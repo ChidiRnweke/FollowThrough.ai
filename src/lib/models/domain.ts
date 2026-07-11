@@ -1,0 +1,339 @@
+import type {
+	AgentRunId,
+	Confidence,
+	ConversationId,
+	DateTime,
+	DiagramId,
+	DiagramKind,
+	EntityId,
+	EntityType,
+	LocalDate,
+	MessageId,
+	NoteId,
+	NoteRevisionId,
+	PipelineKind,
+	ProducerKind,
+	PromiseStrength,
+	ProseMirrorDocument,
+	ProvenanceId,
+	ReferenceId,
+	ReferenceTier,
+	RelationshipId,
+	RelationshipKind,
+	SearchDocumentId,
+	SkillUsageId,
+	SourceAnchorId,
+	SuggestionId,
+	SuggestionStatus,
+	TodoId,
+	TodoResponsibility,
+	TodoStatus,
+	Url,
+	UserId
+} from './shared';
+
+export interface User {
+	readonly id: UserId;
+	readonly email: string;
+	readonly displayName: string;
+	readonly avatarUrl?: Url;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface Note {
+	readonly id: NoteId;
+	readonly userId: UserId;
+	readonly parentId?: NoteId;
+	readonly kind: 'note' | 'skill';
+	readonly title: string;
+	readonly document: ProseMirrorDocument;
+	readonly plainText: string;
+	readonly currentRevision: number;
+	readonly isPinned: boolean;
+	readonly archivedAt?: DateTime;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export type NoteSummary = Pick<
+	Note,
+	'id' | 'parentId' | 'kind' | 'title' | 'isPinned' | 'archivedAt' | 'updatedAt'
+>;
+
+export interface NoteRevision {
+	readonly id: NoteRevisionId;
+	readonly noteId: NoteId;
+	readonly revision: number;
+	readonly title: string;
+	readonly document: ProseMirrorDocument;
+	readonly plainText: string;
+	readonly provenanceId?: ProvenanceId;
+	readonly createdAt: DateTime;
+}
+
+export interface SourceAnchor {
+	readonly id: SourceAnchorId;
+	readonly noteId: NoteId;
+	readonly nodeId?: string;
+	readonly from?: number;
+	readonly to?: number;
+	readonly quote: string;
+	readonly prefix?: string;
+	readonly suffix?: string;
+	readonly revision: number;
+	readonly createdAt: DateTime;
+}
+
+export interface Provenance {
+	readonly id: ProvenanceId;
+	readonly userId: UserId;
+	readonly producerKind: ProducerKind;
+	readonly producerName: string;
+	readonly pipeline?: PipelineKind;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly runId?: AgentRunId;
+	readonly model?: string;
+	readonly metadata: Readonly<Record<string, unknown>>;
+	readonly createdAt: DateTime;
+}
+
+export interface Entity {
+	readonly id: EntityId;
+	readonly userId: UserId;
+	readonly type: EntityType;
+	readonly name: string;
+	readonly description?: string;
+	readonly aliases: readonly string[];
+	readonly metadata: Readonly<Record<string, unknown>>;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface EntityMention {
+	readonly entityId: EntityId;
+	readonly noteId: NoteId;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+}
+
+export interface Todo {
+	readonly id: TodoId;
+	readonly userId: UserId;
+	readonly title: string;
+	readonly description?: string;
+	readonly status: TodoStatus;
+	readonly responsibility: TodoResponsibility;
+	readonly waitingOnEntityId?: EntityId;
+	readonly dueDate?: LocalDate;
+	readonly dueDateVerbatim?: string;
+	readonly promiseStrength?: PromiseStrength;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+	readonly entityIds: readonly EntityId[];
+	readonly completedAt?: DateTime;
+	readonly deletedAt?: DateTime;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface NoteRelationship {
+	readonly id: RelationshipId;
+	readonly userId: UserId;
+	readonly sourceNoteId: NoteId;
+	readonly targetNoteId: NoteId;
+	readonly kind: RelationshipKind;
+	readonly justification?: string;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface ExternalReference {
+	readonly id: ReferenceId;
+	readonly userId: UserId;
+	readonly noteId: NoteId;
+	readonly url: Url;
+	readonly title: string;
+	readonly tier: ReferenceTier;
+	readonly relevanceNote: string;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+	readonly createdAt: DateTime;
+}
+
+interface DiagramBase {
+	readonly id: DiagramId;
+	readonly userId: UserId;
+	readonly noteId: NoteId;
+	readonly title?: string;
+	readonly renderedSvg?: string;
+	readonly searchableText: string;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface MermaidDiagram extends DiagramBase {
+	readonly kind: 'mermaid';
+	readonly source: string;
+}
+
+export interface DrawioDiagram extends DiagramBase {
+	readonly kind: 'drawio';
+	readonly source: string;
+	readonly promotedFromId?: DiagramId;
+}
+
+export type Diagram = MermaidDiagram | DrawioDiagram;
+
+export interface Skill {
+	readonly note: Note;
+	readonly name: string;
+	readonly description: string;
+	readonly triggerHints: readonly string[];
+	readonly isEnabled: boolean;
+}
+
+export type SkillSummary = Pick<Skill, 'name' | 'description' | 'triggerHints' | 'isEnabled'> & {
+	readonly noteId: NoteId;
+};
+
+export interface SkillUsage {
+	readonly id: SkillUsageId;
+	readonly skillNoteId: NoteId;
+	readonly contextNoteId?: NoteId;
+	readonly provenanceId?: ProvenanceId;
+	readonly createdAt: DateTime;
+}
+
+export interface TrustPolicy {
+	readonly userId: UserId;
+	readonly pipeline: PipelineKind;
+	readonly autoAcceptEnabled: boolean;
+	readonly minimumConfidence?: Confidence;
+	readonly conditions: Readonly<Record<string, unknown>>;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface Conversation {
+	readonly id: ConversationId;
+	readonly userId: UserId;
+	readonly contextNoteId?: NoteId;
+	readonly title?: string;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface Message {
+	readonly id: MessageId;
+	readonly conversationId: ConversationId;
+	readonly role: 'user' | 'assistant' | 'tool';
+	readonly content: Readonly<Record<string, unknown>>;
+	readonly model?: string;
+	readonly createdAt: DateTime;
+}
+
+export interface ToolActivity {
+	readonly name: string;
+	readonly input: Readonly<Record<string, unknown>>;
+	readonly output?: Readonly<Record<string, unknown>>;
+	readonly status: 'running' | 'succeeded' | 'failed';
+}
+
+export interface SearchDocument {
+	readonly id: SearchDocumentId;
+	readonly noteId: NoteId;
+	readonly diagramId?: DiagramId;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly content: string;
+	readonly contentHash: string;
+	readonly embeddingModel?: string;
+}
+
+export interface SearchMatch {
+	readonly document: SearchDocument;
+	readonly score: number;
+}
+
+export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'content_insertion' | 'diagram';
+
+interface SuggestionBase<Kind extends SuggestionKind, Payload> {
+	readonly id: SuggestionId;
+	readonly userId: UserId;
+	readonly noteId?: NoteId;
+	readonly kind: Kind;
+	readonly status: SuggestionStatus;
+	readonly payload: Payload;
+	readonly confidence?: Confidence;
+	readonly provenanceId: ProvenanceId;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly decidedAt?: DateTime;
+	readonly expiresAt?: DateTime;
+	readonly appliedArtifactId?: string;
+	readonly isAutoAccepted: boolean;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
+export type BacklinkSuggestion = SuggestionBase<'backlink', CreateRelationshipInput>;
+export type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
+export type ContentInsertionSuggestion = SuggestionBase<
+	'content_insertion',
+	{
+		readonly noteId: NoteId;
+		readonly anchorId: SourceAnchorId;
+		readonly document: ProseMirrorDocument;
+	}
+>;
+export type DiagramSuggestion = SuggestionBase<
+	'diagram',
+	{
+		readonly noteId: NoteId;
+		readonly kind: DiagramKind;
+		readonly title?: string;
+		readonly source: string;
+	}
+>;
+export type Suggestion =
+	| TodoSuggestion
+	| BacklinkSuggestion
+	| ReferenceSuggestion
+	| ContentInsertionSuggestion
+	| DiagramSuggestion;
+
+export interface CreateTodoInput {
+	readonly title: string;
+	readonly description?: string;
+	readonly responsibility: TodoResponsibility;
+	readonly waitingOnEntityId?: EntityId;
+	readonly dueDate?: LocalDate;
+	readonly dueDateVerbatim?: string;
+	readonly promiseStrength?: PromiseStrength;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+	readonly entityIds?: readonly EntityId[];
+}
+
+export interface CreateRelationshipInput {
+	readonly sourceNoteId: NoteId;
+	readonly targetNoteId: NoteId;
+	readonly kind: RelationshipKind;
+	readonly justification?: string;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+}
+
+export interface CreateReferenceInput {
+	readonly noteId: NoteId;
+	readonly url: Url;
+	readonly title: string;
+	readonly tier: ReferenceTier;
+	readonly relevanceNote: string;
+	readonly sourceAnchorId?: SourceAnchorId;
+	readonly provenanceId?: ProvenanceId;
+}
