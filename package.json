@@ -24,6 +24,7 @@
 	"devDependencies": {
 		"@eslint/js": "latest",
 		"@fontsource-variable/inter": "^5.2.8",
+		"@fontsource-variable/jetbrains-mono": "^5.2.8",
 		"@internationalized/date": "^3.12.2",
 		"@lucide/svelte": "^1.24.0",
 		"@playwright/test": "^1.60.0",
