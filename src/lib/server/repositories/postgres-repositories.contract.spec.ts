@@ -1,30 +1,87 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type {
 	Conversation,
 	ConversationId,
 	DateTime,
+	DiagramId,
+	ExternalReference,
 	Message,
 	MessageId,
 	Note,
 	NoteId,
+	NoteRelationship,
+	Provenance,
+	ProvenanceId,
+	ReferenceId,
+	RelationshipId,
 	SearchDocument,
 	SearchDocumentId,
+	SkillUsageId,
+	SuggestionId,
+	TodoId,
+	Url,
 	UserId
 } from '$lib/models';
 import type { PostgresTestContext } from '$lib/server/db/testcontainer';
 import { startPostgresTestcontainer } from '$lib/server/db/testcontainer';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
 import { PostgresConversationRepository } from './postgres-conversations';
 import { PostgresProjectRepository } from './postgres-projects';
 import { PostgresRetrievalIndexRepository } from './postgres-search';
 import { PostgresUserRepository } from './postgres-users';
 import { PostgresNoteRepository } from './postgres-notes';
+import { PostgresDiagramRepository } from './postgres-diagrams';
+import { PostgresProvenanceRepository } from './postgres-provenance';
+import { PostgresReferenceRepository } from './postgres-references';
+import { PostgresRelationshipRepository } from './postgres-relationships';
+import { PostgresSkillRepository } from './postgres-skills';
+import { PostgresSuggestionRepository } from './postgres-suggestions';
+import { PostgresTodoRepository } from './postgres-todos';
+import { PostgresTrustPolicyRepository } from './postgres-trust-policies';
 
 let context: PostgresTestContext;
 const actor = (suffix: string) => ({
 	userId: `10000000-0000-4000-8000-${suffix.padStart(12, '0')}` as UserId
 });
 const now = '2026-07-12T08:00:00.000Z' as DateTime;
+
+const seedNote = async (suffix: string, owner = actor(suffix)) => {
+	const project = await new PostgresProjectRepository(context.db).insert(owner, {
+		name: `Contract project ${suffix}`
+	});
+	const note: Note = {
+		id: `40000000-0000-4000-8000-${suffix.padStart(12, '0')}` as NoteId,
+		userId: owner.userId,
+		projectId: project.id,
+		kind: 'note',
+		position: 0,
+		title: `Contract note ${suffix}`,
+		document: { type: 'doc', content: [] },
+		plainText: '',
+		currentRevision: 1,
+		isPinned: false,
+		createdAt: now,
+		updatedAt: now
+	};
+	await new PostgresNoteRepository(context.db).insert(owner, note);
+	return { owner, project, note };
+};
+
+const seedProvenance = async (owner: ReturnType<typeof actor>, suffix: string) => {
+	const provenance: Provenance = {
+		id: `60000000-0000-4000-8000-${suffix.padStart(12, '0')}` as ProvenanceId,
+		userId: owner.userId,
+		producerKind: 'pipeline',
+		producerName: 'Contract',
+		pipeline: 'agent',
+		metadata: {},
+		createdAt: now
+	};
+	await new PostgresProvenanceRepository(context.db).insert(owner, provenance);
+	return provenance;
+};
 
 beforeAll(async () => {
 	context = await startPostgresTestcontainer();
@@ -117,6 +174,12 @@ describe('Postgres note repository invariants', () => {
 		const repository = new PostgresNoteRepository(context.db);
 		await repository.insert(owner, note);
 		expect(await repository.findById(actor('13'), note.id)).toBeUndefined();
+	});
+
+	it('hides a note when its project is archived', async () => {
+		const { owner, project, note } = await seedNote('43');
+		await new PostgresProjectRepository(context.db).archive(owner, project.id);
+		expect(await new PostgresNoteRepository(context.db).findById(owner, note.id)).toBeUndefined();
 	});
 });
 
@@ -219,5 +282,306 @@ describe('Postgres search repository invariants', () => {
 		}
 		const matches = await repository.searchByEmbedding(owner, vector, 10, first.id);
 		expect(matches.map((match) => match.document.projectId)).toEqual([first.id]);
+	});
+
+	it('does not return another actor’s search documents', async () => {
+		const { owner, project, note } = await seedNote('47');
+		const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
+		const repository = new PostgresRetrievalIndexRepository(context.db);
+		await repository.replaceForNote(owner, note.id, [
+			{
+				id: '50000000-0000-4000-8000-000000000047' as SearchDocumentId,
+				projectId: project.id,
+				noteId: note.id,
+				content: 'private architecture',
+				contentHash: 'private-hash',
+				sourceRevision: 1,
+				chunkIndex: 0,
+				embedding: vector,
+				embeddingModel: 'contract-model'
+			}
+		]);
+		expect(await repository.searchByEmbedding(actor('48'), vector, 10, project.id)).toEqual([]);
+	});
+});
+
+describe('Postgres todo repository invariants', () => {
+	it('does not reveal a todo to another actor', async () => {
+		const { owner, project } = await seedNote('21');
+		const repository = new PostgresTodoRepository(context.db);
+		const todo = {
+			id: '50000000-0000-4000-8000-000000000021' as TodoId,
+			userId: owner.userId,
+			projectId: project.id,
+			title: 'Private task',
+			status: 'open' as const,
+			responsibility: 'mine' as const,
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, todo);
+		expect(await repository.findById(actor('22'), todo.id)).toBeUndefined();
+	});
+
+	it('makes a status update visible through filtered listing', async () => {
+		const { owner, project } = await seedNote('45');
+		const repository = new PostgresTodoRepository(context.db);
+		const todo = await repository.insert(owner, {
+			id: '50000000-0000-4000-8000-000000000045' as TodoId,
+			userId: owner.userId,
+			projectId: project.id,
+			title: 'Status task',
+			status: 'open',
+			responsibility: 'mine',
+			createdAt: now,
+			updatedAt: now
+		});
+		await repository.update(owner, { ...todo, status: 'done' });
+		expect((await repository.list(owner, { status: 'done' })).map((item) => item.id)).toEqual([
+			todo.id
+		]);
+	});
+
+	it('hides todos from an archived project', async () => {
+		const { owner, project } = await seedNote('46');
+		const repository = new PostgresTodoRepository(context.db);
+		await repository.insert(owner, {
+			id: '50000000-0000-4000-8000-000000000046' as TodoId,
+			userId: owner.userId,
+			projectId: project.id,
+			title: 'Archived task',
+			status: 'open',
+			responsibility: 'mine',
+			createdAt: now,
+			updatedAt: now
+		});
+		await new PostgresProjectRepository(context.db).archive(owner, project.id);
+		expect(await repository.list(owner, {})).toEqual([]);
+	});
+});
+
+describe('Postgres provenance repository invariants', () => {
+	it('does not reveal provenance to another actor', async () => {
+		const { owner } = await seedNote('23');
+		const provenance = await seedProvenance(owner, '23');
+		expect(
+			await new PostgresProvenanceRepository(context.db).findById(actor('24'), provenance.id)
+		).toBeUndefined();
+	});
+});
+
+describe('Postgres trust-policy repository invariants', () => {
+	it('lists only policies owned by the actor', async () => {
+		const { owner } = await seedNote('25');
+		const repository = new PostgresTrustPolicyRepository(context.db);
+		await repository.upsert(owner, {
+			userId: owner.userId,
+			pipeline: 'agent',
+			autoAcceptEnabled: false,
+			conditions: {},
+			createdAt: now,
+			updatedAt: now
+		});
+		expect(await repository.list(actor('26'))).toEqual([]);
+	});
+});
+
+describe('Postgres suggestion repository invariants', () => {
+	it('allows only one transition from the same expected status', async () => {
+		const { owner, note, project } = await seedNote('27');
+		const provenance = await seedProvenance(owner, '27');
+		const repository = new PostgresSuggestionRepository(context.db);
+		const suggestion = await repository.insert(owner, {
+			id: '70000000-0000-4000-8000-000000000027' as SuggestionId,
+			userId: owner.userId,
+			noteId: note.id,
+			kind: 'todo',
+			status: 'proposed',
+			payload: { projectId: project.id, title: 'Atomic task', responsibility: 'mine' },
+			provenanceId: provenance.id,
+			isAutoAccepted: false,
+			createdAt: now,
+			updatedAt: now
+		});
+		const results = await Promise.all([
+			repository.transition(owner, suggestion.id, 'proposed', { status: 'rejected' }),
+			repository.transition(owner, suggestion.id, 'proposed', { status: 'rejected' })
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+	});
+
+	it('hides suggestions attached to an archived project', async () => {
+		const { owner, note, project } = await seedNote('44');
+		const provenance = await seedProvenance(owner, '44');
+		const repository = new PostgresSuggestionRepository(context.db);
+		await repository.insert(owner, {
+			id: '70000000-0000-4000-8000-000000000044' as SuggestionId,
+			userId: owner.userId,
+			noteId: note.id,
+			kind: 'todo',
+			status: 'proposed',
+			payload: { projectId: project.id, title: 'Archived task', responsibility: 'mine' },
+			provenanceId: provenance.id,
+			isAutoAccepted: false,
+			createdAt: now,
+			updatedAt: now
+		});
+		await new PostgresProjectRepository(context.db).archive(owner, project.id);
+		expect(await repository.list(owner, { status: 'proposed' })).toEqual([]);
+	});
+});
+
+describe('Postgres relationship repository invariants', () => {
+	it('stores a duplicate semantic edge idempotently', async () => {
+		const { owner, note } = await seedNote('28');
+		const second: Note = {
+			...note,
+			id: '40000000-0000-4000-8000-000000000029' as NoteId,
+			position: 1
+		};
+		await new PostgresNoteRepository(context.db).insert(owner, second);
+		const repository = new PostgresRelationshipRepository(context.db);
+		const relationship: NoteRelationship = {
+			id: '80000000-0000-4000-8000-000000000028' as RelationshipId,
+			userId: owner.userId,
+			sourceNoteId: note.id,
+			targetNoteId: second.id,
+			kind: 'mentions',
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, relationship);
+		await repository.insert(owner, {
+			...relationship,
+			id: '80000000-0000-4000-8000-000000000029' as RelationshipId
+		});
+		expect(await repository.listForNote(owner, note.id)).toHaveLength(1);
+	});
+});
+
+describe('Postgres reference repository invariants', () => {
+	it('lists only references owned by the actor', async () => {
+		const { owner, note } = await seedNote('30');
+		const repository = new PostgresReferenceRepository(context.db);
+		const reference: ExternalReference = {
+			id: '90000000-0000-4000-8000-000000000030' as ReferenceId,
+			userId: owner.userId,
+			noteId: note.id,
+			url: 'https://example.com/reference' as Url,
+			title: 'Reference',
+			tier: 'official',
+			relevanceNote: 'Contract',
+			createdAt: now
+		};
+		await repository.insert(owner, reference);
+		expect(await repository.listForNote(actor('31'), note.id)).toEqual([]);
+	});
+});
+
+describe('Postgres diagram repository invariants', () => {
+	it('limits project listing to the requested project', async () => {
+		const { owner, project, note } = await seedNote('32');
+		const repository = new PostgresDiagramRepository(context.db);
+		await repository.insert(owner, {
+			id: 'a0000000-0000-4000-8000-000000000032' as DiagramId,
+			userId: owner.userId,
+			noteId: note.id,
+			kind: 'mermaid',
+			source: 'flowchart LR\nA --> B',
+			searchableText: 'A B',
+			createdAt: now,
+			updatedAt: now
+		});
+		expect((await repository.listForProject(owner, project.id)).map((item) => item.noteId)).toEqual(
+			[note.id]
+		);
+	});
+});
+
+describe('Postgres skill repository invariants', () => {
+	it('persists skill usage provenance', async () => {
+		const { owner, note } = await seedNote('33');
+		const provenance = await seedProvenance(owner, '33');
+		const repository = new PostgresSkillRepository(context.db);
+		await repository.insert(owner, {
+			note: { ...note, kind: 'skill' },
+			name: 'Contract skill',
+			description: 'Contract',
+			triggerHints: ['contract'],
+			isEnabled: true
+		});
+		const usage = await repository.recordUsage(owner, {
+			id: 'b0000000-0000-4000-8000-000000000033' as SkillUsageId,
+			skillNoteId: note.id,
+			provenanceId: provenance.id,
+			createdAt: now
+		});
+		expect(usage.provenanceId).toBe(provenance.id);
+	});
+
+	it('hides enabled skills from an archived project', async () => {
+		const { owner, note, project } = await seedNote('49');
+		const repository = new PostgresSkillRepository(context.db);
+		await repository.insert(owner, {
+			note: { ...note, kind: 'skill' },
+			name: 'Archived skill',
+			description: 'Contract',
+			triggerHints: ['contract'],
+			isEnabled: true
+		});
+		await new PostgresProjectRepository(context.db).archive(owner, project.id);
+		expect(await repository.listEnabled(owner)).toEqual([]);
+	});
+});
+
+describe('Postgres transaction context invariants', () => {
+	it('rolls back every write when the transaction fails', async () => {
+		const owner = actor('41');
+		const transactions = createTransactionContext(context.db);
+		try {
+			await transactions.transactionRunner.run(async () => {
+				await transactions.database.insert(schema.users).values({
+					id: owner.userId,
+					email: 'rollback@local.invalid',
+					displayName: 'Rollback'
+				});
+				throw new Error('force rollback');
+			});
+		} catch {
+			// The absence of the write is the invariant under test.
+		}
+		const rows = await context.db
+			.select({ id: schema.users.id })
+			.from(schema.users)
+			.where(eq(schema.users.id, owner.userId));
+		expect(rows).toEqual([]);
+	});
+
+	it('keeps nested work inside the outer transaction', async () => {
+		const owner = actor('42');
+		const transactions = createTransactionContext(context.db);
+		try {
+			await transactions.transactionRunner.run(async () => {
+				await transactions.database.insert(schema.users).values({
+					id: owner.userId,
+					email: 'nested@local.invalid',
+					displayName: 'Nested'
+				});
+				await transactions.transactionRunner.run(async () => {
+					await transactions.database.insert(schema.projects).values({
+						userId: owner.userId,
+						name: 'Nested project'
+					});
+				});
+				throw new Error('force outer rollback');
+			});
+		} catch {
+			// Both outer and nested writes must roll back together.
+		}
+		const rows = await context.db
+			.select({ id: schema.projects.id })
+			.from(schema.projects)
+			.where(eq(schema.projects.userId, owner.userId));
+		expect(rows).toEqual([]);
 	});
 });

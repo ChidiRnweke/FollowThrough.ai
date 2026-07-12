@@ -1,4 +1,16 @@
-import type { ActorContext, NoteId, Suggestion, SuggestionId, SuggestionStatus } from '../models';
+import type {
+	ActorContext,
+	DateTime,
+	NoteId,
+	Suggestion,
+	SuggestionId,
+	SuggestionStatus
+} from '../models';
+
+export type SuggestionTransition = Partial<
+	Pick<Suggestion, 'status' | 'decidedAt' | 'appliedArtifactId' | 'isAutoAccepted' | 'updatedAt'>
+> & { readonly appliedArtifactType?: Suggestion['kind'] };
+
 export interface SuggestionRepository {
 	findById(actor: ActorContext, id: SuggestionId): Promise<Suggestion | undefined>;
 	list(
@@ -6,9 +18,11 @@ export interface SuggestionRepository {
 		filter: { noteId?: NoteId; status?: SuggestionStatus }
 	): Promise<readonly Suggestion[]>;
 	insert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
-	update(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
-}
-export interface SuggestionExpiryStore {
-	listExpiredProposed(actor: ActorContext, through: string): Promise<readonly Suggestion[]>;
-	markExpired(actor: ActorContext, ids: readonly SuggestionId[]): Promise<void>;
+	transition(
+		actor: ActorContext,
+		id: SuggestionId,
+		expectedStatus: SuggestionStatus,
+		patch: SuggestionTransition
+	): Promise<Suggestion | undefined>;
+	expireProposedThrough(actor: ActorContext, through: DateTime): Promise<number>;
 }

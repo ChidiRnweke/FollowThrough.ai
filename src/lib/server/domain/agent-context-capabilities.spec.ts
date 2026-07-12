@@ -14,7 +14,7 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/fixtures/domain-builders';
-import { BasicAgentCapabilities } from './diagram-agent-capabilities';
+import { BasicAgent } from './basic-agent';
 import { EnrichedAgentContextBuilder } from './agent-context-capabilities';
 import { EmbeddedKnowledgeSearcher } from '$lib/services';
 
@@ -54,7 +54,7 @@ const setup = async (skillProject = testProjectId()) => {
 	const skills = new InMemorySkills();
 	skills.skills = [skill(skillProject)];
 	const builder = new EnrichedAgentContextBuilder(
-		new BasicAgentCapabilities(undefined, undefined, notes),
+		new BasicAgent(undefined, undefined, notes),
 		new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
 		skills,
 		new KeywordRelevantSkillSelector(),

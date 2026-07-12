@@ -34,7 +34,6 @@ export const suggestionKindLabels: Record<SuggestionKind, string> = {
 	todo: 'Todo',
 	backlink: 'Backlink',
 	reference: 'Reference',
-	content_insertion: 'Content insertion',
 	diagram: 'Diagram'
 };
 

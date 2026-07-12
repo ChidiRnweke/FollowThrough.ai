@@ -3,12 +3,20 @@ import {
 	EmbeddedKnowledgeSearcher,
 	EmbeddedDiagramIndexer,
 	EmbeddedNoteIndexer,
+	DiagramManagementService,
+	DiagramTransformationService,
 	ExpiringSuggestionLister,
 	KeywordRelevantSkillSelector,
 	PersistentConversationJournal,
 	ProjectManagementService,
+	ReferenceManagementService,
+	RelationshipManagementService,
 	NoteManagementService,
-	SuggestionExpiryService,
+	ProvenanceManagementService,
+	SuggestionManagementService,
+	SkillManagementService,
+	TodoManagementService,
+	TrustPolicyManagementService,
 	UserManagementService,
 	ProjectScopedLinkFinder
 } from '$lib/services';
@@ -19,21 +27,7 @@ import {
 	DefaultTodosController
 } from '$lib/controllers';
 import { db, postgresTransactionRunner } from '$lib/server/db';
-import {
-	PostgresProvenanceRecorder,
-	PostgresSuggestionCapabilities,
-	PostgresTrustPolicyCapabilities
-} from './domain/automation-capabilities';
-import { PostgresTodoCapabilities } from './domain/content-capabilities';
-import {
-	BasicAgentCapabilities,
-	PostgresDiagramCapabilities,
-	PostgresSkillCapabilities
-} from './domain/diagram-agent-capabilities';
-import {
-	PostgresKnowledgeCapabilities,
-	PostgresReferenceLister
-} from './domain/knowledge-capabilities';
+import { BasicAgent } from './domain/basic-agent';
 import { PersistentSuggestionArtifactApplier } from './domain/suggestion-artifact-applier';
 import { OpenAIPromiseExtractor } from './domain/openai-capabilities';
 import { WebSearchReferenceFinder } from './domain/openai-reference-capabilities';
@@ -52,15 +46,30 @@ import {
 	PostgresNoteRepository,
 	PostgresSourceAnchorRepository
 } from './repositories/postgres-notes';
+import { PostgresProvenanceRepository } from './repositories/postgres-provenance';
+import { PostgresTodoRepository } from './repositories/postgres-todos';
+import { PostgresSuggestionRepository } from './repositories/postgres-suggestions';
+import { PostgresTrustPolicyRepository } from './repositories/postgres-trust-policies';
+import { PostgresRelationshipRepository } from './repositories/postgres-relationships';
+import { PostgresReferenceRepository } from './repositories/postgres-references';
+import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
+import { PostgresSkillRepository } from './repositories/postgres-skills';
 
 export function createProductionFactory(): ProductionControllerFactory {
 	const projectRepository = new PostgresProjectRepository(db);
 	const userReader = new UserManagementService(new PostgresUserRepository(db));
 	const projects = new ProjectManagementService(projectRepository, projectRepository);
-	const notes = new NoteManagementService(
-		new PostgresNoteRepository(db),
-		new PostgresSourceAnchorRepository(db),
-		projectRepository
+	const noteRepository = new PostgresNoteRepository(db);
+	const anchorRepository = new PostgresSourceAnchorRepository(db);
+	const provenanceRepository = new PostgresProvenanceRepository(db);
+	const notes = new NoteManagementService(noteRepository, anchorRepository, projectRepository);
+	const provenance = new ProvenanceManagementService(provenanceRepository, anchorRepository);
+	const todos = new TodoManagementService(
+		new PostgresTodoRepository(db),
+		projectRepository,
+		anchorRepository,
+		noteRepository,
+		provenanceRepository
 	);
 	const searchRepository = new PostgresRetrievalIndexRepository(db);
 	const conversationJournal = new PersistentConversationJournal(
@@ -77,20 +86,40 @@ export function createProductionFactory(): ProductionControllerFactory {
 		knowledgeSearcher,
 		new OpenAIRelationshipClassifier()
 	);
-	const todos = new PostgresTodoCapabilities(db, projectRepository);
-	const knowledge = new PostgresKnowledgeCapabilities(db);
-	const referenceFinder = new WebSearchReferenceFinder();
-	const referenceLister = new PostgresReferenceLister(knowledge);
-	const provenance = new PostgresProvenanceRecorder(db);
-	const suggestions = new PostgresSuggestionCapabilities(db);
-	const suggestionLister = new ExpiringSuggestionLister(
-		new SuggestionExpiryService(suggestions),
-		suggestions
+	const relationships = new RelationshipManagementService(
+		new PostgresRelationshipRepository(db),
+		noteRepository,
+		anchorRepository,
+		provenanceRepository
 	);
-	const trust = new PostgresTrustPolicyCapabilities(db);
-	const diagrams = new PostgresDiagramCapabilities(db);
-	const skills = new PostgresSkillCapabilities(db);
-	const fallbackAgent = new BasicAgentCapabilities(suggestions, provenance, notes);
+	const references = new ReferenceManagementService(
+		new PostgresReferenceRepository(db),
+		noteRepository,
+		anchorRepository,
+		provenanceRepository
+	);
+	const referenceFinder = new WebSearchReferenceFinder();
+	const suggestions = new SuggestionManagementService(
+		new PostgresSuggestionRepository(db),
+		noteRepository,
+		provenanceRepository,
+		anchorRepository
+	);
+	const suggestionLister = new ExpiringSuggestionLister(suggestions, suggestions);
+	const trust = new TrustPolicyManagementService(new PostgresTrustPolicyRepository(db));
+	const diagrams = new DiagramManagementService(
+		new PostgresDiagramRepository(db),
+		noteRepository,
+		anchorRepository,
+		provenanceRepository
+	);
+	const diagramTransforms = new DiagramTransformationService();
+	const skills = new SkillManagementService(
+		new PostgresSkillRepository(db),
+		noteRepository,
+		provenanceRepository
+	);
+	const fallbackAgent = new BasicAgent(suggestions, provenance, notes);
 	const agentContext = new EnrichedAgentContextBuilder(
 		fallbackAgent,
 		knowledgeSearcher,
@@ -129,7 +158,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 				new DefaultReferencesController({
 					anchorCreator: notes,
 					referenceFinder,
-					referenceRanker: knowledge,
+					referenceRanker: references,
 					provenanceRecorder: provenance,
 					suggestionCreator: suggestions,
 					transactionRunner: postgresTransactionRunner
@@ -137,31 +166,31 @@ export function createProductionFactory(): ProductionControllerFactory {
 			generateDiagram: (actor, selection, instruction) =>
 				new DefaultDiagramsController({
 					anchorCreator: notes,
-					mermaidCreator: diagrams,
+					mermaidCreator: diagramTransforms,
 					provenanceRecorder: provenance,
 					suggestionCreator: suggestions,
 					transactionRunner: postgresTransactionRunner,
 					diagramFinder: diagrams,
-					mermaidReviser: diagrams,
-					mermaidRenderer: diagrams,
-					textExtractor: diagrams,
+					mermaidReviser: diagramTransforms,
+					mermaidRenderer: diagramTransforms,
+					textExtractor: diagramTransforms,
 					diagramWriter: diagrams,
 					diagramIndexer,
-					drawioCreator: diagrams,
-					drawioExporter: diagrams,
-					diagramPromoter: diagrams
+					drawioCreator: diagramTransforms,
+					drawioExporter: diagramTransforms,
+					diagramPromoter: diagramTransforms
 				}).generateMermaid(actor, { selection, instruction })
 		},
 		fallbackAgent
 	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,
-		knowledge,
-		knowledge,
+		relationships,
+		references,
 		diagrams,
 		todos,
-		knowledge,
-		knowledge,
+		relationships,
+		references,
 		diagrams
 	);
 
@@ -192,26 +221,26 @@ export function createProductionFactory(): ProductionControllerFactory {
 		references: {
 			anchorCreator: notes,
 			referenceFinder,
-			referenceRanker: knowledge,
+			referenceRanker: references,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			transactionRunner: postgresTransactionRunner
 		},
 		diagrams: {
 			anchorCreator: notes,
-			mermaidCreator: diagrams,
+			mermaidCreator: diagramTransforms,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			transactionRunner: postgresTransactionRunner,
 			diagramFinder: diagrams,
-			mermaidReviser: diagrams,
-			mermaidRenderer: diagrams,
-			textExtractor: diagrams,
+			mermaidReviser: diagramTransforms,
+			mermaidRenderer: diagramTransforms,
+			textExtractor: diagramTransforms,
 			diagramWriter: diagrams,
 			diagramIndexer,
-			drawioCreator: diagrams,
-			drawioExporter: diagrams,
-			diagramPromoter: diagrams
+			drawioCreator: diagramTransforms,
+			drawioExporter: diagramTransforms,
+			diagramPromoter: diagramTransforms
 		},
 		suggestions: {
 			suggestionLister,
@@ -249,9 +278,9 @@ export function createProductionFactory(): ProductionControllerFactory {
 		notes: {
 			noteReader: notes,
 			noteCreator: notes,
-			relationshipFinder: knowledge,
-			backlinkViewAssembler: knowledge,
-			referenceLister,
+			relationshipFinder: relationships,
+			backlinkViewAssembler: relationships,
+			referenceLister: references,
 			diagramLister: diagrams,
 			todoLister: todos,
 			todoViewAssembler: todos,

@@ -1,0 +1,167 @@
+import type {
+	ActorContext,
+	CreateTodoInput,
+	DateTime,
+	Todo,
+	TodoId,
+	TodoListFilter,
+	TodoStatus,
+	TodoView
+} from '$lib/models';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/models';
+import type {
+	NoteRepository,
+	ProjectRepository,
+	ProvenanceRepository,
+	SourceAnchorRepository,
+	TodoRepository
+} from '$lib/repositories';
+import type {
+	DueTodoFinder,
+	TodoCreator,
+	TodoDeleter,
+	TodoEditor,
+	TodoLister,
+	TodoReader,
+	TodoStatusChanger,
+	TodoViewAssembler,
+	WaitingOnFinder
+} from './contracts';
+
+const now = (): DateTime => new Date().toISOString() as DateTime;
+
+export class TodoManagementService
+	implements
+		TodoCreator,
+		TodoDeleter,
+		TodoReader,
+		TodoEditor,
+		TodoStatusChanger,
+		TodoLister,
+		DueTodoFinder,
+		WaitingOnFinder,
+		TodoViewAssembler
+{
+	constructor(
+		private readonly todos: TodoRepository,
+		private readonly projects: ProjectRepository,
+		private readonly anchors: SourceAnchorRepository,
+		private readonly notes: NoteRepository,
+		private readonly provenance: ProvenanceRepository
+	) {}
+
+	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
+		const title = input.title.trim();
+		if (!title) throw new ValidationError('Todo title is required');
+		if (!(await this.projects.findById(actor, input.projectId)))
+			throw new NotFoundError('Todo project was not found');
+		if (input.responsibility === 'waiting_on' && !input.waitingOn?.trim())
+			throw new ValidationError('Waiting-on todos require a counterparty');
+		if (input.sourceAnchorId)
+			await this.validateAnchor(actor, input.sourceAnchorId, input.projectId);
+		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
+			throw new NotFoundError('Todo provenance was not found');
+		const timestamp = now();
+		return this.todos.insert(actor, {
+			id: crypto.randomUUID() as TodoId,
+			userId: actor.userId,
+			projectId: input.projectId,
+			title,
+			...(input.description !== undefined ? { description: input.description } : {}),
+			status: 'open',
+			responsibility: input.responsibility,
+			...(input.waitingOn?.trim() ? { waitingOn: input.waitingOn.trim() } : {}),
+			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+			...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
+			...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
+			...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
+			...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {}),
+			createdAt: timestamp,
+			updatedAt: timestamp
+		});
+	}
+
+	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+		const todo = await this.todos.findById(actor, todoId);
+		if (!todo) throw new NotFoundError('Todo was not found', { todoId });
+		return todo;
+	}
+
+	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot update another user’s todo');
+		const current = await this.get(actor, todo.id);
+		if (todo.projectId !== current.projectId)
+			throw new ValidationError('A todo cannot move between projects during an edit');
+		const title = todo.title.trim();
+		if (!title) throw new ValidationError('Todo title is required');
+		if (todo.responsibility === 'waiting_on' && !todo.waitingOn?.trim())
+			throw new ValidationError('Waiting-on todos require a counterparty');
+		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
+		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
+			throw new NotFoundError('Todo provenance was not found');
+		return this.todos.update(actor, {
+			...todo,
+			title,
+			waitingOn: todo.waitingOn?.trim(),
+			updatedAt: now()
+		});
+	}
+
+	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
+		const todo = await this.get(actor, todoId);
+		const { completedAt: _completedAt, ...withoutCompletion } = todo;
+		void _completedAt;
+		return this.todos.update(actor, {
+			...withoutCompletion,
+			status,
+			...(status === 'done' ? { completedAt: now() } : {}),
+			updatedAt: now()
+		});
+	}
+
+	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
+		await this.get(actor, todoId);
+		await this.todos.softDelete(actor, todoId, now());
+	}
+
+	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
+		return this.todos.list(actor, filter);
+	}
+	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]> {
+		return this.list(actor, { dueBefore: through as TodoListFilter['dueBefore'] });
+	}
+	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
+		return this.list(actor, { responsibility: 'waiting_on' });
+	}
+
+	async assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]> {
+		return Promise.all(
+			todos.map(async (todo) => {
+				const anchor = todo.sourceAnchorId
+					? await this.anchors.findById(actor, todo.sourceAnchorId)
+					: undefined;
+				const source = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+				const provenance = todo.provenanceId
+					? await this.provenance.findById(actor, todo.provenanceId)
+					: undefined;
+				return {
+					todo,
+					...(source ? { sourceNote: { id: source.id, title: source.title } } : {}),
+					...(anchor ? { anchor } : {}),
+					...(provenance ? { provenance } : {})
+				};
+			})
+		);
+	}
+
+	private async validateAnchor(
+		actor: ActorContext,
+		anchorId: NonNullable<CreateTodoInput['sourceAnchorId']>,
+		projectId: CreateTodoInput['projectId']
+	): Promise<void> {
+		const anchor = await this.anchors.findById(actor, anchorId);
+		const note = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+		if (!anchor || !note || note.projectId !== projectId)
+			throw new NotFoundError('Todo source anchor was not found');
+	}
+}

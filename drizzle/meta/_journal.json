@@ -43,6 +43,13 @@
       "when": 1783846997809,
       "tag": "0005_thankful_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783851052125,
+      "tag": "0006_clean_suggestion_kinds",
+      "breakpoints": true
     }
   ]
 }

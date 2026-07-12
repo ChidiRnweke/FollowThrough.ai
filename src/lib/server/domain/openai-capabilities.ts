@@ -8,7 +8,7 @@ import type {
 	StructuredPromiseClient,
 	StructuredPromiseResult
 } from '$lib/services';
-import { DeterministicPromiseExtractor } from './knowledge-capabilities';
+import { DeterministicPromiseExtractor } from './deterministic-promise-extractor';
 
 const PromiseExtraction = z.object({
 	promises: z.array(

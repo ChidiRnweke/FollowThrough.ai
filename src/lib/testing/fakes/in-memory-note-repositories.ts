@@ -5,7 +5,8 @@ import type {
 	NoteRevision,
 	ProjectId,
 	SourceAnchor,
-	SourceAnchorId
+	SourceAnchorId,
+	UserId
 } from '$lib/models';
 import type { NoteRepository, SourceAnchorRepository } from '$lib/repositories';
 
@@ -74,9 +75,11 @@ export class InMemoryNoteRepository implements NoteRepository {
 
 export class InMemoryAnchorRepository implements SourceAnchorRepository {
 	anchors: SourceAnchor[] = [];
+	ownerIds = new Map<SourceAnchorId, UserId>();
 
-	async findById(_actor: ActorContext, id: SourceAnchorId): Promise<SourceAnchor | undefined> {
-		void _actor;
+	async findById(actor: ActorContext, id: SourceAnchorId): Promise<SourceAnchor | undefined> {
+		const ownerId = this.ownerIds.get(id);
+		if (ownerId && ownerId !== actor.userId) return undefined;
 		return this.anchors.find((anchor) => anchor.id === id);
 	}
 

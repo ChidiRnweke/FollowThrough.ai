@@ -1,21 +1,21 @@
-import type { ActorContext } from '$lib/models';
-import { DemoControllerFactory, demoIds, type ControllerFactory } from '$lib/factories';
+import type { ActorContext, UserId } from '$lib/models';
+import type { ControllerFactory } from '$lib/factories';
+import { z } from 'zod';
 import { createProductionFactory } from './production-factory';
 
+const localUserId = z
+	.string()
+	.uuid()
+	.parse(process.env.LOCAL_USER_ID ?? '00000000-0000-4000-8000-000000000001') as UserId;
+
 export class AppFactory {
+	private static factory: ControllerFactory | undefined;
+
 	static controllerFactory(): ControllerFactory {
-		switch (process.env.APP_MODE) {
-			case 'production':
-				return createProductionFactory();
-			case 'demo-empty':
-				return new DemoControllerFactory('empty');
-			case 'demo-error':
-				return new DemoControllerFactory('error');
-			default:
-				return new DemoControllerFactory();
-		}
+		return (this.factory ??= createProductionFactory());
 	}
+
 	static actor(): ActorContext {
-		return { userId: demoIds.user };
+		return { userId: localUserId };
 	}
 }

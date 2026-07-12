@@ -15,9 +15,9 @@
 
 ## Current Status — 12 July 2026
 
-The project/filesystem foundation and every non-database workflow described by the original blueprint are implemented. The stable frontend seam is `ControllerFactory`; production and demo factories expose domain nouns only. Use cases are methods on those controllers—for example `notes().save`, `todos().extractPromises`, `diagrams().promote`, and `agent().listSessions`—rather than imperative controller objects. The backend suite has 172 behavior tests across 26 files. `pnpm check` passes.
+The project/filesystem backend is complete. The stable frontend seam is `ControllerFactory`; the production factory exposes domain nouns only. Use cases are methods on those controllers—for example `notes().save`, `todos().extractPromises`, `diagrams().promote`, and `agent().listSessions`—rather than imperative controller objects. Controllers and services are grouped into explicit domain folders, with contracts separate from implementations. Runtime demos, starter examples, unimplemented proxies, and the unimplemented content-insertion suggestion branch have been removed. The backend suite has 195 behavior tests across 31 files.
 
-The remaining architectural work is narrower than the original plan implied. Global database access has been removed: production composition injects Drizzle from `src/lib/server/production-factory.ts`. Projects, users, notes/anchors, search, and conversations have explicit Postgres repository adapters. Todos, automation, knowledge, diagram, and skill classes still combine domain rules with constructor-injected Drizzle, so they must be split into pure services plus narrow repositories. Docker-backed contracts are now enabled and green.
+Production composition injects one async-local transactional Drizzle boundary from `src/lib/server/production-factory.ts`. Every persisted domain has an explicit Postgres adapter and pure domain service. Thirty-seven live Postgres contracts verify migrations, ownership, project isolation, mapping, atomic transitions, and nested rollback behavior. `docs/backend-verification.md` maps the independent domain invariants to executable evidence. OAuth and hosting remain intentionally excluded.
 
 ## Context
 
@@ -60,7 +60,7 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
 ## Stable Interfaces and Models
 
 - Shared roots and tree: `Project`, `ProjectId`, `ProjectTreeNode`, `Note`, `NoteKind`, `CreateProjectInput`, `CreateFolderInput`, `MoveProjectEntryInput` in `src/lib/models`.
-- Project capabilities: `ProjectCreator`, `ProjectReader`, `ProjectLister`, `ProjectEditor`, `ProjectTreeReader`, `FolderCreator`, `ProjectEntryMover` in `src/lib/services/projects.ts`.
+- Project capabilities: `ProjectCreator`, `ProjectReader`, `ProjectLister`, `ProjectEditor`, `ProjectTreeReader`, `FolderCreator`, `ProjectEntryMover` in `src/lib/services/projects/contracts.ts`.
 - Repository ports: one explicit domain file per port under `src/lib/repositories`, including `projects`, `notes`, `todos`, `source-anchors`, `suggestions`, `relationships`, `references`, `diagrams`, `skills`, `conversations`, and `retrieval-index`. There are no `content`, `automation`, or `knowledge` repository buckets.
 - Stable controller seam: `workspace()`, `projects()`, `notes()`, `todos()`, `relationships()`, `references()`, `diagrams()`, `suggestions()`, `skills()`, `agent()`, and `trustPolicies()` in `src/lib/factories/controller-factory.ts`.
 - Production composition: `createProductionFactory()` in `src/lib/server/production-factory.ts`.
@@ -81,12 +81,12 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
       **Verified by:** strict TypeScript and production factory construction.
 
 - [x] **4. Implement project controller and shared factory seam**
-      **Evidence:** `src/lib/controllers/projects.ts`, `src/lib/factories/controller-factory.ts`, `demo-controller-factory.ts`, and `production-controller-factory.ts`.
-      **Verified by:** `src/lib/controllers/projects.spec.ts` and demo factory tests.
+      **Evidence:** `src/lib/controllers/projects/controller.ts`, `src/lib/factories/controller-factory.ts`, and `production-controller-factory.ts`.
+      **Verified by:** `src/lib/controllers/projects/controller.spec.ts` and production factory construction.
 
 - [x] **5. Implement project domain service and Postgres repository**
-      **Evidence:** `ProjectManagementService` in `src/lib/services/project-management.ts`; `PostgresProjectRepository` in `src/lib/server/repositories/postgres-projects.ts`; production wiring in `src/lib/server/production-factory.ts`.
-      **Verified by:** `src/lib/services/project-management.spec.ts` and project controller tests.
+      **Evidence:** `ProjectManagementService` in `src/lib/services/projects/management.ts`; `PostgresProjectRepository` in `src/lib/server/repositories/postgres-projects.ts`; production wiring in `src/lib/server/production-factory.ts`.
+      **Verified by:** `src/lib/services/projects/management.spec.ts` and project controller tests.
 
 - [x] **6. Add project-scoped schema and migrations**
       **Evidence:** `src/lib/server/db/schema.ts`, `drizzle/0002_wooden_blockbuster.sql`, `drizzle/0003_flawless_lester.sql`, and Drizzle snapshots. Migrations backfill Inbox projects before making project FKs non-null and add the pgvector HNSW index.
@@ -94,14 +94,14 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
 
 - [x] **7. Replace red scaffolds with executable behavioral suites**
       **Evidence:** shared fakes under `src/lib/testing/fakes`; focused controller/service/domain specs; obsolete unimplemented-proxy specs removed; only the real schema contract remains in the `contracts` project.
-      **Verified by:** `pnpm exec vitest run --project server` — 155 backend tests pass.
+      **Verified by:** `pnpm test:unit` — 195 backend tests pass.
 
 - [x] **8. Implement transactional workflows and ownership checks**
       **Evidence:** Extract Promises, Relate, Reference, diagram generation, note saving, and suggestion lifecycle controllers use injected transaction runners. Concrete capabilities validate actor/project ownership before writes.
       **Verified by:** controller rollback, isolation, lifecycle, and ownership specs.
 
 - [x] **9. Implement note and diagram indexing plus project retrieval**
-      **Evidence:** `src/lib/services/search-indexing.ts`, `semantic-retrieval.ts`, `src/lib/server/repositories/postgres-search.ts`, and embedding adapters. Note and diagram chunks are isolated, SHA-256 hashed, reusable, and project-scoped.
+      **Evidence:** `src/lib/services/retrieval/indexing.ts`, `semantic.ts`, `src/lib/server/repositories/postgres-search.ts`, and embedding adapters. Note and diagram chunks are isolated, SHA-256 hashed, reusable, and project-scoped.
       **Verified by:** search indexing and semantic retrieval specs.
 
 - [x] **10. Implement structured external clients and relationship reranking**
@@ -109,7 +109,7 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
       **Verified by:** client fake specs for mapping, no-output, and typed failure behavior.
 
 - [x] **11. Persist and ground agent runs**
-      **Evidence:** `PersistentConversationJournal`, `PostgresConversationRepository`, `EnrichedAgentContextBuilder`, `KeywordRelevantSkillSelector`, and `DefaultRunAgentController` persist prompts/responses/tool activity and inject project retrieval, history, and selected skill instructions.
+      **Evidence:** `PersistentConversationJournal`, `PostgresConversationRepository`, `EnrichedAgentContextBuilder`, `KeywordRelevantSkillSelector`, and `DefaultAgentController` persist prompts/responses/tool activity and inject project retrieval, history, and selected skill instructions.
       **Verified by:** conversation, grounding, skill-selection, and OpenAI agent specs.
 
 - [x] **12. Remove global database coupling and database-aware artifact orchestration**
@@ -125,38 +125,45 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
       **Verified by:** search-indexing and OpenAI-agent adapter tests.
 
 - [x] **12c. Correct controller and repository taxonomy**
-      **Evidence:** imperative controller files and contracts were removed. Orchestration now lives in noun controllers under `src/lib/controllers`; routes, demo wiring, production wiring, and the agent toolbox all call their methods. Repository ports were split into explicit domain files, with `SourceAnchorRepository`, `NoteRelationshipRepository`, and `RetrievalIndexRepository` replacing ambiguous names. `AgentController` exposes `run`, `listSessions`, and `getSession`.
-      **Verified by:** strict TypeScript, the complete controller behavior suite, demo-factory tests, and import/name audits.
+      **Evidence:** imperative controller files and contracts were removed. Orchestration now lives in noun controller folders under `src/lib/controllers`; production wiring and the agent toolbox call their methods. Repository ports were split into explicit domain files, with `SourceAnchorRepository`, `NoteRelationshipRepository`, and `RetrievalIndexRepository` replacing ambiguous names. `AgentController` exposes `run`, `listSessions`, and `getSession`.
+      **Verified by:** strict TypeScript, the complete controller behavior suite, production composition, and import/name audits.
 
 ## Remaining Plan
 
-- [ ] **13. Split todo persistence from todo domain rules**
-      **Files:** `src/lib/repositories/todos.ts`; `src/lib/server/repositories/postgres-todos.ts` (create); `src/lib/services/todo-management.ts` (create); `src/lib/server/domain/content-capabilities.ts` (remove after callers migrate); `src/lib/server/production-factory.ts` (modify).
+- [x] **13. Split todo persistence from todo domain rules**
+      **Files:** `src/lib/repositories/todos.ts`; `src/lib/server/repositories/postgres-todos.ts`; `src/lib/services/todos/{contracts,management}.ts`; `src/lib/server/production-factory.ts`.
       **What:** Align repository methods with current project-scoped models. Move all Drizzle queries into `PostgresUserRepository`, `PostgresNoteRepository`, and `PostgresTodoRepository`. Move title/revision/folder/anchor/todo transition/ownership rules into pure `NoteManagementService` and `TodoManagementService`. Keep existing service interfaces and controller signatures unchanged. Use `ProjectManagementService` plus `PostgresProjectRepository` as the structural pattern.
       **Tests first:** create `src/lib/services/note-management.spec.ts` and `todo-management.spec.ts` using shared repository fakes. Cover stale/no-op saves, folder content rejection, parent cycles, anchor bounds, immutable project IDs, completion timestamps, partial updates, and foreign IDs.
       **Verify:** `pnpm exec vitest run --project server src/lib/services/note-management.spec.ts src/lib/services/todo-management.spec.ts`, `pnpm check`, and `rg -n 'server/db' src/lib/services` returns nothing.
 
-      **Progress:** Repository port taxonomy, users, and notes/anchors are complete through pure services, Postgres adapters, shared fakes, unit tests, and live repository contracts. Todos remain; there is no longer a `content.ts` repository bucket.
+      **Evidence:** `PostgresTodoRepository` contains owned SQL/mapping while `TodoManagementService` contains project, title, waiting-on, anchor, provenance, status, due-date, deletion, and view behavior. The combined content capability was removed.
+      **Verified by:** note/todo service behavior suites and `pnpm check`. Live todo adapter coverage remains in step 19.
 
-- [ ] **14. Split suggestion, provenance, and trust-policy persistence from domain rules**
-      **Files:** explicit ports in `src/lib/repositories/suggestions.ts`, `provenance.ts`, and `trust-policies.ts`; `src/lib/server/repositories/postgres-provenance.ts`, `postgres-suggestions.ts`, `postgres-trust-policies.ts` (create); `src/lib/services/suggestion-management.ts`, `trust-policy-management.ts` (create); `src/lib/server/domain/automation-capabilities.ts` (remove after migration); `src/lib/server/production-factory.ts` (modify).
+- [x] **14. Split suggestion, provenance, and trust-policy persistence from domain rules**
+      **Files:** explicit ports in `src/lib/repositories/suggestions.ts`, `provenance.ts`, and `trust-policies.ts`; matching Postgres adapters; domain folders under `src/lib/services/suggestions`, `provenance`, and `trust-policies`; `src/lib/server/production-factory.ts`.
       **What:** Repositories perform owned CRUD and mapping only. Services enforce proposal ownership, anchor/note consistency, lifecycle transitions, expiry, and pipeline-specific trust. Preserve `SuggestionCreator/Finder/Lister/Accepter/Rejecter/Reverter`, `ProvenanceRecorder`, and trust-policy interfaces.
       **Tests first:** extend `src/lib/controllers/suggestion-lifecycle.spec.ts` only for orchestration; put transition/expiry/trust behavior in new service specs with repository fakes.
       **Verify:** focused service/controller tests, `pnpm check`, and no Drizzle import in the new services.
 
-- [ ] **15. Split relationship, reference, diagram, and skill persistence from domain behavior**
-      **Files:** explicit ports in `src/lib/repositories/relationships.ts`, `references.ts`, `diagrams.ts`, and `skills.ts`; `src/lib/server/repositories/postgres-relationships.ts`, `postgres-references.ts`, `postgres-diagrams.ts`, `postgres-skills.ts` (create); `src/lib/services/relationship-management.ts`, `reference-management.ts`, `diagram-management.ts`, `skill-management.ts` (create); `src/lib/server/domain/knowledge-capabilities.ts` and `diagram-agent-capabilities.ts` (reduce to deterministic/AI adapters only); production factory (modify).
+      **Evidence:** narrow Postgres provenance, suggestion, and trust-policy adapters are wired to pure management services. Suggestion expiry is one atomic repository transition; the obsolete two-operation expiry store was deleted with the combined automation capability.
+      **Verified by:** suggestion/trust-policy service behaviors, controller lifecycle behaviors, and `pnpm check`. Live adapter coverage remains in step 19.
+
+- [x] **15. Split relationship, reference, diagram, and skill persistence from domain behavior**
+      **Files:** explicit ports and Postgres adapters for relationships, references, diagrams, and skills; matching domain folders under `src/lib/services`; deterministic/AI adapters under `src/lib/server/domain`; production composition root.
       **What:** Move SQL/mapping into repositories. Keep same-project relationship rules, source-note ownership, diagram promotion/revision behavior, skill project ownership, and usage validation in pure services.
       **Tests first:** service specs for same-project relationships, duplicate idempotency, owned references, diagram deletion/indexing, cross-project skill exclusion, and skill usage.
       **Verify:** focused tests, `pnpm check`, and `rg -n 'server/db' src/lib/server/domain` finds only mapper schema types or explicitly documented repository adapters.
 
+      **Evidence:** narrow Postgres adapters and pure management services now own these four domains; deterministic diagram transformations and the fallback agent remain infrastructure-free adapters. The combined knowledge and diagram-agent capability files were removed.
+      **Verified by:** 12 focused service behaviors plus controller workflow suites and `pnpm check`. Live adapter coverage remains in step 19.
+
 - [x] **16. Add provenance to skill-usage recording**
-      **Files:** `src/lib/services/agent.ts`, `src/lib/models/workflows.ts` if a dedicated input is useful, skill repository/service adapters from step 15, agent context builder, and skill usage tests.
+      **Files:** `src/lib/services/agent/contracts.ts`, `src/lib/services/skills`, agent context builder, skill repository adapter, and usage tests.
       **What:** Change `SkillUsageRecorder.record` to accept the provenance for the agent run (or a typed usage input containing it). Persist `provenanceId` for every injected skill and keep the context note optional. Do not synthesize a fake provenance ID.
       **Verify:** a behavior test observes the persisted skill usage with actor-owned provenance and another rejects foreign provenance.
 
 - [x] **17. Implement suggestion expiry as an explicit transition**
-      **Files:** suggestion repository/service adapters from step 14, `src/lib/services/suggestions.ts`, and suggestion lifecycle service tests.
+      **Files:** suggestion repository adapter, `src/lib/services/suggestions`, and suggestion lifecycle service tests.
       **What:** Add an expiry operation that atomically changes eligible `proposed` suggestions to `expired`. Expired records remain readable but cannot be accepted, rejected, or reverted. Use an injected clock in the service tests.
       **Verify:** focused service tests cover before/after expiry, idempotency, and ownership; one assertion per test.
 
@@ -167,20 +174,21 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
 
       **Progress:** Generate, Revise, Promote, and Create Skill now have focused behavior suites covering output, unsupported operations, indexing, provenance, and rollback where transactional.
 
-- [ ] **19. Run real Postgres migration and repository contracts**
+- [x] **19. Run real Postgres migration and repository contracts**
       **Files:** `src/lib/server/db/schema.contract.spec.ts`; add repository integration specs beside each `postgres-*.ts` adapter as it is created.
       **What:** Start the pgvector Testcontainer, apply migrations from an empty database, and verify ownership/project isolation, folder ordering/cycles at the service boundary, conversation chronology, note/diagram chunk coexistence, and cosine search. Never substitute SQLite.
-      **Progress:** Docker is available. Nineteen contracts pass for schema (including entity-table removal and the note-only relationship enum), projects, users, notes, conversations, and project-scoped halfvec search. Add equivalent contracts as the remaining adapters from steps 13–15 land.
+      **Evidence:** Thirty-seven live contracts pass for migrations/schema plus projects, users, notes, conversations, project-scoped halfvec search, todos, provenance, trust policies, atomic suggestion transitions, idempotent relationships, references, diagrams, skills, and nested transaction rollback.
       **Verify:** `pnpm test:repository`.
 
 - [x] **20. Remove the entity taxonomy across the stack**
       **Evidence:** Entity models, controller/factory methods, repositories, SQL tables and joins, relationship enum values, routes, components, demo fixtures, filters, and right-panel mode were deleted. `drizzle/0005_thankful_patriot.sql` destructively migrates existing databases. Todos render the free-text `waitingOn` counterparty and Relate connects notes directly.
       **Verify:** `rg -n "entities\(\)|EntityType|EntityId|same_client|same_system|engagement" src` returns no product dependencies, followed by the full verification suite and Docker migration contracts.
 
-- [ ] **21. Final reconciliation after repository split**
+- [x] **21. Final reconciliation after repository split**
       **Files:** `implementation-checklist.md`, this blueprint.
       **What:** Re-run every available non-UI check, update evidence and counts, and record only Docker/OAuth/hosting exclusions. Audit tests against `docs/domain-invariants.md` and ensure each documented invariant is implemented and tested.
-      **Verify:** `pnpm lint`, `pnpm check`, `pnpm test:unit -- --run`, `pnpm test:workflow`, `pnpm test:capability`, `pnpm build`, and `git diff --check` all pass. Run `pnpm test:repository` when Docker is available.
+      **Evidence:** `docs/backend-verification.md` records the architecture and invariant audit. Demo/runtime scaffolding and mocking-framework usage audits are clean. All behavior and live repository contracts pass.
+      **Verify:** `pnpm lint`, `pnpm check`, `pnpm test:unit`, `pnpm test:workflow`, `pnpm test:capability`, `pnpm test:repository`, `pnpm build`, and `git diff --check` all pass.
 
 ## Test Rules
 
@@ -193,8 +201,10 @@ Projects and their tiered filesystems are the only organizational taxonomy. Ther
 ## Verification Snapshot
 
 - `pnpm check`: passing, 0 errors and 0 warnings.
-- `pnpm exec vitest run --project server`: passing, 172 backend tests across 26 files.
-- `pnpm test:repository`: passing, 19 live Postgres contracts.
+- `pnpm test:unit`: passing, 195 backend tests across 31 files.
+- `pnpm test:workflow`: passing, 79 controller behavior tests.
+- `pnpm test:capability`: passing, 116 service and external-adapter behavior tests.
+- `pnpm test:repository`: passing, 37 live Postgres contracts.
 - `pnpm build`: passing with only the existing large-client-chunk warning.
 
 Completion means every production business rule is in a pure service, every SQL statement is in a repository adapter, controllers and shared types remain stable for the UI, all non-DB behavior is green, and the real Postgres contracts pass when infrastructure is available.

@@ -38,7 +38,6 @@ export const suggestionKind = pgEnum('suggestion_kind', [
 	'todo',
 	'backlink',
 	'reference',
-	'content_insertion',
 	'diagram'
 ]);
 export const suggestionStatus = pgEnum('suggestion_status', [

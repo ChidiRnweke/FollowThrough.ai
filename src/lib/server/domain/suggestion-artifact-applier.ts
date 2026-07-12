@@ -64,8 +64,6 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 						: ({ ...base, kind: 'drawio' } as Diagram);
 				return this.diagramWriter.create(actor, diagram);
 			}
-			case 'content_insertion':
-				throw new InvalidTransitionError('Content insertion application is not available yet');
 		}
 	}
 
@@ -88,8 +86,6 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 			case 'diagram':
 				await this.diagramDeleter.delete(actor, suggestion.appliedArtifactId as DiagramId);
 				break;
-			case 'content_insertion':
-				throw new InvalidTransitionError('Content insertion reversion is not available yet');
 		}
 	}
 }

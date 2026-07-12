@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent, ConversationId } from '$lib/models';
 import { AgentToolEventMapper, OpenAIAgentRunner } from './openai-agent-capabilities';
-import { BasicAgentCapabilities } from './diagram-agent-capabilities';
+import { BasicAgent } from './basic-agent';
 import { InMemoryAgentRunner, InMemoryAgentToolbox } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
@@ -60,7 +60,7 @@ describe('Agent context and suggestion invariants', () => {
 	it('derives the active project from the current note', async () => {
 		const notes = new InMemoryNoteContent();
 		notes.notes = [noteBuilder()];
-		const agent = new BasicAgentCapabilities(undefined, undefined, notes);
+		const agent = new BasicAgent(undefined, undefined, notes);
 		const context = await agent.build(
 			testActor(),
 			{ noteId: testNoteId(), prompt: 'Summarize this note' },
@@ -72,7 +72,7 @@ describe('Agent context and suggestion invariants', () => {
 	it('scopes a fallback todo suggestion to the active project', async () => {
 		const suggestions = new InMemorySuggestions();
 		const provenance = new InMemoryProvenanceRecorder();
-		const agent = new BasicAgentCapabilities(suggestions, provenance);
+		const agent = new BasicAgent(suggestions, provenance);
 		const events = await collect(
 			agent.run(
 				testActor(),
@@ -90,7 +90,7 @@ describe('Agent context and suggestion invariants', () => {
 
 	it('preserves an existing conversation identifier', async () => {
 		const conversationId = '00000000-0000-4000-8000-000000000099' as ConversationId;
-		const agent = new BasicAgentCapabilities();
+		const agent = new BasicAgent();
 		const events = await collect(agent.run(testActor(), { conversationId, prompt: 'Help' }, {}));
 		const completed = events.find((event) => event.type === 'completed');
 		expect(completed?.type === 'completed' ? completed.conversationId : undefined).toBe(

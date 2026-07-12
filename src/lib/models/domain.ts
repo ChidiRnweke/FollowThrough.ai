@@ -264,7 +264,7 @@ export interface SearchMatch {
 	readonly score: number;
 }
 
-export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'content_insertion' | 'diagram';
+export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram';
 
 interface SuggestionBase<Kind extends SuggestionKind, Payload> {
 	readonly id: SuggestionId;
@@ -287,14 +287,6 @@ interface SuggestionBase<Kind extends SuggestionKind, Payload> {
 export type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
 export type BacklinkSuggestion = SuggestionBase<'backlink', CreateRelationshipInput>;
 export type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
-export type ContentInsertionSuggestion = SuggestionBase<
-	'content_insertion',
-	{
-		readonly noteId: NoteId;
-		readonly anchorId: SourceAnchorId;
-		readonly document: ProseMirrorDocument;
-	}
->;
 export type DiagramSuggestion = SuggestionBase<
 	'diagram',
 	{
@@ -305,15 +297,10 @@ export type DiagramSuggestion = SuggestionBase<
 	}
 >;
 export type Suggestion =
-	| TodoSuggestion
-	| BacklinkSuggestion
-	| ReferenceSuggestion
-	| ContentInsertionSuggestion
-	| DiagramSuggestion;
+	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion;
 
 export interface CreateTodoInput {
-	/** Required by production services; optional while legacy controller callers migrate. */
-	readonly projectId?: ProjectId;
+	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly description?: string;
 	readonly responsibility: TodoResponsibility;

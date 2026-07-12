@@ -19,10 +19,17 @@ export class PostgresNoteRepository implements NoteRepository {
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		const [row] = await this.database
-			.select()
+			.select({ note: schema.notes })
 			.from(schema.notes)
-			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)));
-		return row ? toNote(row) : undefined;
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+			.where(
+				and(
+					eq(schema.notes.id, id),
+					eq(schema.notes.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			);
+		return row ? toNote(row.note) : undefined;
 	}
 
 	async listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
@@ -30,11 +37,12 @@ export class PostgresNoteRepository implements NoteRepository {
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
 		return (
 			await this.database
-				.select()
+				.select({ note: schema.notes })
 				.from(schema.notes)
-				.where(and(...conditions))
+				.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+				.where(and(...conditions, isNull(schema.projects.archivedAt)))
 				.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt))
-		).map(toNote);
+		).map((row) => toNote(row.note));
 	}
 
 	async countSiblings(
@@ -82,6 +90,7 @@ export class PostgresNoteRepository implements NoteRepository {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({
+				kind: note.kind,
 				title: note.title,
 				document: note.document as unknown as Record<string, unknown>,
 				plainText: note.plainText,

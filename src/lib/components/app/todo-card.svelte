@@ -26,7 +26,7 @@
 	const waiting = $derived(view.todo.responsibility === 'waiting_on');
 </script>
 
-<Card.Root class="gap-1.5 py-3">
+<Card.Root data-compact={compact || undefined} class="gap-1.5 py-3">
 	<Card.Header class="px-4">
 		<Card.Title class="flex items-start gap-2 text-sm font-medium">
 			<Checkbox

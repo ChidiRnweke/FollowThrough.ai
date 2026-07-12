@@ -14,7 +14,6 @@ import type {
 	SuggestionReverter
 } from '$lib/services';
 import type { SnapshotParticipant } from './in-memory-transaction';
-import type { SuggestionExpiryStore } from '$lib/repositories';
 import { testNow, testSuggestionId } from '../fixtures/domain-builders';
 
 export class InMemorySuggestions
@@ -24,7 +23,6 @@ export class InMemorySuggestions
 		SuggestionAccepter,
 		SuggestionRejecter,
 		SuggestionReverter,
-		SuggestionExpiryStore,
 		SnapshotParticipant
 {
 	suggestions: Suggestion[] = [];
@@ -94,27 +92,6 @@ export class InMemorySuggestions
 
 	restore(snapshot: unknown): void {
 		this.suggestions = snapshot as Suggestion[];
-	}
-
-	async listExpiredProposed(actor: ActorContext, through: string): Promise<readonly Suggestion[]> {
-		return this.suggestions.filter(
-			(suggestion) =>
-				suggestion.userId === actor.userId &&
-				suggestion.status === 'proposed' &&
-				suggestion.expiresAt !== undefined &&
-				suggestion.expiresAt <= through
-		);
-	}
-
-	async markExpired(actor: ActorContext, ids: readonly SuggestionId[]): Promise<void> {
-		const selected = new Set(ids);
-		this.suggestions = this.suggestions.map((suggestion) =>
-			suggestion.userId === actor.userId &&
-			suggestion.status === 'proposed' &&
-			selected.has(suggestion.id)
-				? { ...suggestion, status: 'expired' }
-				: suggestion
-		);
 	}
 
 	private assertPending(suggestion: Suggestion): void {
