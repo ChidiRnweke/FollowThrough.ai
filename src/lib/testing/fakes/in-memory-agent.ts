@@ -1,0 +1,93 @@
+import type {
+	ActorContext,
+	AgentEvent,
+	NoteId,
+	ProvenanceId,
+	RunAgentInput,
+	Skill,
+	SkillSummary,
+	TextSelection
+} from '$lib/models';
+import { NotFoundError } from '$lib/models';
+import type {
+	AgentRunner,
+	AgentWorkflowToolbox,
+	SkillFinder,
+	SkillUsageRecorder
+} from '$lib/services';
+
+export class InMemoryAgentRunner implements AgentRunner {
+	events: AgentEvent[] = [];
+
+	async *run(
+		_actor: ActorContext,
+		_input: RunAgentInput,
+		_context: Readonly<Record<string, unknown>>
+	): AsyncIterable<AgentEvent> {
+		void _actor;
+		void _input;
+		void _context;
+		for (const event of this.events) yield event;
+	}
+}
+
+export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
+	async extractPromises(_actor: ActorContext, _selection: TextSelection): Promise<never> {
+		void _actor;
+		void _selection;
+		throw new Error('Unexpected extractPromises tool invocation');
+	}
+	async relate(_actor: ActorContext, _selection: TextSelection): Promise<never> {
+		void _actor;
+		void _selection;
+		throw new Error('Unexpected relate tool invocation');
+	}
+	async reference(_actor: ActorContext, _selection: TextSelection): Promise<never> {
+		void _actor;
+		void _selection;
+		throw new Error('Unexpected reference tool invocation');
+	}
+	async generateDiagram(
+		_actor: ActorContext,
+		_selection: TextSelection,
+		_instruction?: string
+	): Promise<never> {
+		void _actor;
+		void _selection;
+		void _instruction;
+		throw new Error('Unexpected generateDiagram tool invocation');
+	}
+}
+
+export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
+	skills: Skill[] = [];
+	usages: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }[] = [];
+
+	async listEnabled(_actor: ActorContext): Promise<readonly SkillSummary[]> {
+		void _actor;
+		return this.skills
+			.filter((skill) => skill.isEnabled)
+			.map((skill) => ({
+				noteId: skill.note.id,
+				name: skill.name,
+				description: skill.description,
+				triggerHints: skill.triggerHints,
+				isEnabled: skill.isEnabled
+			}));
+	}
+
+	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill> {
+		void _actor;
+		const skill = this.skills.find((candidate) => candidate.note.id === noteId);
+		if (!skill) throw new NotFoundError('Skill was not found');
+		return skill;
+	}
+
+	async record(
+		_actor: ActorContext,
+		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
+	): Promise<void> {
+		void _actor;
+		this.usages.push(input);
+	}
+}

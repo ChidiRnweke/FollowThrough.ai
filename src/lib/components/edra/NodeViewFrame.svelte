@@ -13,7 +13,9 @@
 		[key: string]: unknown;
 	} = $props();
 
+	// svelte-ignore state_referenced_locally
 	setContext('onDragStart', onDragStart);
+	// svelte-ignore state_referenced_locally
 	setContext('decorationClasses', decorationClasses);
 </script>
 

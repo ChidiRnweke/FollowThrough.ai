@@ -12,11 +12,11 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"test:unit": "vitest",
+		"test:unit": "vitest --project client --project server",
 		"test:demo": "vitest run --project server src/lib/factories/demo-controller-factory.spec.ts",
-		"test:workflow": "vitest run --project server src/lib/controllers/production-workflows.spec.ts",
-		"test:repository": "vitest run --project server src/lib/repositories/*.spec.ts src/lib/server/db/*.contract.spec.ts",
-		"test:capability": "vitest run --project server src/lib/services/*.spec.ts",
+		"test:workflow": "vitest run --project server src/lib/controllers",
+		"test:repository": "vitest run --project contracts",
+		"test:capability": "vitest run --project server src/lib/services src/lib/server/domain",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
 		"test:e2e": "playwright install && playwright test",
 		"db:start": "docker compose up",
@@ -69,6 +69,8 @@
 		"vitest-browser-svelte": "^2.1.1"
 	},
 	"dependencies": {
+		"@floating-ui/dom": "^1.8.0",
+		"@openai/agents": "^0.13.2",
 		"@tiptap/core": "^3.27.3",
 		"@tiptap/extension-audio": "^3.27.3",
 		"@tiptap/extension-bubble-menu": "^3.27.3",
@@ -93,6 +95,10 @@
 		"@tiptap/suggestion": "^3.27.3",
 		"katex": "^0.17.0",
 		"lowlight": "^3.3.0",
-		"mermaid": "^11.16.0"
+		"mermaid": "^11.16.0",
+		"openai": "^6.46.0",
+		"svelte-dnd-action": "^0.9.70",
+		"svelte-sonner": "^1.1.1",
+		"zod": "^4.4.3"
 	}
 }

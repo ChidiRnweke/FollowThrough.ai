@@ -9,8 +9,8 @@ import { NodeView } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Decoration, DecorationSource } from '@tiptap/pm/view';
 
-import NodeViewFrame from '../components/NodeViewFrame.svelte';
-import type { Editor } from '../../../Editor.ts';
+import NodeViewFrame from '../NodeViewFrame.svelte';
+import type { Editor } from './CoreEditor.js';
 import { SvelteRenderer } from './SvelteRenderer.svelte.js';
 
 export interface SvelteNodeViewRendererOptions extends NodeViewRendererOptions {
@@ -74,7 +74,7 @@ class SvelteNodeView extends NodeView<Component, Editor, SvelteNodeViewRendererO
 		this.handleSelectionUpdate = this.handleSelectionUpdate.bind(this);
 		this.editor.on('selectionUpdate', this.handleSelectionUpdate);
 
-		this.renderer = new SvelteRenderer(NodeViewFrame, {
+		this.renderer = new SvelteRenderer(NodeViewFrame as Component<Record<string, unknown>>, {
 			props: {
 				component: this.component,
 				onDragStart,
@@ -219,10 +219,10 @@ class SvelteNodeView extends NodeView<Component, Editor, SvelteNodeViewRendererO
 }
 
 export function SvelteNodeViewRenderer(
-	component: Component,
+	component: Component<NodeViewProps>,
 	options?: Partial<SvelteNodeViewRendererOptions>
 ): NodeViewRenderer {
 	return (props) => {
-		return new SvelteNodeView(component, props, options);
+		return new SvelteNodeView(component as Component, props, options);
 	};
 }

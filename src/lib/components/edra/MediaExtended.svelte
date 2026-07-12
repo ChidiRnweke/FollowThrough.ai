@@ -12,9 +12,9 @@
 	import Trash from '@lucide/svelte/icons/trash-2';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { onDestroy, onMount, type Snippet } from 'svelte';
-	import { duplicateContent } from '../../utils.js';
-	import strings from '../../strings.js';
-	import { NodeViewWrapper } from '$lib/edra/tiptap/index.js';
+	import { duplicateContent } from './commands/utils.js';
+	import strings from './commands/strings.js';
+	import { NodeViewWrapper } from './index.js';
 
 	interface MediaExtendedProps extends NodeViewProps {
 		children: Snippet<[]>;

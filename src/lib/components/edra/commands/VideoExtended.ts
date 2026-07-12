@@ -1,5 +1,5 @@
 import { Video } from './Video.js';
-import { SvelteNodeViewRenderer } from '../../index.ts';
+import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import type { Component } from 'svelte';
 import type { NodeViewProps } from '@tiptap/core';
 

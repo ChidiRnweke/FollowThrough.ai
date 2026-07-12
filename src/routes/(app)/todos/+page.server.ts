@@ -1,0 +1,15 @@
+import type { TodoListFilter, TodoResponsibility, TodoStatus } from '$lib/models';
+import { AppFactory } from '$lib/server/app-factory';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ url }) => {
+	const status = url.searchParams.get('status') as TodoStatus | null;
+	const responsibility = url.searchParams.get('responsibility') as TodoResponsibility | null;
+	const filter: TodoListFilter = {
+		...(status !== null ? { status } : {}),
+		...(responsibility !== null ? { responsibility } : {})
+	};
+	const factory = AppFactory.controllerFactory();
+	const output = await factory.todos().list(AppFactory.actor(), filter);
+	return { todos: output.todos, view: url.searchParams.get('view') ?? 'board' };
+};

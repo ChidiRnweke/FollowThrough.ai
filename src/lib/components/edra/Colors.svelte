@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { quickcolors } from '../../../utils.ts';
+	import { quickcolors } from './commands/utils.js';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { cn } from '$lib/utils.js';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Check from '@lucide/svelte/icons/check';
-	import Tooltip from '../Tooltip.svelte';
-	import { getEditor, useEditorState } from '$lib/edra/tiptap/index.js';
+	import Tooltip from './Tooltip.svelte';
+	import { getEditor, useEditorState } from './commands/index.js';
 
 	let open = $state(false);
 	const editor = getEditor();

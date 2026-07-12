@@ -5,14 +5,14 @@ import type {
 	DateTime,
 	DiagramId,
 	DiagramKind,
-	EntityId,
-	EntityType,
 	LocalDate,
 	MessageId,
 	NoteId,
+	NoteKind,
 	NoteRevisionId,
 	PipelineKind,
 	ProducerKind,
+	ProjectId,
 	PromiseStrength,
 	ProseMirrorDocument,
 	ProvenanceId,
@@ -41,11 +41,23 @@ export interface User {
 	readonly updatedAt: DateTime;
 }
 
+export interface Project {
+	readonly id: ProjectId;
+	readonly userId: UserId;
+	readonly name: string;
+	readonly description?: string;
+	readonly archivedAt?: DateTime;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
 export interface Note {
 	readonly id: NoteId;
 	readonly userId: UserId;
+	readonly projectId: ProjectId;
 	readonly parentId?: NoteId;
-	readonly kind: 'note' | 'skill';
+	readonly kind: NoteKind;
+	readonly position: number;
 	readonly title: string;
 	readonly document: ProseMirrorDocument;
 	readonly plainText: string;
@@ -58,7 +70,15 @@ export interface Note {
 
 export type NoteSummary = Pick<
 	Note,
-	'id' | 'parentId' | 'kind' | 'title' | 'isPinned' | 'archivedAt' | 'updatedAt'
+	| 'id'
+	| 'projectId'
+	| 'parentId'
+	| 'kind'
+	| 'position'
+	| 'title'
+	| 'isPinned'
+	| 'archivedAt'
+	| 'updatedAt'
 >;
 
 export interface NoteRevision {
@@ -98,39 +118,20 @@ export interface Provenance {
 	readonly createdAt: DateTime;
 }
 
-export interface Entity {
-	readonly id: EntityId;
-	readonly userId: UserId;
-	readonly type: EntityType;
-	readonly name: string;
-	readonly description?: string;
-	readonly aliases: readonly string[];
-	readonly metadata: Readonly<Record<string, unknown>>;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-export interface EntityMention {
-	readonly entityId: EntityId;
-	readonly noteId: NoteId;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
 export interface Todo {
 	readonly id: TodoId;
 	readonly userId: UserId;
+	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly description?: string;
 	readonly status: TodoStatus;
 	readonly responsibility: TodoResponsibility;
-	readonly waitingOnEntityId?: EntityId;
+	readonly waitingOn?: string;
 	readonly dueDate?: LocalDate;
 	readonly dueDateVerbatim?: string;
 	readonly promiseStrength?: PromiseStrength;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
-	readonly entityIds: readonly EntityId[];
 	readonly completedAt?: DateTime;
 	readonly deletedAt?: DateTime;
 	readonly createdAt: DateTime;
@@ -246,11 +247,15 @@ export interface ToolActivity {
 
 export interface SearchDocument {
 	readonly id: SearchDocumentId;
+	readonly projectId: ProjectId;
 	readonly noteId: NoteId;
 	readonly diagramId?: DiagramId;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly content: string;
 	readonly contentHash: string;
+	readonly sourceRevision: number;
+	readonly chunkIndex: number;
+	readonly embedding?: readonly number[];
 	readonly embeddingModel?: string;
 }
 
@@ -307,16 +312,17 @@ export type Suggestion =
 	| DiagramSuggestion;
 
 export interface CreateTodoInput {
+	/** Required by production services; optional while legacy controller callers migrate. */
+	readonly projectId?: ProjectId;
 	readonly title: string;
 	readonly description?: string;
 	readonly responsibility: TodoResponsibility;
-	readonly waitingOnEntityId?: EntityId;
+	readonly waitingOn?: string;
 	readonly dueDate?: LocalDate;
 	readonly dueDateVerbatim?: string;
 	readonly promiseStrength?: PromiseStrength;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
-	readonly entityIds?: readonly EntityId[];
 }
 
 export interface CreateRelationshipInput {

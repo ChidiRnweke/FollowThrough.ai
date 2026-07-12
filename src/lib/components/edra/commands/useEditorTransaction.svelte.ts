@@ -1,4 +1,4 @@
-import type { Editor } from './Editor.ts';
+import type { Editor } from './CoreEditor.js';
 /**
  * Svelte 5 rune-based hook that provides a reactive transaction counter.
  * Reading `version` inside a template expression creates a dependency

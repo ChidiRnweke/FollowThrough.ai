@@ -3,6 +3,7 @@ import {
 	boolean,
 	check,
 	date,
+	halfvec,
 	index,
 	integer,
 	jsonb,
@@ -12,12 +13,11 @@ import {
 	text,
 	timestamp,
 	uniqueIndex,
-	uuid,
-	vector
+	uuid
 } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-export const noteKind = pgEnum('note_kind', ['note', 'skill']);
+export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 export const todoStatus = pgEnum('todo_status', [
 	'backlog',
 	'open',
@@ -29,8 +29,6 @@ export const todoResponsibility = pgEnum('todo_responsibility', ['mine', 'waitin
 export const promiseStrength = pgEnum('promise_strength', ['explicit', 'implied', 'tentative']);
 export const diagramKind = pgEnum('diagram_kind', ['mermaid', 'drawio']);
 export const relationshipKind = pgEnum('relationship_kind', [
-	'same_client',
-	'same_system',
 	'prior_decision',
 	'contradicts',
 	'elaborates',
@@ -88,6 +86,26 @@ export const users = pgTable(
 	(table) => [uniqueIndex('users_email_unique').on(sql`lower(${table.email})`)]
 );
 
+export const projects = pgTable(
+	'projects',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		description: text('description'),
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		...timestamps
+	},
+	(table) => [
+		uniqueIndex('projects_user_name_unique')
+			.on(table.userId, sql`lower(${table.name})`)
+			.where(sql`${table.archivedAt} is null`),
+		index('projects_user_updated_idx').on(table.userId, table.updatedAt)
+	]
+);
+
 export const notes = pgTable(
 	'notes',
 	{
@@ -95,8 +113,12 @@ export const notes = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		parentId: uuid('parent_id').references((): AnyPgColumn => notes.id, { onDelete: 'set null' }),
 		kind: noteKind('kind').notNull().default('note'),
+		position: integer('position').notNull().default(0),
 		title: text('title').notNull(),
 		document: jsonb('document')
 			.$type<ProseMirrorDocument>()
@@ -110,6 +132,7 @@ export const notes = pgTable(
 	},
 	(table) => [
 		index('notes_user_updated_idx').on(table.userId, table.updatedAt),
+		index('notes_project_parent_position_idx').on(table.projectId, table.parentId, table.position),
 		index('notes_parent_idx').on(table.parentId),
 		index('notes_user_kind_idx').on(table.userId, table.kind)
 	]
@@ -186,55 +209,6 @@ export const noteRevisions = pgTable(
 	]
 );
 
-export const entities = pgTable(
-	'entities',
-	{
-		id: uuid('id').primaryKey().defaultRandom(),
-		userId: uuid('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		// Intentionally text: the brief says the final entity type set is still open.
-		type: text('type').notNull(),
-		name: text('name').notNull(),
-		description: text('description'),
-		aliases: text('aliases')
-			.array()
-			.notNull()
-			.default(sql`'{}'::text[]`),
-		metadata: jsonb('metadata').$type<JsonObject>().notNull().default({}),
-		...timestamps
-	},
-	(table) => [
-		uniqueIndex('entities_user_type_name_unique').on(
-			table.userId,
-			table.type,
-			sql`lower(${table.name})`
-		),
-		index('entities_user_type_idx').on(table.userId, table.type)
-	]
-);
-
-export const noteEntities = pgTable(
-	'note_entities',
-	{
-		noteId: uuid('note_id')
-			.notNull()
-			.references(() => notes.id, { onDelete: 'cascade' }),
-		entityId: uuid('entity_id')
-			.notNull()
-			.references(() => entities.id, { onDelete: 'cascade' }),
-		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
-			onDelete: 'set null'
-		}),
-		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-	},
-	(table) => [
-		primaryKey({ columns: [table.noteId, table.entityId] }),
-		index('note_entities_entity_idx').on(table.entityId)
-	]
-);
-
 export const todos = pgTable(
 	'todos',
 	{
@@ -242,13 +216,14 @@ export const todos = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		waitingOnEntityId: uuid('waiting_on_entity_id').references(() => entities.id, {
-			onDelete: 'set null'
-		}),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		title: text('title').notNull(),
 		description: text('description'),
 		status: todoStatus('status').notNull().default('open'),
 		responsibility: todoResponsibility('responsibility').notNull().default('mine'),
+		waitingOn: text('waiting_on'),
 		dueDate: date('due_date'),
 		dueDateVerbatim: text('due_date_verbatim'),
 		promiseStrength: promiseStrength('promise_strength'),
@@ -262,23 +237,8 @@ export const todos = pgTable(
 	},
 	(table) => [
 		index('todos_user_status_due_idx').on(table.userId, table.status, table.dueDate),
+		index('todos_project_status_idx').on(table.projectId, table.status),
 		index('todos_waiting_due_idx').on(table.userId, table.responsibility, table.dueDate)
-	]
-);
-
-export const todoEntities = pgTable(
-	'todo_entities',
-	{
-		todoId: uuid('todo_id')
-			.notNull()
-			.references(() => todos.id, { onDelete: 'cascade' }),
-		entityId: uuid('entity_id')
-			.notNull()
-			.references(() => entities.id, { onDelete: 'cascade' })
-	},
-	(table) => [
-		primaryKey({ columns: [table.todoId, table.entityId] }),
-		index('todo_entities_entity_idx').on(table.entityId)
 	]
 );
 
@@ -317,6 +277,9 @@ export const references = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		noteId: uuid('note_id')
 			.notNull()
 			.references(() => notes.id, { onDelete: 'cascade' }),
@@ -340,6 +303,9 @@ export const diagrams = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		noteId: uuid('note_id')
 			.notNull()
 			.references(() => notes.id, { onDelete: 'cascade' }),
@@ -357,7 +323,10 @@ export const diagrams = pgTable(
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
 		...timestamps
 	},
-	(table) => [index('diagrams_note_idx').on(table.noteId)]
+	(table) => [
+		index('diagrams_note_idx').on(table.noteId),
+		index('diagrams_project_idx').on(table.projectId)
+	]
 );
 
 export const skills = pgTable(
@@ -486,6 +455,9 @@ export const searchChunks = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
 		noteId: uuid('note_id')
 			.notNull()
 			.references(() => notes.id, { onDelete: 'cascade' }),
@@ -494,20 +466,23 @@ export const searchChunks = pgTable(
 			onDelete: 'set null'
 		}),
 		content: text('content').notNull(),
-		embedding: vector('embedding', { dimensions: 3072 }),
+		embedding: halfvec('embedding', { dimensions: 3072 }),
 		embeddingModel: text('embedding_model'),
 		contentHash: text('content_hash').notNull(),
+		sourceRevision: integer('source_revision').notNull().default(1),
+		chunkIndex: integer('chunk_index').notNull().default(0),
 		...timestamps
 	},
 	(table) => [
 		index('search_chunks_note_idx').on(table.noteId),
-		index('search_chunks_user_idx').on(table.userId)
+		index('search_chunks_user_idx').on(table.userId),
+		index('search_chunks_project_idx').on(table.projectId)
 	]
 );
 
 export type User = typeof users.$inferSelect;
+export type Project = typeof projects.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type NoteRevision = typeof noteRevisions.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
-export type Entity = typeof entities.$inferSelect;
 export type Suggestion = typeof suggestions.$inferSelect;

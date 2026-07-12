@@ -10,7 +10,11 @@ import type {
 	ProvenanceId,
 	SourceAnchorId,
 	Suggestion,
-	SuggestionId
+	SuggestionId,
+	SuggestionStatus,
+	SuggestionView,
+	TrustPolicy,
+	UpdateTrustPolicyInput
 } from '../models';
 
 export interface SuggestionProposalBase {
@@ -40,6 +44,20 @@ export interface SuggestionCreator {
 export interface SuggestionFinder {
 	get(actor: ActorContext, id: SuggestionId): Promise<Suggestion>;
 }
+export interface SuggestionLister {
+	listByStatus(
+		actor: ActorContext,
+		status: SuggestionStatus,
+		noteId?: NoteId
+	): Promise<readonly Suggestion[]>;
+	countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number>;
+}
+export interface SuggestionViewAssembler {
+	assemble(
+		actor: ActorContext,
+		suggestions: readonly Suggestion[]
+	): Promise<readonly SuggestionView[]>;
+}
 export interface SuggestionAccepter {
 	accept(
 		actor: ActorContext,
@@ -54,12 +72,19 @@ export interface SuggestionRejecter {
 export interface SuggestionReverter {
 	revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
 }
+export interface SuggestionExpirer {
+	expire(actor: ActorContext): Promise<number>;
+}
 export interface TrustPolicyEvaluator {
 	shouldAutoAccept(
 		actor: ActorContext,
 		pipeline: PipelineKind,
 		suggestion: Suggestion
 	): Promise<boolean>;
+}
+export interface TrustPolicyStore {
+	list(actor: ActorContext): Promise<readonly TrustPolicy[]>;
+	upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy>;
 }
 export interface ProvenanceRecorder {
 	record(

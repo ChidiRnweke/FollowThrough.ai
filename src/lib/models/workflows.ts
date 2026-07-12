@@ -11,9 +11,9 @@ import type {
 import type {
 	ConversationId,
 	DiagramId,
-	EntityId,
 	LocalDate,
 	NoteId,
+	ProjectId,
 	PromiseStrength,
 	RelationshipKind,
 	SourceAnchorId,
@@ -35,7 +35,6 @@ export interface PromiseCandidate {
 
 export interface LinkCandidate {
 	readonly targetNoteId: NoteId;
-	readonly entityIds: readonly EntityId[];
 	readonly kind: RelationshipKind;
 	readonly justification: string;
 	readonly confidence: number;
@@ -118,6 +117,7 @@ export interface RevertSuggestionInput {
 
 export interface RunAgentInput {
 	readonly conversationId?: ConversationId;
+	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
 	readonly selection?: TextSelection;
 	readonly prompt: string;

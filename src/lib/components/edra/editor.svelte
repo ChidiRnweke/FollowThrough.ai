@@ -1,14 +1,8 @@
 <script lang="ts">
-	import TiptapContent from '../tiptap/components/TiptapContent.svelte';
+	import TiptapContent from './TiptapContent.svelte';
 	import './editor.css';
 	import mermaid from 'mermaid';
-	import {
-		MathBlock,
-		Link,
-		MathInline,
-		TableColMenu,
-		TableRowMenu
-	} from './components/menu/index.js';
+	import { MathBlock, Link, MathInline, TableColMenu, TableRowMenu } from './index.js';
 	import { mode } from 'mode-watcher';
 
 	interface Props {

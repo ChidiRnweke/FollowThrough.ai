@@ -1,10 +1,6 @@
 <script lang="ts">
-	import {
-		BubbleMenu,
-		getEditor,
-		removeAIHighlight,
-		useEditorTransaction
-	} from '$lib/edra/tiptap/index.js';
+	import BubbleMenu from './BubbleMenu.svelte';
+	import { getEditor, removeAIHighlight, useEditorTransaction } from './commands/index.js';
 	import { toast } from 'svelte-sonner';
 	import {
 		AIState,
@@ -16,7 +12,7 @@
 		SIMPLIFY_LANGUAGE_PROMPT,
 		SOLVE_PROBLEM_PROMPT,
 		SUMMARIZE_PROMPT
-	} from '../../../commands/index.js';
+	} from './commands/index.js';
 	import { fade, slide } from 'svelte/transition';
 	import {
 		Sparkle,

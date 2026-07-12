@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { BubbleMenu, getEditor, useEditorState } from '$lib/edra/tiptap/index.js';
-	import strings from '../../../strings.js';
+	import { BubbleMenu, getEditor, useEditorState } from './index.js';
+	import strings from './commands/strings.js';
 
 	const editor = getEditor();
 	const editorState = useEditorState({

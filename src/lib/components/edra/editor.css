@@ -1,5 +1,5 @@
 @import 'katex/dist/katex.min.css';
-@import '../onedark.css';
+@import './onedark.css';
 
 .tiptap {
 	margin-inline: auto;

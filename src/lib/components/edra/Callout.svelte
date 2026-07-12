@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { NodeViewContent, NodeViewWrapper, type NodeViewProps } from '$lib/edra/tiptap/index.js';
+	import { NodeViewContent, NodeViewWrapper } from './index.js';
+	import type { NodeViewProps } from '@tiptap/core';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { cn } from '$lib/utils.js';

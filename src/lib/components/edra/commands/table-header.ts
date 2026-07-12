@@ -1,7 +1,7 @@
 import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table';
 import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import strings from '../../../strings.js';
+import strings from './strings.js';
 
 import { getCellsInRow, isColumnSelected, selectColumn } from './utils.js';
 

@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
-	import { commands } from '$lib/edra/commands/index.js';
-	import { addAIHighlight, getEditor, useEditorTransaction } from '$lib/edra/tiptap/index.js';
+	import { commands, addAIHighlight, getEditor, useEditorTransaction } from './commands/index.js';
 	import { cn } from '$lib/utils.js';
 	import { WandSparkles } from '@lucide/svelte';
-	import Colors from './tools/Colors.svelte';
-	import Export from './tools/Export.svelte';
+	import Colors from './Colors.svelte';
+	import Export from './Export.svelte';
 	import Tooltip from './Tooltip.svelte';
 	interface Props {
 		class?: string;

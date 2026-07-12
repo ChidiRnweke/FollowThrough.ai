@@ -4,7 +4,9 @@ import type {
 	SourceAnchor,
 	Todo,
 	TodoId,
-	TodoStatus
+	TodoListFilter,
+	TodoStatus,
+	TodoView
 } from '../models';
 export interface TodoCreator {
 	create(actor: ActorContext, input: CreateTodoInput): Promise<Todo>;
@@ -14,6 +16,9 @@ export interface TodoReader {
 }
 export interface TodoEditor {
 	update(actor: ActorContext, todo: Todo): Promise<Todo>;
+}
+export interface TodoDeleter {
+	softDelete(actor: ActorContext, todoId: TodoId): Promise<void>;
 }
 export interface TodoStatusChanger {
 	change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo>;
@@ -26,4 +31,10 @@ export interface WaitingOnFinder {
 }
 export interface TodoSourceFinder {
 	findSource(actor: ActorContext, todoId: TodoId): Promise<SourceAnchor>;
+}
+export interface TodoLister {
+	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
+}
+export interface TodoViewAssembler {
+	assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]>;
 }

@@ -3,7 +3,39 @@ import type { Node, ResolvedPos } from '@tiptap/pm/model';
 import type { EditorState, Selection, Transaction } from '@tiptap/pm/state';
 import { CellSelection, type Rect, TableMap } from '@tiptap/pm/tables';
 import type { EditorView } from '@tiptap/pm/view';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import Table from './table.js';
+
+export const ISMAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+export const quickcolors: { label: string; value: string }[] = [
+	{ label: 'Default', value: '' },
+	{ label: 'Red', value: '#ef4444' },
+	{ label: 'Orange', value: '#f97316' },
+	{ label: 'Yellow', value: '#eab308' },
+	{ label: 'Green', value: '#22c55e' },
+	{ label: 'Blue', value: '#3b82f6' },
+	{ label: 'Purple', value: '#a855f7' }
+];
+
+export function findColors(doc: Node): DecorationSet {
+	const decorations: Decoration[] = [];
+	doc.descendants((node, pos) => {
+		if (!node.isText || !node.text) return;
+		for (const match of node.text.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
+			const from = pos + (match.index ?? 0);
+			decorations.push(
+				Decoration.inline(from, from + match[0].length, { style: `color: ${match[0]}` })
+			);
+		}
+	});
+	return DecorationSet.create(doc, decorations);
+}
+
+export function duplicateContent(editor: Editor, node: Node): void {
+	const { from } = editor.state.selection;
+	editor.commands.insertContentAt(from + node.nodeSize, node.toJSON());
+}
 
 export const isRectSelected = (rect: Rect) => (selection: CellSelection) => {
 	const map = TableMap.get(selection.$anchorCell.node(-1));

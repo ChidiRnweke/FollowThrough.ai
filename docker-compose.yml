@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: followthrough
+      POSTGRES_USER: followthrough
+      POSTGRES_PASSWORD: followthrough
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U followthrough -d followthrough']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - followthrough-data:/var/lib/postgresql/data
+
+volumes:
+  followthrough-data:

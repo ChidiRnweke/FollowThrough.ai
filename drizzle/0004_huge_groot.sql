@@ -1,0 +1,2 @@
+DROP INDEX "projects_user_name_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "projects_user_name_unique" ON "projects" USING btree ("user_id",lower("name")) WHERE "projects"."archived_at" is null;

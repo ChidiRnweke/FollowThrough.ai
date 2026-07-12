@@ -4,9 +4,8 @@
 	import { cn } from '$lib/utils.js';
 	import AlignLeft from '@lucide/svelte/icons/align-left';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import Tooltip from '../Tooltip.svelte';
-	import { commands } from '$lib/edra/commands/index.js';
-	import { getEditor, useEditorTransaction } from '$lib/edra/tiptap/index.js';
+	import Tooltip from './Tooltip.svelte';
+	import { commands, getEditor, useEditorTransaction } from './commands/index.js';
 
 	const alignments = commands['alignment'];
 

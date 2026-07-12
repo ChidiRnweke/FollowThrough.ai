@@ -1,0 +1,17 @@
+{
+  "createdAt": "<ISO-8601>",
+  "listingOnlyDiscovery": true,
+  "sourceContentsForbiddenUntilFreeze": true,
+  "screens": [
+    {
+      "candidateId": "todos",
+      "candidateSourcePath": "src/routes/todos.tsx",
+      "routeGuess": "/todos",
+      "assignedSubagent": "screen-todos",
+      "entryPoint": "http://localhost:3000",
+      "viewports": ["desktop", "laptop", "mobile"],
+      "packet": "artifacts/ui-audit/screens/todos.md",
+      "status": "pending"
+    }
+  ]
+}

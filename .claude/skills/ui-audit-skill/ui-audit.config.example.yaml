@@ -1,0 +1,60 @@
+app:
+  baseUrl: http://localhost:3000
+  routeRoot: src/routes
+  auditOutput: artifacts/ui-audit
+
+routeDiscovery:
+  listingOnly: true
+  allowedCommands: [ls, find, tree]
+  forbidFileContentsUntilFreeze: true
+
+subagents:
+  requiredPerScreen: true
+  preferParallel: true
+  isolateScreenContext: true
+  packetDirectory: artifacts/ui-audit/screens
+  hideImplementationBeforeFreeze: true
+
+reviewMode:
+  humanFirst: true
+  screenshotBeforeDomInspection: true
+  enterThroughVisibleNavigationWhenPractical: true
+  recordFirstGlanceImpression: true
+
+viewports:
+  - name: desktop
+    width: 1440
+    height: 900
+  - name: laptop
+    width: 1024
+    height: 768
+  - name: mobile
+    width: 390
+    height: 844
+
+coverage:
+  include: ["*"]
+  exclude:
+    - pattern: "/auth/callback"
+      reason: "non-visual callback"
+
+fixtures:
+  storageState: .playwright/auth/ui-audit.json
+  dataProfile: ui-audit
+
+safety:
+  allowDestructiveActions: false
+  allowedOrigins:
+    - http://localhost:3000
+
+criteria:
+  decorativeCardAccents: required
+  visualHierarchy: required
+  textOverflow: required
+  informationArchitecture: required
+  responsiveLayout: required
+  expectedInteractionsBeforeCode: required
+
+output:
+  componentTestsAtEnd: required
+  actionableAcceptanceCriteria: required

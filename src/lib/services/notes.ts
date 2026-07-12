@@ -1,16 +1,22 @@
 import type {
 	ActorContext,
+	CreateNoteInput,
 	Note,
 	NoteId,
+	NoteSummary,
 	Provenance,
+	ProjectId,
 	SourceAnchor,
 	TextSelection
 } from '../models';
 export interface NoteCreator {
-	create(actor: ActorContext, input: { title: string; parentId?: NoteId }): Promise<Note>;
+	create(actor: ActorContext, input: CreateNoteInput): Promise<Note>;
 }
 export interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
+}
+export interface NoteTreeReader {
+	list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
 }
 export interface NoteEditor {
 	save(actor: ActorContext, note: Note): Promise<Note>;

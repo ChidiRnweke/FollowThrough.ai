@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 	import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu';
-	import type { Editor } from '../../Editor.ts';
+	import type { Editor } from './commands/CoreEditor.js';
 	import type { Snippet } from 'svelte';
 	interface Props {
 		editor: Editor;

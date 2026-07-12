@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
 
-import { findColors } from '../../utils.ts';
+import { findColors } from './utils.js';
 
 export default Extension.create({
 	name: 'colorHighlighter',

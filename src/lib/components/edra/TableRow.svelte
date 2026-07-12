@@ -6,13 +6,9 @@
 	import ArrowUpFromLine from '@lucide/svelte/icons/arrow-up-from-line';
 	import Sheet from '@lucide/svelte/icons/sheet';
 	import Trash from '@lucide/svelte/icons/trash';
-	import {
-		isRowGripSelected,
-		moveRowDown,
-		moveRowUp
-	} from '../../../tiptap/extensions/table/utils.js';
-	import { BubbleMenu, getEditor } from '$lib/edra/tiptap/index.js';
-	import strings from '../../../strings.js';
+	import { isRowGripSelected, moveRowDown, moveRowUp } from './commands/utils.js';
+	import { BubbleMenu, getEditor } from './index.js';
+	import strings from './commands/strings.js';
 
 	const editor = getEditor();
 </script>

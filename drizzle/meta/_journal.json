@@ -15,6 +15,34 @@
       "when": 1783762270865,
       "tag": "0001_tranquil_nighthawk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783787596318,
+      "tag": "0002_wooden_blockbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783801881738,
+      "tag": "0003_flawless_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783842001154,
+      "tag": "0004_huge_groot",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783846997809,
+      "tag": "0005_thankful_patriot",
+      "breakpoints": true
     }
   ]
 }

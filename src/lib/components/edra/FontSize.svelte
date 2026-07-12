@@ -2,8 +2,8 @@
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import Tooltip from '../Tooltip.svelte';
-	import { getEditor, useEditorTransaction } from '$lib/edra/tiptap/index.js';
+	import Tooltip from './Tooltip.svelte';
+	import { getEditor, useEditorTransaction } from './commands/index.js';
 
 	const editor = getEditor();
 	const transaction = useEditorTransaction(editor);

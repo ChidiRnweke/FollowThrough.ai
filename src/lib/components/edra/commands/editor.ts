@@ -8,21 +8,22 @@ import {
 	SvelteNodeViewRenderer,
 	useEditor,
 	VideoExtended
-} from '../tiptap/index.ts';
+} from './index.js';
+import type { Extensions } from '@tiptap/core';
 import { all, createLowlight } from 'lowlight';
-import extensions from '../../../extensions.ts';
+import extensions from './extensions.js';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import CodeBlock from './components/CodeBlock.svelte';
-import { MediaPlaceholder } from '../tiptap/extensions/MediaPlaceHolder.ts';
-import MediaPlaceholderComp from './components/MediaPlaceHolder.svelte';
-import ImageExtendedComp from './components/ImageExtended.svelte';
-import VideoExtendedComp from './components/VideoExtended.svelte';
-import IFrameComp from './components/IFrame.svelte';
-import MermaidComp from './components/Mermaid.svelte';
-import SlashCommandComp from './components/SlashCommand.svelte';
-import CalloutComp from './components/Callout.svelte';
+import CodeBlock from '../CodeBlock.svelte';
+import { MediaPlaceholder } from './MediaPlaceHolder.js';
+import MediaPlaceholderComp from '../MediaPlaceHolder.svelte';
+import ImageExtendedComp from '../ImageExtended.svelte';
+import VideoExtendedComp from '../VideoExtended.svelte';
+import IFrameComp from '../IFrame.svelte';
+import MermaidComp from '../Mermaid.svelte';
+import SlashCommandComp from '../SlashCommand.svelte';
+import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
-import { setTocItems } from './toc.svelte';
+import { setTocItems } from '../toc.svelte';
 
 const lowlight = createLowlight(all);
 
@@ -36,10 +37,11 @@ export interface EdraEditorProps {
 	) => Promise<void>;
 }
 
-export const createEditor = (props?: EdraEditorProps) =>
+export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
 	useEditor({
 		extensions: [
 			...extensions,
+			...extraExtensions,
 			CodeBlockLowlight.configure({
 				lowlight
 			}).extend({

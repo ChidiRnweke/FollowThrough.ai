@@ -21,8 +21,8 @@ the source of truth.
   editing machinery.
 - Provenance is shared by every AI-created artifact and suggestion. Suggestions
   retain their proposed JSON, decision, applied artifact ID, and reversal state.
-- Entity `type` is text until the open entity taxonomy is decided. Entity links
-  are many-to-many with notes and todos.
+- Projects own recursive folder, note, and skill entries. Todos belong directly
+  to projects and store a waiting-on counterparty as free text.
 - Mermaid and draw.io share a diagram record. Promotion creates a draw.io record
   pointing to its Mermaid predecessor, preserving both history and ownership.
 - Search chunks are model-dependent retrieval units backed by pgvector using
@@ -34,8 +34,6 @@ the source of truth.
 
 - Row-level security policies and OAuth provider/account/session tables.
 - Configurable kanban columns. Status is an enum matching the current v1 flow.
-- Extracted entity mentions as distinct occurrences. `note_entities` currently
-  represents the entity-to-note association and retains one source anchor.
 - A production vector index. Its operator class and tuning depend on the final
   embedding model and expected corpus size.
 

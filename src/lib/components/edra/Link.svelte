@@ -5,8 +5,8 @@
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Link from '@lucide/svelte/icons/link-2';
-	import Tooltip from '../Tooltip.svelte';
-	import { getEditor, useEditorTransaction } from '$lib/edra/tiptap/index.js';
+	import Tooltip from './Tooltip.svelte';
+	import { getEditor, useEditorTransaction } from './commands/index.js';
 
 	let open = $state(false);
 

@@ -1,29 +1,27 @@
 import type {
-	AcceptSuggestionController,
-	CreateSkillFromSelectionController,
-	ExtractPromisesController,
-	GenerateMermaidDiagramController,
-	PromoteDiagramController,
-	ReferenceController,
-	RejectSuggestionController,
-	RelateController,
-	RevertSuggestionController,
-	ReviseMermaidDiagramController,
-	RunAgentController,
-	SaveNoteController
+	AgentController,
+	DiagramsController,
+	NotesController,
+	ProjectsController,
+	ReferencesController,
+	RelationshipsController,
+	SkillsController,
+	SuggestionsController,
+	TodosController,
+	TrustPoliciesController,
+	WorkspaceController
 } from '../controllers';
 
 export interface ControllerFactory {
-	extractPromises(): ExtractPromisesController;
-	relate(): RelateController;
-	reference(): ReferenceController;
-	generateMermaidDiagram(): GenerateMermaidDiagramController;
-	reviseMermaidDiagram(): ReviseMermaidDiagramController;
-	promoteDiagram(): PromoteDiagramController;
-	acceptSuggestion(): AcceptSuggestionController;
-	rejectSuggestion(): RejectSuggestionController;
-	revertSuggestion(): RevertSuggestionController;
-	saveNote(): SaveNoteController;
-	runAgent(): RunAgentController;
-	createSkillFromSelection(): CreateSkillFromSelectionController;
+	workspace(): WorkspaceController;
+	projects(): ProjectsController;
+	notes(): NotesController;
+	todos(): TodosController;
+	relationships(): RelationshipsController;
+	references(): ReferencesController;
+	diagrams(): DiagramsController;
+	suggestions(): SuggestionsController;
+	skills(): SkillsController;
+	agent(): AgentController;
+	trustPolicies(): TrustPoliciesController;
 }

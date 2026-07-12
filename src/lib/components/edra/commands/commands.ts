@@ -30,9 +30,9 @@ import Undo from '@lucide/svelte/icons/undo-2';
 import Video from '@lucide/svelte/icons/video';
 import { isTextSelection } from '@tiptap/core';
 import type { Node } from '@tiptap/pm/model';
-import { ISMAC } from '../../../utils.js';
-import strings from '../../../strings.js';
-import { type Editor } from '../tiptap/index.ts';
+import { ISMAC } from './utils.js';
+import strings from './strings.js';
+import { type Editor } from './CoreEditor.js';
 import { FileCode, type Icon } from '@lucide/svelte';
 import Workflow from '@lucide/svelte/icons/workflow';
 

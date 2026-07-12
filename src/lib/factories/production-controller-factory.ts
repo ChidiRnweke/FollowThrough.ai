@@ -1,84 +1,76 @@
 import {
-	DefaultAcceptSuggestionController,
-	DefaultCreateSkillFromSelectionController,
-	DefaultExtractPromisesController,
-	DefaultGenerateMermaidDiagramController,
-	DefaultPromoteDiagramController,
-	DefaultReferenceController,
-	DefaultRejectSuggestionController,
-	DefaultRelateController,
-	DefaultRevertSuggestionController,
-	DefaultReviseMermaidDiagramController,
-	DefaultRunAgentController,
-	DefaultSaveNoteController,
-	type AcceptSuggestionDependencies,
-	type CreateSkillFromSelectionDependencies,
-	type ExtractPromisesDependencies,
-	type GenerateMermaidDiagramDependencies,
-	type PromoteDiagramDependencies,
-	type ReferenceDependencies,
-	type RejectSuggestionDependencies,
-	type RelateDependencies,
-	type RevertSuggestionDependencies,
-	type ReviseMermaidDiagramDependencies,
-	type RunAgentDependencies,
-	type SaveNoteDependencies
+	DefaultAgentController,
+	DefaultDiagramsController,
+	DefaultNotesController,
+	DefaultProjectsController,
+	DefaultReferencesController,
+	DefaultRelationshipsController,
+	DefaultSkillsController,
+	DefaultSuggestionsController,
+	DefaultTodosController,
+	DefaultTrustPoliciesController,
+	DefaultWorkspaceController,
+	type AgentDependencies,
+	type DiagramsDependencies,
+	type NotesDependencies,
+	type ProjectsDependencies,
+	type ReferencesDependencies,
+	type RelationshipsDependencies,
+	type SkillsDependencies,
+	type SuggestionsDependencies,
+	type TodosDependencies,
+	type TrustPoliciesDependencies,
+	type WorkspaceDependencies
 } from '../controllers';
 import type { ControllerFactory } from './controller-factory';
 
 export interface ProductionControllerDependencies {
-	extractPromises: ExtractPromisesDependencies;
-	relate: RelateDependencies;
-	reference: ReferenceDependencies;
-	generateMermaidDiagram: GenerateMermaidDiagramDependencies;
-	reviseMermaidDiagram: ReviseMermaidDiagramDependencies;
-	promoteDiagram: PromoteDiagramDependencies;
-	acceptSuggestion: AcceptSuggestionDependencies;
-	rejectSuggestion: RejectSuggestionDependencies;
-	revertSuggestion: RevertSuggestionDependencies;
-	saveNote: SaveNoteDependencies;
-	runAgent: RunAgentDependencies;
-	createSkillFromSelection: CreateSkillFromSelectionDependencies;
+	workspace: WorkspaceDependencies;
+	projects: ProjectsDependencies;
+	notes: NotesDependencies;
+	todos: TodosDependencies;
+	relationships: RelationshipsDependencies;
+	references: ReferencesDependencies;
+	diagrams: DiagramsDependencies;
+	suggestions: SuggestionsDependencies;
+	skills: SkillsDependencies;
+	agent: AgentDependencies;
+	trustPolicies: TrustPoliciesDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
 	constructor(private readonly dependencies: ProductionControllerDependencies) {}
-	extractPromises() {
-		return new DefaultExtractPromisesController(this.dependencies.extractPromises);
+	workspace() {
+		return new DefaultWorkspaceController(this.dependencies.workspace);
 	}
-	relate() {
-		return new DefaultRelateController(this.dependencies.relate);
+	projects() {
+		return new DefaultProjectsController(this.dependencies.projects);
 	}
-	reference() {
-		return new DefaultReferenceController(this.dependencies.reference);
+	notes() {
+		return new DefaultNotesController(this.dependencies.notes);
 	}
-	generateMermaidDiagram() {
-		return new DefaultGenerateMermaidDiagramController(this.dependencies.generateMermaidDiagram);
+	todos() {
+		return new DefaultTodosController(this.dependencies.todos);
 	}
-	reviseMermaidDiagram() {
-		return new DefaultReviseMermaidDiagramController(this.dependencies.reviseMermaidDiagram);
+	relationships() {
+		return new DefaultRelationshipsController(this.dependencies.relationships);
 	}
-	promoteDiagram() {
-		return new DefaultPromoteDiagramController(this.dependencies.promoteDiagram);
+	references() {
+		return new DefaultReferencesController(this.dependencies.references);
 	}
-	acceptSuggestion() {
-		return new DefaultAcceptSuggestionController(this.dependencies.acceptSuggestion);
+	diagrams() {
+		return new DefaultDiagramsController(this.dependencies.diagrams);
 	}
-	rejectSuggestion() {
-		return new DefaultRejectSuggestionController(this.dependencies.rejectSuggestion);
+	suggestions() {
+		return new DefaultSuggestionsController(this.dependencies.suggestions);
 	}
-	revertSuggestion() {
-		return new DefaultRevertSuggestionController(this.dependencies.revertSuggestion);
+	skills() {
+		return new DefaultSkillsController(this.dependencies.skills);
 	}
-	saveNote() {
-		return new DefaultSaveNoteController(this.dependencies.saveNote);
+	agent() {
+		return new DefaultAgentController(this.dependencies.agent);
 	}
-	runAgent() {
-		return new DefaultRunAgentController(this.dependencies.runAgent);
-	}
-	createSkillFromSelection() {
-		return new DefaultCreateSkillFromSelectionController(
-			this.dependencies.createSkillFromSelection
-		);
+	trustPolicies() {
+		return new DefaultTrustPoliciesController(this.dependencies.trustPolicies);
 	}
 }

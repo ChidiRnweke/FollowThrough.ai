@@ -1,6 +1,6 @@
 import { getContext, setContext } from 'svelte';
 
-import type { Editor } from '../../../Editor.ts';
+import type { Editor } from './CoreEditor.js';
 
 const EDITOR_CTX = Symbol('editor');
 

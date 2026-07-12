@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import * as schema from './schema';
+import { fileURLToPath } from 'node:url';
 
 export interface PostgresTestContext {
 	readonly container: StartedTestContainer;
@@ -19,12 +20,16 @@ export async function startPostgresTestcontainer(): Promise<PostgresTestContext>
 			POSTGRES_PASSWORD: 'test'
 		})
 		.withExposedPorts(5432)
-		.withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/))
+		// The image starts a temporary init server before the final database.
+		// Waiting for the second readiness line avoids racing migrations against shutdown/startup.
+		.withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
 		.start();
 	const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/followthrough_test`;
 	const client = postgres(url, { max: 1 });
 	const db = drizzle(client, { schema });
-	await migrate(db, { migrationsFolder: 'drizzle' });
+	await migrate(db, {
+		migrationsFolder: fileURLToPath(new URL('../../../../drizzle', import.meta.url))
+	});
 	return {
 		container,
 		client,

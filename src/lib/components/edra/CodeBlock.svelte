@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
-	import { NodeViewContent, NodeViewWrapper, type NodeViewProps } from '$lib/edra/tiptap/index.js';
+	import { NodeViewContent, NodeViewWrapper } from './index.js';
+	import type { NodeViewProps } from '@tiptap/core';
 
 	const { editor, node, updateAttributes, extension, getPos }: NodeViewProps = $props();
 
@@ -9,7 +10,7 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import { cn } from '$lib/utils.js';
-	import strings from '../../strings.js';
+	import strings from './commands/strings.js';
 	import { Sparkle } from '@lucide/svelte';
 	import Tooltip from './Tooltip.svelte';
 

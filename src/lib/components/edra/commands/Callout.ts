@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { mergeAttributes, Node, wrappingInputRule, type NodeViewProps } from '@tiptap/core';
 import type { Component } from 'svelte';
-import { SvelteNodeViewRenderer } from '../../../index.ts';
+import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 
 declare module '@tiptap/core' {
 	interface Commands<ReturnType> {

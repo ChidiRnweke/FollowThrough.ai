@@ -1,0 +1,96 @@
+# design-system.agent.md — compressed reference
+
+> Machine-oriented digest of design-system.md. Usage rules only. Values live in app.css. Conflict → flag, don't guess. Uncovered decision → append to design-system.md decision log.
+
+## identity
+
+- theme: stone(hue~~107) neutrals + teal(hue~~186) primary. one accent.
+- principles: color=information | chrome-defers-to-document | data=gray
+- teal=interactive/primary. red=destructive-only. all else gray.
+
+## tokens.color (semantic only — never raw oklch/hex/tailwind palette)
+
+- bg/fg: document surface + body text
+- card/popover: light=flat+border, dark=lighter step. elevation: light=border, dark=lightness. shadows≈none
+- primary: 1 primary action per view max. links, active states, focus affordances
+- secondary: stone-derived (zinc RETIRED). light oklch(0.955 0.006 106.5)/fg oklch(0.228 0.013 107.4); dark oklch(0.286 0.016 107.4)/fg oklch(0.988 0.003 106.5)
+- muted(-fg): metadata, timestamps, placeholders, provenance captions, inactive
+- accent: hover/selected wash only (=muted)
+- destructive: delete/irreversible only. never validation/emphasis
+- border/input/ring: hairlines. dark=white-alpha 10–15% — never hardcode gray borders
+- success: light oklch(0.55 0.09 155), dark oklch(0.68 0.11 155). completed/confirmed
+- warning: light oklch(0.62 0.1 75), dark oklch(0.74 0.12 75), fg dark-stone both modes. due-soon/degraded/contradicts
+- chart-1..5: mono stone ramp. color only for semantic series (overdue→destructive etc.)
+- sidebar-*: nav rail only. sidebar-primary=brighter teal=active nav item
+
+## tokens.type
+
+- font-sans: Inter Variable — everything. hierarchy via size/weight/color, not typeface
+- font-mono: JetBrains Mono. code, mermaid/drawio source, inline code, IDs, URLs. ligatures: off editable, ok read-only
+- chrome: text-sm base; text-xs+muted-fg for meta/provenance
+- prose(editor): 16px, lh~1.7, @tailwindcss/typography mapped to tokens (links→primary, quotes→border, code-bg→muted)
+- headings: w600; w700 note-title only; tracking −0.01/−0.02em ≥20px
+
+## tokens.shape+density
+
+- radius base 0.625rem: md=buttons/inputs/chips, lg=cards/popovers/suggestion-cards, xl+=modals, full=avatars/dots
+- density: compact. controls 32–36px chrome. roomy only in editor/reading
+- layout: 3 zones sidebar|document|right-panel(chat/review/todo, collapsible). boundaries=border hairlines, no shadows/blocks
+
+## components
+
+- base: shadcn-svelte, extend don't fork. edra shadcn flavor shares tokens — verify after edra customization
+- icons: lucide-svelte. size-4 chrome, size-3.5 chips/captions. currentColor only
+- buttons: default(teal)=single primary/view. else secondary/ghost/outline. destructive=click destroys
+- focus ring visible on everything interactive. keyboard-first
+- dark mode: class .dark, first-class. test every component both themes
+
+## ai-provenance (signature — no per-feature variants)
+
+- NO dedicated AI hue (no violet). shape carries meaning
+- applies: suggestion cards, inserted todos, backlink chips, reference cards, agent chat proposals
+- accepted block: teal gutter dot beside block, hover=provenance, first user edit clears. inline nodes self-identify, no dot
+- rejected: no trace
+- nothing AI-made indistinguishable from user writing until user edits it
+
+## editor.nodes
+
+- todo: inline checkbox+title, reads as prose line. done=strikethrough muted-fg. overdue=warning date. hover=due/owner. click=right-panel detail
+- backlink chip: secondary/muted pill. relationship on hover. contradicts→warning tint (only relationship with color)
+- reference card: icon+title+tier-badge(docs/standard/vendor/blog)+relevance-note muted-fg. docs/standards outrank blogs visually
+- diagram frame: card+hairline, header=kind(mermaid/drawio)+actions(edit/promote/regenerate). mermaid error=muted error state inside frame + failing source, never blank
+
+## chat panel
+
+- sidebar surface tone. alignment+muted author label, NO colored bubbles
+- tool activity=collapsed muted rows, expandable
+- agent proposals=standard suggestion card inline, no chat variant
+
+## motion (expressive, budgeted)
+
+- svelte springs=physical (panels/cards/reorder), css=micro
+- budget priority: 1) suggestion lifecycle: card springs in; Accept→card travels to destination (todo settles, chip pops w/ overshoot); Dismiss→quick exit. 2) panel slide choreography, animated-height tool rows. 3) hover lift 100–150ms
+- springs settle <400ms, no wobble. prose NEVER animates. 1 orchestrated moment/interaction
+- prefers-reduced-motion→fast fades. day one
+
+## copy
+
+- plain verbs, sentence case. name what user controls, not system internals
+- action name stable through flow (Accept→Accepted)
+- errors: what+fix, specific, no apology. empty states: invitation to act
+
+## definition-of-done (per component)
+
+[ ] light+dark ok (white-alpha borders)
+[ ] keyboard focus visible
+[ ] reduced-motion respected
+[ ] zero hardcoded color/font/radius
+[ ] motion within budget
+[ ] copy rules followed
+[ ] AI-touching → provenance treatment + standard card
+
+## hard rules
+
+- missing token → add token first (app.css + design-system.md) → then build
+- check shadcn/edra component exists before creating new
+- app.css=values, design-system.md=usage, this file=digest. digest conflicts with source → source wins, update digest

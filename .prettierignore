@@ -1,10 +1,16 @@
-# Package Managers
+.agents/
+.claude/
+.opencode/
+.svelte-kit/
+build/
+node_modules/
+drizzle/
+skills-lock.json
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
 bun.lock
 bun.lockb
-
-# Miscellaneous
-/static/
-/drizzle/
+static/
+artifacts/ui-audit/
+project-filesystem-backend-plan.md

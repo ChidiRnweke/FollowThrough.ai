@@ -16,9 +16,13 @@
 	import type { Node } from '@tiptap/pm/model';
 	import { NodeSelection } from '@tiptap/pm/state';
 	import { onDestroy, onMount } from 'svelte';
-	import { commands, type EdraCommand } from '../commands/index.ts';
-	import { quickcolors } from '../utils.ts';
-	import { getEditor, useEditorTransaction } from '../tiptap/index.ts';
+	import {
+		commands,
+		type EdraCommand,
+		quickcolors,
+		getEditor,
+		useEditorTransaction
+	} from './commands/index.js';
 
 	interface Props {
 		type?: 'simple' | 'extended';

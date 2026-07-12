@@ -5,6 +5,7 @@ import type {
 	Note,
 	NoteId,
 	ProvenanceId,
+	ProjectId,
 	SourceAnchorId,
 	Suggestion,
 	SuggestionId,
@@ -15,6 +16,7 @@ import type {
 
 export const demoIds = {
 	user: '00000000-0000-4000-8000-000000000001' as UserId,
+	project: '00000000-0000-4000-8000-000000000008' as ProjectId,
 	note: '00000000-0000-4000-8000-000000000002' as NoteId,
 	anchor: '00000000-0000-4000-8000-000000000003' as SourceAnchorId,
 	provenance: '00000000-0000-4000-8000-000000000004' as ProvenanceId,
@@ -26,7 +28,9 @@ export const demoNow = '2026-07-11T09:00:00.000Z' as DateTime;
 export const demoNote: Note = {
 	id: demoIds.note,
 	userId: demoIds.user,
+	projectId: demoIds.project,
 	kind: 'note',
+	position: 0,
 	title: 'Client discovery',
 	document: { type: 'doc', content: [] },
 	plainText: 'I will send the design tomorrow.',
@@ -38,6 +42,7 @@ export const demoNote: Note = {
 export const demoTodo: Todo = {
 	id: demoIds.todo,
 	userId: demoIds.user,
+	projectId: demoIds.project,
 	title: 'Send the design',
 	status: 'open',
 	responsibility: 'mine',
@@ -46,7 +51,6 @@ export const demoTodo: Todo = {
 	promiseStrength: 'explicit',
 	sourceAnchorId: demoIds.anchor,
 	provenanceId: demoIds.provenance,
-	entityIds: [],
 	createdAt: demoNow,
 	updatedAt: demoNow
 };

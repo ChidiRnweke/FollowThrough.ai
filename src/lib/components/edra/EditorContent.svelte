@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Editor } from '../Editor.ts';
+	import type { Editor } from './commands/CoreEditor.js';
 
 	let { editor, class: className }: { editor: Editor | null; class: string } = $props();
 

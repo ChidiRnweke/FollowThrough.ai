@@ -1,5 +1,5 @@
 import { mergeAttributes, Node, type NodeViewProps } from '@tiptap/core';
-import { SvelteNodeViewRenderer } from '../../../index.ts';
+import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import type { Component } from 'svelte';
 import { NodeSelection } from '@tiptap/pm/state';
 
