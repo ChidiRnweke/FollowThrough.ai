@@ -12,9 +12,16 @@ import type {
 	SourceAnchorId,
 	TextSelection
 } from '$lib/models';
-import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/models';
+import {
+	DEFAULT_PROJECT_NAME,
+	NotFoundError,
+	OwnershipError,
+	StaleRevisionError,
+	ValidationError
+} from '$lib/models';
 import type { NoteRepository, ProjectRepository, SourceAnchorRepository } from '$lib/repositories';
 import type {
+	NoteArchiver,
 	NoteCreator,
 	NoteEditor,
 	NoteReader,
@@ -32,6 +39,7 @@ export class NoteManagementService
 		NoteReader,
 		NoteTreeReader,
 		NoteEditor,
+		NoteArchiver,
 		NoteRevisionRecorder,
 		SelectionAnchorCreator,
 		SourceAnchorRepairer
@@ -85,6 +93,25 @@ export class NoteManagementService
 			currentRevision: current.currentRevision + 1,
 			updatedAt: now()
 		});
+	}
+
+	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.get(actor, noteId);
+		if (note.archivedAt) throw new ValidationError('The note is already archived');
+		if (note.kind === 'folder') {
+			const active = await this.notes.listActive(actor, note.projectId);
+			if (active.some((entry) => entry.parentId === noteId))
+				throw new ValidationError('A folder with active contents cannot be archived');
+		}
+		return this.notes.update(actor, { ...note, archivedAt: now(), updatedAt: now() });
+	}
+
+	async restore(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.get(actor, noteId);
+		if (!note.archivedAt) throw new ValidationError('The note is not archived');
+		const { archivedAt, ...rest } = note;
+		void archivedAt;
+		return this.notes.update(actor, { ...rest, updatedAt: now() });
 	}
 
 	async record(
@@ -187,7 +214,7 @@ export class NoteManagementService
 			: await this.projects.findFirstActive(actor);
 		if (project) return project;
 		if (projectId) throw new NotFoundError('Project was not found');
-		return this.projects.insert(actor, { name: 'Inbox' });
+		return this.projects.insert(actor, { name: DEFAULT_PROJECT_NAME });
 	}
 
 	private isUnchanged(current: Note, candidate: Note): boolean {

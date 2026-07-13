@@ -8,5 +8,5 @@
 
 <PageShell title="Today" description="Triage first, then write.">
 	<QuickCapture />
-	<TodayTriage view={data.view} />
+	<TodayTriage view={data.view} projects={data.shell.projects} />
 </PageShell>

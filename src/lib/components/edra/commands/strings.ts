@@ -47,7 +47,7 @@ const strings = {
 	},
 	editor: {
 		headingPlaceholder: "What's the title?",
-		paragraphPlaceholder: 'Write, press space for AI or / for commands',
+		paragraphPlaceholder: 'Start writing…',
 		contentErrorTitle: 'Unable to load the content',
 		contentErrorDescription: 'The content of this page might be corrupted.'
 	},

@@ -1,9 +1,13 @@
 import type {
 	ActorContext,
+	ArchiveNoteInput,
+	ArchiveNoteOutput,
 	CreateNoteInput,
 	CreateNoteOutput,
 	GetNoteViewInput,
 	NoteView,
+	RenameNoteInput,
+	RenameNoteOutput,
 	SaveNoteInput,
 	SaveNoteOutput
 } from '$lib/models';
@@ -21,6 +25,7 @@ import type {
 	TodoViewAssembler
 } from '$lib/services';
 import type {
+	NoteArchiver,
 	NoteEditor,
 	NoteIndexer,
 	NoteRevisionRecorder,
@@ -31,6 +36,8 @@ export interface NotesController {
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
 	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput>;
+	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput>;
+	archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput>;
 }
 export interface NotesDependencies {
 	noteReader: NoteReader;
@@ -44,6 +51,7 @@ export interface NotesDependencies {
 	suggestionLister: SuggestionLister;
 	suggestionViewAssembler: SuggestionViewAssembler;
 	noteEditor: NoteEditor;
+	noteArchiver: NoteArchiver;
 	revisionRecorder: NoteRevisionRecorder;
 	anchorRepairer: SourceAnchorRepairer;
 	noteIndexer: NoteIndexer;
@@ -85,5 +93,20 @@ export class DefaultNotesController implements NotesController {
 			await this.dependencies.noteIndexer.index(actor, note);
 			return { note, repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
+	}
+	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.noteReader.get(actor, input.noteId);
+			const note = await this.dependencies.noteEditor.save(actor, {
+				...current,
+				title: input.title
+			});
+			await this.dependencies.revisionRecorder.record(actor, note);
+			await this.dependencies.noteIndexer.index(actor, note);
+			return { note };
+		});
+	}
+	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
+		return { note: await this.dependencies.noteArchiver.archive(actor, input.noteId) };
 	}
 }

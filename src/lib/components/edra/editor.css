@@ -2,7 +2,8 @@
 @import './onedark.css';
 
 .tiptap {
-	margin-inline: auto;
+	flex: 1;
+	caret-color: var(--foreground);
 }
 
 .tiptap :first-child {
@@ -14,7 +15,7 @@
 }
 
 .tiptap > p {
-	margin: 1rem 0;
+	margin: 0.5rem 0;
 }
 
 /* For Placeholder */
@@ -41,7 +42,7 @@
 .tiptap h1,
 .tiptap h2 {
 	margin-top: 1rem;
-	margin-bottom: 1rem;
+	margin-bottom: 0.5rem;
 }
 
 .tiptap h1 {

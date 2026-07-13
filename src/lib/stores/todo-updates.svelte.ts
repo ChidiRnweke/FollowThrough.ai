@@ -1,5 +1,5 @@
 import { invalidateAll } from '$app/navigation';
-import type { TodoId, TodoStatus, UpdateTodoOutput } from '$lib/models';
+import type { ProjectId, TodoId, TodoStatus, UpdateTodoOutput } from '$lib/models';
 import { noteTodos } from './note-todos.svelte';
 import { rightPanel } from './right-panel.svelte';
 
@@ -20,6 +20,24 @@ class TodoUpdatesStore {
 				rightPanel.todoView = { ...rightPanel.todoView, todo: output.todo };
 			}
 			noteTodos.apply(output.todo);
+			await invalidateAll();
+			return true;
+		} catch {
+			return false;
+		} finally {
+			this.busy = false;
+		}
+	}
+
+	async create(title: string, projectId?: ProjectId, status?: TodoStatus): Promise<boolean> {
+		this.busy = true;
+		try {
+			const response = await fetch('/api/todos', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ title, projectId, status })
+			});
+			if (!response.ok) return false;
 			await invalidateAll();
 			return true;
 		} catch {

@@ -10,7 +10,8 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
-	testNoteId
+	testNoteId,
+	testNow
 } from '$lib/testing/fixtures/domain-builders';
 
 const setup = () => {
@@ -75,6 +76,65 @@ describe('Note management invariants', () => {
 				text: 'short'
 			})
 		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+
+	it('archives an active note', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		const archived = await service.archive(testActor(), testNoteId());
+		expect(archived.archivedAt).toBeDefined();
+	});
+
+	it('rejects archiving a note that is already archived', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder({ archivedAt: testNow })];
+		await expect(service.archive(testActor(), testNoteId())).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
+	});
+
+	it('rejects archiving a folder with active contents', async () => {
+		const { service, notes } = setup();
+		notes.notes = [
+			noteBuilder({ kind: 'folder' }),
+			noteBuilder({ id: testNoteId(2), parentId: testNoteId() })
+		];
+		await expect(service.archive(testActor(), testNoteId())).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
+	});
+
+	it('archives a folder whose contents are all archived', async () => {
+		const { service, notes } = setup();
+		notes.notes = [
+			noteBuilder({ kind: 'folder' }),
+			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
+		];
+		const archived = await service.archive(testActor(), testNoteId());
+		expect(archived.archivedAt).toBeDefined();
+	});
+
+	it('restores an archived note', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder({ archivedAt: testNow })];
+		const restored = await service.restore(testActor(), testNoteId());
+		expect(restored.archivedAt).toBeUndefined();
+	});
+
+	it('rejects restoring a note that is not archived', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		await expect(service.restore(testActor(), testNoteId())).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
+	});
+
+	it('does not expose another user’s note through archive', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		await expect(service.archive(testActor(2), testNoteId())).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 
 	it('rejects selection text that does not match its offsets', async () => {

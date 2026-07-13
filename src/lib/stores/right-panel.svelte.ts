@@ -1,6 +1,6 @@
 import type { TodoView } from '$lib/models';
 
-export type RightPanelMode = 'closed' | 'chat' | 'suggestions' | 'todo-detail';
+export type RightPanelMode = 'closed' | 'chat' | 'todo-detail';
 
 class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
@@ -8,9 +8,6 @@ class RightPanelStore {
 
 	openChat(): void {
 		this.mode = 'chat';
-	}
-	openSuggestions(): void {
-		this.mode = 'suggestions';
 	}
 	openTodo(view: TodoView): void {
 		this.todoView = view;

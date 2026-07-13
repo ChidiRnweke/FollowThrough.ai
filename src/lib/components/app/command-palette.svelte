@@ -27,9 +27,9 @@
 <Command.Dialog
 	bind:open={palette.isOpen}
 	title="Command palette"
-	description="Search notes and actions"
+	description="Search notes, todos and commands"
 >
-	<Command.Input placeholder="Search notes and actions…" />
+	<Command.Input placeholder="Search notes, todos and commands…" />
 	<Command.List>
 		<Command.Empty>Nothing found.</Command.Empty>
 		<Command.Group heading="Actions">
@@ -52,7 +52,7 @@
 			</Command.Item>
 			<Command.Item onSelect={() => go('/suggestions')}>
 				<Inbox class="size-4" />
-				Review suggestions
+				Suggestions inbox
 				{#if shell.pendingSuggestionCount > 0}
 					<Command.Shortcut>{shell.pendingSuggestionCount}</Command.Shortcut>
 				{/if}

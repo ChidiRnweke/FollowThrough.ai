@@ -5,6 +5,7 @@ import type {
 	MermaidDiagram,
 	Note,
 	NoteRelationship,
+	Skill,
 	Suggestion,
 	Todo
 } from './domain';
@@ -120,6 +121,8 @@ export interface RunAgentInput {
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
 	readonly selection?: TextSelection;
+	readonly contextNoteIds?: readonly NoteId[];
+	readonly requestedSkillNames?: readonly string[];
 	readonly prompt: string;
 }
 export type AgentEvent =
@@ -145,4 +148,15 @@ export interface CreateSkillFromSelectionInput {
 }
 export interface CreateSkillFromSelectionOutput {
 	readonly skillNoteId: NoteId;
+}
+
+export interface CreateSkillInput {
+	readonly name: string;
+	readonly description?: string;
+	readonly triggerHints?: readonly string[];
+	readonly projectId?: ProjectId;
+	readonly parentId?: NoteId;
+}
+export interface CreateSkillOutput {
+	readonly skill: Skill;
 }

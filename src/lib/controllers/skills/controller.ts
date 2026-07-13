@@ -2,12 +2,15 @@ import type {
 	ActorContext,
 	CreateSkillFromSelectionInput,
 	CreateSkillFromSelectionOutput,
+	CreateSkillInput,
+	CreateSkillOutput,
 	GetSkillViewInput,
 	ListSkillsOutput,
 	SkillView
 } from '$lib/models';
 import type { TransactionRunner } from '$lib/repositories';
 import type {
+	NoteCreator,
 	ProvenanceRecorder,
 	SelectionAnchorCreator,
 	SkillCreator,
@@ -18,6 +21,7 @@ import type {
 export interface SkillsController {
 	list(actor: ActorContext): Promise<ListSkillsOutput>;
 	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView>;
+	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput>;
 	createFromSelection(
 		actor: ActorContext,
 		input: CreateSkillFromSelectionInput
@@ -28,6 +32,7 @@ export interface SkillsDependencies {
 	skillUsageLister: SkillUsageLister;
 	anchorCreator: SelectionAnchorCreator;
 	skillCreator: SkillCreator;
+	noteCreator: NoteCreator;
 	provenanceRecorder: ProvenanceRecorder;
 	transactionRunner: TransactionRunner;
 }
@@ -42,6 +47,21 @@ export class DefaultSkillsController implements SkillsController {
 			this.dependencies.skillUsageLister.list(actor, input.noteId)
 		]);
 		return { skill, usages };
+	}
+	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const note = await this.dependencies.noteCreator.create(actor, {
+				title: input.name,
+				projectId: input.projectId,
+				parentId: input.parentId
+			});
+			const skill = await this.dependencies.skillCreator.create(actor, note, {
+				name: input.name,
+				description: input.description ?? '',
+				triggerHints: input.triggerHints ?? []
+			});
+			return { skill };
+		});
 	}
 	createFromSelection(
 		actor: ActorContext,

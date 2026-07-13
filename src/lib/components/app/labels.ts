@@ -60,6 +60,20 @@ export function formatDateTime(dateTime: DateTime): string {
 	return dateTimeFormatter.format(new Date(dateTime));
 }
 
+const relativeFormatter = new Intl.RelativeTimeFormat('en-GB', { numeric: 'auto' });
+
+export function formatRelativeTime(dateTime: DateTime): string {
+	const seconds = Math.round((new Date(dateTime).getTime() - Date.now()) / 1000);
+	const minutes = Math.round(seconds / 60);
+	const hours = Math.round(minutes / 60);
+	const days = Math.round(hours / 24);
+	if (Math.abs(seconds) < 60) return 'just now';
+	if (Math.abs(minutes) < 60) return relativeFormatter.format(minutes, 'minute');
+	if (Math.abs(hours) < 24) return relativeFormatter.format(hours, 'hour');
+	if (Math.abs(days) < 7) return relativeFormatter.format(days, 'day');
+	return formatDateTime(dateTime);
+}
+
 export function provenanceCaption(provenance: Provenance, sourceTitle?: string): string {
 	const producer = provenance.pipeline
 		? pipelineLabels[provenance.pipeline]

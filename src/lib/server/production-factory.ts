@@ -125,7 +125,8 @@ export function createProductionFactory(): ProductionControllerFactory {
 		knowledgeSearcher,
 		skills,
 		new KeywordRelevantSkillSelector(),
-		skills
+		skills,
+		notes
 	);
 	const agent = new OpenAIAgentRunner(
 		{
@@ -263,6 +264,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 			skillUsageLister: skills,
 			anchorCreator: notes,
 			skillCreator: skills,
+			noteCreator: notes,
 			provenanceRecorder: provenance,
 			transactionRunner: postgresTransactionRunner
 		},
@@ -270,6 +272,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 			userReader,
 			projectLister: projects,
 			noteTreeReader: notes,
+			skillFinder: skills,
 			suggestionLister,
 			todoLister: todos,
 			waitingOnFinder: todos,
@@ -287,6 +290,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 			suggestionLister,
 			suggestionViewAssembler: suggestions,
 			noteEditor: notes,
+			noteArchiver: notes,
 			revisionRecorder: notes,
 			anchorRepairer: notes,
 			noteIndexer,

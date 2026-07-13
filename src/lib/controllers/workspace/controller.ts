@@ -2,6 +2,7 @@ import type { ActorContext, GetTodayViewInput, ShellContext, TodayView } from '$
 import type {
 	NoteTreeReader,
 	ProjectLister,
+	SkillFinder,
 	SuggestionLister,
 	TodoLister,
 	TodoViewAssembler,
@@ -17,6 +18,7 @@ export interface WorkspaceDependencies {
 	userReader: UserReader;
 	noteTreeReader: NoteTreeReader;
 	projectLister: ProjectLister;
+	skillFinder: SkillFinder;
 	suggestionLister: SuggestionLister;
 	todoLister: TodoLister;
 	waitingOnFinder: WaitingOnFinder;
@@ -25,13 +27,14 @@ export interface WorkspaceDependencies {
 export class DefaultWorkspaceController implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
 	async getShellContext(actor: ActorContext): Promise<ShellContext> {
-		const [user, projects, noteTree, pendingSuggestionCount] = await Promise.all([
+		const [user, projects, noteTree, skills, pendingSuggestionCount] = await Promise.all([
 			this.dependencies.userReader.get(actor),
 			this.dependencies.projectLister.list(actor),
 			this.dependencies.noteTreeReader.list(actor),
+			this.dependencies.skillFinder.listEnabled(actor),
 			this.dependencies.suggestionLister.countByStatus(actor, 'proposed')
 		]);
-		return { user, projects, noteTree, pendingSuggestionCount };
+		return { user, projects, noteTree, skills, pendingSuggestionCount };
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
 		const [due, waiting, pendingSuggestionCount, notes] = await Promise.all([

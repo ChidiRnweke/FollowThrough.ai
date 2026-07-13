@@ -41,6 +41,9 @@ export interface User {
 	readonly updatedAt: DateTime;
 }
 
+/** Name of the auto-created project that holds unsorted notes and todos. */
+export const DEFAULT_PROJECT_NAME = 'General';
+
 export interface Project {
 	readonly id: ProjectId;
 	readonly userId: UserId;

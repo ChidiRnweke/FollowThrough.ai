@@ -11,12 +11,14 @@
 		view,
 		compact = false,
 		today = todayLocalDate(),
+		projectName,
 		onstatus,
 		onopen
 	}: {
 		view: TodoView;
 		compact?: boolean;
 		today?: LocalDate;
+		projectName?: string;
 		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
 	} = $props();
@@ -60,6 +62,9 @@
 		{/if}
 	</Card.Header>
 	<Card.Content class="flex flex-wrap items-center gap-1.5 px-4">
+		{#if projectName}
+			<Badge variant="outline" class="text-muted-foreground">{projectName}</Badge>
+		{/if}
 		{#if view.todo.dueDate}
 			<Badge
 				variant="ghost"

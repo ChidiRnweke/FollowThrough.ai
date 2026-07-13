@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { TodoId, TodoView } from '$lib/models';
+	import type { Project, ProjectId, TodoId, TodoView } from '$lib/models';
 	import * as Tabs from '$lib/components/ui/tabs';
+	import * as Select from '$lib/components/ui/select';
 	import { Button } from '$lib/components/ui/button';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -11,7 +12,29 @@
 	import TodoTable from '../todo-table.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
-	let { todos, view }: { todos: readonly TodoView[]; view: string } = $props();
+	let {
+		todos,
+		view,
+		basePath = '/todos',
+		projectId,
+		projects
+	}: {
+		todos: readonly TodoView[];
+		view: string;
+		basePath?: string;
+		projectId?: ProjectId;
+		projects?: readonly Project[];
+	} = $props();
+
+	const projectNames = $derived(
+		new Map((projects ?? []).map((project) => [project.id, project.name]))
+	);
+	const projectFilter = $derived(page.url.searchParams.get('projectId') ?? '');
+	const projectFilterLabel = $derived(
+		projectFilter === ''
+			? 'All projects'
+			: (projectNames.get(projectFilter as ProjectId) ?? 'All projects')
+	);
 
 	function open(todoId: TodoId): void {
 		const match = todos.find((item) => item.todo.id === todoId);
@@ -27,7 +50,7 @@
 		const params = new SvelteURLSearchParams(page.url.searchParams);
 		if (value === undefined) params.delete(key);
 		else params.set(key, value);
-		void goto(`/todos?${params.toString()}`, { keepFocus: true, noScroll: true });
+		void goto(`${basePath}?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
 
 	const responsibility = $derived(page.url.searchParams.get('responsibility'));
@@ -41,6 +64,23 @@
 		</Tabs.List>
 	</Tabs.Root>
 	<div class="flex items-center gap-1">
+		{#if projects && projects.length > 0}
+			<Select.Root
+				type="single"
+				value={projectFilter}
+				onValueChange={(value) => setParam('projectId', value === '' ? undefined : value)}
+			>
+				<Select.Trigger class="h-8 w-44" size="sm" aria-label="Filter by project">
+					{projectFilterLabel}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="">All projects</Select.Item>
+					{#each projects as project (project.id)}
+						<Select.Item value={project.id}>{project.name}</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+		{/if}
 		<Button
 			variant={responsibility === null ? 'secondary' : 'ghost'}
 			size="sm"
@@ -66,7 +106,24 @@
 </div>
 
 {#if view === 'list'}
-	<TodoTable {todos} onopen={open} />
+	{#if todos.length === 0}
+		<div class="flex flex-col items-center justify-center gap-2 py-16 text-center">
+			<p class="text-sm text-muted-foreground">
+				No todos yet. Capture a promise from a note or add one from the board.
+			</p>
+			<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
+				Add a todo on the board
+			</Button>
+		</div>
+	{:else}
+		<TodoTable {todos} projectNames={projects ? projectNames : undefined} onopen={open} />
+	{/if}
 {:else}
-	<KanbanBoard {todos} onopen={open} onmove={(id, status) => void move(id, status)} />
+	<KanbanBoard
+		{todos}
+		{projectId}
+		projectNames={projects ? projectNames : undefined}
+		onopen={open}
+		onmove={(id, status) => void move(id, status)}
+	/>
 {/if}

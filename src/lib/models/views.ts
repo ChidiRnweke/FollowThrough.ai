@@ -89,8 +89,9 @@ export interface SkillView {
 
 export interface ShellContext {
 	readonly user: User;
-	readonly projects?: readonly Project[];
+	readonly projects: readonly Project[];
 	readonly noteTree: readonly NoteSummary[];
+	readonly skills: readonly SkillSummary[];
 	readonly pendingSuggestionCount: number;
 }
 
@@ -207,6 +208,23 @@ export interface ArchiveProjectOutput {
 }
 
 export interface CreateNoteOutput {
+	readonly note: Note;
+}
+
+export interface RenameNoteInput {
+	readonly noteId: NoteId;
+	readonly title: string;
+}
+
+export interface RenameNoteOutput {
+	readonly note: Note;
+}
+
+export interface ArchiveNoteInput {
+	readonly noteId: NoteId;
+}
+
+export interface ArchiveNoteOutput {
 	readonly note: Note;
 }
 

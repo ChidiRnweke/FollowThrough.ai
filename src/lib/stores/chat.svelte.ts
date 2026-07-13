@@ -1,5 +1,17 @@
-import type { AgentEvent, ConversationId, RunAgentInput, SuggestionView } from '$lib/models';
+import type {
+	AgentEvent,
+	ConversationId,
+	NoteId,
+	RunAgentInput,
+	SuggestionView
+} from '$lib/models';
 import { suggestionToView } from './suggestion-view';
+
+export interface ContextChip {
+	readonly kind: 'note' | 'skill';
+	readonly id: NoteId;
+	readonly name: string;
+}
 
 export interface ChatToolActivity {
 	readonly name: string;
@@ -18,9 +30,29 @@ class ChatStore {
 	entries = $state<ChatEntry[]>([]);
 	isStreaming = $state(false);
 	conversationId = $state<ConversationId | undefined>(undefined);
+	chips = $state<ContextChip[]>([]);
+	// The auto chip for the open note reappears when a different note opens.
+	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
+
+	addChip(chip: ContextChip): void {
+		if (!this.chips.some((known) => known.kind === chip.kind && known.id === chip.id)) {
+			this.chips = [...this.chips, chip];
+		}
+	}
+
+	removeChip(chip: ContextChip): void {
+		this.chips = this.chips.filter((known) => known.kind !== chip.kind || known.id !== chip.id);
+	}
 
 	async send(input: Omit<RunAgentInput, 'conversationId'>): Promise<void> {
 		if (this.isStreaming) return;
+		const noteChips = this.chips.filter((chip) => chip.kind === 'note').map((chip) => chip.id);
+		const skillChips = this.chips.filter((chip) => chip.kind === 'skill').map((chip) => chip.name);
+		input = {
+			...input,
+			contextNoteIds: [...new Set([...(input.contextNoteIds ?? []), ...noteChips])],
+			requestedSkillNames: [...new Set([...(input.requestedSkillNames ?? []), ...skillChips])]
+		};
 		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'user',

@@ -1,6 +1,10 @@
 <script lang="ts">
-	import type { TodoId, TodoStatus, TodoView } from '$lib/models';
+	import type { ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { Button } from '$lib/components/ui/button';
+	import Plus from '@lucide/svelte/icons/plus';
+	import { toast } from 'svelte-sonner';
+	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
 	import { todoStatusLabels } from './labels';
 
@@ -12,11 +16,15 @@
 	let {
 		todos,
 		columns = ['backlog', 'open', 'in_progress', 'done'],
+		projectId,
+		projectNames,
 		onmove,
 		onopen
 	}: {
 		todos: readonly TodoView[];
 		columns?: readonly TodoStatus[];
+		projectId?: ProjectId;
+		projectNames?: ReadonlyMap<ProjectId, string>;
 		onmove?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
 	} = $props();
@@ -46,17 +54,67 @@
 			onmove?.(moved.id, status);
 		}
 	}
+
+	let addingTo = $state<TodoStatus | null>(null);
+	let newTitle = $state('');
+
+	async function addTodo(status: TodoStatus): Promise<void> {
+		const title = newTitle.trim();
+		if (!title) return;
+		newTitle = '';
+		addingTo = null;
+		const ok = await todoUpdates.create(title, projectId, status);
+		if (!ok) toast.error('Could not add the todo. Try again.');
+	}
 </script>
 
-<div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+<div class="grid gap-3 grid-cols-2 md:grid-cols-4">
 	{#each columns as status (status)}
 		<section class="flex min-h-48 flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2">
 			<h3
 				class="flex items-center justify-between px-1 text-xs font-semibold text-muted-foreground"
 			>
 				{todoStatusLabels[status]}
-				<span>{board[status].length}</span>
+				<span class="flex items-center gap-1">
+					<span>{board[status].length}</span>
+					{#if status !== 'done'}
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							class="size-5"
+							aria-label="Add todo to {todoStatusLabels[status]}"
+							onclick={() => {
+								addingTo = status;
+								newTitle = '';
+							}}
+						>
+							<Plus class="size-3.5" />
+						</Button>
+					{/if}
+				</span>
 			</h3>
+			{#if addingTo === status}
+				<form
+					class="flex flex-col gap-1"
+					onsubmit={(e) => {
+						e.preventDefault();
+						void addTodo(status);
+					}}
+				>
+					<input
+						class="rounded-md border border-input bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+						placeholder="Todo title…"
+						bind:value={newTitle}
+						onkeydown={(e) => {
+							if (e.key === 'Escape') addingTo = null;
+						}}
+					/>
+					<div class="flex gap-1">
+						<Button type="submit" size="sm" variant="default" class="flex-1">Add</Button>
+						<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
+					</div>
+				</form>
+			{/if}
 			<div
 				class="flex min-h-32 flex-1 flex-col gap-2"
 				use:dndzone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
@@ -64,7 +122,12 @@
 				onfinalize={(event) => handleFinalize(status, event)}
 			>
 				{#each board[status] as item (item.id)}
-					<TodoCard view={item.view} compact {onopen} />
+					<TodoCard
+						view={item.view}
+						compact
+						projectName={projectNames?.get(item.view.todo.projectId)}
+						{onopen}
+					/>
 				{/each}
 			</div>
 		</section>

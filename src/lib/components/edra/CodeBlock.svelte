@@ -22,7 +22,18 @@
 	const changeLanguage = (language: string) => {
 		updateAttributes({ language: language });
 		defaultLanguage = language;
+		// Mermaid code renders as a live diagram; convert right away instead of
+		// requiring an extra click. Deferred so the attribute update lands first.
+		if (language.toLowerCase() === 'mermaid') queueMicrotask(convertToMermaid);
 	};
+
+	// Fenced ```mermaid blocks arrive with the language already set (e.g. via
+	// paste or import) — render them as diagrams immediately.
+	$effect(() => {
+		if (defaultLanguage.toLowerCase() === 'mermaid' && editor.isEditable) {
+			queueMicrotask(convertToMermaid);
+		}
+	});
 
 	function copyCode() {
 		if (!preRef) return;

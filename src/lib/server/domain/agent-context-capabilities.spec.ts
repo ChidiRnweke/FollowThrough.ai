@@ -58,9 +58,10 @@ const setup = async (skillProject = testProjectId()) => {
 		new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
 		skills,
 		new KeywordRelevantSkillSelector(),
-		skills
+		skills,
+		notes
 	);
-	return { builder, skills };
+	return { builder, skills, notes };
 };
 
 describe('Agent grounding invariants', () => {
@@ -96,6 +97,78 @@ describe('Agent grounding invariants', () => {
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.skills).toEqual([]);
+	});
+
+	it('includes an explicitly requested skill without a keyword match', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{
+				noteId: testNoteId(),
+				prompt: 'Summarize this text',
+				requestedSkillNames: ['Decision records']
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
+			'Decision records'
+		]);
+	});
+
+	it('includes an explicitly requested skill from another project', async () => {
+		const { builder } = await setup(testProjectId(2));
+		const context = await builder.build(
+			testActor(),
+			{
+				noteId: testNoteId(),
+				prompt: 'Summarize this text',
+				requestedSkillNames: ['Decision records']
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
+			'Decision records'
+		]);
+	});
+
+	it('does not duplicate a requested skill that also matches by keyword', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{
+				noteId: testNoteId(),
+				prompt: 'Create an architecture decision',
+				requestedSkillNames: ['Decision records']
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.skills).toHaveLength(1);
+	});
+
+	it('includes explicitly attached context notes with their content', async () => {
+		const { builder, notes } = await setup();
+		notes.notes = [
+			...notes.notes,
+			noteBuilder({ id: testNoteId(5), title: 'Kickoff', plainText: 'Decisions from kickoff.' })
+		];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(5)] },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.contextNotes).toEqual([
+			{ noteId: testNoteId(5), title: 'Kickoff', content: 'Decisions from kickoff.' }
+		]);
+	});
+
+	it('skips context notes that cannot be loaded', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(9)] },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.contextNotes).toEqual([]);
 	});
 
 	it('records usage for an injected skill', async () => {

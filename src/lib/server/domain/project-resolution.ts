@@ -1,5 +1,5 @@
 import type { ActorContext, Project, ProjectId } from '$lib/models';
-import { NotFoundError } from '$lib/models';
+import { DEFAULT_PROJECT_NAME, NotFoundError } from '$lib/models';
 import type { ProjectRepository } from '$lib/repositories';
 
 export async function ensureProjectForActor(
@@ -14,5 +14,5 @@ export async function ensureProjectForActor(
 	}
 	const existing = await repository.findFirstActive(actor);
 	if (existing) return existing;
-	return repository.insert(actor, { name: 'Inbox' });
+	return repository.insert(actor, { name: DEFAULT_PROJECT_NAME });
 }

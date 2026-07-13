@@ -5,6 +5,11 @@
 	let { data } = $props();
 </script>
 
-<PageShell title="Todos" description="Your commitments and what you are waiting on.">
-	<TodosWorkspace todos={data.todos} view={data.view} />
+<PageShell title="Todos" description="Every commitment across all projects.">
+	<TodosWorkspace
+		todos={data.todos}
+		view={data.view}
+		basePath="/todos"
+		projects={data.shell.projects}
+	/>
 </PageShell>

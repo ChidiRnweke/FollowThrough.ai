@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TodoId, TodoView } from '$lib/models';
+	import type { ProjectId, TodoId, TodoView } from '$lib/models';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -7,9 +7,11 @@
 
 	let {
 		todos,
+		projectNames,
 		onopen
 	}: {
 		todos: readonly TodoView[];
+		projectNames?: ReadonlyMap<ProjectId, string>;
 		onopen?: (todoId: TodoId) => void;
 	} = $props();
 </script>
@@ -18,6 +20,9 @@
 	<Table.Header>
 		<Table.Row>
 			<Table.Head>Todo</Table.Head>
+			{#if projectNames}
+				<Table.Head>Project</Table.Head>
+			{/if}
 			<Table.Head>Status</Table.Head>
 			<Table.Head>Due</Table.Head>
 			<Table.Head>Responsibility</Table.Head>
@@ -40,6 +45,11 @@
 						{view.todo.title}
 					{/if}
 				</Table.Cell>
+				{#if projectNames}
+					<Table.Cell class="text-muted-foreground">
+						{projectNames.get(view.todo.projectId) ?? '—'}
+					</Table.Cell>
+				{/if}
 				<Table.Cell>
 					<Badge variant="ghost" class="text-muted-foreground">
 						{todoStatusLabels[view.todo.status]}
