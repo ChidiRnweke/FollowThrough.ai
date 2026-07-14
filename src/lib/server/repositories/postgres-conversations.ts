@@ -12,6 +12,8 @@ const toConversation = (row: typeof schema.conversations.$inferSelect): Conversa
 		? { contextNoteId: row.contextNoteId as Conversation['contextNoteId'] }
 		: {}),
 	...(row.title ? { title: row.title } : {}),
+	...(row.modelOverride ? { modelOverride: row.modelOverride } : {}),
+	...(row.executionModeOverride ? { executionModeOverride: row.executionModeOverride } : {}),
 	createdAt: row.createdAt.toISOString() as Conversation['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as Conversation['updatedAt']
 });
@@ -54,6 +56,8 @@ export class PostgresConversationRepository implements ConversationRepository {
 				userId: actor.userId,
 				contextNoteId: conversation.contextNoteId,
 				title: conversation.title,
+				modelOverride: conversation.modelOverride,
+				executionModeOverride: conversation.executionModeOverride,
 				createdAt: new Date(conversation.createdAt),
 				updatedAt: new Date(conversation.updatedAt)
 			})
@@ -67,6 +71,8 @@ export class PostgresConversationRepository implements ConversationRepository {
 			.set({
 				contextNoteId: conversation.contextNoteId,
 				title: conversation.title,
+				modelOverride: conversation.modelOverride,
+				executionModeOverride: conversation.executionModeOverride,
 				updatedAt: new Date(conversation.updatedAt)
 			})
 			.where(

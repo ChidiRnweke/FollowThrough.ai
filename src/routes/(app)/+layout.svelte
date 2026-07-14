@@ -7,6 +7,7 @@
 	import { palette } from '$lib/stores/palette.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import type { NoteId } from '$lib/models';
+	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 
 	let { data, children } = $props();
 
@@ -16,11 +17,9 @@
 			: undefined
 	);
 
+	const keyboard = new CommandKeyboardHandler();
 	function onkeydown(event: KeyboardEvent): void {
-		if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-			event.preventDefault();
-			palette.toggle();
-		}
+		keyboard.handle(event);
 	}
 </script>
 
@@ -33,6 +32,8 @@
 	</Sidebar.Inset>
 	<RightPanel
 		shell={data.shell}
+		agentPreferences={data.agentPreferences}
+		agentModels={data.agentModels}
 		{activeNoteId}
 		onstatus={(todoId, status) => void todoUpdates.setStatus(todoId, status)}
 	/>

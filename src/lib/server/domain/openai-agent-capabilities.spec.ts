@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent, ConversationId } from '$lib/models';
+import type { AgentRunStore } from '$lib/services';
 import { AgentToolEventMapper, OpenAIAgentRunner } from './openai-agent-capabilities';
 import { BasicAgent } from './basic-agent';
-import { InMemoryAgentRunner, InMemoryAgentToolbox } from '$lib/testing/fakes/in-memory-agent';
+import { InMemoryAgentRunner } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
 import { InMemoryProvenanceRecorder } from '$lib/testing/fakes/in-memory-pipelines';
@@ -24,7 +25,14 @@ describe('Agent runtime boundary', () => {
 	it('uses the deterministic runner when no API key is configured', async () => {
 		const fallback = new InMemoryAgentRunner();
 		fallback.events = [{ type: 'text_delta', text: 'fallback response' }];
-		const runner = new OpenAIAgentRunner(new InMemoryAgentToolbox(), fallback, '');
+		const runner = new OpenAIAgentRunner(
+			() => {
+				throw new Error('Unexpected controller access');
+			},
+			{} as AgentRunStore,
+			fallback,
+			''
+		);
 		const events = await collect(runner.run(testActor(), { prompt: 'Help' }, {}));
 		expect(events).toEqual([{ type: 'text_delta', text: 'fallback response' }]);
 	});
@@ -37,7 +45,13 @@ describe('Agent tool event invariants', () => {
 			name: 'tool_called',
 			item: { toJSON: () => ({ rawItem: { callId: 'call-1', name: 'relate_selection' } }) }
 		});
-		expect(event).toEqual({ type: 'tool_started', name: 'relate_selection' });
+		expect(event).toEqual({
+			type: 'tool_started',
+			callId: 'call-1',
+			name: 'relate_selection',
+			arguments: {},
+			output: undefined
+		});
 	});
 
 	it('preserves the tool name when mapping its SDK output event', () => {
@@ -52,7 +66,24 @@ describe('Agent tool event invariants', () => {
 			name: 'tool_output',
 			item: { toJSON: () => ({ rawItem: { callId: 'call-1' } }) }
 		});
-		expect(event).toEqual({ type: 'tool_completed', name: 'find_references' });
+		expect(event).toEqual({
+			type: 'tool_completed',
+			callId: 'call-1',
+			name: 'find_references'
+		});
+	});
+
+	it('maps a controller failure returned by the tool boundary', () => {
+		const event = new AgentToolEventMapper().map({
+			type: 'run_item_stream_event',
+			name: 'tool_output',
+			item: {
+				toJSON: () => ({
+					rawItem: { callId: 'call-2', name: 'create_note', output: '{"failure":"Denied"}' }
+				})
+			}
+		});
+		expect(event).toMatchObject({ type: 'tool_completed', callId: 'call-2', failure: 'Denied' });
 	});
 });
 

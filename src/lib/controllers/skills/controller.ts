@@ -6,6 +6,9 @@ import type {
 	CreateSkillOutput,
 	GetSkillViewInput,
 	ListSkillsOutput,
+	LoadSkillInput,
+	NoteRevision,
+	RestoreSkillVersionInput,
 	SkillView
 } from '$lib/models';
 import type { TransactionRunner } from '$lib/repositories';
@@ -15,21 +18,28 @@ import type {
 	SelectionAnchorCreator,
 	SkillCreator,
 	SkillFinder,
-	SkillUsageLister
+	SkillUsageLister,
+	SkillUsageRecorder,
+	SkillVersionManager
 } from '$lib/services';
 
 export interface SkillsController {
 	list(actor: ActorContext): Promise<ListSkillsOutput>;
 	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView>;
+	loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput>;
 	createFromSelection(
 		actor: ActorContext,
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput>;
+	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
+	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView>;
 }
 export interface SkillsDependencies {
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
+	skillUsageRecorder: SkillUsageRecorder;
+	skillVersionManager: SkillVersionManager;
 	anchorCreator: SelectionAnchorCreator;
 	skillCreator: SkillCreator;
 	noteCreator: NoteCreator;
@@ -47,6 +57,18 @@ export class DefaultSkillsController implements SkillsController {
 			this.dependencies.skillUsageLister.list(actor, input.noteId)
 		]);
 		return { skill, usages };
+	}
+	async loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView> {
+		const skill = await this.dependencies.skillFinder.load(actor, input.noteId);
+		await this.dependencies.skillUsageRecorder.record(actor, {
+			skillNoteId: input.noteId,
+			contextNoteId: input.contextNoteId,
+			provenanceId: input.provenanceId
+		});
+		return {
+			skill,
+			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
+		};
 	}
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
@@ -87,5 +109,17 @@ export class DefaultSkillsController implements SkillsController {
 			);
 			return { skillNoteId: skill.note.id };
 		});
+	}
+	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]> {
+		return this.dependencies.skillVersionManager.listVersions(actor, input.noteId);
+	}
+	async restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView> {
+		const skill = await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.skillVersionManager.restoreVersion(actor, input.noteId, input.revision)
+		);
+		return {
+			skill,
+			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
+		};
 	}
 }

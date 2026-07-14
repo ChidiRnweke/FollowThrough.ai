@@ -62,6 +62,7 @@ export interface Note {
 	readonly kind: NoteKind;
 	readonly position: number;
 	readonly title: string;
+	readonly builtInKey?: string;
 	readonly document: ProseMirrorDocument;
 	readonly plainText: string;
 	readonly currentRevision: number;
@@ -228,6 +229,8 @@ export interface Conversation {
 	readonly userId: UserId;
 	readonly contextNoteId?: NoteId;
 	readonly title?: string;
+	readonly modelOverride?: string;
+	readonly executionModeOverride?: AgentExecutionMode;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
@@ -242,10 +245,54 @@ export interface Message {
 }
 
 export interface ToolActivity {
+	readonly callId: string;
 	readonly name: string;
 	readonly input: Readonly<Record<string, unknown>>;
-	readonly output?: Readonly<Record<string, unknown>>;
-	readonly status: 'running' | 'succeeded' | 'failed';
+	readonly output?: unknown;
+	readonly failure?: string;
+	readonly decision?: 'approved' | 'rejected';
+	readonly status: 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
+}
+
+export type AgentExecutionMode = 'approval_required' | 'auto_accept';
+export type AgentRunStatus = 'running' | 'awaiting_approval' | 'completed' | 'failed';
+
+export interface AgentPreferences {
+	readonly userId: UserId;
+	readonly defaultModel?: string;
+	readonly executionMode: AgentExecutionMode;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface PendingAgentDecision {
+	readonly callId: string;
+	readonly toolName: string;
+	readonly arguments: Readonly<Record<string, unknown>>;
+}
+
+export interface AgentRun {
+	readonly id: AgentRunId;
+	readonly userId: UserId;
+	readonly conversationId: ConversationId;
+	readonly model: string;
+	readonly executionMode: AgentExecutionMode;
+	readonly status: AgentRunStatus;
+	readonly serializedState?: string;
+	readonly pendingDecisions: readonly PendingAgentDecision[];
+	readonly failure?: string;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface AgentModel {
+	readonly id: string;
+	readonly name: string;
+	readonly provider: string;
+	readonly contextLength?: number;
+	readonly supportsTools: boolean;
+	readonly recommended: boolean;
+	readonly capabilities: readonly string[];
 }
 
 export interface SearchDocument {

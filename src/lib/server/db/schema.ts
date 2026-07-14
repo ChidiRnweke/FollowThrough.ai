@@ -61,6 +61,16 @@ export const referenceTier = pgEnum('reference_tier', [
 	'community'
 ]);
 export const messageRole = pgEnum('message_role', ['user', 'assistant', 'tool']);
+export const agentExecutionMode = pgEnum('agent_execution_mode', [
+	'approval_required',
+	'auto_accept'
+]);
+export const agentRunStatus = pgEnum('agent_run_status', [
+	'running',
+	'awaiting_approval',
+	'completed',
+	'failed'
+]);
 
 type ProseMirrorDocument = Record<string, unknown>;
 type JsonObject = Record<string, unknown>;
@@ -119,6 +129,7 @@ export const notes = pgTable(
 		kind: noteKind('kind').notNull().default('note'),
 		position: integer('position').notNull().default(0),
 		title: text('title').notNull(),
+		builtInKey: text('built_in_key'),
 		document: jsonb('document')
 			.$type<ProseMirrorDocument>()
 			.notNull()
@@ -133,7 +144,10 @@ export const notes = pgTable(
 		index('notes_user_updated_idx').on(table.userId, table.updatedAt),
 		index('notes_project_parent_position_idx').on(table.projectId, table.parentId, table.position),
 		index('notes_parent_idx').on(table.parentId),
-		index('notes_user_kind_idx').on(table.userId, table.kind)
+		index('notes_user_kind_idx').on(table.userId, table.kind),
+		uniqueIndex('notes_user_built_in_key_unique')
+			.on(table.userId, table.builtInKey)
+			.where(sql`${table.builtInKey} is not null`)
 	]
 );
 
@@ -425,9 +439,47 @@ export const conversations = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		contextNoteId: uuid('context_note_id').references(() => notes.id, { onDelete: 'set null' }),
 		title: text('title'),
+		modelOverride: text('model_override'),
+		executionModeOverride: agentExecutionMode('execution_mode_override'),
 		...timestamps
 	},
 	(table) => [index('conversations_user_updated_idx').on(table.userId, table.updatedAt)]
+);
+
+export const agentPreferences = pgTable('agent_preferences', {
+	userId: uuid('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	defaultModel: text('default_model'),
+	executionMode: agentExecutionMode('execution_mode').notNull().default('approval_required'),
+	...timestamps
+});
+
+export const agentRuns = pgTable(
+	'agent_runs',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		conversationId: uuid('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		model: text('model').notNull(),
+		executionMode: agentExecutionMode('execution_mode').notNull(),
+		status: agentRunStatus('status').notNull().default('running'),
+		serializedState: text('serialized_state'),
+		pendingDecisions: jsonb('pending_decisions')
+			.$type<readonly JsonObject[]>()
+			.notNull()
+			.default([]),
+		failure: text('failure'),
+		...timestamps
+	},
+	(table) => [
+		index('agent_runs_user_updated_idx').on(table.userId, table.updatedAt),
+		index('agent_runs_conversation_status_idx').on(table.conversationId, table.status)
+	]
 );
 
 export const messages = pgTable(

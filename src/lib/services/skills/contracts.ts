@@ -4,6 +4,7 @@ import type {
 	NoteId,
 	ProvenanceId,
 	Skill,
+	NoteRevision,
 	SkillSummary,
 	SkillUsageView,
 	TextSelection
@@ -45,4 +46,11 @@ export interface SkillUsageRecorder {
 }
 export interface SkillUsageLister {
 	list(actor: ActorContext, skillNoteId: NoteId): Promise<readonly SkillUsageView[]>;
+}
+export interface SkillVersionManager {
+	listVersions(actor: ActorContext, skillNoteId: NoteId): Promise<readonly NoteRevision[]>;
+	restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill>;
+}
+export interface BuiltInSkillProvisioner {
+	ensure(actor: ActorContext): Promise<void>;
 }

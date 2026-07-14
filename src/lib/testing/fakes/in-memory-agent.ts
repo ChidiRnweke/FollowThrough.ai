@@ -1,6 +1,7 @@
 import type {
 	ActorContext,
 	AgentEvent,
+	DecideAgentRunInput,
 	NoteId,
 	ProvenanceId,
 	RunAgentInput,
@@ -22,6 +23,17 @@ export class InMemoryAgentRunner implements AgentRunner {
 	async *run(
 		_actor: ActorContext,
 		_input: RunAgentInput,
+		_context: Readonly<Record<string, unknown>>
+	): AsyncIterable<AgentEvent> {
+		void _actor;
+		void _input;
+		void _context;
+		for (const event of this.events) yield event;
+	}
+
+	async *resume(
+		_actor: ActorContext,
+		_input: DecideAgentRunInput,
 		_context: Readonly<Record<string, unknown>>
 	): AsyncIterable<AgentEvent> {
 		void _actor;

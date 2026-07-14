@@ -69,6 +69,7 @@
 	"dependencies": {
 		"@floating-ui/dom": "^1.8.0",
 		"@openai/agents": "^0.13.2",
+		"@openrouter/sdk": "^0.9.11",
 		"@tiptap/core": "^3.27.3",
 		"@tiptap/extension-audio": "^3.27.3",
 		"@tiptap/extension-bubble-menu": "^3.27.3",

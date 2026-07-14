@@ -11,6 +11,7 @@ import type {
 } from './domain';
 import type {
 	ConversationId,
+	AgentRunId,
 	DiagramId,
 	LocalDate,
 	NoteId,
@@ -123,14 +124,62 @@ export interface RunAgentInput {
 	readonly selection?: TextSelection;
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly requestedSkillNames?: readonly string[];
+	readonly modelOverride?: string | null;
+	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;
 }
 export type AgentEvent =
 	| { readonly type: 'text_delta'; readonly text: string }
-	| { readonly type: 'tool_started'; readonly name: string }
-	| { readonly type: 'tool_completed'; readonly name: string }
+	| {
+			readonly type: 'tool_started';
+			readonly callId: string;
+			readonly name: string;
+			readonly arguments: Readonly<Record<string, unknown>>;
+	  }
+	| {
+			readonly type: 'tool_completed';
+			readonly callId: string;
+			readonly name: string;
+			readonly output?: unknown;
+			readonly failure?: string;
+	  }
+	| {
+			readonly type: 'approval_required';
+			readonly runId: AgentRunId;
+			readonly callId: string;
+			readonly name: string;
+			readonly arguments: Readonly<Record<string, unknown>>;
+	  }
 	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
-	| { readonly type: 'completed'; readonly conversationId: ConversationId };
+	| {
+			readonly type: 'completed';
+			readonly conversationId: ConversationId;
+			readonly runId?: AgentRunId;
+			readonly model?: string;
+	  };
+
+export interface DecideAgentRunInput {
+	readonly runId: AgentRunId;
+	readonly callId: string;
+	readonly decision: 'approve' | 'reject';
+	readonly message?: string;
+}
+
+export interface UpdateAgentPreferencesInput {
+	readonly defaultModel?: string | null;
+	readonly executionMode: import('./domain').AgentExecutionMode;
+}
+
+export interface RestoreSkillVersionInput {
+	readonly noteId: NoteId;
+	readonly revision: number;
+}
+
+export interface LoadSkillInput {
+	readonly noteId: NoteId;
+	readonly contextNoteId?: NoteId;
+	readonly provenanceId: import('./shared').ProvenanceId;
+}
 
 export interface SaveNoteInput {
 	readonly note: Note;

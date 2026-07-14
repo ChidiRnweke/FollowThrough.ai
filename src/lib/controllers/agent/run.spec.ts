@@ -22,7 +22,40 @@ const setup = (events: AgentEvent[]) => {
 		contextBuilder: { build: async () => ({}) },
 		agentRunner: runner,
 		conversationJournal: journal,
-		provenanceRecorder: new InMemoryProvenanceRecorder()
+		provenanceRecorder: new InMemoryProvenanceRecorder(),
+		preferences: {
+			get: async (actor) => ({
+				userId: actor.userId,
+				executionMode: 'approval_required',
+				createdAt: '2026-01-01T00:00:00.000Z' as never,
+				updatedAt: '2026-01-01T00:00:00.000Z' as never
+			}),
+			update: async () => {
+				throw new Error('Unexpected preferences update');
+			}
+		},
+		models: {
+			list: async () => [],
+			assertSelectable: async () => undefined
+		},
+		runStore: {
+			create: async () => {
+				throw new Error('Unexpected run creation');
+			},
+			get: async () => {
+				throw new Error('Unexpected run load');
+			},
+			pause: async () => {
+				throw new Error('Unexpected run pause');
+			},
+			complete: async () => {
+				throw new Error('Unexpected run completion');
+			},
+			fail: async () => {
+				throw new Error('Unexpected run failure');
+			}
+		},
+		defaultModel: 'openai/test-model'
 	});
 	return { controller, repository };
 };
@@ -35,7 +68,8 @@ describe('Agent conversation invariants', () => {
 		const events = await collect(controller.run(testActor(), { prompt: 'Help me decide' }));
 		expect(events.at(-1)).toEqual({
 			type: 'completed',
-			conversationId: repository.conversations[0]?.id
+			conversationId: repository.conversations[0]?.id,
+			model: 'openai/test-model'
 		});
 	});
 
@@ -62,8 +96,8 @@ describe('Agent conversation invariants', () => {
 
 	it('persists tool lifecycle activity', async () => {
 		const { controller, repository } = setup([
-			{ type: 'tool_started', name: 'knowledge_search' },
-			{ type: 'tool_completed', name: 'knowledge_search' },
+			{ type: 'tool_started', callId: 'call-1', name: 'knowledge_search', arguments: {} },
+			{ type: 'tool_completed', callId: 'call-1', name: 'knowledge_search' },
 			{ type: 'completed', conversationId: 'discarded' as ConversationId }
 		]);
 		await collect(controller.run(testActor(), { prompt: 'Search' }));

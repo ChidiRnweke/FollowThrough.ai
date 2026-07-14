@@ -21,7 +21,22 @@ export class PersistentConversationJournal implements ConversationJournal {
 		if (input.conversationId) {
 			const existing = await this.repository.findById(actor, input.conversationId);
 			if (!existing) throw new NotFoundError('Conversation was not found');
-			return existing;
+			if (input.modelOverride === undefined && input.executionModeOverride === undefined)
+				return existing;
+			return this.repository.update(actor, {
+				...existing,
+				...(input.modelOverride === null
+					? { modelOverride: undefined }
+					: input.modelOverride !== undefined
+						? { modelOverride: input.modelOverride }
+						: {}),
+				...(input.executionModeOverride === null
+					? { executionModeOverride: undefined }
+					: input.executionModeOverride !== undefined
+						? { executionModeOverride: input.executionModeOverride }
+						: {}),
+				updatedAt: now()
+			});
 		}
 		const timestamp = now();
 		return this.repository.insert(actor, {
@@ -29,6 +44,10 @@ export class PersistentConversationJournal implements ConversationJournal {
 			userId: actor.userId,
 			contextNoteId: input.noteId,
 			title: input.prompt.trim().slice(0, 80) || 'New conversation',
+			...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
+			...(input.executionModeOverride
+				? { executionModeOverride: input.executionModeOverride }
+				: {}),
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
@@ -72,9 +91,12 @@ export class PersistentConversationJournal implements ConversationJournal {
 	): Promise<void> {
 		await this.append(actor, conversationId, 'tool', {
 			type: 'tool_activity',
+			callId: activity.callId,
 			name: activity.name,
 			input: activity.input,
 			output: activity.output ?? null,
+			failure: activity.failure ?? null,
+			decision: activity.decision ?? null,
 			status: activity.status
 		});
 	}

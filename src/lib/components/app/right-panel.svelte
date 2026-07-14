@@ -1,5 +1,12 @@
 <script lang="ts">
-	import type { NoteId, ShellContext, TodoId, TodoStatus } from '$lib/models';
+	import type {
+		AgentModel,
+		AgentPreferences,
+		NoteId,
+		ShellContext,
+		TodoId,
+		TodoStatus
+	} from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
@@ -10,10 +17,14 @@
 
 	let {
 		shell,
+		agentPreferences,
+		agentModels,
 		activeNoteId,
 		onstatus
 	}: {
 		shell?: ShellContext;
+		agentPreferences: AgentPreferences;
+		agentModels: readonly AgentModel[];
 		activeNoteId?: NoteId;
 		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 	} = $props();
@@ -55,7 +66,7 @@
 		<Separator />
 		<div class="min-h-0 flex-1 p-4">
 			{#if renderedMode === 'chat'}
-				<ChatPanel {shell} {activeNoteId} />
+				<ChatPanel {shell} {activeNoteId} {agentPreferences} {agentModels} />
 			{:else if renderedMode === 'todo-detail'}
 				<ScrollArea class="h-full">
 					<TodoDetailPanel {onstatus} />

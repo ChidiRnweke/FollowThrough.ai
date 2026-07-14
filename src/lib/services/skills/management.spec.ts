@@ -115,4 +115,47 @@ describe('Skill management invariants', () => {
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
+
+	it('restores an immutable skill snapshot as a new current revision', async () => {
+		const { service, skills, notes } = setup();
+		const current = noteBuilder({
+			kind: 'skill',
+			title: 'Current instructions',
+			plainText: 'Current content',
+			currentRevision: 2
+		});
+		notes.notes[0] = current;
+		notes.revisions = [
+			{
+				id: '00000000-0000-4000-0008-000000000001' as never,
+				noteId: current.id,
+				revision: 1,
+				title: 'Original instructions',
+				document: { type: 'doc', content: [] },
+				plainText: 'Original content',
+				createdAt: testNow
+			}
+		];
+		skills.skills = [
+			{
+				note: current,
+				name: current.title,
+				description: 'Instructions',
+				triggerHints: ['instruction'],
+				isEnabled: true
+			}
+		];
+		const restored = await service.restoreVersion(testActor(), current.id, 1);
+		expect({
+			revision: restored.note.currentRevision,
+			title: restored.note.title,
+			plainText: restored.note.plainText,
+			versionCount: notes.revisions.length
+		}).toEqual({
+			revision: 3,
+			title: 'Original instructions',
+			plainText: 'Original content',
+			versionCount: 2
+		});
+	});
 });

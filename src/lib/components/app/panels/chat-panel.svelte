@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { NoteId, ShellContext } from '$lib/models';
+	import type { AgentModel, AgentPreferences, NoteId, ShellContext } from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import * as Card from '$lib/components/ui/card';
+	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
@@ -17,14 +19,22 @@
 	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
+	import ModelPicker from '$lib/components/app/agent/model-picker.svelte';
+	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
 
 	let {
 		shell,
-		activeNoteId
+		activeNoteId,
+		agentPreferences,
+		agentModels
 	}: {
 		shell?: ShellContext;
 		activeNoteId?: NoteId;
+		agentPreferences: AgentPreferences;
+		agentModels: readonly AgentModel[];
 	} = $props();
+	$effect(() => chat.configureDefaults(agentPreferences.executionMode));
+	$effect(() => chat.persistConversationChoices());
 
 	let prompt = $state('');
 	let viewport = $state<HTMLElement | null>(null);
@@ -80,6 +90,8 @@
 		const selection = editorSelection.current;
 		const request = chat.send({
 			prompt: text,
+			modelOverride: chat.modelOverride,
+			executionModeOverride: chat.executionModeOverride,
 			...(activeNoteId !== undefined ? { noteId: activeNoteId } : {}),
 			...(autoChip !== undefined ? { contextNoteIds: [autoChip.id] } : {}),
 			...(selection !== undefined ? { selection, noteId: selection.noteId } : {})
@@ -137,17 +149,18 @@
 			<FileText class="size-3 shrink-0" />
 		{/if}
 		<span class="truncate">{chip.name}</span>
-		<button
+		<Button
 			type="button"
-			class="rounded-sm p-0.5 hover:bg-muted-foreground/20"
+			variant="ghost"
+			size="icon-xs"
 			aria-label="Remove {chip.name} from context"
 			onclick={() => {
 				if (auto) chat.autoChipDismissedFor = chip.id;
 				else chat.removeChip(chip);
 			}}
 		>
-			<X class="size-3" />
-		</button>
+			<X />
+		</Button>
 	</Badge>
 {/snippet}
 
@@ -157,7 +170,7 @@
 			{#if chat.entries.length === 0}
 				<p class="text-sm text-muted-foreground">
 					Ask about your projects, notes and todos. The open note and your selection travel along —
-					type <kbd class="rounded border border-border px-1">@</kbd> to add notes or invoke skills.
+					type <Kbd>@</Kbd> to add notes or invoke skills.
 				</p>
 			{/if}
 			{#each chat.entries as entry (entry.id)}
@@ -167,31 +180,57 @@
 						<p class="text-sm whitespace-pre-wrap">{entry.text}</p>
 					{/if}
 					{#each entry.tools as tool, index (index)}
-						<Collapsible.Root>
-							<Collapsible.Trigger>
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="ghost"
-										size="sm"
-										class="h-7 gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
+						{#if tool.status === 'approval_required'}
+							<Card.Root>
+								<Card.Header>
+									<Card.Title class="text-sm">Approve {tool.name}?</Card.Title>
+									<Card.Description>This action changes saved workspace data.</Card.Description>
+								</Card.Header>
+								<Card.Content>
+									<pre class="max-h-40 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(
+											tool.arguments,
+											null,
+											2
+										)}</pre>
+								</Card.Content>
+								<Card.Footer class="gap-2">
+									<Button size="sm" onclick={() => void chat.decide(entry, tool, 'approve')}
+										>Approve</Button
 									>
-										<ChevronRight
-											class="size-3.5 transition-transform duration-(--duration-micro)"
-										/>
-										{#if tool.status === 'running'}
-											<LoaderCircle class="size-3.5 animate-spin" />
-										{/if}
-										{tool.name}
-									</Button>
-								{/snippet}
-							</Collapsible.Trigger>
-							<Collapsible.Content>
-								<p class="pl-6 text-xs text-muted-foreground">
-									Tool {tool.name} · {tool.status === 'running' ? 'running' : 'completed'}
-								</p>
-							</Collapsible.Content>
-						</Collapsible.Root>
+									<Button
+										size="sm"
+										variant="outline"
+										onclick={() => void chat.decide(entry, tool, 'reject')}>Reject</Button
+									>
+								</Card.Footer>
+							</Card.Root>
+						{:else}
+							<Collapsible.Root>
+								<Collapsible.Trigger>
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="sm"
+											class="h-7 gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
+										>
+											<ChevronRight
+												class="size-3.5 transition-transform duration-(--duration-micro)"
+											/>
+											{#if tool.status === 'running'}
+												<LoaderCircle class="size-3.5 animate-spin" />
+											{/if}
+											{tool.name} · {tool.status}
+										</Button>
+									{/snippet}
+								</Collapsible.Trigger>
+								<Collapsible.Content>
+									<p class="pl-6 text-xs text-muted-foreground">
+										Tool {tool.name} · {tool.status === 'running' ? 'running' : 'completed'}
+									</p>
+								</Collapsible.Content>
+							</Collapsible.Root>
+						{/if}
 					{/each}
 					{#each entry.suggestions as view (view.suggestion.id)}
 						<SuggestionCard
@@ -215,6 +254,10 @@
 			{/each}
 		</div>
 	{/if}
+	<div class="flex flex-wrap items-center gap-2" aria-label="Chat model and execution mode">
+		<ModelPicker models={agentModels} bind:value={chat.modelOverride} allowDefault compact />
+		<ExecutionModeControl bind:value={chat.executionModeOverride} compact />
+	</div>
 	<div class="relative flex items-end gap-2">
 		{#if mentionCandidates.length > 0}
 			<div
@@ -248,6 +291,7 @@
 			</div>
 		{/if}
 		<Textarea
+			id="chat-composer"
 			bind:value={prompt}
 			bind:ref={textareaRef}
 			placeholder="Ask the agent… (@ to add context)"

@@ -2,6 +2,7 @@ import type {
 	ActorContext,
 	AgentEvent,
 	ConversationId,
+	DecideAgentRunInput,
 	ProjectId,
 	ProvenanceId,
 	RunAgentInput
@@ -41,8 +42,9 @@ export class BasicAgent implements AgentContextBuilder, AgentRunner {
 		context: Readonly<Record<string, unknown>>
 	): AsyncIterable<AgentEvent> {
 		if (/search|find|what did/i.test(input.prompt)) {
-			yield { type: 'tool_started', name: 'knowledge_search' };
-			yield { type: 'tool_completed', name: 'knowledge_search' };
+			const callId = crypto.randomUUID();
+			yield { type: 'tool_started', callId, name: 'knowledge_search', arguments: {} };
+			yield { type: 'tool_completed', callId, name: 'knowledge_search' };
 		}
 		yield { type: 'text_delta', text: `I can help with: ${input.prompt}` };
 		if (
@@ -77,5 +79,14 @@ export class BasicAgent implements AgentContextBuilder, AgentRunner {
 			type: 'completed',
 			conversationId: (input.conversationId ?? crypto.randomUUID()) as ConversationId
 		};
+	}
+	async *resume(
+		_actor: ActorContext,
+		_input: DecideAgentRunInput,
+		_context: Readonly<Record<string, unknown>>
+	): AsyncIterable<AgentEvent> {
+		void _actor;
+		void _input;
+		void _context;
 	}
 }

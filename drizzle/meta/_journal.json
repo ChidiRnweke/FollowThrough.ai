@@ -50,6 +50,20 @@
       "when": 1783851052125,
       "tag": "0006_clean_suggestion_kinds",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784061255476,
+      "tag": "0007_abandoned_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784063417588,
+      "tag": "0008_right_master_mold",
+      "breakpoints": true
     }
   ]
 }

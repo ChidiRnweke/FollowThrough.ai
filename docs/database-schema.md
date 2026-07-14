@@ -10,7 +10,9 @@ the source of truth.
   sharing permissions, or collaborative ownership rules; authentication simply
   establishes the `user_id` used to isolate every query.
 - Notes store canonical ProseMirror JSON plus derived plain text for previews and
-  lexical search. Skills are notes with a one-to-one metadata record.
+  lexical search. Skills are notes with a one-to-one metadata record. Nullable
+  built-in keys are unique per user, so a provisioned skill keeps its identity
+  after user edits or renaming.
 - Todos are independent records. An editor todo node stores only a todo ID, so
   the editor, Today, and kanban always render the same object.
 - Source anchors use stable editor node IDs plus quote context and offsets. This
@@ -29,6 +31,15 @@ the source of truth.
   3072-dimensional embeddings.
 - Local Postgres uses the pgvector image, and the initial migration enables the
   `vector` extension before creating retrieval tables.
+- `agent_preferences` stores each user's default OpenRouter model and execution
+  mode. Nullable model and mode overrides on `conversations` preserve local chat
+  choices without changing those defaults.
+- `agent_runs` owns resumable workbench runs by user and conversation. It stores
+  the effective model and mode, serialized Agents SDK state, chronological
+  status, pending approval arguments, and terminal failures.
+- Assistant `messages` retain the effective model. Tool inputs, outputs,
+  decisions, and failures use chronological tool-activity messages in the same
+  conversation.
 
 ## Deliberately deferred
 
@@ -41,5 +52,7 @@ the source of truth.
 
 Postgres foreign keys cannot prove that related rows belong to the same user.
 The service layer must scope every query by the authenticated user, reject
-cross-user references, and apply note saves or accepted suggestions
-transactionally with their revision, artifact, and provenance records.
+cross-user references, and apply note saves, approved agent mutations, or
+accepted suggestions transactionally with their revision, artifact, and
+provenance records. Paused agent runs and their decisions are always loaded
+through the actor-scoped repository.

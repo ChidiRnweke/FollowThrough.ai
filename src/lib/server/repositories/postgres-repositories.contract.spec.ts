@@ -4,6 +4,8 @@ import type {
 	Conversation,
 	ConversationId,
 	DateTime,
+	AgentRun,
+	AgentRunId,
 	DiagramId,
 	ExternalReference,
 	Message,
@@ -40,6 +42,10 @@ import { PostgresSkillRepository } from './postgres-skills';
 import { PostgresSuggestionRepository } from './postgres-suggestions';
 import { PostgresTodoRepository } from './postgres-todos';
 import { PostgresTrustPolicyRepository } from './postgres-trust-policies';
+import {
+	PostgresAgentPreferencesRepository,
+	PostgresAgentRunRepository
+} from './postgres-agent-settings';
 
 let context: PostgresTestContext;
 const actor = (suffix: string) => ({
@@ -181,6 +187,31 @@ describe('Postgres note repository invariants', () => {
 		await new PostgresProjectRepository(context.db).archive(owner, project.id);
 		expect(await new PostgresNoteRepository(context.db).findById(owner, note.id)).toBeUndefined();
 	});
+
+	it('prevents duplicate built-in skill keys for one actor', async () => {
+		const owner = actor('76');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'General'
+		});
+		const repository = new PostgresNoteRepository(context.db);
+		const builtIn = (suffix: string): Note => ({
+			id: `40000000-0000-4000-8000-${suffix.padStart(12, '0')}` as NoteId,
+			userId: owner.userId,
+			projectId: project.id,
+			kind: 'skill',
+			position: Number(suffix),
+			title: `Built-in ${suffix}`,
+			builtInKey: 'followthrough',
+			document: { type: 'doc', content: [] },
+			plainText: '',
+			currentRevision: 1,
+			isPinned: false,
+			createdAt: now,
+			updatedAt: now
+		});
+		await repository.insert(owner, builtIn('76'));
+		await expect(repository.insert(owner, builtIn('77'))).rejects.toBeDefined();
+	});
 });
 
 describe('Postgres conversation repository invariants', () => {
@@ -247,6 +278,103 @@ describe('Postgres conversation repository invariants', () => {
 		});
 		const sessions = await repository.list(owner);
 		expect(sessions.map((session) => session.title)).toEqual(['Owned session']);
+	});
+
+	it('persists conversation model and execution-mode overrides', async () => {
+		const owner = actor('71');
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const repository = new PostgresConversationRepository(context.db);
+		const conversation = await repository.insert(owner, {
+			id: '20000000-0000-4000-8000-000000000071' as ConversationId,
+			userId: owner.userId,
+			modelOverride: 'openai/gpt-test',
+			executionModeOverride: 'auto_accept',
+			createdAt: now,
+			updatedAt: now
+		});
+		expect({
+			model: conversation.modelOverride,
+			mode: conversation.executionModeOverride
+		}).toEqual({ model: 'openai/gpt-test', mode: 'auto_accept' });
+	});
+});
+
+describe('Postgres agent settings repository invariants', () => {
+	it('persists the actor default model and execution mode', async () => {
+		const owner = actor('72');
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const repository = new PostgresAgentPreferencesRepository(context.db);
+		const preferences = await repository.upsert(owner, {
+			userId: owner.userId,
+			defaultModel: 'anthropic/claude-test',
+			executionMode: 'auto_accept',
+			createdAt: now,
+			updatedAt: now
+		});
+		expect({ model: preferences.defaultModel, mode: preferences.executionMode }).toEqual({
+			model: 'anthropic/claude-test',
+			mode: 'auto_accept'
+		});
+	});
+
+	it('does not reveal a paused run to another actor', async () => {
+		const owner = actor('73');
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const conversations = new PostgresConversationRepository(context.db);
+		const conversation = await conversations.insert(owner, {
+			id: '20000000-0000-4000-8000-000000000073' as ConversationId,
+			userId: owner.userId,
+			createdAt: now,
+			updatedAt: now
+		});
+		const repository = new PostgresAgentRunRepository(context.db);
+		const run: AgentRun = {
+			id: '70000000-0000-4000-8000-000000000073' as AgentRunId,
+			userId: owner.userId,
+			conversationId: conversation.id,
+			model: 'openai/gpt-test',
+			executionMode: 'approval_required',
+			status: 'awaiting_approval',
+			serializedState: 'serialized-state',
+			pendingDecisions: [
+				{ callId: 'call-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+			],
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, run);
+		expect(await repository.findById(actor('74'), run.id)).toBeUndefined();
+	});
+
+	it('round-trips serialized paused-run decisions', async () => {
+		const owner = actor('75');
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const conversations = new PostgresConversationRepository(context.db);
+		const conversation = await conversations.insert(owner, {
+			id: '20000000-0000-4000-8000-000000000075' as ConversationId,
+			userId: owner.userId,
+			createdAt: now,
+			updatedAt: now
+		});
+		const repository = new PostgresAgentRunRepository(context.db);
+		const run = await repository.insert(owner, {
+			id: '70000000-0000-4000-8000-000000000075' as AgentRunId,
+			userId: owner.userId,
+			conversationId: conversation.id,
+			model: 'openai/gpt-test',
+			executionMode: 'approval_required',
+			status: 'awaiting_approval',
+			serializedState: 'serialized-state',
+			pendingDecisions: [
+				{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }
+			],
+			createdAt: now,
+			updatedAt: now
+		});
+		expect({ state: run.serializedState, pending: run.pendingDecisions }).toEqual({
+			state: 'serialized-state',
+			pending: [{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }]
+		});
 	});
 });
 

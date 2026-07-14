@@ -1,18 +1,9 @@
-import type {
-	ActorContext,
-	Note,
-	ProjectId,
-	ProvenanceId,
-	RunAgentInput,
-	Skill
-} from '$lib/models';
+import type { ActorContext, Note, ProjectId, ProvenanceId, RunAgentInput } from '$lib/models';
 import type {
 	AgentContextBuilder,
 	KnowledgeSearcher,
 	NoteReader,
-	RelevantSkillSelector,
-	SkillFinder,
-	SkillUsageRecorder
+	SkillFinder
 } from '$lib/services';
 
 const CONTEXT_NOTE_CONTENT_LIMIT = 4000;
@@ -22,8 +13,6 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly base: AgentContextBuilder,
 		private readonly knowledgeSearcher: KnowledgeSearcher,
 		private readonly skillFinder: SkillFinder,
-		private readonly skillSelector: RelevantSkillSelector,
-		private readonly skillUsageRecorder: SkillUsageRecorder,
 		private readonly noteReader: NoteReader
 	) {}
 
@@ -43,35 +32,7 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 			this.skillFinder.listEnabled(actor),
 			this.loadContextNotes(actor, input.contextNoteIds ?? [])
 		]);
-		const selected = await this.skillSelector.select(actor, input.prompt, availableSkills);
-		const loaded = await Promise.all(
-			selected.map((skill) => this.skillFinder.load(actor, skill.noteId))
-		);
-		// Explicitly requested skills bypass keyword matching and the project
-		// filter — the user asked for them by name.
-		const requested = await this.loadRequestedSkills(
-			actor,
-			input.requestedSkillNames ?? [],
-			availableSkills
-		);
-		const keywordSkills = projectId
-			? loaded.filter((skill) => skill.note.projectId === projectId)
-			: [];
-		const relevantSkills = [
-			...requested,
-			...keywordSkills.filter(
-				(skill) => !requested.some((existing) => existing.note.id === skill.note.id)
-			)
-		];
-		await Promise.all(
-			relevantSkills.map((skill) =>
-				this.skillUsageRecorder.record(actor, {
-					skillNoteId: skill.note.id,
-					contextNoteId: input.noteId,
-					provenanceId: run.provenanceId
-				})
-			)
-		);
+		const requested = new Set(input.requestedSkillNames ?? []);
 		return {
 			...base,
 			knowledge: matches.map((match) => ({
@@ -85,11 +46,12 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				title: note.title,
 				content: note.plainText.slice(0, CONTEXT_NOTE_CONTENT_LIMIT)
 			})),
-			skills: relevantSkills.map((skill) => ({
-				noteId: skill.note.id,
+			skills: availableSkills.map((skill) => ({
+				noteId: skill.noteId,
 				name: skill.name,
 				description: skill.description,
-				instructions: skill.note.plainText
+				triggerHints: skill.triggerHints,
+				requested: requested.has(skill.name)
 			}))
 		};
 	}
@@ -102,16 +64,5 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 			noteIds.map((noteId) => this.noteReader.get(actor, noteId).catch(() => undefined))
 		);
 		return results.filter((note): note is Note => note !== undefined);
-	}
-
-	private async loadRequestedSkills(
-		actor: ActorContext,
-		names: readonly string[],
-		available: readonly { name: string; noteId: Note['id'] }[]
-	): Promise<readonly Skill[]> {
-		const summaries = names
-			.map((name) => available.find((skill) => skill.name === name))
-			.filter((skill): skill is (typeof available)[number] => skill !== undefined);
-		return Promise.all(summaries.map((skill) => this.skillFinder.load(actor, skill.noteId)));
 	}
 }

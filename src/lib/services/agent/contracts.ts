@@ -10,6 +10,7 @@ import type {
 	ProvenanceId,
 	RelateSelectionOutput,
 	RunAgentInput,
+	DecideAgentRunInput,
 	TextSelection,
 	ToolActivity
 } from '$lib/models';
@@ -35,6 +36,11 @@ export interface AgentRunner {
 	run(
 		actor: ActorContext,
 		input: RunAgentInput,
+		context: Readonly<Record<string, unknown>>
+	): AsyncIterable<AgentEvent>;
+	resume(
+		actor: ActorContext,
+		input: DecideAgentRunInput,
 		context: Readonly<Record<string, unknown>>
 	): AsyncIterable<AgentEvent>;
 }

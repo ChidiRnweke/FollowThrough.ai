@@ -3,6 +3,8 @@ import type {
 	DateTime,
 	Note,
 	NoteId,
+	NoteRevision,
+	NoteRevisionId,
 	ProvenanceId,
 	Skill,
 	SkillSummary,
@@ -13,12 +15,18 @@ import type {
 } from '$lib/models';
 import { NotFoundError, ValidationError } from '$lib/models';
 import type { NoteRepository, ProvenanceRepository, SkillRepository } from '$lib/repositories';
-import type { SkillCreator, SkillFinder, SkillUsageLister, SkillUsageRecorder } from './contracts';
+import type {
+	SkillCreator,
+	SkillFinder,
+	SkillUsageLister,
+	SkillUsageRecorder,
+	SkillVersionManager
+} from './contracts';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class SkillManagementService
-	implements SkillCreator, SkillFinder, SkillUsageLister, SkillUsageRecorder
+	implements SkillCreator, SkillFinder, SkillUsageLister, SkillUsageRecorder, SkillVersionManager
 {
 	constructor(
 		private readonly skills: SkillRepository,
@@ -135,5 +143,37 @@ export class SkillManagementService
 				};
 			})
 		);
+	}
+
+	async listVersions(actor: ActorContext, skillNoteId: NoteId): Promise<readonly NoteRevision[]> {
+		await this.load(actor, skillNoteId);
+		return this.notes.listRevisions(actor, skillNoteId);
+	}
+
+	async restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill> {
+		const skill = await this.load(actor, skillNoteId);
+		const snapshot = (await this.notes.listRevisions(actor, skillNoteId)).find(
+			(candidate) => candidate.revision === revision
+		);
+		if (!snapshot) throw new NotFoundError('Skill version was not found');
+		const timestamp = now();
+		const note = await this.notes.update(actor, {
+			...skill.note,
+			title: snapshot.title,
+			document: snapshot.document,
+			plainText: snapshot.plainText,
+			currentRevision: skill.note.currentRevision + 1,
+			updatedAt: timestamp
+		});
+		await this.notes.insertRevision(actor, {
+			id: crypto.randomUUID() as NoteRevisionId,
+			noteId: note.id,
+			revision: note.currentRevision,
+			title: note.title,
+			document: note.document,
+			plainText: note.plainText,
+			createdAt: timestamp
+		});
+		return this.skills.update(actor, { ...skill, note, name: note.title });
 	}
 }

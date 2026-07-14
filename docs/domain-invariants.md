@@ -77,7 +77,10 @@ This document is the independent behavioural specification for backend models, s
 - Promotion preserves a link to the source Mermaid diagram.
 - Diagram labels are included in project-scoped retrieval.
 - A skill is a skill-kind document in a project and is loaded in full only after its summary is selected.
-- Skill usage records identify the skill, context note when present, and provenance.
+- Agent context contains enabled skill summaries and trigger hints, never full instructions.
+- Loading a skill records the skill, context note when present, and provenance; merely advertising its summary does not record usage.
+- Each user has one visible, idempotently provisioned FollowThrough skill in General, and provisioning never overwrites an existing user-edited copy.
+- Restoring a skill version creates a new current immutable revision and preserves all earlier revisions.
 
 ## Retrieval and agent execution
 
@@ -85,12 +88,16 @@ This document is the independent behavioural specification for backend models, s
 - Search chunks are deterministic, carry a cryptographic content hash, and are replaced when their source revision changes.
 - Identical source content is not embedded twice for the same indexing version.
 - Vector candidates are reranked into the closed generic relationship label set.
-- The agent receives the current project, note, selection, relevant retrieval results, conversation history, and selected skill instructions as context.
+- The agent receives the current project, note, selection, relevant retrieval results, conversation history, and enabled skill summaries as context.
 - An agent turn belongs to an actor-owned conversation; a foreign conversation identifier is indistinguishable from a missing one.
-- User prompts, aggregated assistant responses, and tool lifecycle activity are persisted in chronological order.
-- Only enabled skills from the active project may be injected, and every injected skill records its usage.
-- Point solutions exposed as agent tools use the same controllers as direct editor invocation.
-- Agent mutations go through suggestion envelopes unless a future invariant explicitly authorizes direct writes.
+- Conversation model and execution-mode overrides persist independently of user defaults; precedence is conversation override, user default, then environment default.
+- The effective model is retained on assistant messages and agent provenance.
+- User prompts, aggregated assistant responses, tool arguments, outputs, failures, approvals, and rejections are persisted in chronological order.
+- Every relevant non-agent controller method is classified as a read, proposal, mutation, or an explicit exclusion, and exposed tools invoke those same actor-scoped controllers.
+- Read and proposal tools execute immediately. Proposal pipelines remain reviewable and never gain durable-write authority from chat execution mode.
+- Agent mutations are authorized only by approval of that specific pending call or by the persisted effective auto-accept mode.
+- Approval-required runs persist their serialized SDK state and pending calls; decisions resume the same actor-owned run, and rejection is returned to the model for recovery.
+- OpenRouter chat models must advertise tool support for new selection. A transient catalog failure may use stale catalog data and never invalidates an already configured effective model.
 - External client failures map to typed domain errors and do not leave partial domain state.
 
 ## Transactions and isolation

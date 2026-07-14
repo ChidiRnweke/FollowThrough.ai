@@ -7,6 +7,8 @@
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
 	import { todoStatusLabels } from './labels';
+	import { page } from '$app/state';
+	import { Input } from '$lib/components/ui/input';
 
 	interface BoardItem {
 		id: TodoId;
@@ -55,7 +57,7 @@
 		}
 	}
 
-	let addingTo = $state<TodoStatus | null>(null);
+	let addingTo = $state<TodoStatus | null>(page.url.searchParams.has('quickTodo') ? 'open' : null);
 	let newTitle = $state('');
 
 	async function addTodo(status: TodoStatus): Promise<void> {
@@ -94,26 +96,22 @@
 				</span>
 			</h3>
 			{#if addingTo === status}
-				<form
-					class="flex flex-col gap-1"
-					onsubmit={(e) => {
-						e.preventDefault();
-						void addTodo(status);
-					}}
-				>
-					<input
-						class="rounded-md border border-input bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+				<div class="flex flex-col gap-1">
+					<Input
+						id={status === 'open' ? 'quick-todo-input' : undefined}
+						autofocus={status === 'open' && page.url.searchParams.has('quickTodo')}
 						placeholder="Todo title…"
 						bind:value={newTitle}
 						onkeydown={(e) => {
 							if (e.key === 'Escape') addingTo = null;
+							if (e.key === 'Enter') void addTodo(status);
 						}}
 					/>
 					<div class="flex gap-1">
 						<Button type="submit" size="sm" variant="default" class="flex-1">Add</Button>
 						<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
 					</div>
-				</form>
+				</div>
 			{/if}
 			<div
 				class="flex min-h-32 flex-1 flex-col gap-2"

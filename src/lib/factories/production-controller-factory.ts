@@ -1,5 +1,6 @@
 import {
 	DefaultAgentController,
+	DefaultAgentSettingsController,
 	DefaultDiagramsController,
 	DefaultNotesController,
 	DefaultProjectsController,
@@ -11,6 +12,7 @@ import {
 	DefaultTrustPoliciesController,
 	DefaultWorkspaceController,
 	type AgentDependencies,
+	type AgentSettingsDependencies,
 	type DiagramsDependencies,
 	type NotesDependencies,
 	type ProjectsDependencies,
@@ -35,6 +37,7 @@ export interface ProductionControllerDependencies {
 	suggestions: SuggestionsDependencies;
 	skills: SkillsDependencies;
 	agent: AgentDependencies;
+	agentSettings: AgentSettingsDependencies;
 	trustPolicies: TrustPoliciesDependencies;
 }
 
@@ -69,6 +72,9 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	agent() {
 		return new DefaultAgentController(this.dependencies.agent);
+	}
+	agentSettings() {
+		return new DefaultAgentSettingsController(this.dependencies.agentSettings);
 	}
 	trustPolicies() {
 		return new DefaultTrustPoliciesController(this.dependencies.trustPolicies);

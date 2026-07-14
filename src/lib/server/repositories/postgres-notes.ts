@@ -74,6 +74,7 @@ export class PostgresNoteRepository implements NoteRepository {
 				kind: note.kind,
 				position: note.position,
 				title: note.title,
+				builtInKey: note.builtInKey,
 				document: note.document as unknown as Record<string, unknown>,
 				plainText: note.plainText,
 				currentRevision: note.currentRevision,

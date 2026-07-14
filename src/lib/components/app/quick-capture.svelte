@@ -9,6 +9,7 @@
 <ActionForm {action}>
 	<InputGroup.Root>
 		<InputGroup.Input
+			id="quick-capture-input"
 			name="title"
 			placeholder="Capture a note and start writing…"
 			autocomplete="off"

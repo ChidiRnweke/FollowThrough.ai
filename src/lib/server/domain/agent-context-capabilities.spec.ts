@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { SearchDocument, SearchDocumentId, Skill } from '$lib/models';
-import { KeywordRelevantSkillSelector } from '$lib/services';
 import { InMemorySkills } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import {
@@ -57,8 +56,6 @@ const setup = async (skillProject = testProjectId()) => {
 		new BasicAgent(undefined, undefined, notes),
 		new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
 		skills,
-		new KeywordRelevantSkillSelector(),
-		skills,
 		notes
 	);
 	return { builder, skills, notes };
@@ -77,26 +74,26 @@ describe('Agent grounding invariants', () => {
 		]);
 	});
 
-	it('injects matching skill instructions from the active project', async () => {
+	it('exposes skill summaries without eagerly injecting instructions', async () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
 			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.skills as { instructions: string }[])[0]?.instructions).toBe(
-			'Always state the decision and consequences.'
-		);
+		expect((context.skills as { instructions?: string }[])[0]?.instructions).toBeUndefined();
 	});
 
-	it('does not inject a matching skill from another project', async () => {
+	it('makes enabled skill summaries discoverable across projects', async () => {
 		const { builder } = await setup(testProjectId(2));
 		const context = await builder.build(
 			testActor(),
 			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect(context.skills).toEqual([]);
+		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
+			'Decision records'
+		]);
 	});
 
 	it('includes an explicitly requested skill without a keyword match', async () => {
@@ -171,19 +168,13 @@ describe('Agent grounding invariants', () => {
 		expect(context.contextNotes).toEqual([]);
 	});
 
-	it('records usage for an injected skill', async () => {
+	it('does not record skill usage before the agent loads it', async () => {
 		const { builder, skills } = await setup();
 		await builder.build(
 			testActor(),
 			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect(skills.usages).toEqual([
-			{
-				skillNoteId: testNoteId(3),
-				contextNoteId: testNoteId(),
-				provenanceId: testProvenanceId()
-			}
-		]);
+		expect(skills.usages).toEqual([]);
 	});
 });
