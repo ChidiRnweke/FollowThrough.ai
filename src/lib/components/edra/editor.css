@@ -3,7 +3,14 @@
 
 .tiptap {
 	flex: 1;
+	min-height: 100%;
 	caret-color: var(--foreground);
+	cursor: text;
+	outline: none;
+}
+
+.tiptap:focus-visible {
+	outline: none;
 }
 
 .tiptap :first-child {

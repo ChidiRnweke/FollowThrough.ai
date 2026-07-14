@@ -8,6 +8,10 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+/* ============================================================
+   DESIGN SYSTEM TOKENS — see DESIGN_SYSTEM.md for rationale
+   ============================================================ */
+
 :root {
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.153 0.006 107.1);
@@ -49,6 +53,10 @@
 	--duration-micro: 125ms;
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--note-content-width: 90ch;
+	--note-title-size: clamp(2.25rem, 5vw, 3.5rem);
+	--note-title-leading: 1.05;
+	--note-title-tracking: -0.035em;
 }
 
 .dark {
@@ -228,6 +236,17 @@
 		color: var(--color-sidebar-accent-foreground);
 		font-weight: 500;
 	}
+}
+
+@utility note-measure {
+	max-width: var(--note-content-width);
+}
+
+@utility note-title {
+	font-size: var(--note-title-size);
+	font-weight: 700;
+	line-height: var(--note-title-leading);
+	letter-spacing: var(--note-title-tracking);
 }
 
 @layer components {

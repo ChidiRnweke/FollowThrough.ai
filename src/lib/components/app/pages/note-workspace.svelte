@@ -19,7 +19,9 @@
 	import { suggestionToView } from '$lib/stores/suggestion-view';
 	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
+	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
+	import NoteTitleInput from '../note-title-input.svelte';
 	import ReferenceCard from '../reference-card.svelte';
 	import { formatRelativeTime } from '../labels';
 
@@ -27,6 +29,10 @@
 
 	let editorRef = $state<NoteEditor | null>(null);
 	let dirty = $state(false);
+	let saveFailed = $state(false);
+	let editVersion = 0;
+	let saveQueued = false;
+	let activeSave: Promise<void> | undefined;
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
@@ -70,35 +76,68 @@
 	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function markDirty(): void {
+		editVersion += 1;
 		dirty = true;
+		saveFailed = false;
 		clearTimeout(autosaveTimer);
 		autosaveTimer = setTimeout(() => void save({ auto: true }), AUTOSAVE_DELAY);
 	}
 
 	$effect(() => () => clearTimeout(autosaveTimer));
 
-	async function save(options: { auto?: boolean } = {}): Promise<void> {
-		if (!editorRef || noteActions.saving) return;
+	function save(options: { auto?: boolean } = {}): Promise<void> {
+		if (!editorRef) return Promise.resolve();
 		if (!note.title.trim()) {
 			if (!options.auto) toast.error('Give the note a title first.');
-			return;
+			return Promise.resolve();
 		}
 		clearTimeout(autosaveTimer);
-		const output = await noteActions.save({
-			...note,
-			title: note.title.trim(),
-			document: editorRef.getDocument()
+		saveQueued = true;
+		activeSave ??= flushSaves(options).finally(() => {
+			activeSave = undefined;
 		});
-		if (output) {
-			note = { ...output.note };
-			dirty = false;
+		return activeSave;
+	}
+
+	async function flushSaves(options: { auto?: boolean }): Promise<void> {
+		while (saveQueued && editorRef) {
+			saveQueued = false;
+			const savingVersion = editVersion;
+			const output = await noteActions.save({
+				...note,
+				title: note.title.trim(),
+				document: editorRef.getDocument(),
+				plainText: editorRef.getPlainText()
+			});
+			if (!output) {
+				saveFailed = true;
+				dirty = true;
+				if (!options.auto) toast.error('Could not save the note. Try again.');
+				return;
+			}
+
+			saveFailed = false;
+			if (savingVersion === editVersion) {
+				note = { ...output.note };
+				dirty = false;
+			} else {
+				note = {
+					...note,
+					currentRevision: output.note.currentRevision,
+					updatedAt: output.note.updatedAt
+				};
+				dirty = true;
+				saveQueued = true;
+			}
 			await invalidateAll();
-		} else if (!options.auto) {
-			toast.error('Could not save the note. Reload if the problem persists.');
 		}
 	}
 
 	async function togglePin(): Promise<void> {
+		if (dirty) {
+			await save({ auto: true });
+			if (dirty) return;
+		}
 		const toggled = { ...note, isPinned: !note.isPinned };
 		const output = await noteActions.save(toggled);
 		if (output) {
@@ -112,7 +151,10 @@
 
 	async function moveTo(parentId?: NoteId): Promise<void> {
 		if ((note.parentId ?? undefined) === parentId) return;
-		if (dirty) await save({ auto: true });
+		if (dirty) {
+			await save({ auto: true });
+			if (dirty) return;
+		}
 		const siblings = shell.noteTree.filter(
 			(entry) =>
 				entry.projectId === note.projectId &&
@@ -236,102 +278,107 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
-<div class="mx-auto flex min-h-0 w-full max-w-[75ch] flex-1 flex-col gap-2">
-	<div class="flex flex-wrap items-center gap-1.5">
-		{#each view.backlinks as backlink (backlink.relationship.id)}
-			<BacklinkChip {backlink} direction={backlink.sourceNote.id === note.id ? 'out' : 'in'} />
-		{/each}
-		<span class="text-xs text-muted-foreground select-none">Select text for AI actions</span>
-		{#if pendingCount > 0}
-			<button
-				type="button"
-				class="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-xs text-success transition-colors hover:bg-success/20"
-				title="Suggestions without a text anchor live in the Suggestions inbox"
-				onclick={scrollToFirstSuggestion}
-			>
-				{pendingCount} suggestion{pendingCount === 1 ? '' : 's'} to accept or dismiss
-			</button>
-		{/if}
+<div class="note-measure mx-auto flex min-h-full w-full flex-1 flex-col gap-4">
+	<div class="flex min-h-8 flex-wrap items-center gap-2">
+		<div class="min-w-0 flex-1">
+			<NoteBreadcrumb {shell} {note} />
+		</div>
 		<div class="ml-auto flex items-center gap-2">
 			{#if noteActions.running}
-				<LoaderCircle class="size-4 animate-spin text-muted-foreground" />
+				<LoaderCircle class="size-4 animate-spin text-muted-foreground" aria-label="AI action running" />
 			{/if}
-			<span class="text-xs text-muted-foreground" aria-live="polite">
+			<span
+				class:text-destructive={saveFailed}
+				class="text-xs text-muted-foreground"
+				aria-live="polite"
+			>
 				{#if noteActions.saving}
 					Saving…
+				{:else if dirty && !note.title.trim()}
+					Add a title to save
+				{:else if saveFailed}
+					Couldn’t save · press Ctrl+S to retry
 				{:else if dirty}
 					Unsaved changes
 				{:else}
 					Saved · {formatRelativeTime(note.updatedAt)}
 				{/if}
 			</span>
-			<Button
-				size="sm"
-				variant={dirty ? 'default' : 'outline'}
-				disabled={noteActions.saving}
-				onclick={() => void save()}
-			>
-				Save
-			</Button>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button {...props} variant="ghost" size="icon-sm" aria-label="Note actions">
-							<Ellipsis class="size-4" />
+							<Ellipsis />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
-					<DropdownMenu.Item onclick={togglePin}>
-						{#if note.isPinned}
-							<PinOff class="mr-2 size-4" />
-							Unpin
-						{:else}
-							<Pin class="mr-2 size-4" />
-							Pin to sidebar
-						{/if}
-					</DropdownMenu.Item>
-					<DropdownMenu.Sub>
-						<DropdownMenu.SubTrigger>Move to</DropdownMenu.SubTrigger>
-						<DropdownMenu.SubContent>
-							<DropdownMenu.Item
-								disabled={note.parentId === undefined}
-								onclick={() => void moveTo(undefined)}
-							>
-								Project root
-							</DropdownMenu.Item>
-							{#each folders as folder (folder.id)}
-								<DropdownMenu.Item
-									disabled={folder.id === note.parentId}
-									onclick={() => void moveTo(folder.id)}
-								>
-									{folder.title}
-								</DropdownMenu.Item>
-							{/each}
-						</DropdownMenu.SubContent>
-					</DropdownMenu.Sub>
+					<DropdownMenu.Group>
+						<DropdownMenu.Item onclick={togglePin}>
+							{#if note.isPinned}
+								<PinOff data-icon="inline-start" />
+								Unpin
+							{:else}
+								<Pin data-icon="inline-start" />
+								Pin to sidebar
+							{/if}
+						</DropdownMenu.Item>
+						<DropdownMenu.Sub>
+							<DropdownMenu.SubTrigger>Move to</DropdownMenu.SubTrigger>
+							<DropdownMenu.SubContent>
+								<DropdownMenu.Group>
+									<DropdownMenu.Item
+										disabled={note.parentId === undefined}
+										onclick={() => void moveTo(undefined)}
+									>
+										Project root
+									</DropdownMenu.Item>
+									{#each folders as folder (folder.id)}
+										<DropdownMenu.Item
+											disabled={folder.id === note.parentId}
+											onclick={() => void moveTo(folder.id)}
+										>
+											{folder.title}
+										</DropdownMenu.Item>
+									{/each}
+								</DropdownMenu.Group>
+							</DropdownMenu.SubContent>
+						</DropdownMenu.Sub>
+					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
-					<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
-						Archive note
-					</DropdownMenu.Item>
+					<DropdownMenu.Group>
+						<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
+							Archive note
+						</DropdownMenu.Item>
+					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</div>
 	</div>
 
-	<input
-		class="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/50"
-		placeholder="Untitled"
-		aria-label="Note title"
+	<NoteTitleInput
 		bind:value={note.title}
 		oninput={markDirty}
-		onkeydown={(event) => {
-			if (event.key === 'Enter' || event.key === 'ArrowDown') {
-				event.preventDefault();
-				editorRef?.focusStart();
-			}
-		}}
+		onadvance={() => editorRef?.focusStart()}
 	/>
+
+	{#if view.backlinks.length > 0 || pendingCount > 0}
+		<div class="flex flex-wrap items-center gap-1.5">
+			{#each view.backlinks as backlink (backlink.relationship.id)}
+				<BacklinkChip {backlink} direction={backlink.sourceNote.id === note.id ? 'out' : 'in'} />
+			{/each}
+			{#if pendingCount > 0}
+				<Button
+					size="xs"
+					variant="outline"
+					title="Suggestions without a text anchor live in the Suggestions inbox"
+					onclick={scrollToFirstSuggestion}
+				>
+					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'} to review
+				</Button>
+			{/if}
+		</div>
+	{/if}
 
 	<NoteEditor
 		bind:this={editorRef}
@@ -346,10 +393,10 @@
 
 	{#if view.references.length > 0}
 		<Separator />
-		<div class="grid gap-3 lg:grid-cols-2">
+		<section aria-label="References" class="grid gap-3 lg:grid-cols-2">
 			{#each view.references as reference (reference.id)}
 				<ReferenceCard {reference} />
 			{/each}
-		</div>
+		</section>
 	{/if}
 </div>

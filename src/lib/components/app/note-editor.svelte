@@ -50,6 +50,7 @@
 	let initialized = false;
 	const editor = createEditor(
 		{
+			ariaLabel: 'Note body',
 			onUpdate: () => {
 				if (initialized) onchange?.();
 			}
@@ -114,8 +115,16 @@
 		return (editor?.getJSON() ?? { type: 'doc', content: [] }) as unknown as ProseMirrorDocument;
 	}
 
+	export function getPlainText(): string {
+		return editor?.getText({ blockSeparator: '\n\n' }) ?? '';
+	}
+
 	export function focusStart(): void {
 		editor?.commands.focus('start');
+	}
+
+	export function focusEnd(): void {
+		editor?.commands.focus('end');
 	}
 
 	/** Insert a mermaid diagram node at the given ProseMirror position. */
@@ -132,14 +141,7 @@
 </script>
 
 {#if editor}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="flex min-h-72 flex-1 cursor-text flex-col"
-		onclick={() => {
-			if (!editor.isFocused) editor.commands.focus('end');
-		}}
-	>
+	<div class="flex min-h-96 flex-1 cursor-text flex-col">
 		<Tiptap {editor}>
 			<BubbleMenu
 				{editor}
@@ -209,7 +211,7 @@
 					</DropdownMenu.Root>
 				{/if}
 			</BubbleMenu>
-			<EdraEditor class="prose flex max-w-none flex-1 flex-col dark:prose-invert" />
+			<EdraEditor class="prose flex min-h-full max-w-none flex-1 flex-col dark:prose-invert" />
 		</Tiptap>
 	</div>
 {:else}

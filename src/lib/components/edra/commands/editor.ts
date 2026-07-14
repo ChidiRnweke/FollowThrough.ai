@@ -29,6 +29,7 @@ const lowlight = createLowlight(all);
 
 export interface EdraEditorProps {
 	onUpdate?: () => void;
+	ariaLabel?: string;
 	onFileUpload?: (file: File) => Promise<string>;
 	callAI?: (
 		prompt: string,
@@ -68,5 +69,12 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				}
 			})
 		],
+		editorProps: {
+			attributes: {
+				role: 'textbox',
+				'aria-label': props?.ariaLabel ?? 'Rich text editor',
+				'aria-multiline': 'true'
+			}
+		},
 		onUpdate: props?.onUpdate || (() => {})
 	});

@@ -28,20 +28,22 @@
 		className
 	)}
 >
-	<header class="flex flex-wrap items-start justify-between gap-3">
-		{#if header}
-			{@render header()}
-		{:else}
-			<div class="space-y-1">
-				<h1 class="text-xl font-semibold tracking-tight">{title}</h1>
-				{#if description}
-					<p class="text-sm text-muted-foreground">{description}</p>
-				{/if}
-			</div>
-		{/if}
-		{#if actions}
-			<div class="flex items-center gap-2">{@render actions()}</div>
-		{/if}
-	</header>
+	{#if header || title || description || actions}
+		<header class="flex flex-wrap items-start justify-between gap-3">
+			{#if header}
+				{@render header()}
+			{:else}
+				<div class="flex flex-col gap-1">
+					<h1 class="text-xl font-semibold tracking-tight">{title}</h1>
+					{#if description}
+						<p class="text-sm text-muted-foreground">{description}</p>
+					{/if}
+				</div>
+			{/if}
+			{#if actions}
+				<div class="flex items-center gap-2">{@render actions()}</div>
+			{/if}
+		</header>
+	{/if}
 	{@render children()}
 </div>
