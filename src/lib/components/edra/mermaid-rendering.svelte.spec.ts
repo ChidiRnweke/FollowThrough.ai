@@ -9,10 +9,7 @@ describe('Mermaid rendering invariants', () => {
 			`mermaid-labels-${crypto.randomUUID()}`,
 			'flowchart LR\n  Browser["Browser"] -->|HTTPS| Frontend["Frontend App"]'
 		);
-		const rendered = new DOMParser().parseFromString(
-			sanitizeMermaidSvg(svg),
-			'image/svg+xml'
-		);
+		const rendered = new DOMParser().parseFromString(sanitizeMermaidSvg(svg), 'image/svg+xml');
 		expect(rendered.documentElement.textContent).toContain('Frontend App');
 	});
 });

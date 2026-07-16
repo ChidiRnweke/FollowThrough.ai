@@ -13,16 +13,11 @@ export class PostgresMemoryEntryRepository implements MemoryEntryRepository {
 		const [row] = await this.database
 			.select()
 			.from(schema.memoryEntries)
-			.where(
-				and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, actor.userId))
-			);
+			.where(and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, actor.userId)));
 		return row ? toMemoryEntry(row) : undefined;
 	}
 
-	async list(
-		actor: ActorContext,
-		filter: MemoryEntryListFilter
-	): Promise<readonly MemoryEntry[]> {
+	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		const conditions = [
 			eq(schema.memoryEntries.userId, actor.userId),
 			eq(schema.memoryEntries.projectId, filter.projectId)

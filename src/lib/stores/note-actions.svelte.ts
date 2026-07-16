@@ -8,79 +8,71 @@ import type {
 	SaveNoteOutput,
 	TextSelection
 } from '$lib/models';
+import {
+	saveNote,
+	extractPromises,
+	relateNote,
+	findReferences,
+	generateDiagram,
+	reviseDiagram
+} from '$lib/remote/notes.remote';
 
 class NoteActionsStore {
 	running = $state(false);
 	saving = $state(false);
 	lastError = $state<string | undefined>(undefined);
 
-	private async post<T>(path: string, body: unknown): Promise<T | undefined> {
+	private async call<T>(
+		fn: () => Promise<T>,
+		{ save = false, run = false }: { save?: boolean; run?: boolean } = {}
+	): Promise<T | undefined> {
 		this.lastError = undefined;
+		if (save) this.saving = true;
+		if (run) this.running = true;
 		try {
-			const response = await fetch(path, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			const payload = (await response.json().catch(() => undefined)) as
-				T | { message?: string } | undefined;
-			if (response.ok) return payload as T;
-			this.lastError =
-				payload && typeof payload === 'object' && 'message' in payload
-					? payload.message
-					: 'The request failed.';
-			return undefined;
+			return await fn();
 		} catch (error) {
 			this.lastError = error instanceof Error ? error.message : 'The request failed.';
 			return undefined;
-		}
-	}
-
-	private async run<T>(path: string, selection: TextSelection): Promise<T | undefined> {
-		this.running = true;
-		try {
-			return await this.post<T>(path, { selection });
 		} finally {
-			this.running = false;
+			if (save) this.saving = false;
+			if (run) this.running = false;
 		}
 	}
 
 	extractPromises(selection: TextSelection): Promise<ExtractPromisesOutput | undefined> {
-		return this.run('/api/ai/extract-promises', selection);
+		return this.call<ExtractPromisesOutput>(() => extractPromises({ selection }), { run: true });
 	}
 	relate(selection: TextSelection): Promise<RelateSelectionOutput | undefined> {
-		return this.run('/api/ai/relate', selection);
+		return this.call<RelateSelectionOutput>(() => relateNote({ selection }), { run: true });
 	}
 	findReferences(selection: TextSelection): Promise<FindReferencesOutput | undefined> {
-		return this.run('/api/ai/reference', selection);
+		return this.call<FindReferencesOutput>(() => findReferences({ selection }), { run: true });
 	}
 	generateDiagram(selection: TextSelection): Promise<GenerateMermaidDiagramOutput | undefined> {
-		return this.run('/api/ai/diagram', selection);
+		return this.call<GenerateMermaidDiagramOutput>(
+			() => generateDiagram({ selection }),
+			{ run: true }
+		);
 	}
 	async reviseDiagram(
 		noteId: Note['id'],
 		source: string,
 		instruction: string
 	): Promise<ReviseInlineMermaidOutput | undefined> {
-		this.running = true;
-		try {
-			return await this.post<ReviseInlineMermaidOutput>('/api/ai/diagram/revise', {
-				noteId,
-				source,
-				instruction
-			});
-		} finally {
-			this.running = false;
+		const result = await this.call<ReviseInlineMermaidOutput>(
+			() => reviseDiagram({ noteId, source, instruction }) as Promise<ReviseInlineMermaidOutput>,
+			{ run: true }
+		);
+		if (result && 'error' in result) {
+			this.lastError = result.error as string;
+			return undefined;
 		}
+		return result;
 	}
 
 	async save(note: Note): Promise<SaveNoteOutput | undefined> {
-		this.saving = true;
-		try {
-			return await this.post<SaveNoteOutput>('/api/notes', { note });
-		} finally {
-			this.saving = false;
-		}
+		return this.call<SaveNoteOutput>(() => saveNote({ note }), { save: true });
 	}
 }
 

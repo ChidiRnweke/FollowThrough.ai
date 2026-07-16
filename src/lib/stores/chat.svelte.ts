@@ -9,6 +9,8 @@ import type {
 } from '$lib/models';
 import { suggestionToView } from './suggestion-view';
 import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
+import { getSession } from '$lib/remote/chat.remote';
+import { refreshStale } from '$lib/remote/resource-queries';
 
 export type { ChatToolActivity } from './chat-tools';
 
@@ -96,9 +98,8 @@ class ChatStore {
 			return;
 		const conversationId = this.conversationId;
 		try {
-			const response = await fetch(`/api/agent/sessions/${conversationId}`);
-			if (!response.ok) return;
-			const data = (await response.json()) as { messages: readonly Message[] };
+			const session = await getSession(conversationId);
+			const data = session;
 			const entries: ChatEntry[] = [];
 			let pendingTools: ChatToolActivity[] = [];
 			for (const message of data.messages) {
@@ -260,6 +261,7 @@ class ChatStore {
 		else if (event.type === 'failed') {
 			if (!hasText(reply)) appendText(reply, event.message);
 		} else if (event.type === 'completed') this.conversationId = event.conversationId;
+		else if (event.type === 'resources_stale') refreshStale(event.resources);
 	}
 
 	clear(): void {

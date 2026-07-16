@@ -97,7 +97,9 @@ export class DefaultMemoryController implements MemoryController {
 				throw new InvalidGeneratedContentError(
 					'Suggestion creator returned a non-memory suggestion for a memory proposal'
 				);
-			if (await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)) {
+			if (
+				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
+			) {
 				const entry = await this.dependencies.memoryChangeApplier.apply(
 					actor,
 					suggestion.payload,

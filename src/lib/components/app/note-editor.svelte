@@ -113,9 +113,6 @@
 	function runSelectionAction(action: NoteAiAction): void {
 		onaction?.(action, readSelection(), editor?.state.selection.to);
 	}
-	onMount(() => {
-		hydrated = true;
-	});
 
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
@@ -126,7 +123,9 @@
 		)
 	);
 
-	if (editor) {
+	onMount(() => {
+		if (!editor) return;
+
 		// Initial content only; the page remounts per note via {#key}.
 		editor.commands.setContent(untrack(() => document) as never);
 		initialized = true;
@@ -147,7 +146,8 @@
 			if (selection) editorSelection.set(selection);
 			else editorSelection.clear();
 		});
-	}
+		hydrated = true;
+	});
 
 	// Rebuild highlights whenever the anchored suggestion set changes. The dispatch
 	// must stay untracked: it mutates editor state, which would re-trigger this effect.

@@ -209,7 +209,8 @@ export type AgentEvent =
 			readonly conversationId: ConversationId;
 			readonly runId?: AgentRunId;
 			readonly model?: string;
-	  };
+	  }
+	| { readonly type: 'resources_stale'; readonly resources: readonly string[] };
 
 export interface DecideAgentRunInput {
 	readonly runId: AgentRunId;

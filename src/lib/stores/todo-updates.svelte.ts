@@ -1,5 +1,6 @@
 import { invalidateAll } from '$app/navigation';
-import type { ProjectId, TodoId, TodoStatus, UpdateTodoOutput } from '$lib/models';
+import type { ProjectId, TodoId, TodoStatus } from '$lib/models';
+import { updateTodoStatus, createTodo } from '$lib/remote/todos.remote';
 import { noteTodos } from './note-todos.svelte';
 import { rightPanel } from './right-panel.svelte';
 
@@ -9,13 +10,7 @@ class TodoUpdatesStore {
 	async setStatus(todoId: TodoId, status: TodoStatus): Promise<boolean> {
 		this.busy = true;
 		try {
-			const response = await fetch('/api/todos', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ todoId, status })
-			});
-			if (!response.ok) return false;
-			const output = (await response.json()) as UpdateTodoOutput;
+			const output = await updateTodoStatus({ todoId, status });
 			if (rightPanel.todoView?.todo.id === todoId) {
 				rightPanel.todoView = { ...rightPanel.todoView, todo: output.todo };
 			}
@@ -32,12 +27,7 @@ class TodoUpdatesStore {
 	async create(title: string, projectId?: ProjectId, status?: TodoStatus): Promise<boolean> {
 		this.busy = true;
 		try {
-			const response = await fetch('/api/todos', {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ title, projectId, status })
-			});
-			if (!response.ok) return false;
+			await createTodo({ title: title, projectId, status });
 			await invalidateAll();
 			return true;
 		} catch {

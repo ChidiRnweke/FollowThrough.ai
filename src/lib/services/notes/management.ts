@@ -14,6 +14,7 @@ import type {
 } from '$lib/models';
 import {
 	DEFAULT_PROJECT_NAME,
+	findProseMirrorDocumentIssue,
 	NotFoundError,
 	OwnershipError,
 	StaleRevisionError,
@@ -74,6 +75,11 @@ export class NoteManagementService
 			throw new OwnershipError('Cannot save another user’s note');
 		const current = await this.get(actor, candidate.id);
 		if (!candidate.title.trim()) throw new ValidationError('Note title is required');
+		const documentIssue = findProseMirrorDocumentIssue(candidate.document);
+		if (documentIssue)
+			throw new ValidationError(
+				`Invalid note document at ${documentIssue.path}: ${documentIssue.message}`
+			);
 		if (current.archivedAt) throw new ValidationError('Archived notes cannot be edited');
 		if (candidate.projectId !== current.projectId || candidate.kind !== current.kind)
 			throw new ValidationError('A save cannot move a note between projects or change its kind');

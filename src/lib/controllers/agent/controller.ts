@@ -107,7 +107,7 @@ export class DefaultAgentController implements AgentController {
 					input: event.arguments,
 					status: 'running'
 				});
-			if (event.type === 'tool_completed')
+			if (event.type === 'tool_completed') {
 				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
 					callId: event.callId,
 					name: event.name,
@@ -116,6 +116,10 @@ export class DefaultAgentController implements AgentController {
 					failure: event.failure,
 					status: event.failure ? 'failed' : 'succeeded'
 				});
+				yield event;
+				yield { type: 'resources_stale' as const, resources: [event.name] };
+				continue;
+			}
 			if (event.type === 'approval_required')
 				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
 					callId: event.callId,
@@ -207,6 +211,8 @@ export class DefaultAgentController implements AgentController {
 					run.model
 				);
 			yield event;
+			if (event.type === 'tool_completed')
+				yield { type: 'resources_stale' as const, resources: [event.name] };
 		}
 	}
 }

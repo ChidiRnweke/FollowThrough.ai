@@ -9,6 +9,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import { getEntries, createEntry, updateEntry, deleteEntry } from '$lib/remote/memory.remote';
 	import { formatRelativeTime } from '../labels';
 
 	let entries = $state<MemoryEntry[]>([]);
@@ -26,9 +27,8 @@
 	async function load(id: string): Promise<void> {
 		loading = true;
 		try {
-			const response = await fetch(`/api/memory?projectId=${encodeURIComponent(id)}`);
-			if (!response.ok) throw new Error(await response.text());
-			entries = ((await response.json()) as { entries: MemoryEntry[] }).entries;
+			const output = await getEntries(id);
+			entries = [...output.entries];
 		} catch {
 			toast.error('Could not load project memory.');
 		} finally {
@@ -39,18 +39,13 @@
 	async function add(): Promise<void> {
 		const content = draft.trim();
 		if (!content || !projectId) return;
-		const response = await fetch('/api/memory', {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ projectId, content })
-		});
-		if (!response.ok) {
+		try {
+			const { entry } = await createEntry({ projectId, content });
+			entries = [entry, ...entries];
+			draft = '';
+		} catch {
 			toast.error('Could not save the memory entry.');
-			return;
 		}
-		const { entry } = (await response.json()) as { entry: MemoryEntry };
-		entries = [entry, ...entries];
-		draft = '';
 	}
 
 	async function saveEdit(entry: MemoryEntry): Promise<void> {
@@ -59,12 +54,9 @@
 		const previous = entries;
 		entries = entries.map((item) => (item.id === entry.id ? { ...item, content } : item));
 		editingId = undefined;
-		const response = await fetch('/api/memory', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ memoryEntryId: entry.id, content })
-		});
-		if (!response.ok) {
+		try {
+			await updateEntry({ memoryEntryId: entry.id, content });
+		} catch {
 			entries = previous;
 			toast.error('Could not update the memory entry.');
 		}
@@ -73,12 +65,9 @@
 	async function toggleShare(entry: MemoryEntry, shareWithAgents: boolean): Promise<void> {
 		const previous = entries;
 		entries = entries.map((item) => (item.id === entry.id ? { ...item, shareWithAgents } : item));
-		const response = await fetch('/api/memory', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ memoryEntryId: entry.id, shareWithAgents })
-		});
-		if (!response.ok) {
+		try {
+			await updateEntry({ memoryEntryId: entry.id, shareWithAgents });
+		} catch {
 			entries = previous;
 			toast.error('Could not update the memory entry.');
 		}
@@ -87,12 +76,9 @@
 	async function remove(entry: MemoryEntry): Promise<void> {
 		const previous = entries;
 		entries = entries.filter((item) => item.id !== entry.id);
-		const response = await fetch('/api/memory', {
-			method: 'DELETE',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ memoryEntryId: entry.id })
-		});
-		if (!response.ok) {
+		try {
+			await deleteEntry({ memoryEntryId: entry.id });
+		} catch {
 			entries = previous;
 			toast.error('Could not delete the memory entry.');
 		}
@@ -116,8 +102,8 @@
 		<p class="text-sm text-muted-foreground">Loading project memory…</p>
 	{:else if entries.length === 0}
 		<p class="text-sm text-muted-foreground">
-			Nothing remembered yet. Add durable project facts here, or accept memory suggestions from
-			the agent.
+			Nothing remembered yet. Add durable project facts here, or accept memory suggestions from the
+			agent.
 		</p>
 	{:else}
 		<ul class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
@@ -125,24 +111,12 @@
 				<li class="rounded-md border border-border p-3">
 					{#if editingId === entry.id}
 						<div class="flex flex-col gap-2">
-							<Textarea
-								bind:value={editingContent}
-								rows={3}
-								aria-label="Edit memory entry"
-							/>
+							<Textarea bind:value={editingContent} rows={3} aria-label="Edit memory entry" />
 							<div class="flex justify-end gap-2">
-								<Button
-									size="sm"
-									variant="ghost"
-									onclick={() => (editingId = undefined)}
-								>
+								<Button size="sm" variant="ghost" onclick={() => (editingId = undefined)}>
 									Cancel
 								</Button>
-								<Button
-									size="sm"
-									disabled={!editingContent.trim()}
-									onclick={() => saveEdit(entry)}
-								>
+								<Button size="sm" disabled={!editingContent.trim()} onclick={() => saveEdit(entry)}>
 									Save
 								</Button>
 							</div>

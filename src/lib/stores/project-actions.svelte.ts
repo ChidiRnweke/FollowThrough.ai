@@ -11,22 +11,27 @@ import type {
 	RenameNoteOutput,
 	RenameProjectOutput
 } from '$lib/models';
+import {
+	createProject,
+	renameProject,
+	archiveProject,
+	createFolder,
+	moveEntry,
+	createNote,
+	renameNote,
+	archiveNote,
+	createSkill
+} from '$lib/remote/projects.remote';
 
 class ProjectActionsStore {
 	busy = $state(false);
 
-	private async request<T>(path: string, method: string, body: unknown): Promise<T | undefined> {
+	private async withInvalidation<T>(fn: () => Promise<T>): Promise<T | undefined> {
 		this.busy = true;
 		try {
-			const response = await fetch(path, {
-				method,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			if (!response.ok) return undefined;
-			const output = (await response.json()) as T;
+			const result = await fn();
 			await invalidateAll();
-			return output;
+			return result;
 		} catch {
 			return undefined;
 		} finally {
@@ -34,64 +39,31 @@ class ProjectActionsStore {
 		}
 	}
 
-	createProject(name: string): Promise<CreateProjectOutput | undefined> {
-		return this.request('/api/projects', 'POST', { op: 'create', name });
-	}
-
-	renameProject(projectId: ProjectId, name: string): Promise<RenameProjectOutput | undefined> {
-		return this.request('/api/projects', 'POST', { op: 'rename', projectId, name });
-	}
-
-	archiveProject(projectId: ProjectId): Promise<RenameProjectOutput | undefined> {
-		return this.request('/api/projects', 'POST', { op: 'archive', projectId });
-	}
-
-	createFolder(
-		projectId: ProjectId,
-		name: string,
-		parentId?: NoteId
-	): Promise<CreateFolderOutput | undefined> {
-		return this.request('/api/projects', 'POST', { op: 'createFolder', projectId, name, parentId });
-	}
-
-	moveEntry(
+	createProject = (name: string) =>
+		this.withInvalidation<CreateProjectOutput>(() => createProject({ name }));
+	renameProject = (projectId: ProjectId, name: string) =>
+		this.withInvalidation<RenameProjectOutput>(() => renameProject({ projectId, name }));
+	archiveProject = (projectId: ProjectId) =>
+		this.withInvalidation(() => archiveProject({ projectId }));
+	createFolder = (projectId: ProjectId, name: string, parentId?: NoteId) =>
+		this.withInvalidation<CreateFolderOutput>(() => createFolder({ projectId, name, parentId }));
+	moveEntry = (
 		projectId: ProjectId,
 		entryId: NoteId,
 		parentId: NoteId | undefined,
 		position: number
-	): Promise<MoveProjectEntryOutput | undefined> {
-		return this.request('/api/projects', 'POST', {
-			op: 'move',
-			projectId,
-			entryId,
-			parentId,
-			position
-		});
-	}
-
-	createNote(
-		title: string,
-		projectId?: ProjectId,
-		parentId?: NoteId
-	): Promise<CreateNoteOutput | undefined> {
-		return this.request('/api/notes', 'POST', { title, projectId, parentId });
-	}
-
-	createSkill(
-		name: string,
-		projectId?: ProjectId,
-		parentId?: NoteId
-	): Promise<CreateSkillOutput | undefined> {
-		return this.request('/api/skills', 'POST', { name, projectId, parentId });
-	}
-
-	renameNote(noteId: NoteId, title: string): Promise<RenameNoteOutput | undefined> {
-		return this.request('/api/notes', 'POST', { op: 'rename', noteId, title });
-	}
-
-	archiveNote(noteId: NoteId): Promise<ArchiveNoteOutput | undefined> {
-		return this.request('/api/notes', 'DELETE', { noteId });
-	}
+	) =>
+		this.withInvalidation<MoveProjectEntryOutput>(() =>
+			moveEntry({ projectId, entryId, parentId, position })
+		);
+	createNote = (title: string, projectId?: ProjectId, parentId?: NoteId) =>
+		this.withInvalidation<CreateNoteOutput>(() => createNote({ title, projectId, parentId }));
+	createSkill = (name: string, projectId?: ProjectId, parentId?: NoteId) =>
+		this.withInvalidation<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
+	renameNote = (noteId: NoteId, title: string) =>
+		this.withInvalidation<RenameNoteOutput>(() => renameNote({ noteId, title }));
+	archiveNote = (noteId: NoteId) =>
+		this.withInvalidation<ArchiveNoteOutput>(() => archiveNote({ noteId }));
 }
 
 export const projectActions = new ProjectActionsStore();

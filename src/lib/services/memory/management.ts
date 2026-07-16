@@ -11,7 +11,11 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models';
 import { InvalidTransitionError, NotFoundError, ValidationError } from '$lib/models';
-import type { MemoryEntryRepository, ProjectRepository, ProvenanceRepository } from '$lib/repositories';
+import type {
+	MemoryEntryRepository,
+	ProjectRepository,
+	ProvenanceRepository
+} from '$lib/repositories';
 import type {
 	MemoryChangeApplier,
 	MemoryEntryCreator,
@@ -161,8 +165,7 @@ export class MemoryManagementService
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryEntry> {
-		if (!payload.memoryEntryId)
-			throw new ValidationError('Memory updates require a target entry');
+		if (!payload.memoryEntryId) throw new ValidationError('Memory updates require a target entry');
 		const content = payload.content?.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		const target = await this.getActive(actor, payload.memoryEntryId);
@@ -187,16 +190,14 @@ export class MemoryManagementService
 		actor: ActorContext,
 		payload: MemoryChangePayload
 	): Promise<MemoryEntry> {
-		if (!payload.memoryEntryId)
-			throw new ValidationError('Memory removals require a target entry');
+		if (!payload.memoryEntryId) throw new ValidationError('Memory removals require a target entry');
 		const target = await this.getActive(actor, payload.memoryEntryId);
 		return this.softDelete(actor, target);
 	}
 
 	private async getActive(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
 		const entry = await this.get(actor, memoryEntryId);
-		if (entry.deletedAt)
-			throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+		if (entry.deletedAt) throw new NotFoundError('Memory entry was not found', { memoryEntryId });
 		return entry;
 	}
 

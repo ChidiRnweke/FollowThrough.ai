@@ -46,7 +46,9 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 		memoryEntryId: MemoryEntryId
 	): Promise<readonly SearchDocument[]> {
 		return this.documents
-			.filter((item) => item.userId === actor.userId && item.document.memoryEntryId === memoryEntryId)
+			.filter(
+				(item) => item.userId === actor.userId && item.document.memoryEntryId === memoryEntryId
+			)
 			.map((item) => item.document)
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}

@@ -40,5 +40,23 @@ export const actions: Actions = {
 			executionMode
 		});
 		return { saved: true };
+	},
+
+	updateTrustPolicy: async ({ request }) => {
+		const data = await request.formData();
+		const pipeline = data.get('pipeline');
+		const autoAcceptEnabled = data.get('autoAcceptEnabled');
+		const minimumConfidence = data.get('minimumConfidence');
+		if (typeof pipeline !== 'string' || !pipeline.trim())
+			return fail(400, { error: 'Missing pipeline.' });
+		const factory = AppFactory.controllerFactory();
+		const output = await factory.trustPolicies().update(AppFactory.actor(), {
+			pipeline: pipeline as never,
+			autoAcceptEnabled: autoAcceptEnabled === 'true',
+			...(minimumConfidence !== null && minimumConfidence !== ''
+				? { minimumConfidence: Number(minimumConfidence) as never }
+				: {})
+		});
+		return { policy: output.policy };
 	}
 };

@@ -8,10 +8,7 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository {
 		return this.entries.find((entry) => entry.id === id && entry.userId === actor.userId);
 	}
 
-	async list(
-		actor: ActorContext,
-		filter: MemoryEntryListFilter
-	): Promise<readonly MemoryEntry[]> {
+	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		return this.entries.filter(
 			(entry) =>
 				entry.userId === actor.userId &&

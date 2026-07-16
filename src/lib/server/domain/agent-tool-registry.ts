@@ -24,6 +24,7 @@ import type {
 	ProvenanceId,
 	RunAgentInput
 } from '$lib/models';
+import { findProseMirrorDocumentIssue } from '$lib/models';
 
 export type AgentToolClassification =
 	| { readonly kind: 'read' | 'proposal' | 'mutation' }
@@ -144,10 +145,22 @@ const selection = z.object({
 	to: z.number().int().nonnegative(),
 	text: z.string()
 });
-const document = z.object({
-	type: z.literal('doc'),
-	content: z.array(z.record(z.string(), z.unknown())).optional()
-});
+const document = z
+	.object({
+		type: z.literal('doc'),
+		content: z.array(z.record(z.string(), z.unknown())).optional()
+	})
+	.superRefine((value, context) => {
+		const issue = findProseMirrorDocumentIssue(value);
+		if (issue)
+			context.addIssue({
+				code: 'custom',
+				message: `Invalid ProseMirror document at ${issue.path}: ${issue.message}`
+			});
+	})
+	.describe(
+		'Tiptap/ProseMirror JSON. Inline formatting belongs in text-node marks; for example bold text is { type: "text", text: "...", marks: [{ type: "bold" }] }. Never use strong or other formatting names as nodes.'
+	);
 
 interface RegistryContext {
 	readonly provenanceId: ProvenanceId;
@@ -290,7 +303,7 @@ export class AgentToolRegistry {
 			),
 			define(
 				'save_note',
-				'Save a complete current note revision.',
+				'Save a complete current note revision using valid Tiptap/ProseMirror JSON.',
 				'mutation',
 				z.object({
 					note: z.object({

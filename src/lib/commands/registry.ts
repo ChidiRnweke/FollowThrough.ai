@@ -9,6 +9,7 @@ import Sun from '@lucide/svelte/icons/sun';
 import { toggleMode } from 'mode-watcher';
 import { palette } from '$lib/stores/palette.svelte';
 import { rightPanel } from '$lib/stores/right-panel.svelte';
+import { createNote } from '$lib/remote/projects.remote';
 
 export interface AppCommand {
 	readonly id: string;
@@ -30,13 +31,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		icon: FilePlus,
 		async run() {
 			palette.close();
-			const response = await fetch('/api/notes', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ title: 'Untitled' })
-			});
-			if (!response.ok) return;
-			const result = (await response.json()) as { note: { id: string } };
+			const result = await createNote({ title: 'Untitled' });
 			await goto(`/notes/${result.note.id}`);
 			focus('[aria-label="Note title"]');
 		}

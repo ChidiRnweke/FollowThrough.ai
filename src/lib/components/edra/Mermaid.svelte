@@ -22,14 +22,16 @@
 	import { Download } from '@lucide/svelte';
 
 	const { node, editor, getPos, extension }: NodeViewProps = $props();
-	const onRevise = $derived((
-		extension.options as {
-			onRevise?: (
-				source: string,
-				instruction: string
-			) => Promise<{ readonly source: string; readonly title?: string }>;
-		}
-	).onRevise);
+	const onRevise = $derived(
+		(
+			extension.options as {
+				onRevise?: (
+					source: string,
+					instruction: string
+				) => Promise<{ readonly source: string; readonly title?: string }>;
+			}
+		).onRevise
+	);
 
 	// The committed code from the document
 	const code = $derived(node.textContent);

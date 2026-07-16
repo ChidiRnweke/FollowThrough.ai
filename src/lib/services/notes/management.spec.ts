@@ -64,6 +64,22 @@ describe('Note management invariants', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
+	it('rejects a document containing a node without a type', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		await expect(
+			service.save(
+				testActor(),
+				noteBuilder({
+					document: {
+						type: 'doc',
+						content: [{ type: 'paragraph', content: [{ text: 'Broken' }] }]
+					}
+				})
+			)
+		).rejects.toThrow('node type is required');
+	});
+
 	it('rejects selection offsets outside the note', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder({ plainText: 'short' })];

@@ -1,5 +1,6 @@
 import { invalidateAll } from '$app/navigation';
 import type { SuggestionId, SuggestionView } from '$lib/models';
+import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
 
 class SuggestionTrayStore {
 	items = $state<SuggestionView[]>([]);
@@ -17,16 +18,11 @@ class SuggestionTrayStore {
 	async decide(suggestionId: SuggestionId, decision: 'accept' | 'reject'): Promise<boolean> {
 		this.busyIds = [...this.busyIds, suggestionId];
 		try {
-			const response = await fetch('/api/suggestions', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ suggestionId, decision })
-			});
-			if (response.ok) {
-				this.remove(suggestionId);
-				await invalidateAll();
-			}
-			return response.ok;
+			if (decision === 'accept') await acceptSuggestion({ suggestionId });
+			else await rejectSuggestion({ suggestionId });
+			this.remove(suggestionId);
+			await invalidateAll();
+			return true;
 		} catch {
 			return false;
 		} finally {
