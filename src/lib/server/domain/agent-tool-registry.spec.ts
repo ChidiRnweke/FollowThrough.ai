@@ -42,7 +42,13 @@ describe('Agent tool coverage invariants', () => {
 		const coveredActions = classifications.filter(
 			(classification) => classification.kind !== 'excluded'
 		).length;
-		expect(registry('approval_required').tools()).toHaveLength(coveredActions);
+		// memory.list is deliberately exposed twice: list_project_memory and list_user_memory.
+		const scopedAliases = 1;
+		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
+	});
+
+	it('exposes the user profile as a read tool', async () => {
+		expect(await approvalFor('approval_required', 'list_user_memory')).toBe(false);
 	});
 
 	it('does not expose the agent controller recursively', () => {
