@@ -20,7 +20,9 @@ export class PostgresMemoryEntryRepository implements MemoryEntryRepository {
 	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		const conditions = [
 			eq(schema.memoryEntries.userId, actor.userId),
-			eq(schema.memoryEntries.projectId, filter.projectId)
+			filter.projectId
+				? eq(schema.memoryEntries.projectId, filter.projectId)
+				: isNull(schema.memoryEntries.projectId)
 		];
 		if (!filter.includeDeleted) conditions.push(isNull(schema.memoryEntries.deletedAt));
 		return (

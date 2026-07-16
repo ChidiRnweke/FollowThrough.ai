@@ -118,12 +118,14 @@ export class DefaultMemoryController implements MemoryController {
 	}
 
 	private toPayload(input: ProposeMemoryChangeInput): MemoryChangePayload {
+		if (input.scope === 'project' && input.projectId === undefined)
+			throw new ValidationError('Project memory proposals require a project');
 		if (input.operation !== 'add' && input.memoryEntryId === undefined)
 			throw new ValidationError('Memory updates and removals require a target entry');
 		if (input.operation !== 'remove' && !input.content?.trim())
 			throw new ValidationError('Memory additions and updates require content');
 		return {
-			projectId: input.projectId,
+			...(input.scope === 'project' ? { projectId: input.projectId } : {}),
 			operation: input.operation,
 			...(input.memoryEntryId !== undefined ? { memoryEntryId: input.memoryEntryId } : {}),
 			...(input.content !== undefined ? { content: input.content } : {}),

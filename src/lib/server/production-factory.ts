@@ -150,7 +150,12 @@ export function createProductionFactory(): ProductionControllerFactory {
 		anchorRepository,
 		provenanceRepository
 	);
-	const referenceFinder = new WebSearchReferenceFinder();
+	const referenceFinder = new WebSearchReferenceFinder({
+		apiKey: process.env.OPENROUTER_API_KEY,
+		baseURL: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+		appURL: process.env.PUBLIC_APP_URL ?? 'http://localhost:5173',
+		defaultModel: normalizeOpenRouterModelId(defaultAgentModel)
+	});
 	const suggestions = new SuggestionManagementService(
 		new PostgresSuggestionRepository(db),
 		noteRepository,
@@ -174,6 +179,13 @@ export function createProductionFactory(): ProductionControllerFactory {
 		skillRepository
 	);
 	const provisionedSkills = new ProvisioningSkillFinder(builtInSkills, skills);
+	const memoryIndexer = new EmbeddedMemoryIndexer(searchRepository, embeddingClient);
+	const memory = new MemoryManagementService(
+		new PostgresMemoryEntryRepository(db),
+		projectRepository,
+		provenanceRepository,
+		memoryIndexer
+	);
 	const fallbackAgent = new BasicAgent(suggestions, provenance, notes);
 	const agentContext = new EnrichedAgentContextBuilder(
 		fallbackAgent,
@@ -181,7 +193,8 @@ export function createProductionFactory(): ProductionControllerFactory {
 		provisionedSkills,
 		notes,
 		undefined,
-		skills
+		skills,
+		memory
 	);
 	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;
@@ -205,13 +218,6 @@ export function createProductionFactory(): ProductionControllerFactory {
 		process.env.OPENROUTER_API_KEY,
 		process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 		process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
-	);
-	const memoryIndexer = new EmbeddedMemoryIndexer(searchRepository, embeddingClient);
-	const memory = new MemoryManagementService(
-		new PostgresMemoryEntryRepository(db),
-		projectRepository,
-		provenanceRepository,
-		memoryIndexer
 	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,
@@ -324,6 +330,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 			relationshipFinder: relationships,
 			backlinkViewAssembler: relationships,
 			referenceLister: references,
+			referenceViewAssembler: references,
 			diagramLister: diagrams,
 			todoLister: todos,
 			todoViewAssembler: todos,

@@ -4,8 +4,7 @@ import type {
 	ConversationId,
 	NoteId,
 	RunAgentInput,
-	SuggestionView,
-	Message
+	SuggestionView
 } from '$lib/models';
 import { suggestionToView } from './suggestion-view';
 import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
@@ -272,6 +271,17 @@ class ChatStore {
 		this.autoChipDismissedFor = undefined;
 		this.hydratedConversationId = undefined;
 		if (browser) sessionStorage.removeItem(STORAGE_KEY);
+	}
+
+	async switchToConversation(id: ConversationId): Promise<void> {
+		if (this.isStreaming || this.conversationId === id) return;
+		this.entries = [];
+		this.conversationId = id;
+		this.hydratedConversationId = undefined;
+		this.chips = [];
+		this.autoChipDismissedFor = undefined;
+		this.persistConversationChoices();
+		await this.hydrate();
 	}
 }
 

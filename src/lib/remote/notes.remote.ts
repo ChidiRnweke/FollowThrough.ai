@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command } from '$app/server';
+import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import type {
 	ExtractPromisesInput,
@@ -7,6 +7,7 @@ import type {
 	RelateSelectionInput,
 	ReviseInlineMermaidInput
 } from '$lib/models';
+import type { NoteId } from '$lib/models';
 
 const noteSchema = z.object({
 	id: z.string().uuid(),
@@ -38,39 +39,36 @@ const textSelection = z
 	})
 	.refine((s) => s.to >= s.from, 'Selection end must follow its start.');
 
-export const saveNote = command(
-	z.object({ note: noteSchema }),
-	async (input) => {
-		return AppFactory.controllerFactory().notes().save(AppFactory.actor(), input as never);
-	}
-);
+export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
+	return AppFactory.controllerFactory()
+		.notes()
+		.save(AppFactory.actor(), input as never);
+});
 
-export const extractPromises = command(
-	z.object({ selection: textSelection }),
-	async (input) => {
-		return AppFactory.controllerFactory()
-			.todos()
-			.extractPromises(AppFactory.actor(), input as ExtractPromisesInput);
-	}
-);
+export const getNote = query(z.string().uuid(), async (noteId) => {
+	const view = await AppFactory.controllerFactory()
+		.notes()
+		.get(AppFactory.actor(), { noteId: noteId as NoteId });
+	return view.note;
+});
 
-export const relateNote = command(
-	z.object({ selection: textSelection }),
-	async (input) => {
-		return AppFactory.controllerFactory()
-			.relationships()
-			.suggestFromSelection(AppFactory.actor(), input as RelateSelectionInput);
-	}
-);
+export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
+	return AppFactory.controllerFactory()
+		.todos()
+		.extractPromises(AppFactory.actor(), input as ExtractPromisesInput);
+});
 
-export const findReferences = command(
-	z.object({ selection: textSelection }),
-	async (input) => {
-		return AppFactory.controllerFactory()
-			.references()
-			.suggestFromSelection(AppFactory.actor(), input as never);
-	}
-);
+export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
+	return AppFactory.controllerFactory()
+		.relationships()
+		.suggestFromSelection(AppFactory.actor(), input as RelateSelectionInput);
+});
+
+export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
+	return AppFactory.controllerFactory()
+		.references()
+		.suggestFromSelection(AppFactory.actor(), input as never);
+});
 
 export const generateDiagram = command(
 	z.object({ selection: textSelection, instruction: z.string().optional() }),
@@ -89,10 +87,9 @@ export const reviseDiagram = command(
 	}),
 	async (input) => {
 		try {
-			return await AppFactory.controllerFactory().diagrams().reviseInlineMermaid(
-				AppFactory.actor(),
-				input as ReviseInlineMermaidInput
-			);
+			return await AppFactory.controllerFactory()
+				.diagrams()
+				.reviseInlineMermaid(AppFactory.actor(), input as ReviseInlineMermaidInput);
 		} catch (e) {
 			return { error: e instanceof Error ? e.message : 'Diagram revision failed.' };
 		}

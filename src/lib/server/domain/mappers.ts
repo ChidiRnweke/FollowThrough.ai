@@ -101,6 +101,7 @@ export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
 export const toMemoryEntry = (row: typeof schema.memoryEntries.$inferSelect): MemoryEntry =>
 	domain<MemoryEntry>({
 		...row,
+		projectId: row.projectId ?? undefined,
 		provenanceId: row.provenanceId ?? undefined,
 		replacesEntryId: row.replacesEntryId ?? undefined,
 		deletedAt: row.deletedAt ? instant(row.deletedAt) : undefined,

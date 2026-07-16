@@ -144,8 +144,7 @@ They are the main source material for tasks, memory, diagrams, drafts, and deliv
 
 ### Project context and files
 
-RAG based  on the project’s notes, memory, and artifacts should give agents the context they need to help without repeated prompting.
-
+RAG based on the project’s notes, memory, and artifacts should give agents the context they need to help without repeated prompting.
 
 ### Board
 
@@ -158,7 +157,6 @@ Its purpose is to show what work exists, where it is, and when it is due.
 Memory gives agents project-specific understanding.
 
 It should reduce repetitive prompting and help outputs stay consistent with the project’s goals, terminology, history, and constraints.
-
 
 ### User profile and memory
 

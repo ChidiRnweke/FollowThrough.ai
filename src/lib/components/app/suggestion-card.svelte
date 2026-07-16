@@ -86,6 +86,9 @@
 				<Badge variant="ghost" class="mr-1 text-muted-foreground">
 					{memoryOperationLabels[suggestion.payload.operation]}
 				</Badge>
+				{#if suggestion.payload.projectId === undefined}
+					<Badge variant="ghost" class="mr-1 text-muted-foreground">About you</Badge>
+				{/if}
 				{#if suggestion.payload.content}
 					{suggestion.payload.content}
 				{/if}

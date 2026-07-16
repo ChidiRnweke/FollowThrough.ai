@@ -4,7 +4,6 @@
 	import type { NoteId, NoteView, ShellContext, TextSelection } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Separator } from '$lib/components/ui/separator';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Pin from '@lucide/svelte/icons/pin';
@@ -22,7 +21,6 @@
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
-	import ReferenceCard from '../reference-card.svelte';
 	import { formatRelativeTime } from '../labels';
 
 	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
@@ -233,6 +231,7 @@
 			}
 			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'reference', noteRef)));
 			added = output.suggestions.filter((s) => s.status === 'proposed').length;
+			await invalidateAll();
 		} else {
 			// Capture the insertion point before the request; the selection may
 			// change or clear while the diagram is generated.
@@ -417,6 +416,7 @@
 		noteId={note.id}
 		revision={note.currentRevision}
 		document={note.document}
+		references={view.references}
 		skills={shell.skills}
 		onchange={markDirty}
 		onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
@@ -424,12 +424,4 @@
 		onreviseMermaid={reviseMermaid}
 	/>
 
-	{#if view.references.length > 0}
-		<Separator />
-		<section aria-label="References" class="grid gap-3 lg:grid-cols-2">
-			{#each view.references as reference (reference.id)}
-				<ReferenceCard {reference} />
-			{/each}
-		</section>
-	{/if}
 </div>

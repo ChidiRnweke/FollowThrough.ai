@@ -52,19 +52,19 @@ export class MemoryManagementService
 	}
 
 	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
-		await this.requireProject(actor, filter.projectId);
+		if (filter.projectId) await this.requireProject(actor, filter.projectId);
 		return this.entries.list(actor, filter);
 	}
 
 	async create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<MemoryEntry> {
 		const content = input.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		await this.requireProject(actor, input.projectId);
+		if (input.projectId) await this.requireProject(actor, input.projectId);
 		const timestamp = now();
 		const entry = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
 			userId: actor.userId,
-			projectId: input.projectId,
+			...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
 			content,
 			shareWithAgents: input.shareWithAgents ?? true,
 			createdAt: timestamp,
@@ -144,12 +144,12 @@ export class MemoryManagementService
 	): Promise<MemoryEntry> {
 		const content = payload.content?.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		await this.requireProject(actor, payload.projectId);
+		if (payload.projectId) await this.requireProject(actor, payload.projectId);
 		const timestamp = now();
 		const entry = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
 			userId: actor.userId,
-			projectId: payload.projectId,
+			...(payload.projectId !== undefined ? { projectId: payload.projectId } : {}),
 			content,
 			shareWithAgents: payload.shareWithAgents ?? true,
 			provenanceId,
@@ -173,7 +173,7 @@ export class MemoryManagementService
 		const replacement = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
 			userId: actor.userId,
-			projectId: target.projectId,
+			...(target.projectId !== undefined ? { projectId: target.projectId } : {}),
 			content,
 			shareWithAgents: payload.shareWithAgents ?? target.shareWithAgents,
 			provenanceId,

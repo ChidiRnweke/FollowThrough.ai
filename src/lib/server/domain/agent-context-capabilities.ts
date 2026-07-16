@@ -2,6 +2,7 @@ import type { ActorContext, Note, ProjectId, ProvenanceId, RunAgentInput } from 
 import type {
 	AgentContextBuilder,
 	KnowledgeSearcher,
+	MemoryEntryLister,
 	NoteReader,
 	SkillFinder,
 	RelevantSkillSelector,
@@ -18,7 +19,8 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly skillFinder: SkillFinder,
 		private readonly noteReader: NoteReader,
 		private readonly skillSelector: RelevantSkillSelector = new KeywordRelevantSkillSelector(),
-		private readonly skillUsageRecorder?: SkillUsageRecorder
+		private readonly skillUsageRecorder?: SkillUsageRecorder,
+		private readonly memoryLister?: MemoryEntryLister
 	) {}
 
 	async build(
@@ -30,12 +32,13 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		const projectId =
 			input.projectId ??
 			(typeof base.projectId === 'string' ? (base.projectId as ProjectId) : undefined);
-		const [matches, availableSkills, contextNotes] = await Promise.all([
+		const [matches, availableSkills, contextNotes, profileEntries] = await Promise.all([
 			projectId
 				? this.knowledgeSearcher.search(actor, input.prompt, 8, projectId)
 				: Promise.resolve([]),
 			this.skillFinder.listEnabled(actor, projectId),
-			this.loadContextNotes(actor, input.contextNoteIds ?? [])
+			this.loadContextNotes(actor, input.contextNoteIds ?? []),
+			this.memoryLister?.list(actor, {}) ?? Promise.resolve([])
 		]);
 		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
 		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
@@ -47,26 +50,13 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				requested.has(skill.name.toLowerCase()) ||
 				requested.has((skill.slug ?? '').toLowerCase())
 		);
-		const explicitlyLoaded = await Promise.all(
-			exposed.map(async (summary) => {
-				const isRequested =
-					requestedNoteIds.has(summary.noteId) ||
-					requested.has(summary.name.toLowerCase()) ||
-					requested.has((summary.slug ?? '').toLowerCase());
-				if (!isRequested) return { summary, isRequested };
-				const skill = await this.skillFinder.load(actor, summary.noteId);
-				await this.skillUsageRecorder?.record(actor, {
-					skillNoteId: summary.noteId,
-					contextNoteId: input.noteId,
-					provenanceId: run.provenanceId
-				});
-				return { summary, isRequested, instructions: skill.note.plainText };
-			})
-		);
 		const noteMatches = matches.filter((match) => match.document.memoryEntryId === undefined);
 		const memoryMatches = matches.filter((match) => match.document.memoryEntryId !== undefined);
 		return {
 			...base,
+			userProfile: profileEntries
+				.filter((entry) => entry.shareWithAgents)
+				.map((entry) => ({ memoryEntryId: entry.id, content: entry.content })),
 			knowledge: noteMatches.map((match) => ({
 				noteId: match.document.noteId,
 				diagramId: match.document.diagramId,
@@ -83,14 +73,12 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				title: note.title,
 				content: note.plainText.slice(0, CONTEXT_NOTE_CONTENT_LIMIT)
 			})),
-			skills: explicitlyLoaded.map(({ summary, isRequested, instructions }) => ({
+			skills: exposed.map((summary) => ({
 				noteId: summary.noteId,
 				name: summary.name,
 				slug: summary.slug,
 				description: summary.description,
-				triggerHints: summary.triggerHints,
-				requested: isRequested,
-				...(instructions !== undefined ? { instructions } : {})
+				triggerHints: summary.triggerHints
 			}))
 		};
 	}

@@ -165,6 +165,7 @@ const document = z
 interface RegistryContext {
 	readonly provenanceId: ProvenanceId;
 	readonly input: RunAgentInput;
+	readonly model: string;
 }
 
 interface Definition {
@@ -394,7 +395,10 @@ export class AgentToolRegistry {
 				'Propose ranked references for a text selection.',
 				'proposal',
 				z.object({ selection }),
-				(input) => factory.references().suggestFromSelection(actor, input as never)
+				(input) =>
+					factory
+						.references()
+						.suggestFromSelection(actor, input as never, { model: this.context.model })
 			),
 			define(
 				'generate_mermaid_diagram',
@@ -540,11 +544,19 @@ export class AgentToolRegistry {
 					})
 			),
 			define(
+				'list_user_memory',
+				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects.',
+				'read',
+				none,
+				() => factory.memory().list(actor, { sharedOnly: true })
+			),
+			define(
 				'propose_memory_change',
-				'Propose adding, updating, or removing a project memory entry without bypassing review. Use for durable facts, decisions, constraints, terminology, or preferences worth remembering.',
+				'Propose adding, updating, or removing a memory entry without bypassing review. Scope "project" remembers durable project facts, decisions, constraints, and terminology. Scope "user" builds the user profile: whenever the user reveals who they are — role, team, goals, relationships, expertise, preferences, or how they like to work — propose remembering it so future conversations already know them.',
 				'proposal',
 				z.object({
-					projectId: id,
+					scope: z.enum(['project', 'user']),
+					projectId: id.optional(),
 					operation: z.enum(['add', 'update', 'remove']),
 					memoryEntryId: id.optional(),
 					content: z.string().optional(),

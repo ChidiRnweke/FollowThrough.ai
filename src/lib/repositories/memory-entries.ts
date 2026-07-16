@@ -1,7 +1,8 @@
 import type { ActorContext, MemoryEntry, MemoryEntryId, ProjectId } from '../models';
 
 export interface MemoryEntryListFilter {
-	readonly projectId: ProjectId;
+	/** Omit projectId to list user-profile entries (those without a project). */
+	readonly projectId?: ProjectId;
 	readonly includeDeleted?: boolean;
 }
 

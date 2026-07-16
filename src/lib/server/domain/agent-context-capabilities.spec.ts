@@ -9,6 +9,7 @@ import {
 import {
 	noteBuilder,
 	testActor,
+	testMemoryEntryId,
 	testNoteId,
 	testProjectId,
 	testProvenanceId
@@ -48,6 +49,13 @@ const setup = async (skillProject = testProjectId()) => {
 	await repository.replaceForNote(testActor(), testNoteId(4), [
 		document({ noteId: testNoteId(4), projectId: testProjectId(2) })
 	]);
+	await repository.replaceForMemoryEntry(testActor(), testMemoryEntryId(), [
+		document({
+			noteId: undefined,
+			memoryEntryId: testMemoryEntryId(),
+			content: 'The event bus decision was made in April.'
+		})
+	]);
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder()];
 	const skills = new InMemorySkills();
@@ -72,6 +80,32 @@ describe('Agent grounding invariants', () => {
 		expect((context.knowledge as { noteId: string }[]).map((item) => item.noteId)).toEqual([
 			testNoteId(2)
 		]);
+	});
+
+	it('separates memory matches from note knowledge', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Explain the asynchronous decision' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(
+			(context.memory as { memoryEntryId: string }[]).map((item) => item.memoryEntryId)
+		).toEqual([testMemoryEntryId()]);
+	});
+
+	it('keeps memory matches out of the knowledge section', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Explain the asynchronous decision' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(
+			(context.knowledge as { memoryEntryId?: string }[]).every(
+				(item) => item.memoryEntryId === undefined
+			)
+		).toBe(true);
 	});
 
 	it('exposes skill summaries without eagerly injecting instructions', async () => {

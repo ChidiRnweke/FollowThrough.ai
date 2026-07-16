@@ -6,6 +6,7 @@ import type {
 	NoteId,
 	ReferenceCandidate,
 	ReferenceId,
+	ReferenceView,
 	TextSelection
 } from '$lib/models';
 import { NotFoundError, ValidationError } from '$lib/models';
@@ -19,13 +20,19 @@ import type {
 	ReferenceCreator,
 	ReferenceDeleter,
 	ReferenceLister,
-	ReferenceRanker
+	ReferenceRanker,
+	ReferenceViewAssembler
 } from './contracts';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class ReferenceManagementService
-	implements ReferenceCreator, ReferenceDeleter, ReferenceLister, ReferenceRanker
+	implements
+		ReferenceCreator,
+		ReferenceDeleter,
+		ReferenceLister,
+		ReferenceRanker,
+		ReferenceViewAssembler
 {
 	constructor(
 		private readonly references: ReferenceRepository,
@@ -56,6 +63,19 @@ export class ReferenceManagementService
 	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]> {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.references.listForNote(actor, noteId);
+	}
+	async assemble(
+		actor: ActorContext,
+		references: readonly ExternalReference[]
+	): Promise<readonly ReferenceView[]> {
+		return Promise.all(
+			references.map(async (reference) => {
+				const anchor = reference.sourceAnchorId
+					? await this.anchors.findById(actor, reference.sourceAnchorId)
+					: undefined;
+				return { reference, ...(anchor ? { anchor } : {}) };
+			})
+		);
 	}
 	async rank(
 		_actor: ActorContext,

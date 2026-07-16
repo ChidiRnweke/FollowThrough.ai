@@ -10,12 +10,14 @@ import type {
 } from '$lib/models';
 import {
 	saveNote,
+	getNote,
 	extractPromises,
 	relateNote,
 	findReferences,
 	generateDiagram,
 	reviseDiagram
 } from '$lib/remote/notes.remote';
+import { markdownToProseMirror } from '$lib/components/edra/commands/markdown-to-prosemirror.svelte';
 
 class NoteActionsStore {
 	running = $state(false);
@@ -50,10 +52,9 @@ class NoteActionsStore {
 		return this.call<FindReferencesOutput>(() => findReferences({ selection }), { run: true });
 	}
 	generateDiagram(selection: TextSelection): Promise<GenerateMermaidDiagramOutput | undefined> {
-		return this.call<GenerateMermaidDiagramOutput>(
-			() => generateDiagram({ selection }),
-			{ run: true }
-		);
+		return this.call<GenerateMermaidDiagramOutput>(() => generateDiagram({ selection }), {
+			run: true
+		});
 	}
 	async reviseDiagram(
 		noteId: Note['id'],
@@ -73,6 +74,33 @@ class NoteActionsStore {
 
 	async save(note: Note): Promise<SaveNoteOutput | undefined> {
 		return this.call<SaveNoteOutput>(() => saveNote({ note }), { save: true });
+	}
+
+	async applyDiffEdit(noteId: Note['id'], diffText: string): Promise<SaveNoteOutput | undefined> {
+		this.lastError = undefined;
+		this.saving = true;
+		try {
+			const newText = diffText
+				.split('\n')
+				.filter((line) => line.startsWith('+'))
+				.map((line) => line.slice(1))
+				.join('\n');
+			if (!newText.trim()) {
+				this.lastError = 'No changes to apply.';
+				return undefined;
+			}
+			const current = await getNote(noteId);
+			const { document, plainText } = await markdownToProseMirror(newText);
+			const result = await saveNote({
+				note: { ...current, document, plainText }
+			});
+			return result;
+		} catch (error) {
+			this.lastError = error instanceof Error ? error.message : 'The request failed.';
+			return undefined;
+		} finally {
+			this.saving = false;
+		}
 	}
 }
 

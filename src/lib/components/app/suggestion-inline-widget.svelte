@@ -6,7 +6,6 @@
 	import {
 		formatDate,
 		provenanceCaption,
-		referenceTierLabels,
 		relationshipLabels,
 		suggestionKindLabels
 	} from './labels';
@@ -47,15 +46,6 @@
 					{#if suggestion.payload.justification}
 						<p class="text-xs text-muted-foreground">{suggestion.payload.justification}</p>
 					{/if}
-				{:else if suggestion.kind === 'reference'}
-					<p class="text-sm">
-						<span class="font-medium">{suggestionKindLabels[suggestion.kind]}:</span>
-						{suggestion.payload.title}
-						<span class="text-muted-foreground"
-							>({referenceTierLabels[suggestion.payload.tier]})</span
-						>
-					</p>
-					<p class="text-xs text-muted-foreground">{suggestion.payload.relevanceNote}</p>
 				{:else}
 					<p class="text-sm">{suggestionKindLabels[suggestion.kind]}</p>
 				{/if}

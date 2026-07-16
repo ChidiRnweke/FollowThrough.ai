@@ -1,7 +1,8 @@
 import type { ActorContext, MemoryEntry, MemoryEntryId } from '$lib/models';
 import type { MemoryEntryListFilter, MemoryEntryRepository } from '$lib/repositories';
+import type { SnapshotParticipant } from './in-memory-transaction';
 
-export class InMemoryMemoryEntryRepository implements MemoryEntryRepository {
+export class InMemoryMemoryEntryRepository implements MemoryEntryRepository, SnapshotParticipant {
 	entries: MemoryEntry[] = [];
 
 	async findById(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined> {
@@ -9,6 +10,7 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository {
 	}
 
 	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
+		// An undefined filter.projectId matches only user-profile entries, which carry no projectId.
 		return this.entries.filter(
 			(entry) =>
 				entry.userId === actor.userId &&
@@ -25,5 +27,13 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository {
 	async update(_actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
 		this.entries = this.entries.map((item) => (item.id === entry.id ? entry : item));
 		return entry;
+	}
+
+	snapshot(): unknown {
+		return structuredClone(this.entries);
+	}
+
+	restore(snapshot: unknown): void {
+		this.entries = snapshot as MemoryEntry[];
 	}
 }

@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { EmbeddedDiagramIndexer, EmbeddedNoteIndexer, ParagraphChunker } from './indexing';
+import {
+	EmbeddedDiagramIndexer,
+	EmbeddedMemoryIndexer,
+	EmbeddedNoteIndexer,
+	ParagraphChunker
+} from './indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/fakes/in-memory-search';
-import { noteBuilder, testActor } from '$lib/testing/fixtures/domain-builders';
+import {
+	memoryEntryBuilder,
+	noteBuilder,
+	testActor,
+	testNow
+} from '$lib/testing/fixtures/domain-builders';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import type { Diagram, DiagramId } from '$lib/models';
 
@@ -152,5 +162,54 @@ describe('Diagram indexing invariants', () => {
 		await indexer.index(testActor(), diagram);
 		await indexer.index(testActor(), { ...diagram, searchableText: '' });
 		expect(repository.documents.map((item) => item.document.content)).toEqual(['note content']);
+	});
+});
+
+describe('Memory indexing invariants', () => {
+	it('stores memory content as a memory-scoped search document', async () => {
+		const repository = new InMemorySearchRepository();
+		const entry = memoryEntryBuilder();
+		await new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient()).index(
+			testActor(),
+			entry
+		);
+		expect(repository.documents[0]?.document.memoryEntryId).toBe(entry.id);
+	});
+
+	it('gives memory chunks no note source', async () => {
+		const repository = new InMemorySearchRepository();
+		await new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient()).index(
+			testActor(),
+			memoryEntryBuilder()
+		);
+		expect(repository.documents[0]?.document.noteId).toBeUndefined();
+	});
+
+	it('reuses a chunk with an unchanged content hash', async () => {
+		const repository = new InMemorySearchRepository();
+		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const entry = memoryEntryBuilder();
+		await indexer.index(testActor(), entry);
+		const firstId = repository.documents[0]?.document.id;
+		await indexer.index(testActor(), entry);
+		expect(repository.documents[0]?.document.id).toBe(firstId);
+	});
+
+	it('removes chunks for an entry withheld from agents', async () => {
+		const repository = new InMemorySearchRepository();
+		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const entry = memoryEntryBuilder();
+		await indexer.index(testActor(), entry);
+		await indexer.index(testActor(), { ...entry, shareWithAgents: false });
+		expect(repository.documents).toEqual([]);
+	});
+
+	it('removes chunks for a deleted entry', async () => {
+		const repository = new InMemorySearchRepository();
+		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const entry = memoryEntryBuilder();
+		await indexer.index(testActor(), entry);
+		await indexer.index(testActor(), { ...entry, deletedAt: testNow });
+		expect(repository.documents).toEqual([]);
 	});
 });

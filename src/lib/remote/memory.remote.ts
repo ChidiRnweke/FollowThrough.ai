@@ -8,14 +8,14 @@ import type {
 	DeleteMemoryEntryInput
 } from '$lib/models';
 
-export const getEntries = query(z.string().uuid(), async (projectId) => {
+export const getEntries = query(z.string().uuid().optional(), async (projectId) => {
 	const factory = AppFactory.controllerFactory();
 	return factory.memory().list(AppFactory.actor(), { projectId } as ListMemoryInput);
 });
 
 export const createEntry = command(
 	z.object({
-		projectId: z.string().uuid(),
+		projectId: z.string().uuid().optional(),
 		content: z.string().min(1),
 		shareWithAgents: z.boolean().optional()
 	}),

@@ -18,7 +18,7 @@
 ## UX patterns
 
 - **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.
-- Backlinks and AI suggestions are compact context, not competing document chrome. References remain read-only and visibly separate after the authored document.
+- Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
 
 ## Anti-patterns
@@ -27,3 +27,4 @@
 - Do not place helper copy or secondary actions ahead of the title.
 - Do not leave dead space beneath an empty note; the remaining document surface must accept focus.
 - Do not introduce arbitrary colors, widths, typography values, or raw form controls.
+- Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.

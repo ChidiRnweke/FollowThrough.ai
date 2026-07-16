@@ -617,8 +617,10 @@ export const messages = pgTable(
 	(table) => [index('messages_conversation_created_idx').on(table.conversationId, table.createdAt)]
 );
 
-// Durable, user-controlled project facts surfaced to agents via retrieval. Entries
-// changed through suggestions are soft-deleted/superseded so accepts can be reverted.
+// Durable, user-controlled remembered facts. Project-scoped entries surface to agents
+// via retrieval; entries without a project form the user's profile memory and are
+// injected into every agent run. Entries changed through suggestions are
+// soft-deleted/superseded so accepts can be reverted.
 export const memoryEntries = pgTable(
 	'memory_entries',
 	{
@@ -626,9 +628,7 @@ export const memoryEntries = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		projectId: uuid('project_id')
-			.notNull()
-			.references(() => projects.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
 		content: text('content').notNull(),
 		shareWithAgents: boolean('share_with_agents').notNull().default(true),
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),

@@ -118,20 +118,27 @@ describe('Agent tool event invariants', () => {
 });
 
 describe('OpenRouter-compatible SDK integration', () => {
-	it('streams a completion through an OpenAI-compatible base URL', async () => {
+	it('streams a completion with the OpenRouter web search server tool', async () => {
+		let requestTools: unknown;
 		const server = createServer((request, response) => {
 			if (request.url !== '/v1/chat/completions') {
 				response.writeHead(404).end();
 				return;
 			}
-			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			response.write(
-				`data: ${JSON.stringify({ id: 'chatcmpl-local', object: 'chat.completion.chunk', created: 1, model: 'local/test', choices: [{ index: 0, delta: { role: 'assistant', content: 'Local response' }, finish_reason: null }] })}\n\n`
-			);
-			response.write(
-				`data: ${JSON.stringify({ id: 'chatcmpl-local', object: 'chat.completion.chunk', created: 1, model: 'local/test', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`
-			);
-			response.end('data: [DONE]\n\n');
+			const chunks: Buffer[] = [];
+			request.on('data', (chunk: Buffer) => chunks.push(chunk));
+			request.on('end', () => {
+				requestTools = (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { tools?: unknown })
+					.tools;
+				response.writeHead(200, { 'content-type': 'text/event-stream' });
+				response.write(
+					`data: ${JSON.stringify({ id: 'chatcmpl-local', object: 'chat.completion.chunk', created: 1, model: 'local/test', choices: [{ index: 0, delta: { role: 'assistant', content: 'Local response' }, finish_reason: null }] })}\n\n`
+				);
+				response.write(
+					`data: ${JSON.stringify({ id: 'chatcmpl-local', object: 'chat.completion.chunk', created: 1, model: 'local/test', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`
+				);
+				response.end('data: [DONE]\n\n');
+			});
 		});
 		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		const address = server.address();
@@ -204,7 +211,15 @@ describe('OpenRouter-compatible SDK integration', () => {
 					}
 				)
 			);
-			expect(events).toContainEqual({ type: 'text_delta', text: 'Local response' });
+			expect({ events, requestTools }).toMatchObject({
+				events: expect.arrayContaining([{ type: 'text_delta', text: 'Local response' }]),
+				requestTools: expect.arrayContaining([
+					{
+						type: 'openrouter:web_search',
+						parameters: { engine: 'auto', max_results: 3, max_total_results: 6 }
+					}
+				])
+			});
 		} finally {
 			await new Promise<void>((resolve, reject) =>
 				server.close((error) => (error ? reject(error) : resolve()))

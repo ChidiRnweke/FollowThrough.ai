@@ -14,6 +14,7 @@ import type {
 	ProvenanceRecorder,
 	ReferenceFinder,
 	ReferenceRanker,
+	ReferenceSearchOptions,
 	RelationshipClassification,
 	StructuredPromiseClient,
 	StructuredPromiseResult,
@@ -74,12 +75,15 @@ export class InMemoryStructuredRelationshipClient implements StructuredRelations
 
 export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRanker {
 	candidates: ReferenceCandidate[] = [];
+	model?: string;
 	async find(
 		_actor: ActorContext,
-		_selection: TextSelection
+		_selection: TextSelection,
+		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceCandidate[]> {
 		void _actor;
 		void _selection;
+		this.model = options.model;
 		return this.candidates;
 	}
 	async rank(
@@ -97,8 +101,13 @@ export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRank
 export class InMemoryWebReferenceClient implements WebReferenceClient {
 	result?: readonly ReferenceCandidate[];
 	failure?: Error;
-	async search(_selectionText: string): Promise<readonly ReferenceCandidate[] | undefined> {
+	model?: string;
+	async search(
+		_selectionText: string,
+		options: ReferenceSearchOptions = {}
+	): Promise<readonly ReferenceCandidate[] | undefined> {
 		void _selectionText;
+		this.model = options.model;
 		if (this.failure) throw this.failure;
 		return this.result;
 	}

@@ -4,8 +4,11 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ cookies }) => {
 	const factory = AppFactory.controllerFactory();
 	const actor = AppFactory.actor();
-	const shell = await factory.workspace().getShellContext(actor);
-	const agentPreferences = await factory.agentSettings().getPreferences(actor);
+	const [shell, agentPreferences, sessions] = await Promise.all([
+		factory.workspace().getShellContext(actor),
+		factory.agentSettings().getPreferences(actor),
+		factory.agent().listSessions(actor)
+	]);
 	let agentModels = await factory
 		.agentSettings()
 		.listModels(actor)
@@ -27,6 +30,7 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		];
 	return {
 		shell,
+		sessions,
 		agentPreferences,
 		agentModels,
 		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim()),

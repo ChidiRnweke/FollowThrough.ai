@@ -18,6 +18,7 @@ import type {
 	NoteCreator,
 	NoteReader,
 	ReferenceLister,
+	ReferenceViewAssembler,
 	RelationshipFinder,
 	SuggestionLister,
 	SuggestionViewAssembler,
@@ -45,6 +46,7 @@ export interface NotesDependencies {
 	relationshipFinder: RelationshipFinder;
 	backlinkViewAssembler: BacklinkViewAssembler;
 	referenceLister: ReferenceLister;
+	referenceViewAssembler: ReferenceViewAssembler;
 	diagramLister: DiagramLister;
 	todoLister: TodoLister;
 	todoViewAssembler: TodoViewAssembler;
@@ -68,15 +70,16 @@ export class DefaultNotesController implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinks, todoViews, pendingSuggestions] = await Promise.all([
+		const [backlinks, referenceViews, todoViews, pendingSuggestions] = await Promise.all([
 			this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
+			this.dependencies.referenceViewAssembler.assemble(actor, references),
 			this.dependencies.todoViewAssembler.assemble(actor, todos),
 			this.dependencies.suggestionViewAssembler.assemble(actor, pending)
 		]);
 		return {
 			note,
 			backlinks,
-			references,
+			references: referenceViews,
 			diagrams,
 			todos: todoViews,
 			pendingSuggestions

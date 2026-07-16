@@ -4,6 +4,7 @@ import type {
 	ExternalReference,
 	MemoryChangeOperation,
 	MemoryEntry,
+	MemoryScope,
 	MermaidDiagram,
 	Note,
 	NoteRelationship,
@@ -130,14 +131,16 @@ export interface RevertSuggestionInput {
 }
 
 export interface ListMemoryInput {
-	readonly projectId: ProjectId;
+	/** Omit projectId to list the user's profile memory. */
+	readonly projectId?: ProjectId;
 	readonly sharedOnly?: boolean;
 }
 export interface ListMemoryOutput {
 	readonly entries: readonly MemoryEntry[];
 }
 export interface CreateMemoryEntryInput {
-	readonly projectId: ProjectId;
+	/** Omit projectId to create a user-profile entry. */
+	readonly projectId?: ProjectId;
 	readonly content: string;
 	readonly shareWithAgents?: boolean;
 }
@@ -150,7 +153,8 @@ export interface DeleteMemoryEntryInput {
 	readonly memoryEntryId: MemoryEntryId;
 }
 export interface ProposeMemoryChangeInput {
-	readonly projectId: ProjectId;
+	readonly scope: MemoryScope;
+	readonly projectId?: ProjectId;
 	readonly operation: MemoryChangeOperation;
 	readonly memoryEntryId?: MemoryEntryId;
 	readonly content?: string;

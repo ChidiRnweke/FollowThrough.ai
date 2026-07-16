@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import type { AgentModel, AgentPreferences, NoteId, ShellContext } from '$lib/models';
+	import type {
+		AgentModel,
+		AgentPreferences,
+		Conversation,
+		NoteId,
+		ShellContext
+	} from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -17,20 +23,24 @@
 	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
 	import { editorSelection } from '$lib/stores/editor-selection.svelte';
 	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
+	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
 	import ModelPicker from '$lib/components/app/agent/model-picker.svelte';
 	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
+	import ChatHistoryList from './chat-history-list.svelte';
 
 	let {
 		shell,
+		sessions,
 		activeNoteId,
 		agentPreferences,
 		agentModels,
 		agentAvailable
 	}: {
 		shell?: ShellContext;
+		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
@@ -145,6 +155,16 @@
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
+
+	async function handleApplyDiff(diffText: string): Promise<void> {
+		if (!activeNoteId) {
+			toast.error('Open a note first to apply edits.');
+			return;
+		}
+		const result = await noteActions.applyDiffEdit(activeNoteId, diffText);
+		if (result) toast.success('Applied edit to note.');
+		else if (noteActions.lastError) toast.error(noteActions.lastError);
+	}
 </script>
 
 {#snippet chipBadge(chip: ContextChip, auto: boolean)}
@@ -180,10 +200,14 @@
 	<ScrollArea class="min-h-0 flex-1 pr-2" bind:viewportRef={viewport}>
 		<div class="flex flex-col gap-3">
 			{#if chat.entries.length === 0}
-				<p class="text-sm text-muted-foreground">
-					Ask about your projects, notes and todos. The open note and your selection travel along —
-					type <Kbd>@</Kbd> to add notes or invoke skills.
-				</p>
+				{#if sessions.length > 0}
+					<ChatHistoryList {sessions} onselect={(id) => void chat.switchToConversation(id)} />
+				{:else}
+					<p class="text-sm text-muted-foreground">
+						Ask about your projects, notes and todos. The open note and your selection travel along
+						— type <Kbd>@</Kbd> to add notes or invoke skills.
+					</p>
+				{/if}
 			{/if}
 			{#each chat.entries as entry (entry.id)}
 				<div class="space-y-1.5">
@@ -191,7 +215,7 @@
 					{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
 						{#if part.kind === 'text'}
 							{#if part.text}
-								<ChatMarkdown content={part.text} />
+								<ChatMarkdown content={part.text} onapplydiff={handleApplyDiff} />
 							{/if}
 						{:else}
 							{@const tool = part.tool}

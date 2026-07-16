@@ -426,10 +426,14 @@ export type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 export type Suggestion =
 	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
 
+/**
+ * A durable remembered fact. Entries with a project hold project memory; entries
+ * without one form the user's profile memory — who they are across all projects.
+ */
 export interface MemoryEntry {
 	readonly id: MemoryEntryId;
 	readonly userId: UserId;
-	readonly projectId: ProjectId;
+	readonly projectId?: ProjectId;
 	readonly content: string;
 	readonly shareWithAgents: boolean;
 	readonly provenanceId?: ProvenanceId;
@@ -440,9 +444,10 @@ export interface MemoryEntry {
 }
 
 export type MemoryChangeOperation = 'add' | 'update' | 'remove';
+export type MemoryScope = 'project' | 'user';
 
 export interface MemoryChangePayload {
-	readonly projectId: ProjectId;
+	readonly projectId?: ProjectId;
 	readonly operation: MemoryChangeOperation;
 	readonly memoryEntryId?: MemoryEntryId;
 	readonly content?: string;

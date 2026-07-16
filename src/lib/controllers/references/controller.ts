@@ -4,6 +4,7 @@ import type {
 	ProvenanceRecorder,
 	ReferenceFinder,
 	ReferenceRanker,
+	ReferenceSearchOptions,
 	SelectionAnchorCreator,
 	SuggestionCreator
 } from '$lib/services';
@@ -11,7 +12,8 @@ import type {
 export interface ReferencesController {
 	suggestFromSelection(
 		actor: ActorContext,
-		input: FindReferencesInput
+		input: FindReferencesInput,
+		options?: ReferenceSearchOptions
 	): Promise<FindReferencesOutput>;
 }
 
@@ -29,11 +31,12 @@ export class DefaultReferencesController implements ReferencesController {
 
 	suggestFromSelection(
 		actor: ActorContext,
-		input: FindReferencesInput
+		input: FindReferencesInput,
+		options?: ReferenceSearchOptions
 	): Promise<FindReferencesOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
-			const found = await this.dependencies.referenceFinder.find(actor, input.selection);
+			const found = await this.dependencies.referenceFinder.find(actor, input.selection, options);
 			const ranked = await this.dependencies.referenceRanker.rank(actor, input.selection, found);
 			if (ranked.length === 0) return { outcome: 'nothing_relevant', anchorId: anchor.id };
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {

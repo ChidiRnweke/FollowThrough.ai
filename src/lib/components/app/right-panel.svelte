@@ -2,6 +2,7 @@
 	import type {
 		AgentModel,
 		AgentPreferences,
+		Conversation,
 		NoteId,
 		ShellContext,
 		TodoId,
@@ -20,6 +21,7 @@
 
 	let {
 		shell,
+		sessions,
 		agentPreferences,
 		agentModels,
 		agentAvailable,
@@ -27,6 +29,7 @@
 		onstatus
 	}: {
 		shell?: ShellContext;
+		sessions: readonly Conversation[];
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
@@ -86,7 +89,14 @@
 		<Separator />
 		<div class="min-h-0 flex-1 p-4">
 			{#if renderedMode === 'chat'}
-				<ChatPanel {shell} {activeNoteId} {agentPreferences} {agentModels} {agentAvailable} />
+				<ChatPanel
+					{shell}
+					{sessions}
+					{activeNoteId}
+					{agentPreferences}
+					{agentModels}
+					{agentAvailable}
+				/>
 			{:else if renderedMode === 'todo-detail'}
 				<ScrollArea class="h-full">
 					<TodoDetailPanel {onstatus} />

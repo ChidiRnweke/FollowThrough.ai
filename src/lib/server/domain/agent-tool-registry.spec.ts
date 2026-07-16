@@ -11,7 +11,8 @@ import {
 const registry = (mode: 'approval_required' | 'auto_accept') =>
 	new AgentToolRegistry({} as ControllerFactory, testActor(), mode, {
 		provenanceId: testProvenanceId(),
-		input: { prompt: 'Help' }
+		input: { prompt: 'Help' },
+		model: 'openai/gpt-5.6'
 	});
 
 const approvalFor = async (
@@ -93,11 +94,48 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const selected = new AgentToolRegistry(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Create a note' }
+			input: { prompt: 'Create a note' },
+			model: 'openai/gpt-5.6'
 		})
 			.tools()
 			.find((candidate) => candidate.name === 'create_note') as FunctionTool;
 		await selected.invoke({} as never, JSON.stringify({ title: 'Agent draft' }));
 		expect(received).toEqual({ actor: testActor(), input: { title: 'Agent draft' } });
+	});
+
+	it('uses the effective conversation model for reference search', async () => {
+		let receivedModel: string | undefined;
+		const factory = {
+			references: () => ({
+				suggestFromSelection: async (
+					_actor: unknown,
+					_input: unknown,
+					options?: { model?: string }
+				) => {
+					receivedModel = options?.model;
+					return { outcome: 'nothing_relevant' };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = new AgentToolRegistry(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Find references' },
+			model: 'anthropic/claude-sonnet-4.5'
+		})
+			.tools()
+			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
+		await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				selection: {
+					noteId: '00000000-0000-4000-8000-000000000001',
+					revision: 1,
+					from: 0,
+					to: 4,
+					text: 'OAuth'
+				}
+			})
+		);
+		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
 	});
 });

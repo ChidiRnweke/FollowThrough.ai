@@ -1,6 +1,8 @@
 import type {
 	ActorContext,
 	DateTime,
+	MemoryEntry,
+	MemoryEntryId,
 	Note,
 	NoteId,
 	Project,
@@ -27,6 +29,7 @@ export const testSuggestionId = (value = 1): SuggestionId => id(4, value) as Sug
 export const testTodoId = (value = 1): TodoId => id(5, value) as TodoId;
 export const testProvenanceId = (value = 1): ProvenanceId => id(6, value) as ProvenanceId;
 export const testAnchorId = (value = 1): SourceAnchorId => id(7, value) as SourceAnchorId;
+export const testMemoryEntryId = (value = 1): MemoryEntryId => id(8, value) as MemoryEntryId;
 
 export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	id: testProjectId(),
@@ -79,6 +82,17 @@ export const suggestionBuilder = (overrides: Partial<TodoSuggestion> = {}): Todo
 	provenanceId: testProvenanceId(),
 	sourceAnchorId: testAnchorId(),
 	isAutoAccepted: false,
+	createdAt: testNow,
+	updatedAt: testNow,
+	...overrides
+});
+
+export const memoryEntryBuilder = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
+	id: testMemoryEntryId(),
+	userId: testActor().userId,
+	projectId: testProjectId(),
+	content: 'The staging environment uses the shared Postgres cluster.',
+	shareWithAgents: true,
 	createdAt: testNow,
 	updatedAt: testNow,
 	...overrides

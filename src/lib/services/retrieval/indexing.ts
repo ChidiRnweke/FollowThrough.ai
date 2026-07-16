@@ -122,9 +122,14 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 	) {}
 
 	async index(actor: ActorContext, entry: MemoryEntry): Promise<void> {
+		// User-profile entries (no project) are injected into agent context directly and
+		// never enter the retrieval index.
+		const projectId = entry.projectId;
 		const contents =
-			entry.deletedAt || !entry.shareWithAgents ? [] : this.chunker.chunk(entry.content);
-		if (!contents.length) {
+			!projectId || entry.deletedAt || !entry.shareWithAgents
+				? []
+				: this.chunker.chunk(entry.content);
+		if (!contents.length || !projectId) {
 			await this.repository.deleteForMemoryEntry(actor, entry.id);
 			return;
 		}
@@ -151,7 +156,7 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 			const prior = reusable.get(hash);
 			return {
 				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
-				projectId: entry.projectId,
+				projectId,
 				memoryEntryId: entry.id,
 				content,
 				contentHash: hash,

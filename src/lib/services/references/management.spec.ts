@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Url } from '$lib/models';
+import type { ExternalReference, ReferenceId, Url } from '$lib/models';
 import { ReferenceManagementService } from './management';
 import { InMemoryReferenceRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
 import {
@@ -33,6 +33,42 @@ const setup = () => {
 };
 
 describe('Reference management invariants', () => {
+	it('assembles the persisted source anchor for an accepted reference', async () => {
+		const { service, references, anchors } = setup();
+		anchors.anchors = [anchorBuilder()];
+		const reference: ExternalReference = {
+			id: crypto.randomUUID() as ReferenceId,
+			userId: testActor().userId,
+			noteId: testNoteId(),
+			url: 'https://example.com' as Url,
+			title: 'Example',
+			tier: 'official',
+			relevanceNote: 'Relevant',
+			sourceAnchorId: testAnchorId(),
+			createdAt: testNow
+		};
+		references.references = [reference];
+		const views = await service.assemble(testActor(), references.references);
+		expect(views[0]?.anchor?.id).toBe(testAnchorId());
+	});
+
+	it('keeps an accepted reference visible when its anchor is unavailable', async () => {
+		const { service } = setup();
+		const reference: ExternalReference = {
+			id: crypto.randomUUID() as ReferenceId,
+			userId: testActor().userId,
+			noteId: testNoteId(),
+			url: 'https://example.com' as Url,
+			title: 'Example',
+			tier: 'official',
+			relevanceNote: 'Relevant',
+			sourceAnchorId: testAnchorId(2),
+			createdAt: testNow
+		};
+		const views = await service.assemble(testActor(), [reference]);
+		expect(views[0]?.anchor).toBeUndefined();
+	});
+
 	it('rejects an anchor owned by another note', async () => {
 		const { service } = setup();
 		await expect(

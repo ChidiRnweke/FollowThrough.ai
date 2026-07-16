@@ -304,10 +304,6 @@
 		@apply decoration-primary;
 	}
 
-	.ai-provenance {
-		@apply border-l-2 border-l-primary;
-	}
-
 	/* Inline highlights for pending AI suggestions anchored to note text. */
 	.suggestion-anchor {
 		border-bottom: 2px dotted var(--color-primary);
@@ -324,12 +320,21 @@
 	.suggestion-anchor--todo:hover {
 		background-color: color-mix(in oklab, var(--color-success) 20%, transparent);
 	}
-	.suggestion-anchor--reference {
-		border-bottom-color: var(--color-warning);
-		background-color: color-mix(in oklab, var(--color-warning) 10%, transparent);
+	.reference-link {
+		cursor: pointer;
+		font-weight: 500;
+		color: var(--color-primary);
+		text-decoration-line: underline;
+		text-decoration-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.25rem;
 	}
-	.suggestion-anchor--reference:hover {
-		background-color: color-mix(in oklab, var(--color-warning) 20%, transparent);
+	.reference-link:hover,
+	.reference-link:focus-visible {
+		text-decoration-color: var(--color-primary);
+	}
+	.reference-link--pending {
+		text-decoration-style: dotted;
 	}
 
 	/* In-document accept/dismiss blocks rendered below anchored suggestions,
@@ -350,14 +355,6 @@
 		font-weight: 600;
 		color: var(--color-success);
 	}
-	.suggestion-inline-widget--reference {
-		border-left-color: var(--color-warning);
-		background-color: color-mix(in oklab, var(--color-warning) 8%, transparent);
-	}
-	.suggestion-inline-widget--reference .suggestion-inline-widget__glyph {
-		color: var(--color-warning);
-	}
-
 	.provenance-caption {
 		@apply text-xs text-muted-foreground;
 	}

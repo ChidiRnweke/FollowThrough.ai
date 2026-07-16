@@ -55,6 +55,7 @@ This document is the independent behavioural specification for backend models, s
 - References rank standards and official sources above vendor and community sources when relevance is otherwise equal.
 - Reference suggestions are never auto-accepted.
 - Accepted references retain source anchor and provenance links.
+- Accepted references expose their source anchors to note views so resolvable text can render as an inline link; missing or ambiguous anchors never attach a URL to guessed text.
 
 ## Suggestions, provenance, and trust
 
@@ -98,6 +99,9 @@ This document is the independent behavioural specification for backend models, s
 - Agent mutations are authorized only by approval of that specific pending call or by the persisted effective auto-accept mode.
 - Approval-required runs persist their serialized SDK state and pending calls; decisions resume the same actor-owned run, and rejection is returned to the model for recovery.
 - OpenRouter chat models must advertise tool support for new selection. A transient catalog failure may use stale catalog data and never invalidates an already configured effective model.
+- Every OpenRouter agent request preserves the registered application tools and also makes bounded web search available; the model decides whether to use it and must link sources that inform its answer.
+- Agent-triggered reference discovery uses the conversation's effective model, while direct reference discovery uses the configured OpenRouter default. Both remain proposal-only workflows.
+- Reference discovery accepts only valid HTTP(S) citations from OpenRouter's native search metadata, removes duplicate URLs, and proposes at most six sources.
 - External client failures map to typed domain errors and do not leave partial domain state.
 
 ## Transactions and isolation

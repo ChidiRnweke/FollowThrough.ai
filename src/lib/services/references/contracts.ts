@@ -5,14 +5,26 @@ import type {
 	NoteId,
 	ReferenceCandidate,
 	ReferenceId,
+	ReferenceView,
 	TextSelection
 } from '$lib/models';
 
+export interface ReferenceSearchOptions {
+	readonly model?: string;
+}
+
 export interface ReferenceFinder {
-	find(actor: ActorContext, selection: TextSelection): Promise<readonly ReferenceCandidate[]>;
+	find(
+		actor: ActorContext,
+		selection: TextSelection,
+		options?: ReferenceSearchOptions
+	): Promise<readonly ReferenceCandidate[]>;
 }
 export interface WebReferenceClient {
-	search(selectionText: string): Promise<readonly ReferenceCandidate[] | undefined>;
+	search(
+		selectionText: string,
+		options?: ReferenceSearchOptions
+	): Promise<readonly ReferenceCandidate[] | undefined>;
 }
 export interface ReferenceRanker {
 	rank(
@@ -29,4 +41,10 @@ export interface ReferenceDeleter {
 }
 export interface ReferenceLister {
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]>;
+}
+export interface ReferenceViewAssembler {
+	assemble(
+		actor: ActorContext,
+		references: readonly ExternalReference[]
+	): Promise<readonly ReferenceView[]>;
 }

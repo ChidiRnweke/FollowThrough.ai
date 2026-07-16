@@ -8,6 +8,12 @@ describe('Trust policy invariants', () => {
 		const service = new TrustPolicyManagementService(new InMemoryTrustPolicyRepository());
 		expect(await service.list(testActor())).toHaveLength(5);
 	});
+	it('includes a memory pipeline policy', async () => {
+		const service = new TrustPolicyManagementService(new InMemoryTrustPolicyRepository());
+		expect((await service.list(testActor())).some((policy) => policy.pipeline === 'memory')).toBe(
+			true
+		);
+	});
 	it('never auto-accepts references', async () => {
 		const repository = new InMemoryTrustPolicyRepository();
 		repository.policies = [

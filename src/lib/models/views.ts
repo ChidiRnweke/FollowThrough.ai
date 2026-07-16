@@ -59,10 +59,15 @@ export interface BacklinkView {
 	readonly targetNote: NoteRef;
 }
 
+export interface ReferenceView {
+	readonly reference: ExternalReference;
+	readonly anchor?: SourceAnchor;
+}
+
 export interface NoteView {
 	readonly note: Note;
 	readonly backlinks: readonly BacklinkView[];
-	readonly references: readonly ExternalReference[];
+	readonly references: readonly ReferenceView[];
 	readonly diagrams: readonly Diagram[];
 	readonly todos: readonly TodoView[];
 	readonly pendingSuggestions: readonly SuggestionView[];

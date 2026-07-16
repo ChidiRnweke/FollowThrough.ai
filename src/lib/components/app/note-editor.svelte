@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
-	import type { NoteId, ProseMirrorDocument, SkillSummary, TextSelection } from '$lib/models';
+	import type {
+		NoteId,
+		ProseMirrorDocument,
+		ReferenceView,
+		SkillSummary,
+		TextSelection
+	} from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
@@ -26,6 +32,14 @@
 		type AnchoredSuggestion
 	} from './suggestion-anchor-plugin';
 	import SuggestionInlineWidget from './suggestion-inline-widget.svelte';
+	import ReferenceLinkPreview from './reference-link-preview.svelte';
+	import {
+		createReferenceLinkPlugin,
+		referenceLinkKey,
+		REFERENCE_LINK_REBUILD,
+		type AnchoredReferenceLink,
+		type ResolvedReferenceLinkGroup
+	} from './reference-link-plugin';
 	import TodoNodeView from './todo-node.svelte';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
@@ -54,6 +68,7 @@
 		noteId,
 		revision,
 		document,
+		references = [],
 		skills = [],
 		onchange,
 		onaction,
@@ -63,6 +78,7 @@
 		noteId: NoteId;
 		revision: number;
 		document: ProseMirrorDocument;
+		references?: readonly ReferenceView[];
 		skills?: readonly SkillSummary[];
 		onchange?: () => void;
 		onaction?: (action: NoteAiAction, selection?: TextSelection, insertAt?: number) => void;
@@ -75,11 +91,39 @@
 
 	let initialized = false;
 	let hydrated = $state(false);
+	let activeLink = $state<
+		{ readonly group: ResolvedReferenceLinkGroup; readonly anchor: HTMLAnchorElement } | undefined
+	>();
+	let activeLinkUrl = $state('');
+	let closeLinkFrame: number | undefined;
+
+	function retainActiveLink(): void {
+		if (closeLinkFrame !== undefined) cancelAnimationFrame(closeLinkFrame);
+		closeLinkFrame = undefined;
+	}
+
+	function closeActiveLink(): void {
+		retainActiveLink();
+		activeLink = undefined;
+		activeLinkUrl = '';
+	}
+
+	function scheduleActiveLinkClose(frames = 10): void {
+		retainActiveLink();
+		const wait = (remaining: number) => {
+			closeLinkFrame = requestAnimationFrame(() => {
+				if (remaining > 1) wait(remaining - 1);
+				else closeActiveLink();
+			});
+		};
+		wait(frames);
+	}
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
 			onUpdate: () => {
+				closeActiveLink();
 				if (initialized) onchange?.();
 			}
 		},
@@ -117,11 +161,52 @@
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
 		suggestionTray.items.flatMap((item) =>
-			item.anchor && item.suggestion.noteId === noteId && item.suggestion.status === 'proposed'
+			item.anchor &&
+			item.suggestion.noteId === noteId &&
+			item.suggestion.status === 'proposed' &&
+			item.suggestion.kind !== 'reference'
 				? [{ id: item.suggestion.id, kind: item.suggestion.kind, quote: item.anchor.quote }]
 				: []
 		)
 	);
+	const linkedReferences: readonly AnchoredReferenceLink[] = $derived([
+		...references.flatMap((view) =>
+			view.anchor
+				? [
+						{
+							anchor: view.anchor,
+							source: {
+								state: 'accepted' as const,
+								id: view.reference.id,
+								url: view.reference.url,
+								title: view.reference.title,
+								tier: view.reference.tier
+							}
+						}
+					]
+				: []
+		),
+		...suggestionTray.items.flatMap((view) =>
+			view.anchor &&
+			view.suggestion.noteId === noteId &&
+			view.suggestion.status === 'proposed' &&
+			view.suggestion.kind === 'reference'
+				? [
+						{
+							anchor: view.anchor,
+							source: {
+								state: 'pending' as const,
+								id: view.suggestion.id,
+								url: view.suggestion.payload.url,
+								title: view.suggestion.payload.title,
+								tier: view.suggestion.payload.tier,
+								confidence: view.suggestion.confidence
+							}
+						}
+					]
+				: []
+		)
+	]);
 
 	onMount(() => {
 		if (!editor) return;
@@ -141,24 +226,41 @@
 				}
 			})
 		);
+		editor.registerPlugin(
+			createReferenceLinkPlugin({
+				getReferences: () => linkedReferences,
+				getRevision: () => revision,
+				onActivate: (group, anchor) => {
+					retainActiveLink();
+					activeLink = { group, anchor };
+					activeLinkUrl = group.sources[0]?.url ?? '';
+				},
+				onDeactivate: scheduleActiveLinkClose
+			})
+		);
 		editor.on('selectionUpdate', () => {
 			const selection = readSelection();
 			if (selection) editorSelection.set(selection);
 			else editorSelection.clear();
 		});
 		hydrated = true;
+		return retainActiveLink;
 	});
 
 	// Rebuild highlights whenever the anchored suggestion set changes. The dispatch
 	// must stay untracked: it mutates editor state, which would re-trigger this effect.
 	$effect(() => {
 		void anchored;
+		void linkedReferences;
 		if (!editor) return;
-		untrack(() =>
+		untrack(() => {
+			closeActiveLink();
 			editor.view.dispatch(
-				editor.view.state.tr.setMeta(suggestionAnchorKey, SUGGESTION_ANCHOR_REBUILD)
-			)
-		);
+				editor.view.state.tr
+					.setMeta(suggestionAnchorKey, SUGGESTION_ANCHOR_REBUILD)
+					.setMeta(referenceLinkKey, REFERENCE_LINK_REBUILD)
+			);
+		});
 	});
 
 	export function getDocument(): ProseMirrorDocument {
@@ -267,6 +369,22 @@
 			</BubbleMenu>
 			<EdraEditor class="prose flex min-h-full max-w-none flex-1 flex-col dark:prose-invert" />
 		</Tiptap>
+		{#if activeLink}
+			<ReferenceLinkPreview
+				group={activeLink.group}
+				anchor={activeLink.anchor}
+				onretain={retainActiveLink}
+				onurlchange={(url) => (activeLinkUrl = url)}
+				onclose={scheduleActiveLinkClose}
+			/>
+			<div
+				class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
+				role="status"
+				aria-label={`Link destination: ${activeLinkUrl}`}
+			>
+				{activeLinkUrl}
+			</div>
+		{/if}
 	</div>
 {:else}
 	<div class="space-y-3">
