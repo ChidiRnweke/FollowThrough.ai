@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { NoteId, NoteView, ShellContext } from '$lib/models';
+	import type { NoteId, NoteView, ShellContext, TextSelection } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Separator } from '$lib/components/ui/separator';
@@ -180,12 +180,24 @@
 		await goto(`/projects/${note.projectId}`);
 	}
 
-	async function runAction(action: NoteAiAction): Promise<void> {
-		const selection = editorSelection.current;
+	async function runAction(
+		action: NoteAiAction,
+		capturedSelection?: TextSelection,
+		insertAt?: number
+	): Promise<void> {
+		let selection = capturedSelection;
 		if (!selection || noteActions.running) {
 			if (!selection) toast.error('Select some text first.');
 			return;
 		}
+		if (dirty) {
+			await save({ auto: true });
+			if (dirty) {
+				toast.error('Save the note before running an AI action.');
+				return;
+			}
+		}
+		selection = { ...selection, revision: note.currentRevision };
 		let added: number;
 		if (action === 'promises') {
 			const output = await noteActions.extractPromises(selection);
@@ -224,10 +236,13 @@
 		} else {
 			// Capture the insertion point before the request; the selection may
 			// change or clear while the diagram is generated.
-			const insertAt = selection.to;
+			if (insertAt === undefined) {
+				toast.error('Select some text first.');
+				return;
+			}
 			const output = await noteActions.generateDiagram(selection);
 			if (!output) {
-				toast.error('Diagram generation failed. Try again.');
+				toast.error(noteActions.lastError ?? 'Diagram generation failed. Try again.');
 				return;
 			}
 			if (output.suggestion.kind === 'diagram') {
@@ -247,6 +262,20 @@
 		} else {
 			toast.info('No suggestions found.');
 		}
+	}
+
+	async function reviseMermaid(
+		source: string,
+		instruction: string
+	): Promise<{ readonly source: string; readonly title?: string }> {
+		if (dirty) {
+			await save({ auto: true });
+			if (dirty) throw new Error('Save the note before revising its diagram.');
+		}
+		const output = await noteActions.reviseDiagram(note.id, source, instruction);
+		if (!output) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
+		toast.success('Diagram revised — undo with Ctrl+Z');
+		return output;
 	}
 
 	function runSkill(skillName: string): void {
@@ -285,7 +314,10 @@
 		</div>
 		<div class="ml-auto flex items-center gap-2">
 			{#if noteActions.running}
-				<LoaderCircle class="size-4 animate-spin text-muted-foreground" aria-label="AI action running" />
+				<LoaderCircle
+					class="size-4 animate-spin text-muted-foreground"
+					aria-label="AI action running"
+				/>
 			{/if}
 			<span
 				class:text-destructive={saveFailed}
@@ -387,8 +419,9 @@
 		document={note.document}
 		skills={shell.skills}
 		onchange={markDirty}
-		onaction={(action) => void runAction(action)}
+		onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 		onskill={runSkill}
+		onreviseMermaid={reviseMermaid}
 	/>
 
 	{#if view.references.length > 0}

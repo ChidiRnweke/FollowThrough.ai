@@ -36,6 +36,10 @@ export interface EdraEditorProps {
 		onChunk: (chunk: string) => void,
 		onError: (error: Error) => void
 	) => Promise<void>;
+	onReviseMermaid?: (
+		source: string,
+		instruction: string
+	) => Promise<{ readonly source: string; readonly title?: string }>;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
@@ -56,7 +60,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			ImageExtended(ImageExtendedComp),
 			VideoExtended(VideoExtendedComp),
 			IFrameExtended(IFrameComp),
-			Mermaid(MermaidComp),
+			Mermaid(MermaidComp).configure({ onRevise: props?.onReviseMermaid }),
 			SlashCommand(SlashCommandComp),
 			Callout(CalloutComp),
 			AIHighlight.configure({

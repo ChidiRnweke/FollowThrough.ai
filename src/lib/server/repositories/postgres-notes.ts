@@ -32,6 +32,14 @@ export class PostgresNoteRepository implements NoteRepository {
 		return row ? toNote(row.note) : undefined;
 	}
 
+	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.notes)
+			.where(and(eq(schema.notes.userId, actor.userId), eq(schema.notes.builtInKey, key)));
+		return row ? toNote(row) : undefined;
+	}
+
 	async listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
 		const conditions = [eq(schema.notes.userId, actor.userId), isNull(schema.notes.archivedAt)];
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));

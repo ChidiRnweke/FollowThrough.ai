@@ -30,6 +30,8 @@ export * from './users/contracts';
 export * from './users/management';
 export * from './projects/contracts';
 export * from './projects/management';
+export * from './memory/contracts';
+export * from './memory/management';
 export * from './retrieval/contracts';
 export * from './retrieval/indexing';
 export * from './retrieval/semantic';

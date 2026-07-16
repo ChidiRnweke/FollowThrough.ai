@@ -9,7 +9,13 @@ import type {
 import type { TrustPolicyRepository } from '$lib/repositories';
 import type { TrustPolicyEvaluator, TrustPolicyStore } from './contracts';
 
-const pipelines: readonly PipelineKind[] = ['extract_promises', 'relate', 'reference', 'agent'];
+const pipelines: readonly PipelineKind[] = [
+	'extract_promises',
+	'relate',
+	'reference',
+	'agent',
+	'memory'
+];
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class TrustPolicyManagementService implements TrustPolicyStore, TrustPolicyEvaluator {

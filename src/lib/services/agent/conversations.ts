@@ -42,6 +42,7 @@ export class PersistentConversationJournal implements ConversationJournal {
 		return this.repository.insert(actor, {
 			id: crypto.randomUUID() as ConversationId,
 			userId: actor.userId,
+			kind: 'chat',
 			contextNoteId: input.noteId,
 			title: input.prompt.trim().slice(0, 80) || 'New conversation',
 			...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
@@ -54,7 +55,23 @@ export class PersistentConversationJournal implements ConversationJournal {
 	}
 
 	listConversations(actor: ActorContext): Promise<readonly Conversation[]> {
-		return this.repository.list(actor);
+		return this.repository.list(actor, 'chat');
+	}
+
+	createWorkflow(
+		actor: ActorContext,
+		input: { title: string; contextNoteId?: import('$lib/models').NoteId }
+	): Promise<Conversation> {
+		const timestamp = now();
+		return this.repository.insert(actor, {
+			id: crypto.randomUUID() as ConversationId,
+			userId: actor.userId,
+			kind: 'workflow',
+			contextNoteId: input.contextNoteId,
+			title: input.title,
+			createdAt: timestamp,
+			updatedAt: timestamp
+		});
 	}
 
 	async get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation> {

@@ -1,6 +1,7 @@
 import type {
 	ActorContext,
 	LinkCandidate,
+	NoteId,
 	ProjectId,
 	SearchMatch,
 	TextSelection
@@ -42,19 +43,20 @@ export class ProjectScopedLinkFinder implements LinkFinder {
 	async find(actor: ActorContext, selection: TextSelection): Promise<readonly LinkCandidate[]> {
 		const note = await this.noteReader.get(actor, selection.noteId);
 		const matches = await this.searcher.search(actor, selection.text, 12, note.projectId);
-		const unique = new Map(
-			matches
-				.filter((match) => match.document.noteId !== selection.noteId)
-				.map((match) => [match.document.noteId, match])
-		);
+		const unique = new Map<NoteId, SearchMatch>();
+		for (const match of matches) {
+			const targetNoteId = match.document.noteId;
+			if (targetNoteId !== undefined && targetNoteId !== selection.noteId)
+				unique.set(targetNoteId, match);
+		}
 		return Promise.all(
-			[...unique.values()].slice(0, 5).map(async (match) => {
+			[...unique.entries()].slice(0, 5).map(async ([targetNoteId, match]) => {
 				const classification = await this.classifier.classify(
 					selection.text,
 					match.document.content
 				);
 				return {
-					targetNoteId: match.document.noteId,
+					targetNoteId,
 					kind: classification.kind,
 					justification: classification.justification,
 					confidence: Math.round(

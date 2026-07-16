@@ -1,6 +1,7 @@
 import type { ActorContext, Note, NoteId, NoteRevision, ProjectId } from '../models';
 export interface NoteRepository {
 	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
+	findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined>;
 	listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
 	countSiblings(actor: ActorContext, projectId: ProjectId, parentId?: NoteId): Promise<number>;
 	insert(actor: ActorContext, note: Note): Promise<Note>;

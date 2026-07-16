@@ -60,4 +60,46 @@ describe('Command chord invariants', () => {
 		handler.handle(keyboardEvent('p', 100, { ctrlKey: true, shiftKey: true }));
 		expect(commands).toEqual(['palette']);
 	});
+
+	it('runs the second chord key while the modifier stays held', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('k', 100, { ctrlKey: true }));
+		handler.handle(keyboardEvent('c', 200, { ctrlKey: true }));
+		expect(commands).toEqual(['toggle-chat']);
+	});
+
+	it('a repeated modifier keydown does not cancel a pending chord', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('k', 100, { ctrlKey: true }));
+		handler.handle(keyboardEvent('Control', 150, { ctrlKey: true }));
+		handler.handle(keyboardEvent('n', 200, { ctrlKey: true }));
+		expect(commands).toEqual(['new-note']);
+	});
+
+	it('matches the second chord key by physical code on dead-key layouts', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('k', 100, { ctrlKey: true }));
+		handler.handle(keyboardEvent('Dead', 200, { code: 'KeyT' }));
+		expect(commands).toEqual(['quick-todo']);
+	});
+});
+
+describe('Direct shortcut invariants', () => {
+	it('Mod+Shift+I toggles chat focus', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('i', 100, { ctrlKey: true, shiftKey: true }));
+		expect(commands).toEqual(['focus-chat']);
+	});
+
+	it('Mod+Alt+I no longer maps to a command', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('i', 100, { ctrlKey: true, altKey: true }));
+		expect(commands).toEqual([]);
+	});
+
+	it('opens settings via the physical comma key when the layout reports another character', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent(';', 100, { ctrlKey: true, code: 'Comma' }));
+		expect(commands).toEqual(['settings']);
+	});
 });

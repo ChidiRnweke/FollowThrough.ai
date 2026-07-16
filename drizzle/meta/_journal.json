@@ -71,6 +71,20 @@
       "when": 1784065278543,
       "tag": "0009_colorful_stryfe",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784223222182,
+      "tag": "0010_flashy_siren",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784224016223,
+      "tag": "0011_unique_madame_web",
+      "breakpoints": true
     }
   ]
 }

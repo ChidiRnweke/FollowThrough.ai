@@ -8,6 +8,7 @@ import * as schema from '$lib/server/db/schema';
 const toConversation = (row: typeof schema.conversations.$inferSelect): Conversation => ({
 	id: row.id as Conversation['id'],
 	userId: row.userId as Conversation['userId'],
+	kind: row.kind,
 	...(row.contextNoteId
 		? { contextNoteId: row.contextNoteId as Conversation['contextNoteId'] }
 		: {}),
@@ -30,12 +31,19 @@ const toMessage = (row: typeof schema.messages.$inferSelect): Message => ({
 export class PostgresConversationRepository implements ConversationRepository {
 	constructor(private readonly database: Database) {}
 
-	async list(actor: ActorContext): Promise<readonly Conversation[]> {
+	async list(actor: ActorContext, kind?: Conversation['kind']): Promise<readonly Conversation[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.conversations)
-				.where(eq(schema.conversations.userId, actor.userId))
+				.where(
+					kind
+						? and(
+								eq(schema.conversations.userId, actor.userId),
+								eq(schema.conversations.kind, kind)
+							)
+						: eq(schema.conversations.userId, actor.userId)
+				)
 				.orderBy(desc(schema.conversations.updatedAt))
 		).map(toConversation);
 	}
@@ -54,6 +62,7 @@ export class PostgresConversationRepository implements ConversationRepository {
 			.values({
 				id: conversation.id,
 				userId: actor.userId,
+				kind: conversation.kind,
 				contextNoteId: conversation.contextNoteId,
 				title: conversation.title,
 				modelOverride: conversation.modelOverride,

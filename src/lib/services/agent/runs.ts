@@ -23,6 +23,11 @@ export interface AgentRunStore {
 		}
 	): Promise<AgentRun>;
 	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
+	updateContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		contextSnapshot: Readonly<Record<string, unknown>>
+	): Promise<AgentRun>;
 	pause(
 		actor: ActorContext,
 		runId: AgentRunId,
@@ -68,6 +73,15 @@ export class PersistentAgentRunStore implements AgentRunStore {
 		const run = await this.repository.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
+	}
+
+	async updateContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		contextSnapshot: Readonly<Record<string, unknown>>
+	): Promise<AgentRun> {
+		const run = await this.get(actor, runId);
+		return this.repository.update(actor, { ...run, contextSnapshot, updatedAt: now() });
 	}
 
 	async pause(

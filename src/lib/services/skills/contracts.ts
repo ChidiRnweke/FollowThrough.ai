@@ -77,4 +77,5 @@ export interface SkillVersionManager {
 }
 export interface BuiltInSkillProvisioner {
 	ensure(actor: ActorContext): Promise<void>;
+	load(actor: ActorContext, key: string): Promise<Skill>;
 }

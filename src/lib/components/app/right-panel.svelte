@@ -15,6 +15,7 @@
 	import { chat } from '$lib/stores/chat.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import ChatPanel from './panels/chat-panel.svelte';
+	import MemoryPanel from './panels/memory-panel.svelte';
 	import TodoDetailPanel from './panels/todo-detail-panel.svelte';
 
 	let {
@@ -36,6 +37,7 @@
 	const titles = {
 		chat: 'Chat',
 		'todo-detail': 'Todo',
+		'project-memory': 'Project memory',
 		closed: ''
 	} as const;
 
@@ -89,6 +91,8 @@
 				<ScrollArea class="h-full">
 					<TodoDetailPanel {onstatus} />
 				</ScrollArea>
+			{:else if renderedMode === 'project-memory'}
+				<MemoryPanel />
 			{/if}
 		</div>
 	</div>

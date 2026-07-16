@@ -75,7 +75,13 @@ describe('Postgres schema contracts', () => {
 		const rows = await context.client<
 			{ enumlabel: string }[]
 		>`select enumlabel from pg_enum join pg_type on pg_type.oid = pg_enum.enumtypid where pg_type.typname = 'suggestion_kind' order by enumsortorder`;
-		expect(rows.map((row) => row.enumlabel)).toEqual(['todo', 'backlink', 'reference', 'diagram']);
+		expect(rows.map((row) => row.enumlabel)).toEqual([
+			'todo',
+			'backlink',
+			'reference',
+			'diagram',
+			'memory'
+		]);
 	});
 	it('allows exactly folder, note, and skill filesystem entries', async () => {
 		const rows = await context.client<

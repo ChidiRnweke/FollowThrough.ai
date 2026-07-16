@@ -3,6 +3,7 @@ import type {
 	Diagram,
 	ExternalReference,
 	LocalDate,
+	MemoryEntry,
 	Note,
 	NoteRelationship,
 	NoteRevision,
@@ -92,6 +93,16 @@ export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
 		provenanceId: row.provenanceId ?? undefined,
 		completedAt: row.completedAt ? instant(row.completedAt) : undefined,
+		deletedAt: row.deletedAt ? instant(row.deletedAt) : undefined,
+		createdAt: instant(row.createdAt),
+		updatedAt: instant(row.updatedAt)
+	});
+
+export const toMemoryEntry = (row: typeof schema.memoryEntries.$inferSelect): MemoryEntry =>
+	domain<MemoryEntry>({
+		...row,
+		provenanceId: row.provenanceId ?? undefined,
+		replacesEntryId: row.replacesEntryId ?? undefined,
 		deletedAt: row.deletedAt ? instant(row.deletedAt) : undefined,
 		createdAt: instant(row.createdAt),
 		updatedAt: instant(row.updatedAt)

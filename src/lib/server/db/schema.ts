@@ -38,7 +38,8 @@ export const suggestionKind = pgEnum('suggestion_kind', [
 	'todo',
 	'backlink',
 	'reference',
-	'diagram'
+	'diagram',
+	'memory'
 ]);
 export const suggestionStatus = pgEnum('suggestion_status', [
 	'proposed',
@@ -52,7 +53,8 @@ export const pipelineKind = pgEnum('pipeline_kind', [
 	'extract_promises',
 	'relate',
 	'reference',
-	'agent'
+	'agent',
+	'memory'
 ]);
 export const referenceTier = pgEnum('reference_tier', [
 	'official',
@@ -72,6 +74,7 @@ export const agentRunStatus = pgEnum('agent_run_status', [
 	'failed',
 	'cancelled'
 ]);
+export const conversationKind = pgEnum('conversation_kind', ['chat', 'workflow']);
 
 type ProseMirrorDocument = Record<string, unknown>;
 type JsonObject = Record<string, unknown>;
@@ -533,6 +536,7 @@ export const conversations = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		kind: conversationKind('kind').notNull().default('chat'),
 		contextNoteId: uuid('context_note_id').references(() => notes.id, { onDelete: 'set null' }),
 		title: text('title'),
 		modelOverride: text('model_override'),
@@ -613,8 +617,41 @@ export const messages = pgTable(
 	(table) => [index('messages_conversation_created_idx').on(table.conversationId, table.createdAt)]
 );
 
+// Durable, user-controlled project facts surfaced to agents via retrieval. Entries
+// changed through suggestions are soft-deleted/superseded so accepts can be reverted.
+export const memoryEntries = pgTable(
+	'memory_entries',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		content: text('content').notNull(),
+		shareWithAgents: boolean('share_with_agents').notNull().default(true),
+		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
+		replacesEntryId: uuid('replaces_entry_id').references((): AnyPgColumn => memoryEntries.id, {
+			onDelete: 'set null'
+		}),
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
+		...timestamps
+	},
+	(table) => [
+		index('memory_entries_project_active_idx').on(
+			table.projectId,
+			table.deletedAt,
+			table.updatedAt
+		),
+		index('memory_entries_user_idx').on(table.userId)
+	]
+);
+
 // Retrieval units are separate from notes so large notes and diagram labels can be
 // independently embedded and reranked. The selected embedding model emits 3072 dimensions.
+// Each chunk has exactly one source: a note (diagram chunks also carry the note) or a
+// memory entry.
 export const searchChunks = pgTable(
 	'search_chunks',
 	{
@@ -625,9 +662,10 @@ export const searchChunks = pgTable(
 		projectId: uuid('project_id')
 			.notNull()
 			.references(() => projects.id, { onDelete: 'cascade' }),
-		noteId: uuid('note_id')
-			.notNull()
-			.references(() => notes.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id').references(() => notes.id, { onDelete: 'cascade' }),
+		memoryEntryId: uuid('memory_entry_id').references(() => memoryEntries.id, {
+			onDelete: 'cascade'
+		}),
 		diagramId: uuid('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' }),
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'
@@ -642,8 +680,13 @@ export const searchChunks = pgTable(
 	},
 	(table) => [
 		index('search_chunks_note_idx').on(table.noteId),
+		index('search_chunks_memory_idx').on(table.memoryEntryId),
 		index('search_chunks_user_idx').on(table.userId),
-		index('search_chunks_project_idx').on(table.projectId)
+		index('search_chunks_project_idx').on(table.projectId),
+		check(
+			'search_chunks_single_source',
+			sql`(${table.noteId} is null) <> (${table.memoryEntryId} is null)`
+		)
 	]
 );
 

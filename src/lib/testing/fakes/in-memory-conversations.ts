@@ -6,9 +6,12 @@ export class InMemoryConversationRepository implements ConversationRepository {
 	conversations: Conversation[] = [];
 	messages: Message[] = [];
 
-	async list(actor: ActorContext): Promise<readonly Conversation[]> {
+	async list(actor: ActorContext, kind?: Conversation['kind']): Promise<readonly Conversation[]> {
 		return this.conversations
-			.filter((conversation) => conversation.userId === actor.userId)
+			.filter(
+				(conversation) =>
+					conversation.userId === actor.userId && (kind === undefined || conversation.kind === kind)
+			)
 			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 	}
 

@@ -2,6 +2,8 @@ import type {
 	Diagram,
 	DrawioDiagram,
 	ExternalReference,
+	MemoryChangeOperation,
+	MemoryEntry,
 	MermaidDiagram,
 	Note,
 	NoteRelationship,
@@ -14,6 +16,7 @@ import type {
 	AgentRunId,
 	DiagramId,
 	LocalDate,
+	MemoryEntryId,
 	NoteId,
 	ProjectId,
 	PromiseStrength,
@@ -94,6 +97,15 @@ export interface ReviseMermaidDiagramInput {
 export interface ReviseMermaidDiagramOutput {
 	readonly diagram: MermaidDiagram;
 }
+export interface ReviseInlineMermaidInput {
+	readonly noteId: NoteId;
+	readonly source: string;
+	readonly instruction: string;
+}
+export interface ReviseInlineMermaidOutput {
+	readonly source: string;
+	readonly title?: string;
+}
 export interface PromoteDiagramInput {
 	readonly diagramId: DiagramId;
 }
@@ -108,13 +120,47 @@ export interface AcceptSuggestionInput {
 }
 export interface AcceptSuggestionOutput {
 	readonly suggestion: Suggestion;
-	readonly artifact: Todo | NoteRelationship | ExternalReference | Diagram;
+	readonly artifact: Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
 }
 export interface RejectSuggestionInput {
 	readonly suggestionId: SuggestionId;
 }
 export interface RevertSuggestionInput {
 	readonly suggestionId: SuggestionId;
+}
+
+export interface ListMemoryInput {
+	readonly projectId: ProjectId;
+	readonly sharedOnly?: boolean;
+}
+export interface ListMemoryOutput {
+	readonly entries: readonly MemoryEntry[];
+}
+export interface CreateMemoryEntryInput {
+	readonly projectId: ProjectId;
+	readonly content: string;
+	readonly shareWithAgents?: boolean;
+}
+export interface UpdateMemoryEntryInput {
+	readonly memoryEntryId: MemoryEntryId;
+	readonly content?: string;
+	readonly shareWithAgents?: boolean;
+}
+export interface DeleteMemoryEntryInput {
+	readonly memoryEntryId: MemoryEntryId;
+}
+export interface ProposeMemoryChangeInput {
+	readonly projectId: ProjectId;
+	readonly operation: MemoryChangeOperation;
+	readonly memoryEntryId?: MemoryEntryId;
+	readonly content?: string;
+	readonly shareWithAgents?: boolean;
+	readonly justification?: string;
+	readonly confidence?: number;
+}
+export interface ProposeMemoryChangeOutput {
+	readonly suggestion: Suggestion;
+	readonly appliedEntry?: MemoryEntry;
 }
 
 export interface RunAgentInput {
@@ -124,6 +170,7 @@ export interface RunAgentInput {
 	readonly selection?: TextSelection;
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly requestedSkillNames?: readonly string[];
+	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly modelOverride?: string | null;
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;

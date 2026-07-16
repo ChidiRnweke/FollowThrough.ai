@@ -3,6 +3,7 @@ import type {
 	AgentSettingsController,
 	AttachmentsController,
 	DiagramsController,
+	MemoryController,
 	NotesController,
 	ProjectsController,
 	ReferencesController,
@@ -28,4 +29,5 @@ export interface ControllerFactory {
 	agentSettings(): AgentSettingsController;
 	attachments(): AttachmentsController;
 	trustPolicies(): TrustPoliciesController;
+	memory(): MemoryController;
 }

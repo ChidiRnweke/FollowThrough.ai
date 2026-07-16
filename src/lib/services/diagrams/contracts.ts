@@ -6,14 +6,22 @@ import type {
 	MermaidDiagram,
 	NoteId,
 	ProjectId,
-	TextSelection
+	TextSelection,
+	ProvenanceId,
+	ReviseInlineMermaidInput,
+	ReviseInlineMermaidOutput
 } from '$lib/models';
+export interface MermaidDiagramDraft {
+	readonly title?: string;
+	readonly source: string;
+	readonly provenanceId?: ProvenanceId;
+}
 export interface MermaidDiagramCreator {
 	create(
 		actor: ActorContext,
 		selection: TextSelection,
 		instruction?: string
-	): Promise<{ title?: string; source: string }>;
+	): Promise<MermaidDiagramDraft>;
 }
 export interface MermaidDiagramReviser {
 	revise(
@@ -21,6 +29,12 @@ export interface MermaidDiagramReviser {
 		diagram: MermaidDiagram,
 		instruction: string
 	): Promise<MermaidDiagram>;
+}
+export interface InlineMermaidReviser {
+	reviseInline(
+		actor: ActorContext,
+		input: ReviseInlineMermaidInput
+	): Promise<ReviseInlineMermaidOutput>;
 }
 export interface MermaidDiagramRenderer {
 	render(source: string): Promise<string>;

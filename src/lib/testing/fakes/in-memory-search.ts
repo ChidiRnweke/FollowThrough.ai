@@ -1,6 +1,8 @@
 import type {
 	ActorContext,
 	DiagramId,
+	MemoryEntryId,
+	NoteId,
 	ProjectId,
 	SearchDocument,
 	SearchMatch,
@@ -17,10 +19,7 @@ interface OwnedSearchDocument {
 export class InMemorySearchRepository implements RetrievalIndexRepository {
 	documents: OwnedSearchDocument[] = [];
 
-	async listForNote(
-		actor: ActorContext,
-		noteId: SearchDocument['noteId']
-	): Promise<readonly SearchDocument[]> {
+	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]> {
 		return this.documents
 			.filter(
 				(item) =>
@@ -42,9 +41,19 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
+	async listForMemoryEntry(
+		actor: ActorContext,
+		memoryEntryId: MemoryEntryId
+	): Promise<readonly SearchDocument[]> {
+		return this.documents
+			.filter((item) => item.userId === actor.userId && item.document.memoryEntryId === memoryEntryId)
+			.map((item) => item.document)
+			.sort((a, b) => a.chunkIndex - b.chunkIndex);
+	}
+
 	async replaceForNote(
 		actor: ActorContext,
-		noteId: SearchDocument['noteId'],
+		noteId: NoteId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
 		this.documents = [
@@ -66,6 +75,19 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 		this.documents = [
 			...this.documents.filter(
 				(item) => item.userId !== actor.userId || item.document.diagramId !== diagramId
+			),
+			...documents.map((document) => ({ userId: actor.userId, document }))
+		];
+	}
+
+	async replaceForMemoryEntry(
+		actor: ActorContext,
+		memoryEntryId: MemoryEntryId,
+		documents: readonly SearchDocument[]
+	): Promise<void> {
+		this.documents = [
+			...this.documents.filter(
+				(item) => item.userId !== actor.userId || item.document.memoryEntryId !== memoryEntryId
 			),
 			...documents.map((document) => ({ userId: actor.userId, document }))
 		];
@@ -104,7 +126,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 			.map(({ document }) => ({ document, score: 1 }));
 	}
 
-	async deleteForNote(actor: ActorContext, noteId: SearchDocument['noteId']): Promise<void> {
+	async deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void> {
 		this.documents = this.documents.filter(
 			(item) =>
 				item.userId !== actor.userId ||
@@ -116,6 +138,12 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 	async deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void> {
 		this.documents = this.documents.filter(
 			(item) => item.userId !== actor.userId || item.document.diagramId !== diagramId
+		);
+	}
+
+	async deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void> {
+		this.documents = this.documents.filter(
+			(item) => item.userId !== actor.userId || item.document.memoryEntryId !== memoryEntryId
 		);
 	}
 }

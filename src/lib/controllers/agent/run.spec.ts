@@ -42,6 +42,9 @@ const setup = (events: AgentEvent[]) => {
 			create: async () => {
 				throw new Error('Unexpected run creation');
 			},
+			updateContext: async () => {
+				throw new Error('Unexpected run context update');
+			},
 			get: async () => {
 				throw new Error('Unexpected run load');
 			},

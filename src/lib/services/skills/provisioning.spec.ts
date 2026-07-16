@@ -19,11 +19,11 @@ const setup = () => {
 };
 
 describe('Built-in skill provisioning invariants', () => {
-	it('creates exactly one visible FollowThrough skill per user', async () => {
+	it('creates each visible built-in skill exactly once per user', async () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure(testActor());
 		await provisioner.ensure(testActor());
-		expect(skills.skills.map((skill) => skill.name)).toEqual(['FollowThrough']);
+		expect(skills.skills.map((skill) => skill.name)).toEqual(['FollowThrough', 'Diagramming']);
 	});
 
 	it('does not recreate a user-renamed FollowThrough skill', async () => {
@@ -36,12 +36,25 @@ describe('Built-in skill provisioning invariants', () => {
 			plainText: 'My customized instructions'
 		};
 		await provisioner.ensure(testActor());
-		expect(notes.notes.map((note) => note.title)).toEqual(['My workbench instructions']);
+		expect(notes.notes.map((note) => note.title)).toEqual([
+			'My workbench instructions',
+			'Diagramming'
+		]);
 	});
 
 	it('records the initial skill revision', async () => {
 		const { provisioner, notes } = setup();
 		await provisioner.ensure(testActor());
-		expect(notes.revisions.map((revision) => revision.revision)).toEqual([1]);
+		expect(notes.revisions.map((revision) => revision.revision)).toEqual([1, 1]);
+	});
+
+	it('fails with guidance when the Diagramming skill is disabled', async () => {
+		const { provisioner, skills } = setup();
+		await provisioner.ensure(testActor());
+		const diagramming = skills.skills.find((skill) => skill.note.builtInKey === 'diagramming')!;
+		skills.skills = skills.skills.map((skill) =>
+			skill.note.id === diagramming.note.id ? { ...skill, isEnabled: false } : skill
+		);
+		await expect(provisioner.load(testActor(), 'diagramming')).rejects.toThrow('Re-enable it');
 	});
 });

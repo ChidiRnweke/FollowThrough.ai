@@ -36,13 +36,34 @@ export interface ContextChip {
 	readonly name: string;
 }
 
+export type ChatPart = { kind: 'text'; text: string } | { kind: 'tool'; tool: ChatToolActivity };
+
 export interface ChatEntry {
 	readonly id: string;
 	readonly role: 'user' | 'assistant';
-	text: string;
-	tools: ChatToolActivity[];
+	/** Text segments and tool calls in stream arrival order, so tools render inline. */
+	parts: ChatPart[];
 	suggestions: SuggestionView[];
 }
+
+const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
+	entry.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
+
+const hasText = (entry: ChatEntry): boolean =>
+	entry.parts.some((part) => part.kind === 'text' && part.text.length > 0);
+
+/** Merge a tool event into the entry, appending a new inline part when it is unseen. */
+const applyToolActivity = (entry: ChatEntry, incoming: ChatToolActivity): void => {
+	if (!reconcileToolActivity(entryTools(entry), incoming)) {
+		entry.parts.push({ kind: 'tool', tool: incoming });
+	}
+};
+
+const appendText = (entry: ChatEntry, text: string): void => {
+	const last = entry.parts.at(-1);
+	if (last?.kind === 'text') last.text += text;
+	else entry.parts.push({ kind: 'text', text });
+};
 
 class ChatStore {
 	entries = $state<ChatEntry[]>([]);
@@ -83,22 +104,24 @@ class ChatStore {
 			for (const message of data.messages) {
 				if (message.role === 'tool') {
 					const content = message.content;
-					reconcileToolActivity(pendingTools, {
+					const incoming: ChatToolActivity = {
 						callId: String(content.callId ?? ''),
 						name: String(content.name ?? 'tool'),
 						arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
 						...(content.output !== null ? { output: content.output } : {}),
 						...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
 						status: String(content.status ?? 'succeeded') as ChatToolStatus
-					});
+					};
+					if (!reconcileToolActivity(pendingTools, incoming)) pendingTools.push(incoming);
 					continue;
 				}
 				const text = typeof message.content.text === 'string' ? message.content.text : '';
+				const toolParts: ChatPart[] =
+					message.role === 'assistant' ? pendingTools.map((tool) => ({ kind: 'tool', tool })) : [];
 				entries.push({
 					id: message.id,
 					role: message.role,
-					text,
-					tools: message.role === 'assistant' ? pendingTools : [],
+					parts: [...toolParts, ...(text ? [{ kind: 'text' as const, text }] : [])],
 					suggestions: []
 				});
 				if (message.role === 'assistant') pendingTools = [];
@@ -146,15 +169,13 @@ class ChatStore {
 		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'user',
-			text: input.prompt,
-			tools: [],
+			parts: [{ kind: 'text', text: input.prompt }],
 			suggestions: []
 		});
 		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'assistant',
-			text: '',
-			tools: [],
+			parts: [],
 			suggestions: []
 		});
 		// re-read through the $state proxy so streamed mutations stay reactive
@@ -167,14 +188,14 @@ class ChatStore {
 				body: JSON.stringify({ ...input, conversationId: this.conversationId })
 			});
 			if (!response.ok || !response.body) {
-				reply.text = 'The agent is unavailable. Try again.';
+				appendText(reply, 'The agent is unavailable. Try again.');
 				return;
 			}
 			for await (const event of readNdjson(response.body)) {
 				this.apply(reply, event);
 			}
 		} catch {
-			reply.text = reply.text || 'The agent run failed. Try again.';
+			if (!hasText(reply)) appendText(reply, 'The agent run failed. Try again.');
 		} finally {
 			this.isStreaming = false;
 		}
@@ -209,16 +230,16 @@ class ChatStore {
 	}
 
 	private apply(reply: ChatEntry, event: AgentEvent): void {
-		if (event.type === 'text_delta') reply.text += event.text;
+		if (event.type === 'text_delta') appendText(reply, event.text);
 		else if (event.type === 'tool_started')
-			reconcileToolActivity(reply.tools, {
+			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
 				status: 'running'
 			});
 		else if (event.type === 'tool_completed') {
-			reconcileToolActivity(reply.tools, {
+			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
 				arguments: {},
@@ -227,7 +248,7 @@ class ChatStore {
 				status: event.failure ? 'failed' : 'succeeded'
 			});
 		} else if (event.type === 'approval_required') {
-			reconcileToolActivity(reply.tools, {
+			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
@@ -236,8 +257,9 @@ class ChatStore {
 			});
 		} else if (event.type === 'suggestion')
 			reply.suggestions.push(suggestionToView(event.suggestion, 'agent'));
-		else if (event.type === 'failed') reply.text = reply.text || event.message;
-		else if (event.type === 'completed') this.conversationId = event.conversationId;
+		else if (event.type === 'failed') {
+			if (!hasText(reply)) appendText(reply, event.message);
+		} else if (event.type === 'completed') this.conversationId = event.conversationId;
 	}
 
 	clear(): void {

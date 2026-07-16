@@ -4,7 +4,8 @@ const producerNames: Record<PipelineKind, string> = {
 	extract_promises: 'Extract Promises',
 	relate: 'Relate',
 	reference: 'Reference',
-	agent: 'Agent'
+	agent: 'Agent',
+	memory: 'Memory'
 };
 
 export function suggestionToView(
@@ -15,7 +16,7 @@ export function suggestionToView(
 	const provenance: Provenance = {
 		id: suggestion.provenanceId,
 		userId: suggestion.userId,
-		producerKind: pipeline === 'agent' ? 'agent' : 'pipeline',
+		producerKind: pipeline === 'agent' || pipeline === 'memory' ? 'agent' : 'pipeline',
 		producerName: producerNames[pipeline],
 		pipeline,
 		metadata: {},

@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { toast } from 'svelte-sonner';
+	import Brain from '@lucide/svelte/icons/brain';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import FilePlus from '@lucide/svelte/icons/file-plus';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -12,6 +13,7 @@
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
+	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import { formatDateTime } from '../labels';
 
@@ -67,6 +69,10 @@
 	<Button variant="outline" size="sm" href="/projects/{project.id}/todos">
 		<ListTodo class="size-4" />
 		Todos
+	</Button>
+	<Button variant="outline" size="sm" onclick={() => rightPanel.openMemory(project.id)}>
+		<Brain class="size-4" />
+		Memory
 	</Button>
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>

@@ -79,13 +79,23 @@ export const IFrameExtended = (component: Component<NodeViewProps>) =>
 		addNodeView: () => SvelteNodeViewRenderer(component)
 	});
 
+export interface MermaidOptions {
+	onRevise?: (
+		source: string,
+		instruction: string
+	) => Promise<{ readonly source: string; readonly title?: string }>;
+}
+
 export const Mermaid = (component: Component<NodeViewProps>) =>
-	Node.create({
+	Node.create<MermaidOptions>({
 		name: 'mermaid',
 		group: 'block',
 		content: 'text*',
 		code: true,
 		defining: true,
+		addOptions() {
+			return { onRevise: undefined };
+		},
 		parseHTML() {
 			return [{ tag: 'div[data-type="mermaid"]' }];
 		},

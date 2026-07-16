@@ -12,6 +12,7 @@ import { InvalidTransitionError } from '$lib/models';
 import type {
 	DiagramWriter,
 	DiagramDeleter,
+	MemoryChangeApplier,
 	ReferenceCreator,
 	ReferenceDeleter,
 	RelationshipCreator,
@@ -30,7 +31,8 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 		private readonly todoDeleter: TodoDeleter,
 		private readonly relationshipDeleter: RelationshipDeleter,
 		private readonly referenceDeleter: ReferenceDeleter,
-		private readonly diagramDeleter: DiagramDeleter
+		private readonly diagramDeleter: DiagramDeleter,
+		private readonly memoryChangeApplier: MemoryChangeApplier
 	) {}
 
 	async apply(
@@ -64,6 +66,8 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 						: ({ ...base, kind: 'drawio' } as Diagram);
 				return this.diagramWriter.create(actor, diagram);
 			}
+			case 'memory':
+				return this.memoryChangeApplier.apply(actor, suggestion.payload, suggestion.provenanceId);
 		}
 	}
 
@@ -85,6 +89,9 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 				break;
 			case 'diagram':
 				await this.diagramDeleter.delete(actor, suggestion.appliedArtifactId as DiagramId);
+				break;
+			case 'memory':
+				await this.memoryChangeApplier.revert(actor, suggestion);
 				break;
 		}
 	}

@@ -27,14 +27,16 @@ export const pipelineLabels: Record<PipelineKind, string> = {
 	extract_promises: 'Extract Promises',
 	relate: 'Relate',
 	reference: 'Reference',
-	agent: 'Agent'
+	agent: 'Agent',
+	memory: 'Memory'
 };
 
 export const suggestionKindLabels: Record<SuggestionKind, string> = {
 	todo: 'Todo',
 	backlink: 'Backlink',
 	reference: 'Reference',
-	diagram: 'Diagram'
+	diagram: 'Diagram',
+	memory: 'Memory'
 };
 
 export const todoStatusLabels: Record<TodoStatus, string> = {

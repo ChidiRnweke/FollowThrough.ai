@@ -1,6 +1,7 @@
 import type {
 	ActorContext,
 	DiagramId,
+	MemoryEntryId,
 	NoteId,
 	ProjectId,
 	SearchDocument,
@@ -9,6 +10,10 @@ import type {
 export interface RetrievalIndexRepository {
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]>;
 	listForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<readonly SearchDocument[]>;
+	listForMemoryEntry(
+		actor: ActorContext,
+		memoryEntryId: MemoryEntryId
+	): Promise<readonly SearchDocument[]>;
 	replaceForNote(
 		actor: ActorContext,
 		noteId: NoteId,
@@ -17,6 +22,11 @@ export interface RetrievalIndexRepository {
 	replaceForDiagram(
 		actor: ActorContext,
 		diagramId: DiagramId,
+		documents: readonly SearchDocument[]
+	): Promise<void>;
+	replaceForMemoryEntry(
+		actor: ActorContext,
+		memoryEntryId: MemoryEntryId,
 		documents: readonly SearchDocument[]
 	): Promise<void>;
 	search(
@@ -33,4 +43,5 @@ export interface RetrievalIndexRepository {
 	): Promise<readonly SearchMatch[]>;
 	deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void>;
 	deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void>;
+	deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void>;
 }

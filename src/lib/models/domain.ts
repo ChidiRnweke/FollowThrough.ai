@@ -10,6 +10,7 @@ import type {
 	DiagramId,
 	DiagramKind,
 	LocalDate,
+	MemoryEntryId,
 	MessageId,
 	NoteId,
 	NoteKind,
@@ -289,6 +290,7 @@ export interface TrustPolicy {
 export interface Conversation {
 	readonly id: ConversationId;
 	readonly userId: UserId;
+	readonly kind: 'chat' | 'workflow';
 	readonly contextNoteId?: NoteId;
 	readonly title?: string;
 	readonly modelOverride?: string;
@@ -371,7 +373,8 @@ export interface AgentModel {
 export interface SearchDocument {
 	readonly id: SearchDocumentId;
 	readonly projectId: ProjectId;
-	readonly noteId: NoteId;
+	readonly noteId?: NoteId;
+	readonly memoryEntryId?: MemoryEntryId;
 	readonly diagramId?: DiagramId;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly content: string;
@@ -387,7 +390,7 @@ export interface SearchMatch {
 	readonly score: number;
 }
 
-export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram';
+export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
 interface SuggestionBase<Kind extends SuggestionKind, Payload> {
 	readonly id: SuggestionId;
@@ -419,8 +422,33 @@ export type DiagramSuggestion = SuggestionBase<
 		readonly source: string;
 	}
 >;
+export type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 export type Suggestion =
-	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion;
+	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
+
+export interface MemoryEntry {
+	readonly id: MemoryEntryId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly content: string;
+	readonly shareWithAgents: boolean;
+	readonly provenanceId?: ProvenanceId;
+	readonly replacesEntryId?: MemoryEntryId;
+	readonly deletedAt?: DateTime;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export type MemoryChangeOperation = 'add' | 'update' | 'remove';
+
+export interface MemoryChangePayload {
+	readonly projectId: ProjectId;
+	readonly operation: MemoryChangeOperation;
+	readonly memoryEntryId?: MemoryEntryId;
+	readonly content?: string;
+	readonly shareWithAgents?: boolean;
+	readonly justification?: string;
+}
 
 export interface CreateTodoInput {
 	readonly projectId: ProjectId;

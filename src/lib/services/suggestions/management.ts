@@ -200,6 +200,8 @@ export class SuggestionManagementService
 			case 'reference':
 			case 'diagram':
 				return proposal.payload.noteId === noteId;
+			case 'memory':
+				return proposal.payload.projectId === projectId;
 		}
 	}
 }

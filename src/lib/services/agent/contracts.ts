@@ -52,6 +52,10 @@ export interface ConversationRecorder {
 
 export interface ConversationJournal extends ConversationRecorder {
 	listConversations(actor: ActorContext): Promise<readonly Conversation[]>;
+	createWorkflow(
+		actor: ActorContext,
+		input: { title: string; contextNoteId?: import('$lib/models').NoteId }
+	): Promise<Conversation>;
 	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
 	listMessages(actor: ActorContext, conversationId: ConversationId): Promise<readonly Message[]>;
 	recordUserPrompt(

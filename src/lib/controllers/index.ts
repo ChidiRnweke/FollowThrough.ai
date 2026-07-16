@@ -8,6 +8,7 @@ export * from './agent/controller';
 export * from './skills/controller';
 export * from './suggestions/controller';
 export * from './trust-policies/controller';
+export * from './memory/controller';
 export * from './projects/controller';
 export * from './agent-settings/controller';
 export * from './attachments/controller';

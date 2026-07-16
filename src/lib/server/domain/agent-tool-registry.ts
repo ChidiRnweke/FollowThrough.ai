@@ -4,6 +4,7 @@ import type {
 	AgentSettingsController,
 	AttachmentsController,
 	DiagramsController,
+	MemoryController,
 	NotesController,
 	ProjectsController,
 	ReferencesController,
@@ -19,6 +20,7 @@ import type {
 	ActorContext,
 	AgentExecutionMode,
 	NoteId,
+	ProjectId,
 	ProvenanceId,
 	RunAgentInput
 } from '$lib/models';
@@ -42,6 +44,7 @@ export interface AgentToolCoverage {
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
 	readonly agentSettings: Coverage<AgentSettingsController>;
 	readonly attachments: Coverage<AttachmentsController>;
+	readonly memory: Coverage<MemoryController>;
 }
 
 export const agentToolCoverage = {
@@ -73,6 +76,10 @@ export const agentToolCoverage = {
 	diagrams: {
 		generateMermaid: { kind: 'proposal' },
 		reviseMermaid: { kind: 'mutation' },
+		reviseInlineMermaid: {
+			kind: 'excluded',
+			reason: 'Inline diagram revision is scoped to the editor workflow.'
+		},
 		promote: { kind: 'mutation' }
 	},
 	suggestions: {
@@ -105,6 +112,22 @@ export const agentToolCoverage = {
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	trustPolicies: { list: { kind: 'read' }, update: { kind: 'mutation' } },
+	memory: {
+		list: { kind: 'read' },
+		propose: { kind: 'proposal' },
+		create: {
+			kind: 'excluded',
+			reason: 'Memory changes must flow through propose_memory_change review.'
+		},
+		update: {
+			kind: 'excluded',
+			reason: 'Memory changes must flow through propose_memory_change review.'
+		},
+		remove: {
+			kind: 'excluded',
+			reason: 'Memory changes must flow through propose_memory_change review.'
+		}
+	},
 	agentSettings: {
 		getPreferences: { kind: 'read' },
 		updatePreferences: { kind: 'mutation' },
@@ -147,20 +170,27 @@ export class AgentToolRegistry {
 		private readonly context: RegistryContext
 	) {}
 
-	tools(): Tool<unknown>[] {
-		return this.definitions().map((definition) =>
-			tool({
-				name: definition.name,
-				description: definition.description,
-				parameters: z.toJSONSchema(definition.parameters) as never,
-				strict: false,
-				needsApproval:
-					definition.classification === 'mutation' && this.mode === 'approval_required',
-				errorFunction: (_context, error) =>
-					JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
-				execute: async (input) => definition.execute(input as Record<string, unknown>)
-			})
-		);
+	tools(
+		options: { classifications?: readonly Definition['classification'][] } = {}
+	): Tool<unknown>[] {
+		const allowed = options.classifications
+			? new Set<Definition['classification']>(options.classifications)
+			: undefined;
+		return this.definitions()
+			.filter((definition) => !allowed || allowed.has(definition.classification))
+			.map((definition) =>
+				tool({
+					name: definition.name,
+					description: definition.description,
+					parameters: z.toJSONSchema(definition.parameters) as never,
+					strict: false,
+					needsApproval:
+						definition.classification === 'mutation' && this.mode === 'approval_required',
+					errorFunction: (_context, error) =>
+						JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+					execute: async (input) => definition.execute(input as Record<string, unknown>)
+				})
+			);
 	}
 
 	private definitions(): Definition[] {
@@ -485,6 +515,31 @@ export class AgentToolRegistry {
 						.attachments()
 						.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
 			),
+			define(
+				'list_project_memory',
+				'Read the durable memory entries a project shares with agents: facts, decisions, constraints, terminology, and preferences.',
+				'read',
+				z.object({ projectId: id }),
+				(input) =>
+					factory.memory().list(actor, {
+						projectId: input.projectId as ProjectId,
+						sharedOnly: true
+					})
+			),
+			define(
+				'propose_memory_change',
+				'Propose adding, updating, or removing a project memory entry without bypassing review. Use for durable facts, decisions, constraints, terminology, or preferences worth remembering.',
+				'proposal',
+				z.object({
+					projectId: id,
+					operation: z.enum(['add', 'update', 'remove']),
+					memoryEntryId: id.optional(),
+					content: z.string().optional(),
+					justification: z.string().optional(),
+					confidence: z.number().int().min(0).max(100).optional()
+				}),
+				(input) => factory.memory().propose(actor, input as never)
+			),
 			define('list_trust_policies', 'Read pipeline-specific trust policies.', 'read', none, () =>
 				factory.trustPolicies().list(actor)
 			),
@@ -493,7 +548,7 @@ export class AgentToolRegistry {
 				'Change a pipeline-specific trust policy.',
 				'mutation',
 				z.object({
-					pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent']),
+					pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
 					autoAcceptEnabled: z.boolean(),
 					minimumConfidence: z.number().int().min(0).max(100).optional()
 				}),

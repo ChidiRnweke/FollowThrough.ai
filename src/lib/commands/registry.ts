@@ -75,11 +75,15 @@ export const commandRegistry: readonly AppCommand[] = [
 	},
 	{
 		id: 'focus-chat',
-		label: 'Open chat and focus composer',
-		shortcut: '⌘⌥I',
+		label: 'Toggle chat and focus composer',
+		shortcut: '⌘⇧I',
 		icon: MessageSquare,
 		run() {
 			palette.close();
+			if (rightPanel.mode === 'chat') {
+				rightPanel.close();
+				return;
+			}
 			rightPanel.openChat();
 			focus('#chat-composer');
 		}

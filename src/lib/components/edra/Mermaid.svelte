@@ -3,6 +3,7 @@
 	import type { NodeViewProps } from '@tiptap/core';
 	import mermaid from 'mermaid';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
 	import { cn } from '$lib/utils.js';
 	import Workflow from '@lucide/svelte/icons/workflow';
@@ -13,11 +14,22 @@
 	import Code from '@lucide/svelte/icons/code';
 	import Columns2 from '@lucide/svelte/icons/columns-2';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { NodeViewWrapper } from './index.js';
+	import { sanitizeMermaidSvg } from './mermaid-rendering.js';
 	import Tooltip from './Tooltip.svelte';
 	import { Download } from '@lucide/svelte';
 
-	const { node, editor, getPos }: NodeViewProps = $props();
+	const { node, editor, getPos, extension }: NodeViewProps = $props();
+	const onRevise = $derived((
+		extension.options as {
+			onRevise?: (
+				source: string,
+				instruction: string
+			) => Promise<{ readonly source: string; readonly title?: string }>;
+		}
+	).onRevise);
 
 	// The committed code from the document
 	const code = $derived(node.textContent);
@@ -27,6 +39,10 @@
 	let isEditing = $state(false);
 	let mode = $state<'both' | 'code' | 'preview'>('both');
 	let copied = $state(false);
+	let showAiRevision = $state(false);
+	let revisionInstruction = $state('');
+	let isRevising = $state(false);
+	let revisionError = $state<string | null>(null);
 
 	// Render state
 	let container: HTMLDivElement | null = $state(null);
@@ -50,11 +66,10 @@
 
 		const id = `mermaid-${crypto.randomUUID().slice(0, 8)}`;
 		try {
-			const { svg, bindFunctions } = await mermaid.render(id, source);
+			const { svg } = await mermaid.render(id, source);
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;
-			target.innerHTML = svg;
-			bindFunctions?.(target);
+			target.innerHTML = sanitizeMermaidSvg(svg);
 			error = null;
 		} catch (err) {
 			if (thisRender !== renderCounter) return;
@@ -107,6 +122,57 @@
 		editCode = code;
 		isEditing = true;
 		error = null;
+		showAiRevision = false;
+		revisionError = null;
+	}
+
+	function enterAiRevision() {
+		enterEditMode();
+		showAiRevision = true;
+	}
+
+	async function reviseWithAi() {
+		const instruction = revisionInstruction.trim();
+		if (!onRevise || !instruction || isRevising) return;
+		const committedSource = code;
+		isRevising = true;
+		revisionError = null;
+		try {
+			const revised = await onRevise(editCode, instruction);
+			if (code !== committedSource)
+				throw new Error('The diagram changed while the revision was running. Try again.');
+			editor
+				.chain()
+				.focus()
+				.insertContentAt(
+					{ from: getPos() ?? 0, to: (getPos() ?? 0) + node.nodeSize },
+					{
+						type: 'mermaid',
+						content: [{ type: 'text', text: revised.source }]
+					}
+				)
+				.run();
+			isEditing = false;
+			showAiRevision = false;
+			revisionInstruction = '';
+		} catch (revisionFailure) {
+			revisionError =
+				revisionFailure instanceof Error ? revisionFailure.message : 'Diagram revision failed.';
+		} finally {
+			isRevising = false;
+		}
+	}
+
+	function handleRevisionKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			showAiRevision = false;
+			revisionError = null;
+		}
+		if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+			event.preventDefault();
+			void reviseWithAi();
+		}
 	}
 
 	function handleSave() {
@@ -200,7 +266,9 @@
 
 			context.scale(dpr, dpr);
 
-			// Fill white background
+			const pageBackground = getComputedStyle(document.body).backgroundColor;
+			context.fillStyle =
+				pageBackground === 'rgba(0, 0, 0, 0)' ? '#ffffff' : pageBackground || '#ffffff';
 			context.fillRect(0, 0, width, height);
 
 			context.drawImage(image, 0, 0, width, height);
@@ -238,6 +306,16 @@
 					<span class="text-muted-foreground/50 text-[10px]">{lineCount} lines</span>
 				</div>
 				<div class="flex items-center gap-1">
+					{#if onRevise}
+						<Button
+							size="sm"
+							variant={showAiRevision ? 'secondary' : 'ghost'}
+							onclick={() => (showAiRevision = !showAiRevision)}
+						>
+							<Sparkles />
+							Revise with AI
+						</Button>
+					{/if}
 					<Tabs.Root bind:value={mode}>
 						<Tabs.List>
 							<Tabs.Trigger value="code" class="px-2 py-1">
@@ -265,6 +343,32 @@
 					<Button size="sm" onclick={handleSave}>Apply</Button>
 				</div>
 			</div>
+			{#if showAiRevision && onRevise}
+				<div class="flex items-start gap-2 border-b bg-muted/20 p-3">
+					<div class="min-w-0 flex-1 space-y-1.5">
+						<Textarea
+							bind:value={revisionInstruction}
+							onkeydown={handleRevisionKeydown}
+							placeholder="Describe what to change…"
+							aria-label="Diagram revision instruction"
+							rows={2}
+							disabled={isRevising}
+						/>
+						{#if revisionError}
+							<p class="text-xs text-destructive" role="alert">{revisionError}</p>
+						{:else}
+							<p class="text-xs text-muted-foreground">Ctrl/⌘+Enter to revise</p>
+						{/if}
+					</div>
+					<Button
+						disabled={!revisionInstruction.trim() || isRevising}
+						onclick={() => void reviseWithAi()}
+					>
+						{#if isRevising}<LoaderCircle class="animate-spin" />{/if}
+						Revise
+					</Button>
+				</div>
+			{/if}
 
 			<!-- Editor Content -->
 			<div class="flex flex-1 min-h-0 overflow-hidden">
@@ -352,6 +456,18 @@
 					<div
 						class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/preview:opacity-100 transition-opacity"
 					>
+						{#if onRevise}
+							<Tooltip tooltip="Revise with AI">
+								<Button
+									size="icon-sm"
+									variant="ghost"
+									onclick={enterAiRevision}
+									title="Revise with AI"
+								>
+									<Sparkles class="text-muted-foreground" />
+								</Button>
+							</Tooltip>
+						{/if}
 						<Tooltip tooltip="Download Image">
 							<Button size="icon-sm" variant="ghost" onclick={downloadImage} title="Download Image">
 								<Download class="text-muted-foreground" />

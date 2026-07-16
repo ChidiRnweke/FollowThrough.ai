@@ -35,6 +35,10 @@ describe('chat tool activity reconciliation', () => {
 		expect(tools).toHaveLength(1);
 	});
 
+	it('returns undefined for an unseen call so the caller can place it in the flow', () => {
+		expect(reconcileToolActivity([], runningTool())).toBeUndefined();
+	});
+
 	it('reconciles a provider completion without an id to the only active call', () => {
 		const tools = [runningTool()];
 		reconcileToolActivity(tools, {

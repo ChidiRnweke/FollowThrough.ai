@@ -20,6 +20,7 @@ export type AttachmentId = Brand<string, 'AttachmentId'>;
 export type AttachmentVersionId = Brand<string, 'AttachmentVersionId'>;
 export type AttachmentUploadId = Brand<string, 'AttachmentUploadId'>;
 export type AgentSessionItemId = Brand<string, 'AgentSessionItemId'>;
+export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 export type LocalDate = Brand<string, 'LocalDate'>;
@@ -61,6 +62,6 @@ export type PromiseStrength = 'explicit' | 'implied' | 'tentative';
 export type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
 export type DiagramKind = 'mermaid' | 'drawio';
 export type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent';
+export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
 export type ProducerKind = 'user' | 'pipeline' | 'agent';
 export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';

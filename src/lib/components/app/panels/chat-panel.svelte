@@ -188,60 +188,64 @@
 			{#each chat.entries as entry (entry.id)}
 				<div class="space-y-1.5">
 					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
-					{#if entry.text}
-						<ChatMarkdown content={entry.text} />
-					{/if}
-					{#each entry.tools as tool, index (tool.callId || `${entry.id}-${index}`)}
-						{#if tool.status === 'approval_required'}
-							<Card.Root>
-								<Card.Header>
-									<Card.Title class="text-sm">Approve {tool.name}?</Card.Title>
-									<Card.Description>This action changes saved workspace data.</Card.Description>
-								</Card.Header>
-								<Card.Content>
-									<pre class="max-h-40 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(
-											tool.arguments,
-											null,
-											2
-										)}</pre>
-								</Card.Content>
-								<Card.Footer class="gap-2">
-									<Button size="sm" onclick={() => void chat.decide(entry, tool, 'approve')}
-										>Approve</Button
-									>
-									<Button
-										size="sm"
-										variant="outline"
-										onclick={() => void chat.decide(entry, tool, 'reject')}>Reject</Button
-									>
-								</Card.Footer>
-							</Card.Root>
+					{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
+						{#if part.kind === 'text'}
+							{#if part.text}
+								<ChatMarkdown content={part.text} />
+							{/if}
 						{:else}
-							<Collapsible.Root>
-								<Collapsible.Trigger>
-									{#snippet child({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="sm"
-											class="h-7 gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
+							{@const tool = part.tool}
+							{#if tool.status === 'approval_required'}
+								<Card.Root>
+									<Card.Header>
+										<Card.Title class="text-sm">Approve {tool.name}?</Card.Title>
+										<Card.Description>This action changes saved workspace data.</Card.Description>
+									</Card.Header>
+									<Card.Content>
+										<pre class="max-h-40 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(
+												tool.arguments,
+												null,
+												2
+											)}</pre>
+									</Card.Content>
+									<Card.Footer class="gap-2">
+										<Button size="sm" onclick={() => void chat.decide(entry, tool, 'approve')}
+											>Approve</Button
 										>
-											<ChevronRight
-												class="size-3.5 transition-transform duration-(--duration-micro)"
-											/>
-											{#if tool.status === 'running'}
-												<LoaderCircle class="size-3.5 animate-spin" />
-											{/if}
-											{tool.name} · {tool.status}
-										</Button>
-									{/snippet}
-								</Collapsible.Trigger>
-								<Collapsible.Content>
-									<p class="pl-6 text-xs text-muted-foreground">
-										Tool {tool.name} · {tool.status === 'running' ? 'running' : 'completed'}
-									</p>
-								</Collapsible.Content>
-							</Collapsible.Root>
+										<Button
+											size="sm"
+											variant="outline"
+											onclick={() => void chat.decide(entry, tool, 'reject')}>Reject</Button
+										>
+									</Card.Footer>
+								</Card.Root>
+							{:else}
+								<Collapsible.Root>
+									<Collapsible.Trigger>
+										{#snippet child({ props })}
+											<Button
+												{...props}
+												variant="ghost"
+												size="sm"
+												class="h-7 gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
+											>
+												<ChevronRight
+													class="size-3.5 transition-transform duration-(--duration-micro)"
+												/>
+												{#if tool.status === 'running'}
+													<LoaderCircle class="size-3.5 animate-spin" />
+												{/if}
+												{tool.name} · {tool.status}
+											</Button>
+										{/snippet}
+									</Collapsible.Trigger>
+									<Collapsible.Content>
+										<p class="pl-6 text-xs text-muted-foreground">
+											Tool {tool.name} · {tool.status === 'running' ? 'running' : 'completed'}
+										</p>
+									</Collapsible.Content>
+								</Collapsible.Root>
+							{/if}
 						{/if}
 					{/each}
 					{#each entry.suggestions as view (view.suggestion.id)}

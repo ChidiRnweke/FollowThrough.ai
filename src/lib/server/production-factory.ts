@@ -3,7 +3,9 @@ import { OpenRouter } from '@openrouter/sdk';
 import {
 	EmbeddedKnowledgeSearcher,
 	EmbeddedDiagramIndexer,
+	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
+	MemoryManagementService,
 	DiagramManagementService,
 	DiagramTransformationService,
 	DefaultBuiltInSkillProvisioner,
@@ -33,6 +35,7 @@ import { PersistentSuggestionArtifactApplier } from './domain/suggestion-artifac
 import { OpenAIPromiseExtractor } from './domain/openai-capabilities';
 import { WebSearchReferenceFinder } from './domain/openai-reference-capabilities';
 import { OpenAIAgentRunner } from './domain/openai-agent-capabilities';
+import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
 import {
 	DeterministicEmbeddingClient,
 	OpenAIEmbeddingClient
@@ -52,6 +55,7 @@ import { PostgresProvenanceRepository } from './repositories/postgres-provenance
 import { PostgresTodoRepository } from './repositories/postgres-todos';
 import { PostgresSuggestionRepository } from './repositories/postgres-suggestions';
 import { PostgresTrustPolicyRepository } from './repositories/postgres-trust-policies';
+import { PostgresMemoryEntryRepository } from './repositories/postgres-memory-entries';
 import { PostgresRelationshipRepository } from './repositories/postgres-relationships';
 import { PostgresReferenceRepository } from './repositories/postgres-references';
 import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
@@ -164,10 +168,12 @@ export function createProductionFactory(): ProductionControllerFactory {
 	const diagramTransforms = new DiagramTransformationService();
 	const skillRepository = new PostgresSkillRepository(db);
 	const skills = new SkillManagementService(skillRepository, noteRepository, provenanceRepository);
-	const provisionedSkills = new ProvisioningSkillFinder(
-		new DefaultBuiltInSkillProvisioner(projectRepository, noteRepository, skillRepository),
-		skills
+	const builtInSkills = new DefaultBuiltInSkillProvisioner(
+		projectRepository,
+		noteRepository,
+		skillRepository
 	);
+	const provisionedSkills = new ProvisioningSkillFinder(builtInSkills, skills);
 	const fallbackAgent = new BasicAgent(suggestions, provenance, notes);
 	const agentContext = new EnrichedAgentContextBuilder(
 		fallbackAgent,
@@ -179,6 +185,16 @@ export function createProductionFactory(): ProductionControllerFactory {
 	);
 	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;
+	const diagramAgent = new OpenAIDiagramAgent({
+		contextBuilder: agentContext,
+		conversations: conversationJournal,
+		preferences,
+		runs: runStore,
+		sessions: new PostgresAgentSessionRepository(db),
+		provenance,
+		builtInSkills,
+		defaultModel: defaultAgentModel
+	});
 	const agent = new OpenAIAgentRunner(
 		() => {
 			if (!controllerFactory) throw new Error('Controller factory is not initialized');
@@ -190,6 +206,13 @@ export function createProductionFactory(): ProductionControllerFactory {
 		process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 		process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
 	);
+	const memoryIndexer = new EmbeddedMemoryIndexer(searchRepository, embeddingClient);
+	const memory = new MemoryManagementService(
+		new PostgresMemoryEntryRepository(db),
+		projectRepository,
+		provenanceRepository,
+		memoryIndexer
+	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,
 		relationships,
@@ -198,7 +221,8 @@ export function createProductionFactory(): ProductionControllerFactory {
 		todos,
 		relationships,
 		references,
-		diagrams
+		diagrams,
+		memory
 	);
 
 	const dependencies: ProductionControllerDependencies = {
@@ -235,12 +259,13 @@ export function createProductionFactory(): ProductionControllerFactory {
 		},
 		diagrams: {
 			anchorCreator: notes,
-			mermaidCreator: diagramTransforms,
+			mermaidCreator: diagramAgent,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			transactionRunner: postgresTransactionRunner,
 			diagramFinder: diagrams,
-			mermaidReviser: diagramTransforms,
+			mermaidReviser: diagramAgent,
+			inlineMermaidReviser: diagramAgent,
 			mermaidRenderer: diagramTransforms,
 			textExtractor: diagramTransforms,
 			diagramWriter: diagrams,
@@ -312,6 +337,18 @@ export function createProductionFactory(): ProductionControllerFactory {
 			transactionRunner: postgresTransactionRunner
 		},
 		trustPolicies: { trustPolicyStore: trust },
+		memory: {
+			memoryLister: memory,
+			memoryCreator: memory,
+			memoryEditor: memory,
+			memoryDeleter: memory,
+			memoryChangeApplier: memory,
+			provenanceRecorder: provenance,
+			suggestionCreator: suggestions,
+			suggestionAccepter: suggestions,
+			trustPolicyEvaluator: trust,
+			transactionRunner: postgresTransactionRunner
+		},
 		projects: {
 			projectCreator: projects,
 			projectReader: projects,

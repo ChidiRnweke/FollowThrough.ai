@@ -6,7 +6,7 @@ import { suggestionBuilder, testActor, testNow } from '$lib/testing/fixtures/dom
 describe('Trust policy invariants', () => {
 	it('returns a default policy for every pipeline', async () => {
 		const service = new TrustPolicyManagementService(new InMemoryTrustPolicyRepository());
-		expect(await service.list(testActor())).toHaveLength(4);
+		expect(await service.list(testActor())).toHaveLength(5);
 	});
 	it('never auto-accepts references', async () => {
 		const repository = new InMemoryTrustPolicyRepository();

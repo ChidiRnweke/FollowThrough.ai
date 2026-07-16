@@ -57,6 +57,14 @@ export class DiagramTransformationService
 	): Promise<MermaidDiagram> {
 		return { ...diagram, source: `${diagram.source}\n%% ${instruction}`, updatedAt: now() };
 	}
+
+	async reviseInline(
+		_actor: ActorContext,
+		input: import('$lib/models').ReviseInlineMermaidInput
+	): Promise<import('$lib/models').ReviseInlineMermaidOutput> {
+		void _actor;
+		return { source: `${input.source}\n%% ${input.instruction}` };
+	}
 	async render(source: string): Promise<string> {
 		if (!/^(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram)/m.test(source))
 			throw new ValidationError('Generated Mermaid is invalid');

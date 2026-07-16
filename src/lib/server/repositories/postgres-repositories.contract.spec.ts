@@ -222,6 +222,7 @@ describe('Postgres conversation repository invariants', () => {
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000007' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			title: 'Ordering',
 			createdAt: now,
 			updatedAt: now
@@ -248,6 +249,7 @@ describe('Postgres conversation repository invariants', () => {
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000008' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		};
@@ -265,6 +267,7 @@ describe('Postgres conversation repository invariants', () => {
 		await repository.insert(owner, {
 			id: '20000000-0000-4000-8000-000000000014' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			title: 'Owned session',
 			createdAt: now,
 			updatedAt: now
@@ -272,6 +275,7 @@ describe('Postgres conversation repository invariants', () => {
 		await repository.insert(other, {
 			id: '20000000-0000-4000-8000-000000000015' as ConversationId,
 			userId: other.userId,
+			kind: 'chat',
 			title: 'Foreign session',
 			createdAt: now,
 			updatedAt: now
@@ -287,6 +291,7 @@ describe('Postgres conversation repository invariants', () => {
 		const conversation = await repository.insert(owner, {
 			id: '20000000-0000-4000-8000-000000000071' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			modelOverride: 'openai/gpt-test',
 			executionModeOverride: 'auto_accept',
 			createdAt: now,
@@ -324,6 +329,7 @@ describe('Postgres agent settings repository invariants', () => {
 		const conversation = await conversations.insert(owner, {
 			id: '20000000-0000-4000-8000-000000000073' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		});
@@ -353,6 +359,7 @@ describe('Postgres agent settings repository invariants', () => {
 		const conversation = await conversations.insert(owner, {
 			id: '20000000-0000-4000-8000-000000000075' as ConversationId,
 			userId: owner.userId,
+			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		});

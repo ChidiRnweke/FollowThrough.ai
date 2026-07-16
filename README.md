@@ -142,6 +142,11 @@ Notes are where thinking happens.
 
 They are the main source material for tasks, memory, diagrams, drafts, and deliverables.
 
+### Project context and files
+
+RAG based  on the project’s notes, memory, and artifacts should give agents the context they need to help without repeated prompting.
+
+
 ### Board
 
 The board is a lightweight way to track movement.
@@ -154,6 +159,11 @@ Memory gives agents project-specific understanding.
 
 It should reduce repetitive prompting and help outputs stay consistent with the project’s goals, terminology, history, and constraints.
 
+
+### User profile and memory
+
+The user profile contains the user’s preferences, style, and other personal context. It should be available to agents across projects, but the user remains in control of what is stored and shared. For instance, writing style, job title, what they know / don't know.
+
 ### Skills
 
 Skills are reusable actions that transform project material.
@@ -162,7 +172,7 @@ They should feel like tools inside the workspace, not generic prompts the user h
 
 ### Artifacts
 
-Artifacts are the things created from the work: diagrams, images, documents, presentations, and other outputs.
+Artifacts are the things created from the work: diagrams, images, documents, presentations, and other outputs. Diagrams are rendered as much as possible inside the app.
 
 They are part of the project, not isolated generations.
 

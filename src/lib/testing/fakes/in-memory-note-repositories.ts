@@ -19,6 +19,10 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
 	}
 
+	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
+		return this.notes.find((note) => note.userId === actor.userId && note.builtInKey === key);
+	}
+
 	async listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
 		return this.notes.filter(
 			(note) =>

@@ -3,6 +3,7 @@ import {
 	DefaultAgentSettingsController,
 	DefaultAttachmentsController,
 	DefaultDiagramsController,
+	DefaultMemoryController,
 	DefaultNotesController,
 	DefaultProjectsController,
 	DefaultReferencesController,
@@ -16,6 +17,7 @@ import {
 	type AgentSettingsDependencies,
 	type AttachmentsDependencies,
 	type DiagramsDependencies,
+	type MemoryDependencies,
 	type NotesDependencies,
 	type ProjectsDependencies,
 	type ReferencesDependencies,
@@ -42,6 +44,7 @@ export interface ProductionControllerDependencies {
 	agentSettings: AgentSettingsDependencies;
 	attachments: AttachmentsDependencies;
 	trustPolicies: TrustPoliciesDependencies;
+	memory: MemoryDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
@@ -84,5 +87,8 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	trustPolicies() {
 		return new DefaultTrustPoliciesController(this.dependencies.trustPolicies);
+	}
+	memory() {
+		return new DefaultMemoryController(this.dependencies.memory);
 	}
 }

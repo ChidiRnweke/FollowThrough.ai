@@ -2,7 +2,8 @@
 	import TiptapContent from './TiptapContent.svelte';
 	import './editor.css';
 	import mermaid from 'mermaid';
-	import { MathBlock, Link, MathInline, TableColMenu, TableRowMenu } from './index.js';
+	import { MathBlock, MathInline, TableColMenu, TableRowMenu } from './index.js';
+	import { createMermaidConfig } from './mermaid-rendering.js';
 	import { mode } from 'mode-watcher';
 
 	interface Props {
@@ -10,15 +11,9 @@
 	}
 	const { class: className = '' }: Props = $props();
 
-	mermaid.initialize({
-		startOnLoad: false,
-		theme: mode.current === 'dark' ? 'dark' : 'default',
-		securityLevel: 'loose',
-		fontFamily: 'inherit'
-	});
+	mermaid.initialize(createMermaidConfig(mode.current === 'dark'));
 </script>
 
-<Link />
 <MathBlock />
 <MathInline />
 <TableColMenu />

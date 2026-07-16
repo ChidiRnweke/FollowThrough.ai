@@ -67,6 +67,20 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'load_skill')).toBe(false);
 	});
 
+	it('limits diagram workflows to read-only controller tools', () => {
+		const names = registry('auto_accept')
+			.tools({ classifications: ['read'] })
+			.map((candidate) => candidate.name);
+		expect(names.includes('generate_mermaid_diagram')).toBe(false);
+	});
+
+	it('allows diagram workflows to read shared project memory', () => {
+		const names = registry('auto_accept')
+			.tools({ classifications: ['read'] })
+			.map((candidate) => candidate.name);
+		expect(names.includes('list_project_memory')).toBe(true);
+	});
+
 	it('executes agent actions through the actor-scoped controller factory', async () => {
 		let received: unknown;
 		const factory = {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { mount, onMount, unmount, untrack } from 'svelte';
-	import type { NoteId, ProseMirrorDocument, SkillSummary } from '$lib/models';
+	import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
+	import type { NoteId, ProseMirrorDocument, SkillSummary, TextSelection } from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
@@ -28,6 +29,26 @@
 	import TodoNodeView from './todo-node.svelte';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
+	const BLOCK_SEPARATOR = '\n\n';
+
+	function preserveEditorSelection(event: MouseEvent): void {
+		// Keep the Tiptap selection intact until the bubble-menu action reads it.
+		event.preventDefault();
+	}
+
+	function nearestTextOffset(fullText: string, selectedText: string, approximate: number): number {
+		let nearest = -1;
+		let nearestDistance = Number.POSITIVE_INFINITY;
+		for (let offset = fullText.indexOf(selectedText); offset >= 0;) {
+			const distance = Math.abs(offset - approximate);
+			if (distance < nearestDistance) {
+				nearest = offset;
+				nearestDistance = distance;
+			}
+			offset = fullText.indexOf(selectedText, offset + 1);
+		}
+		return nearest;
+	}
 
 	let {
 		noteId,
@@ -36,15 +57,20 @@
 		skills = [],
 		onchange,
 		onaction,
-		onskill
+		onskill,
+		onreviseMermaid
 	}: {
 		noteId: NoteId;
 		revision: number;
 		document: ProseMirrorDocument;
 		skills?: readonly SkillSummary[];
 		onchange?: () => void;
-		onaction?: (action: NoteAiAction) => void;
+		onaction?: (action: NoteAiAction, selection?: TextSelection, insertAt?: number) => void;
 		onskill?: (skillName: string) => void;
+		onreviseMermaid: (
+			source: string,
+			instruction: string
+		) => Promise<{ readonly source: string; readonly title?: string }>;
 	} = $props();
 
 	let initialized = false;
@@ -52,12 +78,41 @@
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
+			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
 			onUpdate: () => {
 				if (initialized) onchange?.();
 			}
 		},
 		[TodoNode(TodoNodeView as never)]
 	);
+
+	function readSelection(): TextSelection | undefined {
+		if (!editor) return undefined;
+		const { from, to, empty } = editor.state.selection;
+		if (empty) return undefined;
+
+		const textSerializers = getTextSerializersFromSchema(editor.schema);
+		const options = { blockSeparator: BLOCK_SEPARATOR, textSerializers };
+		const text = getTextBetween(editor.state.doc, { from, to }, options);
+		if (!text.trim()) return undefined;
+
+		const plainText = editor.getText({ blockSeparator: BLOCK_SEPARATOR });
+		const approximate = getTextBetween(editor.state.doc, { from: 0, to: from }, options).length;
+		const plainFrom = nearestTextOffset(plainText, text, approximate);
+		if (plainFrom < 0) return undefined;
+
+		return {
+			noteId,
+			revision,
+			from: plainFrom,
+			to: plainFrom + text.length,
+			text
+		};
+	}
+
+	function runSelectionAction(action: NoteAiAction): void {
+		onaction?.(action, readSelection(), editor?.state.selection.to);
+	}
 	onMount(() => {
 		hydrated = true;
 	});
@@ -87,19 +142,10 @@
 				}
 			})
 		);
-		editor.on('selectionUpdate', ({ editor: current }) => {
-			const { from, to, empty } = current.state.selection;
-			if (empty) {
-				editorSelection.clear();
-			} else {
-				editorSelection.set({
-					noteId,
-					revision,
-					from,
-					to,
-					text: current.state.doc.textBetween(from, to, ' ')
-				});
-			}
+		editor.on('selectionUpdate', () => {
+			const selection = readSelection();
+			if (selection) editorSelection.set(selection);
+			else editorSelection.clear();
 		});
 	}
 
@@ -155,7 +201,8 @@
 					variant="ghost"
 					size="sm"
 					title="Turn commitments in the selection into todos"
-					onclick={() => onaction?.('promises')}
+					onmousedown={preserveEditorSelection}
+					onclick={() => runSelectionAction('promises')}
 				>
 					<ClipboardCheck class="size-4" />
 					Extract promises
@@ -164,7 +211,8 @@
 					variant="ghost"
 					size="sm"
 					title="Find related notes and propose backlinks"
-					onclick={() => onaction?.('relate')}
+					onmousedown={preserveEditorSelection}
+					onclick={() => runSelectionAction('relate')}
 				>
 					<Waypoints class="size-4" />
 					Find related
@@ -173,7 +221,8 @@
 					variant="ghost"
 					size="sm"
 					title="Find supporting external references"
-					onclick={() => onaction?.('reference')}
+					onmousedown={preserveEditorSelection}
+					onclick={() => runSelectionAction('reference')}
 				>
 					<BookOpen class="size-4" />
 					Reference
@@ -183,7 +232,8 @@
 					variant="ghost"
 					size="sm"
 					title="Generate a mermaid diagram from the selection and insert it"
-					onclick={() => onaction?.('diagram')}
+					onmousedown={preserveEditorSelection}
+					onclick={() => runSelectionAction('diagram')}
 				>
 					<Workflow class="size-4" />
 					Diagram

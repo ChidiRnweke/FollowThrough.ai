@@ -149,6 +149,9 @@ describe('OpenRouter-compatible SDK integration', () => {
 				createdAt: timestamp,
 				updatedAt: timestamp
 			}),
+			updateContext: async () => {
+				return {} as never;
+			},
 			get: async () => {
 				throw new Error('Not used');
 			},

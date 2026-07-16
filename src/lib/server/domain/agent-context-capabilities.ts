@@ -38,16 +38,19 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 			this.loadContextNotes(actor, input.contextNoteIds ?? [])
 		]);
 		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
+		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
 		const selected = await this.skillSelector.select(actor, input.prompt, availableSkills);
 		const exposed = availableSkills.filter(
 			(skill) =>
 				selected.some((candidate) => candidate.noteId === skill.noteId) ||
+				requestedNoteIds.has(skill.noteId) ||
 				requested.has(skill.name.toLowerCase()) ||
 				requested.has((skill.slug ?? '').toLowerCase())
 		);
 		const explicitlyLoaded = await Promise.all(
 			exposed.map(async (summary) => {
 				const isRequested =
+					requestedNoteIds.has(summary.noteId) ||
 					requested.has(summary.name.toLowerCase()) ||
 					requested.has((summary.slug ?? '').toLowerCase());
 				if (!isRequested) return { summary, isRequested };
@@ -60,11 +63,18 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				return { summary, isRequested, instructions: skill.note.plainText };
 			})
 		);
+		const noteMatches = matches.filter((match) => match.document.memoryEntryId === undefined);
+		const memoryMatches = matches.filter((match) => match.document.memoryEntryId !== undefined);
 		return {
 			...base,
-			knowledge: matches.map((match) => ({
+			knowledge: noteMatches.map((match) => ({
 				noteId: match.document.noteId,
 				diagramId: match.document.diagramId,
+				content: match.document.content,
+				score: match.score
+			})),
+			memory: memoryMatches.map((match) => ({
+				memoryEntryId: match.document.memoryEntryId,
 				content: match.document.content,
 				score: match.score
 			})),

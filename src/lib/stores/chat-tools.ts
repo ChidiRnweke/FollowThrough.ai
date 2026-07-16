@@ -26,17 +26,18 @@ const fallbackTool = (
 	return active.length === 1 ? active[0] : undefined;
 };
 
-/** Merge lifecycle events so one tool call always occupies one row in the chat. */
+/**
+ * Merge lifecycle events so one tool call always occupies one row in the chat.
+ * Returns the merged activity, or undefined when no existing activity matches —
+ * the caller decides where a new activity is inserted.
+ */
 export const reconcileToolActivity = (
 	tools: ChatToolActivity[],
 	incoming: ChatToolActivity
-): ChatToolActivity => {
+): ChatToolActivity | undefined => {
 	const exact = incoming.callId ? tools.find((tool) => tool.callId === incoming.callId) : undefined;
 	const existing = exact ?? fallbackTool(tools, incoming);
-	if (!existing) {
-		tools.push(incoming);
-		return incoming;
-	}
+	if (!existing) return undefined;
 
 	if (incoming.callId) existing.callId = incoming.callId;
 	if (incoming.name !== 'tool') existing.name = incoming.name;

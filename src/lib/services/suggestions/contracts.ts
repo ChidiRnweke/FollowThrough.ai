@@ -4,6 +4,7 @@ import type {
 	CreateRelationshipInput,
 	CreateTodoInput,
 	DiagramKind,
+	MemoryChangePayload,
 	NoteId,
 	ProvenanceId,
 	SourceAnchorId,
@@ -32,7 +33,8 @@ export type SuggestionProposal =
 	| (SuggestionProposalBase & {
 			readonly kind: 'diagram';
 			readonly payload: { noteId: NoteId; kind: DiagramKind; title?: string; source: string };
-	  });
+	  })
+	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
 
 export interface SuggestionCreator {
 	create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion>;

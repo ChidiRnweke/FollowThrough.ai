@@ -27,6 +27,7 @@
 	const strength = $derived(
 		suggestion.kind === 'todo' ? suggestion.payload.promiseStrength : undefined
 	);
+	const memoryOperationLabels = { add: 'Add', update: 'Update', remove: 'Remove' } as const;
 </script>
 
 <Card.Root class="gap-2 py-3">
@@ -80,6 +81,18 @@
 			<p class="text-sm">{suggestion.payload.title ?? 'Untitled diagram'}</p>
 			<pre class="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{suggestion.payload
 					.source}</pre>
+		{:else if suggestion.kind === 'memory'}
+			<p class="text-sm">
+				<Badge variant="ghost" class="mr-1 text-muted-foreground">
+					{memoryOperationLabels[suggestion.payload.operation]}
+				</Badge>
+				{#if suggestion.payload.content}
+					{suggestion.payload.content}
+				{/if}
+			</p>
+			{#if suggestion.payload.justification}
+				<p class="text-sm text-muted-foreground">{suggestion.payload.justification}</p>
+			{/if}
 		{:else}
 			<p class="text-sm text-muted-foreground">Proposed content insertion</p>
 		{/if}

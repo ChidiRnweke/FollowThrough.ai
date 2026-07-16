@@ -7,7 +7,9 @@ import type {
 	PromoteDiagramInput,
 	PromoteDiagramOutput,
 	ReviseMermaidDiagramInput,
-	ReviseMermaidDiagramOutput
+	ReviseMermaidDiagramOutput,
+	ReviseInlineMermaidInput,
+	ReviseInlineMermaidOutput
 } from '$lib/models';
 import { UnsupportedDiagramOperationError } from '$lib/models';
 import type { TransactionRunner } from '$lib/repositories';
@@ -22,6 +24,7 @@ import type {
 	MermaidDiagramCreator,
 	MermaidDiagramRenderer,
 	MermaidDiagramReviser,
+	InlineMermaidReviser,
 	ProvenanceRecorder,
 	SelectionAnchorCreator,
 	SuggestionCreator
@@ -36,6 +39,10 @@ export interface DiagramsController {
 		actor: ActorContext,
 		input: ReviseMermaidDiagramInput
 	): Promise<ReviseMermaidDiagramOutput>;
+	reviseInlineMermaid(
+		actor: ActorContext,
+		input: ReviseInlineMermaidInput
+	): Promise<ReviseInlineMermaidOutput>;
 	promote(actor: ActorContext, input: PromoteDiagramInput): Promise<PromoteDiagramOutput>;
 }
 
@@ -47,6 +54,7 @@ export interface DiagramsDependencies {
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;
 	mermaidReviser: MermaidDiagramReviser;
+	inlineMermaidReviser: InlineMermaidReviser;
 	mermaidRenderer: MermaidDiagramRenderer;
 	textExtractor: DiagramTextExtractor;
 	diagramWriter: DiagramWriter;
@@ -63,29 +71,39 @@ export class DefaultDiagramsController implements DiagramsController {
 		actor: ActorContext,
 		input: GenerateMermaidDiagramInput
 	): Promise<GenerateMermaidDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
-			const diagram = await this.dependencies.mermaidCreator.create(
-				actor,
-				input.selection,
-				input.instruction
+		return this.dependencies.mermaidCreator
+			.create(actor, input.selection, input.instruction)
+			.then(({ provenanceId: agentProvenanceId, ...diagram }) =>
+				this.dependencies.transactionRunner.run(async () => {
+					const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
+					const provenanceId =
+						agentProvenanceId ??
+						(
+							await this.dependencies.provenanceRecorder.record(actor, {
+								producerKind: 'agent',
+								producerName: 'Mermaid Diagram Creator',
+								pipeline: 'agent',
+								sourceAnchorId: anchor.id,
+								metadata: {}
+							})
+						).id;
+					const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+						kind: 'diagram',
+						noteId: input.selection.noteId,
+						provenanceId,
+						sourceAnchorId: anchor.id,
+						payload: { noteId: input.selection.noteId, kind: 'mermaid', ...diagram }
+					});
+					return { anchorId: anchor.id, suggestion };
+				})
 			);
-			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
-				producerKind: 'agent',
-				producerName: 'Mermaid Diagram Creator',
-				pipeline: 'agent',
-				sourceAnchorId: anchor.id,
-				metadata: {}
-			});
-			const suggestion = await this.dependencies.suggestionCreator.create(actor, {
-				kind: 'diagram',
-				noteId: input.selection.noteId,
-				provenanceId: provenance.id,
-				sourceAnchorId: anchor.id,
-				payload: { noteId: input.selection.noteId, kind: 'mermaid', ...diagram }
-			});
-			return { anchorId: anchor.id, suggestion };
-		});
+	}
+
+	reviseInlineMermaid(
+		actor: ActorContext,
+		input: ReviseInlineMermaidInput
+	): Promise<ReviseInlineMermaidOutput> {
+		return this.dependencies.inlineMermaidReviser.reviseInline(actor, input);
 	}
 
 	async reviseMermaid(
