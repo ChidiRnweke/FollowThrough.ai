@@ -29,6 +29,7 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		shell,
 		agentPreferences,
 		agentModels,
+		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
 		sidebarOpen: cookies.get('sidebar_state') !== 'false'
 	};
 };

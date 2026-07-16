@@ -8,6 +8,7 @@ import type {
 	ListSkillsOutput,
 	LoadSkillInput,
 	NoteRevision,
+	ProjectId,
 	RestoreSkillVersionInput,
 	SkillView
 } from '$lib/models';
@@ -20,11 +21,12 @@ import type {
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
+	SkillEditor,
 	SkillVersionManager
 } from '$lib/services';
 
 export interface SkillsController {
-	list(actor: ActorContext): Promise<ListSkillsOutput>;
+	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
 	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView>;
 	loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput>;
@@ -34,12 +36,19 @@ export interface SkillsController {
 	): Promise<CreateSkillFromSelectionOutput>;
 	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
 	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView>;
+	update(actor: ActorContext, input: Parameters<SkillEditor['update']>[1]): Promise<SkillView>;
+	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
+	setPinned(
+		actor: ActorContext,
+		input: { noteId: GetSkillViewInput['noteId']; projectId: ProjectId; pinned: boolean }
+	): Promise<void>;
 }
 export interface SkillsDependencies {
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
 	skillUsageRecorder: SkillUsageRecorder;
 	skillVersionManager: SkillVersionManager;
+	skillEditor: SkillEditor;
 	anchorCreator: SelectionAnchorCreator;
 	skillCreator: SkillCreator;
 	noteCreator: NoteCreator;
@@ -48,8 +57,8 @@ export interface SkillsDependencies {
 }
 export class DefaultSkillsController implements SkillsController {
 	constructor(private readonly dependencies: SkillsDependencies) {}
-	async list(actor: ActorContext): Promise<ListSkillsOutput> {
-		return { skills: await this.dependencies.skillFinder.listEnabled(actor) };
+	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
+		return { skills: await this.dependencies.skillFinder.listAll(actor, input?.projectId) };
 	}
 	async get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView> {
 		const [skill, usages] = await Promise.all([
@@ -121,5 +130,28 @@ export class DefaultSkillsController implements SkillsController {
 			skill,
 			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
 		};
+	}
+	async update(
+		actor: ActorContext,
+		input: Parameters<SkillEditor['update']>[1]
+	): Promise<SkillView> {
+		const skill = await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.skillEditor.update(actor, input)
+		);
+		return { skill, usages: await this.dependencies.skillUsageLister.list(actor, input.noteId) };
+	}
+	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string> {
+		return this.dependencies.skillEditor.serialize(actor, input.noteId);
+	}
+	setPinned(
+		actor: ActorContext,
+		input: { noteId: GetSkillViewInput['noteId']; projectId: ProjectId; pinned: boolean }
+	): Promise<void> {
+		return this.dependencies.skillEditor.setPinned(
+			actor,
+			input.noteId,
+			input.projectId,
+			input.pinned
+		);
 	}
 }

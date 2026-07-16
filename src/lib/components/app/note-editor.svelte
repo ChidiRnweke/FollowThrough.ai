@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mount, unmount, untrack } from 'svelte';
+	import { mount, onMount, unmount, untrack } from 'svelte';
 	import type { NoteId, ProseMirrorDocument, SkillSummary } from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
@@ -48,6 +48,7 @@
 	} = $props();
 
 	let initialized = false;
+	let hydrated = $state(false);
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
@@ -57,6 +58,9 @@
 		},
 		[TodoNode(TodoNodeView as never)]
 	);
+	onMount(() => {
+		hydrated = true;
+	});
 
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
@@ -140,7 +144,7 @@
 	}
 </script>
 
-{#if editor}
+{#if hydrated && editor}
 	<div class="flex min-h-96 flex-1 cursor-text flex-col">
 		<Tiptap {editor}>
 			<BubbleMenu

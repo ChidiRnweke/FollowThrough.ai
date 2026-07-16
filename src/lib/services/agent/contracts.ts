@@ -36,12 +36,14 @@ export interface AgentRunner {
 	run(
 		actor: ActorContext,
 		input: RunAgentInput,
-		context: Readonly<Record<string, unknown>>
+		context: Readonly<Record<string, unknown>>,
+		signal?: AbortSignal
 	): AsyncIterable<AgentEvent>;
 	resume(
 		actor: ActorContext,
 		input: DecideAgentRunInput,
-		context: Readonly<Record<string, unknown>>
+		context: Readonly<Record<string, unknown>>,
+		signal?: AbortSignal
 	): AsyncIterable<AgentEvent>;
 }
 export interface ConversationRecorder {

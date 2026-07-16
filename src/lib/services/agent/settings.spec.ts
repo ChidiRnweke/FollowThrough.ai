@@ -55,6 +55,15 @@ describe('Agent model selection invariants', () => {
 		expect(model).toBe('environment/model');
 	});
 
+	it('normalizes legacy colon-form OpenRouter model identifiers', () => {
+		const model = resolveAgentModel(
+			{} as Conversation,
+			{} as AgentPreferences,
+			'deepseek:deepseek-v4-flash'
+		);
+		expect(model).toBe('deepseek/deepseek-v4-flash');
+	});
+
 	it('prefers a conversation execution mode', () => {
 		const mode = resolveAgentExecutionMode(
 			{ executionModeOverride: 'auto_accept' } as Conversation,

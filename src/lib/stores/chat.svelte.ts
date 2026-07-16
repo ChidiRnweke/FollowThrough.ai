@@ -4,9 +4,13 @@ import type {
 	ConversationId,
 	NoteId,
 	RunAgentInput,
-	SuggestionView
+	SuggestionView,
+	Message
 } from '$lib/models';
 import { suggestionToView } from './suggestion-view';
+import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
+
+export type { ChatToolActivity } from './chat-tools';
 
 const STORAGE_KEY = 'followthrough.agent.conversation';
 const browser = typeof window !== 'undefined';
@@ -26,22 +30,10 @@ const persistedConversation = (): PersistedConversationChoices => {
 	}
 };
 
-const persisted = persistedConversation();
-
 export interface ContextChip {
 	readonly kind: 'note' | 'skill';
 	readonly id: NoteId;
 	readonly name: string;
-}
-
-export interface ChatToolActivity {
-	readonly callId: string;
-	readonly name: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
-	runId?: string;
-	output?: unknown;
-	failure?: string;
-	status: 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
 }
 
 export interface ChatEntry {
@@ -55,24 +47,71 @@ export interface ChatEntry {
 class ChatStore {
 	entries = $state<ChatEntry[]>([]);
 	isStreaming = $state(false);
-	conversationId = $state<ConversationId | undefined>(persisted.conversationId);
-	modelOverride = $state<string | null>(persisted.modelOverride ?? null);
-	executionModeOverride = $state<AgentExecutionMode>(
-		persisted.executionModeOverride ?? 'approval_required'
-	);
+	conversationId = $state<ConversationId | undefined>(undefined);
+	modelOverride = $state<string | null>(null);
+	executionModeOverride = $state<AgentExecutionMode>('approval_required');
+	initialized = $state(false);
 	chips = $state<ContextChip[]>([]);
 	// The auto chip for the open note reappears when a different note opens.
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
-	private defaultsConfigured = false;
+	private hydratedConversationId?: ConversationId;
 
-	configureDefaults(mode: AgentExecutionMode): void {
-		if (this.defaultsConfigured || this.entries.length > 0 || this.conversationId) return;
-		this.executionModeOverride = mode;
-		this.defaultsConfigured = true;
+	initialize(defaultMode: AgentExecutionMode): void {
+		if (this.initialized) return;
+		const persisted = persistedConversation();
+		this.conversationId = persisted.conversationId;
+		this.modelOverride = persisted.modelOverride ?? null;
+		this.executionModeOverride = persisted.executionModeOverride ?? defaultMode;
+		this.initialized = true;
+	}
+
+	async hydrate(): Promise<void> {
+		if (
+			!browser ||
+			!this.conversationId ||
+			this.hydratedConversationId === this.conversationId ||
+			this.isStreaming
+		)
+			return;
+		const conversationId = this.conversationId;
+		try {
+			const response = await fetch(`/api/agent/sessions/${conversationId}`);
+			if (!response.ok) return;
+			const data = (await response.json()) as { messages: readonly Message[] };
+			const entries: ChatEntry[] = [];
+			let pendingTools: ChatToolActivity[] = [];
+			for (const message of data.messages) {
+				if (message.role === 'tool') {
+					const content = message.content;
+					reconcileToolActivity(pendingTools, {
+						callId: String(content.callId ?? ''),
+						name: String(content.name ?? 'tool'),
+						arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
+						...(content.output !== null ? { output: content.output } : {}),
+						...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
+						status: String(content.status ?? 'succeeded') as ChatToolStatus
+					});
+					continue;
+				}
+				const text = typeof message.content.text === 'string' ? message.content.text : '';
+				entries.push({
+					id: message.id,
+					role: message.role,
+					text,
+					tools: message.role === 'assistant' ? pendingTools : [],
+					suggestions: []
+				});
+				if (message.role === 'assistant') pendingTools = [];
+			}
+			this.entries = entries;
+			this.hydratedConversationId = conversationId;
+		} catch {
+			// A stale session ID should not prevent starting a new conversation.
+		}
 	}
 
 	persistConversationChoices(): void {
-		if (!browser) return;
+		if (!browser || !this.initialized) return;
 		sessionStorage.setItem(
 			STORAGE_KEY,
 			JSON.stringify({
@@ -172,32 +211,32 @@ class ChatStore {
 	private apply(reply: ChatEntry, event: AgentEvent): void {
 		if (event.type === 'text_delta') reply.text += event.text;
 		else if (event.type === 'tool_started')
-			reply.tools.push({
+			reconcileToolActivity(reply.tools, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
 				status: 'running'
 			});
 		else if (event.type === 'tool_completed') {
-			const tool = reply.tools.find((item) => item.callId === event.callId);
-			if (tool) {
-				tool.status = event.failure ? 'failed' : 'succeeded';
-				tool.output = event.output;
-				tool.failure = event.failure;
-			}
+			reconcileToolActivity(reply.tools, {
+				callId: event.callId,
+				name: event.name,
+				arguments: {},
+				...(event.output === undefined ? {} : { output: event.output }),
+				...(event.failure === undefined ? {} : { failure: event.failure }),
+				status: event.failure ? 'failed' : 'succeeded'
+			});
 		} else if (event.type === 'approval_required') {
-			const existing = reply.tools.find((item) => item.callId === event.callId);
-			const activity = existing ?? {
+			reconcileToolActivity(reply.tools, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
-				status: 'approval_required' as const
-			};
-			activity.status = 'approval_required';
-			activity.runId = event.runId;
-			if (!existing) reply.tools.push(activity);
+				runId: event.runId,
+				status: 'approval_required'
+			});
 		} else if (event.type === 'suggestion')
 			reply.suggestions.push(suggestionToView(event.suggestion, 'agent'));
+		else if (event.type === 'failed') reply.text = reply.text || event.message;
 		else if (event.type === 'completed') this.conversationId = event.conversationId;
 	}
 
@@ -205,6 +244,9 @@ class ChatStore {
 		this.entries = [];
 		this.conversationId = undefined;
 		this.modelOverride = null;
+		this.chips = [];
+		this.autoChipDismissedFor = undefined;
+		this.hydratedConversationId = undefined;
 		if (browser) sessionStorage.removeItem(STORAGE_KEY);
 	}
 }

@@ -16,6 +16,10 @@ export type ConversationId = Brand<string, 'ConversationId'>;
 export type MessageId = Brand<string, 'MessageId'>;
 export type SearchDocumentId = Brand<string, 'SearchDocumentId'>;
 export type AgentRunId = Brand<string, 'AgentRunId'>;
+export type AttachmentId = Brand<string, 'AttachmentId'>;
+export type AttachmentVersionId = Brand<string, 'AttachmentVersionId'>;
+export type AttachmentUploadId = Brand<string, 'AttachmentUploadId'>;
+export type AgentSessionItemId = Brand<string, 'AgentSessionItemId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 export type LocalDate = Brand<string, 'LocalDate'>;

@@ -67,6 +67,8 @@
 		"vitest-browser-svelte": "^2.1.1"
 	},
 	"dependencies": {
+		"@aws-sdk/client-s3": "^3.1087.0",
+		"@aws-sdk/s3-request-presigner": "^3.1087.0",
 		"@floating-ui/dom": "^1.8.0",
 		"@openai/agents": "^0.13.2",
 		"@openrouter/sdk": "^0.9.11",
@@ -92,12 +94,17 @@
 		"@tiptap/pm": "^3.27.3",
 		"@tiptap/starter-kit": "^3.27.3",
 		"@tiptap/suggestion": "^3.27.3",
+		"dompurify": "3.4.11",
+		"dotenv": "^17.4.2",
 		"katex": "^0.17.0",
 		"lowlight": "^3.3.0",
+		"marked": "17.0.6",
 		"mermaid": "^11.16.0",
 		"openai": "^6.46.0",
+		"pdf-parse": "^2.4.5",
 		"svelte-dnd-action": "^0.9.70",
 		"svelte-sonner": "^1.1.1",
+		"yaml": "^2.9.0",
 		"zod": "^4.4.3"
 	}
 }

@@ -64,6 +64,13 @@
       "when": 1784063417588,
       "tag": "0008_right_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784065278543,
+      "tag": "0009_colorful_stryfe",
+      "breakpoints": true
     }
   ]
 }

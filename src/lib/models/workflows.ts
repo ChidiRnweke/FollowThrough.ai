@@ -152,6 +152,12 @@ export type AgentEvent =
 	  }
 	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
 	| {
+			readonly type: 'failed';
+			readonly code: string;
+			readonly message: string;
+			readonly retryable: boolean;
+	  }
+	| {
 			readonly type: 'completed';
 			readonly conversationId: ConversationId;
 			readonly runId?: AgentRunId;

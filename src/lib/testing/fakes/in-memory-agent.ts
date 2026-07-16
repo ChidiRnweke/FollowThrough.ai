@@ -87,6 +87,22 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 				isEnabled: skill.isEnabled
 			}));
 	}
+	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
+		const enabled = await this.listEnabled(actor);
+		const enabledIds = new Set(enabled.map((skill) => skill.noteId));
+		return [
+			...enabled,
+			...this.skills
+				.filter((skill) => !enabledIds.has(skill.note.id))
+				.map((skill) => ({
+					noteId: skill.note.id,
+					name: skill.name,
+					description: skill.description,
+					triggerHints: skill.triggerHints,
+					isEnabled: skill.isEnabled
+				}))
+		];
+	}
 
 	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill> {
 		void _actor;

@@ -129,6 +129,27 @@ export class PostgresNoteRepository implements NoteRepository {
 			})
 			.onConflictDoNothing()
 			.returning();
+		if (row) {
+			const currentAttachments = await this.database
+				.select({
+					attachmentVersionId: schema.attachments.currentVersionId,
+					path: schema.attachments.path
+				})
+				.from(schema.attachments)
+				.where(eq(schema.attachments.noteId, revision.noteId));
+			const snapshot = currentAttachments.filter(
+				(item): item is { attachmentVersionId: string; path: string } =>
+					Boolean(item.attachmentVersionId)
+			);
+			if (snapshot.length > 0)
+				await this.database.insert(schema.noteRevisionAttachments).values(
+					snapshot.map((item) => ({
+						noteRevisionId: row.id,
+						attachmentVersionId: item.attachmentVersionId,
+						path: item.path
+					}))
+				);
+		}
 		return row ? toRevision(row) : revision;
 	}
 
@@ -141,6 +162,42 @@ export class PostgresNoteRepository implements NoteRepository {
 				.where(eq(schema.noteRevisions.noteId, noteId))
 				.orderBy(asc(schema.noteRevisions.revision))
 		).map(toRevision);
+	}
+
+	async restoreAttachmentSnapshot(
+		actor: ActorContext,
+		revisionId: NoteRevision['id'],
+		noteId: NoteId
+	): Promise<void> {
+		if (!(await this.findById(actor, noteId))) throw new NotFoundError('Note was not found');
+		const snapshot = await this.database
+			.select({
+				attachmentId: schema.attachmentVersions.attachmentId,
+				versionId: schema.noteRevisionAttachments.attachmentVersionId
+			})
+			.from(schema.noteRevisionAttachments)
+			.innerJoin(
+				schema.attachmentVersions,
+				eq(schema.attachmentVersions.id, schema.noteRevisionAttachments.attachmentVersionId)
+			)
+			.where(eq(schema.noteRevisionAttachments.noteRevisionId, revisionId));
+		await this.database
+			.update(schema.attachments)
+			.set({ currentVersionId: null, updatedAt: new Date() })
+			.where(
+				and(eq(schema.attachments.noteId, noteId), eq(schema.attachments.userId, actor.userId))
+			);
+		for (const item of snapshot)
+			await this.database
+				.update(schema.attachments)
+				.set({ currentVersionId: item.versionId, updatedAt: new Date() })
+				.where(
+					and(
+						eq(schema.attachments.id, item.attachmentId),
+						eq(schema.attachments.noteId, noteId),
+						eq(schema.attachments.userId, actor.userId)
+					)
+				);
 	}
 }
 

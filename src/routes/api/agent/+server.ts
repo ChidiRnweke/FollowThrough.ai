@@ -28,5 +28,5 @@ const inputSchema = z.object({
 export const POST: RequestHandler = async ({ request }) => {
 	const input = inputSchema.parse(await request.json()) as RunAgentInput;
 	const factory = AppFactory.controllerFactory();
-	return ndjsonResponse(factory.agent().run(AppFactory.actor(), input));
+	return ndjsonResponse(factory.agent().run(AppFactory.actor(), input, request.signal));
 };

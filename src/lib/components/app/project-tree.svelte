@@ -17,7 +17,7 @@
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import Pin from '@lucide/svelte/icons/pin';
 	import Wrench from '@lucide/svelte/icons/wrench';
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from './name-dialog.svelte';
@@ -68,7 +68,8 @@
 
 	// Projects default to expanded, folders to collapsed; `toggled` records
 	// deviations from that default and is persisted per browser.
-	const toggled = new SvelteSet<string>(readStoredToggles());
+	const toggled = new SvelteSet<string>();
+	let togglesRestored = $state(false);
 
 	function readStoredToggles(): string[] {
 		if (typeof localStorage === 'undefined') return [];
@@ -81,7 +82,13 @@
 		return [];
 	}
 
+	onMount(() => {
+		for (const key of readStoredToggles()) toggled.add(key);
+		togglesRestored = true;
+	});
+
 	$effect(() => {
+		if (!togglesRestored) return;
 		localStorage.setItem(STORAGE_KEY, JSON.stringify([...toggled]));
 	});
 

@@ -69,7 +69,8 @@ export const agentRunStatus = pgEnum('agent_run_status', [
 	'running',
 	'awaiting_approval',
 	'completed',
-	'failed'
+	'failed',
+	'cancelled'
 ]);
 
 type ProseMirrorDocument = Record<string, unknown>;
@@ -349,15 +350,110 @@ export const skills = pgTable(
 			.primaryKey()
 			.references(() => notes.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
+		slug: text('slug').notNull(),
 		description: text('description').notNull(),
 		triggerHints: text('trigger_hints')
 			.array()
 			.notNull()
 			.default(sql`'{}'::text[]`),
+		license: text('license'),
+		compatibility: text('compatibility'),
+		metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
+		allowImplicitInvocation: boolean('allow_implicit_invocation').notNull().default(true),
 		isEnabled: boolean('is_enabled').notNull().default(true),
 		...timestamps
 	},
-	(table) => [index('skills_enabled_idx').on(table.isEnabled)]
+	(table) => [
+		index('skills_enabled_idx').on(table.isEnabled),
+		uniqueIndex('skills_note_slug_unique').on(table.noteId, table.slug)
+	]
+);
+
+export const projectSkillPins = pgTable(
+	'project_skill_pins',
+	{
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		skillNoteId: uuid('skill_note_id')
+			.notNull()
+			.references(() => skills.noteId, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.projectId, table.skillNoteId] })]
+);
+
+export const attachments = pgTable(
+	'attachments',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id')
+			.notNull()
+			.references(() => notes.id, { onDelete: 'cascade' }),
+		path: text('path').notNull(),
+		currentVersionId: uuid('current_version_id'),
+		...timestamps
+	},
+	(table) => [
+		uniqueIndex('attachments_note_path_unique').on(table.noteId, table.path),
+		index('attachments_note_idx').on(table.noteId)
+	]
+);
+
+export const attachmentVersions = pgTable(
+	'attachment_versions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		attachmentId: uuid('attachment_id')
+			.notNull()
+			.references(() => attachments.id, { onDelete: 'cascade' }),
+		objectKey: text('object_key').notNull(),
+		mediaType: text('media_type').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		checksumSha256: text('checksum_sha256').notNull(),
+		parserKind: text('parser_kind'),
+		extractedText: text('extracted_text'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [uniqueIndex('attachment_versions_object_key_unique').on(table.objectKey)]
+);
+
+export const noteRevisionAttachments = pgTable(
+	'note_revision_attachments',
+	{
+		noteRevisionId: uuid('note_revision_id')
+			.notNull()
+			.references(() => noteRevisions.id, { onDelete: 'cascade' }),
+		attachmentVersionId: uuid('attachment_version_id')
+			.notNull()
+			.references(() => attachmentVersions.id, { onDelete: 'restrict' }),
+		path: text('path').notNull()
+	},
+	(table) => [primaryKey({ columns: [table.noteRevisionId, table.path] })]
+);
+
+export const attachmentUploads = pgTable(
+	'attachment_uploads',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id')
+			.notNull()
+			.references(() => notes.id, { onDelete: 'cascade' }),
+		path: text('path').notNull(),
+		objectKey: text('object_key').notNull(),
+		mediaType: text('media_type').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		checksumSha256: text('checksum_sha256').notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('attachment_uploads_expiry_idx').on(table.expiresAt)]
 );
 
 export const skillUsages = pgTable(
@@ -474,11 +570,31 @@ export const agentRuns = pgTable(
 			.notNull()
 			.default([]),
 		failure: text('failure'),
+		providerErrorCode: text('provider_error_code'),
+		contextSnapshot: jsonb('context_snapshot').$type<JsonObject>().notNull().default({}),
+		definitionVersion: integer('definition_version').notNull().default(1),
 		...timestamps
 	},
 	(table) => [
 		index('agent_runs_user_updated_idx').on(table.userId, table.updatedAt),
 		index('agent_runs_conversation_status_idx').on(table.conversationId, table.status)
+	]
+);
+
+export const agentSessionItems = pgTable(
+	'agent_session_items',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		conversationId: uuid('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		position: integer('position').notNull(),
+		item: jsonb('item').$type<JsonObject>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('agent_session_items_position_unique').on(table.conversationId, table.position),
+		index('agent_session_items_conversation_idx').on(table.conversationId, table.position)
 	]
 );
 

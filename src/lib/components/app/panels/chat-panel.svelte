@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { AgentModel, AgentPreferences, NoteId, ShellContext } from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -21,20 +21,26 @@
 	import SuggestionCard from '../suggestion-card.svelte';
 	import ModelPicker from '$lib/components/app/agent/model-picker.svelte';
 	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
+	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
 
 	let {
 		shell,
 		activeNoteId,
 		agentPreferences,
-		agentModels
+		agentModels,
+		agentAvailable
 	}: {
 		shell?: ShellContext;
 		activeNoteId?: NoteId;
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
+		agentAvailable: boolean;
 	} = $props();
-	$effect(() => chat.configureDefaults(agentPreferences.executionMode));
 	$effect(() => chat.persistConversationChoices());
+	onMount(() => {
+		chat.initialize(agentPreferences.executionMode);
+		void chat.hydrate();
+	});
 
 	let prompt = $state('');
 	let viewport = $state<HTMLElement | null>(null);
@@ -165,6 +171,12 @@
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col gap-2">
+	{#if !agentAvailable}
+		<div class="rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
+			Agent chat is disabled. Configure <code class="font-mono text-xs">OPENROUTER_API_KEY</code> to enable
+			it.
+		</div>
+	{/if}
 	<ScrollArea class="min-h-0 flex-1 pr-2" bind:viewportRef={viewport}>
 		<div class="flex flex-col gap-3">
 			{#if chat.entries.length === 0}
@@ -177,9 +189,9 @@
 				<div class="space-y-1.5">
 					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
 					{#if entry.text}
-						<p class="text-sm whitespace-pre-wrap">{entry.text}</p>
+						<ChatMarkdown content={entry.text} />
 					{/if}
-					{#each entry.tools as tool, index (index)}
+					{#each entry.tools as tool, index (tool.callId || `${entry.id}-${index}`)}
 						{#if tool.status === 'approval_required'}
 							<Card.Root>
 								<Card.Header>
@@ -298,13 +310,13 @@
 			rows={2}
 			class="min-h-16 resize-none"
 			onkeydown={handleKeydown}
-			disabled={chat.isStreaming}
+			disabled={chat.isStreaming || !agentAvailable}
 		/>
 		<Button
 			size="icon"
 			aria-label="Send message"
 			onclick={() => void send()}
-			disabled={chat.isStreaming || prompt.trim() === ''}
+			disabled={chat.isStreaming || !agentAvailable || prompt.trim() === ''}
 		>
 			{#if chat.isStreaming}
 				<LoaderCircle class="size-4 animate-spin" />

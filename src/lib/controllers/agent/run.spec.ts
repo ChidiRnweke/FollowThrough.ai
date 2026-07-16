@@ -53,6 +53,9 @@ const setup = (events: AgentEvent[]) => {
 			},
 			fail: async () => {
 				throw new Error('Unexpected run failure');
+			},
+			cancel: async () => {
+				throw new Error('Unexpected run cancellation');
 			}
 		},
 		defaultModel: 'openai/test-model'

@@ -92,8 +92,11 @@ export class InMemorySkillRepository implements SkillRepository {
 		return this.skills.find((item) => item.note.id === noteId && item.note.userId === actor.userId);
 	}
 	async listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]> {
+		return (await this.listAll(actor)).filter((skill) => skill.isEnabled);
+	}
+	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
 		return this.skills
-			.filter((item) => item.note.userId === actor.userId && item.isEnabled)
+			.filter((item) => item.note.userId === actor.userId)
 			.map((item) => ({
 				noteId: item.note.id,
 				name: item.name,
@@ -110,6 +113,7 @@ export class InMemorySkillRepository implements SkillRepository {
 		this.skills = this.skills.map((item) => (item.note.id === skill.note.id ? skill : item));
 		return skill;
 	}
+	async setPinned(): Promise<void> {}
 	async recordUsage(_actor: ActorContext, usage: SkillUsage) {
 		this.usages.push(usage);
 		return usage;

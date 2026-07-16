@@ -1,7 +1,17 @@
-import { and, desc, eq } from 'drizzle-orm';
-import type { ActorContext, AgentPreferences, AgentRun } from '$lib/models';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import type {
+	ActorContext,
+	AgentPreferences,
+	AgentRun,
+	AgentSessionItem,
+	ConversationId
+} from '$lib/models';
 import { NotFoundError } from '$lib/models';
-import type { AgentPreferencesRepository, AgentRunRepository } from '$lib/repositories';
+import type {
+	AgentPreferencesRepository,
+	AgentRunRepository,
+	AgentSessionRepository
+} from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
@@ -23,6 +33,9 @@ const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
 	...(row.serializedState ? { serializedState: row.serializedState } : {}),
 	pendingDecisions: row.pendingDecisions as unknown as AgentRun['pendingDecisions'],
 	...(row.failure ? { failure: row.failure } : {}),
+	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
+	contextSnapshot: row.contextSnapshot,
+	definitionVersion: row.definitionVersion,
 	createdAt: row.createdAt.toISOString() as AgentRun['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as AgentRun['updatedAt']
 });
@@ -112,6 +125,9 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 				serializedState: run.serializedState,
 				pendingDecisions: toPendingDecisionRows(run),
 				failure: run.failure,
+				providerErrorCode: run.providerErrorCode,
+				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
+				definitionVersion: run.definitionVersion ?? 1,
 				createdAt: new Date(run.createdAt),
 				updatedAt: new Date(run.updatedAt)
 			})
@@ -127,11 +143,112 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 				serializedState: run.serializedState,
 				pendingDecisions: toPendingDecisionRows(run),
 				failure: run.failure,
+				providerErrorCode: run.providerErrorCode,
+				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
+				definitionVersion: run.definitionVersion ?? 1,
 				updatedAt: new Date(run.updatedAt)
 			})
 			.where(and(eq(schema.agentRuns.id, run.id), eq(schema.agentRuns.userId, actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
+	}
+}
+
+const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): AgentSessionItem => ({
+	id: row.id as AgentSessionItem['id'],
+	conversationId: row.conversationId as AgentSessionItem['conversationId'],
+	position: row.position,
+	item: row.item,
+	createdAt: row.createdAt.toISOString() as AgentSessionItem['createdAt']
+});
+
+export class PostgresAgentSessionRepository implements AgentSessionRepository {
+	constructor(private readonly database: Database) {}
+
+	private async assertOwned(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+		const [owned] = await this.database
+			.select({ id: schema.conversations.id })
+			.from(schema.conversations)
+			.where(
+				and(
+					eq(schema.conversations.id, conversationId),
+					eq(schema.conversations.userId, actor.userId)
+				)
+			);
+		if (!owned) throw new NotFoundError('Conversation was not found');
+	}
+
+	async list(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		limit?: number
+	): Promise<readonly AgentSessionItem[]> {
+		await this.assertOwned(actor, conversationId);
+		if (limit !== undefined) {
+			const rows = await this.database
+				.select()
+				.from(schema.agentSessionItems)
+				.where(eq(schema.agentSessionItems.conversationId, conversationId))
+				.orderBy(desc(schema.agentSessionItems.position))
+				.limit(limit);
+			return rows.reverse().map(toSessionItem);
+		}
+		return (
+			await this.database
+				.select()
+				.from(schema.agentSessionItems)
+				.where(eq(schema.agentSessionItems.conversationId, conversationId))
+				.orderBy(asc(schema.agentSessionItems.position))
+		).map(toSessionItem);
+	}
+
+	async append(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		items: readonly Readonly<Record<string, unknown>>[]
+	): Promise<void> {
+		if (items.length === 0) return;
+		await this.assertOwned(actor, conversationId);
+		const [row] = await this.database
+			.select({ position: sql<number>`coalesce(max(${schema.agentSessionItems.position}), -1)` })
+			.from(schema.agentSessionItems)
+			.where(eq(schema.agentSessionItems.conversationId, conversationId));
+		const start = Number(row?.position ?? -1) + 1;
+		await this.database.insert(schema.agentSessionItems).values(
+			items.map((item, index) => ({
+				id: crypto.randomUUID(),
+				conversationId,
+				position: start + index,
+				item: { ...item }
+			}))
+		);
+	}
+
+	async pop(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<AgentSessionItem | undefined> {
+		const [latest] = await this.list(actor, conversationId, 1);
+		if (!latest) return undefined;
+		await this.database
+			.delete(schema.agentSessionItems)
+			.where(eq(schema.agentSessionItems.id, latest.id));
+		return latest;
+	}
+
+	async clear(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+		await this.assertOwned(actor, conversationId);
+		const rows = await this.database
+			.select({ id: schema.agentSessionItems.id })
+			.from(schema.agentSessionItems)
+			.where(eq(schema.agentSessionItems.conversationId, conversationId));
+		if (rows.length > 0)
+			await this.database.delete(schema.agentSessionItems).where(
+				inArray(
+					schema.agentSessionItems.id,
+					rows.map((row) => row.id)
+				)
+			);
 	}
 }

@@ -13,6 +13,7 @@ import type { NoteRepository, SourceAnchorRepository } from '$lib/repositories';
 export class InMemoryNoteRepository implements NoteRepository {
 	notes: Note[] = [];
 	revisions: NoteRevision[] = [];
+	restoredAttachmentSnapshots: NoteRevision['id'][] = [];
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
@@ -70,6 +71,16 @@ export class InMemoryNoteRepository implements NoteRepository {
 	async listRevisions(_actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
 		void _actor;
 		return this.revisions.filter((revision) => revision.noteId === noteId);
+	}
+
+	async restoreAttachmentSnapshot(
+		_actor: ActorContext,
+		_revisionId: NoteRevision['id'],
+		_noteId: NoteId
+	): Promise<void> {
+		void _actor;
+		void _noteId;
+		this.restoredAttachmentSnapshots.push(_revisionId);
 	}
 }
 

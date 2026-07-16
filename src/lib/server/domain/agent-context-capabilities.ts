@@ -3,8 +3,11 @@ import type {
 	AgentContextBuilder,
 	KnowledgeSearcher,
 	NoteReader,
-	SkillFinder
+	SkillFinder,
+	RelevantSkillSelector,
+	SkillUsageRecorder
 } from '$lib/services';
+import { KeywordRelevantSkillSelector } from '$lib/services';
 
 const CONTEXT_NOTE_CONTENT_LIMIT = 4000;
 
@@ -13,7 +16,9 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly base: AgentContextBuilder,
 		private readonly knowledgeSearcher: KnowledgeSearcher,
 		private readonly skillFinder: SkillFinder,
-		private readonly noteReader: NoteReader
+		private readonly noteReader: NoteReader,
+		private readonly skillSelector: RelevantSkillSelector = new KeywordRelevantSkillSelector(),
+		private readonly skillUsageRecorder?: SkillUsageRecorder
 	) {}
 
 	async build(
@@ -29,10 +34,32 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 			projectId
 				? this.knowledgeSearcher.search(actor, input.prompt, 8, projectId)
 				: Promise.resolve([]),
-			this.skillFinder.listEnabled(actor),
+			this.skillFinder.listEnabled(actor, projectId),
 			this.loadContextNotes(actor, input.contextNoteIds ?? [])
 		]);
-		const requested = new Set(input.requestedSkillNames ?? []);
+		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
+		const selected = await this.skillSelector.select(actor, input.prompt, availableSkills);
+		const exposed = availableSkills.filter(
+			(skill) =>
+				selected.some((candidate) => candidate.noteId === skill.noteId) ||
+				requested.has(skill.name.toLowerCase()) ||
+				requested.has((skill.slug ?? '').toLowerCase())
+		);
+		const explicitlyLoaded = await Promise.all(
+			exposed.map(async (summary) => {
+				const isRequested =
+					requested.has(summary.name.toLowerCase()) ||
+					requested.has((summary.slug ?? '').toLowerCase());
+				if (!isRequested) return { summary, isRequested };
+				const skill = await this.skillFinder.load(actor, summary.noteId);
+				await this.skillUsageRecorder?.record(actor, {
+					skillNoteId: summary.noteId,
+					contextNoteId: input.noteId,
+					provenanceId: run.provenanceId
+				});
+				return { summary, isRequested, instructions: skill.note.plainText };
+			})
+		);
 		return {
 			...base,
 			knowledge: matches.map((match) => ({
@@ -46,12 +73,14 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				title: note.title,
 				content: note.plainText.slice(0, CONTEXT_NOTE_CONTENT_LIMIT)
 			})),
-			skills: availableSkills.map((skill) => ({
-				noteId: skill.noteId,
-				name: skill.name,
-				description: skill.description,
-				triggerHints: skill.triggerHints,
-				requested: requested.has(skill.name)
+			skills: explicitlyLoaded.map(({ summary, isRequested, instructions }) => ({
+				noteId: summary.noteId,
+				name: summary.name,
+				slug: summary.slug,
+				description: summary.description,
+				triggerHints: summary.triggerHints,
+				requested: isRequested,
+				...(instructions !== undefined ? { instructions } : {})
 			}))
 		};
 	}

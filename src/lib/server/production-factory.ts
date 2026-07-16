@@ -23,7 +23,9 @@ import {
 	TrustPolicyManagementService,
 	UserManagementService,
 	ProjectScopedLinkFinder,
-	ProvisioningSkillFinder
+	ProvisioningSkillFinder,
+	AttachmentManagementService,
+	normalizeOpenRouterModelId
 } from '$lib/services';
 import { db, postgresTransactionRunner } from '$lib/server/db';
 import { BasicAgent } from './domain/basic-agent';
@@ -38,6 +40,7 @@ import {
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
 import { PostgresConversationRepository } from './repositories/postgres-conversations';
 import { EnrichedAgentContextBuilder } from './domain/agent-context-capabilities';
+import { AttachmentParserRegistry, S3AttachmentStorage } from './domain/attachment-storage';
 import { OpenAIRelationshipClassifier } from './domain/openai-relationship-capabilities';
 import { PostgresProjectRepository } from './repositories/postgres-projects';
 import { PostgresUserRepository } from './repositories/postgres-users';
@@ -53,9 +56,11 @@ import { PostgresRelationshipRepository } from './repositories/postgres-relation
 import { PostgresReferenceRepository } from './repositories/postgres-references';
 import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
 import { PostgresSkillRepository } from './repositories/postgres-skills';
+import { PostgresAttachmentRepository } from './repositories/postgres-attachments';
 import {
 	PostgresAgentPreferencesRepository,
-	PostgresAgentRunRepository
+	PostgresAgentRunRepository,
+	PostgresAgentSessionRepository
 } from './repositories/postgres-agent-settings';
 
 const firstConfigured = (...values: readonly (string | undefined)[]): string | undefined =>
@@ -85,11 +90,26 @@ export function createProductionFactory(): ProductionControllerFactory {
 		new PostgresAgentPreferencesRepository(db)
 	);
 	const runStore = new PersistentAgentRunStore(new PostgresAgentRunRepository(db));
+	const attachmentStorage = new S3AttachmentStorage({
+		endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
+		region: process.env.S3_REGION ?? 'us-east-1',
+		accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'followthrough',
+		secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? 'followthrough-local-secret',
+		bucket: process.env.S3_BUCKET ?? 'followthrough-attachments',
+		forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false'
+	});
+	const attachments = new AttachmentManagementService(
+		new PostgresAttachmentRepository(db),
+		noteRepository,
+		attachmentStorage,
+		new AttachmentParserRegistry()
+	);
 	const recommendedModels = new Set(
 		(process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
 			.split(',')
 			.map((model) => model.trim())
 			.filter(Boolean)
+			.map(normalizeOpenRouterModelId)
 	);
 	const modelCatalog = new OpenRouterModelCatalog(
 		new OpenRouter({
@@ -102,8 +122,9 @@ export function createProductionFactory(): ProductionControllerFactory {
 	const defaultAgentModel =
 		firstConfigured(process.env.OPENROUTER_DEFAULT_MODEL, process.env.OPENAI_AGENT_MODEL) ??
 		'openai/gpt-5.6';
-	const embeddingClient = process.env.OPENAI_API_KEY
-		? new OpenAIEmbeddingClient(process.env.OPENAI_API_KEY)
+	const openAIKey = process.env.OPENAI_API_KEY;
+	const embeddingClient = openAIKey
+		? new OpenAIEmbeddingClient(openAIKey)
 		: new DeterministicEmbeddingClient();
 	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient);
 	const diagramIndexer = new EmbeddedDiagramIndexer(searchRepository, embeddingClient, notes);
@@ -152,8 +173,11 @@ export function createProductionFactory(): ProductionControllerFactory {
 		fallbackAgent,
 		knowledgeSearcher,
 		provisionedSkills,
-		notes
+		notes,
+		undefined,
+		skills
 	);
+	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;
 	const agent = new OpenAIAgentRunner(
 		() => {
@@ -161,7 +185,10 @@ export function createProductionFactory(): ProductionControllerFactory {
 			return controllerFactory;
 		},
 		runStore,
-		fallbackAgent
+		new PostgresAgentSessionRepository(db),
+		process.env.OPENROUTER_API_KEY,
+		process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+		process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
 	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,
@@ -243,11 +270,13 @@ export function createProductionFactory(): ProductionControllerFactory {
 			defaultModel: defaultAgentModel
 		},
 		agentSettings: { preferences, models: modelCatalog },
+		attachments: { attachments, transactionRunner: postgresTransactionRunner },
 		skills: {
 			skillFinder: provisionedSkills,
 			skillUsageLister: skills,
 			skillUsageRecorder: skills,
 			skillVersionManager: skills,
+			skillEditor: skills,
 			anchorCreator: notes,
 			skillCreator: skills,
 			noteCreator: notes,

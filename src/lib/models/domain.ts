@@ -1,5 +1,9 @@
 import type {
 	AgentRunId,
+	AgentSessionItemId,
+	AttachmentId,
+	AttachmentUploadId,
+	AttachmentVersionId,
 	Confidence,
 	ConversationId,
 	DateTime,
@@ -197,14 +201,72 @@ export type Diagram = MermaidDiagram | DrawioDiagram;
 export interface Skill {
 	readonly note: Note;
 	readonly name: string;
+	readonly slug?: string;
 	readonly description: string;
 	readonly triggerHints: readonly string[];
+	readonly license?: string;
+	readonly compatibility?: string;
+	readonly metadata?: Readonly<Record<string, string>>;
+	readonly allowImplicitInvocation?: boolean;
 	readonly isEnabled: boolean;
 }
 
-export type SkillSummary = Pick<Skill, 'name' | 'description' | 'triggerHints' | 'isEnabled'> & {
+export interface SkillManifest {
+	readonly slug: string;
+	readonly description: string;
+	readonly license?: string;
+	readonly compatibility?: string;
+	readonly metadata: Readonly<Record<string, string>>;
+	readonly allowImplicitInvocation: boolean;
+	readonly instructions: string;
+}
+
+export type SkillSummary = Pick<
+	Skill,
+	'name' | 'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
+> & {
 	readonly noteId: NoteId;
+	readonly projectId?: ProjectId;
+	readonly isPinned?: boolean;
 };
+
+export interface Attachment {
+	readonly id: AttachmentId;
+	readonly noteId: NoteId;
+	readonly path: string;
+	readonly currentVersionId: AttachmentVersionId;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface AttachmentVersion {
+	readonly id: AttachmentVersionId;
+	readonly attachmentId: AttachmentId;
+	readonly objectKey: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+	readonly parserKind?: string;
+	readonly extractedText?: string;
+	readonly createdAt: DateTime;
+}
+
+export interface AttachmentUpload {
+	readonly id: AttachmentUploadId;
+	readonly noteId: NoteId;
+	readonly path: string;
+	readonly objectKey: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+	readonly expiresAt: DateTime;
+	readonly createdAt: DateTime;
+}
+
+export interface AttachmentView {
+	readonly attachment: Attachment;
+	readonly version: AttachmentVersion;
+}
 
 export interface SkillUsage {
 	readonly id: SkillUsageId;
@@ -255,7 +317,7 @@ export interface ToolActivity {
 }
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
-export type AgentRunStatus = 'running' | 'awaiting_approval' | 'completed' | 'failed';
+export type AgentRunStatus = 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgentPreferences {
 	readonly userId: UserId;
@@ -281,8 +343,19 @@ export interface AgentRun {
 	readonly serializedState?: string;
 	readonly pendingDecisions: readonly PendingAgentDecision[];
 	readonly failure?: string;
+	readonly providerErrorCode?: string;
+	readonly contextSnapshot?: Readonly<Record<string, unknown>>;
+	readonly definitionVersion?: number;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+export interface AgentSessionItem {
+	readonly id: AgentSessionItemId;
+	readonly conversationId: ConversationId;
+	readonly position: number;
+	readonly item: Readonly<Record<string, unknown>>;
+	readonly createdAt: DateTime;
 }
 
 export interface AgentModel {

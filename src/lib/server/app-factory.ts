@@ -1,7 +1,10 @@
 import type { ActorContext, UserId } from '$lib/models';
 import type { ControllerFactory } from '$lib/factories';
 import { z } from 'zod';
+import { config } from 'dotenv';
 import { createProductionFactory } from './production-factory';
+
+config({ quiet: true });
 
 const localUserId = z
 	.string()

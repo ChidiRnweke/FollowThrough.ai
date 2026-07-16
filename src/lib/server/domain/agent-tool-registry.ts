@@ -2,6 +2,7 @@ import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import type {
 	AgentSettingsController,
+	AttachmentsController,
 	DiagramsController,
 	NotesController,
 	ProjectsController,
@@ -40,6 +41,7 @@ export interface AgentToolCoverage {
 	readonly skills: Coverage<SkillsController>;
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
 	readonly agentSettings: Coverage<AgentSettingsController>;
+	readonly attachments: Coverage<AttachmentsController>;
 }
 
 export const agentToolCoverage = {
@@ -86,7 +88,21 @@ export const agentToolCoverage = {
 		create: { kind: 'mutation' },
 		createFromSelection: { kind: 'mutation' },
 		listVersions: { kind: 'read' },
-		restoreVersion: { kind: 'mutation' }
+		restoreVersion: { kind: 'mutation' },
+		update: { kind: 'excluded', reason: 'Skill bundle editing is a deliberate user action.' },
+		serialize: { kind: 'excluded', reason: 'The full skill is available through load_skill.' },
+		setPinned: {
+			kind: 'excluded',
+			reason: 'Project skill pinning is a deliberate user preference.'
+		}
+	},
+	attachments: {
+		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
+		complete: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
+		list: { kind: 'read' },
+		download: { kind: 'excluded', reason: 'Signed URLs are only returned to the user interface.' },
+		read: { kind: 'read' },
+		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	trustPolicies: { list: { kind: 'read' }, update: { kind: 'mutation' } },
 	agentSettings: {
@@ -446,6 +462,28 @@ export class AgentToolRegistry {
 				'mutation',
 				z.object({ noteId: id, revision: z.number().int().positive() }),
 				(input) => factory.skills().restoreVersion(actor, input as never)
+			),
+			define(
+				'list_attachments',
+				'List the immutable resources attached to a note or skill bundle.',
+				'read',
+				z.object({ noteId: id }),
+				(input) => factory.attachments().list(actor, input.noteId as NoteId)
+			),
+			define(
+				'read_attachment',
+				'Read a bounded chunk from a safely parsed text or PDF attachment. Scripts are returned as text and never executed.',
+				'read',
+				z.object({
+					noteId: id,
+					path: z.string().min(1).max(512),
+					offset: z.number().int().nonnegative().optional(),
+					limit: z.number().int().positive().max(20_000).optional()
+				}),
+				(input) =>
+					factory
+						.attachments()
+						.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
 			),
 			define('list_trust_policies', 'Read pipeline-specific trust policies.', 'read', none, () =>
 				factory.trustPolicies().list(actor)

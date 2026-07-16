@@ -10,6 +10,29 @@ const chord = async (page: Page, key: string) => {
 	await page.keyboard.press(key);
 };
 
+test('workspace state restores without an SSR hydration mismatch on refresh', async ({ page }) => {
+	const hydrationErrors: string[] = [];
+	page.on('console', (message) => {
+		const text = message.text();
+		if (text.includes('hydration_mismatch') || text.includes('Hydration failed'))
+			hydrationErrors.push(text);
+	});
+	await page.addInitScript(() => {
+		sessionStorage.setItem(
+			'followthrough.agent.conversation',
+			JSON.stringify({ executionModeOverride: 'auto_accept' })
+		);
+	});
+	await openHome(page);
+	const noteHref = await page.locator('a[href^="/notes/"]').first().getAttribute('href');
+	if (!noteHref) throw new Error('A note is required for the hydration regression test');
+	await page.goto(noteHref);
+	hydrationErrors.length = 0;
+	await page.reload();
+	await page.waitForLoadState('networkidle');
+	expect(hydrationErrors).toEqual([]);
+});
+
 test.describe.serial('agent-native keyboard workflow', () => {
 	test('Mod+Shift+P opens the shared command palette with shortcut hints', async ({ page }) => {
 		await openHome(page);

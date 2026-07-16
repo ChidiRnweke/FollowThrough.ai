@@ -161,7 +161,12 @@ export const toSkill = (
 ): Skill => ({
 	note: toNote(note),
 	name: skill.name,
+	slug: skill.slug,
 	description: skill.description,
 	triggerHints: skill.triggerHints,
+	license: skill.license ?? undefined,
+	compatibility: skill.compatibility ?? undefined,
+	metadata: skill.metadata,
+	allowImplicitInvocation: skill.allowImplicitInvocation,
 	isEnabled: skill.isEnabled
 });

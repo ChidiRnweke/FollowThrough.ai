@@ -8,4 +8,9 @@ export interface NoteRepository {
 	delete(actor: ActorContext, id: NoteId): Promise<void>;
 	insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision>;
 	listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
+	restoreAttachmentSnapshot(
+		actor: ActorContext,
+		revisionId: NoteRevision['id'],
+		noteId: NoteId
+	): Promise<void>;
 }

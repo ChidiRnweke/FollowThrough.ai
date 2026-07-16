@@ -92,7 +92,7 @@ describe('Skill management invariants', () => {
 		expect(skills.usages[0]?.provenanceId).toBe(testProvenanceId());
 	});
 
-	it('rejects a usage context from another project', async () => {
+	it('records a user-global skill usage in another owned project', async () => {
 		const { service, skills, notes } = setup();
 		skills.skills = [
 			{
@@ -107,13 +107,12 @@ describe('Skill management invariants', () => {
 			id: testNoteId(2),
 			projectId: '00000000-0000-4000-0002-000000000002' as never
 		});
-		await expect(
-			service.record(testActor(), {
-				skillNoteId: testNoteId(),
-				contextNoteId: testNoteId(2),
-				provenanceId: testProvenanceId()
-			})
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		await service.record(testActor(), {
+			skillNoteId: testNoteId(),
+			contextNoteId: testNoteId(2),
+			provenanceId: testProvenanceId()
+		});
+		expect(skills.usages[0]?.contextNoteId).toBe(testNoteId(2));
 	});
 
 	it('restores an immutable skill snapshot as a new current revision', async () => {
@@ -150,12 +149,14 @@ describe('Skill management invariants', () => {
 			revision: restored.note.currentRevision,
 			title: restored.note.title,
 			plainText: restored.note.plainText,
-			versionCount: notes.revisions.length
+			versionCount: notes.revisions.length,
+			restoredAttachmentSnapshot: notes.restoredAttachmentSnapshots[0]
 		}).toEqual({
 			revision: 3,
 			title: 'Original instructions',
 			plainText: 'Original content',
-			versionCount: 2
+			versionCount: 2,
+			restoredAttachmentSnapshot: '00000000-0000-4000-0008-000000000001'
 		});
 	});
 });

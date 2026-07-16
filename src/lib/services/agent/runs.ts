@@ -19,6 +19,7 @@ export interface AgentRunStore {
 			conversationId: ConversationId;
 			model: string;
 			executionMode: AgentExecutionMode;
+			contextSnapshot: Readonly<Record<string, unknown>>;
 		}
 	): Promise<AgentRun>;
 	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
@@ -29,7 +30,13 @@ export interface AgentRunStore {
 		pendingDecisions: readonly PendingAgentDecision[]
 	): Promise<AgentRun>;
 	complete(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
-	fail(actor: ActorContext, runId: AgentRunId, failure: string): Promise<AgentRun>;
+	fail(
+		actor: ActorContext,
+		runId: AgentRunId,
+		failure: string,
+		providerErrorCode?: string
+	): Promise<AgentRun>;
+	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
 }
 
 export class PersistentAgentRunStore implements AgentRunStore {
@@ -41,6 +48,7 @@ export class PersistentAgentRunStore implements AgentRunStore {
 			conversationId: ConversationId;
 			model: string;
 			executionMode: AgentExecutionMode;
+			contextSnapshot: Readonly<Record<string, unknown>>;
 		}
 	): Promise<AgentRun> {
 		const timestamp = now();
@@ -50,6 +58,7 @@ export class PersistentAgentRunStore implements AgentRunStore {
 			...input,
 			status: 'running',
 			pendingDecisions: [],
+			definitionVersion: 1,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
@@ -88,12 +97,29 @@ export class PersistentAgentRunStore implements AgentRunStore {
 		});
 	}
 
-	async fail(actor: ActorContext, runId: AgentRunId, failure: string): Promise<AgentRun> {
+	async fail(
+		actor: ActorContext,
+		runId: AgentRunId,
+		failure: string,
+		providerErrorCode?: string
+	): Promise<AgentRun> {
 		const run = await this.get(actor, runId);
 		return this.repository.update(actor, {
 			...run,
 			status: 'failed',
 			failure,
+			providerErrorCode,
+			pendingDecisions: [],
+			updatedAt: now()
+		});
+	}
+
+	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
+		const run = await this.get(actor, runId);
+		return this.repository.update(actor, {
+			...run,
+			status: 'cancelled',
+			failure: 'The request was cancelled',
 			pendingDecisions: [],
 			updatedAt: now()
 		});

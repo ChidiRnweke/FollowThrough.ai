@@ -34,6 +34,7 @@
 		shell={data.shell}
 		agentPreferences={data.agentPreferences}
 		agentModels={data.agentModels}
+		agentAvailable={data.agentAvailable}
 		{activeNoteId}
 		onstatus={(todoId, status) => void todoUpdates.setStatus(todoId, status)}
 	/>

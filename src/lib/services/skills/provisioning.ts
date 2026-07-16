@@ -67,8 +67,11 @@ export class DefaultBuiltInSkillProvisioner implements BuiltInSkillProvisioner {
 		await this.skills.insert(actor, {
 			note,
 			name: BUILT_IN_NAME,
+			slug: 'followthrough',
 			description: 'Discover and use FollowThrough actions safely.',
 			triggerHints: ['create', 'update', 'organize', 'plan', 'follow through'],
+			metadata: { 'followthrough.built-in': 'true' },
+			allowImplicitInvocation: true,
 			isEnabled: true
 		});
 	}
@@ -80,9 +83,14 @@ export class ProvisioningSkillFinder implements SkillFinder {
 		private readonly delegate: SkillFinder
 	) {}
 
-	async listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]> {
+	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		await this.provisioner.ensure(actor);
-		return this.delegate.listEnabled(actor);
+		return this.delegate.listEnabled(actor, projectId);
+	}
+
+	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		await this.provisioner.ensure(actor);
+		return this.delegate.listAll(actor, projectId);
 	}
 
 	load(actor: ActorContext, noteId: NoteId): Promise<Skill> {

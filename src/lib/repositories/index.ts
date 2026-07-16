@@ -14,3 +14,4 @@ export * from './conversations';
 export * from './relationships';
 export * from './retrieval-index';
 export * from './agent-settings';
+export * from './attachments';

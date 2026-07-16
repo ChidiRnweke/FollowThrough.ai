@@ -13,6 +13,12 @@ import type { AgentPreferencesRepository } from '$lib/repositories';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
+export const normalizeOpenRouterModelId = (modelId: string): string => {
+	const separator = modelId.indexOf(':');
+	if (separator <= 0 || modelId.includes('/')) return modelId;
+	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
+};
+
 export interface AgentPreferencesStore {
 	get(actor: ActorContext): Promise<AgentPreferences>;
 	update(actor: ActorContext, input: UpdateAgentPreferencesInput): Promise<AgentPreferences>;
@@ -109,7 +115,9 @@ export function resolveAgentModel(
 	preferences: Pick<AgentPreferences, 'defaultModel'>,
 	environmentDefault: string
 ): string {
-	return conversation.modelOverride ?? preferences.defaultModel ?? environmentDefault;
+	return normalizeOpenRouterModelId(
+		conversation.modelOverride ?? preferences.defaultModel ?? environmentDefault
+	);
 }
 
 export function resolveAgentExecutionMode(

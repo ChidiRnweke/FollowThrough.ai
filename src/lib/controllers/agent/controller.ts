@@ -19,13 +19,17 @@ import type {
 import { resolveAgentExecutionMode, resolveAgentModel } from '$lib/services';
 
 export interface AgentController {
-	run(actor: ActorContext, input: RunAgentInput): AsyncIterable<AgentEvent>;
+	run(actor: ActorContext, input: RunAgentInput, signal?: AbortSignal): AsyncIterable<AgentEvent>;
 	listSessions(actor: ActorContext): Promise<readonly Conversation[]>;
 	getSession(
 		actor: ActorContext,
 		conversationId: ConversationId
 	): Promise<{ conversation: Conversation; messages: readonly Message[] }>;
-	decide(actor: ActorContext, input: DecideAgentRunInput): AsyncIterable<AgentEvent>;
+	decide(
+		actor: ActorContext,
+		input: DecideAgentRunInput,
+		signal?: AbortSignal
+	): AsyncIterable<AgentEvent>;
 }
 
 export interface AgentDependencies {
@@ -54,7 +58,11 @@ export class DefaultAgentController implements AgentController {
 		return { conversation, messages };
 	}
 
-	async *run(actor: ActorContext, input: RunAgentInput): AsyncIterable<AgentEvent> {
+	async *run(
+		actor: ActorContext,
+		input: RunAgentInput,
+		signal?: AbortSignal
+	): AsyncIterable<AgentEvent> {
 		if (input.modelOverride) await this.dependencies.models.assertSelectable(input.modelOverride);
 		const conversation = await this.dependencies.conversationJournal.getOrCreate(actor, input);
 		const preferences = await this.dependencies.preferences.get(actor);
@@ -73,12 +81,9 @@ export class DefaultAgentController implements AgentController {
 			model,
 			metadata: { conversationId: conversation.id, executionMode }
 		});
-		const [baseContext, messages] = await Promise.all([
-			this.dependencies.contextBuilder.build(actor, effectiveInput, {
-				provenanceId: provenance.id
-			}),
-			this.dependencies.conversationJournal.listMessages(actor, conversation.id)
-		]);
+		const baseContext = await this.dependencies.contextBuilder.build(actor, effectiveInput, {
+			provenanceId: provenance.id
+		});
 		const context = {
 			...baseContext,
 			conversationId: conversation.id,
@@ -88,10 +93,12 @@ export class DefaultAgentController implements AgentController {
 		};
 		let assistantText = '';
 		let completed = false;
-		for await (const event of this.dependencies.agentRunner.run(actor, effectiveInput, {
-			...context,
-			conversationHistory: messages
-		})) {
+		for await (const event of this.dependencies.agentRunner.run(
+			actor,
+			effectiveInput,
+			context,
+			signal
+		)) {
 			if (event.type === 'text_delta') assistantText += event.text;
 			if (event.type === 'tool_started')
 				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
@@ -138,7 +145,11 @@ export class DefaultAgentController implements AgentController {
 			);
 	}
 
-	async *decide(actor: ActorContext, input: DecideAgentRunInput): AsyncIterable<AgentEvent> {
+	async *decide(
+		actor: ActorContext,
+		input: DecideAgentRunInput,
+		signal?: AbortSignal
+	): AsyncIterable<AgentEvent> {
 		const run = await this.dependencies.runStore.get(actor, input.runId);
 		const pending = run.pendingDecisions.find((item) => item.callId === input.callId);
 		if (!pending) throw new Error('The pending tool call was not found');
@@ -157,20 +168,13 @@ export class DefaultAgentController implements AgentController {
 			model: run.model,
 			metadata: { conversationId: run.conversationId, resumed: true }
 		});
-		const resumeInput: RunAgentInput = { conversationId: run.conversationId, prompt: '' };
-		const [base, messages] = await Promise.all([
-			this.dependencies.contextBuilder.build(actor, resumeInput, { provenanceId: provenance.id }),
-			this.dependencies.conversationJournal.listMessages(actor, run.conversationId)
-		]);
 		let assistantText = '';
-		for await (const event of this.dependencies.agentRunner.resume(actor, input, {
-			...base,
-			conversationId: run.conversationId,
-			effectiveModel: run.model,
-			executionMode: run.executionMode,
-			provenanceId: provenance.id,
-			conversationHistory: messages
-		})) {
+		for await (const event of this.dependencies.agentRunner.resume(
+			actor,
+			input,
+			{ ...(run.contextSnapshot ?? {}), provenanceId: provenance.id },
+			signal
+		)) {
 			if (event.type === 'text_delta') assistantText += event.text;
 			if (event.type === 'tool_started')
 				await this.dependencies.conversationJournal.recordToolActivity(actor, run.conversationId, {

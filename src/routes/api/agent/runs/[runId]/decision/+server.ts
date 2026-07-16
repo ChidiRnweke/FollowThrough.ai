@@ -14,9 +14,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const input = inputSchema.parse(await request.json());
 	const factory = AppFactory.controllerFactory();
 	return ndjsonResponse(
-		factory.agent().decide(AppFactory.actor(), {
-			runId: params.runId as AgentRunId,
-			...input
-		})
+		factory.agent().decide(
+			AppFactory.actor(),
+			{
+				runId: params.runId as AgentRunId,
+				...input
+			},
+			request.signal
+		)
 	);
 };

@@ -3,10 +3,12 @@ import type {
 	Note,
 	NoteId,
 	ProvenanceId,
+	ProjectId,
 	Skill,
 	NoteRevision,
 	SkillSummary,
 	SkillUsageView,
+	SkillManifest,
 	TextSelection
 } from '$lib/models';
 
@@ -28,8 +30,30 @@ export interface SkillCreator {
 	): Promise<Skill>;
 }
 export interface SkillFinder {
-	listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]>;
+	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
+	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
 	load(actor: ActorContext, noteId: NoteId): Promise<Skill>;
+}
+
+export interface SkillEditor {
+	update(
+		actor: ActorContext,
+		input: {
+			noteId: NoteId;
+			displayName?: string;
+			raw?: string;
+			manifest?: SkillManifest;
+			triggerHints?: readonly string[];
+			isEnabled?: boolean;
+		}
+	): Promise<Skill>;
+	serialize(actor: ActorContext, noteId: NoteId): Promise<string>;
+	setPinned(
+		actor: ActorContext,
+		noteId: NoteId,
+		projectId: ProjectId,
+		pinned: boolean
+	): Promise<void>;
 }
 export interface RelevantSkillSelector {
 	select(

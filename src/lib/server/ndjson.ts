@@ -1,3 +1,5 @@
+import { DomainError } from '$lib/models';
+
 export function ndjsonResponse(iterable: AsyncIterable<unknown>): Response {
 	const encoder = new TextEncoder();
 	const stream = new ReadableStream<Uint8Array>({
@@ -8,7 +10,14 @@ export function ndjsonResponse(iterable: AsyncIterable<unknown>): Response {
 				}
 				controller.close();
 			} catch (error) {
-				controller.error(error);
+				const failure =
+					error instanceof DomainError
+						? { code: error.code, message: error.message, details: error.details }
+						: { code: 'INTERNAL', message: 'The stream failed unexpectedly' };
+				controller.enqueue(
+					encoder.encode(`${JSON.stringify({ type: 'failed', ...failure, retryable: false })}\n`)
+				);
+				controller.close();
 			}
 		}
 	});
