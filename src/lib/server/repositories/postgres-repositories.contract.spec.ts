@@ -502,9 +502,9 @@ describe('Postgres memory-entry repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		expect((await repository.list(owner, { projectId: project.id })).map((item) => item.id)).toEqual(
-			[entry.id]
-		);
+		expect(
+			(await repository.list(owner, { projectId: project.id })).map((item) => item.id)
+		).toEqual([entry.id]);
 	});
 
 	it('does not reveal an entry to another actor', async () => {

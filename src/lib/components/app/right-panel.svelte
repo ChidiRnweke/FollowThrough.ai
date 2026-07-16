@@ -4,6 +4,7 @@
 		AgentPreferences,
 		Conversation,
 		NoteId,
+		ProjectId,
 		ShellContext,
 		TodoId,
 		TodoStatus
@@ -26,6 +27,7 @@
 		agentModels,
 		agentAvailable,
 		activeNoteId,
+		activeProjectId,
 		onstatus
 	}: {
 		shell?: ShellContext;
@@ -34,6 +36,7 @@
 		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
 		activeNoteId?: NoteId;
+		activeProjectId?: ProjectId;
 		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 	} = $props();
 
@@ -93,6 +96,7 @@
 					{shell}
 					{sessions}
 					{activeNoteId}
+					{activeProjectId}
 					{agentPreferences}
 					{agentModels}
 					{agentAvailable}

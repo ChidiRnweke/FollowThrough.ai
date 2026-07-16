@@ -16,10 +16,14 @@
 	let {
 		sessions,
 		shell,
+		limit = 5,
+		showAllLink = true,
 		onselect
 	}: {
 		sessions: readonly Conversation[];
 		shell?: ShellContext;
+		limit?: number;
+		showAllLink?: boolean;
 		onselect: (id: Conversation['id']) => void;
 	} = $props();
 
@@ -72,12 +76,12 @@
 <div class="flex flex-col gap-1">
 	<div class="flex items-center justify-between px-1">
 		<h3 class="provenance-caption">Recent chats</h3>
-		<Button variant="link" size="sm"><a href="/chats">All chats</a></Button>
+		{#if showAllLink}<Button variant="link" size="sm"><a href="/chats">All chats</a></Button>{/if}
 	</div>
 	{#if sessions.length === 0}
 		<p class="px-1 text-sm text-muted-foreground">No past conversations yet.</p>
 	{:else}
-		{#each sessions.slice(0, 5) as session (session.id)}
+		{#each sessions.slice(0, limit) as session (session.id)}
 			<div class="group flex min-w-0 items-center gap-1">
 				<Button
 					variant="ghost"
@@ -88,6 +92,7 @@
 					<span class="flex min-w-0 flex-col items-start gap-0.5">
 						<span class="w-full truncate text-left text-sm">{session.title ?? 'New conversation'}</span>
 						<span class="w-full truncate text-left text-xs text-muted-foreground">{origin(session)}</span>
+						<span class="text-left text-xs text-muted-foreground">{new Date(session.updatedAt).toLocaleDateString()}</span>
 					</span>
 				</Button>
 				<DropdownMenu.Root>

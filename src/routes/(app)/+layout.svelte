@@ -6,7 +6,7 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
-	import type { NoteId } from '$lib/models';
+	import type { NoteId, ProjectId } from '$lib/models';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 
 	let { data, children } = $props();
@@ -16,6 +16,13 @@
 			? (page.url.pathname.split('/')[2] as NoteId)
 			: undefined
 	);
+	const activeProjectId = $derived.by(() => {
+		const note = data.shell.noteTree.find((entry) => entry.id === activeNoteId);
+		if (note) return note.projectId;
+		if (page.url.pathname.startsWith('/projects/'))
+			return page.url.pathname.split('/')[2] as ProjectId;
+		return undefined;
+	});
 
 	const keyboard = new CommandKeyboardHandler();
 	function onkeydown(event: KeyboardEvent): void {
@@ -37,6 +44,7 @@
 		agentModels={data.agentModels}
 		agentAvailable={data.agentAvailable}
 		{activeNoteId}
+		{activeProjectId}
 		onstatus={(todoId, status) => void todoUpdates.setStatus(todoId, status)}
 	/>
 </Sidebar.Provider>

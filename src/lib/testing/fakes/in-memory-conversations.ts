@@ -19,7 +19,10 @@ export class InMemoryConversationRepository implements ConversationRepository {
 						conversation.title?.toLowerCase().includes(options.query.toLowerCase()))
 			)
 			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-		return listed.slice(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? listed.length));
+		return listed.slice(
+			options.offset ?? 0,
+			(options.offset ?? 0) + (options.limit ?? listed.length)
+		);
 	}
 
 	async findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined> {

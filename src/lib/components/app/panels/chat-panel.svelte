@@ -42,6 +42,8 @@
 		sessions,
 		activeNoteId,
 		activeProjectId,
+		initialConversationId,
+		showHistory = true,
 		agentPreferences,
 		agentModels,
 		agentAvailable
@@ -50,6 +52,8 @@
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;
+		initialConversationId?: Conversation['id'] | null;
+		showHistory?: boolean;
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
@@ -57,7 +61,9 @@
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
 		chat.initialize(agentPreferences.executionMode);
-		void chat.hydrate();
+		if (initialConversationId === null) chat.clear();
+		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
+		else void chat.hydrate();
 		prompt = sessionStorage.getItem(draftKey()) ?? '';
 	});
 
@@ -230,7 +236,7 @@
 	<ScrollArea class="min-h-0 flex-1 pr-2" bind:viewportRef={viewport}>
 		<div class="flex flex-col gap-3">
 			{#if chat.entries.length === 0}
-				{#if sessions.length > 0}
+				{#if showHistory && sessions.length > 0}
 					<ChatHistoryList {sessions} {shell} onselect={(id) => void chat.switchToConversation(id)} />
 				{:else}
 					<p class="text-sm text-muted-foreground">
