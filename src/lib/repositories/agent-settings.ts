@@ -18,6 +18,10 @@ export interface AgentRunRepository {
 		actor: ActorContext,
 		conversationId: ConversationId
 	): Promise<AgentRun | undefined>;
+	findLatestByConversation(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<AgentRun | undefined>;
 	insert(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 	update(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 }

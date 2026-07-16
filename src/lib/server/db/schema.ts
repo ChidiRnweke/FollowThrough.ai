@@ -537,6 +537,9 @@ export const conversations = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		kind: conversationKind('kind').notNull().default('chat'),
+		contextProjectId: uuid('context_project_id').references(() => projects.id, {
+			onDelete: 'set null'
+		}),
 		contextNoteId: uuid('context_note_id').references(() => notes.id, { onDelete: 'set null' }),
 		title: text('title'),
 		modelOverride: text('model_override'),
@@ -576,6 +579,10 @@ export const agentRuns = pgTable(
 		failure: text('failure'),
 		providerErrorCode: text('provider_error_code'),
 		contextSnapshot: jsonb('context_snapshot').$type<JsonObject>().notNull().default({}),
+		inputSnapshot: jsonb('input_snapshot').$type<JsonObject>().notNull().default({}),
+		retryOfRunId: uuid('retry_of_run_id').references((): AnyPgColumn => agentRuns.id, {
+			onDelete: 'set null'
+		}),
 		definitionVersion: integer('definition_version').notNull().default(1),
 		...timestamps
 	},

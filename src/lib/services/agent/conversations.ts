@@ -43,6 +43,7 @@ export class PersistentConversationJournal implements ConversationJournal {
 			id: crypto.randomUUID() as ConversationId,
 			userId: actor.userId,
 			kind: 'chat',
+			contextProjectId: input.projectId,
 			contextNoteId: input.noteId,
 			title: input.prompt.trim().slice(0, 80) || 'New conversation',
 			...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
@@ -54,19 +55,40 @@ export class PersistentConversationJournal implements ConversationJournal {
 		});
 	}
 
-	listConversations(actor: ActorContext): Promise<readonly Conversation[]> {
-		return this.repository.list(actor, 'chat');
+	listConversations(
+		actor: ActorContext,
+		options: { readonly limit?: number; readonly offset?: number; readonly query?: string } = {}
+	): Promise<readonly Conversation[]> {
+		return this.repository.list(actor, { kind: 'chat', ...options });
+	}
+
+	async rename(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		title: string
+	): Promise<Conversation> {
+		const conversation = await this.get(actor, conversationId);
+		return this.repository.update(actor, { ...conversation, title: title.trim(), updatedAt: now() });
+	}
+
+	remove(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+		return this.repository.delete(actor, conversationId);
 	}
 
 	createWorkflow(
 		actor: ActorContext,
-		input: { title: string; contextNoteId?: import('$lib/models').NoteId }
+		input: {
+			title: string;
+			contextProjectId?: import('$lib/models').ProjectId;
+			contextNoteId?: import('$lib/models').NoteId;
+		}
 	): Promise<Conversation> {
 		const timestamp = now();
 		return this.repository.insert(actor, {
 			id: crypto.randomUUID() as ConversationId,
 			userId: actor.userId,
 			kind: 'workflow',
+			contextProjectId: input.contextProjectId,
 			contextNoteId: input.contextNoteId,
 			title: input.title,
 			createdAt: timestamp,

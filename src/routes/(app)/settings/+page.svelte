@@ -1,6 +1,5 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import SettingsMemory from '$lib/components/app/pages/settings-memory.svelte';
 	import SettingsPolicies from '$lib/components/app/pages/settings-policies.svelte';
 	import SettingsAgent from '$lib/components/app/pages/settings-agent.svelte';
 	import { Separator } from '$lib/components/ui/separator';
@@ -8,10 +7,7 @@
 	let { data } = $props();
 </script>
 
-<PageShell
-	title="Settings"
-	description="Agent defaults, what the agent knows about you, and per-pipeline trust policies."
->
+<PageShell title="Settings" description="Agent defaults and per-pipeline trust policies.">
 	<section class="flex flex-col gap-4">
 		<div>
 			<h2 class="text-sm font-semibold">Agent</h2>
@@ -21,8 +17,6 @@
 		</div>
 		<SettingsAgent preferences={data.preferences} models={data.models} />
 	</section>
-	<Separator />
-	<SettingsMemory />
 	<Separator />
 	<SettingsPolicies policies={data.policies} />
 </PageShell>

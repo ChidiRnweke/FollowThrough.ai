@@ -1,6 +1,7 @@
 import type {
 	ArtifactId,
 	Confidence,
+	ConversationId,
 	LocalDate,
 	NoteId,
 	PipelineKind,
@@ -102,6 +103,17 @@ export interface ShellContext {
 	readonly noteTree: readonly NoteSummary[];
 	readonly skills: readonly SkillSummary[];
 	readonly pendingSuggestionCount: number;
+}
+
+export interface ConversationSummary {
+	readonly id: ConversationId;
+	readonly title?: string;
+	readonly contextProjectId?: ProjectId;
+	readonly contextNoteId?: NoteId;
+	readonly createdAt: import('./shared').DateTime;
+	readonly updatedAt: import('./shared').DateTime;
+	readonly project?: Pick<Project, 'id' | 'name'>;
+	readonly note?: NoteRef;
 }
 
 export interface GetNoteViewInput {

@@ -1,7 +1,7 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike } from 'drizzle-orm';
 import type { ActorContext, Conversation, Message } from '$lib/models';
 import { NotFoundError } from '$lib/models';
-import type { ConversationRepository } from '$lib/repositories';
+import type { ConversationListOptions, ConversationRepository } from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
@@ -9,6 +9,9 @@ const toConversation = (row: typeof schema.conversations.$inferSelect): Conversa
 	id: row.id as Conversation['id'],
 	userId: row.userId as Conversation['userId'],
 	kind: row.kind,
+	...(row.contextProjectId
+		? { contextProjectId: row.contextProjectId as Conversation['contextProjectId'] }
+		: {}),
 	...(row.contextNoteId
 		? { contextNoteId: row.contextNoteId as Conversation['contextNoteId'] }
 		: {}),
@@ -31,21 +34,23 @@ const toMessage = (row: typeof schema.messages.$inferSelect): Message => ({
 export class PostgresConversationRepository implements ConversationRepository {
 	constructor(private readonly database: Database) {}
 
-	async list(actor: ActorContext, kind?: Conversation['kind']): Promise<readonly Conversation[]> {
-		return (
-			await this.database
-				.select()
-				.from(schema.conversations)
-				.where(
-					kind
-						? and(
-								eq(schema.conversations.userId, actor.userId),
-								eq(schema.conversations.kind, kind)
-							)
-						: eq(schema.conversations.userId, actor.userId)
-				)
-				.orderBy(desc(schema.conversations.updatedAt))
-		).map(toConversation);
+	async list(
+		actor: ActorContext,
+		options: ConversationListOptions = {}
+	): Promise<readonly Conversation[]> {
+		const conditions = [eq(schema.conversations.userId, actor.userId)];
+		if (options.kind) conditions.push(eq(schema.conversations.kind, options.kind));
+		if (options.query?.trim())
+			conditions.push(ilike(schema.conversations.title, `%${options.query.trim()}%`));
+		let query = this.database
+			.select()
+			.from(schema.conversations)
+			.where(and(...conditions))
+			.orderBy(desc(schema.conversations.updatedAt), desc(schema.conversations.id))
+			.$dynamic();
+		if (options.offset !== undefined) query = query.offset(options.offset);
+		if (options.limit !== undefined) query = query.limit(options.limit);
+		return (await query).map(toConversation);
 	}
 
 	async findById(actor: ActorContext, id: Conversation['id']): Promise<Conversation | undefined> {
@@ -64,6 +69,7 @@ export class PostgresConversationRepository implements ConversationRepository {
 				userId: actor.userId,
 				kind: conversation.kind,
 				contextNoteId: conversation.contextNoteId,
+				contextProjectId: conversation.contextProjectId,
 				title: conversation.title,
 				modelOverride: conversation.modelOverride,
 				executionModeOverride: conversation.executionModeOverride,
@@ -78,6 +84,7 @@ export class PostgresConversationRepository implements ConversationRepository {
 		const [row] = await this.database
 			.update(schema.conversations)
 			.set({
+				contextProjectId: conversation.contextProjectId,
 				contextNoteId: conversation.contextNoteId,
 				title: conversation.title,
 				modelOverride: conversation.modelOverride,
@@ -93,6 +100,14 @@ export class PostgresConversationRepository implements ConversationRepository {
 			.returning();
 		if (!row) throw new NotFoundError('Conversation was not found');
 		return toConversation(row);
+	}
+
+	async delete(actor: ActorContext, id: Conversation['id']): Promise<void> {
+		const [row] = await this.database
+			.delete(schema.conversations)
+			.where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, actor.userId)))
+			.returning({ id: schema.conversations.id });
+		if (!row) throw new NotFoundError('Conversation was not found');
 	}
 
 	async appendMessage(actor: ActorContext, message: Message): Promise<Message> {

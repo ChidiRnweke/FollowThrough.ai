@@ -1,18 +1,25 @@
 import type { ActorContext, Conversation, ConversationId, Message } from '$lib/models';
 import { NotFoundError } from '$lib/models';
-import type { ConversationRepository } from '$lib/repositories';
+import type { ConversationListOptions, ConversationRepository } from '$lib/repositories';
 
 export class InMemoryConversationRepository implements ConversationRepository {
 	conversations: Conversation[] = [];
 	messages: Message[] = [];
 
-	async list(actor: ActorContext, kind?: Conversation['kind']): Promise<readonly Conversation[]> {
-		return this.conversations
+	async list(
+		actor: ActorContext,
+		options: ConversationListOptions = {}
+	): Promise<readonly Conversation[]> {
+		const listed = this.conversations
 			.filter(
 				(conversation) =>
-					conversation.userId === actor.userId && (kind === undefined || conversation.kind === kind)
+					conversation.userId === actor.userId &&
+					(options.kind === undefined || conversation.kind === options.kind) &&
+					(!options.query ||
+						conversation.title?.toLowerCase().includes(options.query.toLowerCase()))
 			)
 			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+		return listed.slice(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? listed.length));
 	}
 
 	async findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined> {
@@ -34,6 +41,12 @@ export class InMemoryConversationRepository implements ConversationRepository {
 			item.id === conversation.id ? conversation : item
 		);
 		return conversation;
+	}
+
+	async delete(actor: ActorContext, id: ConversationId): Promise<void> {
+		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+		this.conversations = this.conversations.filter((conversation) => conversation.id !== id);
+		this.messages = this.messages.filter((message) => message.conversationId !== id);
 	}
 
 	async appendMessage(actor: ActorContext, message: Message): Promise<Message> {

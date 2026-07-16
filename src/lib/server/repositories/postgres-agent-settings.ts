@@ -35,6 +35,8 @@ const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
 	contextSnapshot: row.contextSnapshot,
+	inputSnapshot: row.inputSnapshot,
+	...(row.retryOfRunId ? { retryOfRunId: row.retryOfRunId as AgentRun['retryOfRunId'] } : {}),
 	definitionVersion: row.definitionVersion,
 	createdAt: row.createdAt.toISOString() as AgentRun['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as AgentRun['updatedAt']
@@ -112,6 +114,23 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
+	async findLatestByConversation(
+		actor: ActorContext,
+		conversationId: AgentRun['conversationId']
+	): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(
+				and(
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.conversationId, conversationId)
+				)
+			)
+			.orderBy(desc(schema.agentRuns.updatedAt));
+		return row ? toRun(row) : undefined;
+	}
+
 	async insert(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
 		const [row] = await this.database
 			.insert(schema.agentRuns)
@@ -127,6 +146,8 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 				failure: run.failure,
 				providerErrorCode: run.providerErrorCode,
 				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
+				inputSnapshot: { ...(run.inputSnapshot ?? {}) },
+				retryOfRunId: run.retryOfRunId,
 				definitionVersion: run.definitionVersion ?? 1,
 				createdAt: new Date(run.createdAt),
 				updatedAt: new Date(run.updatedAt)
@@ -145,6 +166,8 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 				failure: run.failure,
 				providerErrorCode: run.providerErrorCode,
 				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
+				inputSnapshot: { ...(run.inputSnapshot ?? {}) },
+				retryOfRunId: run.retryOfRunId,
 				definitionVersion: run.definitionVersion ?? 1,
 				updatedAt: new Date(run.updatedAt)
 			})

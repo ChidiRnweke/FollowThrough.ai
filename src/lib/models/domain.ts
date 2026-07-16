@@ -293,6 +293,7 @@ export interface Conversation {
 	readonly id: ConversationId;
 	readonly userId: UserId;
 	readonly kind: 'chat' | 'workflow';
+	readonly contextProjectId?: ProjectId;
 	readonly contextNoteId?: NoteId;
 	readonly title?: string;
 	readonly modelOverride?: string;
@@ -349,6 +350,8 @@ export interface AgentRun {
 	readonly failure?: string;
 	readonly providerErrorCode?: string;
 	readonly contextSnapshot?: Readonly<Record<string, unknown>>;
+	readonly inputSnapshot?: Readonly<Record<string, unknown>>;
+	readonly retryOfRunId?: AgentRunId;
 	readonly definitionVersion?: number;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;

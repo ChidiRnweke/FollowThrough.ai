@@ -168,6 +168,7 @@ export interface ProposeMemoryChangeOutput {
 }
 
 export interface RunAgentInput {
+	readonly requestId?: string;
 	readonly conversationId?: ConversationId;
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
@@ -180,6 +181,7 @@ export interface RunAgentInput {
 	readonly prompt: string;
 }
 export type AgentEvent =
+	| { readonly type: 'run_started'; readonly runId: AgentRunId }
 	| { readonly type: 'text_delta'; readonly text: string }
 	| {
 			readonly type: 'tool_started';
@@ -204,10 +206,12 @@ export type AgentEvent =
 	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
 	| {
 			readonly type: 'failed';
+			readonly runId?: AgentRunId;
 			readonly code: string;
 			readonly message: string;
 			readonly retryable: boolean;
 	  }
+	| { readonly type: 'cancelled'; readonly runId: AgentRunId; readonly message: string }
 	| {
 			readonly type: 'completed';
 			readonly conversationId: ConversationId;

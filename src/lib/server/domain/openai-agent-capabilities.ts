@@ -141,8 +141,10 @@ export class OpenAIAgentRunner implements AgentRunner {
 			conversationId: effective.conversationId,
 			model: effective.model,
 			executionMode: effective.executionMode,
-			contextSnapshot: context
+			contextSnapshot: context,
+			inputSnapshot: input as unknown as Readonly<Record<string, unknown>>
 		});
+		yield { type: 'run_started', runId: run.id };
 		yield* this.execute(actor, input, context, run, undefined, signal);
 	}
 
@@ -244,10 +246,9 @@ export class OpenAIAgentRunner implements AgentRunner {
 			if (signal?.aborted) {
 				await this.runStore.cancel(actor, run.id);
 				yield {
-					type: 'failed',
-					code: 'CANCELLED',
-					message: 'The request was cancelled',
-					retryable: false
+					type: 'cancelled',
+					runId: run.id,
+					message: 'Generation stopped'
 				};
 				return;
 			}
@@ -255,6 +256,7 @@ export class OpenAIAgentRunner implements AgentRunner {
 			await this.runStore.fail(actor, run.id, message, providerErrorCode);
 			yield {
 				type: 'failed',
+				runId: run.id,
 				code: providerErrorCode ?? 'EXTERNAL_SERVICE',
 				message: new ExternalServiceError('Agent execution failed', { cause: message }).message,
 				retryable: this.isRetryable(error)

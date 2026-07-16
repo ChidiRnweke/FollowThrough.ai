@@ -20,6 +20,8 @@ export interface AgentRunStore {
 			model: string;
 			executionMode: AgentExecutionMode;
 			contextSnapshot: Readonly<Record<string, unknown>>;
+			inputSnapshot?: Readonly<Record<string, unknown>>;
+			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun>;
 	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
@@ -54,6 +56,8 @@ export class PersistentAgentRunStore implements AgentRunStore {
 			model: string;
 			executionMode: AgentExecutionMode;
 			contextSnapshot: Readonly<Record<string, unknown>>;
+			inputSnapshot?: Readonly<Record<string, unknown>>;
+			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun> {
 		const timestamp = now();

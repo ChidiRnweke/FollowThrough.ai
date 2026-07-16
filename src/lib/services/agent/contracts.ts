@@ -51,10 +51,19 @@ export interface ConversationRecorder {
 }
 
 export interface ConversationJournal extends ConversationRecorder {
-	listConversations(actor: ActorContext): Promise<readonly Conversation[]>;
+	listConversations(
+		actor: ActorContext,
+		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
+	): Promise<readonly Conversation[]>;
+	rename(actor: ActorContext, conversationId: ConversationId, title: string): Promise<Conversation>;
+	remove(actor: ActorContext, conversationId: ConversationId): Promise<void>;
 	createWorkflow(
 		actor: ActorContext,
-		input: { title: string; contextNoteId?: import('$lib/models').NoteId }
+		input: {
+			title: string;
+			contextProjectId?: import('$lib/models').ProjectId;
+			contextNoteId?: import('$lib/models').NoteId;
+		}
 	): Promise<Conversation>;
 	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
 	listMessages(actor: ActorContext, conversationId: ConversationId): Promise<readonly Message[]>;
