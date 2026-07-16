@@ -5,6 +5,7 @@
 		AgentPreferences,
 		Conversation,
 		NoteId,
+		ProjectId,
 		ShellContext
 	} from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
@@ -18,6 +19,10 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Copy from '@lucide/svelte/icons/copy';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import Square from '@lucide/svelte/icons/square';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import X from '@lucide/svelte/icons/x';
 	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
@@ -30,11 +35,13 @@
 	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
 	import ChatHistoryList from './chat-history-list.svelte';
+	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
 
 	let {
 		shell,
 		sessions,
 		activeNoteId,
+		activeProjectId,
 		agentPreferences,
 		agentModels,
 		agentAvailable
@@ -42,6 +49,7 @@
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
+		activeProjectId?: ProjectId;
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
@@ -50,11 +58,19 @@
 	onMount(() => {
 		chat.initialize(agentPreferences.executionMode);
 		void chat.hydrate();
+		prompt = sessionStorage.getItem(draftKey()) ?? '';
 	});
 
 	let prompt = $state('');
 	let viewport = $state<HTMLElement | null>(null);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
+	const draftKey = (): string => `followthrough.chat.draft.${chat.conversationId ?? 'new'}`;
+
+	function saveDraft(): void {
+		if (typeof sessionStorage === 'undefined') return;
+		if (prompt) sessionStorage.setItem(draftKey(), prompt);
+		else sessionStorage.removeItem(draftKey());
+	}
 
 	// The open note travels along automatically, like Copilot's current file.
 	const autoChip = $derived.by((): ContextChip | undefined => {
@@ -103,18 +119,32 @@
 		const text = prompt.trim();
 		if (!text || chat.isStreaming) return;
 		prompt = '';
+		saveDraft();
 		const selection = editorSelection.current;
 		const request = chat.send({
 			prompt: text,
 			modelOverride: chat.modelOverride,
 			executionModeOverride: chat.executionModeOverride,
 			...(activeNoteId !== undefined ? { noteId: activeNoteId } : {}),
+			...(activeProjectId !== undefined ? { projectId: activeProjectId } : {}),
 			...(autoChip !== undefined ? { contextNoteIds: [autoChip.id] } : {}),
 			...(selection !== undefined ? { selection, noteId: selection.noteId } : {})
 		});
 		await tick();
 		viewport?.scrollTo({ top: viewport.scrollHeight });
 		await request;
+	}
+
+	function editMessage(entry: (typeof chat.entries)[number]): void {
+		prompt = entry.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('\n');
+		saveDraft();
+		textareaRef?.focus();
+	}
+
+	async function copyMessage(entry: (typeof chat.entries)[number]): Promise<void> {
+		const text = entry.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('\n');
+		await navigator.clipboard.writeText(text);
+		toast.success('Copied to clipboard.');
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
@@ -201,7 +231,7 @@
 		<div class="flex flex-col gap-3">
 			{#if chat.entries.length === 0}
 				{#if sessions.length > 0}
-					<ChatHistoryList {sessions} onselect={(id) => void chat.switchToConversation(id)} />
+					<ChatHistoryList {sessions} {shell} onselect={(id) => void chat.switchToConversation(id)} />
 				{:else}
 					<p class="text-sm text-muted-foreground">
 						Ask about your projects, notes and todos. The open note and your selection travel along
@@ -211,7 +241,19 @@
 			{/if}
 			{#each chat.entries as entry (entry.id)}
 				<div class="space-y-1.5">
-					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
+					<div class="flex items-center justify-between gap-2">
+						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
+						<div class="flex items-center gap-1">
+							<Button variant="ghost" size="icon-xs" aria-label="Copy message" onclick={() => void copyMessage(entry)}>
+								<Copy />
+							</Button>
+							{#if entry.role === 'user'}
+								<Button variant="ghost" size="icon-xs" aria-label="Edit question in composer" onclick={() => editMessage(entry)}>
+									<Pencil />
+								</Button>
+							{/if}
+						</div>
+					</div>
 					{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
 						{#if part.kind === 'text'}
 							{#if part.text}
@@ -272,6 +314,20 @@
 							{/if}
 						{/if}
 					{/each}
+					{#if entry.role === 'assistant' && entry.status === 'waiting'}
+						<ChatActivity />
+					{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
+						<ChatActivity label="Agent is working" toolActive={entry.parts.some((part) => part.kind === 'tool')} />
+					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
+						<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
+							<span>{entry.error ?? (entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span>
+							{#if entry.status === 'failed' && entry.retryable && entry.runId}
+								<Button variant="outline" size="xs" onclick={() => void chat.retry(entry)}>
+									<RotateCcw data-icon="inline-start" /> Retry
+								</Button>
+							{/if}
+						</div>
+					{/if}
 					{#each entry.suggestions as view (view.suggestion.id)}
 						<SuggestionCard
 							{view}
@@ -338,16 +394,17 @@
 			rows={2}
 			class="min-h-16 resize-none"
 			onkeydown={handleKeydown}
-			disabled={chat.isStreaming || !agentAvailable}
+			oninput={saveDraft}
+			disabled={!agentAvailable}
 		/>
 		<Button
 			size="icon"
-			aria-label="Send message"
-			onclick={() => void send()}
-			disabled={chat.isStreaming || !agentAvailable || prompt.trim() === ''}
+			aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
+			onclick={() => chat.isStreaming ? chat.stop() : void send()}
+			disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
 		>
 			{#if chat.isStreaming}
-				<LoaderCircle class="size-4 animate-spin" />
+				<Square />
 			{:else}
 				<SendHorizontal class="size-4" />
 			{/if}

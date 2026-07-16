@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type {
 	AgentSettingsController,
 	AttachmentsController,
+	DeliverablesController,
 	DiagramsController,
 	MemoryController,
 	NotesController,
@@ -45,6 +46,7 @@ export interface AgentToolCoverage {
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
 	readonly agentSettings: Coverage<AgentSettingsController>;
 	readonly attachments: Coverage<AttachmentsController>;
+	readonly deliverables: Coverage<DeliverablesController>;
 	readonly memory: Coverage<MemoryController>;
 }
 
@@ -111,6 +113,18 @@ export const agentToolCoverage = {
 		download: { kind: 'excluded', reason: 'Signed URLs are only returned to the user interface.' },
 		read: { kind: 'read' },
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
+	},
+	deliverables: {
+		initiateTemplateUpload: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
+		completeTemplateUpload: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
+		listTemplates: { kind: 'read' },
+		deleteTemplate: { kind: 'excluded', reason: 'Template management is a deliberate user action.' },
+		generateDocument: { kind: 'mutation' },
+		listArtifacts: { kind: 'read' },
+		getArtifact: { kind: 'read' },
+		downloadArtifact: { kind: 'read' },
+		deleteArtifact: { kind: 'mutation' },
+		regenerateArtifact: { kind: 'mutation' }
 	},
 	trustPolicies: { list: { kind: 'read' }, update: { kind: 'mutation' } },
 	memory: {
@@ -602,6 +616,33 @@ export class AgentToolRegistry {
 				'read',
 				none,
 				() => factory.agentSettings().listModels(actor)
+			),
+			define(
+				'export_document',
+				'Generate an artifact document (DOCX or PDF) from one or more project notes. Optionally apply a project template.',
+				'mutation',
+				z.object({
+					projectId: id,
+					noteIds: z.array(id),
+					title: z.string().min(1),
+					format: z.enum(['docx', 'pdf']),
+					templateId: id.optional()
+				}),
+				(input) => factory.deliverables().generateDocument(actor, input as never)
+			),
+			define(
+				'list_artifacts',
+				'List generated document artifacts for a project.',
+				'read',
+				z.object({ projectId: id }),
+				(input) => factory.deliverables().listArtifacts(actor, input.projectId)
+			),
+			define(
+				'list_templates',
+				'List available DOCX templates for a project.',
+				'read',
+				z.object({ projectId: id }),
+				(input) => factory.deliverables().listTemplates(actor, input.projectId)
 			)
 		];
 	}

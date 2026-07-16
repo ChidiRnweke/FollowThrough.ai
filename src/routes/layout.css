@@ -59,6 +59,31 @@
 	--note-title-tracking: -0.035em;
 }
 
+@keyframes chat-thinking-dot {
+	0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+	30% { opacity: 1; transform: translateY(-0.125rem); }
+}
+
+.chat-thinking-dots {
+	display: inline-flex;
+	gap: 0.1875rem;
+}
+
+.chat-thinking-dots > span {
+	width: 0.25rem;
+	height: 0.25rem;
+	border-radius: 9999px;
+	background: currentColor;
+	animation: chat-thinking-dot 1.2s infinite ease-in-out;
+}
+
+.chat-thinking-dots > span:nth-child(2) { animation-delay: 0.15s; }
+.chat-thinking-dots > span:nth-child(3) { animation-delay: 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+	.chat-thinking-dots > span { animation: none; }
+}
+
 .dark {
 	--background: oklch(0.153 0.006 107.1);
 	--foreground: oklch(0.988 0.003 106.5);

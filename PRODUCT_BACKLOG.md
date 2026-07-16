@@ -4,11 +4,6 @@ This backlog captures product capabilities that are not yet complete. Items are 
 high-level and unscoped; each should be explored and turned into its own feature blueprint before
 implementation.
 
-## Memory and context
-
-- [ ] **User profile memory** — Maintain user-level context such as writing style, role, preferences,
-      and existing knowledge across projects.
-
 ## Retrieval
 
 - [ ] **Hybrid retrieval (BM25 + RRF)** — Fuse lexical BM25 ranking with the existing semantic

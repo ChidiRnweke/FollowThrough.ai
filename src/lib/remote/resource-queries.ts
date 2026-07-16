@@ -23,7 +23,12 @@ const toolToDomain: Record<string, (() => void) | undefined> = {
 	update_agent_preferences: invalidateAll,
 	generate_mermaid_diagram: invalidateAll,
 	revise_mermaid_diagram: invalidateAll,
-	promote_diagram: invalidateAll
+	promote_diagram: invalidateAll,
+	initiate_template_upload: invalidateAll,
+	generate_document: invalidateAll,
+	delete_template: invalidateAll,
+	delete_artifact: invalidateAll,
+	regenerate_artifact: invalidateAll
 };
 
 export function refreshStale(resources: readonly string[]): void {
