@@ -7,6 +7,7 @@ import {
 	InMemorySearchRepository
 } from '$lib/testing/fakes/in-memory-search';
 import {
+	memoryEntryBuilder,
 	noteBuilder,
 	testActor,
 	testMemoryEntryId,
@@ -14,6 +15,7 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/fakes/in-memory-memory-repository';
 import { BasicAgent } from './basic-agent';
 import { EnrichedAgentContextBuilder } from './agent-context-capabilities';
 import { EmbeddedKnowledgeSearcher } from '$lib/services';
@@ -60,13 +62,17 @@ const setup = async (skillProject = testProjectId()) => {
 	notes.notes = [noteBuilder()];
 	const skills = new InMemorySkills();
 	skills.skills = [skill(skillProject)];
+	const memoryEntries = new InMemoryMemoryEntryRepository();
 	const builder = new EnrichedAgentContextBuilder(
 		new BasicAgent(undefined, undefined, notes),
 		new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
 		skills,
-		notes
+		notes,
+		undefined,
+		undefined,
+		{ list: (actor, filter) => memoryEntries.list(actor, filter) }
 	);
-	return { builder, skills, notes };
+	return { builder, skills, notes, memoryEntries };
 };
 
 describe('Agent grounding invariants', () => {
@@ -80,6 +86,45 @@ describe('Agent grounding invariants', () => {
 		expect((context.knowledge as { noteId: string }[]).map((item) => item.noteId)).toEqual([
 			testNoteId(2)
 		]);
+	});
+
+	it('always injects shared profile memory', async () => {
+		const { builder, memoryEntries } = await setup();
+		memoryEntries.entries = [
+			memoryEntryBuilder({ projectId: undefined, content: 'I lead the platform team.' })
+		];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect((context.userProfile as { content: string }[]).map((item) => item.content)).toEqual([
+			'I lead the platform team.'
+		]);
+	});
+
+	it('withholds unshared profile memory from the agent', async () => {
+		const { builder, memoryEntries } = await setup();
+		memoryEntries.entries = [
+			memoryEntryBuilder({ projectId: undefined, shareWithAgents: false, content: 'Private.' })
+		];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.userProfile).toEqual([]);
+	});
+
+	it('keeps project memory entries out of the user profile', async () => {
+		const { builder, memoryEntries } = await setup();
+		memoryEntries.entries = [memoryEntryBuilder({ content: 'A project fact.' })];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.userProfile).toEqual([]);
 	});
 
 	it('separates memory matches from note knowledge', async () => {

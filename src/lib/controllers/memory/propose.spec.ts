@@ -120,6 +120,42 @@ describe('Memory proposal orchestration invariants', () => {
 		expect(result.suggestion.appliedArtifactId).toBe(result.appliedEntry?.id);
 	});
 
+	it('keeps a user-scoped proposal free of any project', async () => {
+		const { controller } = setup();
+		const result = await controller.propose(
+			testActor(),
+			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
+		);
+		expect(
+			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
+		).toBeUndefined();
+	});
+
+	it('creates a profile entry when a trusted user-scoped proposal is applied', async () => {
+		const { entries, trust, controller } = setup();
+		trust.autoAccept = true;
+		await controller.propose(
+			testActor(),
+			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
+		);
+		expect(entries.entries[0]?.projectId).toBeUndefined();
+	});
+
+	it('drops the project from a user-scoped proposal that carries one', async () => {
+		const { controller } = setup();
+		const result = await controller.propose(testActor(), addInput({ scope: 'user' }));
+		expect(
+			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
+		).toBeUndefined();
+	});
+
+	it('rejects a project-scoped proposal without a project', async () => {
+		const { controller } = setup();
+		await expect(
+			controller.propose(testActor(), addInput({ projectId: undefined }))
+		).rejects.toBeInstanceOf(ValidationError);
+	});
+
 	it('rejects an update proposal without a target entry', async () => {
 		const { controller } = setup();
 		await expect(

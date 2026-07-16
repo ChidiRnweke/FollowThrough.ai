@@ -466,6 +466,48 @@ describe('Postgres memory-entry repository invariants', () => {
 		expect(await repository.findById(owner, entry.id)).toEqual(entry);
 	});
 
+	it('round-trips a user-profile entry without a project', async () => {
+		const owner = actor('69');
+		const repository = new PostgresMemoryEntryRepository(context.db);
+		const entry = await repository.insert(owner, {
+			id: '80000000-0000-4000-8000-000000000069' as MemoryEntryId,
+			userId: owner.userId,
+			content: 'I lead the platform team.',
+			shareWithAgents: true,
+			createdAt: now,
+			updatedAt: now
+		});
+		expect((await repository.findById(owner, entry.id))?.projectId).toBeUndefined();
+	});
+
+	it('scopes the user-profile list to entries without a project', async () => {
+		const { owner, repository } = await seedEntry('70');
+		const profile = await repository.insert(owner, {
+			id: '80000000-0000-4000-8000-000000000071' as MemoryEntryId,
+			userId: owner.userId,
+			content: 'I prefer concise answers.',
+			shareWithAgents: true,
+			createdAt: now,
+			updatedAt: now
+		});
+		expect((await repository.list(owner, {})).map((item) => item.id)).toEqual([profile.id]);
+	});
+
+	it('keeps profile entries out of a project list', async () => {
+		const { owner, project, repository, entry } = await seedEntry('72');
+		await repository.insert(owner, {
+			id: '80000000-0000-4000-8000-000000000073' as MemoryEntryId,
+			userId: owner.userId,
+			content: 'I prefer concise answers.',
+			shareWithAgents: true,
+			createdAt: now,
+			updatedAt: now
+		});
+		expect((await repository.list(owner, { projectId: project.id })).map((item) => item.id)).toEqual(
+			[entry.id]
+		);
+	});
+
 	it('does not reveal an entry to another actor', async () => {
 		const { repository, entry } = await seedEntry('61');
 		expect(await repository.findById(actor('62'), entry.id)).toBeUndefined();

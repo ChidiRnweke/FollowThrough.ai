@@ -21,6 +21,8 @@ export type AttachmentVersionId = Brand<string, 'AttachmentVersionId'>;
 export type AttachmentUploadId = Brand<string, 'AttachmentUploadId'>;
 export type AgentSessionItemId = Brand<string, 'AgentSessionItemId'>;
 export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
+export type ArtifactId = Brand<string, 'ArtifactId'>;
+export type TemplateId = Brand<string, 'TemplateId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 export type LocalDate = Brand<string, 'LocalDate'>;

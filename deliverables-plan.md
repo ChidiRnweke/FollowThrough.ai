@@ -258,21 +258,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - Follow the exact wiring pattern already used for `attachments` in `production-factory.ts`.
       **Verify:** `pnpm typecheck` passes.
 
-- [ ] **Step 15: Create API routes for deliverables**
-      **Files:** `src/routes/api/deliverables/+server.ts` (create)
-      **What:** Create API route following the multi-op POST pattern from `src/routes/api/attachments/+server.ts`:
-      - `POST` with no `op` → generate document (`controller.generateDocument`)
-      - `POST` with `op: 'initiate-template-upload'` → initiate template upload
-      - `POST` with `op: 'complete-template-upload'` → complete template upload
-      - `POST` with `op: 'download-artifact'` → get download URL
-      - `POST` with `op: 'regenerate-artifact'` → regenerate
-      - `GET` → list artifacts (query param: `projectId`)
-      - `DELETE` with `templateId` query → delete template
-      - `DELETE` with `artifactId` query → delete artifact
-      - All handlers use `AppFactory.controllerFactory().deliverables()` and `AppFactory.actor()`.
-      **Verify:** `pnpm typecheck` passes.
-
-- [ ] **Step 16: Create remote functions for client-side access**
+- [ ] **Step 15: Create remote functions for client-side access**
       **Files:** `src/lib/remote/deliverables.remote.ts` (create)
       **What:** Create remote functions following the pattern from `src/lib/remote/projects.remote.ts`:
       - `initiateTemplateUpload = command(z.object({ projectId: z.string().uuid(), name: z.string().min(1), mediaType: z.string(), byteSize: z.number(), checksumSha256: z.string() }), ...)`
@@ -287,7 +273,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - Update `src/lib/remote/resource-queries.ts`: add entries to `toolToDomain` mapping for `initiate_template_upload`, `generate_document`, `delete_template`, `delete_artifact`, `regenerate_artifact` → `invalidateAll`.
       **Verify:** `pnpm typecheck` passes.
 
-- [ ] **Step 17: Add agent export tools to the tool registry**
+- [ ] **Step 16: Add agent export tools to the tool registry**
       **Files:** `src/lib/server/domain/agent-tool-registry.ts` (modify)
       **What:** Read the current agent tool registry to understand its structure. Add two new agent tools:
       - `export_document`: Takes `projectId`, `noteIds` (array), `title`, `format` (`'docx' | 'pdf'`), `templateId` (optional). Calls `AppFactory.controllerFactory().deliverables().generateDocument()`. Returns `{ artifactId, downloadUrl }`.
@@ -296,7 +282,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - Follow the exact same pattern as existing tools in the registry. Each tool should have a `name`, `description`, `parameters` (Zod schema), and `execute` function.
       **Verify:** `pnpm typecheck` passes.
 
-- [ ] **Step 18: Create the artifacts workspace page**
+- [ ] **Step 17: Create the artifacts workspace page**
       **Files:** `src/routes/(app)/artifacts/+page.server.ts` (create), `src/routes/(app)/artifacts/+page.svelte` (create)
       **What:**
       - `+page.server.ts`: Server load function. Get the active project from the shell context (follow `src/routes/(app)/todos/+page.server.ts` pattern). Load artifacts list and templates list.
@@ -308,7 +294,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
         - Follow the design patterns from `DESIGN_SYSTEM.md` and existing page components.
       **Verify:** `pnpm typecheck` passes. Run dev server and navigate to `/artifacts` — page renders without errors.
 
-- [ ] **Step 19: Add artifacts to sidebar navigation**
+- [ ] **Step 18: Add artifacts to sidebar navigation**
       **Files:** `src/lib/components/app/app-sidebar.svelte` (modify)
       **What:** Add a new item to the `secondaryItems` array:
       ```ts
@@ -317,7 +303,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       Import `PackageOpen` from `@lucide/svelte/icons/package-open` (or use a different relevant icon like `FileOutput`, `FileArchive`, or `FolderOutput`).
       **Verify:** `pnpm typecheck` passes. Dev server shows Artifacts in the sidebar.
 
-- [ ] **Step 20: Add export UI to the note editor**
+- [ ] **Step 19: Add export UI to the note editor**
       **Files:** `src/lib/components/edra/Export.svelte` (modify), or create `src/lib/components/app/export-dialog.svelte` (create)
       **What:** Add a new export dialog component. When triggered:
       - Open a dialog with: title input (pre-filled with note title), format selector (DOCX/PDF radio buttons), template selector (dropdown listing available templates for the project, with "No template" option), a generate button.
@@ -326,12 +312,12 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - The dialog should be a reusable component that can be invoked from multiple entry points.
       **Verify:** `pnpm typecheck` passes. Manual test: open a note, click Export, generate a DOCX — download link appears.
 
-- [ ] **Step 21: Add export UI to the project overview page**
+- [ ] **Step 20: Add export UI to the project overview page**
       **Files:** `src/routes/(app)/projects/[id]/+page.svelte` (modify)
       **What:** Add an "Export" button to the project page header. Clicking opens the same export dialog component, but with multi-note selection support (checkboxes in the note tree or a multi-select UI).
       **Verify:** `pnpm typecheck` passes. Manual test: navigate to a project, export multiple notes as PDF.
 
-- [ ] **Step 22: Add export tool call rendering in agent chat**
+- [ ] **Step 21: Add export tool call rendering in agent chat**
       **Files:** `src/lib/components/app/agent/` (find relevant files for rendering tool results in chat)
       **What:** When an agent calls the `export_document` tool, render a rich card in the chat showing:
       - Document title, format icon (DOCX or PDF)
@@ -340,7 +326,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - Follow the existing pattern for how agent tool results are rendered in chat.
       **Verify:** `pnpm typecheck` passes.
 
-- [ ] **Step 23: Create an S3 storage helper for artifacts and templates**
+- [ ] **Step 22: Create an S3 storage helper for artifacts and templates**
       **Files:** `src/lib/server/domain/` (modify or create new utility)
       **What:** Ensure the existing `StorageService` (from the attachment system) supports the new S3 paths:
       - Template staging: `staging/${userId}/templates/${templateId}`
@@ -350,7 +336,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - If the existing `StorageService` is tightly coupled to attachments, create a parallel `ArtifactStorageService` interface and S3 implementation following the same pattern but with artifact/template key structures.
       **Verify:** `pnpm typecheck` passes.
 
-- [ ] **Step 24: Integration test — generate a DOCX end-to-end**
+- [ ] **Step 23: Integration test — generate a DOCX end-to-end**
       **Files:** `tests/deliverables.integration.test.ts` (create)
       **What:** Using Vitest + testcontainers (follow existing test patterns), write an integration test:
       - Setup: create a project, create a note with ProseMirror content (paragraph + heading), upload a minimal DOCX template, extract styles
@@ -359,7 +345,7 @@ The note content is stored as ProseMirror JSON in `notes.document`. The conversi
       - Clean up: delete the S3 objects
       **Verify:** `pnpm t -- --run tests/deliverables.integration.test.ts` passes.
 
-- [ ] **Step 25: Run full typecheck and lint**
+- [ ] **Step 24: Run full typecheck and lint**
       **What:** Run `pnpm typecheck && pnpm lint` to ensure no regressions.
       **Verify:** Both commands exit clean with zero errors.
 

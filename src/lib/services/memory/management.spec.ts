@@ -148,6 +148,49 @@ describe('Memory entry management invariants', () => {
 	});
 });
 
+describe('User profile memory invariants', () => {
+	it('creates a profile entry without any project', async () => {
+		const { service } = await setup();
+		const entry = await service.create(testActor(), { content: 'I lead the platform team.' });
+		expect(entry.projectId).toBeUndefined();
+	});
+
+	it('keeps profile entries out of the retrieval index', async () => {
+		const { search, service } = await setup();
+		await service.create(testActor(), { content: 'I lead the platform team.' });
+		expect(search.documents).toEqual([]);
+	});
+
+	it('lists profile entries without project entries', async () => {
+		const { service } = await setup();
+		await service.create(testActor(), { projectId: testProjectId(), content: 'Project fact' });
+		const profile = await service.create(testActor(), { content: 'I prefer short answers.' });
+		expect((await service.list(testActor(), {})).map((item) => item.id)).toEqual([profile.id]);
+	});
+
+	it('lists project entries without profile entries', async () => {
+		const { service } = await setup();
+		const project = await service.create(testActor(), {
+			projectId: testProjectId(),
+			content: 'Project fact'
+		});
+		await service.create(testActor(), { content: 'I prefer short answers.' });
+		expect(
+			(await service.list(testActor(), { projectId: testProjectId() })).map((item) => item.id)
+		).toEqual([project.id]);
+	});
+
+	it('applies a user-scoped add as a profile entry', async () => {
+		const { service } = await setup();
+		const entry = await service.apply(
+			testActor(),
+			{ operation: 'add', content: 'I am the founder.' },
+			testProvenanceId()
+		);
+		expect(entry.projectId).toBeUndefined();
+	});
+});
+
 describe('Memory change application invariants', () => {
 	it('rejects an apply with unknown provenance', async () => {
 		const { service } = await setup();

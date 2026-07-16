@@ -1,6 +1,7 @@
 import type {
 	AgentRunId,
 	AgentSessionItemId,
+	ArtifactId,
 	AttachmentId,
 	AttachmentUploadId,
 	AttachmentVersionId,
@@ -30,6 +31,7 @@ import type {
 	SourceAnchorId,
 	SuggestionId,
 	SuggestionStatus,
+	TemplateId,
 	TodoId,
 	TodoResponsibility,
 	TodoStatus,
@@ -485,4 +487,61 @@ export interface CreateReferenceInput {
 	readonly relevanceNote: string;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
+}
+
+export interface ProjectTemplate {
+	readonly id: TemplateId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly name: string;
+	readonly objectKey: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly extractedStyles?: Record<string, unknown>;
+	readonly isDefault: boolean;
+	readonly createdAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface ExtractedTemplateStyles {
+	readonly fonts: {
+		readonly heading: Record<string, { name: string; size: number; bold: boolean; italic: boolean; color?: string }>;
+		readonly body: { name: string; size: number; color?: string };
+	};
+	readonly pageMargins: { top: number; bottom: number; left: number; right: number };
+	readonly headerImages?: string[];
+	readonly footerContent?: string;
+	readonly themeColors: Record<string, string>;
+}
+
+export interface Artifact {
+	readonly id: ArtifactId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly format: 'docx' | 'pdf';
+	readonly objectKey: string;
+	readonly byteSize: number;
+	readonly sourceNoteIds: NoteId[];
+	readonly templateId?: TemplateId;
+	readonly provenanceId?: ProvenanceId;
+	readonly runId?: AgentRunId;
+	readonly createdAt: DateTime;
+}
+
+export interface ArtifactView {
+	readonly id: ArtifactId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly format: 'docx' | 'pdf';
+	readonly objectKey: string;
+	readonly byteSize: number;
+	readonly sourceNoteIds: NoteId[];
+	readonly templateId?: TemplateId;
+	readonly provenanceId?: ProvenanceId;
+	readonly runId?: AgentRunId;
+	readonly createdAt: DateTime;
+	readonly projectName: string;
+	readonly templateName?: string;
 }

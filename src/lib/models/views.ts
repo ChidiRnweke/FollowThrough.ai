@@ -1,15 +1,19 @@
 import type {
+	ArtifactId,
 	Confidence,
 	LocalDate,
 	NoteId,
 	PipelineKind,
 	ProjectId,
 	SuggestionStatus,
+	TemplateId,
 	TodoId,
 	TodoResponsibility,
 	TodoStatus
 } from './shared';
 import type {
+	Artifact,
+	ArtifactView,
 	Diagram,
 	ExternalReference,
 	Note,
@@ -253,4 +257,44 @@ export interface UpdateTrustPolicyInput {
 
 export interface UpdateTrustPolicyOutput {
 	readonly policy: TrustPolicy;
+}
+
+export interface ListArtifactsOutput {
+	readonly artifacts: readonly ArtifactView[];
+}
+
+export interface GenerateDocumentInput {
+	readonly projectId: ProjectId;
+	readonly noteIds: NoteId[];
+	readonly title: string;
+	readonly format: 'docx' | 'pdf';
+	readonly templateId?: TemplateId;
+}
+
+export interface GenerateDocumentOutput {
+	readonly artifact: Artifact;
+	readonly downloadUrl: string;
+}
+
+export interface InitiateTemplateUploadInput {
+	readonly projectId: ProjectId;
+	readonly name: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+}
+
+export interface InitiateTemplateUploadOutput {
+	readonly templateId: TemplateId;
+	readonly uploadUrl: string;
+	readonly requiredHeaders: Record<string, string>;
+}
+
+export interface GetArtifactDownloadOutput {
+	readonly url: string;
+}
+
+export interface RegenerateArtifactOutput {
+	readonly artifact: Artifact;
+	readonly downloadUrl: string;
 }
