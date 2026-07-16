@@ -690,9 +690,61 @@ export const searchChunks = pgTable(
 	]
 );
 
+export const projectTemplates = pgTable(
+	'project_templates',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		objectKey: text('object_key').notNull(),
+		mediaType: text('media_type').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		extractedStyles: jsonb('extracted_styles').$type<JsonObject>().notNull().default({}),
+		isDefault: boolean('is_default').notNull().default(false),
+		...timestamps
+	},
+	(table) => [
+		uniqueIndex('project_templates_project_name_unique').on(table.projectId, table.name),
+		index('project_templates_project_idx').on(table.projectId)
+	]
+);
+
+export const artifacts = pgTable(
+	'artifacts',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		format: text('format').notNull(),
+		objectKey: text('object_key').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		sourceNoteIds: jsonb('source_note_ids').$type<string[]>().notNull(),
+		templateId: uuid('template_id').references(() => projectTemplates.id, { onDelete: 'set null' }),
+		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
+		runId: text('run_id'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('artifacts_project_created_idx').on(table.projectId, table.createdAt),
+		index('artifacts_user_idx').on(table.userId)
+	]
+);
+
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type NoteRevision = typeof noteRevisions.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Suggestion = typeof suggestions.$inferSelect;
+export type Artifact = typeof artifacts.$inferSelect;
+export type ProjectTemplate = typeof projectTemplates.$inferSelect;

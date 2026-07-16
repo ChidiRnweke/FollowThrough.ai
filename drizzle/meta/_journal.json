@@ -92,6 +92,13 @@
       "when": 1784239716723,
       "tag": "0012_parallel_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784240478508,
+      "tag": "0013_whole_loners",
+      "breakpoints": true
     }
   ]
 }

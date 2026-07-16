@@ -467,10 +467,9 @@ describe('Postgres memory-entry repository invariants', () => {
 	});
 
 	it('round-trips a user-profile entry without a project', async () => {
-		const owner = actor('69');
-		const repository = new PostgresMemoryEntryRepository(context.db);
+		const { owner, repository } = await seedEntry('69');
 		const entry = await repository.insert(owner, {
-			id: '80000000-0000-4000-8000-000000000069' as MemoryEntryId,
+			id: '80000000-0000-4000-8000-000000000169' as MemoryEntryId,
 			userId: owner.userId,
 			content: 'I lead the platform team.',
 			shareWithAgents: true,
