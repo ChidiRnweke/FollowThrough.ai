@@ -12,6 +12,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Settings from '@lucide/svelte/icons/settings';
 	import SunMoon from '@lucide/svelte/icons/sun-moon';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/palette.svelte';
@@ -36,6 +37,7 @@
 			icon: Inbox,
 			badge: shell.pendingSuggestionCount
 		},
+		{ href: '/profile', label: 'Profile', icon: UserRound, badge: 0 },
 		{ href: '/settings', label: 'Settings', icon: Settings, badge: 0 }
 	]);
 

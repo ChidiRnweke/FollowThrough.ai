@@ -1,12 +1,14 @@
 import type {
 	ActorContext,
 	AgentEvent,
+	AgentRunId,
 	Conversation,
 	ConversationId,
 	DecideAgentRunInput,
 	Message,
 	RunAgentInput
 } from '$lib/models';
+import { ValidationError } from '$lib/models';
 import type {
 	AgentContextBuilder,
 	AgentRunner,
@@ -20,7 +22,12 @@ import { resolveAgentExecutionMode, resolveAgentModel } from '$lib/services';
 
 export interface AgentController {
 	run(actor: ActorContext, input: RunAgentInput, signal?: AbortSignal): AsyncIterable<AgentEvent>;
-	listSessions(actor: ActorContext): Promise<readonly Conversation[]>;
+	listSessions(
+		actor: ActorContext,
+		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
+	): Promise<readonly Conversation[]>;
+	renameSession(actor: ActorContext, conversationId: ConversationId, title: string): Promise<Conversation>;
+	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
 	getSession(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -30,6 +37,7 @@ export interface AgentController {
 		input: DecideAgentRunInput,
 		signal?: AbortSignal
 	): AsyncIterable<AgentEvent>;
+	retry(actor: ActorContext, runId: AgentRunId, signal?: AbortSignal): AsyncIterable<AgentEvent>;
 }
 
 export interface AgentDependencies {
@@ -46,8 +54,23 @@ export interface AgentDependencies {
 export class DefaultAgentController implements AgentController {
 	constructor(private readonly dependencies: AgentDependencies) {}
 
-	listSessions(actor: ActorContext): Promise<readonly Conversation[]> {
-		return this.dependencies.conversationJournal.listConversations(actor);
+	listSessions(
+		actor: ActorContext,
+		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
+	): Promise<readonly Conversation[]> {
+		return this.dependencies.conversationJournal.listConversations(actor, options);
+	}
+
+	renameSession(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		title: string
+	): Promise<Conversation> {
+		return this.dependencies.conversationJournal.rename(actor, conversationId, title);
+	}
+
+	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+		return this.dependencies.conversationJournal.remove(actor, conversationId);
 	}
 
 	async getSession(actor: ActorContext, conversationId: ConversationId) {
@@ -55,12 +78,48 @@ export class DefaultAgentController implements AgentController {
 			this.dependencies.conversationJournal.get(actor, conversationId),
 			this.dependencies.conversationJournal.listMessages(actor, conversationId)
 		]);
-		return { conversation, messages };
+		const latestRun = await this.dependencies.runStore
+			.getLatestForConversation(actor, conversationId)
+			.catch(() => undefined);
+		return {
+			conversation,
+			messages,
+			...(latestRun
+				? {
+						latestRun: {
+							id: latestRun.id,
+							status: latestRun.status,
+							failure: latestRun.failure
+						}
+					}
+				: {})
+		};
 	}
 
 	async *run(
 		actor: ActorContext,
 		input: RunAgentInput,
+		signal?: AbortSignal
+	): AsyncIterable<AgentEvent> {
+		yield* this.executeRun(actor, input, true, signal);
+	}
+
+	async *retry(
+		actor: ActorContext,
+		runId: AgentRunId,
+		signal?: AbortSignal
+	): AsyncIterable<AgentEvent> {
+		const run = await this.dependencies.runStore.get(actor, runId);
+		if (run.status !== 'failed') throw new ValidationError('Only failed runs can be retried');
+		const input = run.inputSnapshot as RunAgentInput | undefined;
+		if (!input?.prompt) throw new ValidationError('The original request is unavailable');
+		yield* this.executeRun(actor, { ...input, conversationId: run.conversationId }, false, signal);
+	}
+
+	private async *executeRun(
+		actor: ActorContext,
+		input: RunAgentInput,
+		recordPrompt: boolean,
 		signal?: AbortSignal
 	): AsyncIterable<AgentEvent> {
 		if (input.modelOverride) await this.dependencies.models.assertSelectable(input.modelOverride);
@@ -69,11 +128,12 @@ export class DefaultAgentController implements AgentController {
 		const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
 		const executionMode = resolveAgentExecutionMode(conversation, preferences);
 		const effectiveInput = { ...input, conversationId: conversation.id };
-		await this.dependencies.conversationJournal.recordUserPrompt(
-			actor,
-			conversation.id,
-			input.prompt
-		);
+		if (recordPrompt)
+			await this.dependencies.conversationJournal.recordUserPrompt(
+				actor,
+				conversation.id,
+				input.prompt
+			);
 		const provenance = await this.dependencies.provenanceRecorder.record(actor, {
 			producerKind: 'agent',
 			producerName: 'Workbench Agent',

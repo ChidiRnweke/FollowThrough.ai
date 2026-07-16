@@ -12,3 +12,4 @@ export * from './memory/controller';
 export * from './projects/controller';
 export * from './agent-settings/controller';
 export * from './attachments/controller';
+export * from './deliverables/controller';

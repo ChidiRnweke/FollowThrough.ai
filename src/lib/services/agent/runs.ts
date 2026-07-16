@@ -25,6 +25,7 @@ export interface AgentRunStore {
 		}
 	): Promise<AgentRun>;
 	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
+	getLatestForConversation(actor: ActorContext, conversationId: ConversationId): Promise<AgentRun>;
 	updateContext(
 		actor: ActorContext,
 		runId: AgentRunId,
@@ -75,6 +76,15 @@ export class PersistentAgentRunStore implements AgentRunStore {
 
 	async get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
 		const run = await this.repository.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		return run;
+	}
+
+	async getLatestForConversation(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<AgentRun> {
+		const run = await this.repository.findLatestByConversation(actor, conversationId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}

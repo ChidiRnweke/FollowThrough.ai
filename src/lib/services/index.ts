@@ -37,3 +37,7 @@ export * from './retrieval/indexing';
 export * from './retrieval/semantic';
 export * from './attachments/contracts';
 export * from './attachments/management';
+export * from './templates/contracts';
+export * from './templates/management';
+export * from './artifacts/contracts';
+export * from './artifacts/management';

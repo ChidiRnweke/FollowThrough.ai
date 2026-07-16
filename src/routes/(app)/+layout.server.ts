@@ -7,7 +7,7 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 	const [shell, agentPreferences, sessions] = await Promise.all([
 		factory.workspace().getShellContext(actor),
 		factory.agentSettings().getPreferences(actor),
-		factory.agent().listSessions(actor)
+		factory.agent().listSessions(actor, { limit: 5 })
 	]);
 	let agentModels = await factory
 		.agentSettings()

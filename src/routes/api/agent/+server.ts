@@ -6,6 +6,7 @@ import type { RequestHandler } from './$types';
 
 const id = z.string().uuid();
 const inputSchema = z.object({
+	requestId: id.optional(),
 	conversationId: id.optional(),
 	projectId: id.optional(),
 	noteId: id.optional(),

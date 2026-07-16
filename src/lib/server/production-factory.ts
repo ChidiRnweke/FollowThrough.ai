@@ -61,6 +61,12 @@ import { PostgresReferenceRepository } from './repositories/postgres-references'
 import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
 import { PostgresSkillRepository } from './repositories/postgres-skills';
 import { PostgresAttachmentRepository } from './repositories/postgres-attachments';
+import { PostgresTemplateRepository } from './repositories/postgres-templates';
+import { PostgresArtifactRepository } from './repositories/postgres-artifacts';
+import { TemplateManagementService } from '$lib/services/templates/management';
+import { ArtifactManagementService } from '$lib/services/artifacts/management';
+import { generateDocx } from './domain/docx-generator';
+import { generatePdf } from './domain/pdf-generator';
 import {
 	PostgresAgentPreferencesRepository,
 	PostgresAgentRunRepository,
@@ -107,6 +113,23 @@ export function createProductionFactory(): ProductionControllerFactory {
 		noteRepository,
 		attachmentStorage,
 		new AttachmentParserRegistry()
+	);
+	const templateRepository = new PostgresTemplateRepository(db);
+	const artifactRepository = new PostgresArtifactRepository(db);
+	const templates = new TemplateManagementService(
+		attachmentStorage,
+		templateRepository,
+		postgresTransactionRunner
+	);
+	const artifacts = new ArtifactManagementService(
+		artifactRepository,
+		attachmentStorage,
+		generateDocx,
+		generatePdf,
+		provenance,
+		notes,
+		templateRepository,
+		postgresTransactionRunner
 	);
 	const recommendedModels = new Set(
 		(process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
@@ -302,6 +325,17 @@ export function createProductionFactory(): ProductionControllerFactory {
 		},
 		agentSettings: { preferences, models: modelCatalog },
 		attachments: { attachments, transactionRunner: postgresTransactionRunner },
+		deliverables: {
+			templateUploader: templates,
+			templateLister: templates,
+			templateDeleter: templates,
+			documentGenerator: artifacts,
+			artifactLister: artifacts,
+			artifactReader: artifacts,
+			artifactDeleter: artifacts,
+			artifactRegenerator: artifacts,
+			transactionRunner: postgresTransactionRunner
+		},
 		skills: {
 			skillFinder: provisionedSkills,
 			skillUsageLister: skills,

@@ -1,6 +1,7 @@
 import type {
 	AgentEvent,
 	AgentExecutionMode,
+	AgentRunId,
 	ConversationId,
 	NoteId,
 	RunAgentInput,
@@ -45,6 +46,10 @@ export interface ChatEntry {
 	/** Text segments and tool calls in stream arrival order, so tools render inline. */
 	parts: ChatPart[];
 	suggestions: SuggestionView[];
+	status?: 'waiting' | 'streaming' | 'completed' | 'failed' | 'cancelled';
+	runId?: AgentRunId;
+	error?: string;
+	retryable?: boolean;
 }
 
 const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
@@ -77,6 +82,7 @@ class ChatStore {
 	// The auto chip for the open note reappears when a different note opens.
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
+	private abortController?: AbortController;
 
 	initialize(defaultMode: AgentExecutionMode): void {
 		if (this.initialized) return;
@@ -122,11 +128,24 @@ class ChatStore {
 					id: message.id,
 					role: message.role,
 					parts: [...toolParts, ...(text ? [{ kind: 'text' as const, text }] : [])],
-					suggestions: []
+					suggestions: [],
+					status: 'completed'
 				});
 				if (message.role === 'assistant') pendingTools = [];
 			}
 			this.entries = entries;
+			const latestRun = data.latestRun;
+			const lastReply = this.entries.findLast((entry) => entry.role === 'assistant');
+			if (latestRun && lastReply && latestRun.status === 'failed') {
+				lastReply.status = 'failed';
+				lastReply.runId = latestRun.id;
+				lastReply.error = latestRun.failure ?? 'The agent run failed.';
+				lastReply.retryable = true;
+			} else if (latestRun && lastReply && latestRun.status === 'cancelled') {
+				lastReply.status = 'cancelled';
+				lastReply.runId = latestRun.id;
+				lastReply.error = 'Generation stopped';
+			}
 			this.hydratedConversationId = conversationId;
 		} catch {
 			// A stale session ID should not prevent starting a new conversation.
@@ -161,6 +180,7 @@ class ChatStore {
 		const skillChips = this.chips.filter((chip) => chip.kind === 'skill').map((chip) => chip.name);
 		input = {
 			...input,
+			requestId: crypto.randomUUID(),
 			modelOverride: this.modelOverride,
 			executionModeOverride: this.executionModeOverride,
 			contextNoteIds: [...new Set([...(input.contextNoteIds ?? []), ...noteChips])],
@@ -170,34 +190,81 @@ class ChatStore {
 			id: crypto.randomUUID(),
 			role: 'user',
 			parts: [{ kind: 'text', text: input.prompt }],
-			suggestions: []
+			suggestions: [],
+			status: 'completed'
 		});
 		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'assistant',
 			parts: [],
-			suggestions: []
+			suggestions: [],
+			status: 'waiting'
 		});
 		// re-read through the $state proxy so streamed mutations stay reactive
 		const reply = this.entries[this.entries.length - 1]!;
 		this.isStreaming = true;
+		this.abortController = new AbortController();
 		try {
 			const response = await fetch('/api/agent', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ ...input, conversationId: this.conversationId })
+				body: JSON.stringify({ ...input, conversationId: this.conversationId }),
+				signal: this.abortController.signal
 			});
 			if (!response.ok || !response.body) {
-				appendText(reply, 'The agent is unavailable. Try again.');
+				reply.status = 'failed';
+				reply.error = 'The agent is unavailable. Try again.';
+				reply.retryable = Boolean(reply.runId);
 				return;
 			}
 			for await (const event of readNdjson(response.body)) {
 				this.apply(reply, event);
 			}
-		} catch {
-			if (!hasText(reply)) appendText(reply, 'The agent run failed. Try again.');
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') {
+				reply.status = 'cancelled';
+				reply.error = 'Generation stopped';
+			} else {
+				reply.status = 'failed';
+				reply.error = 'The connection to the agent was lost.';
+				reply.retryable = Boolean(reply.runId);
+			}
 		} finally {
 			this.isStreaming = false;
+			this.abortController = undefined;
+		}
+	}
+
+	stop(): void {
+		this.abortController?.abort();
+	}
+
+	async retry(reply: ChatEntry): Promise<void> {
+		if (this.isStreaming || !reply.runId) return;
+		reply.status = 'waiting';
+		reply.error = undefined;
+		reply.retryable = false;
+		this.isStreaming = true;
+		this.abortController = new AbortController();
+		try {
+			const response = await fetch(`/api/agent/runs/${reply.runId}/retry`, {
+				method: 'POST',
+				signal: this.abortController.signal
+			});
+			if (!response.ok || !response.body) {
+				reply.status = 'failed';
+				reply.error = 'The retry could not be started.';
+				reply.retryable = true;
+				return;
+			}
+			for await (const event of readNdjson(response.body)) this.apply(reply, event);
+		} catch (error) {
+			reply.status = error instanceof DOMException && error.name === 'AbortError' ? 'cancelled' : 'failed';
+			reply.error = reply.status === 'cancelled' ? 'Generation stopped' : 'The retry failed.';
+			reply.retryable = reply.status === 'failed';
+		} finally {
+			this.isStreaming = false;
+			this.abortController = undefined;
 		}
 	}
 
@@ -230,14 +297,21 @@ class ChatStore {
 	}
 
 	private apply(reply: ChatEntry, event: AgentEvent): void {
-		if (event.type === 'text_delta') appendText(reply, event.text);
+		if (event.type === 'run_started') reply.runId = event.runId;
+		else if (event.type === 'text_delta') {
+			reply.status = 'streaming';
+			appendText(reply, event.text);
+		}
 		else if (event.type === 'tool_started')
+			{
+				reply.status = 'streaming';
 			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
 				status: 'running'
 			});
+			}
 		else if (event.type === 'tool_completed') {
 			applyToolActivity(reply, {
 				callId: event.callId,
@@ -258,12 +332,23 @@ class ChatStore {
 		} else if (event.type === 'suggestion')
 			reply.suggestions.push(suggestionToView(event.suggestion, 'agent'));
 		else if (event.type === 'failed') {
-			if (!hasText(reply)) appendText(reply, event.message);
-		} else if (event.type === 'completed') this.conversationId = event.conversationId;
+			reply.status = 'failed';
+			reply.runId = event.runId ?? reply.runId;
+			reply.error = event.message;
+			reply.retryable = event.retryable;
+		} else if (event.type === 'cancelled') {
+			reply.status = 'cancelled';
+			reply.runId = event.runId;
+			reply.error = event.message;
+		} else if (event.type === 'completed') {
+			reply.status = 'completed';
+			this.conversationId = event.conversationId;
+		}
 		else if (event.type === 'resources_stale') refreshStale(event.resources);
 	}
 
 	clear(): void {
+		this.stop();
 		this.entries = [];
 		this.conversationId = undefined;
 		this.modelOverride = null;
