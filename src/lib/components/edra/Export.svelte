@@ -2,7 +2,10 @@
 	import { buttonVariants } from '$lib/components/ui/button/button.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { getEditor } from './commands/index.js';
-	import { ChevronDown, Download } from '@lucide/svelte';
+	import { ChevronDown, Download, FileText, FileOutput } from '@lucide/svelte';
+
+	let { onExportDocx, onExportPdf }: { onExportDocx?: () => void; onExportPdf?: () => void } = $props();
+
 	const editor = getEditor();
 	const handleExport = (as: 'markdown' | 'html' | 'json') => {
 		let text = '';
@@ -66,6 +69,20 @@
 			<DropdownMenu.Item onclick={() => handleExport('markdown')}>Markdown</DropdownMenu.Item>
 			<DropdownMenu.Item onclick={() => handleExport('html')}>HTML</DropdownMenu.Item>
 			<DropdownMenu.Item onclick={() => handleExport('json')}>JSON</DropdownMenu.Item>
+			{#if onExportDocx || onExportPdf}
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>Generate Document</DropdownMenu.Label>
+				{#if onExportDocx}
+					<DropdownMenu.Item onclick={onExportDocx}>
+						<FileText class="mr-2 size-4" />DOCX
+					</DropdownMenu.Item>
+				{/if}
+				{#if onExportPdf}
+					<DropdownMenu.Item onclick={onExportPdf}>
+						<FileOutput class="mr-2 size-4" />PDF
+					</DropdownMenu.Item>
+				{/if}
+			{/if}
 		</DropdownMenu.Content>
 	</DropdownMenu.Portal>
 </DropdownMenu.Root>

@@ -22,9 +22,12 @@
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
 	import { formatRelativeTime } from '../labels';
+	import FileOutput from '@lucide/svelte/icons/file-output';
+	import ExportDialog from '../export-dialog.svelte';
 
 	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
 
+	let exportOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
@@ -335,6 +338,9 @@
 					Saved · {formatRelativeTime(note.updatedAt)}
 				{/if}
 			</span>
+			<Button variant="ghost" size="icon-sm" aria-label="Export document" onclick={() => (exportOpen = true)}>
+				<FileOutput class="size-4" />
+			</Button>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -424,4 +430,10 @@
 		onreviseMermaid={reviseMermaid}
 	/>
 
+	<ExportDialog
+		bind:open={exportOpen}
+		projectId={note.projectId}
+		defaultTitle={note.title}
+		defaultNoteIds={[note.id]}
+	/>
 </div>

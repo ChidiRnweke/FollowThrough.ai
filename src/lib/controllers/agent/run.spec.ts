@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent, ConversationId } from '$lib/models';
+import type { AgentEvent, AgentRun, AgentRunId, ConversationId } from '$lib/models';
 import { PersistentConversationJournal } from '$lib/services';
 import { InMemoryAgentRunner } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryConversationRepository } from '$lib/testing/fakes/in-memory-conversations';
@@ -18,6 +18,7 @@ const setup = (events: AgentEvent[]) => {
 	const runner = new InMemoryAgentRunner();
 	runner.events = events;
 	const journal = new PersistentConversationJournal(repository);
+	let retryRun: AgentRun | undefined;
 	const controller = new DefaultAgentController({
 		contextBuilder: { build: async () => ({}) },
 		agentRunner: runner,
@@ -38,16 +39,14 @@ const setup = (events: AgentEvent[]) => {
 			list: async () => [],
 			assertSelectable: async () => undefined
 		},
-		runStore: {
+			runStore: {
 			create: async () => {
 				throw new Error('Unexpected run creation');
 			},
 			updateContext: async () => {
 				throw new Error('Unexpected run context update');
 			},
-			get: async () => {
-				throw new Error('Unexpected run load');
-			},
+			get: async () => retryRun ?? Promise.reject(new Error('Unexpected run load')),
 			getLatestForConversation: async () => {
 				throw new Error('No run persisted by this fake');
 			},
@@ -66,7 +65,7 @@ const setup = (events: AgentEvent[]) => {
 		},
 		defaultModel: 'openai/test-model'
 	});
-	return { controller, repository };
+	return { controller, repository, setRetryRun: (run: AgentRun) => (retryRun = run) };
 };
 
 describe('Agent conversation invariants', () => {
@@ -155,5 +154,28 @@ describe('Agent conversation invariants', () => {
 			.conversationId;
 		const session = await controller.getSession(testActor(), conversationId);
 		expect(session.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+	});
+
+	it('retries a failed run without duplicating the user prompt', async () => {
+		const { controller, repository, setRetryRun } = setup([
+			{ type: 'completed', conversationId: 'discarded' as ConversationId }
+		]);
+		const first = await collect(controller.run(testActor(), { prompt: 'Try this once' }));
+		const conversationId = (first.at(-1) as Extract<AgentEvent, { type: 'completed' }>).conversationId;
+		const timestamp = '2026-01-01T00:00:00.000Z' as never;
+		setRetryRun({
+			id: '70000000-0000-4000-8000-000000000001' as AgentRunId,
+			userId: testActor().userId,
+			conversationId,
+			model: 'openai/test-model',
+			executionMode: 'approval_required',
+			status: 'failed',
+			pendingDecisions: [],
+			inputSnapshot: { prompt: 'Try this once', conversationId },
+			createdAt: timestamp,
+			updatedAt: timestamp
+		});
+		await collect(controller.retry(testActor(), '70000000-0000-4000-8000-000000000001' as AgentRunId));
+		expect(repository.messages.filter((message) => message.role === 'user')).toHaveLength(1);
 	});
 });
