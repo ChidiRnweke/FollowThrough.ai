@@ -3,10 +3,12 @@ import type {
 	ActorContext,
 	AgentPreferences,
 	AgentRun,
+	AgentRunId,
+	AgentRunStatus,
 	AgentSessionItem,
 	ConversationId
 } from '$lib/models';
-import { NotFoundError } from '$lib/models';
+import { assertAgentRunTransition, isTerminalAgentRunStatus, NotFoundError } from '$lib/models';
 import type {
 	AgentPreferencesRepository,
 	AgentRunRepository,
@@ -23,13 +25,20 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
 	updatedAt: row.updatedAt.toISOString() as AgentPreferences['updatedAt']
 });
 
-const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
+export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
 	id: row.id as AgentRun['id'],
 	userId: row.userId as AgentRun['userId'],
 	conversationId: row.conversationId as AgentRun['conversationId'],
 	model: row.model,
 	executionMode: row.executionMode,
 	status: row.status,
+	requestId: row.requestId,
+	...(row.cancelRequestedAt
+		? { cancelRequestedAt: row.cancelRequestedAt.toISOString() as AgentRun['cancelRequestedAt'] }
+		: {}),
+	...(row.startedAt ? { startedAt: row.startedAt.toISOString() as AgentRun['startedAt'] } : {}),
+	...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() as AgentRun['finishedAt'] } : {}),
+	...(row.provenanceId ? { provenanceId: row.provenanceId as AgentRun['provenanceId'] } : {}),
 	...(row.serializedState ? { serializedState: row.serializedState } : {}),
 	pendingDecisions: row.pendingDecisions as unknown as AgentRun['pendingDecisions'],
 	...(row.failure ? { failure: row.failure } : {}),
@@ -96,6 +105,16 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
+	async findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(
+				and(eq(schema.agentRuns.userId, actor.userId), eq(schema.agentRuns.requestId, requestId))
+			);
+		return row ? toRun(row) : undefined;
+	}
+
 	async findAwaitingByConversation(
 		actor: ActorContext,
 		conversationId: AgentRun['conversationId']
@@ -131,40 +150,60 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
+	async findActiveByConversation(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(
+				and(
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.conversationId, conversationId),
+					inArray(schema.agentRuns.status, ['queued', 'running', 'awaiting_approval', 'cancelling'])
+				)
+			)
+			.limit(1);
+		return row ? toRun(row) : undefined;
+	}
+
 	async insert(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
 		const [row] = await this.database
 			.insert(schema.agentRuns)
-			.values({
-				id: run.id,
-				userId: actor.userId,
-				conversationId: run.conversationId,
-				model: run.model,
-				executionMode: run.executionMode,
-				status: run.status,
-				serializedState: run.serializedState,
-				pendingDecisions: toPendingDecisionRows(run),
-				failure: run.failure,
-				providerErrorCode: run.providerErrorCode,
-				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
-				inputSnapshot: { ...(run.inputSnapshot ?? {}) },
-				retryOfRunId: run.retryOfRunId,
-				definitionVersion: run.definitionVersion ?? 1,
-				createdAt: new Date(run.createdAt),
-				updatedAt: new Date(run.updatedAt)
-			})
+			.values(this.toInsert(actor, run))
 			.returning();
 		return toRun(row!);
 	}
 
+	async insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.insert(schema.agentRuns)
+			.values(this.toInsert(actor, run))
+			.onConflictDoNothing({
+				target: [schema.agentRuns.userId, schema.agentRuns.requestId]
+			})
+			.returning();
+		return row ? toRun(row) : undefined;
+	}
+
 	async update(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
+		const current = await this.findById(actor, run.id);
+		if (!current) throw new NotFoundError('Agent run was not found');
+		if (current.status !== run.status) assertAgentRunTransition(current.status, run.status);
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
 				status: run.status,
-				serializedState: run.serializedState,
+				requestId: run.requestId,
+				cancelRequestedAt: run.cancelRequestedAt ? new Date(run.cancelRequestedAt) : null,
+				startedAt: run.startedAt ? new Date(run.startedAt) : null,
+				finishedAt: run.finishedAt ? new Date(run.finishedAt) : null,
+				provenanceId: run.provenanceId ?? null,
+				serializedState: run.serializedState ?? null,
 				pendingDecisions: toPendingDecisionRows(run),
-				failure: run.failure,
-				providerErrorCode: run.providerErrorCode,
+				failure: run.failure ?? null,
+				providerErrorCode: run.providerErrorCode ?? null,
 				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
 				inputSnapshot: { ...(run.inputSnapshot ?? {}) },
 				retryOfRunId: run.retryOfRunId,
@@ -175,6 +214,159 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
+	}
+
+	async requestCancellation(
+		actor: ActorContext,
+		runId: AgentRun['id'],
+		at: AgentRun['updatedAt']
+	): Promise<AgentRun> {
+		const run = await this.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		if (isTerminalAgentRunStatus(run.status) || run.status === 'cancelling') return run;
+		const status = run.status === 'queued' ? 'cancelled' : 'cancelling';
+		assertAgentRunTransition(run.status, status);
+		const [updated] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status,
+				cancelRequestedAt: new Date(at),
+				...(status === 'cancelled' ? { finishedAt: new Date(at) } : {}),
+				updatedAt: new Date(at)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.status, run.status)
+				)
+			)
+			.returning();
+		if (updated) return toRun(updated);
+		const concurrent = await this.findById(actor, runId);
+		if (
+			concurrent &&
+			(isTerminalAgentRunStatus(concurrent.status) || concurrent.status === 'cancelling')
+		)
+			return concurrent;
+		throw new NotFoundError('Agent run was not found');
+	}
+
+	async requeueAfterDecision(
+		actor: ActorContext,
+		runId: AgentRun['id'],
+		at: AgentRun['updatedAt']
+	): Promise<AgentRun> {
+		const run = await this.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		if (run.status === 'queued') return run;
+		assertAgentRunTransition(run.status, 'queued');
+		const [updated] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: 'queued',
+				updatedAt: new Date(at)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.status, run.status)
+				)
+			)
+			.returning();
+		if (updated) return toRun(updated);
+		const concurrent = await this.findById(actor, runId);
+		if (concurrent?.status === 'queued') return concurrent;
+		throw new NotFoundError('Agent run was not found');
+	}
+
+	private toInsert(actor: ActorContext, run: AgentRun): typeof schema.agentRuns.$inferInsert {
+		return {
+			id: run.id,
+			userId: actor.userId,
+			conversationId: run.conversationId,
+			model: run.model,
+			executionMode: run.executionMode,
+			status: run.status,
+			requestId: run.requestId,
+			cancelRequestedAt: run.cancelRequestedAt ? new Date(run.cancelRequestedAt) : undefined,
+			startedAt: run.startedAt ? new Date(run.startedAt) : undefined,
+			finishedAt: run.finishedAt ? new Date(run.finishedAt) : undefined,
+			provenanceId: run.provenanceId,
+			serializedState: run.serializedState,
+			pendingDecisions: toPendingDecisionRows(run),
+			failure: run.failure,
+			providerErrorCode: run.providerErrorCode,
+			contextSnapshot: { ...(run.contextSnapshot ?? {}) },
+			inputSnapshot: { ...(run.inputSnapshot ?? {}) },
+			retryOfRunId: run.retryOfRunId,
+			definitionVersion: run.definitionVersion ?? 1,
+			createdAt: new Date(run.createdAt),
+			updatedAt: new Date(run.updatedAt)
+		};
+	}
+
+	async transition(
+		runId: AgentRunId,
+		from: AgentRunStatus | readonly AgentRunStatus[],
+		to: AgentRunStatus,
+		patch: Partial<AgentRun> = {}
+	): Promise<AgentRun | undefined> {
+		const fromStatuses = Array.isArray(from) ? from : [from];
+		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+		const now = new Date();
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: to,
+				...(patch.cancelRequestedAt
+					? { cancelRequestedAt: new Date(patch.cancelRequestedAt) }
+					: {}),
+				...(patch.startedAt ? { startedAt: new Date(patch.startedAt) } : {}),
+				...(patch.finishedAt ? { finishedAt: new Date(patch.finishedAt) } : {}),
+				...(patch.provenanceId !== undefined ? { provenanceId: patch.provenanceId ?? null } : {}),
+				...(patch.serializedState !== undefined
+					? { serializedState: patch.serializedState ?? null }
+					: {}),
+				...(patch.pendingDecisions !== undefined
+					? {
+							pendingDecisions: patch.pendingDecisions.map((d) => ({
+								callId: d.callId,
+								toolName: d.toolName,
+								arguments: d.arguments
+							})) as PendingDecisionRows
+						}
+					: {}),
+				...(patch.failure !== undefined ? { failure: patch.failure ?? null } : {}),
+				...(patch.providerErrorCode !== undefined
+					? { providerErrorCode: patch.providerErrorCode ?? null }
+					: {}),
+				...(patch.contextSnapshot ? { contextSnapshot: { ...patch.contextSnapshot } } : {}),
+				updatedAt: now
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					inArray(schema.agentRuns.status, fromStatuses as [AgentRunStatus, ...AgentRunStatus[]])
+				)
+			)
+			.returning();
+		return row ? toRun(row) : undefined;
+	}
+
+	async recoverInterrupted(failureMessage: string): Promise<number> {
+		const rows = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: 'failed',
+				failure: failureMessage,
+				finishedAt: new Date(),
+				updatedAt: new Date()
+			})
+			.where(inArray(schema.agentRuns.status, ['running', 'cancelling']))
+			.returning({ id: schema.agentRuns.id });
+		return rows.length;
 	}
 }
 
@@ -273,5 +465,25 @@ export class PostgresAgentSessionRepository implements AgentSessionRepository {
 					rows.map((row) => row.id)
 				)
 			);
+	}
+
+	async replace(
+		conversationId: import('$lib/models').ConversationId,
+		items: readonly Readonly<Record<string, unknown>>[]
+	): Promise<void> {
+		await this.database.transaction(async (transaction) => {
+			await transaction
+				.delete(schema.agentSessionItems)
+				.where(eq(schema.agentSessionItems.conversationId, conversationId));
+			if (items.length > 0)
+				await transaction.insert(schema.agentSessionItems).values(
+					items.map((item, position) => ({
+						id: crypto.randomUUID(),
+						conversationId,
+						position,
+						item: { ...item }
+					}))
+				);
+		});
 	}
 }

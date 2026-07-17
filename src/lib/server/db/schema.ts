@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+	bigint,
 	boolean,
 	check,
 	date,
@@ -68,12 +69,15 @@ export const agentExecutionMode = pgEnum('agent_execution_mode', [
 	'auto_accept'
 ]);
 export const agentRunStatus = pgEnum('agent_run_status', [
+	'queued',
 	'running',
 	'awaiting_approval',
+	'cancelling',
 	'completed',
 	'failed',
 	'cancelled'
 ]);
+export const agentRunDecision = pgEnum('agent_run_decision', ['approve', 'reject']);
 export const conversationKind = pgEnum('conversation_kind', ['chat', 'workflow']);
 
 type ProseMirrorDocument = Record<string, unknown>;
@@ -570,7 +574,14 @@ export const agentRuns = pgTable(
 			.references(() => conversations.id, { onDelete: 'cascade' }),
 		model: text('model').notNull(),
 		executionMode: agentExecutionMode('execution_mode').notNull(),
-		status: agentRunStatus('status').notNull().default('running'),
+		status: agentRunStatus('status').notNull().default('queued'),
+		requestId: text('request_id')
+			.notNull()
+			.default(sql`gen_random_uuid()::text`),
+		cancelRequestedAt: timestamp('cancel_requested_at', { withTimezone: true }),
+		startedAt: timestamp('started_at', { withTimezone: true }),
+		finishedAt: timestamp('finished_at', { withTimezone: true }),
+		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
 		serializedState: text('serialized_state'),
 		pendingDecisions: jsonb('pending_decisions')
 			.$type<readonly JsonObject[]>()
@@ -587,9 +598,43 @@ export const agentRuns = pgTable(
 		...timestamps
 	},
 	(table) => [
+		uniqueIndex('agent_runs_user_request_unique').on(table.userId, table.requestId),
+		uniqueIndex('agent_runs_active_conversation_unique')
+			.on(table.conversationId)
+			.where(sql`${table.status} in ('queued', 'running', 'awaiting_approval', 'cancelling')`),
 		index('agent_runs_user_updated_idx').on(table.userId, table.updatedAt),
 		index('agent_runs_conversation_status_idx').on(table.conversationId, table.status)
 	]
+);
+
+export const agentRunEvents = pgTable(
+	'agent_run_events',
+	{
+		cursor: bigint('cursor', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+		runId: uuid('run_id')
+			.notNull()
+			.references(() => agentRuns.id, { onDelete: 'cascade' }),
+		attempt: integer('attempt').notNull(),
+		event: jsonb('event').$type<JsonObject>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('agent_run_events_run_cursor_idx').on(table.runId, table.cursor)]
+);
+
+export const agentRunDecisions = pgTable(
+	'agent_run_decisions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		runId: uuid('run_id')
+			.notNull()
+			.references(() => agentRuns.id, { onDelete: 'cascade' }),
+		callId: text('call_id').notNull(),
+		decision: agentRunDecision('decision').notNull(),
+		message: text('message'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		consumedAt: timestamp('consumed_at', { withTimezone: true })
+	},
+	(table) => [uniqueIndex('agent_run_decisions_run_call_unique').on(table.runId, table.callId)]
 );
 
 export const agentSessionItems = pgTable(
@@ -616,12 +661,23 @@ export const messages = pgTable(
 		conversationId: uuid('conversation_id')
 			.notNull()
 			.references(() => conversations.id, { onDelete: 'cascade' }),
+		runId: uuid('run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
+		eventCursor: bigint('event_cursor', { mode: 'bigint' }).references(
+			() => agentRunEvents.cursor,
+			{ onDelete: 'set null' }
+		),
 		role: messageRole('role').notNull(),
 		content: jsonb('content').$type<JsonObject>().notNull(),
 		model: text('model'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('messages_conversation_created_idx').on(table.conversationId, table.createdAt)]
+	(table) => [
+		index('messages_conversation_created_idx').on(table.conversationId, table.createdAt),
+		uniqueIndex('messages_event_cursor_unique').on(table.eventCursor),
+		uniqueIndex('messages_assistant_run_unique')
+			.on(table.runId)
+			.where(sql`${table.role} = 'assistant' and ${table.runId} is not null`)
+	]
 );
 
 // Durable, user-controlled remembered facts. Project-scoped entries surface to agents

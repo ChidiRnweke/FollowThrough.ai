@@ -10,6 +10,7 @@ import type {
 	NoteEditor,
 	NoteIndexer,
 	NoteReader,
+	NoteTreeReader,
 	NoteRevisionRecorder,
 	SelectionAnchorCreator,
 	SourceAnchorRepairer
@@ -27,6 +28,7 @@ interface ContentSnapshot {
 export class InMemoryNoteContent
 	implements
 		NoteReader,
+		NoteTreeReader,
 		NoteEditor,
 		NoteRevisionRecorder,
 		SelectionAnchorCreator,
@@ -47,6 +49,15 @@ export class InMemoryNoteContent
 		);
 		if (!note) throw new NotFoundError('Note was not found');
 		return note;
+	}
+
+	async list(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly Note[]> {
+		return this.notes.filter(
+			(note) =>
+				note.userId === actor.userId &&
+				!note.archivedAt &&
+				(projectId === undefined || note.projectId === projectId)
+		);
 	}
 
 	async create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {

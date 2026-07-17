@@ -49,6 +49,10 @@ import {
 	PostgresAgentPreferencesRepository,
 	PostgresAgentRunRepository
 } from './postgres-agent-settings';
+import {
+	PostgresAgentRunDecisionRepository,
+	PostgresAgentRunEventRepository
+} from './postgres-agent-runs';
 
 let context: PostgresTestContext;
 const actor = (suffix: string) => ({
@@ -215,6 +219,38 @@ describe('Postgres note repository invariants', () => {
 		await repository.insert(owner, builtIn('76'));
 		await expect(repository.insert(owner, builtIn('77'))).rejects.toBeDefined();
 	});
+
+	it('applies a note update when the expected revision is current', async () => {
+		const { owner, note } = await seedNote('181');
+		const repository = new PostgresNoteRepository(context.db);
+		const updated = await repository.updateIfRevision(
+			owner,
+			{ ...note, title: 'Accepted', currentRevision: 2 },
+			1
+		);
+		expect(updated?.title).toBe('Accepted');
+	});
+
+	it('rejects a note update when the expected revision is stale', async () => {
+		const { owner, note } = await seedNote('182');
+		const repository = new PostgresNoteRepository(context.db);
+		const updated = await repository.updateIfRevision(
+			owner,
+			{ ...note, title: 'Stale', currentRevision: 2 },
+			2
+		);
+		expect(updated).toBeUndefined();
+	});
+
+	it('allows exactly one concurrent note update from the same revision', async () => {
+		const { owner, note } = await seedNote('183');
+		const repository = new PostgresNoteRepository(context.db);
+		const results = await Promise.all([
+			repository.updateIfRevision(owner, { ...note, title: 'Browser A', currentRevision: 2 }, 1),
+			repository.updateIfRevision(owner, { ...note, title: 'Browser B', currentRevision: 2 }, 1)
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+	});
 });
 
 describe('Postgres conversation repository invariants', () => {
@@ -344,6 +380,7 @@ describe('Postgres agent settings repository invariants', () => {
 			model: 'openai/gpt-test',
 			executionMode: 'approval_required',
 			status: 'awaiting_approval',
+			requestId: 'repository-contract-paused-1',
 			serializedState: 'serialized-state',
 			pendingDecisions: [
 				{ callId: 'call-1', toolName: 'create_note', arguments: { title: 'Draft' } }
@@ -374,6 +411,7 @@ describe('Postgres agent settings repository invariants', () => {
 			model: 'openai/gpt-test',
 			executionMode: 'approval_required',
 			status: 'awaiting_approval',
+			requestId: 'repository-contract-paused-2',
 			serializedState: 'serialized-state',
 			pendingDecisions: [
 				{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }
@@ -385,6 +423,75 @@ describe('Postgres agent settings repository invariants', () => {
 			state: 'serialized-state',
 			pending: [{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }]
 		});
+	});
+});
+
+describe('Postgres durable agent run repository invariants', () => {
+	const seedQueuedRun = async (suffix: string): Promise<AgentRun> => {
+		const owner = actor(suffix);
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const conversation = await new PostgresConversationRepository(context.db).insert(owner, {
+			id: `21000000-0000-4000-8000-${suffix.padStart(12, '0')}` as ConversationId,
+			userId: owner.userId,
+			kind: 'chat',
+			createdAt: now,
+			updatedAt: now
+		});
+		return new PostgresAgentRunRepository(context.db).insert(owner, {
+			id: `71000000-0000-4000-8000-${suffix.padStart(12, '0')}` as AgentRunId,
+			userId: owner.userId,
+			conversationId: conversation.id,
+			model: 'openai/gpt-test',
+			executionMode: 'approval_required',
+			status: 'queued',
+			requestId: `request-${suffix}`,
+			pendingDecisions: [],
+			contextSnapshot: {},
+			inputSnapshot: { prompt: 'Contract prompt' },
+			createdAt: now,
+			updatedAt: now
+		});
+	};
+
+	it('orders replayed events by their global cursor', async () => {
+		const run = await seedQueuedRun('93');
+		const events = new PostgresAgentRunEventRepository(context.db);
+		await Promise.all([
+			events.append(run.id, 0, {
+				type: 'run_queued',
+				runId: run.id,
+				attempt: 1,
+				reason: 'submitted'
+			}),
+			events.append(run.id, 1, { type: 'text_delta', text: 'next' })
+		]);
+		const owner = actor('93');
+		const replay = await events.replay(owner, run.id, '0');
+		expect(replay.map((event) => event.cursor)).toEqual(
+			[...replay.map((event) => event.cursor)].sort((left, right) => Number(left) - Number(right))
+		);
+	});
+
+	it('returns the same durable decision for an identical retry', async () => {
+		const run = await seedQueuedRun('94');
+		const owner = actor('94');
+		const decisions = new PostgresAgentRunDecisionRepository(context.db);
+		const input = { runId: run.id, callId: 'call-94', decision: 'approve' as const };
+		const first = await decisions.record(owner, input);
+		const duplicate = await decisions.record(owner, input);
+		expect(duplicate).toEqual(first);
+	});
+
+	it('rejects overlapping active runs in one conversation', async () => {
+		const run = await seedQueuedRun('97');
+		const repository = new PostgresAgentRunRepository(context.db);
+		await expect(
+			repository.insert(actor('97'), {
+				...run,
+				id: '71000000-0000-4000-8000-000000000197' as AgentRunId,
+				requestId: 'request-97-overlap'
+			})
+		).rejects.toThrow();
 	});
 });
 

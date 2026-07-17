@@ -107,11 +107,39 @@ export class PostgresNoteRepository implements NoteRepository {
 				position: note.position,
 				isPinned: note.isPinned,
 				currentRevision: note.currentRevision,
-				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null
+				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
+				updatedAt: new Date(note.updatedAt)
 			})
 			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
 			.returning();
 		return toNote(row!);
+	}
+
+	async updateIfRevision(
+		actor: ActorContext,
+		note: Note,
+		expectedRevision: number
+	): Promise<Note | undefined> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				title: note.title,
+				document: note.document as unknown as Record<string, unknown>,
+				plainText: note.plainText,
+				isPinned: note.isPinned,
+				currentRevision: note.currentRevision,
+				updatedAt: new Date(note.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.notes.id, note.id),
+					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.currentRevision, expectedRevision),
+					isNull(schema.notes.archivedAt)
+				)
+			)
+			.returning();
+		return row ? toNote(row) : undefined;
 	}
 
 	async delete(actor: ActorContext, id: NoteId): Promise<void> {

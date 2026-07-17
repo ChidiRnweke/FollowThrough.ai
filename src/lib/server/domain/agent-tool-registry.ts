@@ -26,6 +26,7 @@ import type {
 	RunAgentInput
 } from '$lib/models';
 import { findProseMirrorDocumentIssue } from '$lib/models';
+import type { AgentToolExecutor } from '$lib/services';
 
 export type AgentToolClassification =
 	| { readonly kind: 'read' | 'proposal' | 'mutation' }
@@ -65,6 +66,11 @@ export const agentToolCoverage = {
 		get: { kind: 'read' },
 		create: { kind: 'mutation' },
 		save: { kind: 'mutation' },
+		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
+		listSyncInventory: {
+			kind: 'excluded',
+			reason: 'Sync inventory is reserved for browser reconciliation.'
+		},
 		rename: { kind: 'mutation' },
 		archive: { kind: 'mutation' }
 	},
@@ -115,10 +121,16 @@ export const agentToolCoverage = {
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	deliverables: {
-		initiateTemplateUpload: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
+		initiateTemplateUpload: {
+			kind: 'excluded',
+			reason: 'The agent cannot upload local user files.'
+		},
 		completeTemplateUpload: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
 		listTemplates: { kind: 'read' },
-		deleteTemplate: { kind: 'excluded', reason: 'Template management is a deliberate user action.' },
+		deleteTemplate: {
+			kind: 'excluded',
+			reason: 'Template management is a deliberate user action.'
+		},
 		generateDocument: { kind: 'mutation' },
 		previewDocument: {
 			kind: 'excluded',
@@ -201,7 +213,8 @@ export class AgentToolRegistry {
 		private readonly controllers: ControllerFactory,
 		private readonly actor: ActorContext,
 		private readonly mode: AgentExecutionMode,
-		private readonly context: RegistryContext
+		private readonly context: RegistryContext,
+		private readonly toolExecutor?: AgentToolExecutor
 	) {}
 
 	tools(
@@ -222,7 +235,19 @@ export class AgentToolRegistry {
 						definition.classification === 'mutation' && this.mode === 'approval_required',
 					errorFunction: (_context, error) =>
 						JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
-					execute: async (input) => definition.execute(input as Record<string, unknown>)
+					execute: async (input, _runContext, details) => {
+						const parsed = input as Record<string, unknown>;
+						if (!this.toolExecutor) return definition.execute(parsed);
+						return this.toolExecutor.execute(
+							{
+								callId: String(details?.toolCall?.callId ?? ''),
+								toolName: definition.name,
+								arguments: parsed,
+								classification: definition.classification
+							},
+							() => definition.execute(parsed)
+						);
+					}
 				})
 			);
 	}
@@ -634,7 +659,10 @@ export class AgentToolRegistry {
 					format: z.enum(['docx', 'pdf']),
 					templateId: id.optional()
 				}),
-				(input) => factory.deliverables().generateDocument(actor, { ...input, projectId: input.projectId as never } as never)
+				(input) =>
+					factory
+						.deliverables()
+						.generateDocument(actor, { ...input, projectId: input.projectId as never } as never)
 			),
 			define(
 				'list_artifacts',

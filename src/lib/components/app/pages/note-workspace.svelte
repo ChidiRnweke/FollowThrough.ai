@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { NoteId, NoteView, ShellContext, TextSelection } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -12,6 +13,7 @@
 	import { chat } from '$lib/stores/chat.svelte';
 	import { editorSelection } from '$lib/stores/editor-selection.svelte';
 	import { noteActions } from '$lib/stores/note-actions.svelte';
+	import { noteSync } from '$lib/stores/note-sync.svelte';
 	import { noteTodos } from '$lib/stores/note-todos.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
@@ -20,23 +22,43 @@
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
+	import NoteConflictDialog from '../note-conflict-dialog.svelte';
+	import NoteSyncStatus from '../note-sync-status.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
-	import { formatRelativeTime } from '../labels';
 	import FileOutput from '@lucide/svelte/icons/file-output';
 	import ExportDialog from '../export-dialog.svelte';
 
 	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
 
 	let exportOpen = $state(false);
+	let conflictOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
+	let syncReady = $state(false);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
+	let reconciling = false;
 	let editVersion = 0;
 	let saveQueued = false;
 	let activeSave: Promise<void> | undefined;
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
+
+	onMount(() => {
+		let cancelled = false;
+		const stopListening = noteSync.listenForReconnect();
+		void noteSync.initialize({ note: view.note, etag: view.etag }).then((local) => {
+			if (cancelled) return;
+			note = { ...local };
+			conflictOpen = noteSync.status === 'conflict';
+			syncReady = true;
+		});
+		return () => {
+			cancelled = true;
+			stopListening();
+			noteSync.reset();
+		};
+	});
 
 	const noteRef = $derived({ id: note.id, title: note.title });
 	const pendingCount = $derived(
@@ -56,12 +78,28 @@
 		)
 	);
 
-	// Pick up external revisions (e.g. AI-created todo nodes) when we have no
-	// local edits in flight.
+	// Pick up external revisions (e.g. AI-created todo nodes) through the same
+	// reconciliation path as a future service-worker-driven refresh.
 	$effect(() => {
-		if (!dirty && !noteActions.saving && view.note.currentRevision > note.currentRevision) {
-			note = { ...view.note };
-		}
+		void view.etag;
+		if (
+			!syncReady ||
+			dirty ||
+			reconciling ||
+			noteSync.status !== 'synced' ||
+			view.note.currentRevision <= note.currentRevision
+		)
+			return;
+		reconciling = true;
+		void noteSync
+			.initialize({ note: view.note, etag: view.etag })
+			.then((local) => {
+				note = { ...local };
+				editorRef?.replaceDocument(local.document);
+			})
+			.finally(() => {
+				reconciling = false;
+			});
 	});
 
 	$effect(() => {
@@ -104,13 +142,13 @@
 		while (saveQueued && editorRef) {
 			saveQueued = false;
 			const savingVersion = editVersion;
-			const output = await noteActions.save({
+			const record = await noteSync.save({
 				...note,
 				title: note.title.trim(),
 				document: editorRef.getDocument(),
 				plainText: editorRef.getPlainText()
 			});
-			if (!output) {
+			if (!record) {
 				saveFailed = true;
 				dirty = true;
 				if (!options.auto) toast.error('Could not save the note. Try again.');
@@ -119,32 +157,53 @@
 
 			saveFailed = false;
 			if (savingVersion === editVersion) {
-				note = { ...output.note };
+				note = { ...record.local };
 				dirty = false;
 			} else {
 				note = {
 					...note,
-					currentRevision: output.note.currentRevision,
-					updatedAt: output.note.updatedAt
+					currentRevision: record.local.currentRevision,
+					updatedAt: record.local.updatedAt
 				};
 				dirty = true;
 				saveQueued = true;
 			}
-			await invalidateAll();
+			if (record.state === 'conflict') {
+				conflictOpen = true;
+				if (!saveQueued) return;
+			} else if (record.state === 'synced') {
+				await invalidateAll();
+			}
 		}
 	}
 
+	async function ensureSynchronized(message: string): Promise<boolean> {
+		if (dirty) await save({ auto: true });
+		if (dirty || noteSync.status !== 'synced') {
+			toast.error(message);
+			return false;
+		}
+		return true;
+	}
+
 	async function togglePin(): Promise<void> {
+		if (!editorRef) return;
 		if (dirty) {
 			await save({ auto: true });
 			if (dirty) return;
 		}
 		const toggled = { ...note, isPinned: !note.isPinned };
-		const output = await noteActions.save(toggled);
-		if (output) {
-			note = { ...output.note };
-			toast.success(output.note.isPinned ? 'Pinned' : 'Unpinned');
-			await invalidateAll();
+		const record = await noteSync.save({
+			...toggled,
+			document: editorRef.getDocument(),
+			plainText: editorRef.getPlainText()
+		});
+		if (record) {
+			note = { ...record.local };
+			dirty = false;
+			conflictOpen = record.state === 'conflict';
+			toast.success(note.isPinned ? 'Pinned' : 'Unpinned');
+			if (record.state === 'synced') await invalidateAll();
 		} else {
 			toast.error('Could not update pin. Try again.');
 		}
@@ -152,10 +211,7 @@
 
 	async function moveTo(parentId?: NoteId): Promise<void> {
 		if ((note.parentId ?? undefined) === parentId) return;
-		if (dirty) {
-			await save({ auto: true });
-			if (dirty) return;
-		}
+		if (!(await ensureSynchronized('Sync the note before moving it.'))) return;
 		const siblings = shell.noteTree.filter(
 			(entry) =>
 				entry.projectId === note.projectId &&
@@ -173,6 +229,7 @@
 	}
 
 	async function archive(): Promise<void> {
+		if (!(await ensureSynchronized('Sync the note before archiving it.'))) return;
 		const output = await projectActions.archiveNote(note.id);
 		if (!output) {
 			toast.error('Could not archive the note. Try again.');
@@ -191,13 +248,7 @@
 			if (!selection) toast.error('Select some text first.');
 			return;
 		}
-		if (dirty) {
-			await save({ auto: true });
-			if (dirty) {
-				toast.error('Save the note before running an AI action.');
-				return;
-			}
-		}
+		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
 		selection = { ...selection, revision: note.currentRevision };
 		let added: number;
 		if (action === 'promises') {
@@ -270,10 +321,8 @@
 		source: string,
 		instruction: string
 	): Promise<{ readonly source: string; readonly title?: string }> {
-		if (dirty) {
-			await save({ auto: true });
-			if (dirty) throw new Error('Save the note before revising its diagram.');
-		}
+		if (!(await ensureSynchronized('Sync the note before revising its diagram.')))
+			throw new Error('Sync the note before revising its diagram.');
 		const output = await noteActions.reviseDiagram(note.id, source, instruction);
 		if (!output) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
 		toast.success('Diagram revised — undo with Ctrl+Z');
@@ -305,6 +354,31 @@
 	function onbeforeunload(event: BeforeUnloadEvent): void {
 		if (dirty) event.preventDefault();
 	}
+
+	async function retrySync(): Promise<void> {
+		const record = await noteSync.retry();
+		if (!record) return;
+		note = { ...record.local };
+		conflictOpen = record.state === 'conflict';
+		if (record.state === 'synced') await invalidateAll();
+	}
+
+	async function useRemoteVersion(): Promise<void> {
+		const remote = await noteSync.useRemote();
+		if (!remote) return;
+		note = { ...remote };
+		editorRef?.replaceDocument(remote.document);
+		dirty = false;
+		await invalidateAll();
+	}
+
+	async function keepLocalVersion(): Promise<void> {
+		const record = await noteSync.keepLocal();
+		if (!record) return;
+		note = { ...record.local };
+		conflictOpen = record.state === 'conflict';
+		if (record.state === 'synced') await invalidateAll();
+	}
 </script>
 
 <svelte:window {onkeydown} {onbeforeunload} />
@@ -321,24 +395,28 @@
 					aria-label="AI action running"
 				/>
 			{/if}
-			<span
-				class:text-destructive={saveFailed}
-				class="text-xs text-muted-foreground"
-				aria-live="polite"
-			>
-				{#if noteActions.saving}
-					Saving…
-				{:else if dirty && !note.title.trim()}
-					Add a title to save
-				{:else if saveFailed}
+			{#if dirty && !note.title.trim()}
+				<span class="text-xs text-muted-foreground" aria-live="polite">Add a title to save</span>
+			{:else if saveFailed}
+				<span class="text-xs text-destructive" aria-live="polite">
 					Couldn’t save · press Ctrl+S to retry
-				{:else if dirty}
-					Unsaved changes
-				{:else}
-					Saved · {formatRelativeTime(note.updatedAt)}
-				{/if}
-			</span>
-			<Button variant="ghost" size="icon-sm" aria-label="Export document" onclick={() => (exportOpen = true)}>
+				</span>
+			{:else if dirty}
+				<span class="text-xs text-muted-foreground" aria-live="polite">Unsaved changes</span>
+			{:else}
+				<NoteSyncStatus
+					status={noteSync.status}
+					updatedAt={note.updatedAt}
+					onRetry={() => void retrySync()}
+					onReview={() => (conflictOpen = true)}
+				/>
+			{/if}
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Export document"
+				onclick={() => (exportOpen = true)}
+			>
 				<FileOutput class="size-4" />
 			</Button>
 			<DropdownMenu.Root>
@@ -417,18 +495,35 @@
 		</div>
 	{/if}
 
-	<NoteEditor
-		bind:this={editorRef}
-		noteId={note.id}
-		revision={note.currentRevision}
-		document={note.document}
-		references={view.references}
-		skills={shell.skills}
-		onchange={markDirty}
-		onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
-		onskill={runSkill}
-		onreviseMermaid={reviseMermaid}
-	/>
+	{#if syncReady}
+		<NoteEditor
+			bind:this={editorRef}
+			noteId={note.id}
+			revision={note.currentRevision}
+			document={note.document}
+			references={view.references}
+			skills={shell.skills}
+			onchange={markDirty}
+			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
+			onskill={runSkill}
+			onreviseMermaid={reviseMermaid}
+		/>
+	{:else}
+		<div class="flex flex-1 flex-col gap-3" aria-label="Loading note from device">
+			<Skeleton class="h-5 w-full" />
+			<Skeleton class="h-5 w-5/6" />
+			<Skeleton class="h-5 w-2/3" />
+		</div>
+	{/if}
+
+	{#if noteSync.record?.state === 'conflict'}
+		<NoteConflictDialog
+			bind:open={conflictOpen}
+			record={noteSync.record}
+			onUseRemote={useRemoteVersion}
+			onKeepLocal={keepLocalVersion}
+		/>
+	{/if}
 
 	<ExportDialog
 		bind:open={exportOpen}

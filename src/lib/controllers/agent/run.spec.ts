@@ -1,181 +1,175 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent, AgentRun, AgentRunId, ConversationId } from '$lib/models';
+import type { AgentRunId, DateTime } from '$lib/models';
 import { PersistentConversationJournal } from '$lib/services';
-import { InMemoryAgentRunner } from '$lib/testing/fakes/in-memory-agent';
+import { InMemoryAgentRunPersistence } from '$lib/testing/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/fakes/in-memory-conversations';
-import { InMemoryProvenanceRecorder } from '$lib/testing/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
 import { testActor } from '$lib/testing/fixtures/domain-builders';
 import { DefaultAgentController } from './controller';
+import type { AgentRunExecutor } from '$lib/server/domain/agent-run-executor';
 
-const collect = async (events: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> => {
-	const collected: AgentEvent[] = [];
-	for await (const event of events) collected.push(event);
-	return collected;
-};
+const noopExecutor: AgentRunExecutor = {
+	execute: async () => 'completed',
+	finishCancellation: async () => undefined
+} as unknown as AgentRunExecutor;
 
-const setup = (events: AgentEvent[]) => {
-	const repository = new InMemoryConversationRepository();
-	const runner = new InMemoryAgentRunner();
-	runner.events = events;
-	const journal = new PersistentConversationJournal(repository);
-	let retryRun: AgentRun | undefined;
+const setup = () => {
+	const conversations = new InMemoryConversationRepository();
+	const runs = new InMemoryAgentRunPersistence();
 	const controller = new DefaultAgentController({
-		contextBuilder: { build: async () => ({}) },
-		agentRunner: runner,
-		conversationJournal: journal,
-		provenanceRecorder: new InMemoryProvenanceRecorder(),
+		conversationJournal: new PersistentConversationJournal(conversations),
 		preferences: {
 			get: async (actor) => ({
 				userId: actor.userId,
 				executionMode: 'approval_required',
-				createdAt: '2026-01-01T00:00:00.000Z' as never,
-				updatedAt: '2026-01-01T00:00:00.000Z' as never
+				createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
+				updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
 			}),
 			update: async () => {
-				throw new Error('Unexpected preferences update');
+				throw new Error('Unexpected preference update');
 			}
 		},
-		models: {
-			list: async () => [],
-			assertSelectable: async () => undefined
-		},
-			runStore: {
-			create: async () => {
-				throw new Error('Unexpected run creation');
-			},
-			updateContext: async () => {
-				throw new Error('Unexpected run context update');
-			},
-			get: async () => retryRun ?? Promise.reject(new Error('Unexpected run load')),
-			getLatestForConversation: async () => {
-				throw new Error('No run persisted by this fake');
-			},
-			pause: async () => {
-				throw new Error('Unexpected run pause');
-			},
-			complete: async () => {
-				throw new Error('Unexpected run completion');
-			},
-			fail: async () => {
-				throw new Error('Unexpected run failure');
-			},
-			cancel: async () => {
-				throw new Error('Unexpected run cancellation');
-			}
-		},
-		defaultModel: 'openai/test-model'
+		models: { list: async () => [], assertSelectable: async () => undefined },
+		runs,
+		events: runs,
+		decisions: runs,
+		transactionRunner: new InMemoryTransactionRunner([conversations, runs]),
+		defaultModel: 'openai/test-model',
+		executor: noopExecutor
 	});
-	return { controller, repository, setRetryRun: (run: AgentRun) => (retryRun = run) };
+	return { controller, conversations, runs };
 };
 
-describe('Agent conversation invariants', () => {
-	it('returns the persisted conversation identifier on completion', async () => {
-		const { controller, repository } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		const events = await collect(controller.run(testActor(), { prompt: 'Help me decide' }));
-		expect(events.at(-1)).toEqual({
-			type: 'completed',
-			conversationId: repository.conversations[0]?.id,
-			model: 'openai/test-model'
+describe('durable agent submission', () => {
+	it('returns a queued receipt before provider execution', async () => {
+		const { controller } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000001',
+			input: 'Help me decide'
 		});
+		expect(receipt.status).toBe('queued');
 	});
 
-	it('persists the user prompt before running the agent', async () => {
-		const { controller, repository } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		await collect(controller.run(testActor(), { prompt: 'Compare the options' }));
-		expect(repository.messages[0]?.content).toEqual({
-			type: 'text',
-			text: 'Compare the options'
+	it('records one prompt for a duplicate logical request', async () => {
+		const { controller, conversations } = setup();
+		const input = {
+			requestId: '10000000-0000-4000-8000-000000000002',
+			input: 'Compare the options'
+		};
+		await controller.submit(testActor(), input);
+		await controller.submit(testActor(), input);
+		expect(conversations.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+	});
+
+	it('returns the same run for a duplicate logical request', async () => {
+		const { controller } = setup();
+		const input = {
+			requestId: '10000000-0000-4000-8000-000000000003',
+			input: 'Compare the options'
+		};
+		const first = await controller.submit(testActor(), input);
+		const second = await controller.submit(testActor(), input);
+		expect(second.runId).toBe(first.runId);
+	});
+
+	it('rejects another active run in the same conversation', async () => {
+		const { controller } = setup();
+		const first = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000004',
+			input: 'First'
 		});
-	});
-
-	it('persists streamed assistant text as one message', async () => {
-		const { controller, repository } = setup([
-			{ type: 'text_delta', text: 'First ' },
-			{ type: 'text_delta', text: 'answer' },
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		await collect(controller.run(testActor(), { prompt: 'Help' }));
-		expect(repository.messages.at(-1)?.content).toEqual({ type: 'text', text: 'First answer' });
-	});
-
-	it('persists tool lifecycle activity', async () => {
-		const { controller, repository } = setup([
-			{ type: 'tool_started', callId: 'call-1', name: 'knowledge_search', arguments: {} },
-			{ type: 'tool_completed', callId: 'call-1', name: 'knowledge_search' },
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		await collect(controller.run(testActor(), { prompt: 'Search' }));
-		expect(repository.messages.filter((message) => message.role === 'tool')).toHaveLength(2);
-	});
-
-	it('continues an owned conversation without creating another', async () => {
-		const { controller, repository } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		const first = await collect(controller.run(testActor(), { prompt: 'First' }));
-		const conversationId = (first.at(-1) as Extract<AgentEvent, { type: 'completed' }>)
-			.conversationId;
-		await collect(controller.run(testActor(), { conversationId, prompt: 'Second' }));
-		expect(repository.conversations).toHaveLength(1);
-	});
-
-	it('rejects another user’s conversation identifier', async () => {
-		const { controller } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		const first = await collect(controller.run(testActor(), { prompt: 'First' }));
-		const conversationId = (first.at(-1) as Extract<AgentEvent, { type: 'completed' }>)
-			.conversationId;
 		await expect(
-			collect(controller.run(testActor(2), { conversationId, prompt: 'Intrude' }))
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+			controller.submit(testActor(), {
+				requestId: '10000000-0000-4000-8000-000000000005',
+				conversationId: first.conversationId,
+				input: 'Second'
+			})
+		).rejects.toThrow('active agent run');
 	});
+});
 
-	it('lists the actor’s conversation sessions', async () => {
-		const { controller } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		await collect(controller.run(testActor(), { prompt: 'First' }));
-		const sessions = await controller.listSessions(testActor());
-		expect(sessions.map((session) => session.title)).toEqual(['First']);
-	});
-
-	it('loads a session with its persisted messages', async () => {
-		const { controller } = setup([
-			{ type: 'text_delta', text: 'Answer' },
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		const events = await collect(controller.run(testActor(), { prompt: 'Question' }));
-		const conversationId = (events.at(-1) as Extract<AgentEvent, { type: 'completed' }>)
-			.conversationId;
-		const session = await controller.getSession(testActor(), conversationId);
-		expect(session.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-	});
-
-	it('retries a failed run without duplicating the user prompt', async () => {
-		const { controller, repository, setRetryRun } = setup([
-			{ type: 'completed', conversationId: 'discarded' as ConversationId }
-		]);
-		const first = await collect(controller.run(testActor(), { prompt: 'Try this once' }));
-		const conversationId = (first.at(-1) as Extract<AgentEvent, { type: 'completed' }>).conversationId;
-		const timestamp = '2026-01-01T00:00:00.000Z' as never;
-		setRetryRun({
-			id: '70000000-0000-4000-8000-000000000001' as AgentRunId,
-			userId: testActor().userId,
-			conversationId,
-			model: 'openai/test-model',
-			executionMode: 'approval_required',
-			status: 'failed',
-			pendingDecisions: [],
-			inputSnapshot: { prompt: 'Try this once', conversationId },
-			createdAt: timestamp,
-			updatedAt: timestamp
+describe('durable agent lifecycle commands', () => {
+	it('cancels a queued run immediately', async () => {
+		const { controller } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000006',
+			input: 'Stop before start'
 		});
-		await collect(controller.retry(testActor(), '70000000-0000-4000-8000-000000000001' as AgentRunId));
-		expect(repository.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		expect(snapshot.run.status).toBe('cancelled');
+	});
+
+	it('requeues an approval decision on the same run', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000007',
+			input: 'Archive it'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = {
+			...original,
+			status: 'awaiting_approval',
+			pendingDecisions: [{ callId: 'call-1', toolName: 'archive_note', arguments: {} }]
+		};
+		const snapshot = await controller.decide(testActor(), {
+			runId: receipt.runId,
+			callId: 'call-1',
+			decision: 'approve'
+		});
+		expect(snapshot.run.status).toBe('queued');
+	});
+
+	it('rejects a contradictory duplicate decision', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000008',
+			input: 'Archive it'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = {
+			...original,
+			status: 'awaiting_approval',
+			pendingDecisions: [{ callId: 'call-2', toolName: 'archive_note', arguments: {} }]
+		};
+		await controller.decide(testActor(), {
+			runId: receipt.runId,
+			callId: 'call-2',
+			decision: 'approve'
+		});
+		await expect(
+			controller.decide(testActor(), {
+				runId: receipt.runId,
+				callId: 'call-2',
+				decision: 'reject'
+			})
+		).rejects.toThrow('different decision');
+	});
+
+	it('manual retry creates ancestry without another prompt', async () => {
+		const { controller, conversations, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000009',
+			input: 'Try this once'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = { ...original, status: 'failed' };
+		await controller.retry(testActor(), receipt.runId, '10000000-0000-4000-8000-000000000010');
+		expect(conversations.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+	});
+
+	it('manual retry points at the failed run', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000011',
+			input: 'Try this once'
+		});
+		runs.runs[0] = { ...runs.runs[0]!, status: 'failed' };
+		const retried = await controller.retry(
+			testActor(),
+			receipt.runId,
+			'10000000-0000-4000-8000-000000000012'
+		);
+		const child = runs.runs.find((run) => run.id === retried.runId);
+		expect(child?.retryOfRunId).toBe(receipt.runId as AgentRunId);
 	});
 });

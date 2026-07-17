@@ -20,6 +20,9 @@
 - **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.
 - Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
+- Note synchronization stays in the quiet utility row. Pending device saves and conflicts are explicit;
+  three-way comparison belongs in a focused dialog, and resolution always preserves a complete rich
+  document version.
 - **Chat:** Conversational pattern. Desktop uses the contextual right panel for quick work; mobile and durable links use full-page `/chats/new` and `/chats/[id]` routes.
 - Show no more than five recent chats in the panel. Full history belongs on `/chats`, with project/note origin visible in both locations.
 - A submitted turn renders immediate three-dot activity, then human-readable tool or streaming state. Stop, retry, failure, and cancellation are explicit and announced accessibly.

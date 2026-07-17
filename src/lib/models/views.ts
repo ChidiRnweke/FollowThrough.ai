@@ -12,6 +12,7 @@ import type {
 	TodoResponsibility,
 	TodoStatus
 } from './shared';
+import type { NoteEtag } from './shared';
 import type {
 	Artifact,
 	ArtifactView,
@@ -71,6 +72,7 @@ export interface ReferenceView {
 
 export interface NoteView {
 	readonly note: Note;
+	readonly etag: NoteEtag;
 	readonly backlinks: readonly BacklinkView[];
 	readonly references: readonly ReferenceView[];
 	readonly diagrams: readonly Diagram[];

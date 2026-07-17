@@ -25,6 +25,7 @@ import type {
 	SourceAnchorId,
 	SuggestionId,
 	TextSelection,
+	NoteEtag,
 	TodoResponsibility,
 	Url
 } from './shared';
@@ -180,8 +181,27 @@ export interface RunAgentInput {
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;
 }
+export interface SubmitAgentRunInput {
+	readonly requestId: string;
+	readonly conversationId?: ConversationId;
+	readonly input: string;
+	readonly model?: string | null;
+	readonly mode?: import('./domain').AgentExecutionMode | null;
+	readonly projectId?: ProjectId;
+	readonly noteId?: NoteId;
+	readonly selection?: TextSelection;
+	readonly contextNoteIds?: readonly NoteId[];
+	readonly requestedSkillNames?: readonly string[];
+	readonly requestedSkillNoteIds?: readonly NoteId[];
+}
 export type AgentEvent =
-	| { readonly type: 'run_started'; readonly runId: AgentRunId }
+	| {
+			readonly type: 'run_queued';
+			readonly runId: AgentRunId;
+			readonly attempt: number;
+			readonly reason: 'submitted' | 'retry' | 'resumed';
+	  }
+	| { readonly type: 'run_started'; readonly runId: AgentRunId; readonly attempt: number }
 	| { readonly type: 'text_delta'; readonly text: string }
 	| {
 			readonly type: 'tool_started';
@@ -248,6 +268,7 @@ export interface SaveNoteInput {
 }
 export interface SaveNoteOutput {
 	readonly note: Note;
+	readonly etag: NoteEtag;
 	readonly repairedAnchorIds: readonly SourceAnchorId[];
 }
 

@@ -9,10 +9,13 @@ import {
 	testAnchorId,
 	testNoteId
 } from '$lib/testing/fixtures/domain-builders';
+import { noteEtag } from '$lib/models';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new DefaultNotesController({
+		noteReader: content,
+		noteTreeReader: content,
 		noteEditor: content,
 		revisionRecorder: content,
 		anchorRepairer: content,
@@ -65,6 +68,65 @@ describe('Note revision invariants', () => {
 		content.anchors = [anchorBuilder()];
 		const result = await controller.save(testActor(), { note });
 		expect(result.repairedAnchorIds).toEqual([testAnchorId()]);
+	});
+});
+
+describe('Note synchronization invariants', () => {
+	it('accepts a conditional save based on the current ETag', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		const result = await controller.sync(testActor(), {
+			note: { ...note, plainText: 'Changed' },
+			baseEtag: noteEtag(note),
+			operationId: crypto.randomUUID()
+		});
+		expect(result.outcome).toBe('saved');
+	});
+
+	it('returns the remote version when a conditional save conflicts', async () => {
+		const { content, controller } = setup();
+		const base = noteBuilder();
+		content.notes = [noteBuilder({ currentRevision: 2, plainText: 'Remote' })];
+		const result = await controller.sync(testActor(), {
+			note: { ...base, plainText: 'Local' },
+			baseEtag: noteEtag(base),
+			operationId: crypto.randomUUID()
+		});
+		expect(result.outcome === 'conflict' ? result.remote.note.plainText : undefined).toBe('Remote');
+	});
+
+	it('acknowledges a retried mutation that is already stored remotely', async () => {
+		const { content, controller } = setup();
+		const base = noteBuilder();
+		content.notes = [noteBuilder({ currentRevision: 2, plainText: 'Same change' })];
+		const result = await controller.sync(testActor(), {
+			note: { ...base, plainText: 'Same change' },
+			baseEtag: noteEtag(base),
+			operationId: crypto.randomUUID()
+		});
+		expect(result.outcome).toBe('saved');
+	});
+
+	it('rejects a base ETag that does not describe the submitted revision', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await expect(
+			controller.sync(testActor(), {
+				note,
+				baseEtag: noteEtag({ ...note, currentRevision: 2 }),
+				operationId: crypto.randomUUID()
+			})
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+
+	it('lists current ETags for ordinary notes', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note, noteBuilder({ id: testNoteId(2), kind: 'folder' })];
+		const result = await controller.listSyncInventory(testActor(), {});
+		expect(result.entries.map((entry) => entry.etag)).toEqual([noteEtag(note)]);
 	});
 });
 

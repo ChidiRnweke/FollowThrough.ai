@@ -2,22 +2,22 @@ import { Agent, OpenAIProvider, RunState, Runner } from '@openai/agents';
 import OpenAI from 'openai';
 import type {
 	ActorContext,
+	AgentExecutionUpdate,
 	AgentEvent,
-	AgentExecutionMode,
 	AgentRun,
+	AgentRunDecisionRecord,
 	ConversationId,
-	DecideAgentRunInput,
 	PendingAgentDecision,
 	ProvenanceId,
 	RunAgentInput
 } from '$lib/models';
-import { ExternalServiceError, ValidationError } from '$lib/models';
+import { AgentProviderFailure, ValidationError } from '$lib/models';
 import type { ControllerFactory } from '$lib/factories';
 import type { AgentSessionRepository } from '$lib/repositories';
-import type { AgentRunner, AgentRunStore } from '$lib/services';
+import type { AgentRunner } from '$lib/services';
 import { AgentToolRegistry } from './agent-tool-registry';
 import { withOpenRouterWebSearch } from './openrouter-server-tools';
-import { PersistentAgentSession } from './persistent-agent-session';
+import { BufferedAgentSession } from './buffered-agent-session';
 
 type ToolStreamEvent = {
 	readonly type: string;
@@ -104,82 +104,34 @@ export class AgentToolEventMapper {
 	}
 }
 
-interface EffectiveRunContext {
-	readonly conversationId: ConversationId;
-	readonly model: string;
-	readonly executionMode: AgentExecutionMode;
-	readonly provenanceId: ProvenanceId;
-}
-
-const readRunContext = (context: Readonly<Record<string, unknown>>): EffectiveRunContext => ({
-	conversationId: context.conversationId as ConversationId,
-	model: String(context.effectiveModel),
-	executionMode: context.executionMode as AgentExecutionMode,
-	provenanceId: context.provenanceId as ProvenanceId
-});
-
 export class OpenAIAgentRunner implements AgentRunner {
 	constructor(
 		private readonly controllers: () => ControllerFactory,
-		private readonly runStore: AgentRunStore,
 		private readonly sessions: AgentSessionRepository,
 		private readonly apiKey = process.env.OPENROUTER_API_KEY,
 		private readonly baseURL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 		private readonly appURL = process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
 	) {}
 
-	async *run(
-		actor: ActorContext,
-		input: RunAgentInput,
-		context: Readonly<Record<string, unknown>>,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
+	async *execute(input: {
+		readonly actor: ActorContext;
+		readonly run: AgentRun;
+		readonly request: RunAgentInput;
+		readonly context: Readonly<Record<string, unknown>>;
+		readonly decision?: AgentRunDecisionRecord;
+		readonly signal: AbortSignal;
+		readonly toolExecutor: import('$lib/services').AgentToolExecutor;
+	}): AsyncIterable<AgentExecutionUpdate> {
+		const { actor, run, request, context, decision, signal, toolExecutor } = input;
 		if (!this.apiKey)
-			throw new ValidationError('Agent chat is disabled until OPENROUTER_API_KEY is configured');
-		const effective = readRunContext(context);
-		const run = await this.runStore.create(actor, {
-			conversationId: effective.conversationId,
-			model: effective.model,
-			executionMode: effective.executionMode,
-			contextSnapshot: context,
-			inputSnapshot: input as unknown as Readonly<Record<string, unknown>>
-		});
-		yield { type: 'run_started', runId: run.id };
-		yield* this.execute(actor, input, context, run, undefined, signal);
-	}
-
-	async *resume(
-		actor: ActorContext,
-		input: DecideAgentRunInput,
-		context: Readonly<Record<string, unknown>>,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
-		if (!this.apiKey) throw new ValidationError('There is no resumable remote agent run');
-		const run = await this.runStore.get(actor, input.runId);
-		if (run.status !== 'awaiting_approval' || !run.serializedState)
-			throw new ValidationError('The agent run is not awaiting approval');
-		if (!run.pendingDecisions.some((decision) => decision.callId === input.callId))
-			throw new ValidationError('The pending tool call was not found');
-		yield* this.execute(
-			actor,
-			{ prompt: '', conversationId: run.conversationId },
-			context,
-			run,
-			input,
-			signal
-		);
-	}
-
-	private async *execute(
-		actor: ActorContext,
-		input: RunAgentInput,
-		context: Readonly<Record<string, unknown>>,
-		run: AgentRun,
-		decision?: DecideAgentRunInput,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
+			throw new AgentProviderFailure(
+				'Agent chat is disabled until OPENROUTER_API_KEY is configured',
+				'CONFIGURATION',
+				false
+			);
 		const provider = this.provider();
-		const agent = this.agent(actor, input, context, run);
+		const agent = this.agent(actor, request, context, run, toolExecutor);
+		const session = new BufferedAgentSession(this.sessions, actor, run.conversationId);
 		try {
 			const runner = new Runner({
 				modelProvider: provider,
@@ -199,18 +151,18 @@ export class OpenAIAgentRunner implements AgentRunner {
 						message: decision.message ?? 'The user rejected this action. Recover without it.'
 					});
 			}
-			const stream = await runner.run(agent, state ?? input.prompt, {
+			const stream = await runner.run(agent, state ?? request.prompt, {
 				stream: true,
-				session: new PersistentAgentSession(this.sessions, actor, run.conversationId),
+				session,
 				maxTurns: 20,
 				signal
 			});
 			const mapper = new AgentToolEventMapper();
 			for await (const event of stream) {
 				const toolEvent = mapper.map(event);
-				if (toolEvent) yield toolEvent;
+				if (toolEvent) yield { type: 'event', event: toolEvent };
 				if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
-					yield { type: 'text_delta', text: event.data.delta };
+					yield { type: 'event', event: { type: 'text_delta', text: event.data.delta } };
 			}
 			await stream.completed;
 			const interruptions = stream.interruptions;
@@ -223,44 +175,43 @@ export class OpenAIAgentRunner implements AgentRunner {
 						arguments: details.arguments
 					};
 				});
-				await this.runStore.pause(actor, run.id, stream.state.toString(), pending);
 				for (const item of pending)
 					yield {
-						type: 'approval_required',
-						runId: run.id,
-						callId: item.callId,
-						name: item.toolName,
-						arguments: item.arguments
+						type: 'event',
+						event: {
+							type: 'approval_required',
+							runId: run.id,
+							callId: item.callId,
+							name: item.toolName,
+							arguments: item.arguments
+						}
 					};
-				return;
-			}
-			await this.runStore.complete(actor, run.id);
-			yield {
-				type: 'completed',
-				conversationId: run.conversationId,
-				runId: run.id,
-				model: run.model
-			};
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (signal?.aborted) {
-				await this.runStore.cancel(actor, run.id);
 				yield {
-					type: 'cancelled',
-					runId: run.id,
-					message: 'Generation stopped'
+					type: 'approval_checkpoint',
+					serializedState: stream.state.toString(),
+					pendingDecisions: pending,
+					sessionItems: await session.snapshot()
 				};
 				return;
 			}
-			const providerErrorCode = this.providerErrorCode(error);
-			await this.runStore.fail(actor, run.id, message, providerErrorCode);
 			yield {
-				type: 'failed',
-				runId: run.id,
-				code: providerErrorCode ?? 'EXTERNAL_SERVICE',
-				message: new ExternalServiceError('Agent execution failed', { cause: message }).message,
-				retryable: this.isRetryable(error)
+				type: 'event',
+				event: {
+					type: 'completed',
+					conversationId: run.conversationId,
+					runId: run.id,
+					model: run.model
+				}
 			};
+			yield { type: 'completed', sessionItems: await session.snapshot() };
+		} catch (error) {
+			if (signal.aborted) throw error;
+			throw new AgentProviderFailure(
+				error instanceof Error ? error.message : String(error),
+				this.providerErrorCode(error) ?? 'EXTERNAL_SERVICE',
+				this.isRetryable(error),
+				{ cause: error }
+			);
 		} finally {
 			await provider.close();
 		}
@@ -270,14 +221,21 @@ export class OpenAIAgentRunner implements AgentRunner {
 		actor: ActorContext,
 		input: RunAgentInput,
 		context: Readonly<Record<string, unknown>>,
-		run: AgentRun
+		run: AgentRun,
+		toolExecutor: import('$lib/services').AgentToolExecutor
 	) {
 		const provenanceId = (context.provenanceId ?? crypto.randomUUID()) as ProvenanceId;
-		const registry = new AgentToolRegistry(this.controllers(), actor, run.executionMode, {
-			provenanceId,
-			input,
-			model: run.model
-		});
+		const registry = new AgentToolRegistry(
+			this.controllers(),
+			actor,
+			run.executionMode,
+			{
+				provenanceId,
+				input,
+				model: run.model
+			},
+			toolExecutor
+		);
 		const { skills: rawSkills, ...rest } = context;
 		const skills = Array.isArray(rawSkills)
 			? (rawSkills as {

@@ -10,6 +10,7 @@ This document is the independent behavioural specification for backend models, s
 - Archived projects do not appear in active project lists.
 - A filesystem entry belongs to exactly one project and the same user as that project.
 - A filesystem entry is a folder, note, or skill document.
+- Skill documents are excluded from ordinary note listings and project trees and remain discoverable through Skills.
 - Folder entries do not carry authored document content.
 - A root entry has no parent. A nested entry has exactly one parent.
 - A parent must be a folder in the same project and owned by the same user.
@@ -25,6 +26,12 @@ This document is the independent behavioural specification for backend models, s
 - A note title is non-empty after trimming.
 - A save may only mutate a note owned by the actor.
 - A save against a stale revision is rejected without changing the note.
+- A note content save atomically compares its base revision; concurrent saves from one base have
+  exactly one winner.
+- A note ETag is an opaque function of persistent note identity and content revision. A successful
+  conditional save returns the next ETag; a conflict preserves the current remote note and ETag.
+- Retrying an already-applied note mutation with identical synchronization content is idempotently
+  acknowledged.
 - A no-op save does not increment the current revision or create another revision snapshot.
 - A meaningful save increments the revision exactly once and records an immutable snapshot.
 - Anchors are created only from a non-empty selection in the current note revision.
@@ -80,10 +87,19 @@ This document is the independent behavioural specification for backend models, s
 - A skill is a skill-kind document in a project and is loaded in full only after its summary is selected.
 - Agent context contains enabled skill summaries and trigger hints, never full instructions.
 - Loading a skill records the skill, context note when present, and provenance; merely advertising its summary does not record usage.
-- Each user has one visible, idempotently provisioned FollowThrough skill in General, and provisioning never overwrites an existing user-edited copy.
+- Each user has one idempotently provisioned FollowThrough skill stored in General and listed in Skills, and provisioning never overwrites an existing user-edited copy.
 - Restoring a skill version creates a new current immutable revision and preserves all earlier revisions.
 
 ## Retrieval and agent execution
+
+- Agent runs move only through the documented queued, running, awaiting-approval, cancelling, and terminal transitions; terminal runs are immutable.
+- A conversation has at most one non-terminal agent run.
+- Agent events are committed before a client can observe them, and their global cursors define replay order.
+- Every worker heartbeat, event append, projection, and status mutation is fenced by the current lease token.
+- Closing or losing a browser connection never cancels a run; cancellation is an explicit persisted command.
+- A logical submitted request records its user prompt once. Idempotent resubmission and manual retry never append that prompt again.
+- Automatic replay is forbidden after any non-read tool effect has started.
+- Tool receipts prevent duplicate database-visible effects, but no exactly-once guarantee is made for an uncertain external effect.
 
 - Search is always scoped to the actor and, when provided, a project.
 - Search chunks are deterministic, carry a cryptographic content hash, and are replaced when their source revision changes.

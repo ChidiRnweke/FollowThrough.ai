@@ -38,6 +38,27 @@ describe('Project management invariants', () => {
 		expect(tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
 	});
 
+	it('does not expose root skill documents in project trees', async () => {
+		const { repository, service } = setup();
+		repository.entries = [
+			noteBuilder({ id: testNoteId(1) }),
+			noteBuilder({ id: testNoteId(2), kind: 'skill' })
+		];
+		const tree = await service.read(testActor(), projectBuilder().id);
+		expect(tree.map((node) => node.entry.id)).toEqual([testNoteId(1)]);
+	});
+
+	it('does not expose nested skill documents in project trees', async () => {
+		const { repository, service } = setup();
+		repository.entries = [
+			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
+			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) }),
+			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) })
+		];
+		const tree = await service.read(testActor(), projectBuilder().id);
+		expect(tree[0]?.children.map((node) => node.entry.id)).toEqual([testNoteId(2)]);
+	});
+
 	it('rejects moving an entry below its descendant', async () => {
 		const { repository, service } = setup();
 		repository.entries = [

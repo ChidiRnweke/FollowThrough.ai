@@ -34,6 +34,17 @@ describe('Note management invariants', () => {
 		});
 	});
 
+	it('does not expose skill documents in note listings', async () => {
+		const { service, notes } = setup();
+		notes.notes = [
+			noteBuilder(),
+			noteBuilder({ id: testNoteId(2), kind: 'folder' }),
+			noteBuilder({ id: testNoteId(3), kind: 'skill' })
+		];
+		const listed = await service.list(testActor());
+		expect(listed.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
+	});
+
 	it('does not increment a no-op save', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
@@ -46,6 +57,17 @@ describe('Note management invariants', () => {
 		notes.notes = [noteBuilder()];
 		const saved = await service.save(testActor(), noteBuilder({ title: 'Changed' }));
 		expect(saved.currentRevision).toBe(2);
+	});
+
+	it('rejects a save that loses the atomic revision race', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		notes.failNextConditionalUpdate = true;
+		await expect(
+			service.save(testActor(), noteBuilder({ title: 'Changed' }))
+		).rejects.toMatchObject({
+			code: 'STALE_REVISION'
+		});
 	});
 
 	it('does not allow a content save to reorder siblings', async () => {

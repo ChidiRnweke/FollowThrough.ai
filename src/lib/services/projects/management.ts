@@ -75,7 +75,9 @@ export class ProjectManagementService
 
 	async read(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTreeNode[]> {
 		await this.get(actor, projectId);
-		const entries = await this.tree.list(actor, projectId);
+		const entries = (await this.tree.list(actor, projectId)).filter(
+			(entry) => entry.kind !== 'skill'
+		);
 		const children = new Map<NoteId | undefined, Note[]>();
 		for (const entry of entries) {
 			const siblings = children.get(entry.parentId) ?? [];

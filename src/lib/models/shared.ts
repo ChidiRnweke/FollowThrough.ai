@@ -3,6 +3,7 @@ export type Brand<T, Name extends string> = T & { readonly __brand: Name };
 export type UserId = Brand<string, 'UserId'>;
 export type ProjectId = Brand<string, 'ProjectId'>;
 export type NoteId = Brand<string, 'NoteId'>;
+export type NoteEtag = Brand<string, 'NoteEtag'>;
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;
 export type TodoId = Brand<string, 'TodoId'>;
 export type RelationshipId = Brand<string, 'RelationshipId'>;

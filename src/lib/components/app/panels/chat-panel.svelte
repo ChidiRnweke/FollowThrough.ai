@@ -60,11 +60,13 @@
 	} = $props();
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
+		const release = chat.observe();
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) chat.clear();
 		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
 		else void chat.hydrate();
 		prompt = sessionStorage.getItem(draftKey()) ?? '';
+		return release;
 	});
 
 	let prompt = $state('');
@@ -164,7 +166,7 @@
 			...(selection !== undefined ? { selection, noteId: selection.noteId } : {})
 		});
 		await tick();
-		viewport?.scrollTo({ top: viewport.scrollHeight });
+		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
 		await request;
 	}
 
@@ -234,6 +236,10 @@
 		if (result) toast.success('Applied edit to note.');
 		else if (noteActions.lastError) toast.error(noteActions.lastError);
 	}
+
+	function requestRetry(entry: (typeof chat.entries)[number]): void {
+		void chat.retry(entry);
+	}
 </script>
 
 {#snippet chipBadge(chip: ContextChip, auto: boolean)}
@@ -283,7 +289,7 @@
 				{/if}
 			{/if}
 			{#each chat.entries as entry (entry.id)}
-				<div class="space-y-1.5">
+				<div class="flex flex-col gap-1.5">
 					<div class="flex items-center justify-between gap-2">
 						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
 						<div class="flex items-center gap-1">
@@ -367,13 +373,19 @@
 							{/if}
 						{/if}
 					{/each}
-					{#if entry.role === 'assistant' && entry.status === 'waiting'}
+					{#if entry.role === 'assistant' && entry.status === 'queued'}
+						<ChatActivity label={entry.error ?? 'Queued'} />
+					{:else if entry.role === 'assistant' && entry.status === 'waiting'}
 						<ChatActivity />
 					{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
 						<ChatActivity
 							label="Agent is working"
 							toolActive={entry.parts.some((part) => part.kind === 'tool')}
 						/>
+					{:else if entry.role === 'assistant' && entry.status === 'awaiting_approval'}
+						<p class="text-xs text-muted-foreground" role="status">Waiting for your approval.</p>
+					{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
+						<ChatActivity label="Cancellation requested" />
 					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
 						<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
 							<span
@@ -381,7 +393,7 @@
 									(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
 							>
 							{#if entry.status === 'failed' && entry.retryable && entry.runId}
-								<Button variant="outline" size="xs" onclick={() => void chat.retry(entry)}>
+								<Button variant="outline" size="xs" onclick={() => requestRetry(entry)}>
 									<RotateCcw data-icon="inline-start" /> Retry
 								</Button>
 							{/if}
@@ -400,7 +412,9 @@
 		</div>
 	</ScrollArea>
 	{#if showJumpToLatest}
-		<Button variant="outline" size="sm" class="self-end" onclick={jumpToLatest}>Jump to latest</Button>
+		<Button variant="outline" size="sm" class="self-end" onclick={jumpToLatest}
+			>Jump to latest</Button
+		>
 	{/if}
 	{#if autoChip || chat.chips.length > 0}
 		<div class="flex flex-wrap items-center gap-1" aria-label="Chat context">
@@ -415,6 +429,13 @@
 	<div class="flex flex-wrap items-center gap-2" aria-label="Chat model and execution mode">
 		<ModelPicker models={agentModels} bind:value={chat.modelOverride} allowDefault compact />
 		<ExecutionModeControl bind:value={chat.executionModeOverride} compact />
+		<Badge
+			variant="secondary"
+			class={chat.isStreaming && chat.connection !== 'connected' ? undefined : 'hidden'}
+			aria-live="polite"
+		>
+			{chat.connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
+		</Badge>
 	</div>
 	<div class="relative flex items-end gap-2">
 		{#if mentionCandidates.length > 0}
@@ -462,7 +483,7 @@
 		<Button
 			size="icon"
 			aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
-			onclick={() => (chat.isStreaming ? chat.stop() : void send())}
+			onclick={() => (chat.isStreaming ? void chat.stop() : void send())}
 			disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
 		>
 			{#if chat.isStreaming}

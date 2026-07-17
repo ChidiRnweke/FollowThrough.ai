@@ -1,28 +1,44 @@
 import type {
 	ActorContext,
-	AgentEvent,
 	AgentRun,
 	AgentRunId,
+	AgentRunReceipt,
+	AgentRunEventRecord,
+	AgentRunSnapshot,
 	Conversation,
 	ConversationId,
+	DateTime,
 	DecideAgentRunInput,
 	Message,
-	RunAgentInput
+	RunAgentInput,
+	SubmitAgentRunInput
 } from '$lib/models';
-import { ValidationError } from '$lib/models';
+import { isTerminalAgentRunStatus, NotFoundError, ValidationError } from '$lib/models';
 import type {
-	AgentContextBuilder,
-	AgentRunner,
-	AgentModelCatalog,
-	AgentPreferencesStore,
-	AgentRunStore,
-	ConversationJournal,
-	ProvenanceRecorder
-} from '$lib/services';
+	AgentRunDecisionRepository,
+	AgentRunEventRepository,
+	AgentRunRepository,
+	TransactionRunner
+} from '$lib/repositories';
+import type { AgentModelCatalog, AgentPreferencesStore, ConversationJournal } from '$lib/services';
 import { resolveAgentExecutionMode, resolveAgentModel } from '$lib/services';
+import type { AgentRunExecutor } from '$lib/server/domain/agent-run-executor';
+
+const now = (): DateTime => new Date().toISOString() as DateTime;
+
+class DuplicateSubmission extends Error {}
 
 export interface AgentController {
-	run(actor: ActorContext, input: RunAgentInput, signal?: AbortSignal): AsyncIterable<AgentEvent>;
+	submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
+	getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	listRunEvents(
+		actor: ActorContext,
+		runId: AgentRunId,
+		after: string
+	): Promise<readonly AgentRunEventRecord[]>;
+	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot>;
+	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
 	listSessions(
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
@@ -39,26 +55,23 @@ export interface AgentController {
 	): Promise<{
 		conversation: Conversation;
 		messages: readonly Message[];
-		latestRun?: Pick<AgentRun, 'id' | 'status' | 'failure'>;
+		latestRun?: AgentRunSnapshot;
 	}>;
-	decide(
-		actor: ActorContext,
-		input: DecideAgentRunInput,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent>;
-	retry(actor: ActorContext, runId: AgentRunId, signal?: AbortSignal): AsyncIterable<AgentEvent>;
 }
 
 export interface AgentDependencies {
-	contextBuilder: AgentContextBuilder;
-	agentRunner: AgentRunner;
 	conversationJournal: ConversationJournal;
-	provenanceRecorder: ProvenanceRecorder;
 	preferences: AgentPreferencesStore;
 	models: AgentModelCatalog;
-	runStore: AgentRunStore;
+	runs: AgentRunRepository;
+	events: AgentRunEventRepository;
+	decisions: AgentRunDecisionRepository;
+	transactionRunner: TransactionRunner;
 	defaultModel: string;
+	executor: AgentRunExecutor;
 }
+
+const activeRuns = new Map<AgentRunId, AbortController>();
 
 export class DefaultAgentController implements AgentController {
 	constructor(private readonly dependencies: AgentDependencies) {}
@@ -79,214 +92,245 @@ export class DefaultAgentController implements AgentController {
 	}
 
 	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
-		const latest = await this.dependencies.runStore
-			.getLatestForConversation(actor, conversationId)
-			.catch(() => undefined);
-		if (latest?.status === 'running' || latest?.status === 'awaiting_approval')
+		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
+		if (active)
 			throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
 		await this.dependencies.conversationJournal.remove(actor, conversationId);
 	}
 
 	async getSession(actor: ActorContext, conversationId: ConversationId) {
-		const [conversation, messages] = await Promise.all([
+		const [conversation, messages, latest] = await Promise.all([
 			this.dependencies.conversationJournal.get(actor, conversationId),
-			this.dependencies.conversationJournal.listMessages(actor, conversationId)
+			this.dependencies.conversationJournal.listMessages(actor, conversationId),
+			this.dependencies.runs.findLatestByConversation(actor, conversationId)
 		]);
-		const latestRun = await this.dependencies.runStore
-			.getLatestForConversation(actor, conversationId)
-			.catch(() => undefined);
 		return {
 			conversation,
 			messages,
-			...(latestRun
-				? {
-						latestRun: {
-							id: latestRun.id,
-							status: latestRun.status,
-							failure: latestRun.failure
-						}
-					}
-				: {})
+			...(latest ? { latestRun: await this.snapshot(actor, latest) } : {})
 		};
 	}
 
-	async *run(
-		actor: ActorContext,
-		input: RunAgentInput,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
-		yield* this.executeRun(actor, input, true, signal);
-	}
-
-	async *retry(
-		actor: ActorContext,
-		runId: AgentRunId,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
-		const run = await this.dependencies.runStore.get(actor, runId);
-		if (run.status !== 'failed') throw new ValidationError('Only failed runs can be retried');
-		const input = run.inputSnapshot as RunAgentInput | undefined;
-		if (!input?.prompt) throw new ValidationError('The original request is unavailable');
-		yield* this.executeRun(actor, { ...input, conversationId: run.conversationId }, false, signal);
-	}
-
-	private async *executeRun(
-		actor: ActorContext,
-		input: RunAgentInput,
-		recordPrompt: boolean,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
-		if (input.modelOverride) await this.dependencies.models.assertSelectable(input.modelOverride);
-		const conversation = await this.dependencies.conversationJournal.getOrCreate(actor, input);
-		const preferences = await this.dependencies.preferences.get(actor);
-		const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
-		const executionMode = resolveAgentExecutionMode(conversation, preferences);
-		const effectiveInput = { ...input, conversationId: conversation.id };
-		if (recordPrompt)
-			await this.dependencies.conversationJournal.recordUserPrompt(
-				actor,
-				conversation.id,
-				input.prompt
-			);
-		const provenance = await this.dependencies.provenanceRecorder.record(actor, {
-			producerKind: 'agent',
-			producerName: 'Workbench Agent',
-			pipeline: 'agent',
-			model,
-			metadata: { conversationId: conversation.id, executionMode }
-		});
-		const baseContext = await this.dependencies.contextBuilder.build(actor, effectiveInput, {
-			provenanceId: provenance.id
-		});
-		const context = {
-			...baseContext,
-			conversationId: conversation.id,
-			effectiveModel: model,
-			executionMode,
-			provenanceId: provenance.id
-		};
-		let assistantText = '';
-		let completed = false;
-		for await (const event of this.dependencies.agentRunner.run(
-			actor,
-			effectiveInput,
-			context,
-			signal
-		)) {
-			if (event.type === 'text_delta') assistantText += event.text;
-			if (event.type === 'tool_started')
-				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
-					callId: event.callId,
-					name: event.name,
-					input: event.arguments,
-					status: 'running'
-				});
-			if (event.type === 'tool_completed') {
-				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
-					callId: event.callId,
-					name: event.name,
-					input: {},
-					output: event.output,
-					failure: event.failure,
-					status: event.failure ? 'failed' : 'succeeded'
-				});
-				yield event;
-				yield { type: 'resources_stale' as const, resources: [event.name] };
-				continue;
-			}
-			if (event.type === 'approval_required')
-				await this.dependencies.conversationJournal.recordToolActivity(actor, conversation.id, {
-					callId: event.callId,
-					name: event.name,
-					input: event.arguments,
-					status: 'approval_required'
-				});
-			if (event.type === 'completed') {
-				await this.dependencies.conversationJournal.recordAssistantText(
+	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {
+		const existing = await this.dependencies.runs.findByRequestId(actor, input.requestId);
+		if (existing) return this.receipt(actor, existing);
+		if (input.model) await this.dependencies.models.assertSelectable(input.model);
+		try {
+			const receipt = await this.dependencies.transactionRunner.run(async () => {
+				const submittedAt = now();
+				const runInput = this.freezeInput(input);
+				const conversation = await this.dependencies.conversationJournal.getOrCreate(
+					actor,
+					runInput
+				);
+				const preferences = await this.dependencies.preferences.get(actor);
+				const run: AgentRun = {
+					id: crypto.randomUUID() as AgentRunId,
+					userId: actor.userId,
+					conversationId: conversation.id,
+					model: resolveAgentModel(conversation, preferences, this.dependencies.defaultModel),
+					executionMode: resolveAgentExecutionMode(conversation, preferences),
+					status: 'queued',
+					requestId: input.requestId,
+					pendingDecisions: [],
+					contextSnapshot: {},
+					inputSnapshot: runInput as unknown as Readonly<Record<string, unknown>>,
+					definitionVersion: 1,
+					createdAt: submittedAt,
+					updatedAt: submittedAt
+				};
+				await this.dependencies.conversationJournal.recordUserPrompt(
 					actor,
 					conversation.id,
-					assistantText,
-					model
+					runInput.prompt,
+					run.id
 				);
-				completed = true;
-				yield { ...event, conversationId: conversation.id, model };
-				continue;
-			}
-			yield event;
+				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
+				if (!inserted) throw new DuplicateSubmission();
+				const event = await this.dependencies.events.append(run.id, 0, {
+					type: 'run_queued',
+					runId: run.id,
+					attempt: 1,
+					reason: 'submitted'
+				});
+				return {
+					runId: run.id,
+					conversationId: conversation.id,
+					status: run.status,
+					latestCursor: event.cursor
+				};
+			});
+			this.executeInBackground(receipt.runId);
+			return receipt;
+		} catch (error) {
+			if (!(error instanceof DuplicateSubmission)) throw this.mapActiveRunConflict(error);
+			const duplicate = await this.dependencies.runs.findByRequestId(actor, input.requestId);
+			if (!duplicate) throw error;
+			return this.receipt(actor, duplicate);
 		}
-		if (!completed && assistantText)
-			await this.dependencies.conversationJournal.recordAssistantText(
-				actor,
-				conversation.id,
-				assistantText,
-				model
-			);
 	}
 
-	async *decide(
+	async getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
+		const run = await this.dependencies.runs.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		return this.snapshot(actor, run);
+	}
+
+	listRunEvents(
 		actor: ActorContext,
-		input: DecideAgentRunInput,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent> {
-		const run = await this.dependencies.runStore.get(actor, input.runId);
-		const pending = run.pendingDecisions.find((item) => item.callId === input.callId);
-		if (!pending) throw new Error('The pending tool call was not found');
-		await this.dependencies.conversationJournal.recordToolActivity(actor, run.conversationId, {
-			callId: input.callId,
-			name: pending.toolName,
-			input: pending.arguments,
-			decision: input.decision === 'approve' ? 'approved' : 'rejected',
-			status: input.decision === 'approve' ? 'running' : 'rejected'
+		runId: AgentRunId,
+		after: string
+	): Promise<readonly AgentRunEventRecord[]> {
+		return this.dependencies.events.replay(actor, runId, after);
+	}
+
+	async decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot> {
+		const snapshot = await this.dependencies.transactionRunner.run(async () => {
+			const run = await this.requireRun(actor, input.runId);
+			if (run.status !== 'awaiting_approval' && run.status !== 'queued')
+				throw new ValidationError('The agent run is not awaiting approval');
+			if (!run.pendingDecisions.some((pending) => pending.callId === input.callId))
+				throw new ValidationError('The pending tool call was not found');
+			await this.dependencies.decisions.record(actor, input);
+			const queued = await this.dependencies.runs.requeueAfterDecision(actor, run.id, now());
+			if (run.status === 'awaiting_approval')
+				await this.dependencies.events.append(run.id, 0, {
+					type: 'run_queued',
+					runId: run.id,
+					attempt: 1,
+					reason: 'resumed'
+				});
+			return this.snapshot(actor, queued);
 		});
-		const provenance = await this.dependencies.provenanceRecorder.record(actor, {
-			producerKind: 'agent',
-			producerName: 'Workbench Agent',
-			pipeline: 'agent',
-			runId: run.id,
-			model: run.model,
-			metadata: { conversationId: run.conversationId, resumed: true }
+		this.executeInBackground(input.runId);
+		return snapshot;
+	}
+
+	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const run = await this.dependencies.runs.requestCancellation(actor, runId, now());
+			// Abort in-process execution immediately
+			const controller = activeRuns.get(runId);
+			if (controller) controller.abort();
+			if (run.status === 'cancelled')
+				await this.dependencies.events.append(run.id, 0, {
+					type: 'cancelled',
+					runId: run.id,
+					message: 'The request was cancelled before it started'
+				});
+			return this.snapshot(actor, run);
 		});
-		let assistantText = '';
-		for await (const event of this.dependencies.agentRunner.resume(
-			actor,
-			input,
-			{ ...(run.contextSnapshot ?? {}), provenanceId: provenance.id },
-			signal
-		)) {
-			if (event.type === 'text_delta') assistantText += event.text;
-			if (event.type === 'tool_started')
-				await this.dependencies.conversationJournal.recordToolActivity(actor, run.conversationId, {
-					callId: event.callId,
-					name: event.name,
-					input: event.arguments,
-					status: 'running'
+	}
+
+	async retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {
+		const duplicate = await this.dependencies.runs.findByRequestId(actor, requestId);
+		if (duplicate) return this.receipt(actor, duplicate);
+		try {
+			const receipt = await this.dependencies.transactionRunner.run(async () => {
+				const original = await this.requireRun(actor, runId);
+				if (!isTerminalAgentRunStatus(original.status) || original.status === 'completed')
+					throw new ValidationError('Only failed or cancelled runs can be retried');
+				const submittedAt = now();
+				const retry: AgentRun = {
+					id: crypto.randomUUID() as AgentRunId,
+					userId: original.userId,
+					conversationId: original.conversationId,
+					model: original.model,
+					executionMode: original.executionMode,
+					status: 'queued',
+					requestId,
+					pendingDecisions: [],
+					contextSnapshot: {},
+					inputSnapshot: original.inputSnapshot,
+					retryOfRunId: original.id,
+					definitionVersion: 1,
+					createdAt: submittedAt,
+					updatedAt: submittedAt
+				};
+				const inserted = await this.dependencies.runs.insertIdempotent(actor, retry);
+				if (!inserted) throw new DuplicateSubmission();
+				const event = await this.dependencies.events.append(retry.id, 0, {
+					type: 'run_queued',
+					runId: retry.id,
+					attempt: 1,
+					reason: 'submitted'
 				});
-			if (event.type === 'tool_completed')
-				await this.dependencies.conversationJournal.recordToolActivity(actor, run.conversationId, {
-					callId: event.callId,
-					name: event.name,
-					input: {},
-					output: event.output,
-					failure: event.failure,
-					status: event.failure ? 'failed' : 'succeeded'
-				});
-			if (event.type === 'approval_required')
-				await this.dependencies.conversationJournal.recordToolActivity(actor, run.conversationId, {
-					callId: event.callId,
-					name: event.name,
-					input: event.arguments,
-					status: 'approval_required'
-				});
-			if (event.type === 'completed' && assistantText)
-				await this.dependencies.conversationJournal.recordAssistantText(
-					actor,
-					run.conversationId,
-					assistantText,
-					run.model
-				);
-			yield event;
-			if (event.type === 'tool_completed')
-				yield { type: 'resources_stale' as const, resources: [event.name] };
+				return {
+					runId: retry.id,
+					conversationId: retry.conversationId,
+					status: retry.status,
+					latestCursor: event.cursor
+				};
+			});
+			this.executeInBackground(receipt.runId);
+			return receipt;
+		} catch (error) {
+			if (!(error instanceof DuplicateSubmission)) throw this.mapActiveRunConflict(error);
+			const existing = await this.dependencies.runs.findByRequestId(actor, requestId);
+			if (!existing) throw error;
+			return this.receipt(actor, existing);
 		}
+	}
+
+	executeInBackground(runId: AgentRunId): void {
+		const controller = new AbortController();
+		activeRuns.set(runId, controller);
+		const cleanup = () => activeRuns.delete(runId);
+		this.dependencies.executor.execute(runId, controller.signal).then(cleanup, (error) => {
+			cleanup();
+			console.error(`[agent-run] Background execution failed for ${runId}:`, error);
+		});
+	}
+
+	private freezeInput(input: SubmitAgentRunInput): RunAgentInput {
+		return {
+			requestId: input.requestId,
+			prompt: input.input,
+			...(input.conversationId ? { conversationId: input.conversationId } : {}),
+			...(input.projectId ? { projectId: input.projectId } : {}),
+			...(input.noteId ? { noteId: input.noteId } : {}),
+			...(input.selection ? { selection: input.selection } : {}),
+			...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
+			...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
+			...(input.requestedSkillNoteIds
+				? { requestedSkillNoteIds: input.requestedSkillNoteIds }
+				: {}),
+			...(input.model !== undefined ? { modelOverride: input.model } : {}),
+			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {})
+		};
+	}
+
+	private async requireRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
+		const run = await this.dependencies.runs.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		return run;
+	}
+
+	private async receipt(actor: ActorContext, run: AgentRun): Promise<AgentRunReceipt> {
+		return {
+			runId: run.id,
+			conversationId: run.conversationId,
+			status: run.status,
+			latestCursor: await this.dependencies.events.latestCursor(actor, run.id)
+		};
+	}
+
+	private async snapshot(actor: ActorContext, run: AgentRun): Promise<AgentRunSnapshot> {
+		return {
+			run,
+			latestCursor: await this.dependencies.events.latestCursor(actor, run.id),
+			pendingDecisions: run.pendingDecisions
+		};
+	}
+
+	private mapActiveRunConflict(error: unknown): unknown {
+		if (
+			typeof error === 'object' &&
+			error !== null &&
+			'constraint_name' in error &&
+			error.constraint_name === 'agent_runs_active_conversation_unique'
+		)
+			return new ValidationError('This conversation already has an active agent run');
+		return error;
 	}
 }

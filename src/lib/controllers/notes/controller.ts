@@ -6,10 +6,22 @@ import type {
 	CreateNoteOutput,
 	GetNoteViewInput,
 	NoteView,
+	NoteSyncInventoryEntry,
 	RenameNoteInput,
 	RenameNoteOutput,
 	SaveNoteInput,
-	SaveNoteOutput
+	SaveNoteOutput,
+	SyncNoteInput,
+	SyncNoteOutput,
+	ListNoteSyncInventoryInput,
+	ListNoteSyncInventoryOutput
+} from '$lib/models';
+import {
+	noteEtag,
+	noteMatchesEtag,
+	noteSyncContentEquals,
+	StaleRevisionError,
+	ValidationError
 } from '$lib/models';
 import type { TransactionRunner } from '$lib/repositories';
 import type {
@@ -17,6 +29,7 @@ import type {
 	DiagramLister,
 	NoteCreator,
 	NoteReader,
+	NoteTreeReader,
 	ReferenceLister,
 	ReferenceViewAssembler,
 	RelationshipFinder,
@@ -37,11 +50,17 @@ export interface NotesController {
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
 	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput>;
+	sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput>;
+	listSyncInventory(
+		actor: ActorContext,
+		input: ListNoteSyncInventoryInput
+	): Promise<ListNoteSyncInventoryOutput>;
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput>;
 	archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput>;
 }
 export interface NotesDependencies {
 	noteReader: NoteReader;
+	noteTreeReader: NoteTreeReader;
 	noteCreator: NoteCreator;
 	relationshipFinder: RelationshipFinder;
 	backlinkViewAssembler: BacklinkViewAssembler;
@@ -78,6 +97,7 @@ export class DefaultNotesController implements NotesController {
 		]);
 		return {
 			note,
+			etag: noteEtag(note),
 			backlinks,
 			references: referenceViews,
 			diagrams,
@@ -94,8 +114,49 @@ export class DefaultNotesController implements NotesController {
 			await this.dependencies.revisionRecorder.record(actor, note);
 			const anchors = await this.dependencies.anchorRepairer.repairForNote(actor, note);
 			await this.dependencies.noteIndexer.index(actor, note);
-			return { note, repairedAnchorIds: anchors.map((anchor) => anchor.id) };
+			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
+	}
+	async sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput> {
+		if (!noteMatchesEtag(input.note, input.baseEtag))
+			throw new ValidationError('The base ETag does not describe the submitted note revision');
+		try {
+			const saved = await this.save(actor, { note: input.note });
+			return {
+				outcome: 'saved',
+				version: { note: saved.note, etag: saved.etag },
+				repairedAnchorIds: saved.repairedAnchorIds
+			};
+		} catch (error) {
+			if (!(error instanceof StaleRevisionError)) throw error;
+			const remote = await this.dependencies.noteReader.get(actor, input.note.id);
+			if (noteSyncContentEquals(remote, input.note))
+				return {
+					outcome: 'saved',
+					version: { note: remote, etag: noteEtag(remote) },
+					repairedAnchorIds: []
+				};
+			return {
+				outcome: 'conflict',
+				baseEtag: input.baseEtag,
+				remote: { note: remote, etag: noteEtag(remote) }
+			};
+		}
+	}
+	async listSyncInventory(
+		actor: ActorContext,
+		input: ListNoteSyncInventoryInput
+	): Promise<ListNoteSyncInventoryOutput> {
+		const notes = await this.dependencies.noteTreeReader.list(actor, input.projectId);
+		const entries: NoteSyncInventoryEntry[] = notes
+			.filter((note) => note.kind === 'note')
+			.map((note) => ({
+				noteId: note.id,
+				projectId: note.projectId,
+				etag: noteEtag(note),
+				updatedAt: note.updatedAt
+			}));
+		return { entries };
 	}
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {

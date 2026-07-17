@@ -90,6 +90,7 @@ export type NoteSummary = Pick<
 	| 'isPinned'
 	| 'archivedAt'
 	| 'updatedAt'
+	| 'currentRevision'
 >;
 
 export interface NoteRevision {
@@ -305,6 +306,8 @@ export interface Conversation {
 export interface Message {
 	readonly id: MessageId;
 	readonly conversationId: ConversationId;
+	readonly runId?: AgentRunId;
+	readonly eventCursor?: string;
 	readonly role: 'user' | 'assistant' | 'tool';
 	readonly content: Readonly<Record<string, unknown>>;
 	readonly model?: string;
@@ -322,7 +325,8 @@ export interface ToolActivity {
 }
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
-export type AgentRunStatus = 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'cancelled';
+export type AgentRunStatus =
+	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgentPreferences {
 	readonly userId: UserId;
@@ -345,6 +349,11 @@ export interface AgentRun {
 	readonly model: string;
 	readonly executionMode: AgentExecutionMode;
 	readonly status: AgentRunStatus;
+	readonly requestId: string;
+	readonly cancelRequestedAt?: DateTime;
+	readonly startedAt?: DateTime;
+	readonly finishedAt?: DateTime;
+	readonly provenanceId?: ProvenanceId;
 	readonly serializedState?: string;
 	readonly pendingDecisions: readonly PendingAgentDecision[];
 	readonly failure?: string;
@@ -355,6 +364,19 @@ export interface AgentRun {
 	readonly definitionVersion?: number;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+export interface AgentRunReceipt {
+	readonly runId: AgentRunId;
+	readonly conversationId: ConversationId;
+	readonly status: AgentRunStatus;
+	readonly latestCursor: string;
+}
+
+export interface AgentRunSnapshot {
+	readonly run: AgentRun;
+	readonly latestCursor: string;
+	readonly pendingDecisions: readonly PendingAgentDecision[];
 }
 
 export interface AgentSessionItem {

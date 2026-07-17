@@ -67,6 +67,7 @@ export class PersistentAgentRunStore implements AgentRunStore {
 			userId: actor.userId,
 			...input,
 			status: 'running',
+			requestId: crypto.randomUUID(),
 			pendingDecisions: [],
 			definitionVersion: 1,
 			createdAt: timestamp,

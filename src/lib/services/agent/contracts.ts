@@ -1,6 +1,9 @@
 import type {
 	ActorContext,
 	AgentEvent,
+	AgentExecutionUpdate,
+	AgentRun,
+	AgentRunDecisionRecord,
 	Conversation,
 	ConversationId,
 	ExtractPromisesOutput,
@@ -33,18 +36,27 @@ export interface AgentContextBuilder {
 	): Promise<Readonly<Record<string, unknown>>>;
 }
 export interface AgentRunner {
-	run(
-		actor: ActorContext,
-		input: RunAgentInput,
-		context: Readonly<Record<string, unknown>>,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent>;
-	resume(
-		actor: ActorContext,
-		input: DecideAgentRunInput,
-		context: Readonly<Record<string, unknown>>,
-		signal?: AbortSignal
-	): AsyncIterable<AgentEvent>;
+	execute(input: {
+		readonly actor: ActorContext;
+		readonly run: AgentRun;
+		readonly request: RunAgentInput;
+		readonly context: Readonly<Record<string, unknown>>;
+		readonly decision?: AgentRunDecisionRecord;
+		readonly signal: AbortSignal;
+		readonly toolExecutor: AgentToolExecutor;
+	}): AsyncIterable<AgentExecutionUpdate>;
+}
+
+export interface AgentToolExecutor {
+	execute(
+		input: {
+			readonly callId: string;
+			readonly toolName: string;
+			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly classification: 'read' | 'proposal' | 'mutation';
+		},
+		action: () => Promise<unknown>
+	): Promise<unknown>;
 }
 export interface ConversationRecorder {
 	getOrCreate(actor: ActorContext, input: RunAgentInput): Promise<Conversation>;
@@ -70,17 +82,26 @@ export interface ConversationJournal extends ConversationRecorder {
 	recordUserPrompt(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		prompt: string
+		prompt: string,
+		runId?: import('$lib/models').AgentRunId
 	): Promise<void>;
 	recordAssistantText(
 		actor: ActorContext,
 		conversationId: ConversationId,
 		text: string,
-		model?: string
+		model?: string,
+		provenance?: {
+			readonly runId: import('$lib/models').AgentRunId;
+			readonly eventCursor?: string;
+		}
 	): Promise<void>;
 	recordToolActivity(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		activity: ToolActivity
+		activity: ToolActivity,
+		provenance?: {
+			readonly runId: import('$lib/models').AgentRunId;
+			readonly eventCursor?: string;
+		}
 	): Promise<void>;
 }

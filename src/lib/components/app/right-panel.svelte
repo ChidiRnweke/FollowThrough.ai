@@ -74,7 +74,6 @@
 						aria-label="New chat"
 						title="New chat"
 						onclick={() => chat.clear()}
-						disabled={chat.isStreaming}
 					>
 						<Plus data-icon />
 					</Button>

@@ -4,8 +4,10 @@ import { AppFactory } from '$lib/server/app-factory';
 import type {
 	ExtractPromisesInput,
 	GenerateMermaidDiagramInput,
+	ListNoteSyncInventoryInput,
 	RelateSelectionInput,
-	ReviseInlineMermaidInput
+	ReviseInlineMermaidInput,
+	SyncNoteInput
 } from '$lib/models';
 import type { NoteId } from '$lib/models';
 
@@ -39,6 +41,8 @@ const textSelection = z
 	})
 	.refine((s) => s.to >= s.from, 'Selection end must follow its start.');
 
+const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
+
 export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
 	return AppFactory.controllerFactory()
 		.notes()
@@ -51,6 +55,28 @@ export const getNote = query(z.string().uuid(), async (noteId) => {
 		.get(AppFactory.actor(), { noteId: noteId as NoteId });
 	return view.note;
 });
+
+export const syncNote = command(
+	z.object({
+		note: noteSchema,
+		baseEtag: noteEtag,
+		operationId: z.string().uuid()
+	}),
+	async (input) => {
+		return AppFactory.controllerFactory()
+			.notes()
+			.sync(AppFactory.actor(), input as SyncNoteInput);
+	}
+);
+
+export const listNoteSyncInventory = query(
+	z.object({ projectId: z.string().uuid().optional() }),
+	async (input) => {
+		return AppFactory.controllerFactory()
+			.notes()
+			.listSyncInventory(AppFactory.actor(), input as ListNoteSyncInventoryInput);
+	}
+);
 
 export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllerFactory()

@@ -271,6 +271,13 @@
 		return editor?.getText({ blockSeparator: '\n\n' }) ?? '';
 	}
 
+	export function replaceDocument(nextDocument: ProseMirrorDocument): void {
+		if (!editor) return;
+		initialized = false;
+		editor.commands.setContent(nextDocument as never);
+		initialized = true;
+	}
+
 	export function focusStart(): void {
 		editor?.commands.focus('start');
 	}

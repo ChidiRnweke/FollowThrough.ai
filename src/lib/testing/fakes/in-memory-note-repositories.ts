@@ -14,6 +14,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 	notes: Note[] = [];
 	revisions: NoteRevision[] = [];
 	restoredAttachmentSnapshots: NoteRevision['id'][] = [];
+	failNextConditionalUpdate = false;
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
@@ -51,6 +52,27 @@ export class InMemoryNoteRepository implements NoteRepository {
 
 	async update(_actor: ActorContext, note: Note): Promise<Note> {
 		void _actor;
+		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? note : candidate));
+		return note;
+	}
+
+	async updateIfRevision(
+		actor: ActorContext,
+		note: Note,
+		expectedRevision: number
+	): Promise<Note | undefined> {
+		if (this.failNextConditionalUpdate) {
+			this.failNextConditionalUpdate = false;
+			return undefined;
+		}
+		const current = this.notes.find(
+			(candidate) =>
+				candidate.id === note.id &&
+				candidate.userId === actor.userId &&
+				!candidate.archivedAt &&
+				candidate.currentRevision === expectedRevision
+		);
+		if (!current) return undefined;
 		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? note : candidate));
 		return note;
 	}

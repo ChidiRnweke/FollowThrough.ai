@@ -57,8 +57,9 @@ export class NoteManagementService
 		return note;
 	}
 
-	list(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteSummary[]> {
-		return this.notes.listActive(actor, projectId);
+	async list(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteSummary[]> {
+		const notes = await this.notes.listActive(actor, projectId);
+		return notes.filter((note) => note.kind !== 'skill');
 	}
 
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<Note>;
@@ -93,12 +94,18 @@ export class NoteManagementService
 		if (candidate.currentRevision !== current.currentRevision)
 			throw new StaleRevisionError('The note has changed since it was loaded');
 		if (this.isUnchanged(current, candidate)) return current;
-		return this.notes.update(actor, {
-			...candidate,
-			title: candidate.title.trim(),
-			currentRevision: current.currentRevision + 1,
-			updatedAt: now()
-		});
+		const updated = await this.notes.updateIfRevision(
+			actor,
+			{
+				...candidate,
+				title: candidate.title.trim(),
+				currentRevision: current.currentRevision + 1,
+				updatedAt: now()
+			},
+			current.currentRevision
+		);
+		if (!updated) throw new StaleRevisionError('The note changed while it was being saved');
+		return updated;
 	}
 
 	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {

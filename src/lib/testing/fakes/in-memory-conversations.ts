@@ -1,8 +1,9 @@
 import type { ActorContext, Conversation, ConversationId, Message } from '$lib/models';
 import { NotFoundError } from '$lib/models';
 import type { ConversationListOptions, ConversationRepository } from '$lib/repositories';
+import type { SnapshotParticipant } from './in-memory-transaction';
 
-export class InMemoryConversationRepository implements ConversationRepository {
+export class InMemoryConversationRepository implements ConversationRepository, SnapshotParticipant {
 	conversations: Conversation[] = [];
 	messages: Message[] = [];
 
@@ -62,5 +63,18 @@ export class InMemoryConversationRepository implements ConversationRepository {
 	async listMessages(actor: ActorContext, id: ConversationId): Promise<readonly Message[]> {
 		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
 		return this.messages.filter((message) => message.conversationId === id);
+	}
+
+	snapshot(): unknown {
+		return structuredClone({ conversations: this.conversations, messages: this.messages });
+	}
+
+	restore(snapshot: unknown): void {
+		const state = snapshot as {
+			conversations: Conversation[];
+			messages: Message[];
+		};
+		this.conversations = state.conversations;
+		this.messages = state.messages;
 	}
 }

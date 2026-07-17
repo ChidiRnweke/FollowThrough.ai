@@ -25,6 +25,8 @@ const toConversation = (row: typeof schema.conversations.$inferSelect): Conversa
 const toMessage = (row: typeof schema.messages.$inferSelect): Message => ({
 	id: row.id as Message['id'],
 	conversationId: row.conversationId as Message['conversationId'],
+	...(row.runId ? { runId: row.runId as Message['runId'] } : {}),
+	...(row.eventCursor ? { eventCursor: row.eventCursor.toString() } : {}),
 	role: row.role,
 	content: row.content,
 	...(row.model ? { model: row.model } : {}),
@@ -118,6 +120,8 @@ export class PostgresConversationRepository implements ConversationRepository {
 			.values({
 				id: message.id,
 				conversationId: message.conversationId,
+				runId: message.runId,
+				eventCursor: message.eventCursor ? BigInt(message.eventCursor) : undefined,
 				role: message.role,
 				content: message.content,
 				model: message.model,

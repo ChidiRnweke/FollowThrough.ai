@@ -73,11 +73,21 @@ import {
 	PostgresAgentRunRepository,
 	PostgresAgentSessionRepository
 } from './repositories/postgres-agent-settings';
+import {
+	PostgresAgentRunDecisionRepository,
+	PostgresAgentRunEventRepository
+} from './repositories/postgres-agent-runs';
+import { AgentRunExecutor } from './domain/agent-run-executor';
 
 const firstConfigured = (...values: readonly (string | undefined)[]): string | undefined =>
 	values.map((value) => value?.trim()).find((value): value is string => Boolean(value));
 
-export function createProductionFactory(): ProductionControllerFactory {
+export interface ProductionApplication {
+	readonly controllers: ProductionControllerFactory;
+	readonly recoverInterruptedRuns: () => Promise<number>;
+}
+
+export function createProductionFactory(): ProductionApplication {
 	const projectRepository = new PostgresProjectRepository(db);
 	const userReader = new UserManagementService(new PostgresUserRepository(db));
 	const projects = new ProjectManagementService(projectRepository, projectRepository);
@@ -100,7 +110,11 @@ export function createProductionFactory(): ProductionControllerFactory {
 	const preferences = new PersistentAgentPreferencesStore(
 		new PostgresAgentPreferencesRepository(db)
 	);
-	const runStore = new PersistentAgentRunStore(new PostgresAgentRunRepository(db));
+	const runRepository = new PostgresAgentRunRepository(db);
+	const runStore = new PersistentAgentRunStore(runRepository);
+	const runEvents = new PostgresAgentRunEventRepository(db);
+	const runDecisions = new PostgresAgentRunDecisionRepository(db);
+	const agentSessions = new PostgresAgentSessionRepository(db);
 	const attachmentStorage = new S3AttachmentStorage({
 		endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
 		region: process.env.S3_REGION ?? 'us-east-1',
@@ -228,7 +242,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 		conversations: conversationJournal,
 		preferences,
 		runs: runStore,
-		sessions: new PostgresAgentSessionRepository(db),
+		sessions: agentSessions,
 		provenance,
 		builtInSkills,
 		defaultModel: defaultAgentModel
@@ -238,8 +252,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 			if (!controllerFactory) throw new Error('Controller factory is not initialized');
 			return controllerFactory;
 		},
-		runStore,
-		new PostgresAgentSessionRepository(db),
+		agentSessions,
 		process.env.OPENROUTER_API_KEY,
 		process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 		process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
@@ -316,14 +329,15 @@ export function createProductionFactory(): ProductionControllerFactory {
 			suggestionReverter: suggestions
 		},
 		agent: {
-			contextBuilder: agentContext,
-			agentRunner: agent,
 			conversationJournal,
-			provenanceRecorder: provenance,
 			preferences,
 			models: modelCatalog,
-			runStore,
-			defaultModel: defaultAgentModel
+			runs: runRepository,
+			events: runEvents,
+			decisions: runDecisions,
+			transactionRunner: postgresTransactionRunner,
+			defaultModel: defaultAgentModel,
+			executor: undefined as unknown as AgentRunExecutor // set below after cyclic wiring
 		},
 		agentSettings: { preferences, models: modelCatalog },
 		attachments: { attachments, transactionRunner: postgresTransactionRunner },
@@ -365,6 +379,7 @@ export function createProductionFactory(): ProductionControllerFactory {
 		},
 		notes: {
 			noteReader: notes,
+			noteTreeReader: notes,
 			noteCreator: notes,
 			relationshipFinder: relationships,
 			backlinkViewAssembler: relationships,
@@ -407,5 +422,20 @@ export function createProductionFactory(): ProductionControllerFactory {
 		}
 	};
 	controllerFactory = new ProductionControllerFactory(dependencies);
-	return controllerFactory;
+	const executor = new AgentRunExecutor({
+		runs: runRepository,
+		events: runEvents,
+		decisions: runDecisions,
+		sessions: agentSessions,
+		transactions: postgresTransactionRunner,
+		contextBuilder: agentContext,
+		provenance,
+		conversations: conversationJournal,
+		runner: agent
+	});
+	(dependencies.agent as { executor: AgentRunExecutor }).executor = executor;
+	return {
+		controllers: controllerFactory,
+		recoverInterruptedRuns: () => runRepository.recoverInterrupted('Process restarted')
+	};
 }

@@ -1,7 +1,7 @@
 import type {
 	ActorContext,
 	AgentEvent,
-	DecideAgentRunInput,
+	AgentExecutionUpdate,
 	NoteId,
 	ProvenanceId,
 	RunAgentInput,
@@ -20,26 +20,12 @@ import type {
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];
 
-	async *run(
-		_actor: ActorContext,
-		_input: RunAgentInput,
-		_context: Readonly<Record<string, unknown>>
-	): AsyncIterable<AgentEvent> {
-		void _actor;
+	async *execute(
+		_input: Parameters<AgentRunner['execute']>[0]
+	): AsyncIterable<AgentExecutionUpdate> {
 		void _input;
-		void _context;
-		for (const event of this.events) yield event;
-	}
-
-	async *resume(
-		_actor: ActorContext,
-		_input: DecideAgentRunInput,
-		_context: Readonly<Record<string, unknown>>
-	): AsyncIterable<AgentEvent> {
-		void _actor;
-		void _input;
-		void _context;
-		for (const event of this.events) yield event;
+		for (const event of this.events) yield { type: 'event', event };
+		yield { type: 'completed', sessionItems: [] };
 	}
 }
 

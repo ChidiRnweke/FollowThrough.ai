@@ -113,35 +113,60 @@ export class PersistentConversationJournal implements ConversationJournal {
 	async recordUserPrompt(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		prompt: string
+		prompt: string,
+		runId?: import('$lib/models').AgentRunId
 	): Promise<void> {
-		await this.append(actor, conversationId, 'user', { type: 'text', text: prompt });
+		await this.append(actor, conversationId, 'user', { type: 'text', text: prompt }, undefined, {
+			runId
+		});
 	}
 
 	async recordAssistantText(
 		actor: ActorContext,
 		conversationId: ConversationId,
 		text: string,
-		model?: string
+		model?: string,
+		provenance?: {
+			readonly runId: import('$lib/models').AgentRunId;
+			readonly eventCursor?: string;
+		}
 	): Promise<void> {
-		await this.append(actor, conversationId, 'assistant', { type: 'text', text }, model);
+		await this.append(
+			actor,
+			conversationId,
+			'assistant',
+			{ type: 'text', text },
+			model,
+			provenance
+		);
 	}
 
 	async recordToolActivity(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		activity: ToolActivity
+		activity: ToolActivity,
+		provenance?: {
+			readonly runId: import('$lib/models').AgentRunId;
+			readonly eventCursor?: string;
+		}
 	): Promise<void> {
-		await this.append(actor, conversationId, 'tool', {
-			type: 'tool_activity',
-			callId: activity.callId,
-			name: activity.name,
-			input: activity.input,
-			output: activity.output ?? null,
-			failure: activity.failure ?? null,
-			decision: activity.decision ?? null,
-			status: activity.status
-		});
+		await this.append(
+			actor,
+			conversationId,
+			'tool',
+			{
+				type: 'tool_activity',
+				callId: activity.callId,
+				name: activity.name,
+				input: activity.input,
+				output: activity.output ?? null,
+				failure: activity.failure ?? null,
+				decision: activity.decision ?? null,
+				status: activity.status
+			},
+			undefined,
+			provenance
+		);
 	}
 
 	private async append(
@@ -149,13 +174,19 @@ export class PersistentConversationJournal implements ConversationJournal {
 		conversationId: ConversationId,
 		role: Message['role'],
 		content: Readonly<Record<string, unknown>>,
-		model?: string
+		model?: string,
+		provenance?: {
+			readonly runId?: import('$lib/models').AgentRunId;
+			readonly eventCursor?: string;
+		}
 	): Promise<void> {
 		await this.repository.appendMessage(actor, {
 			id: crypto.randomUUID() as MessageId,
 			conversationId,
 			role,
 			content,
+			...(provenance?.runId ? { runId: provenance.runId } : {}),
+			...(provenance?.eventCursor ? { eventCursor: provenance.eventCursor } : {}),
 			...(model ? { model } : {}),
 			createdAt: now()
 		});
