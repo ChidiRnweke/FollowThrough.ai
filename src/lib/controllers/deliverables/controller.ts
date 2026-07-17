@@ -1,10 +1,13 @@
 import type {
 	ActorContext,
 	ArtifactId,
+	ExportSettings,
 	GenerateDocumentInput,
 	GenerateDocumentOutput,
 	GetArtifactDownloadOutput,
 	ListArtifactsOutput,
+	PreviewDocumentInput,
+	PreviewDocumentOutput,
 	ProjectId,
 	TemplateId
 } from '$lib/models';
@@ -14,6 +17,9 @@ import type {
 	ArtifactReader,
 	ArtifactRegenerator,
 	DocumentGenerator,
+	DocumentPreviewer,
+	ExportSettingsReader,
+	ExportSettingsWriter,
 	TemplateDeleter,
 	TemplateLister,
 	TemplateUploader
@@ -23,14 +29,40 @@ import type { TransactionRunner } from '$lib/repositories';
 export interface DeliverablesController {
 	initiateTemplateUpload(
 		actor: ActorContext,
-		input: { projectId: ProjectId; name: string; mediaType: string; byteSize: number; checksumSha256: string }
-	): Promise<{ templateId: TemplateId; uploadUrl: string; requiredHeaders: Record<string, string> }>;
+		input: {
+			projectId: ProjectId;
+			name: string;
+			mediaType: string;
+			byteSize: number;
+			checksumSha256: string;
+		}
+	): Promise<{
+		templateId: TemplateId;
+		uploadUrl: string;
+		requiredHeaders: Record<string, string>;
+	}>;
 	completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void>;
-	listTemplates(actor: ActorContext, projectId: ProjectId): Promise<readonly import('$lib/models').ProjectTemplate[]>;
+	listTemplates(
+		actor: ActorContext,
+		projectId: ProjectId
+	): Promise<readonly import('$lib/models').ProjectTemplate[]>;
 	deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void>;
-	generateDocument(actor: ActorContext, input: GenerateDocumentInput): Promise<GenerateDocumentOutput>;
+	generateDocument(
+		actor: ActorContext,
+		input: GenerateDocumentInput
+	): Promise<GenerateDocumentOutput>;
+	previewDocument(actor: ActorContext, input: PreviewDocumentInput): Promise<PreviewDocumentOutput>;
+	getExportSettings(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings>;
+	updateExportSettings(
+		actor: ActorContext,
+		projectId: ProjectId,
+		settings: ExportSettings
+	): Promise<ExportSettings>;
 	listArtifacts(actor: ActorContext, projectId: ProjectId): Promise<ListArtifactsOutput>;
-	getArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<import('$lib/models').Artifact | undefined>;
+	getArtifact(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<import('$lib/models').Artifact | undefined>;
 	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	deleteArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<void>;
 	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
@@ -41,6 +73,9 @@ export interface DeliverablesDependencies {
 	templateLister: TemplateLister;
 	templateDeleter: TemplateDeleter;
 	documentGenerator: DocumentGenerator;
+	documentPreviewer: DocumentPreviewer;
+	exportSettingsReader: ExportSettingsReader;
+	exportSettingsWriter: ExportSettingsWriter;
 	artifactLister: ArtifactLister;
 	artifactReader: ArtifactReader;
 	artifactDeleter: ArtifactDeleter;
@@ -53,7 +88,13 @@ export class DefaultDeliverablesController implements DeliverablesController {
 
 	async initiateTemplateUpload(
 		actor: ActorContext,
-		input: { projectId: ProjectId; name: string; mediaType: string; byteSize: number; checksumSha256: string }
+		input: {
+			projectId: ProjectId;
+			name: string;
+			mediaType: string;
+			byteSize: number;
+			checksumSha256: string;
+		}
 	) {
 		return this.dependencies.templateUploader.initiateUpload(actor, input);
 	}
@@ -70,10 +111,33 @@ export class DefaultDeliverablesController implements DeliverablesController {
 		await this.dependencies.templateDeleter.delete(actor, templateId);
 	}
 
-	async generateDocument(actor: ActorContext, input: GenerateDocumentInput): Promise<GenerateDocumentOutput> {
+	async generateDocument(
+		actor: ActorContext,
+		input: GenerateDocumentInput
+	): Promise<GenerateDocumentOutput> {
 		return this.dependencies.transactionRunner.run(async () =>
 			this.dependencies.documentGenerator.generate(actor, input)
 		);
+	}
+
+	async previewDocument(
+		actor: ActorContext,
+		input: PreviewDocumentInput
+	): Promise<PreviewDocumentOutput> {
+		const buffer = await this.dependencies.documentPreviewer.preview(actor, input);
+		return { data: buffer.toString('base64') };
+	}
+
+	async getExportSettings(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings> {
+		return this.dependencies.exportSettingsReader.getSettings(actor, projectId);
+	}
+
+	async updateExportSettings(
+		actor: ActorContext,
+		projectId: ProjectId,
+		settings: ExportSettings
+	): Promise<ExportSettings> {
+		return this.dependencies.exportSettingsWriter.updateSettings(actor, projectId, settings);
 	}
 
 	async listArtifacts(actor: ActorContext, projectId: ProjectId): Promise<ListArtifactsOutput> {
@@ -84,7 +148,10 @@ export class DefaultDeliverablesController implements DeliverablesController {
 		return this.dependencies.artifactReader.get(actor, artifactId);
 	}
 
-	async downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput> {
+	async downloadArtifact(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<GetArtifactDownloadOutput> {
 		return this.dependencies.artifactReader.download(actor, artifactId);
 	}
 
@@ -92,7 +159,10 @@ export class DefaultDeliverablesController implements DeliverablesController {
 		await this.dependencies.artifactDeleter.delete(actor, artifactId);
 	}
 
-	async regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput> {
+	async regenerateArtifact(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<GenerateDocumentOutput> {
 		return this.dependencies.artifactRegenerator.regenerate(actor, artifactId);
 	}
 }

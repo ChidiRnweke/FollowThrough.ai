@@ -8,7 +8,6 @@
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import PackageOpen from '@lucide/svelte/icons/package-open';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -32,7 +31,6 @@
 
 	const secondaryItems = $derived([
 		{ href: '/skills', label: 'Skills', icon: Wrench, badge: 0 },
-		{ href: '/artifacts', label: 'Artifacts', icon: PackageOpen, badge: 0 },
 		{
 			href: '/suggestions',
 			label: 'Suggestions',

@@ -24,7 +24,12 @@ export interface AttachmentStorage {
 		checksumSha256: string;
 		expiresInSeconds: number;
 	}): Promise<string>;
-	createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
+	createDownloadUrl(
+		objectKey: string,
+		expiresInSeconds: number,
+		downloadFilename?: string
+	): Promise<string>;
+	put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void>;
 	stat(objectKey: string): Promise<StoredObjectInfo>;
 	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
 	promote(sourceKey: string, destinationKey: string): Promise<void>;
@@ -76,12 +81,41 @@ export class S3AttachmentStorage implements AttachmentStorage {
 		);
 	}
 
-	createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string> {
+	createDownloadUrl(
+		objectKey: string,
+		expiresInSeconds: number,
+		downloadFilename?: string
+	): Promise<string> {
 		return getSignedUrl(
 			this.client,
-			new GetObjectCommand({ Bucket: this.config.bucket, Key: objectKey }),
+			new GetObjectCommand({
+				Bucket: this.config.bucket,
+				Key: objectKey,
+				...(downloadFilename
+					? {
+							ResponseContentDisposition: `attachment; filename="${downloadFilename.replace(/["\\\r\n]/g, '_')}"`
+						}
+					: {})
+			}),
 			{ expiresIn: expiresInSeconds }
 		);
+	}
+
+	async put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void> {
+		try {
+			await this.client.send(
+				new PutObjectCommand({
+					Bucket: this.config.bucket,
+					Key: objectKey,
+					Body: data,
+					ContentType: mediaType
+				})
+			);
+		} catch (error) {
+			throw new ExternalServiceError('Generated document could not be stored', {
+				cause: error instanceof Error ? error.message : String(error)
+			});
+		}
 	}
 
 	async stat(objectKey: string): Promise<StoredObjectInfo> {

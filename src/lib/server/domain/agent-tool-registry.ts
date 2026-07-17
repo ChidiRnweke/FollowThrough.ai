@@ -120,6 +120,12 @@ export const agentToolCoverage = {
 		listTemplates: { kind: 'read' },
 		deleteTemplate: { kind: 'excluded', reason: 'Template management is a deliberate user action.' },
 		generateDocument: { kind: 'mutation' },
+		previewDocument: {
+			kind: 'excluded',
+			reason: 'Preview is an interactive UI flow; the agent generates documents directly.'
+		},
+		getExportSettings: { kind: 'read' },
+		updateExportSettings: { kind: 'mutation' },
 		listArtifacts: { kind: 'read' },
 		getArtifact: { kind: 'read' },
 		downloadArtifact: { kind: 'read' },
@@ -643,6 +649,60 @@ export class AgentToolRegistry {
 				'read',
 				z.object({ projectId: id }),
 				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
+			),
+			define(
+				'get_export_settings',
+				'Read the project document-export settings (font, size, line height, margins).',
+				'read',
+				z.object({ projectId: id }),
+				(input) => factory.deliverables().getExportSettings(actor, input.projectId as never)
+			),
+			define(
+				'update_export_settings',
+				'Change the project document-export settings.',
+				'mutation',
+				z.object({
+					projectId: id,
+					fontFamily: z.enum(['helvetica', 'times', 'courier']),
+					fontSize: z.number().min(8).max(18),
+					lineHeight: z.number().min(1).max(2.2),
+					margin: z.number().min(18).max(144)
+				}),
+				(input) =>
+					factory.deliverables().updateExportSettings(actor, input.projectId as never, {
+						fontFamily: input.fontFamily,
+						fontSize: input.fontSize,
+						lineHeight: input.lineHeight,
+						margin: input.margin
+					})
+			),
+			define(
+				'get_artifact',
+				'Read a generated artifact record.',
+				'read',
+				z.object({ artifactId: id }),
+				(input) => factory.deliverables().getArtifact(actor, input.artifactId as never)
+			),
+			define(
+				'download_artifact',
+				'Create a time-limited download link for a generated artifact.',
+				'read',
+				z.object({ artifactId: id }),
+				(input) => factory.deliverables().downloadArtifact(actor, input.artifactId as never)
+			),
+			define(
+				'delete_artifact',
+				'Delete a generated artifact.',
+				'mutation',
+				z.object({ artifactId: id }),
+				(input) => factory.deliverables().deleteArtifact(actor, input.artifactId as never)
+			),
+			define(
+				'regenerate_artifact',
+				'Regenerate an artifact from its source notes and return a fresh download link.',
+				'mutation',
+				z.object({ artifactId: id }),
+				(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId as never)
 			)
 		];
 	}

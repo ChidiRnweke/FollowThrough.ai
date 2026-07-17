@@ -14,6 +14,7 @@ export * from './conversations';
 export * from './relationships';
 export * from './retrieval-index';
 export * from './memory-entries';
+export * from './export-settings';
 export * from './agent-settings';
 export * from './attachments';
 export * from './templates';

@@ -275,12 +275,47 @@ export interface ListArtifactsOutput {
 	readonly artifacts: readonly ArtifactView[];
 }
 
+export type ExportFontFamily = 'helvetica' | 'times' | 'courier';
+
+export interface ExportSettings {
+	readonly fontFamily: ExportFontFamily;
+	/** Body font size in points. */
+	readonly fontSize: number;
+	/** Line height multiplier. */
+	readonly lineHeight: number;
+	/** Page margin in points, applied to all sides. */
+	readonly margin: number;
+}
+
+export const defaultExportSettings: ExportSettings = {
+	fontFamily: 'helvetica',
+	fontSize: 11,
+	lineHeight: 1.35,
+	margin: 72
+};
+
 export interface GenerateDocumentInput {
 	readonly projectId: ProjectId;
 	readonly noteIds: NoteId[];
 	readonly title: string;
 	readonly format: 'docx' | 'pdf';
 	readonly templateId?: TemplateId;
+	readonly settings?: ExportSettings;
+	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 of the diagram source. */
+	readonly diagramSvgs?: Record<string, string>;
+}
+
+export interface PreviewDocumentInput {
+	readonly projectId: ProjectId;
+	readonly noteIds: NoteId[];
+	readonly title: string;
+	readonly settings?: ExportSettings;
+	readonly diagramSvgs?: Record<string, string>;
+}
+
+export interface PreviewDocumentOutput {
+	/** Base64-encoded PDF bytes. */
+	readonly data: string;
 }
 
 export interface GenerateDocumentOutput {

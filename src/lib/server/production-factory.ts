@@ -56,6 +56,7 @@ import { PostgresTodoRepository } from './repositories/postgres-todos';
 import { PostgresSuggestionRepository } from './repositories/postgres-suggestions';
 import { PostgresTrustPolicyRepository } from './repositories/postgres-trust-policies';
 import { PostgresMemoryEntryRepository } from './repositories/postgres-memory-entries';
+import { PostgresExportSettingsRepository } from './repositories/postgres-export-settings';
 import { PostgresRelationshipRepository } from './repositories/postgres-relationships';
 import { PostgresReferenceRepository } from './repositories/postgres-references';
 import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
@@ -129,7 +130,8 @@ export function createProductionFactory(): ProductionControllerFactory {
 		provenance,
 		notes,
 		templateRepository,
-		postgresTransactionRunner
+		postgresTransactionRunner,
+		new PostgresExportSettingsRepository(db)
 	);
 	const recommendedModels = new Set(
 		(process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
@@ -330,6 +332,9 @@ export function createProductionFactory(): ProductionControllerFactory {
 			templateLister: templates,
 			templateDeleter: templates,
 			documentGenerator: artifacts,
+			documentPreviewer: artifacts,
+			exportSettingsReader: artifacts,
+			exportSettingsWriter: artifacts,
 			artifactLister: artifacts,
 			artifactReader: artifacts,
 			artifactDeleter: artifacts,

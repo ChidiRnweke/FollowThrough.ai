@@ -11,9 +11,11 @@
 	import Folder from '@lucide/svelte/icons/folder';
 	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import PackageOpen from '@lucide/svelte/icons/package-open';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import ExportSettingsDialog from '../export-settings-dialog.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import { formatDateTime } from '../labels';
 
@@ -21,6 +23,7 @@
 
 	const project = $derived(view.project);
 	let renameOpen = $state(false);
+	let exportDefaultsOpen = $state(false);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
 
@@ -74,6 +77,10 @@
 		<Brain class="size-4" />
 		Memory
 	</Button>
+	<Button variant="outline" size="sm" href="/artifacts?projectId={project.id}">
+		<PackageOpen class="size-4" />
+		Artifacts
+	</Button>
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}
@@ -84,6 +91,9 @@
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="start">
 			<DropdownMenu.Item onclick={() => (renameOpen = true)}>Rename project</DropdownMenu.Item>
+			<DropdownMenu.Item onclick={() => (exportDefaultsOpen = true)}>
+				Export defaults…
+			</DropdownMenu.Item>
 			<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
 				Archive project
 			</DropdownMenu.Item>
@@ -165,3 +175,4 @@
 	busy={projectActions.busy}
 	onsubmit={rename}
 />
+<ExportSettingsDialog bind:open={exportDefaultsOpen} projectId={project.id} />

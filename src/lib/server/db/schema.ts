@@ -721,6 +721,22 @@ export const projectTemplates = pgTable(
 	]
 );
 
+// Per-project document export preferences (font, line height, margins).
+export const exportSettings = pgTable(
+	'export_settings',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		settings: jsonb('settings').$type<JsonObject>().notNull().default({}),
+		...timestamps
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.projectId] })]
+);
+
 export const artifacts = pgTable(
 	'artifacts',
 	{

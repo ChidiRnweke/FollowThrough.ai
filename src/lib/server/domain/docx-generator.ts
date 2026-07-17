@@ -1,5 +1,6 @@
 import {
 	AlignmentType,
+	BorderStyle,
 	Document,
 	Footer,
 	Header,
@@ -48,14 +49,6 @@ function headingFont(styles: ExtractedTemplateStyles, level: number): { name: st
 		bold: h?.bold ?? true,
 		italics: h?.italic ?? false,
 		color: h?.color ?? '000000'
-	};
-}
-
-function bodyFont(styles: ExtractedTemplateStyles): { name: string; size: number; color: string } {
-	return {
-		name: styles.fonts.body.name ?? 'Calibri',
-		size: (styles.fonts.body.size ?? 11) * 2,
-		color: styles.fonts.body.color ?? '000000'
 	};
 }
 
@@ -130,7 +123,7 @@ async function convertNode(
 			for (const item of content) {
 				if (item.type === 'listItem') {
 					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
-					let paraTexts: TextRun[] = [];
+					const paraTexts: TextRun[] = [];
 					for (const child of itemContent) {
 						if (child.type === 'paragraph') {
 							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];
@@ -152,7 +145,7 @@ async function convertNode(
 			for (const item of content) {
 				if (item.type === 'listItem') {
 					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
-					let paraTexts: TextRun[] = [];
+					const paraTexts: TextRun[] = [];
 					for (const child of itemContent) {
 						if (child.type === 'paragraph') {
 							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];
@@ -188,7 +181,13 @@ async function convertNode(
 			break;
 		}
 		case 'horizontalRule': {
-			results.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
+			// docx has no horizontal-rule element; an empty paragraph with a bottom border renders one.
+			results.push(
+				new Paragraph({
+					border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'auto', space: 1 } },
+					spacing: { before: 120, after: 120 }
+				})
+			);
 			break;
 		}
 		case 'image': {

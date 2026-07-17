@@ -44,6 +44,7 @@ import { PostgresSuggestionRepository } from './postgres-suggestions';
 import { PostgresTodoRepository } from './postgres-todos';
 import { PostgresTrustPolicyRepository } from './postgres-trust-policies';
 import { PostgresMemoryEntryRepository } from './postgres-memory-entries';
+import { PostgresExportSettingsRepository } from './postgres-export-settings';
 import {
 	PostgresAgentPreferencesRepository,
 	PostgresAgentRunRepository
@@ -583,6 +584,52 @@ describe('Postgres memory-entry repository invariants', () => {
 		]);
 		await search.deleteForMemoryEntry(owner, entry.id);
 		expect(await search.listForMemoryEntry(owner, entry.id)).toEqual([]);
+	});
+});
+
+describe('Postgres export-settings repository invariants', () => {
+	it('returns nothing before settings are saved', async () => {
+		const { owner, project } = await seedNote('80');
+		const repository = new PostgresExportSettingsRepository(context.db);
+		expect(await repository.find(owner, project.id)).toBeUndefined();
+	});
+
+	it('round-trips upserted settings', async () => {
+		const { owner, project } = await seedNote('81');
+		const repository = new PostgresExportSettingsRepository(context.db);
+		const settings = { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 } as const;
+		await repository.upsert(owner, project.id, settings);
+		expect(await repository.find(owner, project.id)).toEqual(settings);
+	});
+
+	it('replaces settings on repeated upsert', async () => {
+		const { owner, project } = await seedNote('82');
+		const repository = new PostgresExportSettingsRepository(context.db);
+		await repository.upsert(owner, project.id, {
+			fontFamily: 'courier',
+			fontSize: 10,
+			lineHeight: 1.2,
+			margin: 36
+		});
+		await repository.upsert(owner, project.id, {
+			fontFamily: 'helvetica',
+			fontSize: 11,
+			lineHeight: 1.35,
+			margin: 72
+		});
+		expect((await repository.find(owner, project.id))?.fontFamily).toBe('helvetica');
+	});
+
+	it('does not reveal settings to another actor', async () => {
+		const { owner, project } = await seedNote('83');
+		const repository = new PostgresExportSettingsRepository(context.db);
+		await repository.upsert(owner, project.id, {
+			fontFamily: 'times',
+			fontSize: 12,
+			lineHeight: 1.5,
+			margin: 60
+		});
+		expect(await repository.find(actor('84'), project.id)).toBeUndefined();
 	});
 });
 

@@ -435,5 +435,6 @@
 		projectId={note.projectId}
 		defaultTitle={note.title}
 		defaultNoteIds={[note.id]}
+		documents={[{ id: note.id, document: note.document }]}
 	/>
 </div>
