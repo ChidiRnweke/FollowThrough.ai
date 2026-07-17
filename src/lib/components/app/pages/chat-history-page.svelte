@@ -23,9 +23,10 @@
 		hasNext: boolean;
 	} = $props();
 
-	let search = $state(query);
+	let search = $state<string | undefined>(undefined);
+	const effectiveSearch = $derived(search ?? query);
 	const href = (nextPage: number): string =>
-		`/chats?${new URLSearchParams({ ...(search.trim() ? { q: search.trim() } : {}), page: String(nextPage) })}`;
+		`/chats?${new URLSearchParams({ ...(effectiveSearch.trim() ? { q: effectiveSearch.trim() } : {}), page: String(nextPage) })}`;
 
 	function submitSearch(): void {
 		void goto(href(1));
@@ -41,12 +42,13 @@
 				Find conversations by title and return to their project or note context.
 			</p>
 		</div>
-		<Button><a href="/chats/new"><Plus data-icon="inline-start" /> New chat</a></Button>
+		<Button href="/chats/new"><Plus data-icon="inline-start" /> New chat</Button>
 	</header>
 
 	<InputGroup.Root>
 		<InputGroup.Input
-			bind:value={search}
+			value={effectiveSearch}
+			oninput={(event) => (search = event.currentTarget.value)}
 			placeholder="Search chats…"
 			aria-label="Search chats"
 			onkeydown={(event) => {
@@ -67,11 +69,11 @@
 			onselect={(id) => void goto(`/chats/${id}`)}
 		/>
 		<div class="flex items-center justify-between">
-			<Button variant="outline" disabled={page <= 1}
-				><a href={href(Math.max(1, page - 1))}>Previous</a></Button
+			<Button variant="outline" disabled={page <= 1} href={href(Math.max(1, page - 1))}
+				>Previous</Button
 			>
 			<span class="text-sm text-muted-foreground">Page {page}</span>
-			<Button variant="outline" disabled={!hasNext}><a href={href(page + 1)}>Next</a></Button>
+			<Button variant="outline" disabled={!hasNext} href={href(page + 1)}>Next</Button>
 		</div>
 	{:else}
 		<Empty.Root>
@@ -84,7 +86,7 @@
 						: 'Start a conversation from any project or note.'}</Empty.Description
 				>
 			</Empty.Header>
-			<Empty.Content><Button><a href="/chats/new">Start a chat</a></Button></Empty.Content>
+			<Empty.Content><Button href="/chats/new">Start a chat</Button></Empty.Content>
 		</Empty.Root>
 	{/if}
 </main>

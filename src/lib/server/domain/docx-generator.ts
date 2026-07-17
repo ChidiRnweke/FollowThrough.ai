@@ -1,18 +1,14 @@
 import {
 	AlignmentType,
-	BorderStyle,
 	Document,
 	Footer,
 	Header,
 	HeadingLevel,
 	ImageRun,
-	LevelFormat,
-	NumberFormat,
 	Packer,
 	Paragraph,
 	TextRun,
 	type IHeaderOptions,
-	type IFontOptions,
 	type ISectionOptions
 } from 'docx';
 import type { ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
@@ -23,26 +19,39 @@ export interface GenerateDocxInput {
 	readonly title: string;
 }
 
+const HEADING_LEVELS = [
+	HeadingLevel.HEADING_1,
+	HeadingLevel.HEADING_2,
+	HeadingLevel.HEADING_3,
+	HeadingLevel.HEADING_4,
+	HeadingLevel.HEADING_5,
+	HeadingLevel.HEADING_6
+];
+
 function headerImageToImageRun(dataUrl: string): ImageRun | null {
 	const match = /^data:(image\/\w+);base64,(.+)$/.exec(dataUrl);
 	if (!match) return null;
 	const buffer = Buffer.from(match[2], 'base64');
-	return new ImageRun({ data: buffer, transformation: { width: 200, height: 60 } });
+	return new ImageRun({
+		type: 'png',
+		data: buffer,
+		transformation: { width: 200, height: 60 }
+	});
 }
 
-function headingFont(styles: ExtractedTemplateStyles, level: number): IFontOptions {
+function headingFont(styles: ExtractedTemplateStyles, level: number): { name: string; size: number; bold: boolean; italics: boolean; color: string } {
 	const key = `Heading${level}`;
 	const h = styles.fonts.heading[key];
 	return {
 		name: h?.name ?? 'Calibri',
 		size: (h?.size ?? 12) * 2,
 		bold: h?.bold ?? true,
-		italic: h?.italic ?? false,
+		italics: h?.italic ?? false,
 		color: h?.color ?? '000000'
 	};
 }
 
-function bodyFont(styles: ExtractedTemplateStyles): IFontOptions {
+function bodyFont(styles: ExtractedTemplateStyles): { name: string; size: number; color: string } {
 	return {
 		name: styles.fonts.body.name ?? 'Calibri',
 		size: (styles.fonts.body.size ?? 11) * 2,
@@ -56,24 +65,22 @@ function textRunFromNode(
 	isCode: boolean = false
 ): TextRun {
 	const text = (node.text as string) ?? '';
-	const options: IFontOptions = isCode
-		? { name: 'Courier New', size: 18 }
-		: bodyFont(styles);
-
 	const marks = (node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
 	let bold = false;
-	let italic = false;
+	let italics = false;
+	let fontName = isCode ? 'Courier New' : styles.fonts.body.name ?? 'Calibri';
+	let fontSize = isCode ? 18 : (styles.fonts.body.size ?? 11) * 2;
 
 	for (const mark of marks) {
 		if (mark.type === 'bold') bold = true;
-		if (mark.type === 'italic') italic = true;
+		if (mark.type === 'italic') italics = true;
 		if (mark.type === 'code') {
-			options.name = 'Courier New';
-			options.size = 18;
+			fontName = 'Courier New';
+			fontSize = 18;
 		}
 	}
 
-	return new TextRun({ text, bold, italics: italic, font: options });
+	return new TextRun({ text, bold, italics, font: fontName, size: fontSize });
 }
 
 function collectText(node: Record<string, unknown>): string {
@@ -88,28 +95,21 @@ async function convertNode(
 	node: Record<string, unknown>,
 	styles: ExtractedTemplateStyles,
 	depth: number = 0
-): Promise<(Paragraph | import('docx').Table)[]> {
+): Promise<Paragraph[]> {
 	const type = node.type as string;
 	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
 	const attrs = (node.attrs as Record<string, unknown> | undefined) ?? {};
-	const results: (Paragraph | import('docx').Table)[] = [];
+	const results: Paragraph[] = [];
 
 	switch (type) {
 		case 'heading': {
-			const level = (attrs.level as number) ?? 1;
+			const level = Math.min((attrs.level as number) ?? 1, 6);
 			const text = collectText(node);
-			const headingLevels: HeadingLevel[] = [
-				HeadingLevel.HEADING_1,
-				HeadingLevel.HEADING_2,
-				HeadingLevel.HEADING_3,
-				HeadingLevel.HEADING_4,
-				HeadingLevel.HEADING_5,
-				HeadingLevel.HEADING_6
-			];
+			const h = headingFont(styles, level);
 			results.push(
 				new Paragraph({
-					heading: headingLevels[Math.min(level - 1, 5)],
-					children: [new TextRun({ text, font: headingFont(styles, level) })]
+					heading: HEADING_LEVELS[level - 1],
+					children: [new TextRun({ text, font: h.name, size: h.size, bold: h.bold, italics: h.italics, color: h.color })]
 				})
 			);
 			break;
@@ -123,25 +123,27 @@ async function convertNode(
 					children.push(new TextRun({ break: 1 }));
 				}
 			}
-			results.push(new Paragraph({ children: children.length > 0 ? children : [new TextRun({ text: '' })] }));
+			results.push(new Paragraph({ children }));
 			break;
 		}
 		case 'bulletList': {
 			for (const item of content) {
 				if (item.type === 'listItem') {
-					const itemResults = await Promise.all(
-						((item.content as Array<Record<string, unknown>>) ?? []).map((c) =>
-							flattenResults(convertNode(c, styles))
-						)
-					);
-					itemResults.flat().forEach((p) => {
-						results.push(
-							new Paragraph({
-								bullet: { level: depth },
-								children: p instanceof Paragraph ? p.root.map((r) => (r as TextRun)) : [new TextRun({ text: '' })]
-							})
-						);
-					});
+					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
+					let paraTexts: TextRun[] = [];
+					for (const child of itemContent) {
+						if (child.type === 'paragraph') {
+							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];
+							for (const sc of subContent) {
+								if (sc.type === 'text') paraTexts.push(textRunFromNode(sc, styles));
+								else if (sc.type === 'hardBreak') paraTexts.push(new TextRun({ break: 1 }));
+							}
+						}
+					}
+					results.push(new Paragraph({
+						bullet: { level: depth },
+						children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
+					}));
 				}
 			}
 			break;
@@ -149,88 +151,65 @@ async function convertNode(
 		case 'orderedList': {
 			for (const item of content) {
 				if (item.type === 'listItem') {
-					const itemResults = await Promise.all(
-						((item.content as Array<Record<string, unknown>>) ?? []).map((c) =>
-							flattenResults(convertNode(c, styles))
-						)
-					);
-					itemResults.flat().forEach((p, idx) => {
-						results.push(
-							new Paragraph({
-								numbering: { reference: 'ordered', level: depth, format: NumberFormat.DECIMAL },
-								children: p instanceof Paragraph ? p.root.map((r) => (r as TextRun)) : [new TextRun({ text: '' })]
-							})
-						);
-					});
+					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
+					let paraTexts: TextRun[] = [];
+					for (const child of itemContent) {
+						if (child.type === 'paragraph') {
+							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];
+							for (const sc of subContent) {
+								if (sc.type === 'text') paraTexts.push(textRunFromNode(sc, styles));
+								else if (sc.type === 'hardBreak') paraTexts.push(new TextRun({ break: 1 }));
+							}
+						}
+					}
+					results.push(new Paragraph({
+						numbering: { reference: 'default-numbering', level: depth },
+						children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
+					}));
 				}
 			}
 			break;
 		}
 		case 'blockquote': {
 			for (const child of content) {
-				const childResults = await flattenResults(convertNode(child, styles));
-				for (const c of childResults) {
-					if (c instanceof Paragraph) {
-						results.push(
-							new Paragraph({
-								indent: { left: 720 },
-								children: c.root.map((r) => r as TextRun)
-							})
-						);
-					}
-				}
+				const childText = collectText(child);
+				results.push(new Paragraph({
+					indent: { left: 720 },
+					children: [new TextRun({ text: childText, italics: true })]
+				}));
 			}
 			break;
 		}
 		case 'codeBlock': {
-			const textRuns: TextRun[] = [];
-			for (const child of content) {
-				if (child.type === 'text') {
-					textRuns.push(new TextRun({ text: child.text as string, font: { name: 'Courier New', size: 18 } }));
-				}
-			}
-			results.push(
-				new Paragraph({
-					children: textRuns.length > 0 ? textRuns : [new TextRun({ text: '' })],
-					spacing: { before: 120, after: 120 }
-				})
-			);
+			const text = collectText(node);
+			results.push(new Paragraph({
+				children: [new TextRun({ text, font: 'Courier New', size: 18 })]
+			}));
 			break;
 		}
 		case 'horizontalRule': {
-			// docx has no horizontal-rule element; an empty paragraph with a bottom border renders one.
-			results.push(
-				new Paragraph({
-					border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'auto', space: 1 } },
-					spacing: { before: 120, after: 120 }
-				})
-			);
+			results.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
 			break;
 		}
 		case 'image': {
 			const src = attrs.src as string | undefined;
-			if (src && src.startsWith('data:')) {
-				const imageRun = headerImageToImageRun(src);
-				if (imageRun) {
-					results.push(new Paragraph({ children: [imageRun] }));
+			if (src?.startsWith('data:')) {
+				const imgRun = headerImageToImageRun(src);
+				if (imgRun) {
+					results.push(new Paragraph({ children: [imgRun] }));
 				}
 			}
 			break;
 		}
 		default: {
 			for (const child of content) {
-				results.push(...(await flattenResults(convertNode(child, styles))));
+				const converted = await convertNode(child, styles);
+				results.push(...converted);
 			}
 		}
 	}
 
 	return results;
-}
-
-async function flattenResults(
-	promise: Promise<(Paragraph | import('docx').Table)[]>
-): Promise<(Paragraph | import('docx').Table)[]> {
-	return await promise;
 }
 
 export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
@@ -240,7 +219,7 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 	const titlePara = new Paragraph({
 		heading: HeadingLevel.HEADING_1,
 		alignment: AlignmentType.CENTER,
-		children: [new TextRun({ text: input.title, font: headingFont(styles, 1) })]
+		children: [new TextRun({ text: input.title, font: styles.fonts.body.name ?? 'Calibri', size: 24, bold: true })]
 	});
 	allParagraphs.push(titlePara);
 	allParagraphs.push(new Paragraph({ children: [] }));
@@ -250,7 +229,7 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 			allParagraphs.push(
 				new Paragraph({
 					heading: HeadingLevel.HEADING_2,
-					children: [new TextRun({ text: note.title, font: headingFont(styles, 2) })]
+					children: [new TextRun({ text: note.title, font: styles.fonts.body.name ?? 'Calibri', size: 26, bold: true })]
 				})
 			);
 		}
@@ -258,34 +237,22 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 		const docContent = note.document.content ?? [];
 		for (const node of docContent as Array<Record<string, unknown>>) {
 			const converted = await convertNode(node, styles);
-			for (const item of converted) {
-				if (item instanceof Paragraph) {
-					allParagraphs.push(item);
-				}
+			for (const c of converted) {
+				allParagraphs.push(c);
 			}
 		}
 
 		allParagraphs.push(new Paragraph({ children: [] }));
 	}
 
-	const headerOptions: IHeaderOptions = { children: [] };
+	const headerChildren: (Paragraph | import('docx').Table)[] = [];
 	if (styles.headerImages?.length) {
 		const imgRun = headerImageToImageRun(styles.headerImages[0]);
 		if (imgRun) {
-			headerOptions.children.push(new Paragraph({ children: [imgRun] }));
+			headerChildren.push(new Paragraph({ children: [imgRun] }));
 		}
 	}
-
-	const footerOptions = styles.footerContent
-		? {
-				children: [
-					new Paragraph({
-						alignment: AlignmentType.CENTER,
-						children: [new TextRun({ text: styles.footerContent, font: { name: 'Calibri', size: 16 } })]
-					})
-				]
-			}
-		: undefined;
+	const headerOptions: IHeaderOptions = { children: headerChildren };
 
 	const section: ISectionOptions = {
 		properties: {
@@ -299,8 +266,19 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 			}
 		},
 		headers: { default: new Header(headerOptions) },
-		...(footerOptions ? { footers: { default: new Footer(footerOptions) } } : {}),
-		children: allParagraphs
+		...(styles.footerContent ? {
+			footers: {
+				default: new Footer({
+					children: [
+						new Paragraph({
+							alignment: AlignmentType.CENTER,
+							children: [new TextRun({ text: styles.footerContent, size: 16 })]
+						})
+					]
+				})
+			}
+		} : {}),
+		children: allParagraphs as readonly (Paragraph | import('docx').Table)[]
 	};
 
 	const doc = new Document({

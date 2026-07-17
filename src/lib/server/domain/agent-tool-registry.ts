@@ -628,21 +628,21 @@ export class AgentToolRegistry {
 					format: z.enum(['docx', 'pdf']),
 					templateId: id.optional()
 				}),
-				(input) => factory.deliverables().generateDocument(actor, input as never)
+				(input) => factory.deliverables().generateDocument(actor, { ...input, projectId: input.projectId as never } as never)
 			),
 			define(
 				'list_artifacts',
 				'List generated document artifacts for a project.',
 				'read',
 				z.object({ projectId: id }),
-				(input) => factory.deliverables().listArtifacts(actor, input.projectId)
+				(input) => factory.deliverables().listArtifacts(actor, input.projectId as never)
 			),
 			define(
 				'list_templates',
 				'List available DOCX templates for a project.',
 				'read',
 				z.object({ projectId: id }),
-				(input) => factory.deliverables().listTemplates(actor, input.projectId)
+				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
 			)
 		];
 	}

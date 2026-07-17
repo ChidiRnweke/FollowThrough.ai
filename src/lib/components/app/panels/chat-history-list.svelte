@@ -85,7 +85,7 @@
 <div class="flex flex-col gap-1">
 	<div class="flex items-center justify-between px-1">
 		<h3 class="provenance-caption">Recent chats</h3>
-		{#if showAllLink}<Button variant="link" size="sm"><a href="/chats">All chats</a></Button>{/if}
+		{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
 	</div>
 	{#if sessions.length === 0}
 		<p class="px-1 text-sm text-muted-foreground">No past conversations yet.</p>
@@ -125,15 +125,10 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Group>
-							<DropdownMenu.Item>
-								<a
-									class="flex w-full items-center gap-2"
-									href="/chats/{session.id}"
-									target="_blank"
-									rel="noreferrer"
-								>
-									<ExternalLink /> Open in new tab
-								</a>
+							<DropdownMenu.Item
+								onclick={() => window.open(`/chats/${session.id}`, '_blank', 'noopener,noreferrer')}
+							>
+								<ExternalLink /> Open in new tab
 							</DropdownMenu.Item>
 							<DropdownMenu.Item
 								onclick={() => {

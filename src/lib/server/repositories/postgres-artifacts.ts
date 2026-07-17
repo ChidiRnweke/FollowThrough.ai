@@ -17,7 +17,7 @@ const toArtifact = (row: typeof schema.artifacts.$inferSelect): Artifact => ({
 	sourceNoteIds: (row.sourceNoteIds as NoteId[]) ?? [],
 	templateId: row.templateId ? (row.templateId as TemplateId) : undefined,
 	provenanceId: row.provenanceId ? (row.provenanceId as Artifact['provenanceId']) : undefined,
-	runId: row.runId ?? undefined,
+	runId: row.runId ? (row.runId as Artifact['runId']) : undefined,
 	createdAt: instant(row.createdAt)
 });
 

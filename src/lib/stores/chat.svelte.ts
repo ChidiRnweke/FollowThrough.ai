@@ -55,9 +55,6 @@ export interface ChatEntry {
 const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
 	entry.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
 
-const hasText = (entry: ChatEntry): boolean =>
-	entry.parts.some((part) => part.kind === 'text' && part.text.length > 0);
-
 /** Merge a tool event into the entry, appending a new inline part when it is unseen. */
 const applyToolActivity = (entry: ChatEntry, incoming: ChatToolActivity): void => {
 	if (!reconcileToolActivity(entryTools(entry), incoming)) {

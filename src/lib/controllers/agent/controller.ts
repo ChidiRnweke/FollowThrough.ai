@@ -1,6 +1,7 @@
 import type {
 	ActorContext,
 	AgentEvent,
+	AgentRun,
 	AgentRunId,
 	Conversation,
 	ConversationId,
@@ -35,7 +36,11 @@ export interface AgentController {
 	getSession(
 		actor: ActorContext,
 		conversationId: ConversationId
-	): Promise<{ conversation: Conversation; messages: readonly Message[] }>;
+	): Promise<{
+		conversation: Conversation;
+		messages: readonly Message[];
+		latestRun?: Pick<AgentRun, 'id' | 'status' | 'failure'>;
+	}>;
 	decide(
 		actor: ActorContext,
 		input: DecideAgentRunInput,

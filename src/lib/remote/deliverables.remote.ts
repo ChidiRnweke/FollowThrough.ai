@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import type { GenerateDocumentInput } from '$lib/models';
+import type { ArtifactId, GenerateDocumentInput, ProjectId, TemplateId } from '$lib/models';
 
 export const initiateTemplateUpload = command(
 	z.object({
@@ -14,7 +14,7 @@ export const initiateTemplateUpload = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.initiateTemplateUpload(AppFactory.actor(), input)
+			.initiateTemplateUpload(AppFactory.actor(), { ...input, projectId: input.projectId as ProjectId })
 );
 
 export const completeTemplateUpload = command(
@@ -22,13 +22,13 @@ export const completeTemplateUpload = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.completeTemplateUpload(AppFactory.actor(), input.templateId)
+			.completeTemplateUpload(AppFactory.actor(), input.templateId as TemplateId)
 );
 
 export const listTemplates = query(z.string().uuid(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.listTemplates(AppFactory.actor(), projectId)
+		.listTemplates(AppFactory.actor(), projectId as ProjectId)
 );
 
 export const deleteTemplate = command(
@@ -36,7 +36,7 @@ export const deleteTemplate = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.deleteTemplate(AppFactory.actor(), input.templateId)
+			.deleteTemplate(AppFactory.actor(), input.templateId as TemplateId)
 );
 
 export const generateDocument = command(
@@ -56,7 +56,7 @@ export const generateDocument = command(
 export const listArtifacts = query(z.string().uuid(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.listArtifacts(AppFactory.actor(), projectId)
+		.listArtifacts(AppFactory.actor(), projectId as ProjectId)
 );
 
 export const downloadArtifact = command(
@@ -64,7 +64,7 @@ export const downloadArtifact = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.downloadArtifact(AppFactory.actor(), input.artifactId)
+			.downloadArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
 );
 
 export const deleteArtifact = command(
@@ -72,7 +72,7 @@ export const deleteArtifact = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.deleteArtifact(AppFactory.actor(), input.artifactId)
+			.deleteArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
 );
 
 export const regenerateArtifact = command(
@@ -80,5 +80,5 @@ export const regenerateArtifact = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.regenerateArtifact(AppFactory.actor(), input.artifactId)
+			.regenerateArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
 );

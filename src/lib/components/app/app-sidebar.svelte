@@ -168,8 +168,14 @@
 				>
 					<MessageSquare class="size-4" />
 				</Button>
-				<Button variant="ghost" size="icon-sm" class="md:hidden" aria-label="Open chat">
-					<a href="/chats/new"><MessageSquare /></a>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					class="md:hidden"
+					aria-label="Open chat"
+					href="/chats/new"
+				>
+					<MessageSquare />
 				</Button>
 				<Button variant="ghost" size="icon-sm" aria-label="Toggle theme" onclick={toggleMode}>
 					<SunMoon class="size-4" />
