@@ -508,7 +508,10 @@ export interface ProjectTemplate {
 
 export interface ExtractedTemplateStyles {
 	readonly fonts: {
-		readonly heading: Record<string, { name: string; size: number; bold: boolean; italic: boolean; color?: string }>;
+		readonly heading: Record<
+			string,
+			{ name: string; size: number; bold: boolean; italic: boolean; color?: string }
+		>;
 		readonly body: { name: string; size: number; color?: string };
 	};
 	readonly pageMargins: { top: number; bottom: number; left: number; right: number };

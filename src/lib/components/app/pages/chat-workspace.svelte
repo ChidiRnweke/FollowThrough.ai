@@ -32,14 +32,22 @@
 				<Breadcrumb.Item><Breadcrumb.Link href="/chats">Chats</Breadcrumb.Link></Breadcrumb.Item>
 				{#if project}
 					<Breadcrumb.Separator />
-					<Breadcrumb.Item><Breadcrumb.Link href="/projects/{project.id}">{project.name}</Breadcrumb.Link></Breadcrumb.Item>
+					<Breadcrumb.Item
+						><Breadcrumb.Link href="/projects/{project.id}">{project.name}</Breadcrumb.Link
+						></Breadcrumb.Item
+					>
 				{/if}
 				{#if note}
 					<Breadcrumb.Separator />
-					<Breadcrumb.Item><Breadcrumb.Link href="/notes/{note.id}">{note.title}</Breadcrumb.Link></Breadcrumb.Item>
+					<Breadcrumb.Item
+						><Breadcrumb.Link href="/notes/{note.id}">{note.title}</Breadcrumb.Link
+						></Breadcrumb.Item
+					>
 				{/if}
 				<Breadcrumb.Separator />
-				<Breadcrumb.Item><Breadcrumb.Page>{conversation?.title ?? 'New chat'}</Breadcrumb.Page></Breadcrumb.Item>
+				<Breadcrumb.Item
+					><Breadcrumb.Page>{conversation?.title ?? 'New chat'}</Breadcrumb.Page></Breadcrumb.Item
+				>
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
 	</header>

@@ -162,6 +162,9 @@ describe('OpenRouter-compatible SDK integration', () => {
 			get: async () => {
 				throw new Error('Not used');
 			},
+			getLatestForConversation: async () => {
+				throw new Error('Not used');
+			},
 			pause: async () => {
 				throw new Error('Not used');
 			},

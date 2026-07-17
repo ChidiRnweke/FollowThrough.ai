@@ -259,7 +259,8 @@ class ChatStore {
 			}
 			for await (const event of readNdjson(response.body)) this.apply(reply, event);
 		} catch (error) {
-			reply.status = error instanceof DOMException && error.name === 'AbortError' ? 'cancelled' : 'failed';
+			reply.status =
+				error instanceof DOMException && error.name === 'AbortError' ? 'cancelled' : 'failed';
 			reply.error = reply.status === 'cancelled' ? 'Generation stopped' : 'The retry failed.';
 			reply.retryable = reply.status === 'failed';
 		} finally {
@@ -301,18 +302,15 @@ class ChatStore {
 		else if (event.type === 'text_delta') {
 			reply.status = 'streaming';
 			appendText(reply, event.text);
-		}
-		else if (event.type === 'tool_started')
-			{
-				reply.status = 'streaming';
+		} else if (event.type === 'tool_started') {
+			reply.status = 'streaming';
 			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
 				status: 'running'
 			});
-			}
-		else if (event.type === 'tool_completed') {
+		} else if (event.type === 'tool_completed') {
 			applyToolActivity(reply, {
 				callId: event.callId,
 				name: event.name,
@@ -343,8 +341,7 @@ class ChatStore {
 		} else if (event.type === 'completed') {
 			reply.status = 'completed';
 			this.conversationId = event.conversationId;
-		}
-		else if (event.type === 'resources_stale') refreshStale(event.resources);
+		} else if (event.type === 'resources_stale') refreshStale(event.resources);
 	}
 
 	clear(): void {

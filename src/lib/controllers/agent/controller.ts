@@ -26,7 +26,11 @@ export interface AgentController {
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
 	): Promise<readonly Conversation[]>;
-	renameSession(actor: ActorContext, conversationId: ConversationId, title: string): Promise<Conversation>;
+	renameSession(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		title: string
+	): Promise<Conversation>;
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
 	getSession(
 		actor: ActorContext,
@@ -69,8 +73,13 @@ export class DefaultAgentController implements AgentController {
 		return this.dependencies.conversationJournal.rename(actor, conversationId, title);
 	}
 
-	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
-		return this.dependencies.conversationJournal.remove(actor, conversationId);
+	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+		const latest = await this.dependencies.runStore
+			.getLatestForConversation(actor, conversationId)
+			.catch(() => undefined);
+		if (latest?.status === 'running' || latest?.status === 'awaiting_approval')
+			throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
+		await this.dependencies.conversationJournal.remove(actor, conversationId);
 	}
 
 	async getSession(actor: ActorContext, conversationId: ConversationId) {

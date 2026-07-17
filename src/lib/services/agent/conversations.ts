@@ -68,7 +68,11 @@ export class PersistentConversationJournal implements ConversationJournal {
 		title: string
 	): Promise<Conversation> {
 		const conversation = await this.get(actor, conversationId);
-		return this.repository.update(actor, { ...conversation, title: title.trim(), updatedAt: now() });
+		return this.repository.update(actor, {
+			...conversation,
+			title: title.trim(),
+			updatedAt: now()
+		});
 	}
 
 	remove(actor: ActorContext, conversationId: ConversationId): Promise<void> {

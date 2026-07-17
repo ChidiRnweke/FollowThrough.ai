@@ -70,12 +70,39 @@
 	let prompt = $state('');
 	let viewport = $state<HTMLElement | null>(null);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
+	let followingLatest = $state(true);
+	let showJumpToLatest = $state(false);
 	const draftKey = (): string => `followthrough.chat.draft.${chat.conversationId ?? 'new'}`;
 
 	function saveDraft(): void {
 		if (typeof sessionStorage === 'undefined') return;
 		if (prompt) sessionStorage.setItem(draftKey(), prompt);
 		else sessionStorage.removeItem(draftKey());
+	}
+
+	$effect(() => {
+		const node = viewport;
+		if (!node) return;
+		const updatePosition = () => {
+			followingLatest = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+			showJumpToLatest = !followingLatest;
+		};
+		const observer = new MutationObserver(() => {
+			if (followingLatest) node.scrollTo({ top: node.scrollHeight });
+			else showJumpToLatest = true;
+		});
+		node.addEventListener('scroll', updatePosition, { passive: true });
+		observer.observe(node, { childList: true, subtree: true, characterData: true });
+		return () => {
+			node.removeEventListener('scroll', updatePosition);
+			observer.disconnect();
+		};
+	});
+
+	function jumpToLatest(): void {
+		followingLatest = true;
+		showJumpToLatest = false;
+		viewport?.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
 	}
 
 	// The open note travels along automatically, like Copilot's current file.
@@ -142,13 +169,19 @@
 	}
 
 	function editMessage(entry: (typeof chat.entries)[number]): void {
-		prompt = entry.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('\n');
+		prompt = entry.parts
+			.filter((part) => part.kind === 'text')
+			.map((part) => part.text)
+			.join('\n');
 		saveDraft();
 		textareaRef?.focus();
 	}
 
 	async function copyMessage(entry: (typeof chat.entries)[number]): Promise<void> {
-		const text = entry.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('\n');
+		const text = entry.parts
+			.filter((part) => part.kind === 'text')
+			.map((part) => part.text)
+			.join('\n');
 		await navigator.clipboard.writeText(text);
 		toast.success('Copied to clipboard.');
 	}
@@ -237,7 +270,11 @@
 		<div class="flex flex-col gap-3">
 			{#if chat.entries.length === 0}
 				{#if showHistory && sessions.length > 0}
-					<ChatHistoryList {sessions} {shell} onselect={(id) => void chat.switchToConversation(id)} />
+					<ChatHistoryList
+						{sessions}
+						{shell}
+						onselect={(id) => void chat.switchToConversation(id)}
+					/>
 				{:else}
 					<p class="text-sm text-muted-foreground">
 						Ask about your projects, notes and todos. The open note and your selection travel along
@@ -250,11 +287,21 @@
 					<div class="flex items-center justify-between gap-2">
 						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
 						<div class="flex items-center gap-1">
-							<Button variant="ghost" size="icon-xs" aria-label="Copy message" onclick={() => void copyMessage(entry)}>
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								aria-label="Copy message"
+								onclick={() => void copyMessage(entry)}
+							>
 								<Copy />
 							</Button>
 							{#if entry.role === 'user'}
-								<Button variant="ghost" size="icon-xs" aria-label="Edit question in composer" onclick={() => editMessage(entry)}>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									aria-label="Edit question in composer"
+									onclick={() => editMessage(entry)}
+								>
 									<Pencil />
 								</Button>
 							{/if}
@@ -323,10 +370,16 @@
 					{#if entry.role === 'assistant' && entry.status === 'waiting'}
 						<ChatActivity />
 					{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
-						<ChatActivity label="Agent is working" toolActive={entry.parts.some((part) => part.kind === 'tool')} />
+						<ChatActivity
+							label="Agent is working"
+							toolActive={entry.parts.some((part) => part.kind === 'tool')}
+						/>
 					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
 						<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
-							<span>{entry.error ?? (entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span>
+							<span
+								>{entry.error ??
+									(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
+							>
 							{#if entry.status === 'failed' && entry.retryable && entry.runId}
 								<Button variant="outline" size="xs" onclick={() => void chat.retry(entry)}>
 									<RotateCcw data-icon="inline-start" /> Retry
@@ -346,6 +399,9 @@
 			{/each}
 		</div>
 	</ScrollArea>
+	{#if showJumpToLatest}
+		<Button variant="outline" size="sm" class="self-end" onclick={jumpToLatest}>Jump to latest</Button>
+	{/if}
 	{#if autoChip || chat.chips.length > 0}
 		<div class="flex flex-wrap items-center gap-1" aria-label="Chat context">
 			{#if autoChip}
@@ -406,7 +462,7 @@
 		<Button
 			size="icon"
 			aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
-			onclick={() => chat.isStreaming ? chat.stop() : void send()}
+			onclick={() => (chat.isStreaming ? chat.stop() : void send())}
 			disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
 		>
 			{#if chat.isStreaming}

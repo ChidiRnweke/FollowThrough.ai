@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import type { Conversation, ShellContext } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -12,6 +12,7 @@
 	import NameDialog from '$lib/components/app/name-dialog.svelte';
 	import { deleteSession, renameSession } from '$lib/remote/chat.remote';
 	import { toast } from 'svelte-sonner';
+	import { chat } from '$lib/stores/chat.svelte';
 
 	let {
 		sessions,
@@ -59,9 +60,17 @@
 
 	async function remove(): Promise<void> {
 		if (!selected) return;
+		if (chat.isStreaming && chat.conversationId === selected.id) {
+			toast.error('Stop the active generation before deleting this chat.');
+			return;
+		}
 		busy = true;
 		try {
 			await deleteSession({ conversationId: selected.id });
+			if (chat.conversationId === selected.id) {
+				chat.clear();
+				if (location.pathname === `/chats/${selected.id}`) await goto('/chats/new');
+			}
 			await invalidateAll();
 			deleteOpen = false;
 			toast.success('Chat deleted.');
@@ -90,15 +99,26 @@
 				>
 					<MessageSquare data-icon="inline-start" />
 					<span class="flex min-w-0 flex-col items-start gap-0.5">
-						<span class="w-full truncate text-left text-sm">{session.title ?? 'New conversation'}</span>
-						<span class="w-full truncate text-left text-xs text-muted-foreground">{origin(session)}</span>
-						<span class="text-left text-xs text-muted-foreground">{new Date(session.updatedAt).toLocaleDateString()}</span>
+						<span class="w-full truncate text-left text-sm"
+							>{session.title ?? 'New conversation'}</span
+						>
+						<span class="w-full truncate text-left text-xs text-muted-foreground"
+							>{origin(session)}</span
+						>
+						<span class="text-left text-xs text-muted-foreground"
+							>{new Date(session.updatedAt).toLocaleDateString()}</span
+						>
 					</span>
 				</Button>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
-							<Button {...props} variant="ghost" size="icon-sm" aria-label="Actions for {session.title ?? 'chat'}">
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Actions for {session.title ?? 'chat'}"
+							>
 								<MoreHorizontal />
 							</Button>
 						{/snippet}
@@ -106,14 +126,30 @@
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Group>
 							<DropdownMenu.Item>
-								<a class="flex w-full items-center gap-2" href="/chats/{session.id}" target="_blank" rel="noreferrer">
+								<a
+									class="flex w-full items-center gap-2"
+									href="/chats/{session.id}"
+									target="_blank"
+									rel="noreferrer"
+								>
 									<ExternalLink /> Open in new tab
 								</a>
 							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => { selected = session; renameOpen = true; }}>
+							<DropdownMenu.Item
+								onclick={() => {
+									selected = session;
+									renameOpen = true;
+								}}
+							>
 								<Pencil /> Rename
 							</DropdownMenu.Item>
-							<DropdownMenu.Item variant="destructive" onclick={() => { selected = session; deleteOpen = true; }}>
+							<DropdownMenu.Item
+								variant="destructive"
+								onclick={() => {
+									selected = session;
+									deleteOpen = true;
+								}}
+							>
 								<Trash2 /> Delete
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>

@@ -48,6 +48,9 @@ const setup = (events: AgentEvent[]) => {
 			get: async () => {
 				throw new Error('Unexpected run load');
 			},
+			getLatestForConversation: async () => {
+				throw new Error('No run persisted by this fake');
+			},
 			pause: async () => {
 				throw new Error('Unexpected run pause');
 			},

@@ -1,10 +1,10 @@
 import {
 	AlignmentType,
+	BorderStyle,
 	Document,
 	Footer,
 	Header,
 	HeadingLevel,
-	HorizontalRule,
 	ImageRun,
 	LevelFormat,
 	NumberFormat,
@@ -198,7 +198,13 @@ async function convertNode(
 			break;
 		}
 		case 'horizontalRule': {
-			results.push(new Paragraph({ children: [new HorizontalRule()] }));
+			// docx has no horizontal-rule element; an empty paragraph with a bottom border renders one.
+			results.push(
+				new Paragraph({
+					border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'auto', space: 1 } },
+					spacing: { before: 120, after: 120 }
+				})
+			);
 			break;
 		}
 		case 'image': {
