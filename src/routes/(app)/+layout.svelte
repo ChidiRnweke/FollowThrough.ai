@@ -10,6 +10,8 @@
 
 	let { data, children } = $props();
 
+	const isNavigating = $derived(navigating.to !== null);
+
 	const activeNoteId = $derived(
 		page.url.pathname.startsWith('/notes/')
 			? (page.url.pathname.split('/')[2] as NoteId)
@@ -36,9 +38,14 @@
 		shell={data.shell}
 		activePath={page.url.pathname}
 		{activeNoteId}
-		loading={navigating.to !== null}
+		loading={isNavigating}
 	/>
-	<Sidebar.Inset class="min-w-0 overflow-y-auto border-l border-sidebar-border">
+	<Sidebar.Inset class="relative min-w-0 overflow-y-auto border-l border-sidebar-border">
+		{#if isNavigating}
+			<div class="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden">
+				<div class="bg-primary h-full w-full origin-left animate-pulse"></div>
+			</div>
+		{/if}
 		{@render children()}
 	</Sidebar.Inset>
 	<RightPanel

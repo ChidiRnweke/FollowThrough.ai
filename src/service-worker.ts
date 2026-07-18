@@ -14,8 +14,9 @@ const OFFLINE_ROUTE = `${base}/offline`;
 const PRECACHED_PATHS = [...build, ...files, ...prerendered];
 const PRECACHED_PATH_SET = new Set(PRECACHED_PATHS);
 
-const canStore = (response: Response): boolean =>
-	response.ok && !response.headers.get('cache-control')?.includes('no-store');
+const canStore = (response: Response, allowPrivatePageData = false): boolean =>
+	response.ok &&
+	(allowPrivatePageData || !response.headers.get('cache-control')?.includes('no-store'));
 
 const isPageDataRequest = (url: URL): boolean =>
 	url.pathname.endsWith('/__data.json') || url.pathname.endsWith('.html__data.json');
@@ -65,12 +66,13 @@ const cacheFirst = async (request: Request, pathname: string): Promise<Response>
 const networkFirst = async (
 	request: Request,
 	cacheKey: Request | string,
-	fallback?: string
+	fallback?: string,
+	allowPrivatePageData = false
 ): Promise<Response> => {
 	const cache = await caches.open(PAGE_CACHE);
 	try {
 		const response = await fetch(request);
-		if (canStore(response)) await cache.put(cacheKey, response.clone());
+		if (canStore(response, allowPrivatePageData)) await cache.put(cacheKey, response.clone());
 		if (response.status < 500) return response;
 		return (await cache.match(cacheKey)) ?? response;
 	} catch (error) {
@@ -99,6 +101,8 @@ worker.addEventListener('fetch', (event) => {
 	}
 
 	if (isPageDataRequest(url)) {
-		event.respondWith(networkFirst(request, request));
+		// SvelteKit marks page-data responses private/no-store. This app-owned cache is the narrow
+		// exception that allows an already-visited private workspace route to reopen offline.
+		event.respondWith(networkFirst(request, request, undefined, true));
 	}
 });

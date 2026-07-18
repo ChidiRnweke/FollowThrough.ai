@@ -28,10 +28,6 @@ feature blueprint before implementation.
 
 ### Remaining work
 
-- [ ] **Installable PWA and offline workspace shell** — Make the workspace installable and able to
-      reopen without a connection by caching versioned application assets and the minimum navigation
-      shell. This enables offline access but does not, by itself, make server-backed data safe to edit
-      offline.
 - [ ] **Offline note creation and broader mutations** — Cache the project metadata required to create
       notes with client-generated IDs. Extend the outbox and conditional-write model to create,
       delete, move, and archive operations while keeping agent actions, retrieval, and attachments

@@ -39,11 +39,6 @@ test('reopens a visited note from the cached workspace while offline', async ({
 	page,
 	context
 }) => {
-	const dataResponses: Array<{ url: string; cacheControl: string | undefined }> = [];
-	page.on('response', (response) => {
-		if (response.url().includes('__data.json'))
-			dataResponses.push({ url: response.url(), cacheControl: response.headers()['cache-control'] });
-	});
 	await page.goto('/');
 	await waitForServiceWorker(page);
 	const noteLink = page.locator('a[href^="/notes/"]').first();
@@ -55,17 +50,7 @@ test('reopens a visited note from the cached workspace while offline', async ({
 	await context.setOffline(true);
 	await page.reload();
 	await page.getByRole('link', { name: noteTitle, exact: true }).click();
-	const title = page.getByLabel('Note title');
-	if (!(await title.isVisible())) {
-		const cachedUrls = await page.evaluate(async () => {
-			const urls: string[] = [];
-			for (const name of await caches.keys())
-				for (const request of await (await caches.open(name)).keys()) urls.push(request.url);
-			return urls.filter((url) => url.includes('__data.json'));
-		});
-		throw new Error(JSON.stringify({ dataResponses, cachedUrls }));
-	}
-	expect(await title.inputValue()).toBe(noteTitle);
+	expect(await page.getByLabel('Note title').inputValue()).toBe(noteTitle);
 });
 
 test('uses the offline fallback for an uncached route', async ({ page, context }) => {

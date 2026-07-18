@@ -18,6 +18,7 @@ import type { AgentRunner } from '$lib/services';
 import { AgentToolRegistry } from './agent-tool-registry';
 import { withOpenRouterWebSearch } from './openrouter-server-tools';
 import { BufferedAgentSession } from './buffered-agent-session';
+import { traceAgentTurn } from './telemetry';
 
 type ToolStreamEvent = {
 	readonly type: string;
@@ -151,59 +152,69 @@ export class OpenAIAgentRunner implements AgentRunner {
 						message: decision.message ?? 'The user rejected this action. Recover without it.'
 					});
 			}
-			const stream = await runner.run(agent, state ?? request.prompt, {
-				stream: true,
-				session,
-				maxTurns: 20,
-				signal
-			});
-			const mapper = new AgentToolEventMapper();
-			for await (const event of stream) {
-				const toolEvent = mapper.map(event);
-				if (toolEvent) yield { type: 'event', event: toolEvent };
-				if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
-					yield { type: 'event', event: { type: 'text_delta', text: event.data.delta } };
-			}
-			await stream.completed;
-			const interruptions = stream.interruptions;
-			if (interruptions.length > 0) {
-				const pending: PendingAgentDecision[] = interruptions.map((item) => {
-					const details = callDetails(item);
-					return {
-						callId: details.callId,
-						toolName: details.name,
-						arguments: details.arguments
-					};
+			let outputText = '';
+			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
+				const stream = await runner.run(agent, state ?? request.prompt, {
+					stream: true,
+					session,
+					maxTurns: 20,
+					signal
 				});
-				for (const item of pending)
-					yield {
-						type: 'event',
-						event: {
-							type: 'approval_required',
-							runId: run.id,
-							callId: item.callId,
-							name: item.toolName,
-							arguments: item.arguments
-						}
-					};
-				yield {
-					type: 'approval_checkpoint',
-					serializedState: stream.state.toString(),
-					pendingDecisions: pending,
-					sessionItems: await session.snapshot()
-				};
-				return;
-			}
-			yield {
-				type: 'event',
-				event: {
-					type: 'completed',
-					conversationId: run.conversationId,
-					runId: run.id,
-					model: run.model
+				const mapper = new AgentToolEventMapper();
+				for await (const event of stream) {
+					const toolEvent = mapper.map(event);
+					if (toolEvent) yield { type: 'event', event: toolEvent };
+					if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta') {
+						outputText += event.data.delta;
+						yield { type: 'event', event: { type: 'text_delta', text: event.data.delta } };
+					}
 				}
+				await stream.completed;
+				const interruptions = stream.interruptions;
+				if (interruptions.length > 0) {
+					const pending: PendingAgentDecision[] = interruptions.map((item) => {
+						const details = callDetails(item);
+						return {
+							callId: details.callId,
+							toolName: details.name,
+							arguments: details.arguments
+						};
+					});
+					for (const item of pending)
+						yield {
+							type: 'event',
+							event: {
+								type: 'approval_required',
+								runId: run.id,
+								callId: item.callId,
+								name: item.toolName,
+								arguments: item.arguments
+							}
+						};
+					yield {
+						type: 'approval_checkpoint',
+						serializedState: stream.state.toString(),
+						pendingDecisions: pending,
+						sessionItems: await session.snapshot()
+					};
+					return;
+				}
+				yield {
+					type: 'event',
+					event: {
+						type: 'completed',
+						conversationId: run.conversationId,
+						runId: run.id,
+						model: run.model
+					}
+				};
+				yield { type: 'completed', sessionItems: await session.snapshot() };
 			};
-			yield { type: 'completed', sessionItems: await session.snapshot() };
+			yield* traceAgentTurn(
+				{ input: request.prompt ?? '', sessionId: run.conversationId, model: run.model },
+				() => runTurn(),
+				() => outputText
+			);
 		} catch (error) {
 			if (signal.aborted) throw error;
 			throw new AgentProviderFailure(

@@ -30,5 +30,17 @@ export const variables = defineEnvVars({
 		description: 'OpenRouter model used to describe uploaded images.',
 		schema: optionalString
 	},
-	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString }
+	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString },
+	OTEL_EXPORTER_OTLP_ENDPOINT: {
+		description: 'OTLP/gRPC collector endpoint for Phoenix traces. Telemetry is disabled when unset.',
+		schema: optionalString
+	},
+	PHOENIX_PROJECT_NAME: {
+		description: 'Phoenix project name traces are grouped under (defaults to followthrough).',
+		schema: optionalString
+	},
+	PHOENIX_API_KEY: {
+		description: 'Optional auth token forwarded to the Phoenix OTLP collector.',
+		schema: optionalString
+	}
 });
