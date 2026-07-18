@@ -130,12 +130,6 @@ export function createProductionFactory(): ProductionApplication {
 		bucket: process.env.S3_BUCKET ?? 'followthrough-attachments',
 		forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false'
 	});
-	const attachments = new AttachmentManagementService(
-		new PostgresAttachmentRepository(db),
-		noteRepository,
-		attachmentStorage,
-		new AttachmentParserRegistry()
-	);
 	const templateRepository = new PostgresTemplateRepository(db);
 	const artifactRepository = new PostgresArtifactRepository(db);
 	const templates = new TemplateManagementService(
@@ -176,6 +170,15 @@ export function createProductionFactory(): ProductionApplication {
 	const embeddingClient = openAIKey
 		? new OpenAIEmbeddingClient(openAIKey)
 		: new DeterministicEmbeddingClient();
+	const attachmentRepository = new PostgresAttachmentRepository(db);
+	const attachments = new AttachmentManagementService(
+		attachmentRepository,
+		noteRepository,
+		attachmentStorage,
+		new AttachmentParserRegistry(),
+		searchRepository,
+		embeddingClient
+	);
 	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient);
 	const diagramIndexer = new EmbeddedDiagramIndexer(searchRepository, embeddingClient, notes);
 	const knowledgeSearcher = new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient);
@@ -402,7 +405,9 @@ export function createProductionFactory(): ProductionApplication {
 			suggestionViewAssembler: suggestions,
 			noteEditor: notes,
 			noteArchiver: notes,
+			notePublisher: notes,
 			revisionRecorder: notes,
+			revisionReader: notes,
 			anchorRepairer: notes,
 			noteIndexer,
 			transactionRunner: postgresTransactionRunner
@@ -447,7 +452,9 @@ export function createProductionFactory(): ProductionApplication {
 	(dependencies.agent as { executor: AgentRunExecutor }).executor = executor;
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: () => runRepository.recoverInterrupted('Process restarted'),
+		recoverInterruptedRuns: async () =>
+			(await runRepository.recoverInterrupted('Process restarted')) +
+			(await attachmentRepository.failInterrupted()),
 		eventBus
 	};
 }

@@ -122,7 +122,17 @@ export const agentToolCoverage = {
 		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
 		complete: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
 		list: { kind: 'read' },
+		listForProject: {
+			kind: 'excluded',
+			reason: 'Project attachments enter agent context through semantic retrieval.'
+		},
 		download: { kind: 'excluded', reason: 'Signed URLs are only returned to the user interface.' },
+		downloadById: {
+			kind: 'excluded',
+			reason: 'Signed URLs are only returned to the user interface.'
+		},
+		retry: { kind: 'excluded', reason: 'Attachment processing is managed by the user.' },
+		removeById: { kind: 'excluded', reason: 'Project attachments are managed by the user.' },
 		read: { kind: 'read' },
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},

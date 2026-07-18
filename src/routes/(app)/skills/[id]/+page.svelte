@@ -36,7 +36,14 @@
 				headers: intent.requiredHeaders,
 				body: file
 			});
-			if (!stored.ok) throw new Error('Object storage rejected the upload');
+			if (!stored.ok) {
+				const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
+				throw new Error(
+					detail
+						? `Object storage rejected the upload: ${detail}`
+						: `Object storage rejected the upload (${stored.status})`
+				);
+			}
 			const completed = await fetch('/api/attachments', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },

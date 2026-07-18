@@ -5,9 +5,20 @@ import type {
 	NoteId,
 	ProjectId,
 	SearchDocument,
+	AttachmentId,
 	SearchMatch
 } from '../models';
 export interface RetrievalIndexRepository {
+	listForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): Promise<readonly SearchDocument[]>;
+	replaceForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId,
+		documents: readonly SearchDocument[]
+	): Promise<void>;
+	deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]>;
 	listForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<readonly SearchDocument[]>;
 	listForMemoryEntry(

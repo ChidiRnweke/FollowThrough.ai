@@ -1,5 +1,6 @@
 import type {
 	ActorContext,
+	AttachmentId,
 	DiagramId,
 	MemoryEntryId,
 	NoteId,
@@ -18,6 +19,35 @@ interface OwnedSearchDocument {
 
 export class InMemorySearchRepository implements RetrievalIndexRepository {
 	documents: OwnedSearchDocument[] = [];
+
+	async listForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): Promise<readonly SearchDocument[]> {
+		return this.documents
+			.filter((item) => item.userId === actor.userId && item.document.attachmentId === attachmentId)
+			.map((item) => item.document)
+			.sort((a, b) => a.chunkIndex - b.chunkIndex);
+	}
+
+	async replaceForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId,
+		documents: readonly SearchDocument[]
+	): Promise<void> {
+		this.documents = [
+			...this.documents.filter(
+				(item) => item.userId !== actor.userId || item.document.attachmentId !== attachmentId
+			),
+			...documents.map((document) => ({ userId: actor.userId, document }))
+		];
+	}
+
+	async deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
+		this.documents = this.documents.filter(
+			(item) => item.userId !== actor.userId || item.document.attachmentId !== attachmentId
+		);
+	}
 
 	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]> {
 		return this.documents

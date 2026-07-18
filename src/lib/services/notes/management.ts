@@ -25,7 +25,9 @@ import type {
 	NoteArchiver,
 	NoteCreator,
 	NoteEditor,
+	NotePublisher,
 	NoteReader,
+	NoteRevisionReader,
 	NoteRevisionRecorder,
 	NoteTreeReader,
 	SelectionAnchorCreator,
@@ -41,7 +43,9 @@ export class NoteManagementService
 		NoteTreeReader,
 		NoteEditor,
 		NoteArchiver,
+		NotePublisher,
 		NoteRevisionRecorder,
+		NoteRevisionReader,
 		SelectionAnchorCreator,
 		SourceAnchorRepairer
 {
@@ -144,6 +148,17 @@ export class NoteManagementService
 			createdAt: now()
 		};
 		await this.notes.insertRevision(actor, revision);
+	}
+
+	async latestRevision(actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined> {
+		await this.get(actor, noteId);
+		const revisions = await this.notes.listRevisions(actor, noteId);
+		return revisions.length > 0 ? revisions[revisions.length - 1] : undefined;
+	}
+
+	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.get(actor, noteId);
+		return this.notes.update(actor, { ...note, publishedAt: now(), updatedAt: now() });
 	}
 
 	async repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]> {

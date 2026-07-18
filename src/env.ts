@@ -30,5 +30,9 @@ export const variables = defineEnvVars({
 	S3_ACCESS_KEY_ID: { description: 'S3 access key.', schema: optionalString },
 	S3_SECRET_ACCESS_KEY: { description: 'S3 secret key.', schema: optionalString },
 	S3_BUCKET: { description: 'S3 attachment bucket.', schema: optionalString },
+	OPENROUTER_ATTACHMENT_VISION_MODEL: {
+		description: 'OpenRouter model used to describe uploaded images.',
+		schema: optionalString
+	},
 	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString }
 });

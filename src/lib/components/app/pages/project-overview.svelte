@@ -12,6 +12,8 @@
 	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import PackageOpen from '@lucide/svelte/icons/package-open';
+	import Paperclip from '@lucide/svelte/icons/paperclip';
+	import ProjectAttachmentsDialog from '../project-attachments-dialog.svelte';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
@@ -26,6 +28,7 @@
 	let exportDefaultsOpen = $state(false);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
+	let attachmentsOpen = $state(false);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
@@ -80,6 +83,9 @@
 	<Button variant="outline" size="sm" href="/artifacts?projectId={project.id}">
 		<PackageOpen class="size-4" />
 		Artifacts
+	</Button>
+	<Button variant="outline" size="sm" onclick={() => (attachmentsOpen = true)}>
+		<Paperclip data-icon="inline-start" /> Attachments
 	</Button>
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
@@ -176,3 +182,4 @@
 	onsubmit={rename}
 />
 <ExportSettingsDialog bind:open={exportDefaultsOpen} projectId={project.id} />
+<ProjectAttachmentsDialog bind:open={attachmentsOpen} projectId={project.id} />

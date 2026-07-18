@@ -1,10 +1,18 @@
-import type { ActorContext, AttachmentUpload, AttachmentView, NoteId } from '$lib/models';
+import type {
+	ActorContext,
+	AttachmentId,
+	AttachmentUpload,
+	AttachmentView,
+	NoteId,
+	ProjectId
+} from '$lib/models';
 
 export interface AttachmentManager {
 	initiate(
 		actor: ActorContext,
 		input: {
-			noteId: NoteId;
+			projectId?: ProjectId;
+			noteId?: NoteId;
 			path: string;
 			mediaType: string;
 			byteSize: number;
@@ -16,7 +24,12 @@ export interface AttachmentManager {
 		requiredHeaders: Record<string, string>;
 	}>;
 	complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView>;
+	startProcessing(actor: ActorContext, attachment: AttachmentView): void;
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
+	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
+	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
+	retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
 	download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }>;
 	read(
 		actor: ActorContext,

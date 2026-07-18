@@ -6,6 +6,8 @@ import type {
 	ConvertInlineMermaidInput,
 	GenerateMermaidDiagramInput,
 	ListNoteSyncInventoryInput,
+	PublishNoteInput,
+	DiscardNoteDraftInput,
 	RelateSelectionInput,
 	ReviseInlineMermaidInput,
 	SyncNoteInput
@@ -27,6 +29,7 @@ const noteSchema = z.object({
 	plainText: z.string(),
 	currentRevision: z.number().int(),
 	isPinned: z.boolean(),
+	publishedAt: z.string().optional(),
 	archivedAt: z.string().optional(),
 	createdAt: z.string(),
 	updatedAt: z.string()
@@ -67,6 +70,29 @@ export const syncNote = command(
 		return AppFactory.controllerFactory()
 			.notes()
 			.sync(AppFactory.actor(), input as SyncNoteInput);
+	}
+);
+
+export const publishNote = command(
+	z.object({
+		noteId: z.string().uuid(),
+		baseEtag: noteEtag
+	}),
+	async (input) => {
+		return AppFactory.controllerFactory()
+			.notes()
+			.publish(AppFactory.actor(), input as PublishNoteInput);
+	}
+);
+
+export const discardNoteDraft = command(
+	z.object({
+		noteId: z.string().uuid()
+	}),
+	async (input) => {
+		return AppFactory.controllerFactory()
+			.notes()
+			.discardDraft(AppFactory.actor(), input as DiscardNoteDraftInput);
 	}
 );
 

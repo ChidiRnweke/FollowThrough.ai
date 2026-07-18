@@ -4,9 +4,13 @@ import type {
 	ArchiveNoteOutput,
 	CreateNoteInput,
 	CreateNoteOutput,
+	DiscardNoteDraftInput,
+	DiscardNoteDraftOutput,
 	GetNoteViewInput,
 	NoteView,
 	NoteSyncInventoryEntry,
+	PublishNoteInput,
+	PublishNoteOutput,
 	RenameNoteInput,
 	RenameNoteOutput,
 	SaveNoteInput,
@@ -20,6 +24,7 @@ import {
 	noteEtag,
 	noteMatchesEtag,
 	noteSyncContentEquals,
+	NotFoundError,
 	StaleRevisionError,
 	ValidationError
 } from '$lib/models';
@@ -42,7 +47,9 @@ import type {
 	NoteArchiver,
 	NoteEditor,
 	NoteIndexer,
+	NotePublisher,
 	NoteRevisionRecorder,
+	NoteRevisionReader,
 	SourceAnchorRepairer
 } from '$lib/services';
 
@@ -51,6 +58,8 @@ export interface NotesController {
 	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput>;
 	sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput>;
+	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput>;
+	discardDraft(actor: ActorContext, input: DiscardNoteDraftInput): Promise<DiscardNoteDraftOutput>;
 	listSyncInventory(
 		actor: ActorContext,
 		input: ListNoteSyncInventoryInput
@@ -73,7 +82,9 @@ export interface NotesDependencies {
 	suggestionViewAssembler: SuggestionViewAssembler;
 	noteEditor: NoteEditor;
 	noteArchiver: NoteArchiver;
+	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
+	revisionReader: NoteRevisionReader;
 	anchorRepairer: SourceAnchorRepairer;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
@@ -111,7 +122,6 @@ export class DefaultNotesController implements NotesController {
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteEditor.save(actor, input.note);
-			await this.dependencies.revisionRecorder.record(actor, note);
 			const anchors = await this.dependencies.anchorRepairer.repairForNote(actor, note);
 			await this.dependencies.noteIndexer.index(actor, note);
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
@@ -142,6 +152,36 @@ export class DefaultNotesController implements NotesController {
 				remote: { note: remote, etag: noteEtag(remote) }
 			};
 		}
+	}
+	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			if (!noteMatchesEtag(note, input.baseEtag))
+				throw new StaleRevisionError('The note has changed since it was loaded');
+			await this.dependencies.revisionRecorder.record(actor, note);
+			const published = await this.dependencies.notePublisher.markPublished(actor, note.id);
+			return { note: published, etag: noteEtag(published) };
+		});
+	}
+	async discardDraft(
+		actor: ActorContext,
+		input: DiscardNoteDraftInput
+	): Promise<DiscardNoteDraftOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			const revision = await this.dependencies.revisionReader.latestRevision(actor, input.noteId);
+			if (!revision)
+				throw new NotFoundError('No published version exists for this note', {
+					noteId: input.noteId
+				});
+			const restored = await this.dependencies.noteEditor.save(actor, {
+				...note,
+				title: revision.title,
+				document: revision.document,
+				plainText: revision.plainText
+			});
+			return { note: restored, etag: noteEtag(restored) };
+		});
 	}
 	async listSyncInventory(
 		actor: ActorContext,

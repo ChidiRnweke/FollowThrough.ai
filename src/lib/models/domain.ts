@@ -74,6 +74,7 @@ export interface Note {
 	readonly plainText: string;
 	readonly currentRevision: number;
 	readonly isPinned: boolean;
+	readonly publishedAt?: DateTime;
 	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
@@ -236,7 +237,8 @@ export type SkillSummary = Pick<
 
 export interface Attachment {
 	readonly id: AttachmentId;
-	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly noteId?: NoteId;
 	readonly path: string;
 	readonly currentVersionId: AttachmentVersionId;
 	readonly createdAt: DateTime;
@@ -252,12 +254,17 @@ export interface AttachmentVersion {
 	readonly checksumSha256: string;
 	readonly parserKind?: string;
 	readonly extractedText?: string;
+	readonly processingStatus:
+		'queued' | 'processing' | 'ready' | 'partial' | 'unsupported' | 'failed';
+	readonly processingFailure?: string;
+	readonly processedAt?: DateTime;
 	readonly createdAt: DateTime;
 }
 
 export interface AttachmentUpload {
 	readonly id: AttachmentUploadId;
-	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly noteId?: NoteId;
 	readonly path: string;
 	readonly objectKey: string;
 	readonly mediaType: string;
@@ -402,6 +409,8 @@ export interface SearchDocument {
 	readonly projectId: ProjectId;
 	readonly noteId?: NoteId;
 	readonly memoryEntryId?: MemoryEntryId;
+	readonly attachmentId?: AttachmentId;
+	readonly attachmentPath?: string;
 	readonly diagramId?: DiagramId;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly content: string;

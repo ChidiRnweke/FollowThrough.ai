@@ -145,6 +145,7 @@ export const notes = pgTable(
 		plainText: text('plain_text').notNull().default(''),
 		currentRevision: integer('current_revision').notNull().default(1),
 		isPinned: boolean('is_pinned').notNull().default(false),
+		publishedAt: timestamp('published_at', { withTimezone: true }),
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		...timestamps
 	},
@@ -397,15 +398,22 @@ export const attachments = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		noteId: uuid('note_id')
+		projectId: uuid('project_id')
 			.notNull()
-			.references(() => notes.id, { onDelete: 'cascade' }),
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id').references(() => notes.id, { onDelete: 'cascade' }),
 		path: text('path').notNull(),
 		currentVersionId: uuid('current_version_id'),
 		...timestamps
 	},
 	(table) => [
-		uniqueIndex('attachments_note_path_unique').on(table.noteId, table.path),
+		uniqueIndex('attachments_note_path_unique')
+			.on(table.noteId, table.path)
+			.where(sql`${table.noteId} is not null`),
+		uniqueIndex('attachments_project_path_unique')
+			.on(table.projectId, table.path)
+			.where(sql`${table.noteId} is null`),
+		index('attachments_project_idx').on(table.projectId),
 		index('attachments_note_idx').on(table.noteId)
 	]
 );
@@ -423,6 +431,9 @@ export const attachmentVersions = pgTable(
 		checksumSha256: text('checksum_sha256').notNull(),
 		parserKind: text('parser_kind'),
 		extractedText: text('extracted_text'),
+		processingStatus: text('processing_status').notNull().default('queued'),
+		processingFailure: text('processing_failure'),
+		processedAt: timestamp('processed_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [uniqueIndex('attachment_versions_object_key_unique').on(table.objectKey)]
@@ -449,9 +460,10 @@ export const attachmentUploads = pgTable(
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		noteId: uuid('note_id')
+		projectId: uuid('project_id')
 			.notNull()
-			.references(() => notes.id, { onDelete: 'cascade' }),
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id').references(() => notes.id, { onDelete: 'cascade' }),
 		path: text('path').notNull(),
 		objectKey: text('object_key').notNull(),
 		mediaType: text('media_type').notNull(),
@@ -729,6 +741,8 @@ export const searchChunks = pgTable(
 		memoryEntryId: uuid('memory_entry_id').references(() => memoryEntries.id, {
 			onDelete: 'cascade'
 		}),
+		attachmentId: uuid('attachment_id').references(() => attachments.id, { onDelete: 'cascade' }),
+		attachmentPath: text('attachment_path'),
 		diagramId: uuid('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' }),
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'
@@ -744,11 +758,12 @@ export const searchChunks = pgTable(
 	(table) => [
 		index('search_chunks_note_idx').on(table.noteId),
 		index('search_chunks_memory_idx').on(table.memoryEntryId),
+		index('search_chunks_attachment_idx').on(table.attachmentId),
 		index('search_chunks_user_idx').on(table.userId),
 		index('search_chunks_project_idx').on(table.projectId),
 		check(
 			'search_chunks_single_source',
-			sql`(${table.noteId} is null) <> (${table.memoryEntryId} is null)`
+			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}) = 1`
 		)
 	]
 );

@@ -1,6 +1,7 @@
 import { and, asc, cosineDistance, desc, eq, isNull, sql } from 'drizzle-orm';
 import type {
 	ActorContext,
+	AttachmentId,
 	DiagramId,
 	MemoryEntryId,
 	NoteId,
@@ -17,6 +18,8 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 	projectId: row.projectId as SearchDocument['projectId'],
 	...(row.noteId ? { noteId: row.noteId as NoteId } : {}),
 	...(row.memoryEntryId ? { memoryEntryId: row.memoryEntryId as MemoryEntryId } : {}),
+	...(row.attachmentId ? { attachmentId: row.attachmentId as AttachmentId } : {}),
+	...(row.attachmentPath ? { attachmentPath: row.attachmentPath } : {}),
 	content: row.content,
 	contentHash: row.contentHash,
 	sourceRevision: row.sourceRevision,
@@ -31,6 +34,47 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 
 export class PostgresRetrievalIndexRepository implements RetrievalIndexRepository {
 	constructor(private readonly database: Database) {}
+
+	async listForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): Promise<readonly SearchDocument[]> {
+		return (
+			await this.database
+				.select()
+				.from(schema.searchChunks)
+				.where(
+					and(
+						eq(schema.searchChunks.userId, actor.userId),
+						eq(schema.searchChunks.attachmentId, attachmentId)
+					)
+				)
+				.orderBy(asc(schema.searchChunks.chunkIndex))
+		).map(toDocument);
+	}
+
+	async replaceForAttachment(
+		actor: ActorContext,
+		attachmentId: AttachmentId,
+		documents: readonly SearchDocument[]
+	): Promise<void> {
+		await this.deleteForAttachment(actor, attachmentId);
+		if (documents.length)
+			await this.database
+				.insert(schema.searchChunks)
+				.values(documents.map((document) => ({ ...this.toRow(actor)(document), attachmentId })));
+	}
+
+	async deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
+		await this.database
+			.delete(schema.searchChunks)
+			.where(
+				and(
+					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.attachmentId, attachmentId)
+				)
+			);
+	}
 
 	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]> {
 		return (
@@ -133,6 +177,8 @@ export class PostgresRetrievalIndexRepository implements RetrievalIndexRepositor
 			projectId: document.projectId,
 			noteId: document.noteId,
 			memoryEntryId: document.memoryEntryId,
+			attachmentId: document.attachmentId,
+			attachmentPath: document.attachmentPath,
 			diagramId: document.diagramId,
 			sourceAnchorId: document.sourceAnchorId,
 			content: document.content,

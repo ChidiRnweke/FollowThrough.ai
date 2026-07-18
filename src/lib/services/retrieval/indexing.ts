@@ -1,5 +1,6 @@
 import type {
 	ActorContext,
+	Attachment,
 	ContentHash,
 	Diagram,
 	MemoryEntry,
@@ -111,6 +112,65 @@ export class EmbeddedNoteIndexer implements NoteIndexer {
 			};
 		});
 		await this.repository.replaceForNote(actor, note.id, documents);
+	}
+}
+
+export class EmbeddedAttachmentIndexer {
+	constructor(
+		private readonly repository: RetrievalIndexRepository,
+		private readonly embeddingClient: EmbeddingClient,
+		private readonly chunker: ContentChunker = new ParagraphChunker()
+	) {}
+
+	async index(
+		actor: ActorContext,
+		attachment: Attachment,
+		text: string
+	): Promise<{ truncated: boolean }> {
+		const all = this.chunker.chunk(text);
+		const contents = all.slice(0, 50);
+		if (!contents.length) {
+			await this.repository.deleteForAttachment(actor, attachment.id);
+			return { truncated: false };
+		}
+		const hashes = await Promise.all(contents.map(contentHash));
+		const existing = await this.repository.listForAttachment(actor, attachment.id);
+		const reusable = new Map(
+			existing
+				.filter((item) => item.embeddingModel === this.embeddingClient.model)
+				.map((item) => [item.contentHash, item])
+		);
+		const missing = hashes
+			.map((hash, index) => ({ hash, index }))
+			.filter(({ hash }) => !reusable.get(hash)?.embedding);
+		const embedded = missing.length
+			? await this.embeddingClient.embed(missing.map(({ index }) => contents[index]!))
+			: undefined;
+		if (embedded && embedded.vectors.length !== missing.length)
+			throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
+		const generated = new Map(missing.map(({ hash }, index) => [hash, embedded!.vectors[index]!]));
+		const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
+			const hash = hashes[chunkIndex]!;
+			const prior = reusable.get(hash);
+			return {
+				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+				projectId: attachment.projectId,
+				attachmentId: attachment.id,
+				attachmentPath: attachment.path,
+				content,
+				contentHash: hash,
+				sourceRevision: 1,
+				chunkIndex,
+				...((prior?.embedding ?? generated.get(hash))
+					? { embedding: prior?.embedding ?? generated.get(hash)! }
+					: {}),
+				...((prior?.embeddingModel ?? embedded?.model)
+					? { embeddingModel: prior?.embeddingModel ?? embedded!.model }
+					: {})
+			};
+		});
+		await this.repository.replaceForAttachment(actor, attachment.id, documents);
+		return { truncated: all.length > contents.length };
 	}
 }
 

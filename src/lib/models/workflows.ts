@@ -291,6 +291,23 @@ export interface SaveNoteOutput {
 	readonly repairedAnchorIds: readonly SourceAnchorId[];
 }
 
+export interface PublishNoteInput {
+	readonly noteId: NoteId;
+	readonly baseEtag: NoteEtag;
+}
+export interface PublishNoteOutput {
+	readonly note: Note;
+	readonly etag: NoteEtag;
+}
+
+export interface DiscardNoteDraftInput {
+	readonly noteId: NoteId;
+}
+export interface DiscardNoteDraftOutput {
+	readonly note: Note;
+	readonly etag: NoteEtag;
+}
+
 export interface CreateSkillFromSelectionInput {
 	readonly selection: TextSelection;
 	readonly name: string;

@@ -1,4 +1,10 @@
-import type { ActorContext, AttachmentUploadId, NoteId } from '$lib/models';
+import type {
+	ActorContext,
+	AttachmentId,
+	AttachmentUploadId,
+	NoteId,
+	ProjectId
+} from '$lib/models';
 import type { TransactionRunner } from '$lib/repositories';
 import type { AttachmentManager } from '$lib/services';
 
@@ -12,6 +18,16 @@ export interface AttachmentsController {
 		uploadId: AttachmentUploadId
 	): ReturnType<AttachmentManager['complete']>;
 	list(actor: ActorContext, noteId: NoteId): ReturnType<AttachmentManager['list']>;
+	listForProject(
+		actor: ActorContext,
+		projectId: ProjectId
+	): ReturnType<AttachmentManager['listForProject']>;
+	downloadById(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): ReturnType<AttachmentManager['downloadById']>;
+	retry(actor: ActorContext, attachmentId: AttachmentId): ReturnType<AttachmentManager['retry']>;
+	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
 	download(
 		actor: ActorContext,
 		noteId: NoteId,
@@ -38,12 +54,31 @@ export class DefaultAttachmentsController implements AttachmentsController {
 		return this.dependencies.attachments.initiate(actor, input);
 	}
 	complete(actor: ActorContext, uploadId: AttachmentUploadId) {
-		return this.dependencies.transactionRunner.run(() =>
+		return this.completeAndStart(actor, uploadId);
+	}
+	private async completeAndStart(actor: ActorContext, uploadId: AttachmentUploadId) {
+		const attachment = await this.dependencies.transactionRunner.run(() =>
 			this.dependencies.attachments.complete(actor, uploadId)
 		);
+		this.dependencies.attachments.startProcessing(actor, attachment);
+		return attachment;
 	}
 	list(actor: ActorContext, noteId: NoteId) {
 		return this.dependencies.attachments.list(actor, noteId);
+	}
+	listForProject(actor: ActorContext, projectId: ProjectId) {
+		return this.dependencies.attachments.listForProject(actor, projectId);
+	}
+	downloadById(actor: ActorContext, attachmentId: AttachmentId) {
+		return this.dependencies.attachments.downloadById(actor, attachmentId);
+	}
+	retry(actor: ActorContext, attachmentId: AttachmentId) {
+		return this.dependencies.attachments.retry(actor, attachmentId);
+	}
+	removeById(actor: ActorContext, attachmentId: AttachmentId) {
+		return this.dependencies.transactionRunner.run(() =>
+			this.dependencies.attachments.removeById(actor, attachmentId)
+		);
 	}
 	download(actor: ActorContext, noteId: NoteId, path: string) {
 		return this.dependencies.attachments.download(actor, noteId, path);

@@ -3,6 +3,7 @@ import type {
 	CreateNoteInput,
 	Note,
 	NoteId,
+	NoteRevision,
 	NoteSummary,
 	Provenance,
 	ProjectId,
@@ -27,6 +28,12 @@ export interface NoteArchiver {
 }
 export interface NoteRevisionRecorder {
 	record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void>;
+}
+export interface NoteRevisionReader {
+	latestRevision(actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined>;
+}
+export interface NotePublisher {
+	markPublished(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
 export interface NoteImporter {
 	import(actor: ActorContext, markdown: string): Promise<Note>;

@@ -122,6 +122,9 @@ This document is the independent behavioural specification for backend models, s
 - Approval-required runs persist their serialized SDK state and pending calls; decisions resume the same actor-owned run, and rejection is returned to the model for recovery.
 - OpenRouter chat models must advertise tool support for new selection. A transient catalog failure may use stale catalog data and never invalidates an already configured effective model.
 - Every OpenRouter agent request preserves the registered application tools and also makes bounded web search available; the model decides whether to use it and must link sources that inform its answer.
+- Every attachment belongs to exactly one project and optionally one note. Project attachments never create note revisions; note bundle attachments do.
+- Attachment processing is durable as queued/processing/ready/partial/unsupported/failed, indexes at most 50 chunks, and failure never removes the downloadable file.
+- Retrieval chunks have exactly one primary source: note, memory entry, or attachment. Attachment retrieval remains actor- and project-scoped.
 - Agent-triggered reference discovery uses the conversation's effective model, while direct reference discovery uses the configured OpenRouter default. Both remain proposal-only workflows.
 - Reference discovery accepts only valid HTTP(S) citations from OpenRouter's native search metadata, removes duplicate URLs, and proposes at most six sources.
 - External client failures map to typed domain errors and do not leave partial domain state.

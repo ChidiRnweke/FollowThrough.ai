@@ -1,7 +1,9 @@
 import {
 	CopyObjectCommand,
+	CreateBucketCommand,
 	DeleteObjectCommand,
 	GetObjectCommand,
+	HeadBucketCommand,
 	HeadObjectCommand,
 	PutObjectCommand,
 	S3Client
@@ -46,6 +48,7 @@ export interface S3AttachmentStorageConfig {
 
 export class S3AttachmentStorage implements AttachmentStorage {
 	private readonly client: S3Client;
+	private bucketReady: Promise<void> | undefined;
 
 	constructor(private readonly config: S3AttachmentStorageConfig) {
 		this.client = new S3Client({
@@ -59,13 +62,14 @@ export class S3AttachmentStorage implements AttachmentStorage {
 		});
 	}
 
-	createUploadUrl(input: {
+	async createUploadUrl(input: {
 		objectKey: string;
 		mediaType: string;
 		byteSize: number;
 		checksumSha256: string;
 		expiresInSeconds: number;
 	}): Promise<string> {
+		await this.ensureBucket();
 		return getSignedUrl(
 			this.client,
 			new PutObjectCommand({
@@ -76,9 +80,27 @@ export class S3AttachmentStorage implements AttachmentStorage {
 			}),
 			{
 				expiresIn: input.expiresInSeconds,
-				signableHeaders: new Set(['content-type', 'x-amz-meta-sha256'])
+				signableHeaders: new Set(['content-type', 'x-amz-meta-sha256']),
+				// Metadata headers are hoisted into the query string by default. The browser
+				// sends this value as a required header, so keep it in SignedHeaders instead.
+				unhoistableHeaders: new Set(['x-amz-meta-sha256'])
 			}
 		);
+	}
+
+	private ensureBucket(): Promise<void> {
+		return (this.bucketReady ??= this.checkOrCreateBucket());
+	}
+
+	private async checkOrCreateBucket(): Promise<void> {
+		try {
+			await this.client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
+		} catch (error) {
+			const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+				?.httpStatusCode;
+			if (status !== 404) throw error;
+			await this.client.send(new CreateBucketCommand({ Bucket: this.config.bucket }));
+		}
 	}
 
 	createDownloadUrl(

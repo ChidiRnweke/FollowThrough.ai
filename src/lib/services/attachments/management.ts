@@ -8,7 +8,8 @@ import type {
 	AttachmentView,
 	DateTime,
 	NoteId,
-	NoteRevisionId
+	NoteRevisionId,
+	ProjectId
 } from '$lib/models';
 import { NotFoundError, ValidationError } from '$lib/models';
 import type { AttachmentRepository, NoteRepository } from '$lib/repositories';
@@ -18,9 +19,12 @@ import type {
 } from '$lib/server/domain/attachment-storage';
 import { validateAttachmentPath } from '$lib/services/skills/manifest';
 import type { AttachmentManager } from './contracts';
+import type { RetrievalIndexRepository } from '$lib/repositories';
+import type { EmbeddingClient } from '$lib/services/retrieval/contracts';
+import { EmbeddedAttachmentIndexer } from '$lib/services/retrieval/indexing';
 
 const MAX_ATTACHMENT_BYTES = Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
-const MAX_PARSE_BYTES = Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? 1024 * 1024);
+const MAX_PARSE_BYTES = Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? MAX_ATTACHMENT_BYTES);
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -29,22 +33,28 @@ export class AttachmentManagementService implements AttachmentManager {
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository,
 		private readonly storage: AttachmentStorage,
-		private readonly parsers: AttachmentParserRegistry
+		private readonly parsers: AttachmentParserRegistry,
+		private readonly retrieval?: RetrievalIndexRepository,
+		private readonly embeddingClient?: EmbeddingClient
 	) {}
 
 	async initiate(
 		actor: ActorContext,
 		input: {
-			noteId: NoteId;
+			projectId?: ProjectId;
+			noteId?: NoteId;
 			path: string;
 			mediaType: string;
 			byteSize: number;
 			checksumSha256: string;
 		}
 	) {
-		const note = await this.notes.findById(actor, input.noteId);
-		if (!note) throw new NotFoundError('Note was not found');
-		if (note.archivedAt) throw new ValidationError('Archived notes cannot receive attachments');
+		if ((input.noteId ? 1 : 0) + (input.projectId ? 1 : 0) !== 1)
+			throw new ValidationError('Provide exactly one attachment owner');
+		const note = input.noteId ? await this.notes.findById(actor, input.noteId) : undefined;
+		if (input.noteId && !note) throw new NotFoundError('Note was not found');
+		if (note?.archivedAt) throw new ValidationError('Archived notes cannot receive attachments');
+		const projectId = note?.projectId ?? input.projectId!;
 		const path = validateAttachmentPath(input.path);
 		if (
 			!Number.isSafeInteger(input.byteSize) ||
@@ -56,10 +66,11 @@ export class AttachmentManagementService implements AttachmentManager {
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
 		const timestamp = now();
 		const uploadId = crypto.randomUUID() as AttachmentUploadId;
-		const objectKey = `staging/${actor.userId}/${input.noteId}/${uploadId}`;
+		const objectKey = `staging/${actor.userId}/${projectId}/${uploadId}`;
 		const upload = await this.attachments.createUpload(actor, {
 			id: uploadId,
-			noteId: input.noteId,
+			projectId,
+			...(input.noteId ? { noteId: input.noteId } : {}),
 			path,
 			objectKey,
 			mediaType: input.mediaType || 'application/octet-stream',
@@ -97,15 +108,9 @@ export class AttachmentManagementService implements AttachmentManager {
 			throw new ValidationError(
 				'Uploaded attachment does not match its declared size and checksum'
 			);
-		const parser = this.parsers.select(upload.mediaType, upload.path);
-		let extractedText: string | undefined;
-		if (parser && upload.byteSize <= MAX_PARSE_BYTES) {
-			const bytes = await this.storage.read(upload.objectKey, MAX_PARSE_BYTES);
-			extractedText = (await parser.parse(bytes)).slice(0, MAX_PARSE_BYTES);
-		}
 		const timestamp = now();
 		const versionId = crypto.randomUUID() as AttachmentVersionId;
-		const destinationKey = `objects/${actor.userId}/${upload.noteId}/${versionId}`;
+		const destinationKey = `objects/${actor.userId}/${upload.projectId}/${versionId}`;
 		await this.storage.promote(upload.objectKey, destinationKey);
 		const view = await this.attachments.finalize(actor, upload, {
 			id: versionId,
@@ -114,16 +119,49 @@ export class AttachmentManagementService implements AttachmentManager {
 			mediaType: upload.mediaType,
 			byteSize: upload.byteSize,
 			checksumSha256: upload.checksumSha256,
-			...(parser ? { parserKind: parser.kind } : {}),
-			...(extractedText !== undefined ? { extractedText } : {}),
+			processingStatus: 'queued',
 			createdAt: timestamp
 		});
-		await this.recordBundleRevision(actor, upload.noteId);
+		if (upload.noteId) await this.recordBundleRevision(actor, upload.noteId);
 		return view;
+	}
+
+	startProcessing(actor: ActorContext, attachment: AttachmentView): void {
+		void this.process(actor, attachment).catch(() => undefined);
 	}
 
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
 		return this.attachments.list(actor, noteId);
+	}
+
+	listForProject(actor: ActorContext, projectId: ProjectId) {
+		return this.attachments.listForProject(actor, projectId);
+	}
+
+	async downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }> {
+		const found = await this.attachments.findById(actor, attachmentId);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
+	}
+
+	async retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView> {
+		const found = await this.attachments.findById(actor, attachmentId);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		if (found.version.processingStatus !== 'failed')
+			throw new ValidationError('Only failed attachments can be retried');
+		const queued = await this.attachments.updateVersion(actor, {
+			...found.version,
+			processingStatus: 'queued',
+			processingFailure: undefined,
+			processedAt: undefined
+		});
+		void this.process(actor, queued).catch(() => undefined);
+		return queued;
+	}
+
+	async removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
+		if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
+		await this.attachments.removeById(actor, attachmentId);
 	}
 
 	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
@@ -177,5 +215,101 @@ export class AttachmentManagementService implements AttachmentManager {
 			plainText: updated.plainText,
 			createdAt: timestamp
 		});
+	}
+
+	private async process(actor: ActorContext, view: AttachmentView): Promise<void> {
+		await this.attachments.updateVersion(actor, {
+			...view.version,
+			processingStatus: 'processing'
+		});
+		try {
+			const isImage = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(
+				view.version.mediaType
+			);
+			if (isImage) {
+				const extractedText = await this.describeImage(view);
+				if (this.retrieval && this.embeddingClient)
+					await new EmbeddedAttachmentIndexer(this.retrieval, this.embeddingClient).index(
+						actor,
+						view.attachment,
+						extractedText
+					);
+				await this.attachments.updateVersion(actor, {
+					...view.version,
+					parserKind: 'vision',
+					extractedText,
+					processingStatus: 'ready',
+					processedAt: now()
+				});
+				return;
+			}
+			const parser = this.parsers.select(view.version.mediaType, view.attachment.path);
+			if (!parser || view.version.byteSize > MAX_PARSE_BYTES) {
+				await this.attachments.updateVersion(actor, {
+					...view.version,
+					processingStatus: 'unsupported',
+					processedAt: now()
+				});
+				return;
+			}
+			const bytes = await this.storage.read(view.version.objectKey, MAX_PARSE_BYTES);
+			const extractedText = (await parser.parse(bytes)).slice(0, MAX_PARSE_BYTES);
+			let status: AttachmentVersion['processingStatus'] = 'ready';
+			if (this.retrieval && this.embeddingClient) {
+				const result = await new EmbeddedAttachmentIndexer(
+					this.retrieval,
+					this.embeddingClient
+				).index(actor, view.attachment, extractedText);
+				if (result.truncated) status = 'partial';
+			}
+			await this.attachments.updateVersion(actor, {
+				...view.version,
+				parserKind: parser.kind,
+				extractedText,
+				processingStatus: status,
+				processedAt: now()
+			});
+		} catch (error) {
+			await this.attachments.updateVersion(actor, {
+				...view.version,
+				processingStatus: 'failed',
+				processingFailure: error instanceof Error ? error.message : 'Processing failed',
+				processedAt: now()
+			});
+		}
+	}
+
+	private async describeImage(view: AttachmentView): Promise<string> {
+		const key = process.env.OPENROUTER_API_KEY;
+		if (!key) throw new Error('OPENROUTER_API_KEY is required for image processing');
+		const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
+		const response = await fetch(
+			`${process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
+			{
+				method: 'POST',
+				signal: AbortSignal.timeout(60_000),
+				headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+				body: JSON.stringify({
+					model: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
+					messages: [
+						{
+							role: 'user',
+							content: [
+								{
+									type: 'text',
+									text: 'Describe this image factually for search. Include visible text, charts, diagrams, objects, and layout. Do not make unsupported inferences.'
+								},
+								{ type: 'image_url', image_url: { url: imageUrl } }
+							]
+						}
+					]
+				})
+			}
+		);
+		if (!response.ok) throw new Error(`Vision description failed (${response.status})`);
+		const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+		const description = payload.choices?.[0]?.message?.content?.trim();
+		if (!description) throw new Error('Vision model returned no description');
+		return description;
 	}
 }

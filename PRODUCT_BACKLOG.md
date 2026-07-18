@@ -51,10 +51,14 @@ feature blueprint before implementation.
 - [ ] **Image search and insertion** — Find relevant external images from selected content and insert an approved result into a note.
 - [ ] **Image asset management** — Keep image files, metadata, attribution, provenance, and source relationships available within the project.
 
-
-
 ## Backlog conventions
 
 - An item being listed here does not imply a chosen scope, design, priority, or implementation order.
 - Scope one item at a time against the current repository before implementation.
 - Remove an item from this file once its agreed acceptance criteria are implemented and verified.
+
+# Attachments and visual assets
+
+- Searchable project attachments — upload text, source files, PDFs, and images; process them asynchronously and expose relevant excerpts or image descriptions through project retrieval.
+- Project visual assets — manage uploaded project images and insert reusable images into notes.
+- Image search and insertion — future, unscoped.
