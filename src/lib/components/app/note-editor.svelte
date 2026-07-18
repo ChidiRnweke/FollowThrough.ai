@@ -408,7 +408,7 @@
 				{/if}
 			</BubbleMenu>
 			<EdraEditor
-				class="prose flex min-h-full max-w-none flex-1 flex-col pb-12 dark:prose-invert"
+				class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
 			/>
 		</Tiptap>
 		{#if activeLink}

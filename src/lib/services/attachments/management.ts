@@ -161,7 +161,9 @@ export class AttachmentManagementService implements AttachmentManager {
 
 	async removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
 		if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
+		const found = await this.attachments.findById(actor, attachmentId);
 		await this.attachments.removeById(actor, attachmentId);
+		if (found) await this.storage.remove(found.version.objectKey);
 	}
 
 	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
@@ -193,8 +195,11 @@ export class AttachmentManagementService implements AttachmentManager {
 	}
 
 	async remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void> {
-		await this.attachments.remove(actor, noteId, validateAttachmentPath(path));
+		const validatedPath = validateAttachmentPath(path);
+		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
+		await this.attachments.remove(actor, noteId, validatedPath);
 		await this.recordBundleRevision(actor, noteId);
+		if (found) await this.storage.remove(found.version.objectKey);
 	}
 
 	private async recordBundleRevision(actor: ActorContext, noteId: NoteId): Promise<void> {

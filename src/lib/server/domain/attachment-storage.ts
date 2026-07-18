@@ -35,6 +35,7 @@ export interface AttachmentStorage {
 	stat(objectKey: string): Promise<StoredObjectInfo>;
 	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
 	promote(sourceKey: string, destinationKey: string): Promise<void>;
+	remove(objectKey: string): Promise<void>;
 }
 
 export interface S3AttachmentStorageConfig {
@@ -192,6 +193,18 @@ export class S3AttachmentStorage implements AttachmentStorage {
 			);
 		} catch (error) {
 			throw new ExternalServiceError('Attachment object could not be committed', {
+				cause: error instanceof Error ? error.message : String(error)
+			});
+		}
+	}
+
+	async remove(objectKey: string): Promise<void> {
+		try {
+			await this.client.send(
+				new DeleteObjectCommand({ Bucket: this.config.bucket, Key: objectKey })
+			);
+		} catch (error) {
+			throw new ExternalServiceError('Attachment object could not be removed', {
 				cause: error instanceof Error ? error.message : String(error)
 			});
 		}

@@ -69,7 +69,21 @@
 		const stopListening = noteSync.listenForReconnect();
 		void noteSync.initialize({ note: view.note, etag: view.etag }).then((local) => {
 			if (cancelled) return;
-			note = { ...local };
+			// Use view.note as the base for all server-authoritative fields
+			// (parentId, position, publishedRevision, publishedAt, etc.) and
+			// only take content fields from the local sync record.  The
+			// coordinator's IndexedDB record may carry stale metadata when
+			// operations like move or publish changed the note without bumping
+			// currentRevision.
+			note = {
+				...view.note,
+				title: local.title,
+				document: local.document,
+				plainText: local.plainText,
+				isPinned: local.isPinned,
+				currentRevision: local.currentRevision,
+				updatedAt: local.updatedAt
+			};
 			conflictOpen = noteSync.status === 'conflict';
 			syncReady = true;
 		});

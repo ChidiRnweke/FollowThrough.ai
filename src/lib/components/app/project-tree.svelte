@@ -93,6 +93,7 @@
 	});
 
 	function isProjectOpen(projectId: ProjectId): boolean {
+		if (!togglesRestored) return false;
 		return !toggled.has(`project:${projectId}`);
 	}
 
@@ -353,10 +354,20 @@
 	<Menu.Item variant="destructive" onclick={() => void archiveEntry(entry)}>Archive</Menu.Item>
 {/snippet}
 
-{#snippet inlineCreateRow(edit: Extract<InlineEdit, { mode: 'create' }>, variant: 'default' | 'inline' = 'default')}
+{#snippet inlineCreateRow(
+	edit: Extract<InlineEdit, { mode: 'create' }>,
+	variant: 'default' | 'inline' = 'default'
+)}
 	{#if variant === 'inline'}
-		{@const placeholder = edit.kind === 'folder' ? 'Folder name…' : edit.kind === 'skill' ? 'Skill name…' : 'Note title…'}
-		<div class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 transition-colors focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
+		{@const placeholder =
+			edit.kind === 'folder'
+				? 'Folder name…'
+				: edit.kind === 'skill'
+					? 'Skill name…'
+					: 'Note title…'}
+		<div
+			class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 transition-colors focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring"
+		>
 			<Plus class="size-3.5 shrink-0 text-muted-foreground" />
 			<input
 				class="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
@@ -493,7 +504,9 @@
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
-								{zoneItems(entry.projectId, entry.id).length === 0 ? 'Create your first note' : 'New note'}
+								{zoneItems(entry.projectId, entry.id).length === 0
+									? 'Create your first note'
+									: 'New note'}
 							</button>
 						</div>
 					{/if}

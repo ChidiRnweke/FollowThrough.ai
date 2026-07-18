@@ -70,12 +70,11 @@ describe('Note management invariants', () => {
 		});
 	});
 
-	it('does not allow a content save to reorder siblings', async () => {
+	it('saves even when the client sends stale position', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder({ position: 0 })];
-		await expect(service.save(testActor(), noteBuilder({ position: 1 }))).rejects.toMatchObject({
-			code: 'VALIDATION'
-		});
+		const saved = await service.save(testActor(), noteBuilder({ position: 1 }));
+		expect(saved).toBeDefined();
 	});
 
 	it('rejects authored content in a folder', async () => {

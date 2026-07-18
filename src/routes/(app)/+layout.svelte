@@ -33,7 +33,12 @@
 <svelte:window {onkeydown} />
 
 <Sidebar.Provider open={data.sidebarOpen} class="h-dvh min-h-0 overflow-hidden">
-	<AppSidebar shell={data.shell} activePath={page.url.pathname} {activeNoteId} loading={!!navigating} />
+	<AppSidebar
+		shell={data.shell}
+		activePath={page.url.pathname}
+		{activeNoteId}
+		loading={navigating.to !== null}
+	/>
 	<Sidebar.Inset class="min-w-0 overflow-y-auto border-l border-sidebar-border">
 		{@render children()}
 	</Sidebar.Inset>

@@ -88,8 +88,6 @@ export class NoteManagementService
 		if (current.archivedAt) throw new ValidationError('Archived notes cannot be edited');
 		if (candidate.projectId !== current.projectId || candidate.kind !== current.kind)
 			throw new ValidationError('A save cannot move a note between projects or change its kind');
-		if (candidate.parentId !== current.parentId || candidate.position !== current.position)
-			throw new ValidationError('A content save cannot move or reorder a note');
 		if (
 			candidate.kind === 'folder' &&
 			(candidate.plainText.trim() || candidate.document.content?.length)
@@ -256,8 +254,6 @@ export class NoteManagementService
 			current.title === candidate.title &&
 			current.plainText === candidate.plainText &&
 			JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-			current.parentId === candidate.parentId &&
-			current.position === candidate.position &&
 			current.isPinned === candidate.isPinned
 		);
 	}
