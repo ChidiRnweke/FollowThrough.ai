@@ -4,7 +4,6 @@
 	import CommandPalette from '$lib/components/app/command-palette.svelte';
 	import RightPanel from '$lib/components/app/right-panel.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { palette } from '$lib/stores/palette.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import type { NoteId, ProjectId } from '$lib/models';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
