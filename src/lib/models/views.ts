@@ -48,6 +48,7 @@ export interface ProjectView {
 export interface TodoView {
 	readonly todo: Todo;
 	readonly sourceNote?: NoteRef;
+	readonly originNote?: NoteRef;
 	readonly anchor?: SourceAnchor;
 	readonly provenance?: Provenance;
 }
@@ -255,12 +256,16 @@ export interface UpdateTodoInput {
 	readonly todoId: TodoId;
 	readonly status?: TodoStatus;
 	readonly title?: string;
-	readonly description?: string;
-	readonly dueDate?: LocalDate;
+	readonly description?: string | null;
+	readonly dueDate?: LocalDate | null;
+	readonly responsibility?: TodoResponsibility;
+	readonly waitingOn?: string | null;
+	readonly linkedNoteId?: NoteId | null;
 }
 
 export interface UpdateTodoOutput {
 	readonly todo: Todo;
+	readonly view: TodoView;
 }
 
 export interface UpdateTrustPolicyInput {

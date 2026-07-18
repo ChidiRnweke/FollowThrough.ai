@@ -253,6 +253,7 @@ export const todos = pgTable(
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'
 		}),
+		linkedNoteId: uuid('linked_note_id').references(() => notes.id, { onDelete: 'set null' }),
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
 		deletedAt: timestamp('deleted_at', { withTimezone: true }),

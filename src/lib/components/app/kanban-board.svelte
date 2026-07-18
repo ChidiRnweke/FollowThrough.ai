@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
+	import type { NoteSummary, ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -21,7 +21,9 @@
 		projectId,
 		projectNames,
 		onmove,
-		onopen
+		onopen,
+		detail = 'basic',
+		notes = []
 	}: {
 		todos: readonly TodoView[];
 		columns?: readonly TodoStatus[];
@@ -29,6 +31,8 @@
 		projectNames?: ReadonlyMap<ProjectId, string>;
 		onmove?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
+		detail?: 'basic' | 'detailed';
+		notes?: readonly NoteSummary[];
 	} = $props();
 
 	let board = $derived.by(() => {
@@ -124,7 +128,10 @@
 						view={item.view}
 						compact
 						projectName={projectNames?.get(item.view.todo.projectId)}
+						{detail}
+						{notes}
 						{onopen}
+						onstatus={onmove}
 					/>
 				{/each}
 			</div>

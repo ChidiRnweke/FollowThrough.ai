@@ -11,5 +11,6 @@
 		view={data.view}
 		basePath="/todos"
 		projects={data.shell.projects}
+		notes={data.shell.noteTree}
 	/>
 </PageShell>

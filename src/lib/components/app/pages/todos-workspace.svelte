@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Project, ProjectId, TodoId, TodoView } from '$lib/models';
+	import type { NoteSummary, Project, ProjectId, TodoId, TodoView } from '$lib/models';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Select from '$lib/components/ui/select';
 	import { Button } from '$lib/components/ui/button';
@@ -11,19 +11,22 @@
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 
 	let {
 		todos,
 		view,
 		basePath = '/todos',
 		projectId,
-		projects
+		projects,
+		notes = []
 	}: {
 		todos: readonly TodoView[];
 		view: string;
 		basePath?: string;
 		projectId?: ProjectId;
 		projects?: readonly Project[];
+		notes?: readonly NoteSummary[];
 	} = $props();
 
 	const projectNames = $derived(
@@ -54,6 +57,9 @@
 	}
 
 	const responsibility = $derived(page.url.searchParams.get('responsibility'));
+	const detail = $derived(
+		page.url.searchParams.get('detail') === 'detailed' ? 'detailed' : 'basic'
+	);
 </script>
 
 <div class="flex flex-wrap items-center justify-between gap-2">
@@ -63,6 +69,17 @@
 			<Tabs.Trigger value="list">List</Tabs.Trigger>
 		</Tabs.List>
 	</Tabs.Root>
+	{#if view === 'board'}
+		<ToggleGroup.Root
+			type="single"
+			value={detail}
+			onValueChange={(value) => setParam('detail', value === 'detailed' ? 'detailed' : undefined)}
+			aria-label="Board detail"
+		>
+			<ToggleGroup.Item value="basic">Basic</ToggleGroup.Item>
+			<ToggleGroup.Item value="detailed">Detailed</ToggleGroup.Item>
+		</ToggleGroup.Root>
+	{/if}
 	<div class="flex items-center gap-1">
 		{#if projects && projects.length > 0}
 			<Select.Root
@@ -116,13 +133,15 @@
 			</Button>
 		</div>
 	{:else}
-		<TodoTable {todos} projectNames={projects ? projectNames : undefined} onopen={open} />
+		<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
 	{/if}
 {:else}
 	<KanbanBoard
 		{todos}
 		{projectId}
 		projectNames={projects ? projectNames : undefined}
+		{notes}
+		{detail}
 		onopen={open}
 		onmove={(id, status) => void move(id, status)}
 	/>

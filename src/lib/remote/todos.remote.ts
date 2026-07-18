@@ -3,17 +3,29 @@ import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import type { UpdateTodoInput } from '$lib/models';
 
-export const updateTodoStatus = command(
-	z.object({
-		todoId: z.string().uuid(),
-		status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled'])
-	}),
+export const updateTodo = command(
+	z
+		.object({
+			todoId: z.string().uuid(),
+			status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
+			title: z.string().optional(),
+			description: z.string().nullable().optional(),
+			dueDate: z.string().nullable().optional(),
+			responsibility: z.enum(['mine', 'waiting_on']).optional(),
+			waitingOn: z.string().nullable().optional(),
+			linkedNoteId: z.string().uuid().nullable().optional()
+		})
+		.refine((value) => Object.keys(value).some((key) => key !== 'todoId'), {
+			message: 'A todo update requires at least one edit'
+		}),
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.todos()
 			.update(AppFactory.actor(), input as UpdateTodoInput);
 	}
 );
+
+export const updateTodoStatus = updateTodo;
 
 export const createTodo = command(
 	z.object({

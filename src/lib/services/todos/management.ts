@@ -55,8 +55,6 @@ export class TodoManagementService
 		if (!title) throw new ValidationError('Todo title is required');
 		if (!(await this.projects.findById(actor, input.projectId)))
 			throw new NotFoundError('Todo project was not found');
-		if (input.responsibility === 'waiting_on' && !input.waitingOn?.trim())
-			throw new ValidationError('Waiting-on todos require a counterparty');
 		if (input.sourceAnchorId)
 			await this.validateAnchor(actor, input.sourceAnchorId, input.projectId);
 		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
@@ -94,15 +92,14 @@ export class TodoManagementService
 			throw new ValidationError('A todo cannot move between projects during an edit');
 		const title = todo.title.trim();
 		if (!title) throw new ValidationError('Todo title is required');
-		if (todo.responsibility === 'waiting_on' && !todo.waitingOn?.trim())
-			throw new ValidationError('Waiting-on todos require a counterparty');
+		if (todo.linkedNoteId) await this.validateLinkedNote(actor, todo.linkedNoteId, todo.projectId);
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
 		return this.todos.update(actor, {
 			...todo,
 			title,
-			waitingOn: todo.waitingOn?.trim(),
+			waitingOn: todo.responsibility === 'mine' ? undefined : todo.waitingOn?.trim() || undefined,
 			updatedAt: now()
 		});
 	}
@@ -140,18 +137,33 @@ export class TodoManagementService
 				const anchor = todo.sourceAnchorId
 					? await this.anchors.findById(actor, todo.sourceAnchorId)
 					: undefined;
-				const source = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+				const origin = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+				const linked = todo.linkedNoteId
+					? await this.notes.findById(actor, todo.linkedNoteId)
+					: undefined;
+				const source = linked ?? origin;
 				const provenance = todo.provenanceId
 					? await this.provenance.findById(actor, todo.provenanceId)
 					: undefined;
 				return {
 					todo,
 					...(source ? { sourceNote: { id: source.id, title: source.title } } : {}),
+					...(origin ? { originNote: { id: origin.id, title: origin.title } } : {}),
 					...(anchor ? { anchor } : {}),
 					...(provenance ? { provenance } : {})
 				};
 			})
 		);
+	}
+
+	private async validateLinkedNote(
+		actor: ActorContext,
+		noteId: NonNullable<Todo['linkedNoteId']>,
+		projectId: Todo['projectId']
+	): Promise<void> {
+		const note = await this.notes.findById(actor, noteId);
+		if (!note || note.projectId !== projectId || note.kind !== 'note' || note.archivedAt)
+			throw new NotFoundError('Todo linked note was not found');
 	}
 
 	private async validateAnchor(

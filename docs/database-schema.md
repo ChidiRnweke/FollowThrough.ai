@@ -14,7 +14,9 @@ the source of truth.
   built-in keys are unique per user, so a provisioned skill keeps its identity
   after user edits or renaming.
 - Todos are independent records. An editor todo node stores only a todo ID, so
-  the editor, Today, and kanban always render the same object.
+  the editor, Today, and kanban always render the same object. A nullable linked
+  note is an editable association; the source anchor remains immutable provenance
+  and becomes the effective source whenever the linked note is cleared.
 - Source anchors use stable editor node IDs plus quote context and offsets. This
   gives AI artifacts a resolvable link even after normal document edits.
 - Notes keep immutable ProseMirror snapshots at meaningful save boundaries.

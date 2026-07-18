@@ -447,8 +447,11 @@ export class AgentToolRegistry {
 				z.object({
 					todoId: id,
 					title: z.string().optional(),
-					description: z.string().optional(),
-					dueDate: z.string().optional(),
+					description: z.string().nullable().optional(),
+					dueDate: z.string().nullable().optional(),
+					responsibility: z.enum(['mine', 'waiting_on']).optional(),
+					waitingOn: z.string().nullable().optional(),
+					linkedNoteId: id.nullable().optional(),
 					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
 				}),
 				(input) => factory.todos().update(actor, input as never)

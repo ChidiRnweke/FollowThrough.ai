@@ -1,75 +1,120 @@
 <script lang="ts">
-	import type { TodoId, TodoStatus } from '$lib/models';
-	import { Badge } from '$lib/components/ui/badge';
-	import * as Select from '$lib/components/ui/select';
+	import * as Field from '$lib/components/ui/field';
+	import { Button } from '$lib/components/ui/button';
+	import { Separator } from '$lib/components/ui/separator';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import { page } from '$app/state';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
-	import { formatDate, provenanceCaption, todoStatusLabels } from '../labels';
-
-	let {
-		onstatus
-	}: {
-		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
-	} = $props();
+	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
+	import TodoTextField from '../todo-fields/todo-text-field.svelte';
+	import TodoStatusField from '../todo-fields/todo-status-field.svelte';
+	import TodoDueDateField from '../todo-fields/todo-due-date-field.svelte';
+	import TodoResponsibilityField from '../todo-fields/todo-responsibility-field.svelte';
+	import TodoSourceField from '../todo-fields/todo-source-field.svelte';
 
 	const view = $derived(rightPanel.todoView);
-	const statuses: TodoStatus[] = ['backlog', 'open', 'in_progress', 'done', 'cancelled'];
+	const notes = $derived(page.data.shell?.noteTree ?? []);
+	const created = $derived(
+		view
+			? new Intl.DateTimeFormat('en-GB', {
+					day: 'numeric',
+					month: 'short',
+					year: 'numeric'
+				}).format(new Date(view.todo.createdAt))
+			: ''
+	);
 </script>
 
 {#if view}
-	<div class="flex flex-col gap-3">
-		<h3 class="text-sm font-semibold {view.todo.status === 'done' ? 'line-through' : ''}">
-			{view.todo.title}
-		</h3>
-		{#if view.todo.description}
-			<p class="text-sm text-muted-foreground">{view.todo.description}</p>
-		{/if}
-		<div class="flex flex-wrap items-center gap-1.5">
-			{#if onstatus}
-				<Select.Root
-					type="single"
-					value={view.todo.status}
-					onValueChange={(status) => onstatus(view.todo.id, status as TodoStatus)}
-				>
-					<Select.Trigger size="sm" aria-label="Todo status">
-						{todoStatusLabels[view.todo.status]}
-					</Select.Trigger>
-					<Select.Content>
-						{#each statuses as status (status)}
-							<Select.Item value={status} label={todoStatusLabels[status]} />
-						{/each}
-					</Select.Content>
-				</Select.Root>
-			{:else}
-				<Badge variant="ghost" class="text-muted-foreground">
-					{todoStatusLabels[view.todo.status]}
-				</Badge>
-			{/if}
-			{#if view.todo.dueDate}
-				<Badge variant="ghost" class="text-muted-foreground">
-					Due {formatDate(view.todo.dueDate)}
-				</Badge>
-			{/if}
+	<div class="flex flex-col gap-5 pb-6">
+		<Field.FieldGroup>
+			<Field.Field>
+				<Field.FieldLabel for="todo-title">Title</Field.FieldLabel>
+				{#key `${view.todo.id}-title-${view.todo.updatedAt}`}<TodoTextField
+						todoId={view.todo.id}
+						value={view.todo.title}
+						field="title"
+						label="Todo title"
+					/>{/key}
+			</Field.Field>
+			<Field.Field>
+				<Field.FieldLabel>Description</Field.FieldLabel>
+				{#key `${view.todo.id}-description-${view.todo.updatedAt}`}<TodoTextField
+						todoId={view.todo.id}
+						value={view.todo.description}
+						field="description"
+						label="Todo description"
+						multiline
+					/>{/key}
+			</Field.Field>
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Status</Field.FieldLabel>
+				<TodoStatusField todoId={view.todo.id} value={view.todo.status} />
+			</Field.Field>
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Due date</Field.FieldLabel>
+				<TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} />
+			</Field.Field>
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Responsibility</Field.FieldLabel>
+				<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
+			</Field.Field>
 			{#if view.todo.responsibility === 'waiting_on'}
-				<Badge variant="ghost" class="bg-warning/15 text-warning-foreground dark:text-warning">
-					Waiting on {view.todo.waitingOn ?? 'someone'}
-				</Badge>
+				<Field.Field>
+					<Field.FieldLabel>Counterparty (optional)</Field.FieldLabel>
+					{#key `${view.todo.id}-waiting-${view.todo.updatedAt}`}<TodoTextField
+							todoId={view.todo.id}
+							value={view.todo.waitingOn}
+							field="waitingOn"
+							label="Waiting on"
+						/>{/key}
+				</Field.Field>
 			{/if}
-		</div>
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Source</Field.FieldLabel>
+				<TodoSourceField
+					todoId={view.todo.id}
+					projectId={view.todo.projectId}
+					value={view.todo.linkedNoteId}
+					sourceTitle={view.sourceNote?.title}
+					hasOrigin={view.originNote !== undefined}
+					{notes}
+				/>
+			</Field.Field>
+			{#if view.sourceNote}
+				<Field.Field orientation="responsive">
+					<Field.FieldLabel>Open source</Field.FieldLabel>
+					<Button href="/notes/{view.sourceNote.id}" variant="link" size="sm"
+						>Open selected note<ExternalLink data-icon="inline-end" /></Button
+					>
+				</Field.Field>
+			{/if}
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Created</Field.FieldLabel>
+				<p class="text-sm text-muted-foreground">{created}</p>
+			</Field.Field>
+		</Field.FieldGroup>
+
 		{#if view.anchor}
-			<blockquote class="border-l-2 border-border pl-2 text-sm text-muted-foreground">
-				{view.anchor.quote}
-			</blockquote>
+			<Separator />
+			<section class="flex flex-col gap-2" aria-labelledby="original-context-heading">
+				<h3 id="original-context-heading" class="text-sm font-semibold">Original context</h3>
+				<blockquote class="border-l-2 border-border pl-3 text-sm text-muted-foreground">
+					{view.anchor.quote}
+				</blockquote>
+				{#if view.originNote}<Button
+						href="/notes/{view.originNote.id}"
+						variant="link"
+						size="sm"
+						class="self-start px-0"
+						>Open {view.originNote.title}<ExternalLink data-icon="inline-end" /></Button
+					>{/if}
+			</section>
 		{/if}
-		{#if view.provenance}
-			<p class="provenance-caption">
-				{provenanceCaption(view.provenance, view.sourceNote?.title)}
-			</p>
-		{/if}
-		{#if view.sourceNote}
-			<a class="text-sm text-primary hover:underline" href="/notes/{view.sourceNote.id}">
-				Jump to source
-			</a>
-		{/if}
+
+		<p class="sr-only" aria-live="polite">
+			{todoUpdates.isPending(view.todo.id) ? 'Saving todo' : 'Todo saved'}
+		</p>
 	</div>
 {:else}
 	<p class="text-sm text-muted-foreground">Pick a todo to see its details.</p>

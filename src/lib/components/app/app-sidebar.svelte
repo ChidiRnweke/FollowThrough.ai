@@ -99,9 +99,15 @@
 				</Sidebar.Menu>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
-		<Sidebar.Group class="min-h-0 flex-1 overflow-y-auto py-1 group-data-[collapsible=icon]:hidden">
+		<Sidebar.Group
+			class="min-h-0 flex-1 overflow-y-auto py-1 group-data-[collapsible=icon]:hidden gap-y-1"
+		>
 			<Sidebar.GroupLabel>Projects</Sidebar.GroupLabel>
-			<Sidebar.GroupAction title="New project" onclick={() => tree?.openNewProject()}>
+			<Sidebar.GroupAction
+				class="top-2.5 rounded-full"
+				title="New project"
+				onclick={() => tree?.openNewProject()}
+			>
 				<Plus class="size-4" />
 				<span class="sr-only">New project</span>
 			</Sidebar.GroupAction>

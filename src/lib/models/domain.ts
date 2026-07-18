@@ -145,6 +145,7 @@ export interface Todo {
 	readonly dueDateVerbatim?: string;
 	readonly promiseStrength?: PromiseStrength;
 	readonly sourceAnchorId?: SourceAnchorId;
+	readonly linkedNoteId?: NoteId;
 	readonly provenanceId?: ProvenanceId;
 	readonly completedAt?: DateTime;
 	readonly deletedAt?: DateTime;

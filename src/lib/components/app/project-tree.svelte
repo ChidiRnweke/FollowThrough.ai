@@ -8,7 +8,6 @@
 	import { toast } from 'svelte-sonner';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import FilePlus from '@lucide/svelte/icons/file-plus';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Folder from '@lucide/svelte/icons/folder';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
@@ -16,6 +15,7 @@
 	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import Pin from '@lucide/svelte/icons/pin';
+	import Plus from '@lucide/svelte/icons/plus';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -174,6 +174,8 @@
 		| { mode: 'rename'; entryId: NoteId; current: string };
 
 	let inlineEdit = $state<InlineEdit | null>(null);
+	let inlineCreateValue = $state('');
+	let inlineCreateSubmitted = false;
 
 	function startCreate(
 		kind: 'note' | 'folder' | 'skill',
@@ -181,7 +183,30 @@
 		parentId?: NoteId
 	): void {
 		expandTo(projectId, parentId);
+		inlineCreateValue = '';
+		inlineCreateSubmitted = false;
 		inlineEdit = { mode: 'create', kind, projectId, parentId };
+	}
+
+	function handleInlineCreateKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			const trimmed = inlineCreateValue.trim();
+			if (!trimmed || projectActions.busy) return;
+			inlineCreateSubmitted = true;
+			void submitInline(trimmed);
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			inlineEdit = null;
+		}
+	}
+
+	function handleInlineCreateBlur(): void {
+		if (!inlineCreateSubmitted && !projectActions.busy) inlineEdit = null;
+	}
+
+	function autofocus(node: HTMLInputElement): void {
+		node.focus();
 	}
 
 	function isCreatingIn(projectId: ProjectId, parentId?: NoteId): boolean {
@@ -290,10 +315,6 @@
 <!-- Shared context/dropdown items for a tree entry (note, skill, or folder). -->
 {#snippet entryMenuItems(entry: NoteSummary, Menu: typeof ContextMenu | typeof DropdownMenu)}
 	{#if entry.kind === 'folder'}
-		<Menu.Item onclick={() => startCreate('note', entry.projectId, entry.id)}>
-			<FilePlus class="size-4" />
-			New note
-		</Menu.Item>
 		<Menu.Item onclick={() => startCreate('folder', entry.projectId, entry.id)}>
 			<FolderPlus class="size-4" />
 			New folder
@@ -332,18 +353,35 @@
 	<Menu.Item variant="destructive" onclick={() => void archiveEntry(entry)}>Archive</Menu.Item>
 {/snippet}
 
-{#snippet inlineCreateRow(edit: Extract<InlineEdit, { mode: 'create' }>)}
-	<TreeInlineInput
-		icon={edit.kind === 'folder' ? Folder : edit.kind === 'skill' ? Wrench : FileText}
-		placeholder={edit.kind === 'folder'
-			? 'Folder name…'
-			: edit.kind === 'skill'
-				? 'Skill name…'
-				: 'Note title…'}
-		busy={projectActions.busy}
-		onsubmit={submitInline}
-		oncancel={() => (inlineEdit = null)}
-	/>
+{#snippet inlineCreateRow(edit: Extract<InlineEdit, { mode: 'create' }>, variant: 'default' | 'inline' = 'default')}
+	{#if variant === 'inline'}
+		{@const placeholder = edit.kind === 'folder' ? 'Folder name…' : edit.kind === 'skill' ? 'Skill name…' : 'Note title…'}
+		<div class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 transition-colors focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring">
+			<Plus class="size-3.5 shrink-0 text-muted-foreground" />
+			<input
+				class="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+				{placeholder}
+				aria-label={placeholder}
+				disabled={projectActions.busy}
+				bind:value={inlineCreateValue}
+				use:autofocus
+				onkeydown={handleInlineCreateKeydown}
+				onblur={handleInlineCreateBlur}
+			/>
+		</div>
+	{:else}
+		<TreeInlineInput
+			icon={edit.kind === 'folder' ? Folder : edit.kind === 'skill' ? Wrench : FileText}
+			placeholder={edit.kind === 'folder'
+				? 'Folder name…'
+				: edit.kind === 'skill'
+					? 'Skill name…'
+					: 'Note title…'}
+			busy={projectActions.busy}
+			onsubmit={submitInline}
+			oncancel={() => (inlineEdit = null)}
+		/>
+	{/if}
 {/snippet}
 
 {#snippet entryRow(entry: NoteSummary, depth: number)}
@@ -444,7 +482,19 @@
 					</ul>
 					{#if inlineEdit?.mode === 'create' && isCreatingIn(entry.projectId, entry.id)}
 						<div class="ml-3.5 pl-2.5">
-							{@render inlineCreateRow(inlineEdit)}
+							{@render inlineCreateRow(inlineEdit, 'inline')}
+						</div>
+					{/if}
+					{#if !isCreatingIn(entry.projectId, entry.id)}
+						<div class="ml-3.5 pl-2.5">
+							<button
+								type="button"
+								class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								onclick={() => startCreate('note', entry.projectId, entry.id)}
+							>
+								<Plus class="size-3.5 shrink-0" />
+								{zoneItems(entry.projectId, entry.id).length === 0 ? 'Create your first note' : 'New note'}
+							</button>
 						</div>
 					{/if}
 				</div>
@@ -454,10 +504,6 @@
 {/snippet}
 
 {#snippet projectMenuItems(project: Project, Menu: typeof ContextMenu | typeof DropdownMenu)}
-	<Menu.Item onclick={() => startCreate('note', project.id)}>
-		<FilePlus class="size-4" />
-		New note
-	</Menu.Item>
 	<Menu.Item onclick={() => startCreate('folder', project.id)}>
 		<FolderPlus class="size-4" />
 		New folder
@@ -527,14 +573,16 @@
 					<div
 						class="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden"
 					>
-						<a
-							href="{projectHref}/todos"
-							aria-current={activePath.startsWith(`${projectHref}/todos`) ? 'page' : undefined}
-							class="row-interactive mb-0.5 flex items-center gap-2 rounded-md border-b border-sidebar-border/60 px-2 py-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-						>
-							<ListTodo class="size-3.5 shrink-0" />
-							Project todos
-						</a>
+						<Sidebar.MenuSubItem>
+							<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
+								{#snippet child({ props })}
+									<a href="{projectHref}/todos" {...props}>
+										<ListTodo class="size-4 shrink-0 text-muted-foreground" />
+										<span class="truncate">Todos</span>
+									</a>
+								{/snippet}
+							</Sidebar.MenuSubButton>
+						</Sidebar.MenuSubItem>
 						<ul
 							class="flex min-h-1.5 min-w-0 flex-col gap-1"
 							use:dndzone={{
@@ -551,10 +599,17 @@
 							{/each}
 						</ul>
 						{#if inlineEdit?.mode === 'create' && isCreatingIn(project.id, undefined)}
-							{@render inlineCreateRow(inlineEdit)}
+							{@render inlineCreateRow(inlineEdit, 'inline')}
 						{/if}
-						{#if entries.length === 0 && !isCreatingIn(project.id, undefined)}
-							<p class="px-2 py-1 text-xs text-muted-foreground">No notes yet.</p>
+						{#if !isCreatingIn(project.id, undefined)}
+							<button
+								type="button"
+								class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								onclick={() => startCreate('note', project.id)}
+							>
+								<Plus class="size-3.5 shrink-0" />
+								{entries.length === 0 ? 'Create your first note' : 'New note'}
+							</button>
 						{/if}
 					</div>
 				</div>

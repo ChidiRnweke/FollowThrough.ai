@@ -23,6 +23,30 @@ const setup = () => {
 };
 
 describe('Todo edit invariants', () => {
+	it('rejects an update without an edit', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder()];
+		await expect(controller.update(testActor(), { todoId: testTodoId() })).rejects.toMatchObject({
+			code: 'INVALID_GENERATED_CONTENT'
+		});
+	});
+
+	it('clears a due date when explicitly set to null', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder({ dueDate: '2026-07-20' as never })];
+		const result = await controller.update(testActor(), { todoId: testTodoId(), dueDate: null });
+		expect(result.todo.dueDate).toBeUndefined();
+	});
+
+	it('clears a description when explicitly set to null', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder({ description: 'Context' })];
+		const result = await controller.update(testActor(), {
+			todoId: testTodoId(),
+			description: null
+		});
+		expect(result.todo.description).toBeUndefined();
+	});
 	it('a partial title edit preserves the description', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ description: 'Keep this context' })];

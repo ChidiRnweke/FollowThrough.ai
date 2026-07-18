@@ -60,11 +60,22 @@ export class DefaultTodosController implements TodosController {
 		return { todo };
 	}
 	async update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput> {
+		if (Object.keys(input).every((key) => key === 'todoId')) {
+			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
+		}
 		let todo = await this.dependencies.todoReader.get(actor, input.todoId);
-		const edits: Partial<Pick<Todo, 'title' | 'description' | 'dueDate'>> = {
+		const edits: Partial<
+			Pick<
+				Todo,
+				'title' | 'description' | 'dueDate' | 'responsibility' | 'waitingOn' | 'linkedNoteId'
+			>
+		> = {
 			...(input.title !== undefined ? { title: input.title } : {}),
-			...(input.description !== undefined ? { description: input.description } : {}),
-			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {})
+			...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
+			...(input.dueDate !== undefined ? { dueDate: input.dueDate ?? undefined } : {}),
+			...(input.responsibility !== undefined ? { responsibility: input.responsibility } : {}),
+			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn ?? undefined } : {}),
+			...(input.linkedNoteId !== undefined ? { linkedNoteId: input.linkedNoteId ?? undefined } : {})
 		};
 		if (Object.keys(edits).length > 0) {
 			todo = await this.dependencies.todoEditor.update(actor, { ...todo, ...edits });
@@ -72,7 +83,8 @@ export class DefaultTodosController implements TodosController {
 		if (input.status !== undefined && input.status !== todo.status) {
 			todo = await this.dependencies.todoStatusChanger.change(actor, input.todoId, input.status);
 		}
-		return { todo };
+		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
+		return { todo, view: view! };
 	}
 	async extractPromises(
 		actor: ActorContext,

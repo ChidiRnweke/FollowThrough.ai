@@ -1,18 +1,22 @@
 <script lang="ts">
-	import type { ProjectId, TodoId, TodoView } from '$lib/models';
+	import type { NoteSummary, ProjectId, TodoId, TodoView } from '$lib/models';
 	import * as Table from '$lib/components/ui/table';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { formatDate, todoStatusLabels } from './labels';
+	import TodoStatusField from './todo-fields/todo-status-field.svelte';
+	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
+	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
+	import TodoSourceField from './todo-fields/todo-source-field.svelte';
 
 	let {
 		todos,
 		projectNames,
-		onopen
+		onopen,
+		notes = []
 	}: {
 		todos: readonly TodoView[];
 		projectNames?: ReadonlyMap<ProjectId, string>;
 		onopen?: (todoId: TodoId) => void;
+		notes?: readonly NoteSummary[];
 	} = $props();
 </script>
 
@@ -50,28 +54,25 @@
 						{projectNames.get(view.todo.projectId) ?? '—'}
 					</Table.Cell>
 				{/if}
-				<Table.Cell>
-					<Badge variant="ghost" class="text-muted-foreground">
-						{todoStatusLabels[view.todo.status]}
-					</Badge>
-				</Table.Cell>
-				<Table.Cell class="text-muted-foreground">
-					{view.todo.dueDate ? formatDate(view.todo.dueDate) : '—'}
-				</Table.Cell>
-				<Table.Cell class="text-muted-foreground">
-					{view.todo.responsibility === 'waiting_on'
-						? `Waiting on ${view.todo.waitingOn ?? 'someone'}`
-						: 'Mine'}
-				</Table.Cell>
-				<Table.Cell>
-					{#if view.sourceNote}
-						<a class="text-sm text-primary hover:underline" href="/notes/{view.sourceNote.id}">
-							{view.sourceNote.title}
-						</a>
-					{:else}
-						<span class="text-muted-foreground">—</span>
-					{/if}
-				</Table.Cell>
+				<Table.Cell><TodoStatusField todoId={view.todo.id} value={view.todo.status} /></Table.Cell>
+				<Table.Cell><TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} /></Table.Cell
+				>
+				<Table.Cell
+					><TodoResponsibilityField
+						todoId={view.todo.id}
+						value={view.todo.responsibility}
+					/></Table.Cell
+				>
+				<Table.Cell
+					><TodoSourceField
+						todoId={view.todo.id}
+						projectId={view.todo.projectId}
+						value={view.todo.linkedNoteId}
+						sourceTitle={view.sourceNote?.title}
+						hasOrigin={view.originNote !== undefined}
+						{notes}
+					/></Table.Cell
+				>
 			</Table.Row>
 		{/each}
 	</Table.Body>

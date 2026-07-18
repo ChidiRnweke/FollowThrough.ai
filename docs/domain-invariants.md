@@ -49,6 +49,8 @@ This document is the independent behavioural specification for backend models, s
 - Deleted todos never appear in active lists.
 - Completed todos carry a completion timestamp; reopening them clears it.
 - Todo status changes are visible through every query of the same todo identity.
+- A todo may link to an active ordinary note in its project; clearing that link restores its anchor-derived source without changing provenance.
+- Waiting-on todos may omit a counterparty, and assigning responsibility to the user clears any counterparty.
 - Partial updates preserve every field not supplied by the caller.
 - Project, responsibility, status, note, and due-date filters never leak another user's todos.
 

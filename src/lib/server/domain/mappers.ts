@@ -79,6 +79,7 @@ export const toProvenance = (row: typeof schema.provenance.$inferSelect): Proven
 		...row,
 		pipeline: row.pipeline ?? undefined,
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
+		linkedNoteId: row.linkedNoteId ?? undefined,
 		runId: row.runId ? (row.runId as Provenance['runId']) : undefined,
 		model: row.model ?? undefined,
 		metadata: row.metadata,

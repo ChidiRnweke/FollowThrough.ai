@@ -1,11 +1,14 @@
 <script lang="ts">
-	import type { LocalDate, TodoId, TodoStatus, TodoView } from '$lib/models';
+	import type { LocalDate, NoteSummary, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ProvenanceDot from './provenance-dot.svelte';
 	import { formatDate, todayLocalDate } from './labels';
+	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
+	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
+	import TodoSourceField from './todo-fields/todo-source-field.svelte';
 
 	let {
 		view,
@@ -13,7 +16,9 @@
 		today = todayLocalDate(),
 		projectName,
 		onstatus,
-		onopen
+		onopen,
+		detail = 'basic',
+		notes = []
 	}: {
 		view: TodoView;
 		compact?: boolean;
@@ -21,14 +26,30 @@
 		projectName?: string;
 		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
+		detail?: 'basic' | 'detailed';
+		notes?: readonly NoteSummary[];
 	} = $props();
 
 	const done = $derived(view.todo.status === 'done');
 	const overdue = $derived(!done && view.todo.dueDate !== undefined && view.todo.dueDate < today);
 	const waiting = $derived(view.todo.responsibility === 'waiting_on');
+	const createdAge = $derived(relativeAge(view.todo.createdAt));
+	function relativeAge(value: string): string {
+		const days = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
+		if (days === 0) return 'today';
+		if (days === 1) return 'yesterday';
+		return `${days} days ago`;
+	}
+	function openBody(event: MouseEvent): void {
+		if (
+			(event.target as HTMLElement).closest('button, a, input, [role="button"], [role="combobox"]')
+		)
+			return;
+		onopen?.(view.todo.id);
+	}
 </script>
 
-<Card.Root data-compact={compact || undefined} class="gap-1.5 py-3">
+<Card.Root data-compact={compact || undefined} class="gap-1.5 py-3" onclick={openBody}>
 	<Card.Header class="px-4">
 		<Card.Title class="flex items-start gap-2 text-sm font-medium">
 			<Checkbox
@@ -65,18 +86,30 @@
 		{#if projectName}
 			<Badge variant="outline" class="text-muted-foreground">{projectName}</Badge>
 		{/if}
-		{#if view.todo.dueDate}
+		{#if detail === 'detailed'}
+			<TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} />
+		{:else if view.todo.dueDate}
 			<Badge
 				variant="ghost"
 				class={overdue ? 'bg-warning/15 text-warning' : 'text-muted-foreground'}
+				>{formatDate(view.todo.dueDate)}</Badge
 			>
-				{formatDate(view.todo.dueDate)}
-			</Badge>
 		{/if}
-		{#if waiting}
-			<Badge variant="ghost" class="bg-warning/15 text-warning-foreground dark:text-warning">
-				Waiting on {view.todo.waitingOn ?? 'someone'}
-			</Badge>
+		{#if detail === 'detailed'}
+			<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
+			<TodoSourceField
+				todoId={view.todo.id}
+				projectId={view.todo.projectId}
+				value={view.todo.linkedNoteId}
+				sourceTitle={view.sourceNote?.title}
+				hasOrigin={view.originNote !== undefined}
+				{notes}
+			/>
+			<span class="text-xs text-muted-foreground">Created {createdAge}</span>
+		{:else if waiting}
+			<Badge variant="ghost" class="bg-warning/15 text-warning-foreground dark:text-warning"
+				>Waiting on {view.todo.waitingOn ?? 'someone'}</Badge
+			>
 		{/if}
 	</Card.Content>
 </Card.Root>
