@@ -23,9 +23,7 @@
 			<SuggestionCard
 				{view}
 				busy={suggestionTray.busyIds.includes(view.suggestion.id)}
-				onaccept={isDrawio(view)
-					? undefined
-					: (id) => void decide(id, 'accept')}
+				onaccept={isDrawio(view) ? undefined : (id) => void decide(id, 'accept')}
 				onreject={(id) => void decide(id, 'reject')}
 				onreview={isDrawio(view) && view.suggestion.kind === 'diagram'
 					? () => suggestionTray.requestReview(view.suggestion as DiagramSuggestion)

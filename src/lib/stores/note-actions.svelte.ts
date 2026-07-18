@@ -100,10 +100,7 @@ class NoteActionsStore {
 					suggestionId,
 					drawioReview: { noteId, source, renderedSvg }
 				});
-				if (
-					accepted.suggestion.kind !== 'diagram' ||
-					accepted.suggestion.payload.kind !== 'drawio'
-				)
+				if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
 					throw new Error('The accepted suggestion did not create the expected draw.io diagram.');
 				return accepted.artifact as DrawioDiagram;
 			},

@@ -22,10 +22,7 @@ export const acceptSuggestion = command(
 				.suggestions()
 				.accept(AppFactory.actor(), input as AcceptSuggestionInput);
 			if (!input.drawioReview) return accepted;
-			if (
-				accepted.suggestion.kind !== 'diagram' ||
-				accepted.suggestion.payload.kind !== 'drawio'
-			)
+			if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
 				throw new Error('The suggestion did not create the expected draw.io diagram.');
 			const artifact = accepted.artifact as Diagram;
 			if (artifact.noteId !== input.drawioReview.noteId)

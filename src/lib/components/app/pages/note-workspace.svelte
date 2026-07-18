@@ -544,11 +544,7 @@
 				<BacklinkChip {backlink} direction={backlink.sourceNote.id === note.id ? 'out' : 'in'} />
 			{/each}
 			{#if pendingCount > 0}
-				<Button
-					size="xs"
-					variant="outline"
-					onclick={() => rightPanel.openSuggestions()}
-				>
+				<Button size="xs" variant="outline" onclick={() => rightPanel.openSuggestions()}>
 					<Lightbulb class="size-3.5" />
 					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'}
 				</Button>
