@@ -1,143 +1,143 @@
 <script lang="ts">
-	import type { GetProjectOutput, ProjectTreeNode } from '$lib/models';
-	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
+	import type { GetProjectOutput, NoteId, ProjectTreeNode } from '$lib/models';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import Brain from '@lucide/svelte/icons/brain';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import FilePlus from '@lucide/svelte/icons/file-plus';
 	import FileText from '@lucide/svelte/icons/file-text';
+	import FilePlus from '@lucide/svelte/icons/file-plus';
 	import Folder from '@lucide/svelte/icons/folder';
-	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import PackageOpen from '@lucide/svelte/icons/package-open';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
-	import ProjectAttachmentsDialog from '../project-attachments-dialog.svelte';
 	import Wrench from '@lucide/svelte/icons/wrench';
+	import ProjectAttachmentsDialog from '../project-attachments-dialog.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
-	import ExportSettingsDialog from '../export-settings-dialog.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import { formatDateTime } from '../labels';
 
-	let { view }: { view: GetProjectOutput } = $props();
+	export interface ProjectCounts {
+		todos: number;
+		memory: number;
+		artifacts: number;
+		attachments: number;
+	}
+
+	let {
+		view,
+		counts,
+		oncreatenote
+	}: { view: GetProjectOutput; counts: ProjectCounts; oncreatenote?: () => void } = $props();
 
 	const project = $derived(view.project);
-	let renameOpen = $state(false);
-	let exportDefaultsOpen = $state(false);
-	let newNoteOpen = $state(false);
-	let newFolderOpen = $state(false);
 	let attachmentsOpen = $state(false);
+	let renameEntryOpen = $state(false);
+	let renameEntryId: NoteId | null = $state(null);
+	let renameEntryTitle = $state('');
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
 	}
 
-	async function createNote(title: string): Promise<void> {
-		const output = await projectActions.createNote(title, project.id);
-		if (!output) {
-			toast.error('Could not create the note. Try again.');
-			return;
-		}
-		await goto(`/notes/${output.note.id}`);
+	function startRename(id: NoteId, title: string): void {
+		renameEntryId = id;
+		renameEntryTitle = title;
+		renameEntryOpen = true;
 	}
 
-	async function createFolder(name: string): Promise<void> {
-		const output = await projectActions.createFolder(project.id, name);
-		if (!output) toast.error('Could not create the folder. Try again.');
+	async function renameEntrySubmit(title: string): Promise<void> {
+		if (!renameEntryId) return;
+		const output = await projectActions.renameNote(renameEntryId, title);
+		if (!output) toast.error('Could not rename. Try again.');
 	}
 
-	async function rename(name: string): Promise<void> {
-		const output = await projectActions.renameProject(project.id, name);
-		if (!output) toast.error('Could not rename the project. Try again.');
-	}
-
-	async function archive(): Promise<void> {
-		const output = await projectActions.archiveProject(project.id);
-		if (!output) {
-			toast.error('Could not archive the project. Try again.');
-			return;
-		}
-		await goto('/');
+	async function archiveEntry(id: NoteId): Promise<void> {
+		const output = await projectActions.archiveNote(id);
+		if (!output) toast.error('Could not archive. Try again.');
 	}
 </script>
 
-<div class="flex flex-wrap items-center gap-2">
-	<Button variant="outline" size="sm" onclick={() => (newNoteOpen = true)}>
-		<FilePlus class="size-4" />
-		New note
-	</Button>
-	<Button variant="outline" size="sm" onclick={() => (newFolderOpen = true)}>
-		<FolderPlus class="size-4" />
-		New folder
-	</Button>
-	<Button variant="outline" size="sm" href="/projects/{project.id}/todos">
-		<ListTodo class="size-4" />
-		Todos
-	</Button>
-	<Button variant="outline" size="sm" onclick={() => rightPanel.openMemory(project.id)}>
-		<Brain class="size-4" />
-		Memory
-	</Button>
-	<Button variant="outline" size="sm" href="/artifacts?projectId={project.id}">
-		<PackageOpen class="size-4" />
-		Artifacts
-	</Button>
-	<Button variant="outline" size="sm" onclick={() => (attachmentsOpen = true)}>
-		<Paperclip data-icon="inline-start" /> Attachments
-	</Button>
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="icon-sm" aria-label="Project actions">
-					<Ellipsis class="size-4" />
-				</Button>
-			{/snippet}
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="start">
-			<DropdownMenu.Item onclick={() => (renameOpen = true)}>Rename project</DropdownMenu.Item>
-			<DropdownMenu.Item onclick={() => (exportDefaultsOpen = true)}>
-				Export defaults…
-			</DropdownMenu.Item>
-			<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
-				Archive project
-			</DropdownMenu.Item>
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
-</div>
+<!-- Destination strip -->
+<nav class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Project spaces">
+	<a
+		href="/projects/{project.id}/todos"
+		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+	>
+		<ListTodo class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex-1">Todos</span>
+		{#if counts.todos > 0}
+			<span class="text-xs tabular-nums text-muted-foreground">{counts.todos}</span>
+		{/if}
+	</a>
+	<button
+		type="button"
+		onclick={() => rightPanel.openMemory(project.id)}
+		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+	>
+		<Brain class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex-1 text-left">Memory</span>
+		{#if counts.memory > 0}
+			<span class="text-xs tabular-nums text-muted-foreground">{counts.memory}</span>
+		{/if}
+	</button>
+	<a
+		href="/artifacts?projectId={project.id}"
+		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+	>
+		<PackageOpen class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex-1">Artifacts</span>
+		{#if counts.artifacts > 0}
+			<span class="text-xs tabular-nums text-muted-foreground">{counts.artifacts}</span>
+		{/if}
+	</a>
+	<button
+		type="button"
+		onclick={() => (attachmentsOpen = true)}
+		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+	>
+		<Paperclip class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex-1 text-left">Attachments</span>
+		{#if counts.attachments > 0}
+			<span class="text-xs tabular-nums text-muted-foreground">{counts.attachments}</span>
+		{/if}
+	</button>
+</nav>
 
+<!-- Documents -->
 {#if view.tree.length === 0}
 	<div
 		class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-16 text-center"
 	>
 		<p class="text-sm text-muted-foreground">This project is empty.</p>
-		<Button size="sm" onclick={() => (newNoteOpen = true)}>
+		<Button size="sm" onclick={oncreatenote}>
 			<FilePlus class="size-4" />
 			Create the first note
 		</Button>
 	</div>
 {:else}
-	<section class="flex flex-col gap-1" aria-label="Project contents">
-		<p class="text-xs font-medium text-muted-foreground">
-			{countEntries(view.tree)}
-			{countEntries(view.tree) === 1 ? 'item' : 'items'}
-		</p>
+	<section class="flex flex-col gap-2" aria-label="Documents">
+		<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+			Documents · {countEntries(view.tree)}
+		</h2>
 		<ul class="divide-y divide-border rounded-lg border border-border">
 			{#each view.tree as node (node.entry.id)}
-				<li>
+				<li class="group relative">
 					{#if node.entry.kind === 'folder'}
-						<div class="flex items-center gap-2 px-3 py-2 text-sm">
+						<div class="flex items-center gap-2 px-3 py-2.5 pr-10 text-sm">
 							<Folder class="size-4 shrink-0 text-muted-foreground" />
-							<span class="font-medium">{node.entry.title}</span>
-							<span class="text-xs text-muted-foreground">
+							<span class="min-w-0 flex-1 truncate font-medium">
+								{node.entry.title}
+							</span>
+							<span class="shrink-0 text-xs text-muted-foreground">
 								{node.children.length}
 								{node.children.length === 1 ? 'item' : 'items'}
 							</span>
 						</div>
 					{:else}
 						<a
-							class="row-interactive flex items-center gap-2 px-3 py-2 text-sm"
+							class="row-interactive flex items-center gap-2 px-3 py-2.5 pr-10 text-sm"
 							href="/notes/{node.entry.id}"
 						>
 							{#if node.entry.kind === 'skill'}
@@ -146,11 +146,41 @@
 								<FileText class="size-4 shrink-0 text-muted-foreground" />
 							{/if}
 							<span class="min-w-0 flex-1 truncate">{node.entry.title}</span>
-							<span class="text-xs text-muted-foreground">
+							<span class="shrink-0 text-xs text-muted-foreground">
 								{formatDateTime(node.entry.updatedAt)}
 							</span>
 						</a>
 					{/if}
+					<div
+						class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 has-data-[state=open]:opacity-100"
+					>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-sm"
+										class="size-7"
+										aria-label="Actions for {node.entry.title}"
+									>
+										<Ellipsis class="size-4" />
+									</Button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="end">
+								<DropdownMenu.Item onclick={() => startRename(node.entry.id, node.entry.title)}>
+									Rename
+								</DropdownMenu.Item>
+								<DropdownMenu.Item
+									variant="destructive"
+									onclick={() => void archiveEntry(node.entry.id)}
+								>
+									Archive
+								</DropdownMenu.Item>
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -158,28 +188,11 @@
 {/if}
 
 <NameDialog
-	bind:open={newNoteOpen}
-	title="New note"
-	label="Note title"
-	submitLabel="Create"
+	bind:open={renameEntryOpen}
+	title="Rename"
+	label="Name"
+	initialValue={renameEntryTitle}
 	busy={projectActions.busy}
-	onsubmit={createNote}
+	onsubmit={renameEntrySubmit}
 />
-<NameDialog
-	bind:open={newFolderOpen}
-	title="New folder"
-	label="Folder name"
-	submitLabel="Create"
-	busy={projectActions.busy}
-	onsubmit={createFolder}
-/>
-<NameDialog
-	bind:open={renameOpen}
-	title="Rename project"
-	label="Project name"
-	initialValue={project.name}
-	busy={projectActions.busy}
-	onsubmit={rename}
-/>
-<ExportSettingsDialog bind:open={exportDefaultsOpen} projectId={project.id} />
 <ProjectAttachmentsDialog bind:open={attachmentsOpen} projectId={project.id} />
