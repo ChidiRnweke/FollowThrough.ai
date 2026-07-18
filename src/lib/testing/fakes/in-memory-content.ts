@@ -1,4 +1,11 @@
-import type { ActorContext, Note, NoteId, SourceAnchor, TextSelection } from '$lib/models';
+import type {
+	ActorContext,
+	Note,
+	NoteId,
+	NoteRevision,
+	SourceAnchor,
+	TextSelection
+} from '$lib/models';
 import {
 	ExternalServiceError,
 	NotFoundError,
@@ -9,8 +16,10 @@ import {
 import type {
 	NoteEditor,
 	NoteIndexer,
+	NotePublisher,
 	NoteReader,
 	NoteTreeReader,
+	NoteRevisionReader,
 	NoteRevisionRecorder,
 	SelectionAnchorCreator,
 	SourceAnchorRepairer
@@ -30,7 +39,9 @@ export class InMemoryNoteContent
 		NoteReader,
 		NoteTreeReader,
 		NoteEditor,
+		NotePublisher,
 		NoteRevisionRecorder,
+		NoteRevisionReader,
 		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
@@ -104,6 +115,35 @@ export class InMemoryNoteContent
 			)
 		)
 			this.revisions.push(structuredClone(note));
+	}
+
+	async latestRevision(_actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined> {
+		void _actor;
+		const matching = this.revisions.filter((r) => r.id === noteId);
+		if (matching.length === 0) return undefined;
+		const latest = matching[matching.length - 1]!;
+		return {
+			id: latest.id as unknown as NoteRevision['id'],
+			noteId: latest.id,
+			revision: latest.currentRevision,
+			title: latest.title,
+			document: latest.document,
+			plainText: latest.plainText,
+			createdAt: latest.updatedAt
+		};
+	}
+
+	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.get(actor, noteId);
+		const ts = new Date().toISOString() as Note['updatedAt'];
+		const published = {
+			...note,
+			publishedRevision: note.currentRevision,
+			publishedAt: ts,
+			updatedAt: ts
+		};
+		this.notes = this.notes.map((n) => (n.id === noteId ? published : n));
+		return published;
 	}
 
 	async repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]> {

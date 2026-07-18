@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { flushSync } from 'svelte';
 import type {
 	AgentEvent,
 	AgentRunEventRecord,
@@ -110,6 +111,22 @@ describe('chat event projection', () => {
 	it('records the optimistic prompt once', async () => {
 		const { store } = await sendWith(streamedEvents);
 		expect(store.entries.at(0)?.parts).toEqual([{ kind: 'text', text: 'look this up' }]);
+	});
+
+	it('notifies reactive observers when the streamed reply completes', async () => {
+		const store = new ChatStore(new FakeAgentRunTransport(streamedEvents), new MemoryStorage());
+		const seen: (string | undefined)[] = [];
+		const stop = $effect.root(() => {
+			$effect(() => {
+				seen.push(store.entries.at(-1)?.status);
+			});
+		});
+		flushSync();
+		await store.send({ prompt: 'look this up' });
+		await Promise.resolve();
+		flushSync();
+		stop();
+		expect(seen.at(-1)).toBe('completed');
 	});
 
 	it('a later attempt replaces abandoned partial output', async () => {

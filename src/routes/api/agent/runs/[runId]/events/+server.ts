@@ -18,19 +18,30 @@ export const GET: RequestHandler = async ({ params, request, url }) => {
 	await agent.getRun(actor, runId);
 	let cursor = cursorAfter(request, url);
 
+	let teardown = () => {};
+
 	const body = new ReadableStream<Uint8Array>({
 		start(controller) {
 			let closed = false;
 			let flushing = false;
 			let pendingFlush = false;
 
-			const close = () => {
-				if (closed) return;
+			const cleanup = () => {
 				closed = true;
 				clearInterval(fallbackTimer);
 				clearInterval(keepaliveTimer);
 				unsubscribe();
-				controller.close();
+			};
+			teardown = cleanup;
+
+			const close = () => {
+				if (closed) return;
+				cleanup();
+				try {
+					controller.close();
+				} catch {
+					// The runtime already closed the controller (e.g. client disconnect).
+				}
 			};
 
 			const flush = async () => {
@@ -46,11 +57,16 @@ export const GET: RequestHandler = async ({ params, request, url }) => {
 						const records = await agent.listRunEvents(actor, runId, cursor);
 						for (const record of records) {
 							if (closed) return;
-							controller.enqueue(
-								encoder.encode(
-									`id: ${record.cursor}\nevent: agent\ndata: ${JSON.stringify(record)}\n\n`
-								)
-							);
+							try {
+								controller.enqueue(
+									encoder.encode(
+										`id: ${record.cursor}\nevent: agent\ndata: ${JSON.stringify(record)}\n\n`
+									)
+								);
+							} catch {
+								cleanup();
+								return;
+							}
 							cursor = record.cursor;
 						}
 						const snapshot = await agent.getRun(actor, runId);
@@ -64,11 +80,12 @@ export const GET: RequestHandler = async ({ params, request, url }) => {
 					} while (pendingFlush && !closed);
 				} catch (error) {
 					if (!closed) {
-						closed = true;
-						clearInterval(fallbackTimer);
-						clearInterval(keepaliveTimer);
-						unsubscribe();
-						controller.error(error);
+						cleanup();
+						try {
+							controller.error(error);
+						} catch {
+							// The runtime already closed the controller.
+						}
 					}
 				} finally {
 					flushing = false;
@@ -86,11 +103,19 @@ export const GET: RequestHandler = async ({ params, request, url }) => {
 
 			// Keepalive heartbeat
 			const keepaliveTimer = setInterval(() => {
-				if (!closed) controller.enqueue(encoder.encode(': keepalive\n\n'));
+				if (closed) return;
+				try {
+					controller.enqueue(encoder.encode(': keepalive\n\n'));
+				} catch {
+					cleanup();
+				}
 			}, 15_000);
 
 			// Clean up on client disconnect
 			request.signal.addEventListener('abort', close);
+		},
+		cancel() {
+			teardown();
 		}
 	});
 

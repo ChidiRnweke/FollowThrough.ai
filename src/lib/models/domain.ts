@@ -73,6 +73,7 @@ export interface Note {
 	readonly document: ProseMirrorDocument;
 	readonly plainText: string;
 	readonly currentRevision: number;
+	readonly publishedRevision: number;
 	readonly isPinned: boolean;
 	readonly publishedAt?: DateTime;
 	readonly archivedAt?: DateTime;

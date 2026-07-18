@@ -7,6 +7,8 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 	conversations: Conversation[] = [];
 	messages: Message[] = [];
 
+	constructor(private readonly runExists?: (runId: string) => boolean) {}
+
 	async list(
 		actor: ActorContext,
 		options: ConversationListOptions = {}
@@ -56,6 +58,8 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 	async appendMessage(actor: ActorContext, message: Message): Promise<Message> {
 		if (!(await this.findById(actor, message.conversationId)))
 			throw new NotFoundError('Conversation was not found');
+		if (message.runId && this.runExists && !this.runExists(message.runId))
+			throw new NotFoundError(`Agent run ${message.runId} was not found`);
 		this.messages.push(message);
 		return message;
 	}

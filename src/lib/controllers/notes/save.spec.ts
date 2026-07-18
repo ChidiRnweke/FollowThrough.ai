@@ -17,7 +17,9 @@ const setup = () => {
 		noteReader: content,
 		noteTreeReader: content,
 		noteEditor: content,
+		notePublisher: content,
 		revisionRecorder: content,
+		revisionReader: content,
 		anchorRepairer: content,
 		noteIndexer: content,
 		transactionRunner: new InMemoryTransactionRunner([content])
@@ -36,12 +38,12 @@ describe('Note revision invariants', () => {
 		expect(result.note.currentRevision).toBe(2);
 	});
 
-	it('records an immutable snapshot for a meaningful edit', async () => {
+	it('does not record a revision snapshot on draft save', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.save(testActor(), { note: { ...note, plainText: 'Changed' } });
-		expect(content.revisions.map((revision) => revision.currentRevision)).toEqual([2]);
+		expect(content.revisions).toHaveLength(0);
 	});
 
 	it('does not duplicate an existing snapshot for a no-op save', async () => {
@@ -154,7 +156,7 @@ describe('Note save transaction invariants', () => {
 		expect(content.notes[0]?.currentRevision).toBe(1);
 	});
 
-	it('rolls back the revision snapshot when indexing fails', async () => {
+	it('does not create revisions even when indexing fails', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
@@ -186,5 +188,67 @@ describe('Note save transaction invariants', () => {
 			// The restored identity is the invariant under test.
 		}
 		expect(content.notes[0]?.id).toBe(testNoteId());
+	});
+});
+
+describe('Note publish invariants', () => {
+	it('creates a revision snapshot on publish', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		expect(content.revisions).toHaveLength(1);
+		expect(content.revisions[0]?.currentRevision).toBe(note.currentRevision);
+	});
+
+	it('sets publishedRevision to currentRevision on the note', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		const result = await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note)
+		});
+		expect(result.note.publishedRevision).toBe(note.currentRevision);
+		expect(result.note.publishedAt).toBeDefined();
+	});
+
+	it('rejects a stale ETag on publish', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await expect(
+			controller.publish(testActor(), {
+				noteId: note.id,
+				baseEtag: noteEtag({ ...note, currentRevision: 99 })
+			})
+		).rejects.toMatchObject({ code: 'STALE_REVISION' });
+	});
+});
+
+describe('Note discard draft invariants', () => {
+	it('restores content from the last published revision', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ plainText: 'Original' });
+		content.notes = [note];
+		// Publish the original
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		// Edit (draft save)
+		const saved = await controller.save(testActor(), {
+			note: { ...content.notes[0]!, plainText: 'Draft change' }
+		});
+		expect(saved.note.plainText).toBe('Draft change');
+		// Discard
+		const discarded = await controller.discardDraft(testActor(), { noteId: note.id });
+		expect(discarded.note.plainText).toBe('Original');
+	});
+
+	it('rejects discard when no published version exists', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await expect(controller.discardDraft(testActor(), { noteId: note.id })).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 });

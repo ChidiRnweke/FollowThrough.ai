@@ -139,14 +139,14 @@ export class DefaultAgentController implements AgentController {
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
+				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
+				if (!inserted) throw new DuplicateSubmission();
 				await this.dependencies.conversationJournal.recordUserPrompt(
 					actor,
 					conversation.id,
 					runInput.prompt,
 					run.id
 				);
-				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
-				if (!inserted) throw new DuplicateSubmission();
 				const event = await this.dependencies.events.append(run.id, 0, {
 					type: 'run_queued',
 					runId: run.id,

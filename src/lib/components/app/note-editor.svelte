@@ -407,7 +407,9 @@
 					</DropdownMenu.Root>
 				{/if}
 			</BubbleMenu>
-			<EdraEditor class="prose flex min-h-full max-w-none flex-1 flex-col dark:prose-invert" />
+			<EdraEditor
+				class="prose flex min-h-full max-w-none flex-1 flex-col pb-12 dark:prose-invert"
+			/>
 		</Tiptap>
 		{#if activeLink}
 			<ReferenceLinkPreview

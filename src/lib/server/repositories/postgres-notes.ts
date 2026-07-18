@@ -107,6 +107,8 @@ export class PostgresNoteRepository implements NoteRepository {
 				position: note.position,
 				isPinned: note.isPinned,
 				currentRevision: note.currentRevision,
+				publishedRevision: note.publishedRevision,
+				publishedAt: note.publishedAt ? new Date(note.publishedAt) : null,
 				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
 				updatedAt: new Date(note.updatedAt)
 			})

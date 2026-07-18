@@ -178,15 +178,16 @@ export class ChatStore {
 					(entry) => entry.role === 'assistant' && entry.runId === snapshot.run.id
 				);
 				if (!reply && snapshot.run.status !== 'completed') {
-					reply = {
+					this.entries.push({
 						id: crypto.randomUUID(),
 						role: 'assistant',
 						parts: pendingTools.map((tool) => ({ kind: 'tool', tool })),
 						suggestions: [],
 						status: 'waiting',
 						runId: snapshot.run.id
-					};
-					this.entries.push(reply);
+					});
+					// Re-read through the $state proxy: mutating the raw pushed object bypasses reactivity.
+					reply = this.entries[this.entries.length - 1];
 				}
 				if (reply) {
 					this.activeReply = reply;
@@ -239,14 +240,15 @@ export class ChatStore {
 			suggestions: [],
 			status: 'completed'
 		});
-		const reply: ChatEntry = {
+		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'assistant',
 			parts: [],
 			suggestions: [],
 			status: 'queued'
-		};
-		this.entries.push(reply);
+		});
+		// Re-read through the $state proxy: mutating the raw pushed object bypasses reactivity.
+		const reply = this.entries[this.entries.length - 1]!;
 		this.activeReply = reply;
 		this.runStatus = 'queued';
 		try {

@@ -67,6 +67,8 @@ export const agentToolCoverage = {
 		create: { kind: 'mutation' },
 		save: { kind: 'mutation' },
 		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
+		publish: { kind: 'mutation' },
+		discardDraft: { kind: 'mutation' },
 		listSyncInventory: {
 			kind: 'excluded',
 			reason: 'Sync inventory is reserved for browser reconciliation.'
@@ -396,6 +398,20 @@ export class AgentToolRegistry {
 			),
 			define('archive_note', 'Archive a note.', 'mutation', z.object({ noteId: id }), (input) =>
 				factory.notes().archive(actor, input as never)
+			),
+			define(
+				'publish_note',
+				'Publish a note, creating a versioned snapshot.',
+				'mutation',
+				z.object({ noteId: id, baseEtag: z.string() }),
+				(input) => factory.notes().publish(actor, input as never)
+			),
+			define(
+				'discard_note_draft',
+				'Discard unpublished changes and revert to the last published version.',
+				'mutation',
+				z.object({ noteId: id }),
+				(input) => factory.notes().discardDraft(actor, input as never)
 			),
 			define(
 				'list_todos',

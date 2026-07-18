@@ -50,6 +50,7 @@ export const noteBuilder = (overrides: Partial<Note> = {}): Note => ({
 	document: { type: 'doc', content: [] },
 	plainText: '',
 	currentRevision: 1,
+	publishedRevision: 0,
 	isPinned: false,
 	createdAt: testNow,
 	updatedAt: testNow,

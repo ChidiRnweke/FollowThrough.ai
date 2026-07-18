@@ -10,6 +10,7 @@
 		SuggestionId,
 		TextSelection
 	} from '$lib/models';
+	import { noteEtag } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -34,9 +35,12 @@
 	import NoteSyncStatus from '../note-sync-status.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
 	import FileOutput from '@lucide/svelte/icons/file-output';
+	import ArrowUpFromLine from '@lucide/svelte/icons/arrow-up-from-line';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import Lightbulb from '@lucide/svelte/icons/lightbulb';
 	import ExportDialog from '../export-dialog.svelte';
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
+	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';
 
 	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
 
@@ -48,13 +52,17 @@
 	let syncReady = $state(false);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
+	let publishing = $state(false);
 	let reconciling = false;
 	let editVersion = 0;
+	let lastSaveKeyTime = 0;
 	let saveQueued = false;
 	let activeSave: Promise<void> | undefined;
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
+
+	const hasUnpublishedChanges = $derived(note.currentRevision > note.publishedRevision);
 
 	onMount(() => {
 		let cancelled = false;
@@ -147,7 +155,7 @@
 	$effect(() => () => clearTimeout(autosaveTimer));
 
 	function save(options: { auto?: boolean } = {}): Promise<void> {
-		if (!editorRef) return Promise.resolve();
+		if (!editorRef || !dirty) return Promise.resolve();
 		if (!note.title.trim()) {
 			if (!options.auto) toast.error('Give the note a title first.');
 			return Promise.resolve();
@@ -408,7 +416,14 @@
 	function onkeydown(event: KeyboardEvent): void {
 		if ((event.metaKey || event.ctrlKey) && event.key === 's') {
 			event.preventDefault();
-			void save();
+			const now = Date.now();
+			if (now - lastSaveKeyTime < 800 && hasUnpublishedChanges) {
+				lastSaveKeyTime = 0;
+				void publish();
+			} else {
+				lastSaveKeyTime = now;
+				void save();
+			}
 		}
 	}
 
@@ -440,6 +455,45 @@
 		conflictOpen = record.state === 'conflict';
 		if (record.state === 'synced') await invalidateAll();
 	}
+
+	async function publish(): Promise<void> {
+		if (publishing) return;
+		if (dirty) await save();
+		if (dirty || noteSync.status !== 'synced') {
+			toast.error('Save the note before publishing.');
+			return;
+		}
+		publishing = true;
+		try {
+			const result = await publishNote({
+				noteId: note.id,
+				baseEtag: noteEtag(note)
+			});
+			const output = result as { note: typeof note; etag: string };
+			note = { ...output.note };
+			toast.success('Published');
+			await invalidateAll();
+		} catch {
+			toast.error('Could not publish. Try again.');
+		} finally {
+			publishing = false;
+		}
+	}
+
+	async function discardDraft(): Promise<void> {
+		if (note.publishedRevision === 0) return;
+		try {
+			const result = await discardNoteDraft({ noteId: note.id });
+			const output = result as { note: typeof note; etag: string };
+			note = { ...output.note };
+			editorRef?.replaceDocument(output.note.document);
+			dirty = false;
+			toast.success('Reverted to last published version');
+			await invalidateAll();
+		} catch {
+			toast.error('Could not discard changes. Try again.');
+		}
+	}
 </script>
 
 <svelte:window {onkeydown} {onbeforeunload} />
@@ -464,6 +518,8 @@
 				</span>
 			{:else if dirty}
 				<span class="text-xs text-muted-foreground" aria-live="polite">Unsaved changes</span>
+			{:else if hasUnpublishedChanges}
+				<span class="text-xs text-muted-foreground" aria-live="polite">Unpublished changes</span>
 			{:else}
 				<NoteSyncStatus
 					status={noteSync.status}
@@ -471,6 +527,22 @@
 					onRetry={() => void retrySync()}
 					onReview={() => (conflictOpen = true)}
 				/>
+			{/if}
+			{#if hasUnpublishedChanges}
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={dirty || publishing}
+					aria-label="Publish note (Ctrl+S, S)"
+					onclick={() => void publish()}
+				>
+					{#if publishing}
+						<LoaderCircle class="size-4 animate-spin" />
+					{:else}
+						<ArrowUpFromLine class="size-4" />
+					{/if}
+					Publish
+				</Button>
 			{/if}
 			<Button
 				variant="ghost"
@@ -523,6 +595,15 @@
 					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
+						<DropdownMenu.Item
+							disabled={note.publishedRevision === 0 || !hasUnpublishedChanges}
+							onclick={() => {
+								if (confirm('Discard all changes since last publish?')) void discardDraft();
+							}}
+						>
+							<Undo2 data-icon="inline-start" />
+							Discard changes
+						</DropdownMenu.Item>
 						<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
 							Archive note
 						</DropdownMenu.Item>

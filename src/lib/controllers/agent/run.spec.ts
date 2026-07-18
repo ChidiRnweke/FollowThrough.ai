@@ -14,8 +14,10 @@ const noopExecutor: AgentRunExecutor = {
 } as unknown as AgentRunExecutor;
 
 const setup = () => {
-	const conversations = new InMemoryConversationRepository();
 	const runs = new InMemoryAgentRunPersistence();
+	const conversations = new InMemoryConversationRepository((runId) =>
+		runs.runs.some((run) => run.id === runId)
+	);
 	const controller = new DefaultAgentController({
 		conversationJournal: new PersistentConversationJournal(conversations),
 		preferences: {
@@ -48,6 +50,17 @@ describe('durable agent submission', () => {
 			input: 'Help me decide'
 		});
 		expect(receipt.status).toBe('queued');
+	});
+
+	it('records the user prompt against the persisted run', async () => {
+		const { controller, conversations } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000009',
+			input: 'Help me decide'
+		});
+		expect(conversations.messages.find((message) => message.role === 'user')?.runId).toBe(
+			receipt.runId
+		);
 	});
 
 	it('records one prompt for a duplicate logical request', async () => {

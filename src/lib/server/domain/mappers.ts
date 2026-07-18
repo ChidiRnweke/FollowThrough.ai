@@ -45,6 +45,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 		parentId: row.parentId ?? undefined,
 		builtInKey: row.builtInKey ?? undefined,
 		document: row.document,
+		publishedRevision: row.publishedRevision,
 		publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined,
 		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
 		createdAt: instant(row.createdAt),

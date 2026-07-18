@@ -28,6 +28,7 @@ const noteSchema = z.object({
 	}),
 	plainText: z.string(),
 	currentRevision: z.number().int(),
+	publishedRevision: z.number().int().default(0),
 	isPinned: z.boolean(),
 	publishedAt: z.string().optional(),
 	archivedAt: z.string().optional(),

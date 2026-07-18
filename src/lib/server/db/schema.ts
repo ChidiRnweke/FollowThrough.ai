@@ -144,6 +144,7 @@ export const notes = pgTable(
 			.default({ type: 'doc', content: [] }),
 		plainText: text('plain_text').notNull().default(''),
 		currentRevision: integer('current_revision').notNull().default(1),
+		publishedRevision: integer('published_revision').notNull().default(0),
 		isPinned: boolean('is_pinned').notNull().default(false),
 		publishedAt: timestamp('published_at', { withTimezone: true }),
 		archivedAt: timestamp('archived_at', { withTimezone: true }),

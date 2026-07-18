@@ -158,7 +158,13 @@ export class NoteManagementService
 
 	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		const note = await this.get(actor, noteId);
-		return this.notes.update(actor, { ...note, publishedAt: now(), updatedAt: now() });
+		const ts = now();
+		return this.notes.update(actor, {
+			...note,
+			publishedRevision: note.currentRevision,
+			publishedAt: ts,
+			updatedAt: ts
+		});
 	}
 
 	async repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]> {
