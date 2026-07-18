@@ -1,5 +1,9 @@
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import {
+	createOpenRouterClient,
+	DEFAULT_GENERATION_MODEL,
+	type OpenRouterClientOptions
+} from './openrouter-client';
 import { z } from 'zod';
 import type { ActorContext, LocalDate, PromiseCandidate, TextSelection } from '$lib/models';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
@@ -30,26 +34,29 @@ Separate action, owner, responsibility, due-date wording, resolved ISO date, and
 Questions, suggestions, aspirations, and floated options are not promises.
 Use explicit for direct commitments, implied for contextually expected actions, and tentative for hedged commitments.`;
 
-export class OpenAIStructuredPromiseClient implements StructuredPromiseClient {
-	private readonly client: OpenAI;
+export interface OpenAIStructuredPromiseClientOptions extends OpenRouterClientOptions {
+	readonly model?: string;
+}
 
-	constructor(
-		apiKey: string,
-		private readonly model = process.env.OPENAI_MODEL ?? 'gpt-5.6-luna'
-	) {
-		this.client = new OpenAI({ apiKey });
+export class OpenAIStructuredPromiseClient implements StructuredPromiseClient {
+	private readonly client;
+	private readonly model: string;
+
+	constructor(apiKey: string, options: OpenAIStructuredPromiseClientOptions = {}) {
+		this.model = options.model ?? DEFAULT_GENERATION_MODEL;
+		this.client = createOpenRouterClient(apiKey, options);
 	}
 
 	async extract(text: string): Promise<readonly StructuredPromiseResult[] | undefined> {
-		const response = await this.client.responses.parse({
+		const completion = await this.client.chat.completions.parse({
 			model: this.model,
-			input: [
+			messages: [
 				{ role: 'system', content: SYSTEM_PROMPT },
 				{ role: 'user', content: text }
 			],
-			text: { format: zodTextFormat(PromiseExtraction, 'promise_extraction') }
+			response_format: zodResponseFormat(PromiseExtraction, 'promise_extraction')
 		});
-		return response.output_parsed?.promises;
+		return completion.choices[0]?.message.parsed?.promises;
 	}
 }
 
@@ -66,10 +73,16 @@ export class OpenAIPromiseExtractor implements PromiseExtractor {
 		} = {}
 	) {
 		this.fallback = options.fallback ?? new DeterministicPromiseExtractor();
-		const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+		const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
 		this.client =
 			options.client ??
-			(apiKey ? new OpenAIStructuredPromiseClient(apiKey, options.model) : undefined);
+			(apiKey
+				? new OpenAIStructuredPromiseClient(apiKey, {
+						model: options.model,
+						baseURL: process.env.OPENROUTER_BASE_URL,
+						appURL: process.env.PUBLIC_APP_URL
+					})
+				: undefined);
 	}
 
 	async extract(

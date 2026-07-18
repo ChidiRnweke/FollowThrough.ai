@@ -1,5 +1,9 @@
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import {
+	createOpenRouterClient,
+	DEFAULT_GENERATION_MODEL,
+	type OpenRouterClientOptions
+} from './openrouter-client';
 import { z } from 'zod';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
 import type {
@@ -22,29 +26,32 @@ Use elaborates when the target adds meaningful detail to the same idea.
 Use mentions for a weaker topical relationship.
 Give a concise, evidence-based justification and calibrated confidence.`;
 
-export class OpenAIStructuredRelationshipClient implements StructuredRelationshipClient {
-	private readonly client: OpenAI;
+export interface OpenAIStructuredRelationshipClientOptions extends OpenRouterClientOptions {
+	readonly model?: string;
+}
 
-	constructor(
-		apiKey: string,
-		private readonly model = process.env.OPENAI_RELATIONSHIP_MODEL ?? 'gpt-5.6-luna'
-	) {
-		this.client = new OpenAI({ apiKey });
+export class OpenAIStructuredRelationshipClient implements StructuredRelationshipClient {
+	private readonly client;
+	private readonly model: string;
+
+	constructor(apiKey: string, options: OpenAIStructuredRelationshipClientOptions = {}) {
+		this.model = options.model ?? DEFAULT_GENERATION_MODEL;
+		this.client = createOpenRouterClient(apiKey, options);
 	}
 
 	async classify(
 		sourceText: string,
 		targetText: string
 	): Promise<RelationshipClassification | undefined> {
-		const response = await this.client.responses.parse({
+		const completion = await this.client.chat.completions.parse({
 			model: this.model,
-			input: [
+			messages: [
 				{ role: 'system', content: SYSTEM_PROMPT },
 				{ role: 'user', content: `SOURCE:\n${sourceText}\n\nTARGET:\n${targetText}` }
 			],
-			text: { format: zodTextFormat(RelationshipOutput, 'relationship_classification') }
+			response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
 		});
-		return response.output_parsed ?? undefined;
+		return completion.choices[0]?.message.parsed ?? undefined;
 	}
 }
 
@@ -60,10 +67,16 @@ export class OpenAIRelationshipClassifier implements RelationshipClassifier {
 			model?: string;
 		} = {}
 	) {
-		const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+		const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
 		this.client =
 			options.client ??
-			(apiKey ? new OpenAIStructuredRelationshipClient(apiKey, options.model) : undefined);
+			(apiKey
+				? new OpenAIStructuredRelationshipClient(apiKey, {
+						model: options.model,
+						baseURL: process.env.OPENROUTER_BASE_URL,
+						appURL: process.env.PUBLIC_APP_URL
+					})
+				: undefined);
 		this.fallback = options.fallback ?? new HeuristicRelationshipClassifier();
 	}
 

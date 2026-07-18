@@ -3,6 +3,7 @@ import type { ActorContext, ReferenceCandidate, TextSelection, Url } from '$lib/
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
 import type { ReferenceFinder, ReferenceSearchOptions, WebReferenceClient } from '$lib/services';
 import { openRouterWebSearchTool } from './openrouter-server-tools';
+import { createOpenRouterClient, DEFAULT_GENERATION_MODEL } from './openrouter-client';
 
 const REFERENCE_PROMPT = `Search the web for sources that directly support or clarify the selected architecture text.
 Prefer standards and official documentation, then vendor documentation, then community sources.
@@ -119,15 +120,8 @@ export class OpenRouterWebReferenceClient implements WebReferenceClient {
 	private readonly defaultModel: string;
 
 	constructor(apiKey: string, options: OpenRouterWebReferenceClientOptions = {}) {
-		this.defaultModel = options.defaultModel ?? 'openai/gpt-5.6';
-		this.client = new OpenAI({
-			apiKey,
-			baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
-			defaultHeaders: {
-				'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
-				'X-OpenRouter-Title': 'FollowThrough'
-			}
-		});
+		this.defaultModel = options.defaultModel ?? DEFAULT_GENERATION_MODEL;
+		this.client = createOpenRouterClient(apiKey, options);
 	}
 
 	async search(

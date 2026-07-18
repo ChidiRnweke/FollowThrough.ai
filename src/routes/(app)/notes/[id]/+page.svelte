@@ -6,7 +6,7 @@
 </script>
 
 {#key data.view.note.id}
-	<PageShell fill class="max-w-none gap-0 px-4 py-4 md:px-10 md:py-6">
+	<PageShell fill class="max-w-none gap-0 px-4 pt-2 pb-4 md:px-10 md:pt-3 md:pb-6">
 		<NoteWorkspace view={data.view} shell={data.shell} />
 	</PageShell>
 {/key}

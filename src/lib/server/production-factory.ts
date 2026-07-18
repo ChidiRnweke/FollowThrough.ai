@@ -36,10 +36,8 @@ import { OpenAIPromiseExtractor } from './domain/openai-capabilities';
 import { WebSearchReferenceFinder } from './domain/openai-reference-capabilities';
 import { OpenAIAgentRunner } from './domain/openai-agent-capabilities';
 import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
-import {
-	DeterministicEmbeddingClient,
-	OpenAIEmbeddingClient
-} from './domain/openai-embedding-capabilities';
+import { OpenAIEmbeddingClient } from './domain/openai-embedding-capabilities';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
 import { PostgresConversationRepository } from './repositories/postgres-conversations';
 import { EnrichedAgentContextBuilder } from './domain/agent-context-capabilities';
@@ -84,9 +82,6 @@ import {
 	DrawioXmlValidator,
 	DrawioDiagramTextExtractor
 } from './domain/drawio-content';
-
-const firstConfigured = (...values: readonly (string | undefined)[]): string | undefined =>
-	values.map((value) => value?.trim()).find((value): value is string => Boolean(value));
 
 export interface ProductionApplication {
 	readonly controllers: ProductionControllerFactory;
@@ -148,6 +143,15 @@ export function createProductionFactory(): ProductionApplication {
 		postgresTransactionRunner,
 		new PostgresExportSettingsRepository(db)
 	);
+	const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+	if (!openRouterApiKey) {
+		throw new Error(
+			'OPENROUTER_API_KEY is required. Refusing to start with AI features silently disabled.'
+		);
+	}
+	const openRouterBaseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL;
+	const appURL = process.env.PUBLIC_APP_URL ?? 'http://localhost:5173';
+	const defaultAgentModel = process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL;
 	const recommendedModels = new Set(
 		(process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
 			.split(',')
@@ -157,19 +161,16 @@ export function createProductionFactory(): ProductionApplication {
 	);
 	const modelCatalog = new OpenRouterModelCatalog(
 		new OpenRouter({
-			apiKey: process.env.OPENROUTER_API_KEY,
-			httpReferer: process.env.PUBLIC_APP_URL ?? 'http://localhost:5173',
+			apiKey: openRouterApiKey,
+			httpReferer: appURL,
 			xTitle: 'FollowThrough'
 		}),
 		recommendedModels
 	);
-	const defaultAgentModel =
-		firstConfigured(process.env.OPENROUTER_DEFAULT_MODEL, process.env.OPENAI_AGENT_MODEL) ??
-		'openai/gpt-5.6';
-	const openAIKey = process.env.OPENAI_API_KEY;
-	const embeddingClient = openAIKey
-		? new OpenAIEmbeddingClient(openAIKey)
-		: new DeterministicEmbeddingClient();
+	const embeddingClient = new OpenAIEmbeddingClient(openRouterApiKey, {
+		baseURL: openRouterBaseURL,
+		appURL
+	});
 	const attachmentRepository = new PostgresAttachmentRepository(db);
 	const attachments = new AttachmentManagementService(
 		attachmentRepository,
@@ -200,9 +201,9 @@ export function createProductionFactory(): ProductionApplication {
 		provenanceRepository
 	);
 	const referenceFinder = new WebSearchReferenceFinder({
-		apiKey: process.env.OPENROUTER_API_KEY,
-		baseURL: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
-		appURL: process.env.PUBLIC_APP_URL ?? 'http://localhost:5173',
+		apiKey: openRouterApiKey,
+		baseURL: openRouterBaseURL,
+		appURL,
 		defaultModel: normalizeOpenRouterModelId(defaultAgentModel)
 	});
 	const suggestions = new SuggestionManagementService(
@@ -264,9 +265,9 @@ export function createProductionFactory(): ProductionApplication {
 			return controllerFactory;
 		},
 		agentSessions,
-		process.env.OPENROUTER_API_KEY,
-		process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
-		process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL
 	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,

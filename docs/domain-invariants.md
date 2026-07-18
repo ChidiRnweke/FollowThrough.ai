@@ -32,6 +32,8 @@ This document is the independent behavioural specification for backend models, s
   conditional save returns the next ETag; a conflict preserves the current remote note and ETag.
 - Retrying an already-applied note mutation with identical synchronization content is idempotently
   acknowledged.
+- Reopening from a cached loader snapshot never downgrades a device record whose acknowledged base
+  has a higher content revision or turns its pending work into a false conflict.
 - A no-op save does not increment the current revision or create another revision snapshot.
 - A meaningful save increments the revision exactly once and records an immutable snapshot.
 - Anchors are created only from a non-empty selection in the current note revision.

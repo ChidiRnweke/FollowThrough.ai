@@ -6,6 +6,9 @@
 - **Secondary styles and modifiers:** None. Forms, navigation, tables, and menus remain conventional.
 - **Ornament budget:** Zero decorative motifs. Use rules, type, and spacing instead of shadows or illustration.
 - **Color modes:** Preserve the existing semantic olive-neutral light and dark themes.
+- **Product mark:** FollowThrough uses a flat teal tile with a continuous white F-to-check path.
+  It replaces framework placeholder branding without adding gradients, shadows, or a broader
+  ornament system.
 
 ## Tokens and composition
 
@@ -16,6 +19,10 @@
 - Focus indicators, AA contrast, 44px touch targets for primary controls, reduced motion, and keyboard access are required.
 
 ## UX patterns
+
+- **Offline fallback:** When an uncached route cannot load, use a focused single-action status page
+  with the product mark, a plain-language connection explanation, and one retry action. Do not
+  imply that uncached server data or online-only mutations are available.
 
 - **Todos:** Progressive disclosure combines three familiar work surfaces. Basic Kanban is the default scanning view; Detailed Kanban exposes committed metadata edits in place; List is a compact editable matrix; the independent right panel is the complete master-detail editor. Board detail and board/list mode stay URL-addressable. Editable popovers must not resize cards or rows, and provenance remains separate from the user-selected source.
 - **Project resources:** Todos, Memory, Artifacts, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.

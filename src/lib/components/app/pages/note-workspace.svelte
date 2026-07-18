@@ -676,7 +676,7 @@
 			onrejectDrawio={rejectDrawio}
 		/>
 	{:else}
-		<div class="flex flex-1 flex-col gap-3" aria-label="Loading note from device">
+		<div class="flex flex-col gap-3" aria-label="Loading note from device">
 			<Skeleton class="h-5 w-full" />
 			<Skeleton class="h-5 w-5/6" />
 			<Skeleton class="h-5 w-2/3" />

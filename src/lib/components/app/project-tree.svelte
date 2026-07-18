@@ -17,7 +17,7 @@
 	import Pin from '@lucide/svelte/icons/pin';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Wrench from '@lucide/svelte/icons/wrench';
-	import { onMount, untrack } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from './name-dialog.svelte';
@@ -70,6 +70,7 @@
 	// deviations from that default and is persisted per browser.
 	const toggled = new SvelteSet<string>();
 	let togglesRestored = $state(false);
+	let transitionsReady = $state(false);
 
 	function readStoredToggles(): string[] {
 		if (typeof localStorage === 'undefined') return [];
@@ -82,9 +83,11 @@
 		return [];
 	}
 
-	onMount(() => {
+	onMount(async () => {
 		for (const key of readStoredToggles()) toggled.add(key);
 		togglesRestored = true;
+		await tick();
+		transitionsReady = true;
 	});
 
 	$effect(() => {
@@ -474,7 +477,13 @@
 			</DropdownMenu.Root>
 		{/if}
 		{#if isFolder && depth < MAX_DEPTH}
-			<div class="tree-collapse" data-open={isOpen}>
+			<div
+				class="tree-collapse"
+				data-open={isOpen}
+				style={transitionsReady
+					? undefined
+					: `display:grid;grid-template-rows:${isOpen ? '1fr' : '0fr'};transition:none`}
+			>
 				<div class="min-h-0 overflow-hidden">
 					<ul
 						class="ml-3.5 flex min-h-1.5 min-w-0 flex-col gap-1 border-l border-sidebar-border py-0.5 pl-2.5"
@@ -576,12 +585,18 @@
 				class="group-data-[collapsible=icon]:hidden"
 			>
 				<ChevronRight
-					class="size-4 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
-						? 'rotate-90'
-						: ''}"
+					class="size-4 text-muted-foreground {transitionsReady
+						? 'transition-transform duration-(--duration-micro)'
+						: ''} {isOpen ? 'rotate-90' : ''}"
 				/>
 			</Sidebar.MenuAction>
-			<div class="tree-collapse" data-open={isOpen}>
+			<div
+				class="tree-collapse"
+				data-open={isOpen}
+				style={transitionsReady
+					? undefined
+					: `display:grid;grid-template-rows:${isOpen ? '1fr' : '0fr'};transition:none`}
+			>
 				<div class="min-h-0 overflow-hidden">
 					<div
 						class="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden"

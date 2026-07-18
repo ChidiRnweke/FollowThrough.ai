@@ -1,15 +1,28 @@
-import OpenAI from 'openai';
-import { createHash } from 'node:crypto';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
 import type { EmbeddingBatch, EmbeddingClient } from '$lib/services';
+import { createOpenRouterClient, type OpenRouterClientOptions } from './openrouter-client';
+
+/**
+ * Embeddings run on OpenRouter. The model stays `openai/text-embedding-3-large`
+ * (3072 dims) to keep the stored `search_chunks` vectors valid — only the
+ * provider/base URL changes. There is deliberately no local fallback: if the
+ * embedder is unavailable the caller fails rather than silently producing
+ * meaningless vectors.
+ */
+
+export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-large';
+
+export interface OpenAIEmbeddingClientOptions extends OpenRouterClientOptions {
+	readonly model?: string;
+}
 
 export class OpenAIEmbeddingClient implements EmbeddingClient {
-	private readonly client: OpenAI;
-	constructor(
-		apiKey: string,
-		readonly model = process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-large'
-	) {
-		this.client = new OpenAI({ apiKey });
+	private readonly client;
+	readonly model: string;
+
+	constructor(apiKey: string, options: OpenAIEmbeddingClientOptions = {}) {
+		this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
+		this.client = createOpenRouterClient(apiKey, options);
 	}
 
 	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
@@ -30,26 +43,5 @@ export class OpenAIEmbeddingClient implements EmbeddingClient {
 				cause: error instanceof Error ? error.message : String(error)
 			});
 		}
-	}
-}
-
-export class DeterministicEmbeddingClient implements EmbeddingClient {
-	readonly model: string;
-
-	constructor(private readonly dimensions = 3072) {
-		this.model = `deterministic-sha256-${dimensions}`;
-	}
-
-	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
-		return {
-			model: this.model,
-			vectors: contents.map((content) => {
-				const digest = createHash('sha256').update(content).digest();
-				return Array.from(
-					{ length: this.dimensions },
-					(_, index) => (digest[index % digest.length]! - 127.5) / 127.5
-				);
-			})
-		};
 	}
 }

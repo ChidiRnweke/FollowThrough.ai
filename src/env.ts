@@ -14,15 +14,11 @@ export const variables = defineEnvVars({
 		schema: optionalString
 	},
 	OPENROUTER_DEFAULT_MODEL: {
-		description: 'Fallback OpenRouter model ID for workbench chat.',
+		description: 'Default OpenRouter generation model ID (defaults to deepseek/deepseek-v4-flash).',
 		schema: optionalString
 	},
 	OPENROUTER_RECOMMENDED_MODELS: {
 		description: 'Comma-separated OpenRouter model IDs shown as recommended.',
-		schema: optionalString
-	},
-	OPENAI_AGENT_MODEL: {
-		description: 'Deprecated compatibility fallback for OPENROUTER_DEFAULT_MODEL.',
 		schema: optionalString
 	},
 	S3_ENDPOINT: { description: 'S3-compatible object storage endpoint.', schema: optionalString },

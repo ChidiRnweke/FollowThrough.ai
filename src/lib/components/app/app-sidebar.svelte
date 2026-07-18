@@ -49,7 +49,7 @@
 			<span
 				class="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
 			>
-				Workbench
+				FollowThrough
 			</span>
 			<Sidebar.Trigger class="text-muted-foreground" />
 		</div>

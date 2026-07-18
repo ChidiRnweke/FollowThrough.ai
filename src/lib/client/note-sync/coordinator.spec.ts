@@ -28,6 +28,33 @@ const pendingRecord = (): NoteSyncRecord => {
 };
 
 describe('Local note synchronization invariants', () => {
+	it('does not downgrade a synced device record from a stale cached loader', async () => {
+		const { coordinator } = setup();
+		const current = noteBuilder({ currentRevision: 3, plainText: 'Current' });
+		await coordinator.open({ note: current, etag: noteEtag(current) });
+		const stale = noteBuilder({ currentRevision: 2, plainText: 'Stale' });
+		const result = await coordinator.open({ note: stale, etag: noteEtag(stale) });
+		expect(result.base.etag).toBe(noteEtag(current));
+	});
+
+	it('does not turn pending work into a conflict from a stale cached loader', async () => {
+		const { coordinator, repository } = setup();
+		const base = noteBuilder({ currentRevision: 3, plainText: 'Current' });
+		await repository.put({
+			userId: base.userId,
+			noteId: base.id,
+			base: { note: base, etag: noteEtag(base) },
+			local: { ...base, plainText: 'Pending' },
+			operationId: crypto.randomUUID(),
+			editVersion: 1,
+			state: 'pending',
+			updatedAt: base.updatedAt
+		});
+		const stale = noteBuilder({ currentRevision: 2, plainText: 'Stale' });
+		const result = await coordinator.open({ note: stale, etag: noteEtag(stale) });
+		expect(result.state).toBe('pending');
+	});
+
 	it('stages local content before attempting synchronization', async () => {
 		const { coordinator, repository } = setup();
 		const base = noteBuilder();

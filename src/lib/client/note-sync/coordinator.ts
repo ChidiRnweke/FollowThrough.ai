@@ -13,6 +13,11 @@ export class NoteSyncCoordinator {
 	async open(server: VersionedNote): Promise<NoteSyncRecord> {
 		const existing = await this.repository.get(server.note.userId, server.note.id);
 		if (!existing) return this.store(this.syncedRecord(server));
+		if (existing.base.note.currentRevision > server.note.currentRevision)
+			return this.store({
+				...existing,
+				state: existing.state === 'syncing' ? 'pending' : existing.state
+			});
 
 		if (existing.state === 'synced') {
 			if (existing.base.etag === server.etag) return existing;
