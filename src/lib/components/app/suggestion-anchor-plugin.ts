@@ -22,7 +22,7 @@ export const SUGGESTION_ANCHOR_REBUILD = 'rebuild';
 /**
  * Locate each anchor by its quote in the document text, mirroring the
  * server-side repair semantics: an anchor whose quote is missing or ambiguous
- * is skipped (those suggestions stay reachable from the Suggestions inbox).
+ * is skipped (those suggestions stay reachable from the Suggestions panel).
  * Anchors store plainText offsets at a past revision, so the stored from/to
  * are never trusted — only the quote is.
  */

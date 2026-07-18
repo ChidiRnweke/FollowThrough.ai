@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SuggestionId } from '$lib/models';
+	import type { DiagramSuggestion, SuggestionId } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
@@ -14,10 +14,19 @@
 
 	const view = $derived(suggestionTray.items.find((item) => item.suggestion.id === suggestionId));
 	const busy = $derived(suggestionTray.busyIds.includes(suggestionId));
+	const isDrawio = $derived(
+		view?.suggestion.kind === 'diagram' && view.suggestion.payload.kind === 'drawio'
+	);
 
 	async function decide(decision: 'accept' | 'reject'): Promise<void> {
 		const ok = await suggestionTray.decide(suggestionId, decision);
 		if (!ok) toast.error('Could not apply the decision. Try again.');
+	}
+
+	function openReview(): void {
+		if (view?.suggestion.kind === 'diagram' && view.suggestion.payload.kind === 'drawio') {
+			suggestionTray.requestReview(view.suggestion as DiagramSuggestion);
+		}
 	}
 </script>
 
@@ -54,7 +63,11 @@
 				</p>
 			</div>
 			<div class="flex shrink-0 items-center gap-1">
-				<Button size="sm" disabled={busy} onclick={() => void decide('accept')}>Accept</Button>
+				{#if isDrawio}
+					<Button size="sm" variant="outline" disabled={busy} onclick={openReview}>Review</Button>
+				{:else}
+					<Button size="sm" disabled={busy} onclick={() => void decide('accept')}>Accept</Button>
+				{/if}
 				<Button size="sm" variant="ghost" disabled={busy} onclick={() => void decide('reject')}>
 					Dismiss
 				</Button>

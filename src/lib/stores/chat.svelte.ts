@@ -192,8 +192,12 @@ export class ChatStore {
 					this.activeReply = reply;
 					this.reconcileSnapshot(reply, snapshot);
 				}
-				if (activeStatuses.includes(snapshot.run.status) && reply)
-					this.attach(reply, snapshot.run.id, '0', 0);
+				if (activeStatuses.includes(snapshot.run.status) && reply) {
+					const stored = this.storage.load();
+					const resumeCursor = stored.runId === snapshot.run.id ? stored.cursor : '0';
+					const resumeAttempt = stored.runId === snapshot.run.id ? stored.attempt : 0;
+					this.attach(reply, snapshot.run.id, resumeCursor, resumeAttempt);
+				}
 			}
 			this.hydratedConversationId = conversationId;
 		} catch {

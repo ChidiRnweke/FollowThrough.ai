@@ -78,6 +78,12 @@ import {
 	PostgresAgentRunEventRepository
 } from './repositories/postgres-agent-runs';
 import { AgentRunExecutor } from './domain/agent-run-executor';
+import { InProcessAgentEventBus, type AgentEventBus } from './domain/agent-event-bus';
+import {
+	DrawioSvgSanitizer,
+	DrawioXmlValidator,
+	DrawioDiagramTextExtractor
+} from './domain/drawio-content';
 
 const firstConfigured = (...values: readonly (string | undefined)[]): string | undefined =>
 	values.map((value) => value?.trim()).find((value): value is string => Boolean(value));
@@ -85,6 +91,7 @@ const firstConfigured = (...values: readonly (string | undefined)[]): string | u
 export interface ProductionApplication {
 	readonly controllers: ProductionControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
+	readonly eventBus: AgentEventBus;
 }
 
 export function createProductionFactory(): ProductionApplication {
@@ -237,6 +244,7 @@ export function createProductionFactory(): ProductionApplication {
 	);
 	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;
+	const eventBus = new InProcessAgentEventBus();
 	const diagramAgent = new OpenAIDiagramAgent({
 		contextBuilder: agentContext,
 		conversations: conversationJournal,
@@ -310,13 +318,15 @@ export function createProductionFactory(): ProductionApplication {
 			diagramFinder: diagrams,
 			mermaidReviser: diagramAgent,
 			inlineMermaidReviser: diagramAgent,
+			inlineMermaidToDrawioConverter: diagramAgent,
+			drawioXmlValidator: new DrawioXmlValidator(),
+			drawioSvgSanitizer: new DrawioSvgSanitizer(),
 			mermaidRenderer: diagramTransforms,
 			textExtractor: diagramTransforms,
+			drawioTextExtractor: new DrawioDiagramTextExtractor(),
 			diagramWriter: diagrams,
 			diagramIndexer,
-			drawioCreator: diagramTransforms,
-			drawioExporter: diagramTransforms,
-			diagramPromoter: diagramTransforms
+			drawioCreator: diagramAgent
 		},
 		suggestions: {
 			suggestionLister,
@@ -431,11 +441,13 @@ export function createProductionFactory(): ProductionApplication {
 		contextBuilder: agentContext,
 		provenance,
 		conversations: conversationJournal,
-		runner: agent
+		runner: agent,
+		eventBus
 	});
 	(dependencies.agent as { executor: AgentRunExecutor }).executor = executor;
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: () => runRepository.recoverInterrupted('Process restarted')
+		recoverInterruptedRuns: () => runRepository.recoverInterrupted('Process restarted'),
+		eventBus
 	};
 }

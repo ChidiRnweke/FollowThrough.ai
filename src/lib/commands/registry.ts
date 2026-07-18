@@ -1,7 +1,6 @@
 import { goto } from '$app/navigation';
 import type { Component } from 'svelte';
 import FilePlus from '@lucide/svelte/icons/file-plus';
-import Inbox from '@lucide/svelte/icons/inbox';
 import ListTodo from '@lucide/svelte/icons/list-todo';
 import MessageSquare from '@lucide/svelte/icons/message-square';
 import Settings from '@lucide/svelte/icons/settings';
@@ -88,12 +87,6 @@ export const commandRegistry: readonly AppCommand[] = [
 		label: 'Go to todos',
 		icon: ListTodo,
 		run: () => void goto('/todos')
-	},
-	{
-		id: 'suggestions',
-		label: 'Suggestions inbox',
-		icon: Inbox,
-		run: () => void goto('/suggestions')
 	},
 	{
 		id: 'settings',

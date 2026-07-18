@@ -2,10 +2,14 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
 	import type {
+		Diagram,
+		DiagramSuggestion,
+		DrawioDiagram,
 		NoteId,
 		ProseMirrorDocument,
 		ReferenceView,
 		SkillSummary,
+		SuggestionId,
 		TextSelection
 	} from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
@@ -73,7 +77,11 @@
 		onchange,
 		onaction,
 		onskill,
-		onreviseMermaid
+		onreviseMermaid,
+		onconvertMermaid,
+		onacceptDrawio,
+		onrejectDrawio,
+		diagrams = []
 	}: {
 		noteId: NoteId;
 		revision: number;
@@ -87,6 +95,14 @@
 			source: string,
 			instruction: string
 		) => Promise<{ readonly source: string; readonly title?: string }>;
+		onconvertMermaid: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
+		onacceptDrawio: (
+			suggestionId: SuggestionId,
+			source: string,
+			renderedSvg: string
+		) => Promise<DrawioDiagram>;
+		onrejectDrawio: (suggestionId: SuggestionId) => Promise<void>;
+		diagrams?: readonly Diagram[];
 	} = $props();
 
 	let initialized = false;
@@ -122,6 +138,23 @@
 		{
 			ariaLabel: 'Note body',
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
+			onConvertMermaid: (source, instruction) => onconvertMermaid(source, instruction),
+			getDrawioSuggestion: (suggestionId) => {
+				const candidate = suggestionTray.items.find(
+					(item) => item.suggestion.id === suggestionId
+				)?.suggestion;
+				return candidate?.kind === 'diagram' && candidate.payload.kind === 'drawio'
+					? candidate
+					: undefined;
+			},
+			onAcceptDrawio: (suggestionId, source, renderedSvg) =>
+				onacceptDrawio(suggestionId, source, renderedSvg),
+			onRejectDrawio: (suggestionId) => onrejectDrawio(suggestionId),
+			getDrawioDiagram: (diagramId) => {
+				const candidate = diagrams.find((diagram) => diagram.id === diagramId);
+				return candidate?.kind === 'drawio' ? candidate : undefined;
+			},
+			getNoteId: () => noteId,
 			onUpdate: () => {
 				closeActiveLink();
 				if (initialized) onchange?.();

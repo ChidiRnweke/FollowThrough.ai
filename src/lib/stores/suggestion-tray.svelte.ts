@@ -1,9 +1,10 @@
 import { invalidateAll } from '$app/navigation';
-import type { SuggestionId, SuggestionView } from '$lib/models';
+import type { DiagramSuggestion, SuggestionId, SuggestionView } from '$lib/models';
 import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
 
 class SuggestionTrayStore {
 	items = $state<SuggestionView[]>([]);
+	reviewRequested = $state<DiagramSuggestion | null>(null);
 
 	replace(views: readonly SuggestionView[]): void {
 		this.items = [...views];
@@ -30,6 +31,12 @@ class SuggestionTrayStore {
 		}
 	}
 	busyIds = $state<SuggestionId[]>([]);
+	requestReview(suggestion: DiagramSuggestion): void {
+		this.reviewRequested = suggestion;
+	}
+	clearReview(): void {
+		this.reviewRequested = null;
+	}
 	clear(): void {
 		this.items = [];
 	}

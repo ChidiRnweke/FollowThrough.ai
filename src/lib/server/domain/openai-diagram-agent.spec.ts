@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MermaidSubmissionValidator } from './openai-diagram-agent';
+import { DrawioSubmissionCollector, MermaidSubmissionValidator } from './openai-diagram-agent';
+import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
 
 describe('Diagram submission safety invariants', () => {
 	it('accepts styled Mermaid source in the server validator', async () => {
@@ -29,4 +30,25 @@ describe('Diagram submission safety invariants', () => {
 			new MermaidSubmissionValidator().validate('sequenceDiagram\n  Alice->>Bob Hello')
 		).rejects.toThrow('Invalid Mermaid syntax');
 	}, 15_000);
+});
+
+describe('Draw.io agent submission invariants', () => {
+	it('accepts direct uncompressed draw.io XML', () => {
+		const result = new DrawioSubmissionCollector().submit({
+			title: 'Architecture',
+			source: VALID_DRAWIO_XML
+		});
+		expect(result.source).toBe(VALID_DRAWIO_XML);
+	});
+
+	it('allows the bounded agent run to correct a rejected submission', () => {
+		const submissions = new DrawioSubmissionCollector();
+		try {
+			submissions.submit({ title: 'Invalid', source: '<mxfile />' });
+		} catch {
+			// The same collector remains open for the agent's next bounded tool turn.
+		}
+		const corrected = submissions.submit({ title: 'Corrected', source: VALID_DRAWIO_XML });
+		expect(corrected.title).toBe('Corrected');
+	});
 });

@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { NoteId, NoteView, ShellContext, TextSelection } from '$lib/models';
+	import type {
+		DiagramSuggestion,
+		DrawioDiagram,
+		NoteId,
+		NoteView,
+		ShellContext,
+		SuggestionId,
+		TextSelection
+	} from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -26,12 +34,16 @@
 	import NoteSyncStatus from '../note-sync-status.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
 	import FileOutput from '@lucide/svelte/icons/file-output';
+	import Lightbulb from '@lucide/svelte/icons/lightbulb';
 	import ExportDialog from '../export-dialog.svelte';
+	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 
 	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
 
 	let exportOpen = $state(false);
 	let conflictOpen = $state(false);
+	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
+	let reviewDialogOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
 	let syncReady = $state(false);
 	let dirty = $state(false);
@@ -67,11 +79,6 @@
 		).length
 	);
 
-	function scrollToFirstSuggestion(): void {
-		window.document
-			.querySelector('.suggestion-inline-widget-host')
-			?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-	}
 	const folders = $derived(
 		shell.noteTree.filter(
 			(entry) => entry.projectId === note.projectId && entry.kind === 'folder' && !entry.archivedAt
@@ -109,6 +116,21 @@
 			noteTodos.clear();
 			editorSelection.clear();
 		};
+	});
+
+	$effect(() => {
+		const requested = suggestionTray.reviewRequested;
+		if (requested) {
+			reviewingSuggestion = requested;
+			reviewDialogOpen = true;
+			suggestionTray.clearReview();
+		}
+	});
+
+	$effect(() => {
+		if (!reviewDialogOpen && reviewingSuggestion) {
+			reviewingSuggestion = null;
+		}
 	});
 
 	const AUTOSAVE_DELAY = 2000;
@@ -329,6 +351,45 @@
 		return output;
 	}
 
+	async function convertMermaid(source: string, instruction?: string): Promise<DiagramSuggestion> {
+		if (!(await ensureSynchronized('Sync the note before converting its diagram.')))
+			throw new Error('Sync the note before converting its diagram.');
+		const output = await noteActions.convertDiagram(note.id, source, instruction);
+		if (
+			!output ||
+			output.suggestion.kind !== 'diagram' ||
+			output.suggestion.payload.kind !== 'drawio'
+		)
+			throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
+		const suggestion = output.suggestion;
+		suggestionTray.add([suggestionToView(suggestion, 'agent', noteRef)]);
+		toast.success('draw.io conversion ready to review');
+		return suggestion;
+	}
+
+	async function acceptDrawio(
+		suggestionId: SuggestionId,
+		source: string,
+		renderedSvg: string
+	): Promise<DrawioDiagram> {
+		if (!(await ensureSynchronized('Sync the note before accepting its diagram.')))
+			throw new Error('Sync the note before accepting its diagram.');
+		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
+		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
+		suggestionTray.remove(suggestionId);
+		await invalidateAll();
+		toast.success('draw.io diagram accepted');
+		return diagram;
+	}
+
+	async function rejectDrawio(suggestionId: SuggestionId): Promise<void> {
+		const rejected = await noteActions.rejectDrawio(suggestionId);
+		if (!rejected)
+			throw new Error(noteActions.lastError ?? 'The conversion could not be dismissed.');
+		suggestionTray.remove(suggestionId);
+		toast.success('draw.io conversion dismissed');
+	}
+
 	function runSkill(skillName: string): void {
 		const selection = editorSelection.current;
 		if (!selection) {
@@ -486,10 +547,10 @@
 				<Button
 					size="xs"
 					variant="outline"
-					title="Suggestions without a text anchor live in the Suggestions inbox"
-					onclick={scrollToFirstSuggestion}
+					onclick={() => rightPanel.openSuggestions()}
 				>
-					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'} to review
+					<Lightbulb class="size-3.5" />
+					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'}
 				</Button>
 			{/if}
 		</div>
@@ -502,11 +563,15 @@
 			revision={note.currentRevision}
 			document={note.document}
 			references={view.references}
+			diagrams={view.diagrams}
 			skills={shell.skills}
 			onchange={markDirty}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}
 			onreviseMermaid={reviseMermaid}
+			onconvertMermaid={convertMermaid}
+			onacceptDrawio={acceptDrawio}
+			onrejectDrawio={rejectDrawio}
 		/>
 	{:else}
 		<div class="flex flex-1 flex-col gap-3" aria-label="Loading note from device">
@@ -532,4 +597,18 @@
 		defaultNoteIds={[note.id]}
 		documents={[{ id: note.id, document: note.document }]}
 	/>
+
+	{#if reviewingSuggestion}
+		<DrawioReviewDialog
+			bind:open={reviewDialogOpen}
+			suggestion={reviewingSuggestion}
+			onaccept={async (output) => {
+				const suggestion = reviewingSuggestion;
+				if (!suggestion) return;
+				await acceptDrawio(suggestion.id, output.xml, output.svg);
+				reviewingSuggestion = null;
+				reviewDialogOpen = false;
+			}}
+		/>
+	{/if}
 </div>

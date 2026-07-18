@@ -46,39 +46,12 @@ feature blueprint before implementation.
       storage quotas and eviction behavior, and let sign-out clear or deliberately retain cached
       workspace data on the device.
 
-## Durable agent execution
-
-- [x] **Durable server-owned agent runs** — Deliver one vertical reliability slice in which an
-      accepted agent run no longer depends on the originating browser request. Persist the run and its
-      ordered text/tool/status events, then let a server-side worker claim it with a lease and
-      heartbeat. A refresh, route change, temporary disconnect, or closed tab must not cancel the run.
-      Any client can reattach by run ID, recover persisted progress and terminal output, and continue
-      receiving live events; a status query remains the reliable fallback when streaming is
-      unavailable. Support explicit cancellation and detect abandoned leases. Give run submission and
-      mutating tool calls stable idempotency keys before enabling bounded automatic retries, so crash
-      recovery cannot duplicate notes, todos, suggestions, or other writes. Surface queued, running,
-      awaiting-approval, cancelling, cancelled, failed, and completed outcomes rather than leaving a
-      run permanently in progress. Keep distributed scheduling, priority queues, and multi-worker
-      throughput optimization out of the first slice unless the existing deployment topology requires
-      them.
-
-## Content transformations
-
-- [ ] **General selection transformations** — Rewrite, expand, summarize, or restructure selected note content in place through the suggestion flow.
-- [ ] **Action-oriented drafting** — Turn project context or selected material into follow-ups briefs, emails, reports, and other working drafts.
-- [ ] **Reusable output workflows** — Allow skills to define repeatable transformations from notes, todos, project context, and artifacts into useful outputs.
-
-## Images and visual assets
+## Images and assets
 
 - [ ] **Image search and insertion** — Find relevant external images from selected content and insert an approved result into a note.
-- [ ] **AI image generation** — Generate images from note content or instructions, review them, and save approved images to the project.
 - [ ] **Image asset management** — Keep image files, metadata, attribution, provenance, and source relationships available within the project.
 
-## Diagrams
 
-- [ ] **Embedded draw.io editor** — Open and manually edit promoted draw.io diagrams without leaving the workbench.
-- [ ] **Production Mermaid-to-draw.io conversion** — Convert Mermaid structure into useful editable draw.io shapes, connectors, and layout.. Will be done "agentically" in the sense that the agent will be able to propose a conversion, but the user will have to approve it before it is applied.
-- [ ] **Draw.io rendering and versioning** — Produce reliable previews and retain revisions as diagram is polished.
 
 ## Backlog conventions
 

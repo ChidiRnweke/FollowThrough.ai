@@ -2,7 +2,6 @@
 	import type { NoteSummary, Project, TodayView } from '$lib/models';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import Inbox from '@lucide/svelte/icons/inbox';
 	import Pin from '@lucide/svelte/icons/pin';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
@@ -87,21 +86,6 @@
 			{#each view.waitingOn as item (item.todo.id)}
 				<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
 			{/each}
-		{/if}
-		{#if view.pendingSuggestionCount > 0}
-			<a href="/suggestions" class="block">
-				<Card.Root class="gap-1 py-3 transition-colors hover:bg-accent">
-					<Card.Header class="px-4">
-						<Card.Title class="flex items-center gap-2 text-sm font-medium">
-							<Inbox class="size-4 text-muted-foreground" />
-							Pending suggestions
-						</Card.Title>
-						<Card.Action>
-							<Badge variant="secondary">{view.pendingSuggestionCount}</Badge>
-						</Card.Action>
-					</Card.Header>
-				</Card.Root>
-			</a>
 		{/if}
 	</section>
 </div>

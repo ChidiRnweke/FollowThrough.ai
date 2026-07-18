@@ -108,12 +108,31 @@ export interface ReviseInlineMermaidOutput {
 	readonly source: string;
 	readonly title?: string;
 }
+export interface ConvertInlineMermaidInput {
+	readonly noteId: NoteId;
+	readonly source: string;
+	readonly instruction?: string;
+}
+export interface ConvertInlineMermaidOutput {
+	readonly suggestion: Suggestion;
+}
+export interface GetDrawioDiagramInput {
+	readonly noteId: NoteId;
+	readonly diagramId: DiagramId;
+}
+export interface SaveDrawioDiagramInput extends GetDrawioDiagramInput {
+	readonly source: string;
+	readonly renderedSvg: string;
+}
+export interface SaveDrawioDiagramOutput {
+	readonly diagram: DrawioDiagram;
+}
 export interface PromoteDiagramInput {
 	readonly diagramId: DiagramId;
 }
 export interface PromoteDiagramOutput {
 	readonly source: MermaidDiagram;
-	readonly promoted: DrawioDiagram;
+	readonly suggestion: Suggestion;
 }
 
 export interface AcceptSuggestionInput {

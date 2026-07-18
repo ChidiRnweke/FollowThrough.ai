@@ -8,6 +8,7 @@ import {
 } from '@tiptap/core';
 import type { Component } from 'svelte';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
+import type { DiagramId, DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
 
 declare module '@tiptap/core' {
 	interface Commands<ReturnType> {
@@ -17,6 +18,7 @@ declare module '@tiptap/core' {
 		};
 		iframe: { setIframe: (attributes: { src: string }) => ReturnType };
 		mermaid: { setMermaid: (source: string) => ReturnType };
+		drawio: { setDrawio: (diagramId: DiagramId) => ReturnType };
 	}
 }
 
@@ -84,23 +86,53 @@ export interface MermaidOptions {
 		source: string,
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
+	onConvert?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
+	getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
+	onAcceptDrawio?: (
+		suggestionId: SuggestionId,
+		source: string,
+		renderedSvg: string
+	) => Promise<DrawioDiagram>;
+	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
 }
 
 export const Mermaid = (component: Component<NodeViewProps>) =>
 	Node.create<MermaidOptions>({
 		name: 'mermaid',
 		group: 'block',
+		atom: true,
 		content: 'text*',
 		code: true,
 		defining: true,
 		addOptions() {
-			return { onRevise: undefined };
+			return {
+				onRevise: undefined,
+				onConvert: undefined,
+				getDrawioSuggestion: undefined,
+				onAcceptDrawio: undefined,
+				onRejectDrawio: undefined
+			};
+		},
+		addAttributes() {
+			return {
+				pendingDrawioSuggestionId: {
+					default: null,
+					parseHTML: (element) => element.getAttribute('data-pending-drawio-suggestion-id'),
+					renderHTML: (attributes) =>
+						attributes.pendingDrawioSuggestionId
+							? {
+									'data-pending-drawio-suggestion-id':
+										attributes.pendingDrawioSuggestionId as string
+								}
+							: {}
+				}
+			};
 		},
 		parseHTML() {
 			return [{ tag: 'div[data-type="mermaid"]' }];
 		},
-		renderHTML() {
-			return ['div', { 'data-type': this.name }, 0];
+		renderHTML({ HTMLAttributes }) {
+			return ['div', mergeAttributes(HTMLAttributes, { 'data-type': this.name }), 0];
 		},
 		addCommands() {
 			return {
@@ -111,6 +143,40 @@ export const Mermaid = (component: Component<NodeViewProps>) =>
 							type: this.name,
 							content: source ? [{ type: 'text', text: source }] : []
 						})
+			};
+		},
+		addNodeView: () => SvelteNodeViewRenderer(component)
+	});
+
+export interface DrawioOptions {
+	getDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
+	getNoteId?: () => string;
+}
+
+export const Drawio = (component: Component<NodeViewProps>) =>
+	Node.create<DrawioOptions>({
+		name: 'drawio',
+		group: 'block',
+		atom: true,
+		draggable: true,
+		addOptions() {
+			return { getDiagram: undefined, getNoteId: undefined };
+		},
+		addAttributes() {
+			return { diagramId: { default: null } };
+		},
+		parseHTML() {
+			return [{ tag: 'div[data-type="drawio"]' }];
+		},
+		renderHTML({ HTMLAttributes }) {
+			return ['div', mergeAttributes(HTMLAttributes, { 'data-type': this.name })];
+		},
+		addCommands() {
+			return {
+				setDrawio:
+					(diagramId) =>
+					({ commands }) =>
+						commands.insertContent({ type: this.name, attrs: { diagramId } })
 			};
 		},
 		addNodeView: () => SvelteNodeViewRenderer(component)

@@ -3,6 +3,7 @@ import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import type {
 	ExtractPromisesInput,
+	ConvertInlineMermaidInput,
 	GenerateMermaidDiagramInput,
 	ListNoteSyncInventoryInput,
 	RelateSelectionInput,
@@ -119,5 +120,18 @@ export const reviseDiagram = command(
 		} catch (e) {
 			return { error: e instanceof Error ? e.message : 'Diagram revision failed.' };
 		}
+	}
+);
+
+export const convertDiagram = command(
+	z.object({
+		noteId: z.string().uuid(),
+		source: z.string().trim().min(1).max(50_000),
+		instruction: z.string().trim().max(2_000).optional()
+	}),
+	async (input) => {
+		return AppFactory.controllerFactory()
+			.diagrams()
+			.convertInlineMermaid(AppFactory.actor(), input as ConvertInlineMermaidInput);
 	}
 );

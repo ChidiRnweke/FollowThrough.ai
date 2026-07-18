@@ -1,6 +1,6 @@
 import type { ProjectId, TodoView } from '$lib/models';
 
-export type RightPanelMode = 'closed' | 'chat' | 'todo-detail' | 'project-memory';
+export type RightPanelMode = 'closed' | 'chat' | 'todo-detail' | 'project-memory' | 'suggestions';
 
 class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
@@ -17,6 +17,9 @@ class RightPanelStore {
 	openMemory(projectId: ProjectId): void {
 		this.memoryProjectId = projectId;
 		this.mode = this.mode === 'project-memory' ? 'closed' : 'project-memory';
+	}
+	openSuggestions(): void {
+		this.mode = 'suggestions';
 	}
 	toggle(mode: RightPanelMode): void {
 		this.mode = this.mode === mode ? 'closed' : mode;

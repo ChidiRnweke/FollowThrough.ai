@@ -5,7 +5,6 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import House from '@lucide/svelte/icons/house';
-	import Inbox from '@lucide/svelte/icons/inbox';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -31,12 +30,6 @@
 
 	const secondaryItems = $derived([
 		{ href: '/skills', label: 'Skills', icon: Wrench, badge: 0 },
-		{
-			href: '/suggestions',
-			label: 'Suggestions',
-			icon: Inbox,
-			badge: shell.pendingSuggestionCount
-		},
 		{ href: '/profile', label: 'Profile', icon: UserRound, badge: 0 },
 		{ href: '/settings', label: 'Settings', icon: Settings, badge: 0 }
 	]);

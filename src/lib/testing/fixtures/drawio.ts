@@ -1,0 +1,2 @@
+export const VALID_DRAWIO_XML =
+	'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="API &amp; worker" vertex="1" parent="1"><mxGeometry x="10" y="20" width="120" height="40" as="geometry"/></mxCell><mxCell id="3" edge="1" parent="1" source="2" target="2"><mxGeometry relative="1" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>';

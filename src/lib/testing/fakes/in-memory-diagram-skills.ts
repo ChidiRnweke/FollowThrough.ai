@@ -92,7 +92,8 @@ export class InMemoryDiagrams
 		void _actor;
 		return drawioBuilder({
 			noteId: diagram.noteId,
-			source: `<mxfile>${diagram.source}</mxfile>`,
+			source:
+				'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>',
 			promotedFromId: diagram.id
 		});
 	}

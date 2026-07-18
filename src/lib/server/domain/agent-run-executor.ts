@@ -21,6 +21,7 @@ import type {
 	ConversationJournal,
 	ProvenanceRecorder
 } from '$lib/services';
+import type { AgentEventBus } from './agent-event-bus';
 
 export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 
@@ -34,6 +35,7 @@ export interface AgentRunExecutorDependencies {
 	readonly provenance: ProvenanceRecorder;
 	readonly conversations: ConversationJournal;
 	readonly runner: AgentRunner;
+	readonly eventBus: AgentEventBus;
 }
 
 const passthroughToolExecutor: AgentToolExecutor = {
@@ -103,6 +105,7 @@ export class AgentRunExecutor {
 				failure: 'The request was cancelled'
 			});
 		});
+		this.deps.eventBus.notify(run.id);
 	}
 
 	private async prepare(runId: AgentRunId): Promise<AgentRun | undefined> {
@@ -141,6 +144,7 @@ export class AgentRunExecutor {
 			runId: run.id,
 			attempt: 1
 		});
+		this.deps.eventBus.notify(run.id);
 
 		return run;
 	}
@@ -150,7 +154,7 @@ export class AgentRunExecutor {
 		actor: ActorContext,
 		event: AgentEvent
 	): Promise<AgentRunEventRecord> {
-		return this.deps.transactions.run(async () => {
+		const record = await this.deps.transactions.run(async () => {
 			const record = await this.deps.events.append(run.id, 1, event);
 			const activity = this.toolActivity(event);
 			if (activity)
@@ -160,6 +164,8 @@ export class AgentRunExecutor {
 				});
 			return record;
 		});
+		this.deps.eventBus.notify(run.id);
+		return record;
 	}
 
 	private async complete(
@@ -186,6 +192,7 @@ export class AgentRunExecutor {
 				finishedAt: new Date().toISOString() as DateTime
 			});
 		});
+		this.deps.eventBus.notify(run.id);
 	}
 
 	private toolActivity(event: AgentEvent): ToolActivity | undefined {

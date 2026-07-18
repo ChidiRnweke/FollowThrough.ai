@@ -5,6 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
+	import SafeSvgPreview from './safe-svg-preview.svelte';
 
 	let {
 		diagram,
@@ -60,9 +61,12 @@
 	</Card.Header>
 	<Card.Content class="px-4">
 		{#if diagram.renderedSvg}
-			<div class="overflow-x-auto [&_svg]:h-auto [&_svg]:max-h-80 [&_svg]:max-w-full">
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -- SVG produced by trusted render pipeline -->
-				{@html diagram.renderedSvg}
+			<div class="flex min-h-24 items-center justify-center overflow-x-auto">
+				<SafeSvgPreview
+					svg={diagram.renderedSvg}
+					alt={diagram.title ? `Preview of ${diagram.title}` : 'Diagram preview'}
+					class="max-h-80 max-w-full"
+				/>
 			</div>
 		{:else}
 			<div class="space-y-2 rounded-md bg-muted/50 p-3">

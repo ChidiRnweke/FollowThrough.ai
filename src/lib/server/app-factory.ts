@@ -1,5 +1,6 @@
 import type { ActorContext, UserId } from '$lib/models';
 import type { ControllerFactory } from '$lib/factories';
+import type { AgentEventBus } from './domain/agent-event-bus';
 import { z } from 'zod';
 import { config } from 'dotenv';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
@@ -24,6 +25,10 @@ export class AppFactory {
 
 	static recoverInterruptedRuns(): Promise<number> {
 		return this.application().recoverInterruptedRuns();
+	}
+
+	static eventBus(): AgentEventBus {
+		return this.application().eventBus;
 	}
 
 	static actor(): ActorContext {

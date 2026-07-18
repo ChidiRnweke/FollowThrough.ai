@@ -1,5 +1,8 @@
 import type {
 	ExtractPromisesOutput,
+	ConvertInlineMermaidOutput,
+	DrawioDiagram,
+	SuggestionId,
 	FindReferencesOutput,
 	GenerateMermaidDiagramOutput,
 	Note,
@@ -15,8 +18,10 @@ import {
 	relateNote,
 	findReferences,
 	generateDiagram,
-	reviseDiagram
+	reviseDiagram,
+	convertDiagram
 } from '$lib/remote/notes.remote';
+import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
 import { markdownToProseMirror } from '$lib/components/edra/commands/markdown-to-prosemirror.svelte';
 
 class NoteActionsStore {
@@ -70,6 +75,44 @@ class NoteActionsStore {
 			return undefined;
 		}
 		return result;
+	}
+
+	convertDiagram(
+		noteId: Note['id'],
+		source: string,
+		instruction?: string
+	): Promise<ConvertInlineMermaidOutput | undefined> {
+		return this.call<ConvertInlineMermaidOutput>(
+			() => convertDiagram({ noteId, source, instruction }),
+			{ run: true }
+		);
+	}
+
+	async acceptDrawio(
+		noteId: Note['id'],
+		suggestionId: SuggestionId,
+		source: string,
+		renderedSvg: string
+	): Promise<DrawioDiagram | undefined> {
+		return this.call<DrawioDiagram>(
+			async () => {
+				const accepted = await acceptSuggestion({
+					suggestionId,
+					drawioReview: { noteId, source, renderedSvg }
+				});
+				if (
+					accepted.suggestion.kind !== 'diagram' ||
+					accepted.suggestion.payload.kind !== 'drawio'
+				)
+					throw new Error('The accepted suggestion did not create the expected draw.io diagram.');
+				return accepted.artifact as DrawioDiagram;
+			},
+			{ run: true }
+		);
+	}
+
+	rejectDrawio(suggestionId: SuggestionId): Promise<unknown | undefined> {
+		return this.call(() => rejectSuggestion({ suggestionId }), { run: true });
 	}
 
 	async save(note: Note): Promise<SaveNoteOutput | undefined> {

@@ -23,6 +23,9 @@
 - Note synchronization stays in the quiet utility row. Pending device saves and conflicts are explicit;
   three-way comparison belongs in a focused dialog, and resolution always preserves a complete rich
   document version.
+- Inline Mermaid diagrams may expose a compact draw.io conversion action. While conversion review is pending, the Mermaid block remains unchanged and carries a restrained review row; acceptance inserts a flat draw.io preview immediately after it, while dismissal removes only the pending state.
+- Draw.io conversion review uses a focused dialog over the source note. Accepted draw.io references render a reserved, non-shifting image preview with title, saved status, and one “Open in draw.io” action.
+- The note-scoped draw.io editor is a focused editing mode with a quiet back action, explicit Save, accessible loading/saving/failure announcements, and leave protection for modified content. It reuses the document visual system and does not introduce another workbench shell or new design tokens.
 - **Chat:** Conversational pattern. Desktop uses the contextual right panel for quick work; mobile and durable links use full-page `/chats/new` and `/chats/[id]` routes.
 - Show no more than five recent chats in the panel. Full history belongs on `/chats`, with project/note origin visible in both locations.
 - A submitted turn renders immediate three-dot activity, then human-readable tool or streaming state. Stop, retry, failure, and cancellation are explicit and announced accessibly.
@@ -37,4 +40,5 @@
 - Do not leave dead space beneath an empty note; the remaining document surface must accept focus.
 - Do not introduce arbitrary colors, widths, typography values, or raw form controls.
 - Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.
+- Do not accept draw.io conversions from the general Suggestions inbox, render exported SVG as application HTML, enable iframe autosave, or add diagram revision/history chrome to the current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token, duplicate a prompt during retry, or hide chat entirely on mobile.

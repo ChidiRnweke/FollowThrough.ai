@@ -18,6 +18,7 @@
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import ChatPanel from './panels/chat-panel.svelte';
 	import MemoryPanel from './panels/memory-panel.svelte';
+	import SuggestionsPanel from './panels/suggestions-panel.svelte';
 	import TodoDetailPanel from './panels/todo-detail-panel.svelte';
 
 	let {
@@ -44,6 +45,7 @@
 		chat: 'Chat',
 		'todo-detail': 'Todo',
 		'project-memory': 'Project memory',
+		suggestions: 'Suggestions',
 		closed: ''
 	} as const;
 
@@ -106,6 +108,10 @@
 				</ScrollArea>
 			{:else if renderedMode === 'project-memory'}
 				<MemoryPanel />
+			{:else if renderedMode === 'suggestions'}
+				<ScrollArea class="h-full">
+					<SuggestionsPanel />
+				</ScrollArea>
 			{/if}
 		</div>
 	</div>

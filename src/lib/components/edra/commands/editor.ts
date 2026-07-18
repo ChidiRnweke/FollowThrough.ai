@@ -1,6 +1,7 @@
 import {
 	AIHighlight,
 	Callout,
+	Drawio,
 	IFrameExtended,
 	ImageExtended,
 	Mermaid,
@@ -20,10 +21,13 @@ import ImageExtendedComp from '../ImageExtended.svelte';
 import VideoExtendedComp from '../VideoExtended.svelte';
 import IFrameComp from '../IFrame.svelte';
 import MermaidComp from '../Mermaid.svelte';
+import DrawioComp from '../Drawio.svelte';
+import type { DiagramId, DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
 import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
 import { setTocItems } from '../toc.svelte';
+import { DiagramDeletion } from './DiagramDeletion.js';
 
 const lowlight = createLowlight(all);
 
@@ -40,6 +44,16 @@ export interface EdraEditorProps {
 		source: string,
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
+	onConvertMermaid?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
+	getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
+	onAcceptDrawio?: (
+		suggestionId: SuggestionId,
+		source: string,
+		renderedSvg: string
+	) => Promise<DrawioDiagram>;
+	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
+	getDrawioDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
+	getNoteId?: () => string;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
@@ -60,7 +74,18 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			ImageExtended(ImageExtendedComp),
 			VideoExtended(VideoExtendedComp),
 			IFrameExtended(IFrameComp),
-			Mermaid(MermaidComp).configure({ onRevise: props?.onReviseMermaid }),
+			Mermaid(MermaidComp).configure({
+				onRevise: props?.onReviseMermaid,
+				onConvert: props?.onConvertMermaid,
+				getDrawioSuggestion: props?.getDrawioSuggestion,
+				onAcceptDrawio: props?.onAcceptDrawio,
+				onRejectDrawio: props?.onRejectDrawio
+			}),
+			Drawio(DrawioComp).configure({
+				getDiagram: props?.getDrawioDiagram,
+				getNoteId: props?.getNoteId
+			}),
+			DiagramDeletion,
 			SlashCommand(SlashCommandComp),
 			Callout(CalloutComp),
 			AIHighlight.configure({

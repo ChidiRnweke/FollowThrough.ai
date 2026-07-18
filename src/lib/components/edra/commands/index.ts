@@ -7,6 +7,7 @@ export * from './Callout.js';
 export * from './BuiltinExtensions.js';
 export * from './ColorHighlighter.js';
 export * from './CoreEditor.js';
+export * from './DiagramDeletion.js';
 export * from './ImageExtended.js';
 export * from './MediaPlaceHolder.js';
 export * from './SvelteMarkViewRenderer.js';

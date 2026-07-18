@@ -89,7 +89,13 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Inline diagram revision is scoped to the editor workflow.'
 		},
-		promote: { kind: 'mutation' }
+		convertInlineMermaid: {
+			kind: 'excluded',
+			reason: 'Inline draw.io conversion is scoped to the note editor review workflow.'
+		},
+		getDrawio: { kind: 'excluded', reason: 'The draw.io editor uses a note-scoped route.' },
+		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
+		promote: { kind: 'proposal' }
 	},
 	suggestions: {
 		list: { kind: 'read' },
@@ -461,8 +467,8 @@ export class AgentToolRegistry {
 			),
 			define(
 				'promote_diagram',
-				'Promote Mermaid to a durable draw.io diagram.',
-				'mutation',
+				'Propose converting a durable Mermaid diagram to draw.io for explicit review.',
+				'proposal',
 				z.object({ diagramId: id }),
 				(input) => factory.diagrams().promote(actor, input as never)
 			),

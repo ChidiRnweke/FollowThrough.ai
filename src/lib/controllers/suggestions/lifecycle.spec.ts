@@ -54,6 +54,13 @@ describe('Suggestion lifecycle invariants', () => {
 		expect(result.status).toBe('rejected');
 	});
 
+	it('rejecting a proposal does not apply an artifact', async () => {
+		const { suggestions, artifacts, reject } = setup();
+		suggestions.suggestions = [suggestionBuilder()];
+		await reject.reject(testActor(), { suggestionId: testSuggestionId() });
+		expect(artifacts.artifacts).toEqual([]);
+	});
+
 	it('an expired proposal cannot be accepted', async () => {
 		const { suggestions, accept } = setup();
 		suggestions.suggestions = [

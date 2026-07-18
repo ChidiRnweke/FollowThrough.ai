@@ -15,12 +15,14 @@
 		view,
 		busy = false,
 		onaccept,
-		onreject
+		onreject,
+		onreview
 	}: {
 		view: SuggestionView;
 		busy?: boolean;
 		onaccept?: (suggestionId: SuggestionId) => void;
 		onreject?: (suggestionId: SuggestionId) => void;
+		onreview?: () => void;
 	} = $props();
 
 	const suggestion = $derived(view.suggestion);
@@ -79,8 +81,14 @@
 			<p class="text-sm text-muted-foreground">{suggestion.payload.relevanceNote}</p>
 		{:else if suggestion.kind === 'diagram'}
 			<p class="text-sm">{suggestion.payload.title ?? 'Untitled diagram'}</p>
-			<pre class="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{suggestion.payload
-					.source}</pre>
+			{#if suggestion.payload.kind === 'drawio'}
+				<p class="text-sm text-muted-foreground">
+					Review this conversion beside its source Mermaid diagram before accepting it.
+				</p>
+			{:else}
+				<pre class="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{suggestion.payload
+						.source}</pre>
+			{/if}
 		{:else if suggestion.kind === 'memory'}
 			<p class="text-sm">
 				<Badge variant="ghost" class="mr-1 text-muted-foreground">
@@ -108,8 +116,11 @@
 			{provenanceCaption(view.provenance, view.note?.title)}
 		</p>
 	</Card.Content>
-	{#if suggestion.status === 'proposed' && (onaccept || onreject)}
+	{#if suggestion.status === 'proposed' && (onaccept || onreject || onreview)}
 		<Card.Footer class="gap-2 px-4">
+			{#if onreview}
+				<Button size="sm" variant="outline" disabled={busy} onclick={onreview}>Review</Button>
+			{/if}
 			{#if onaccept}
 				<Button size="sm" disabled={busy} onclick={() => onaccept(suggestion.id)}>Accept</Button>
 			{/if}

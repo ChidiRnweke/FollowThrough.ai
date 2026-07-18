@@ -21,6 +21,7 @@ import type {
 	TodoDeleter
 } from '$lib/services';
 import type { SuggestionArtifactApplier } from '$lib/controllers';
+import { DrawioLabelExtractor, DrawioXmlValidator } from './drawio-content';
 
 export class PersistentSuggestionArtifactApplier implements SuggestionArtifactApplier {
 	constructor(
@@ -32,7 +33,9 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 		private readonly relationshipDeleter: RelationshipDeleter,
 		private readonly referenceDeleter: ReferenceDeleter,
 		private readonly diagramDeleter: DiagramDeleter,
-		private readonly memoryChangeApplier: MemoryChangeApplier
+		private readonly memoryChangeApplier: MemoryChangeApplier,
+		private readonly drawioValidator = new DrawioXmlValidator(),
+		private readonly drawioLabels = new DrawioLabelExtractor()
 	) {}
 
 	async apply(
@@ -47,14 +50,19 @@ export class PersistentSuggestionArtifactApplier implements SuggestionArtifactAp
 			case 'reference':
 				return this.referenceCreator.create(actor, suggestion.payload);
 			case 'diagram': {
+				const source =
+					suggestion.payload.kind === 'drawio'
+						? this.drawioValidator.validate(suggestion.payload.source)
+						: suggestion.payload.source;
 				const now = new Date().toISOString() as Diagram['createdAt'];
 				const base = {
 					id: crypto.randomUUID() as Diagram['id'],
 					userId: actor.userId,
 					noteId: suggestion.payload.noteId,
 					title: suggestion.payload.title,
-					source: suggestion.payload.source,
-					searchableText: suggestion.payload.source,
+					source,
+					searchableText:
+						suggestion.payload.kind === 'drawio' ? this.drawioLabels.extract(source) : source,
 					sourceAnchorId: suggestion.sourceAnchorId,
 					provenanceId: suggestion.provenanceId,
 					createdAt: now,

@@ -9,10 +9,16 @@ import type {
 	TextSelection,
 	ProvenanceId,
 	ReviseInlineMermaidInput,
-	ReviseInlineMermaidOutput
+	ReviseInlineMermaidOutput,
+	ConvertInlineMermaidInput
 } from '$lib/models';
 export interface MermaidDiagramDraft {
 	readonly title?: string;
+	readonly source: string;
+	readonly provenanceId?: ProvenanceId;
+}
+export interface DrawioDiagramDraft {
+	readonly title: string;
 	readonly source: string;
 	readonly provenanceId?: ProvenanceId;
 }
@@ -35,6 +41,9 @@ export interface InlineMermaidReviser {
 		actor: ActorContext,
 		input: ReviseInlineMermaidInput
 	): Promise<ReviseInlineMermaidOutput>;
+}
+export interface InlineMermaidToDrawioConverter {
+	convertInline(actor: ActorContext, input: ConvertInlineMermaidInput): Promise<DrawioDiagramDraft>;
 }
 export interface MermaidDiagramRenderer {
 	render(source: string): Promise<string>;
@@ -71,4 +80,10 @@ export interface DiagramDeleter {
 }
 export interface DiagramIndexer {
 	index(actor: ActorContext, diagram: Diagram): Promise<void>;
+}
+export interface DrawioXmlContentValidator {
+	validate(source: string): string;
+}
+export interface DrawioSvgPreviewSanitizer {
+	sanitize(source: string): string;
 }

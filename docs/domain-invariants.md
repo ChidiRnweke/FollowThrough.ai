@@ -81,8 +81,14 @@ This document is the independent behavioural specification for backend models, s
 ## Diagrams and skills
 
 - A diagram belongs to a note in the same user and project boundary.
-- Mermaid revisions never mutate promoted draw.io diagrams.
-- Promotion preserves a link to the source Mermaid diagram.
+- Inline Mermaid source is sent directly to the diagram agent for conversion and is never registered as a durable diagram merely to enable conversion.
+- Mermaid revisions never mutate an accepted draw.io diagram; the draw.io copy is independent after acceptance.
+- Agent-produced draw.io XML remains an ordinary diagram suggestion and cannot create a diagram until the user explicitly accepts it in the source note.
+- Draw.io XML is untrusted at agent submission, suggestion application, and every save. It must be well-formed, uncompressed `mxfile`/`diagram`/`mxGraphModel` XML with valid cell references and finite geometry, and it cannot contain doctypes, scripts, event handlers, unsafe URLs, or unsafe styles.
+- A note-scoped draw.io editor can load or save a diagram only when both the route note and the draw.io diagram belong to the current actor and to each other; foreign and mismatched identifiers remain indistinguishable from missing data.
+- Hosted draw.io messages are accepted only from the active iframe at exactly `https://embed.diagrams.net`, are schema-validated before use, and replies use that exact target origin. Message listeners are removed when the editor is destroyed.
+- Draw.io SVG previews are sanitized on the server and displayed through an image resource, never inserted into the application DOM as markup.
+- Explicit draw.io saves replace the current XML, preview, searchable labels, and retrieval index using last-save-wins semantics. This slice creates no diagram revision or restoration history.
 - Diagram labels are included in project-scoped retrieval.
 - A skill is a skill-kind document in a project and is loaded in full only after its summary is selected.
 - Agent context contains enabled skill summaries and trigger hints, never full instructions.
