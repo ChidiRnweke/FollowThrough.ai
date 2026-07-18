@@ -21,11 +21,13 @@
 	let {
 		shell,
 		activePath,
-		activeNoteId
+		activeNoteId,
+		loading = false
 	}: {
 		shell: ShellContext;
 		activePath: string;
 		activeNoteId?: NoteId;
+		loading?: boolean;
 	} = $props();
 
 	const secondaryItems = $derived([
@@ -89,7 +91,7 @@
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton isActive={isActive('/todos')} tooltipContent="Todos">
 							{#snippet child({ props })}
-								<a href="/todos" {...props}>
+								<a {...props} href="/todos">
 									<ListTodo class="size-4" />
 									<span>Todos</span>
 								</a>
@@ -100,7 +102,8 @@
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 		<Sidebar.Group
-			class="min-h-0 flex-1 overflow-y-auto py-1 group-data-[collapsible=icon]:hidden gap-y-1"
+			class="min-h-0 flex-1 overflow-y-auto py-1 group-data-[collapsible=icon]:hidden gap-y-1 data-loading:pointer-events-none"
+			data-loading={loading || undefined}
 		>
 			<Sidebar.GroupLabel>Projects</Sidebar.GroupLabel>
 			<Sidebar.GroupAction
@@ -112,13 +115,23 @@
 				<span class="sr-only">New project</span>
 			</Sidebar.GroupAction>
 			<Sidebar.GroupContent>
-				<ProjectTree
-					bind:this={tree}
-					projects={shell.projects}
-					noteTree={shell.noteTree}
-					{activeNoteId}
-					{activePath}
-				/>
+				{#if loading && !shell.projects.length}
+					<Sidebar.Menu>
+						{#each { length: 4 } as _}
+							<Sidebar.MenuItem>
+								<Sidebar.MenuSkeleton showIcon />
+							</Sidebar.MenuItem>
+						{/each}
+					</Sidebar.Menu>
+				{:else}
+					<ProjectTree
+						bind:this={tree}
+						projects={shell.projects}
+						noteTree={shell.noteTree}
+						{activeNoteId}
+						{activePath}
+					/>
+				{/if}
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 		<Sidebar.Group class="mt-auto pt-1 pb-2">

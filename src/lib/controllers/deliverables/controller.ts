@@ -6,6 +6,7 @@ import type {
 	GenerateDocumentOutput,
 	GetArtifactDownloadOutput,
 	ListArtifactsOutput,
+	ListArtifactsParams,
 	PreviewDocumentInput,
 	PreviewDocumentOutput,
 	ProjectId,
@@ -58,7 +59,11 @@ export interface DeliverablesController {
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings>;
-	listArtifacts(actor: ActorContext, projectId: ProjectId): Promise<ListArtifactsOutput>;
+	listArtifacts(
+		actor: ActorContext,
+		projectId: ProjectId,
+		params?: ListArtifactsParams
+	): Promise<ListArtifactsOutput>;
 	getArtifact(
 		actor: ActorContext,
 		artifactId: ArtifactId
@@ -140,8 +145,12 @@ export class DefaultDeliverablesController implements DeliverablesController {
 		return this.dependencies.exportSettingsWriter.updateSettings(actor, projectId, settings);
 	}
 
-	async listArtifacts(actor: ActorContext, projectId: ProjectId): Promise<ListArtifactsOutput> {
-		return { artifacts: await this.dependencies.artifactLister.list(actor, projectId) };
+	async listArtifacts(
+		actor: ActorContext,
+		projectId: ProjectId,
+		params?: ListArtifactsParams
+	): Promise<ListArtifactsOutput> {
+		return this.dependencies.artifactLister.list(actor, projectId, params);
 	}
 
 	async getArtifact(actor: ActorContext, artifactId: ArtifactId) {

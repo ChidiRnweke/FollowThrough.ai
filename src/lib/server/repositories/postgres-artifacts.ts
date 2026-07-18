@@ -1,10 +1,20 @@
-import { and, asc, eq } from 'drizzle-orm';
-import type { ActorContext, Artifact, ArtifactId, ArtifactView, NoteId, ProjectId, TemplateId } from '$lib/models';
+import { and, asc, count, eq, ilike, or } from 'drizzle-orm';
+import type {
+	ActorContext,
+	Artifact,
+	ArtifactId,
+	ListArtifactsOutput,
+	ListArtifactsParams,
+	NoteId,
+	ProjectId,
+	TemplateId
+} from '$lib/models';
 import type { ArtifactRepository } from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
-const instant = (value: Date): Artifact['createdAt'] => value.toISOString() as Artifact['createdAt'];
+const instant = (value: Date): Artifact['createdAt'] =>
+	value.toISOString() as Artifact['createdAt'];
 
 const toArtifact = (row: typeof schema.artifacts.$inferSelect): Artifact => ({
 	id: row.id as ArtifactId,
@@ -45,8 +55,33 @@ export class PostgresArtifactRepository implements ArtifactRepository {
 		return toArtifact(row!);
 	}
 
-	async listByProject(actor: ActorContext, projectId: ProjectId): Promise<readonly ArtifactView[]> {
-		const rows = await this.database
+	async listByProject(
+		actor: ActorContext,
+		projectId: ProjectId,
+		params: ListArtifactsParams = {}
+	): Promise<ListArtifactsOutput> {
+		const query = params.query?.trim();
+		const search = query
+			? or(
+					ilike(schema.artifacts.title, `%${query}%`),
+					ilike(schema.artifacts.format, `%${query}%`),
+					ilike(schema.projectTemplates.name, `%${query}%`)
+				)
+			: undefined;
+		const filters = and(
+			eq(schema.artifacts.projectId, projectId),
+			eq(schema.artifacts.userId, actor.userId),
+			search
+		);
+		const [{ total }] = await this.database
+			.select({ total: count() })
+			.from(schema.artifacts)
+			.leftJoin(
+				schema.projectTemplates,
+				eq(schema.projectTemplates.id, schema.artifacts.templateId)
+			)
+			.where(filters);
+		let statement = this.database
 			.select({
 				artifact: schema.artifacts,
 				projectName: schema.projects.name,
@@ -54,19 +89,24 @@ export class PostgresArtifactRepository implements ArtifactRepository {
 			})
 			.from(schema.artifacts)
 			.innerJoin(schema.projects, eq(schema.projects.id, schema.artifacts.projectId))
-			.leftJoin(schema.projectTemplates, eq(schema.projectTemplates.id, schema.artifacts.templateId))
-			.where(
-				and(
-					eq(schema.artifacts.projectId, projectId),
-					eq(schema.artifacts.userId, actor.userId)
-				)
+			.leftJoin(
+				schema.projectTemplates,
+				eq(schema.projectTemplates.id, schema.artifacts.templateId)
 			)
-			.orderBy(asc(schema.artifacts.createdAt));
-		return rows.map(({ artifact, projectName, templateName }) => ({
-			...toArtifact(artifact),
-			projectName,
-			templateName: templateName ?? undefined
-		}));
+			.where(filters)
+			.orderBy(asc(schema.artifacts.createdAt), asc(schema.artifacts.id))
+			.$dynamic();
+		if (params.limit !== undefined) statement = statement.limit(params.limit);
+		if (params.offset !== undefined) statement = statement.offset(params.offset);
+		const rows = await statement;
+		return {
+			artifacts: rows.map(({ artifact, projectName, templateName }) => ({
+				...toArtifact(artifact),
+				projectName,
+				templateName: templateName ?? undefined
+			})),
+			total
+		};
 	}
 
 	async findById(actor: ActorContext, id: ArtifactId): Promise<Artifact | undefined> {

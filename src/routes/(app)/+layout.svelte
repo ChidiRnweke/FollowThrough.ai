@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import AppSidebar from '$lib/components/app/app-sidebar.svelte';
 	import CommandPalette from '$lib/components/app/command-palette.svelte';
 	import RightPanel from '$lib/components/app/right-panel.svelte';
@@ -33,7 +33,7 @@
 <svelte:window {onkeydown} />
 
 <Sidebar.Provider open={data.sidebarOpen} class="h-dvh min-h-0 overflow-hidden">
-	<AppSidebar shell={data.shell} activePath={page.url.pathname} {activeNoteId} />
+	<AppSidebar shell={data.shell} activePath={page.url.pathname} {activeNoteId} loading={!!navigating} />
 	<Sidebar.Inset class="min-w-0 overflow-y-auto border-l border-sidebar-border">
 		{@render children()}
 	</Sidebar.Inset>

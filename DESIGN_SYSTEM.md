@@ -18,6 +18,7 @@
 ## UX patterns
 
 - **Todos:** Progressive disclosure combines three familiar work surfaces. Basic Kanban is the default scanning view; Detailed Kanban exposes committed metadata edits in place; List is a compact editable matrix; the independent right panel is the complete master-detail editor. Board detail and board/list mode stay URL-addressable. Editable popovers must not resize cards or rows, and provenance remains separate from the user-selected source.
+- **Project resources:** Todos, Memory, Artifacts, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.
 - Todo controls use the existing flat shadcn Select, Popover, Calendar, Command, Input, and Textarea components. Selection commits immediately; text commits on blur or Enter and restores its saved value on Escape or failure. Saving and errors are announced without a manual Save button.
 
 - **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.

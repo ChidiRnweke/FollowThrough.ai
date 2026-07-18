@@ -117,6 +117,17 @@
 			});
 	});
 
+	// Pick up parentId/position changes from sidebar reorders, which update the
+	// database without bumping currentRevision and therefore bypass the revision-
+	// gated reconciliation effect above.
+	$effect(() => {
+		const viewParentId = view.note.parentId;
+		const viewPosition = view.note.position;
+		if (untrack(() => note.parentId !== viewParentId || note.position !== viewPosition)) {
+			note = { ...note, parentId: viewParentId, position: viewPosition };
+		}
+	});
+
 	$effect(() => {
 		noteTodos.replace(view.todos);
 		suggestionTray.replace(view.pendingSuggestions);

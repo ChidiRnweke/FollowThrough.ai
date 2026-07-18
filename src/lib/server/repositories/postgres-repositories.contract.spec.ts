@@ -6,6 +6,8 @@ import type {
 	DateTime,
 	AgentRun,
 	AgentRunId,
+	Artifact,
+	ArtifactId,
 	DiagramId,
 	ExternalReference,
 	MemoryEntryId,
@@ -23,6 +25,7 @@ import type {
 	SkillUsageId,
 	SuggestionId,
 	TodoId,
+	TemplateId,
 	Url,
 	UserId
 } from '$lib/models';
@@ -44,6 +47,7 @@ import { PostgresSuggestionRepository } from './postgres-suggestions';
 import { PostgresTodoRepository } from './postgres-todos';
 import { PostgresTrustPolicyRepository } from './postgres-trust-policies';
 import { PostgresMemoryEntryRepository } from './postgres-memory-entries';
+import { PostgresArtifactRepository } from './postgres-artifacts';
 import { PostgresExportSettingsRepository } from './postgres-export-settings';
 import {
 	PostgresAgentPreferencesRepository,
@@ -96,6 +100,28 @@ const seedProvenance = async (owner: ReturnType<typeof actor>, suffix: string) =
 	return provenance;
 };
 
+const seedArtifact = async (
+	owner: ReturnType<typeof actor>,
+	projectId: Artifact['projectId'],
+	suffix: string,
+	patch: Partial<Artifact> = {}
+) => {
+	const artifact: Artifact = {
+		id: `70000000-0000-4000-8000-${suffix.padStart(12, '0')}` as ArtifactId,
+		userId: owner.userId,
+		projectId,
+		title: `Artifact ${suffix}`,
+		format: 'pdf',
+		objectKey: `artifacts/${suffix}.pdf`,
+		byteSize: 100,
+		sourceNoteIds: [],
+		createdAt: now,
+		...patch
+	};
+	await new PostgresArtifactRepository(context.db).insert(owner, artifact);
+	return artifact;
+};
+
 beforeAll(async () => {
 	context = await startPostgresTestcontainer();
 }, 120_000);
@@ -127,6 +153,142 @@ describe('Postgres project repository invariants', () => {
 		await repository.archive(owner, project.id);
 		const replacement = await repository.insert(owner, { name: 'reusable' });
 		expect(replacement.name).toBe('reusable');
+	});
+});
+
+describe('Postgres artifact repository listing invariants', () => {
+	it('matches artifact titles with a case-insensitive substring', async () => {
+		const owner = actor('301');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact search title'
+		});
+		await seedArtifact(owner, project.id, '301', { title: 'Quarterly Strategy Review' });
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id,
+			{ query: 'STRATEGY' }
+		);
+		expect(result.total).toBe(1);
+	});
+
+	it('matches artifact formats with a case-insensitive substring', async () => {
+		const owner = actor('302');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact search format'
+		});
+		await seedArtifact(owner, project.id, '302', { format: 'docx' });
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id,
+			{ query: 'OCX' }
+		);
+		expect(result.total).toBe(1);
+	});
+
+	it('matches template names with a case-insensitive substring', async () => {
+		const owner = actor('303');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact search template'
+		});
+		const templateId = '80000000-0000-4000-8000-000000000303' as TemplateId;
+		await context.db.insert(schema.projectTemplates).values({
+			id: templateId,
+			userId: owner.userId,
+			projectId: project.id,
+			name: 'Executive Briefing',
+			objectKey: 'templates/executive.docx',
+			mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+			byteSize: 100
+		});
+		await seedArtifact(owner, project.id, '303', { templateId });
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id,
+			{ query: 'brief' }
+		);
+		expect(result.total).toBe(1);
+	});
+
+	it('does not match a null template for an unrelated search', async () => {
+		const owner = actor('304');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact null template'
+		});
+		await seedArtifact(owner, project.id, '304');
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id,
+			{ query: 'missing' }
+		);
+		expect(result.artifacts).toEqual([]);
+	});
+
+	it('keeps artifact listings scoped to the actor and project', async () => {
+		const owner = actor('305');
+		const other = actor('306');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Owned artifacts'
+		});
+		const otherProject = await new PostgresProjectRepository(context.db).insert(other, {
+			name: 'Other artifacts'
+		});
+		await seedArtifact(owner, project.id, '305');
+		await seedArtifact(other, otherProject.id, '306');
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			other,
+			project.id
+		);
+		expect(result.total).toBe(0);
+	});
+
+	it('counts all filtered artifacts before pagination', async () => {
+		const owner = actor('307');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact count'
+		});
+		for (let index = 0; index < 12; index += 1) {
+			await seedArtifact(owner, project.id, String(30700 + index), { title: `Match ${index}` });
+		}
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id,
+			{ query: 'match', limit: 10 }
+		);
+		expect(result.total).toBe(12);
+	});
+
+	it('returns non-overlapping deterministic pages', async () => {
+		const owner = actor('308');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Artifact pages'
+		});
+		for (let index = 0; index < 20; index += 1) {
+			await seedArtifact(owner, project.id, String(30800 + index));
+		}
+		const repository = new PostgresArtifactRepository(context.db);
+		const first = await repository.listByProject(owner, project.id, { limit: 10, offset: 0 });
+		const second = await repository.listByProject(owner, project.id, { limit: 10, offset: 10 });
+		expect([...first.artifacts, ...second.artifacts].map((artifact) => artifact.id)).toEqual(
+			Array.from(
+				{ length: 20 },
+				(_, index) => `70000000-0000-4000-8000-${String(30800 + index).padStart(12, '0')}`
+			)
+		);
+	});
+
+	it('keeps omitted listing parameters unbounded', async () => {
+		const owner = actor('309');
+		const project = await new PostgresProjectRepository(context.db).insert(owner, {
+			name: 'Unbounded artifacts'
+		});
+		for (let index = 0; index < 11; index += 1) {
+			await seedArtifact(owner, project.id, String(30900 + index));
+		}
+		const result = await new PostgresArtifactRepository(context.db).listByProject(
+			owner,
+			project.id
+		);
+		expect(result.artifacts).toHaveLength(11);
 	});
 });
 

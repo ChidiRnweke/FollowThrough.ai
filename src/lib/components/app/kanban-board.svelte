@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { NoteSummary, ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
@@ -119,7 +119,7 @@
 			{/if}
 			<div
 				class="flex min-h-32 flex-1 flex-col gap-2"
-				use:dndzone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
+				use:dragHandleZone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
 				onconsider={(event) => handleConsider(status, event)}
 				onfinalize={(event) => handleFinalize(status, event)}
 			>
@@ -127,6 +127,7 @@
 					<TodoCard
 						view={item.view}
 						compact
+						draggable
 						projectName={projectNames?.get(item.view.todo.projectId)}
 						{detail}
 						{notes}

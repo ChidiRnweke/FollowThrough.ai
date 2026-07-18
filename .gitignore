@@ -25,3 +25,7 @@ vite.config.ts.timestamp-*
 test-results
 design_doc
 artifacts
+!src/lib/services/artifacts/
+!src/lib/services/artifacts/**
+!src/routes/(app)/artifacts/
+!src/routes/(app)/artifacts/**

@@ -9,6 +9,8 @@
 	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import { dragHandle } from 'svelte-dnd-action';
 
 	let {
 		view,
@@ -18,7 +20,8 @@
 		onstatus,
 		onopen,
 		detail = 'basic',
-		notes = []
+		notes = [],
+		draggable = false
 	}: {
 		view: TodoView;
 		compact?: boolean;
@@ -28,6 +31,7 @@
 		onopen?: (todoId: TodoId) => void;
 		detail?: 'basic' | 'detailed';
 		notes?: readonly NoteSummary[];
+		draggable?: boolean;
 	} = $props();
 
 	const done = $derived(view.todo.status === 'done');
@@ -49,9 +53,23 @@
 	}
 </script>
 
-<Card.Root data-compact={compact || undefined} class="gap-1.5 py-3" onclick={openBody}>
+<Card.Root
+	data-compact={compact || undefined}
+	class="gap-1.5 py-3 [&_a]:cursor-pointer [&_button]:cursor-pointer"
+	onclick={openBody}
+>
 	<Card.Header class="px-4">
 		<Card.Title class="flex items-start gap-2 text-sm font-medium">
+			{#if draggable}
+				<span
+					use:dragHandle
+					class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					aria-label="Drag {view.todo.title}"
+					title="Drag todo"
+				>
+					<GripVertical />
+				</span>
+			{/if}
 			<Checkbox
 				checked={done}
 				aria-label={done ? 'Reopen todo' : 'Complete todo'}

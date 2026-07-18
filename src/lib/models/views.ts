@@ -1,5 +1,4 @@
 import type {
-	ArtifactId,
 	Confidence,
 	ConversationId,
 	LocalDate,
@@ -280,6 +279,13 @@ export interface UpdateTrustPolicyOutput {
 
 export interface ListArtifactsOutput {
 	readonly artifacts: readonly ArtifactView[];
+	readonly total: number;
+}
+
+export interface ListArtifactsParams {
+	readonly query?: string;
+	readonly limit?: number;
+	readonly offset?: number;
 }
 
 export type ExportFontFamily = 'helvetica' | 'times' | 'courier';

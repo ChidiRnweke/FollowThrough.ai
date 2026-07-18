@@ -12,9 +12,7 @@
 	import PackageOpen from '@lucide/svelte/icons/package-open';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Wrench from '@lucide/svelte/icons/wrench';
-	import ProjectAttachmentsDialog from '../project-attachments-dialog.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
-	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import { formatDateTime } from '../labels';
 
@@ -32,7 +30,6 @@
 	}: { view: GetProjectOutput; counts: ProjectCounts; oncreatenote?: () => void } = $props();
 
 	const project = $derived(view.project);
-	let attachmentsOpen = $state(false);
 	let renameEntryOpen = $state(false);
 	let renameEntryId: NoteId | null = $state(null);
 	let renameEntryTitle = $state('');
@@ -71,17 +68,16 @@
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.todos}</span>
 		{/if}
 	</a>
-	<button
-		type="button"
-		onclick={() => rightPanel.openMemory(project.id)}
+	<a
+		href="/projects/{project.id}/memory"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
 		<Brain class="size-4 shrink-0 text-muted-foreground" />
-		<span class="flex-1 text-left">Memory</span>
+		<span class="flex-1">Memory</span>
 		{#if counts.memory > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.memory}</span>
 		{/if}
-	</button>
+	</a>
 	<a
 		href="/artifacts?projectId={project.id}"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -92,17 +88,16 @@
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.artifacts}</span>
 		{/if}
 	</a>
-	<button
-		type="button"
-		onclick={() => (attachmentsOpen = true)}
+	<a
+		href="/projects/{project.id}/attachments"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
 		<Paperclip class="size-4 shrink-0 text-muted-foreground" />
-		<span class="flex-1 text-left">Attachments</span>
+		<span class="flex-1">Attachments</span>
 		{#if counts.attachments > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.attachments}</span>
 		{/if}
-	</button>
+	</a>
 </nav>
 
 <!-- Documents -->
@@ -195,4 +190,3 @@
 	busy={projectActions.busy}
 	onsubmit={renameEntrySubmit}
 />
-<ProjectAttachmentsDialog bind:open={attachmentsOpen} projectId={project.id} />

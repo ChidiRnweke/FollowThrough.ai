@@ -576,7 +576,7 @@
 						<Sidebar.MenuSubItem>
 							<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
 								{#snippet child({ props })}
-									<a href="{projectHref}/todos" {...props}>
+									<a {...props} href="{projectHref}/todos">
 										<ListTodo class="size-4 shrink-0 text-muted-foreground" />
 										<span class="truncate">Todos</span>
 									</a>

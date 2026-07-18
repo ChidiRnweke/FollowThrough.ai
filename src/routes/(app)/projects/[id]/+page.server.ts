@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		counts: {
 			todos: todosResult.todos.length,
 			memory: memoryResult.entries.length,
-			artifacts: artifactsResult.artifacts.length,
+			artifacts: artifactsResult.total,
 			attachments: attachments.length
 		}
 	};
