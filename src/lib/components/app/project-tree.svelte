@@ -17,7 +17,7 @@
 	import Pin from '@lucide/svelte/icons/pin';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Wrench from '@lucide/svelte/icons/wrench';
-	import { onMount, tick, untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from './name-dialog.svelte';
@@ -83,11 +83,21 @@
 		return [];
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		for (const key of readStoredToggles()) toggled.add(key);
 		togglesRestored = true;
-		await tick();
-		transitionsReady = true;
+
+		let enableTransitionsFrame: number | undefined;
+		const restoredStateFrame = requestAnimationFrame(() => {
+			enableTransitionsFrame = requestAnimationFrame(() => {
+				transitionsReady = true;
+			});
+		});
+
+		return () => {
+			cancelAnimationFrame(restoredStateFrame);
+			if (enableTransitionsFrame !== undefined) cancelAnimationFrame(enableTransitionsFrame);
+		};
 	});
 
 	$effect(() => {

@@ -2,8 +2,11 @@ import type {
 	ActorContext,
 	AcceptSuggestionInput,
 	AcceptSuggestionOutput,
+	ListPendingMemoryInput,
+	ListPendingMemoryOutput,
 	ListSuggestionsInput,
 	ListSuggestionsOutput,
+	MemorySuggestionView,
 	SuggestionGroup,
 	SuggestionView,
 	RejectSuggestionInput,
@@ -27,6 +30,10 @@ export interface SuggestionArtifactApplier {
 
 export interface SuggestionsController {
 	list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput>;
+	listPendingMemory(
+		actor: ActorContext,
+		input: ListPendingMemoryInput
+	): Promise<ListPendingMemoryOutput>;
 	accept(actor: ActorContext, input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput>;
 	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion>;
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
@@ -60,6 +67,22 @@ export class DefaultSuggestionsController implements SuggestionsController {
 			group.note ? { note: group.note, suggestions: group.views } : { suggestions: group.views }
 		);
 		return { groups: result };
+	}
+	async listPendingMemory(
+		actor: ActorContext,
+		input: ListPendingMemoryInput
+	): Promise<ListPendingMemoryOutput> {
+		const pending = await this.dependencies.suggestionLister.listByStatus(actor, 'proposed');
+		const memory = pending.filter(
+			(suggestion) =>
+				suggestion.kind === 'memory' && suggestion.payload.projectId === input.projectId
+		);
+		const views = await this.dependencies.suggestionViewAssembler.assemble(actor, memory);
+		return {
+			suggestions: views
+				.filter((view): view is MemorySuggestionView => view.suggestion.kind === 'memory')
+				.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt))
+		};
 	}
 	accept(actor: ActorContext, input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {

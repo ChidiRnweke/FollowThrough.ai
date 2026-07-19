@@ -1,5 +1,13 @@
 <script lang="ts">
-	import type { MemoryEntry, MemoryEntryId, ProjectId } from '$lib/models';
+	import { invalidateAll } from '$app/navigation';
+	import type {
+		MemoryEntry,
+		MemoryEntryId,
+		MemorySuggestionView,
+		ProjectId,
+		SuggestionId
+	} from '$lib/models';
+	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
@@ -8,7 +16,14 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import { getEntries, createEntry, updateEntry, deleteEntry } from '$lib/remote/memory.remote';
+	import {
+		getEntries,
+		getPendingSuggestions,
+		createEntry,
+		updateEntry,
+		deleteEntry
+	} from '$lib/remote/memory.remote';
+	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
 	import { formatRelativeTime } from './labels';
 
 	let {
@@ -23,10 +38,18 @@
 	} = $props();
 
 	let entries = $state<MemoryEntry[]>([]);
+	let pending = $state<MemorySuggestionView[]>([]);
 	let loading = $state(false);
+	let busyIds = $state<SuggestionId[]>([]);
 	let draft = $state('');
 	let editingId = $state<MemoryEntryId | undefined>(undefined);
 	let editingContent = $state('');
+	const items = $derived.by(() =>
+		[
+			...pending.map((view) => ({ kind: 'pending' as const, view, at: view.suggestion.createdAt })),
+			...entries.map((entry) => ({ kind: 'saved' as const, entry, at: entry.updatedAt }))
+		].sort((a, b) => b.at.localeCompare(a.at))
+	);
 
 	$effect(() => {
 		void load(projectId);
@@ -35,12 +58,57 @@
 	async function load(id: ProjectId | undefined): Promise<void> {
 		loading = true;
 		try {
-			const output = await getEntries(id);
-			entries = [...output.entries];
+			const [saved, proposed] = await Promise.all([getEntries(id), getPendingSuggestions(id)]);
+			entries = [...saved.entries];
+			pending = [...proposed.suggestions];
 		} catch {
 			toast.error('Could not load memory.');
 		} finally {
 			loading = false;
+		}
+	}
+
+	function proposalContent(view: MemorySuggestionView): string {
+		const suggestion = view.suggestion;
+		if (suggestion.payload.content) return suggestion.payload.content;
+		const target = entries.find((entry) => entry.id === suggestion.payload.memoryEntryId);
+		return target?.content ?? 'Remove this remembered item';
+	}
+
+	async function accept(view: MemorySuggestionView): Promise<void> {
+		const id = view.suggestion.id;
+		busyIds = [...busyIds, id];
+		try {
+			const output = await acceptSuggestion({ suggestionId: id });
+			if (output.suggestion.kind !== 'memory') throw new Error('Expected a memory suggestion');
+			pending = pending.filter((item) => item.suggestion.id !== id);
+			const targetId = output.suggestion.payload.memoryEntryId;
+			const remaining = targetId ? entries.filter((entry) => entry.id !== targetId) : entries;
+			entries =
+				output.suggestion.payload.operation === 'remove'
+					? remaining
+					: [output.artifact as MemoryEntry, ...remaining];
+			await invalidateAll();
+			toast.success('Memory accepted.');
+		} catch {
+			toast.error('Could not accept the memory suggestion.');
+		} finally {
+			busyIds = busyIds.filter((busyId) => busyId !== id);
+		}
+	}
+
+	async function dismiss(view: MemorySuggestionView): Promise<void> {
+		const id = view.suggestion.id;
+		busyIds = [...busyIds, id];
+		try {
+			await rejectSuggestion({ suggestionId: id });
+			pending = pending.filter((item) => item.suggestion.id !== id);
+			await invalidateAll();
+			toast.success('Memory suggestion dismissed.');
+		} catch {
+			toast.error('Could not dismiss the memory suggestion.');
+		} finally {
+			busyIds = busyIds.filter((busyId) => busyId !== id);
 		}
 	}
 
@@ -101,15 +169,55 @@
 			Add memory
 		</Button>
 	</div>
-	{#if loading && entries.length === 0}
+	{#if loading && items.length === 0}
 		<p class="text-sm text-muted-foreground">Loading memory…</p>
-	{:else if entries.length === 0}
+	{:else if items.length === 0}
 		<p class="text-sm text-muted-foreground">{emptyText}</p>
 	{:else}
 		<ul class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-			{#each entries as entry (entry.id)}
+			{#each items as item (item.kind === 'pending' ? `pending-${item.view.suggestion.id}` : `saved-${item.entry.id}`)}
 				<li class="rounded-md border border-border p-3">
-					{#if editingId === entry.id}
+					{#if item.kind === 'pending'}
+						{@const view = item.view}
+						{@const suggestion = view.suggestion}
+						{@const busy = busyIds.includes(suggestion.id)}
+						<div class="flex items-start gap-3">
+							<Checkbox
+								checked={false}
+								disabled={busy}
+								aria-label="Accept memory suggestion"
+								onCheckedChange={(checked) => {
+									if (checked === true) void accept(view);
+								}}
+							/>
+							<div class="min-w-0 flex-1">
+								<div class="flex flex-wrap items-center gap-1.5">
+									<Badge variant="secondary">Suggested</Badge>
+									<Badge variant="ghost">{suggestion.payload.operation}</Badge>
+								</div>
+								<p class="mt-2 text-sm whitespace-pre-wrap">{proposalContent(view)}</p>
+								{#if suggestion.payload.justification}
+									<p class="mt-1 text-xs text-muted-foreground">
+										{suggestion.payload.justification}
+									</p>
+								{/if}
+								<div class="mt-2 flex items-center justify-between gap-2">
+									<span class="text-xs text-muted-foreground">
+										{formatRelativeTime(suggestion.createdAt)}
+									</span>
+									<Button
+										size="sm"
+										variant="ghost"
+										disabled={busy}
+										onclick={() => void dismiss(view)}
+									>
+										Dismiss
+									</Button>
+								</div>
+							</div>
+						</div>
+					{:else if editingId === item.entry.id}
+						{@const entry = item.entry}
 						<div class="flex flex-col gap-2">
 							<Textarea bind:value={editingContent} rows={3} aria-label="Edit memory entry" />
 							<div class="flex justify-end gap-2">
@@ -122,6 +230,7 @@
 							</div>
 						</div>
 					{:else}
+						{@const entry = item.entry}
 						<p class="text-sm whitespace-pre-wrap">{entry.content}</p>
 						<div class="mt-2 flex items-center justify-between gap-2">
 							<Label class="flex items-center gap-1.5 text-xs text-muted-foreground">

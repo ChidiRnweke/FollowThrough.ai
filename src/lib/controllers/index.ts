@@ -13,3 +13,4 @@ export * from './projects/controller';
 export * from './agent-settings/controller';
 export * from './attachments/controller';
 export * from './deliverables/controller';
+export * from './retrieval/controller';

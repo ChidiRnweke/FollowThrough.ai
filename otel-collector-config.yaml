@@ -1,0 +1,35 @@
+# Local-dev OpenTelemetry collector: receives OTLP from the app, keeps only
+# OpenInference (LLM/tool/agent) spans, and forwards them to the self-hosted
+# Phoenix. The Tempo/Loki/Prometheus fan-out from the production collector is
+# dropped here — local dev only needs the Phoenix path. The collector holds the
+# Phoenix ingest key, so the app doesn't send auth.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  # Drop non-OpenInference spans so only LLM/tool/agent spans reach Phoenix.
+  filter/openinference:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["openinference.span.kind"] == nil or attributes["openinference.span.kind"] == ""'
+
+exporters:
+  # Bare host only — otlphttp appends /v1/traces itself.
+  otlphttp/phoenix:
+    endpoint: https://phoenix.chidinweke.be
+    headers:
+      Authorization: 'Bearer ${env:PHOENIX_API_KEY}'
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [filter/openinference, batch]
+      exporters: [otlphttp/phoenix]

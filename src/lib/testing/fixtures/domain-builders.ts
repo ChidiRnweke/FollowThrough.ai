@@ -3,6 +3,7 @@ import type {
 	DateTime,
 	MemoryEntry,
 	MemoryEntryId,
+	MemorySuggestion,
 	Note,
 	NoteId,
 	Project,
@@ -82,6 +83,24 @@ export const suggestionBuilder = (overrides: Partial<TodoSuggestion> = {}): Todo
 	},
 	provenanceId: testProvenanceId(),
 	sourceAnchorId: testAnchorId(),
+	isAutoAccepted: false,
+	createdAt: testNow,
+	updatedAt: testNow,
+	...overrides
+});
+
+export const memorySuggestionBuilder = (
+	overrides: Partial<MemorySuggestion> = {}
+): MemorySuggestion => ({
+	id: testSuggestionId(),
+	userId: testActor().userId,
+	kind: 'memory',
+	status: 'proposed',
+	payload: {
+		operation: 'add',
+		content: 'Always answer in English.'
+	},
+	provenanceId: testProvenanceId(),
 	isAutoAccepted: false,
 	createdAt: testNow,
 	updatedAt: testNow,

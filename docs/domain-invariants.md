@@ -115,7 +115,7 @@ This document is the independent behavioural specification for backend models, s
 - Search chunks are deterministic, carry a cryptographic content hash, and are replaced when their source revision changes.
 - Identical source content is not embedded twice for the same indexing version.
 - Vector candidates are reranked into the closed generic relationship label set.
-- The agent receives the current project, note, selection, relevant retrieval results, conversation history, and enabled skill summaries as context.
+- The agent receives the current project, note, selection, conversation history, and enabled skill summaries as context; user memory, project memory, and knowledge-base evidence remain available through first-class retrieval tools rather than eager context injection.
 - An agent turn belongs to an actor-owned conversation; a foreign conversation identifier is indistinguishable from a missing one.
 - Conversation model and execution-mode overrides persist independently of user defaults; precedence is conversation override, user default, then environment default.
 - The effective model is retained on assistant messages and agent provenance.

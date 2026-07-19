@@ -2,6 +2,7 @@ import { ProductionControllerFactory, type ProductionControllerDependencies } fr
 import { OpenRouter } from '@openrouter/sdk';
 import {
 	EmbeddedKnowledgeSearcher,
+	RerankingKnowledgeSearcher,
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
@@ -27,6 +28,7 @@ import {
 	ProjectScopedLinkFinder,
 	ProvisioningSkillFinder,
 	AttachmentManagementService,
+	EmbeddedToolRetriever,
 	normalizeOpenRouterModelId
 } from '$lib/services';
 import { db, postgresTransactionRunner } from '$lib/server/db';
@@ -38,6 +40,8 @@ import { OpenAIAgentRunner } from './domain/openai-agent-capabilities';
 import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
 import { OpenAIEmbeddingClient } from './domain/openai-embedding-capabilities';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
+import { OpenRouterReranker } from './domain/openrouter-rerank-capabilities';
+import { ConversationCondenser } from './domain/conversation-condenser';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
 import { PostgresConversationRepository } from './repositories/postgres-conversations';
 import { EnrichedAgentContextBuilder } from './domain/agent-context-capabilities';
@@ -171,6 +175,15 @@ export function createProductionFactory(): ProductionApplication {
 		baseURL: openRouterBaseURL,
 		appURL
 	});
+	const reranker = new OpenRouterReranker(openRouterApiKey, {
+		baseURL: openRouterBaseURL,
+		appURL
+	});
+	const condenser = new ConversationCondenser(openRouterApiKey, {
+		baseURL: openRouterBaseURL,
+		appURL
+	});
+	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
 	const attachmentRepository = new PostgresAttachmentRepository(db);
 	const attachments = new AttachmentManagementService(
 		attachmentRepository,
@@ -182,7 +195,10 @@ export function createProductionFactory(): ProductionApplication {
 	);
 	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient);
 	const diagramIndexer = new EmbeddedDiagramIndexer(searchRepository, embeddingClient, notes);
-	const knowledgeSearcher = new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient);
+	const knowledgeSearcher = new RerankingKnowledgeSearcher(
+		new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient),
+		reranker
+	);
 	const linkFinder = new ProjectScopedLinkFinder(
 		notes,
 		knowledgeSearcher,
@@ -239,12 +255,10 @@ export function createProductionFactory(): ProductionApplication {
 	const fallbackAgent = new BasicAgent(suggestions, provenance, notes);
 	const agentContext = new EnrichedAgentContextBuilder(
 		fallbackAgent,
-		knowledgeSearcher,
 		provisionedSkills,
 		notes,
 		undefined,
-		skills,
-		memory
+		skills
 	);
 	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;
@@ -267,7 +281,8 @@ export function createProductionFactory(): ProductionApplication {
 		agentSessions,
 		openRouterApiKey,
 		openRouterBaseURL,
-		appURL
+		appURL,
+		toolRetriever
 	);
 	const artifactApplier = new PersistentSuggestionArtifactApplier(
 		todos,
@@ -435,6 +450,11 @@ export function createProductionFactory(): ProductionApplication {
 			folderCreator: projects,
 			entryMover: projects,
 			transactionRunner: postgresTransactionRunner
+		},
+		retrieval: {
+			knowledgeSearcher,
+			condenser,
+			conversations: conversationJournal
 		}
 	};
 	controllerFactory = new ProductionControllerFactory(dependencies);

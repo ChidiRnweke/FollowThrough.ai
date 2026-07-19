@@ -37,6 +37,18 @@ services:
     volumes:
       - followthrough-objects:/data
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.113.0
+    restart: unless-stopped
+    command: ['--config=/etc/otelcol-contrib/config.yaml']
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      PHOENIX_API_KEY: ${PHOENIX_API_KEY}
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+
 volumes:
   followthrough-data:
   followthrough-objects:

@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "NODE_OPTIONS='--import ./scripts/otel-instrumentation.js' vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
 		"start": "node --import ./scripts/otel-instrumentation.js build",
@@ -78,7 +78,7 @@
 		"@openai/agents": "^0.13.2",
 		"@openrouter/sdk": "^0.9.11",
 		"@opentelemetry/api": "^1.9.1",
-		"@opentelemetry/exporter-trace-otlp-grpc": "^0.220.0",
+		"@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
 		"@opentelemetry/resources": "^2.9.0",
 		"@opentelemetry/sdk-node": "^0.220.0",
 		"@opentelemetry/semantic-conventions": "^1.43.0",

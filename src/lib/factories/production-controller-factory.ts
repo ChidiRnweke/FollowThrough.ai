@@ -9,6 +9,7 @@ import {
 	DefaultProjectsController,
 	DefaultReferencesController,
 	DefaultRelationshipsController,
+	DefaultRetrievalController,
 	DefaultSkillsController,
 	DefaultSuggestionsController,
 	DefaultTodosController,
@@ -24,6 +25,7 @@ import {
 	type ProjectsDependencies,
 	type ReferencesDependencies,
 	type RelationshipsDependencies,
+	type RetrievalDependencies,
 	type SkillsDependencies,
 	type SuggestionsDependencies,
 	type TodosDependencies,
@@ -48,6 +50,7 @@ export interface ProductionControllerDependencies {
 	deliverables: DeliverablesDependencies;
 	trustPolicies: TrustPoliciesDependencies;
 	memory: MemoryDependencies;
+	retrieval: RetrievalDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
@@ -96,5 +99,8 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	memory() {
 		return new DefaultMemoryController(this.dependencies.memory);
+	}
+	retrieval() {
+		return new DefaultRetrievalController(this.dependencies.retrieval);
 	}
 }

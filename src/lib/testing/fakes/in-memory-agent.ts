@@ -4,7 +4,6 @@ import type {
 	AgentExecutionUpdate,
 	NoteId,
 	ProvenanceId,
-	RunAgentInput,
 	Skill,
 	SkillSummary,
 	TextSelection
@@ -14,7 +13,9 @@ import type {
 	AgentRunner,
 	AgentWorkflowToolbox,
 	SkillFinder,
-	SkillUsageRecorder
+	SkillUsageRecorder,
+	ToolDescriptor,
+	ToolRetriever
 } from '$lib/services';
 
 export class InMemoryAgentRunner implements AgentRunner {
@@ -26,6 +27,21 @@ export class InMemoryAgentRunner implements AgentRunner {
 		void _input;
 		for (const event of this.events) yield { type: 'event', event };
 		yield { type: 'completed', sessionItems: [] };
+	}
+}
+
+export class InMemoryToolRetriever implements ToolRetriever {
+	names: string[] = [];
+
+	async retrieve(
+		_catalog: readonly ToolDescriptor[],
+		_query: string,
+		_topN: number
+	): Promise<string[]> {
+		void _catalog;
+		void _query;
+		void _topN;
+		return this.names;
 	}
 }
 

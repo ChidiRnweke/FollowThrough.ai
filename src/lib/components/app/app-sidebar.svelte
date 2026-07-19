@@ -17,6 +17,7 @@
 	import { palette } from '$lib/stores/palette.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import ProjectTree from './project-tree.svelte';
+	import MemoryNotificationMenu from './memory-notification-menu.svelte';
 
 	let {
 		shell,
@@ -117,8 +118,8 @@
 			<Sidebar.GroupContent>
 				{#if loading && !shell.projects.length}
 					<Sidebar.Menu>
-						{#each { length: 4 } as _}
-							<Sidebar.MenuItem>
+						{#each [0, 1, 2, 3] as index (index)}
+							<Sidebar.MenuItem data-skeleton-index={index}>
 								<Sidebar.MenuSkeleton showIcon />
 							</Sidebar.MenuItem>
 						{/each}
@@ -169,6 +170,7 @@
 				{shell.user.displayName}
 			</span>
 			<div class="flex items-center group-data-[collapsible=icon]:flex-col">
+				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
 				<Button
 					variant="ghost"
 					size="icon-sm"

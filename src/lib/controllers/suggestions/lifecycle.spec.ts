@@ -1,15 +1,61 @@
 import { describe, expect, it } from 'vitest';
 import { DefaultSuggestionsController, type SuggestionsDependencies } from './controller';
-import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
+import {
+	InMemorySuggestionReader,
+	InMemorySuggestions
+} from '$lib/testing/fakes/in-memory-automation';
 import { InMemorySuggestionArtifacts } from '$lib/testing/fakes/in-memory-artifacts';
 import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
 import {
 	suggestionBuilder,
+	memorySuggestionBuilder,
 	testActor,
+	testProjectId,
 	testSuggestionId,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/fixtures/domain-builders';
+
+describe('Pending memory review invariants', () => {
+	it('returns only profile memory suggestions for the profile scope', async () => {
+		const reader = new InMemorySuggestionReader();
+		reader.suggestions = [
+			memorySuggestionBuilder(),
+			memorySuggestionBuilder({
+				id: testSuggestionId(2),
+				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+			}),
+			suggestionBuilder({ id: testSuggestionId(3) })
+		];
+		const controller = new DefaultSuggestionsController({
+			suggestionLister: reader,
+			suggestionViewAssembler: reader
+		} as unknown as SuggestionsDependencies);
+		const result = await controller.listPendingMemory(testActor(), {});
+		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId()]);
+	});
+
+	it('returns only memory suggestions for the requested project', async () => {
+		const reader = new InMemorySuggestionReader();
+		reader.suggestions = [
+			memorySuggestionBuilder(),
+			memorySuggestionBuilder({
+				id: testSuggestionId(2),
+				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+			}),
+			memorySuggestionBuilder({
+				id: testSuggestionId(3),
+				payload: { operation: 'add', content: 'Other project', projectId: testProjectId(2) }
+			})
+		];
+		const controller = new DefaultSuggestionsController({
+			suggestionLister: reader,
+			suggestionViewAssembler: reader
+		} as unknown as SuggestionsDependencies);
+		const result = await controller.listPendingMemory(testActor(), { projectId: testProjectId() });
+		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId(2)]);
+	});
+});
 
 const setup = () => {
 	const suggestions = new InMemorySuggestions();

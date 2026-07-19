@@ -9,8 +9,11 @@
  * and otherwise no-ops. Export failures never propagate into request handling — the
  * fail-hard rule applies to config/secrets, not to trace export.
  */
+// Loaded before app code via `node --import`, so it runs before the app's own
+// dotenv. Load .env here too, or none of the PHOENIX_/OTEL_ vars would be visible.
+import 'dotenv/config';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
@@ -49,7 +52,10 @@ export function initTelemetry() {
 
 	sdk = new NodeSDK({
 		resource,
-		traceExporter: new OTLPTraceExporter({ url: endpoint, headers }),
+		traceExporter: new OTLPTraceExporter({
+			url: `${endpoint.replace(/\/+$/, '')}/v1/traces`,
+			headers
+		}),
 		instrumentations: [new OpenAIInstrumentation()]
 	});
 

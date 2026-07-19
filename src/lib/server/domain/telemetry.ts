@@ -11,6 +11,40 @@ export interface AgentTurnSpanParams {
 }
 
 /**
+ * Trace a synchronous pre-step (e.g. the retrieval/baseline-tool preprocess) as a
+ * CHAIN span carrying input and a short description of the output. No-op safe when
+ * telemetry is disabled.
+ */
+export async function traceChainStep<T>(
+	name: string,
+	input: string,
+	body: () => Promise<T>,
+	describeOutput: (result: T) => string
+): Promise<T> {
+	const span: Span = trace.getTracer(TRACER_NAME).startSpan(name, {
+		attributes: {
+			[SemanticConventions.OPENINFERENCE_SPAN_KIND]: OpenInferenceSpanKind.CHAIN,
+			[SemanticConventions.INPUT_VALUE]: input
+		}
+	});
+	try {
+		const result = await body();
+		span.setAttribute(SemanticConventions.OUTPUT_VALUE, describeOutput(result));
+		span.setStatus({ code: SpanStatusCode.OK });
+		return result;
+	} catch (error) {
+		span.setStatus({
+			code: SpanStatusCode.ERROR,
+			message: error instanceof Error ? error.message : String(error)
+		});
+		if (error instanceof Error) span.recordException(error);
+		throw error;
+	} finally {
+		span.end();
+	}
+}
+
+/**
  * Wrap an agent turn in a manual OpenInference span.
  *
  * The OpenAI Agents instrumentation never records input/output on its root/agent

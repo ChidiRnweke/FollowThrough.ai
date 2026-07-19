@@ -10,6 +10,7 @@ import type {
 	ProjectsController,
 	ReferencesController,
 	RelationshipsController,
+	RetrievalController,
 	SkillsController,
 	SuggestionsController,
 	TodosController,
@@ -26,7 +27,16 @@ import type {
 	RunAgentInput
 } from '$lib/models';
 import { findProseMirrorDocumentIssue } from '$lib/models';
-import type { AgentToolExecutor } from '$lib/services';
+import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/services';
+import { matchToolName } from './tool-name-matcher';
+
+/**
+ * First-class tools that are always registered directly and excluded from the
+ * retriever ranking: knowledge search plus the user and project memory reads.
+ * The agent should reach for these liberally (and the two memory reads in
+ * parallel) rather than discovering them.
+ */
+const CORE_TOOL_NAMES = ['search', 'list_user_memory', 'list_project_memory'];
 
 export type AgentToolClassification =
 	| { readonly kind: 'read' | 'proposal' | 'mutation' }
@@ -49,6 +59,7 @@ export interface AgentToolCoverage {
 	readonly attachments: Coverage<AttachmentsController>;
 	readonly deliverables: Coverage<DeliverablesController>;
 	readonly memory: Coverage<MemoryController>;
+	readonly retrieval: Coverage<RetrievalController>;
 }
 
 export const agentToolCoverage = {
@@ -101,6 +112,10 @@ export const agentToolCoverage = {
 	},
 	suggestions: {
 		list: { kind: 'read' },
+		listPendingMemory: {
+			kind: 'excluded',
+			reason: 'Pending memory review is scoped to the notification and memory UI.'
+		},
 		accept: { kind: 'mutation' },
 		reject: { kind: 'mutation' },
 		revert: { kind: 'mutation' }
@@ -183,6 +198,9 @@ export const agentToolCoverage = {
 		getPreferences: { kind: 'read' },
 		updatePreferences: { kind: 'mutation' },
 		listModels: { kind: 'read' }
+	},
+	retrieval: {
+		search: { kind: 'read' }
 	}
 } as const satisfies AgentToolCoverage;
 
@@ -232,7 +250,8 @@ export class AgentToolRegistry {
 		private readonly actor: ActorContext,
 		private readonly mode: AgentExecutionMode,
 		private readonly context: RegistryContext,
-		private readonly toolExecutor?: AgentToolExecutor
+		private readonly toolExecutor?: AgentToolExecutor,
+		private readonly toolRetriever?: ToolRetriever
 	) {}
 
 	tools(
@@ -243,36 +262,142 @@ export class AgentToolRegistry {
 			: undefined;
 		return this.definitions()
 			.filter((definition) => !allowed || allowed.has(definition.classification))
-			.map((definition) =>
-				tool({
-					name: definition.name,
-					description: definition.description,
-					parameters: z.toJSONSchema(definition.parameters) as never,
-					strict: false,
-					needsApproval:
-						definition.classification === 'mutation' && this.mode === 'approval_required',
-					errorFunction: (_context, error) =>
-						JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
-					execute: async (input, _runContext, details) => {
-						const parsed = input as Record<string, unknown>;
-						if (!this.toolExecutor) return definition.execute(parsed);
-						return this.toolExecutor.execute(
-							{
-								callId: String(details?.toolCall?.callId ?? ''),
-								toolName: definition.name,
-								arguments: parsed,
-								classification: definition.classification
-							},
-							() => definition.execute(parsed)
-						);
-					}
+			.map((definition) => this.buildTool(definition));
+	}
+
+	/**
+	 * Context-reducing surface for the agent. A small always-on core (`search`)
+	 * plus the tools most relevant to `query` (retrieved by embedding lookup) are
+	 * registered as REAL tools the model calls directly — no dispatch indirection
+	 * for the common case. `search_tools` discovers the long tail and `use_tool`
+	 * dispatches those by name. Returns the tools and the baseline names selected.
+	 */
+	async agentTools(
+		query: string,
+		topN = 12
+	): Promise<{ tools: Tool<unknown>[]; baseline: ToolDescriptor[] }> {
+		const definitions = this.definitions();
+		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
+		const names = definitions.map((definition) => definition.name);
+		const core = CORE_TOOL_NAMES;
+
+		const retrieved = this.toolRetriever
+			? await this.toolRetriever.retrieve(this.catalog(), query, topN)
+			: [];
+		const selected = [...core, ...retrieved.filter((name) => !core.includes(name))]
+			.map((name) => byName.get(name))
+			.filter((definition): definition is Definition => definition !== undefined);
+		const direct = selected.map((definition) => this.buildTool(definition));
+		const baseline: ToolDescriptor[] = selected.map((definition) => ({
+			name: definition.name,
+			description: definition.description
+		}));
+
+		const searchTools = tool({
+			name: 'search_tools',
+			description:
+				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Returns each match with the exact input schema; call it via use_tool.',
+			parameters: z.toJSONSchema(
+				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
+			) as never,
+			strict: false,
+			execute: async (input) => {
+				const { query: toolQuery, limit } = input as { query: string; limit?: number };
+				const ranked = this.toolRetriever
+					? await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5)
+					: [];
+				return ranked
+					.map((name) => byName.get(name))
+					.filter((definition): definition is Definition => definition !== undefined)
+					.map((definition) => ({
+						name: definition.name,
+						description: definition.description,
+						classification: definition.classification,
+						input_schema: z.toJSONSchema(definition.parameters)
+					}));
+			}
+		});
+
+		const useTool = tool({
+			name: 'use_tool',
+			description:
+				"Execute a FollowThrough tool by name. name must be an exact tool name from search_tools; payload must match that tool's input schema.",
+			parameters: z.toJSONSchema(
+				z.object({
+					name: z.string().min(1),
+					payload: z.record(z.string(), z.unknown()).optional()
 				})
-			);
+			) as never,
+			strict: false,
+			needsApproval: async (_context, input) => {
+				const target = byName.get((input as { name?: string }).name ?? '');
+				return target?.classification === 'mutation' && this.mode === 'approval_required';
+			},
+			errorFunction: (_context, error) =>
+				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+			execute: async (input, _runContext, details) => {
+				const { name, payload } = input as { name: string; payload?: Record<string, unknown> };
+				const match = matchToolName(name, names);
+				if (match.kind === 'none') return { error: `No tool named "${name}".` };
+				if (match.kind === 'suggestion')
+					return { error: `No tool named "${name}". Did you mean "${match.name}"?` };
+				const target = byName.get(match.name)!;
+				const validation = target.parameters.safeParse(payload ?? {});
+				if (!validation.success)
+					return { error: `Invalid payload for "${target.name}": ${validation.error.message}` };
+				const parsed = validation.data as Record<string, unknown>;
+				if (!this.toolExecutor) return target.execute(parsed);
+				return this.toolExecutor.execute(
+					{
+						callId: String(details?.toolCall?.callId ?? ''),
+						toolName: target.name,
+						arguments: parsed,
+						classification: target.classification
+					},
+					() => target.execute(parsed)
+				);
+			}
+		});
+
+		return { tools: [...direct, searchTools, useTool], baseline };
+	}
+
+	/** Static name + description catalog, used by the tool retriever. */
+	catalog(): ToolDescriptor[] {
+		return this.definitions()
+			.filter((definition) => !CORE_TOOL_NAMES.includes(definition.name))
+			.map((definition) => ({ name: definition.name, description: definition.description }));
+	}
+
+	private buildTool(definition: Definition): Tool<unknown> {
+		return tool({
+			name: definition.name,
+			description: definition.description,
+			parameters: z.toJSONSchema(definition.parameters) as never,
+			strict: false,
+			needsApproval: definition.classification === 'mutation' && this.mode === 'approval_required',
+			errorFunction: (_context, error) =>
+				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+			execute: async (input, _runContext, details) => {
+				const parsed = input as Record<string, unknown>;
+				if (!this.toolExecutor) return definition.execute(parsed);
+				return this.toolExecutor.execute(
+					{
+						callId: String(details?.toolCall?.callId ?? ''),
+						toolName: definition.name,
+						arguments: parsed,
+						classification: definition.classification
+					},
+					() => definition.execute(parsed)
+				);
+			}
+		});
 	}
 
 	private definitions(): Definition[] {
 		const actor = this.actor;
 		const factory = this.controllers;
+		const conversationId = this.context.input.conversationId;
 		const define = <T extends z.ZodObject>(
 			name: string,
 			description: string,
@@ -287,6 +412,17 @@ export class AgentToolRegistry {
 			execute: (input) => execute(parameters.parse(input))
 		});
 		return [
+			define(
+				'search',
+				"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps.",
+				'read',
+				z.object({ query: z.string().min(1) }),
+				(input) =>
+					factory.retrieval().search(actor, {
+						query: input.query,
+						...(conversationId ? { conversationId } : {})
+					})
+			),
 			define(
 				'get_workspace_context',
 				'Read projects, notes, skills, and pending work.',
@@ -614,7 +750,7 @@ export class AgentToolRegistry {
 			),
 			define(
 				'list_project_memory',
-				'Read the durable memory entries a project shares with agents: facts, decisions, constraints, terminology, and preferences.',
+				'Read the durable memory entries a specific project shares with agents: facts, decisions, constraints, terminology, and preferences. Use when the request concerns an active or referenced project and its projectId is known.',
 				'read',
 				z.object({ projectId: id }),
 				(input) =>
@@ -625,7 +761,7 @@ export class AgentToolRegistry {
 			),
 			define(
 				'list_user_memory',
-				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects.',
+				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects. Use when personal context could improve the response.',
 				'read',
 				none,
 				() => factory.memory().list(actor, { sharedOnly: true })

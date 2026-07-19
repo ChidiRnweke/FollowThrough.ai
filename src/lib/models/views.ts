@@ -17,6 +17,7 @@ import type {
 	ArtifactView,
 	Diagram,
 	ExternalReference,
+	MemorySuggestion,
 	Note,
 	NoteRelationship,
 	NoteSummary,
@@ -57,6 +58,10 @@ export interface SuggestionView {
 	readonly note?: NoteRef;
 	readonly anchor?: SourceAnchor;
 	readonly provenance: Provenance;
+}
+
+export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'> {
+	readonly suggestion: MemorySuggestion;
 }
 
 export interface BacklinkView {
@@ -105,6 +110,14 @@ export interface ShellContext {
 	readonly noteTree: readonly NoteSummary[];
 	readonly skills: readonly SkillSummary[];
 	readonly pendingSuggestionCount: number;
+	readonly pendingMemoryNotifications: readonly PendingMemoryNotification[];
+}
+
+export interface PendingMemoryNotification {
+	readonly projectId?: ProjectId;
+	readonly label: string;
+	readonly href: string;
+	readonly count: number;
 }
 
 export interface ConversationSummary {
@@ -149,6 +162,14 @@ export interface SuggestionGroup {
 
 export interface ListSuggestionsOutput {
 	readonly groups: readonly SuggestionGroup[];
+}
+
+export interface ListPendingMemoryInput {
+	readonly projectId?: ProjectId;
+}
+
+export interface ListPendingMemoryOutput {
+	readonly suggestions: readonly MemorySuggestionView[];
 }
 
 export interface ListSkillsOutput {

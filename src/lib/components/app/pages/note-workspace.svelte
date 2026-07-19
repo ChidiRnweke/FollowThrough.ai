@@ -523,7 +523,7 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
-<div class="note-measure mx-auto flex min-h-full w-full flex-1 flex-col gap-4">
+<div class="note-measure mx-auto flex w-full flex-1 flex-col gap-4">
 	<div class="flex min-h-8 flex-wrap items-center gap-2">
 		<div class="min-w-0 flex-1">
 			<NoteBreadcrumb {shell} {note} />
@@ -678,7 +678,11 @@
 	{:else}
 		<div class="flex flex-col gap-3" aria-label="Loading note from device">
 			<Skeleton class="h-5 w-full" />
+			<Skeleton class="h-5 w-11/12" />
+			<Skeleton class="h-5 w-4/5" />
+			<Skeleton class="mt-2 h-5 w-full" />
 			<Skeleton class="h-5 w-5/6" />
+			<Skeleton class="h-5 w-3/4" />
 			<Skeleton class="h-5 w-2/3" />
 		</div>
 	{/if}

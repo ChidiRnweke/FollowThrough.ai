@@ -8,7 +8,7 @@ import type {
 } from '$lib/models';
 import { InvalidGeneratedContentError } from '$lib/models';
 import type { RetrievalIndexRepository } from '$lib/repositories';
-import type { EmbeddingClient, KnowledgeSearcher } from './contracts';
+import type { EmbeddingClient, KnowledgeSearcher, Reranker } from './contracts';
 import type { LinkFinder, RelationshipClassifier } from '$lib/services/relationships/contracts';
 import type { NoteReader } from '$lib/services/notes/contracts';
 
@@ -30,6 +30,32 @@ export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {
 		if (!embedding || batch.vectors.length !== 1)
 			throw new InvalidGeneratedContentError('Query embedding returned an invalid result');
 		return this.repository.searchByEmbedding(actor, embedding, limit, projectId);
+	}
+}
+
+/**
+ * Wraps a knowledge searcher with a reranking stage: retrieve a wide candidate
+ * set from the cheap vector search, then shrink it to `limit` with the reranker.
+ */
+export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
+	constructor(
+		private readonly inner: KnowledgeSearcher,
+		private readonly reranker: Reranker,
+		private readonly candidateMultiplier = 5,
+		private readonly minCandidates = 40
+	) {}
+
+	async search(
+		actor: ActorContext,
+		query: string,
+		limit = 10,
+		projectId?: ProjectId
+	): Promise<readonly SearchMatch[]> {
+		if (!query.trim()) return [];
+		const wideLimit = Math.max(this.minCandidates, limit * this.candidateMultiplier);
+		const candidates = await this.inner.search(actor, query, wideLimit, projectId);
+		if (candidates.length <= limit) return candidates;
+		return this.reranker.rerank(query, candidates, limit);
 	}
 }
 

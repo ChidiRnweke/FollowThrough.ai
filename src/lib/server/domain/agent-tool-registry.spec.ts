@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { ControllerFactory } from '$lib/factories';
+import { InMemoryToolRetriever } from '$lib/testing/fakes/in-memory-agent';
 import { testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
 import {
 	AgentToolRegistry,
@@ -49,6 +50,29 @@ describe('Agent tool coverage invariants', () => {
 
 	it('exposes the user profile as a read tool', async () => {
 		expect(await approvalFor('approval_required', 'list_user_memory')).toBe(false);
+	});
+
+	it('keeps all retrieval tools directly available when ranking selects another tool', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_note'];
+		const selected = await new AgentToolRegistry(
+			{} as ControllerFactory,
+			testActor(),
+			'auto_accept',
+			{
+				provenanceId: testProvenanceId(),
+				input: { prompt: 'Create a note' },
+				model: 'openai/gpt-5.6'
+			},
+			undefined,
+			retriever
+		).agentTools('Create a note');
+		expect(selected.baseline.map((tool) => tool.name)).toEqual([
+			'search',
+			'list_user_memory',
+			'list_project_memory',
+			'create_note'
+		]);
 	});
 
 	it('does not expose the agent controller recursively', () => {

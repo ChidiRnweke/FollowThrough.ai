@@ -1,36 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { SearchDocument, SearchDocumentId, Skill } from '$lib/models';
+import type { Skill } from '$lib/models';
 import { InMemorySkills } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/fakes/in-memory-search';
-import {
-	memoryEntryBuilder,
 	noteBuilder,
 	testActor,
-	testMemoryEntryId,
 	testNoteId,
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/fixtures/domain-builders';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/fakes/in-memory-memory-repository';
 import { BasicAgent } from './basic-agent';
 import { EnrichedAgentContextBuilder } from './agent-context-capabilities';
-import { EmbeddedKnowledgeSearcher } from '$lib/services';
-
-const document = (overrides: Partial<SearchDocument> = {}): SearchDocument => ({
-	id: crypto.randomUUID() as SearchDocumentId,
-	projectId: testProjectId(),
-	noteId: testNoteId(2),
-	content: 'Use an asynchronous event bus.',
-	contentHash: 'hash',
-	sourceRevision: 1,
-	chunkIndex: 0,
-	embedding: [1, 0, 0],
-	...overrides
-});
 
 const skill = (project = testProjectId()): Skill => ({
 	note: noteBuilder({
@@ -46,111 +26,29 @@ const skill = (project = testProjectId()): Skill => ({
 });
 
 const setup = async (skillProject = testProjectId()) => {
-	const repository = new InMemorySearchRepository();
-	await repository.replaceForNote(testActor(), testNoteId(2), [document()]);
-	await repository.replaceForNote(testActor(), testNoteId(4), [
-		document({ noteId: testNoteId(4), projectId: testProjectId(2) })
-	]);
-	await repository.replaceForMemoryEntry(testActor(), testMemoryEntryId(), [
-		document({
-			noteId: undefined,
-			memoryEntryId: testMemoryEntryId(),
-			content: 'The event bus decision was made in April.'
-		})
-	]);
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder()];
 	const skills = new InMemorySkills();
 	skills.skills = [skill(skillProject)];
-	const memoryEntries = new InMemoryMemoryEntryRepository();
 	const builder = new EnrichedAgentContextBuilder(
 		new BasicAgent(undefined, undefined, notes),
-		new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
 		skills,
 		notes,
 		undefined,
-		undefined,
-		{ list: (actor, filter) => memoryEntries.list(actor, filter) }
+		undefined
 	);
-	return { builder, skills, notes, memoryEntries };
+	return { builder, skills, notes };
 };
 
 describe('Agent grounding invariants', () => {
-	it('retrieves knowledge only from the active project', async () => {
+	it('keeps user memory out of application context', async () => {
 		const { builder } = await setup();
-		const context = await builder.build(
-			testActor(),
-			{ noteId: testNoteId(), prompt: 'Explain the asynchronous decision' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect((context.knowledge as { noteId: string }[]).map((item) => item.noteId)).toEqual([
-			testNoteId(2)
-		]);
-	});
-
-	it('always injects shared profile memory', async () => {
-		const { builder, memoryEntries } = await setup();
-		memoryEntries.entries = [
-			memoryEntryBuilder({ projectId: undefined, content: 'I lead the platform team.' })
-		];
 		const context = await builder.build(
 			testActor(),
 			{ noteId: testNoteId(), prompt: 'Anything at all' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.userProfile as { content: string }[]).map((item) => item.content)).toEqual([
-			'I lead the platform team.'
-		]);
-	});
-
-	it('withholds unshared profile memory from the agent', async () => {
-		const { builder, memoryEntries } = await setup();
-		memoryEntries.entries = [
-			memoryEntryBuilder({ projectId: undefined, shareWithAgents: false, content: 'Private.' })
-		];
-		const context = await builder.build(
-			testActor(),
-			{ noteId: testNoteId(), prompt: 'Anything at all' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context.userProfile).toEqual([]);
-	});
-
-	it('keeps project memory entries out of the user profile', async () => {
-		const { builder, memoryEntries } = await setup();
-		memoryEntries.entries = [memoryEntryBuilder({ content: 'A project fact.' })];
-		const context = await builder.build(
-			testActor(),
-			{ noteId: testNoteId(), prompt: 'Anything at all' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context.userProfile).toEqual([]);
-	});
-
-	it('separates memory matches from note knowledge', async () => {
-		const { builder } = await setup();
-		const context = await builder.build(
-			testActor(),
-			{ noteId: testNoteId(), prompt: 'Explain the asynchronous decision' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(
-			(context.memory as { memoryEntryId: string }[]).map((item) => item.memoryEntryId)
-		).toEqual([testMemoryEntryId()]);
-	});
-
-	it('keeps memory matches out of the knowledge section', async () => {
-		const { builder } = await setup();
-		const context = await builder.build(
-			testActor(),
-			{ noteId: testNoteId(), prompt: 'Explain the asynchronous decision' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(
-			(context.knowledge as { memoryEntryId?: string }[]).every(
-				(item) => item.memoryEntryId === undefined
-			)
-		).toBe(true);
+		expect(context).not.toHaveProperty('userProfile');
 	});
 
 	it('exposes skill summaries without eagerly injecting instructions', async () => {

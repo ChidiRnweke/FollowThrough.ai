@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import AppSidebar from '$lib/components/app/app-sidebar.svelte';
 	import CommandPalette from '$lib/components/app/command-palette.svelte';
@@ -11,6 +12,12 @@
 	let { data, children } = $props();
 
 	const isNavigating = $derived(navigating.to !== null);
+
+	let insetRef = $state<HTMLElement | null>(null);
+
+	afterNavigate(() => {
+		if (insetRef) insetRef.scrollTop = 0;
+	});
 
 	const activeNoteId = $derived(
 		page.url.pathname.startsWith('/notes/')
@@ -40,7 +47,7 @@
 		{activeNoteId}
 		loading={isNavigating}
 	/>
-	<Sidebar.Inset class="relative min-w-0 overflow-y-auto border-l border-sidebar-border">
+	<Sidebar.Inset bind:ref={insetRef} class="relative min-w-0 overflow-y-auto border-l border-sidebar-border">
 		{#if isNavigating}
 			<div class="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden">
 				<div class="bg-primary h-full w-full origin-left animate-pulse"></div>

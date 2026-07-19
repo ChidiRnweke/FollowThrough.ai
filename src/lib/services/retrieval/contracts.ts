@@ -19,3 +19,13 @@ export interface EmbeddingClient {
 	readonly model: string;
 	embed(contents: readonly string[]): Promise<EmbeddingBatch>;
 }
+export interface Reranker {
+	rerank(
+		query: string,
+		matches: readonly SearchMatch[],
+		topN: number
+	): Promise<readonly SearchMatch[]>;
+}
+export interface Condenser {
+	condense(text: string): Promise<string>;
+}

@@ -9,6 +9,7 @@ import type {
 	ProjectsController,
 	ReferencesController,
 	RelationshipsController,
+	RetrievalController,
 	SkillsController,
 	SuggestionsController,
 	TodosController,
@@ -32,4 +33,5 @@ export interface ControllerFactory {
 	deliverables(): DeliverablesController;
 	trustPolicies(): TrustPoliciesController;
 	memory(): MemoryController;
+	retrieval(): RetrievalController;
 }

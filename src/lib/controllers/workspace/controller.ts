@@ -1,4 +1,12 @@
-import type { ActorContext, GetTodayViewInput, ShellContext, TodayView } from '$lib/models';
+import type {
+	ActorContext,
+	GetTodayViewInput,
+	PendingMemoryNotification,
+	Project,
+	ShellContext,
+	Suggestion,
+	TodayView
+} from '$lib/models';
 import type {
 	NoteTreeReader,
 	ProjectLister,
@@ -24,17 +32,55 @@ export interface WorkspaceDependencies {
 	waitingOnFinder: WaitingOnFinder;
 	todoViewAssembler: TodoViewAssembler;
 }
+
+export const toPendingMemoryNotifications = (
+	projects: readonly Project[],
+	suggestions: readonly Suggestion[]
+): readonly PendingMemoryNotification[] => {
+	const counts = new Map<string | undefined, number>();
+	for (const suggestion of suggestions) {
+		if (suggestion.kind !== 'memory' || suggestion.status !== 'proposed') continue;
+		const projectId = suggestion.payload.projectId;
+		counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
+	}
+	return [
+		...(counts.get(undefined)
+			? [{ label: 'Profile memory', href: '/profile', count: counts.get(undefined)! }]
+			: []),
+		...projects.flatMap((project) => {
+			const count = counts.get(project.id);
+			return count
+				? [
+						{
+							projectId: project.id,
+							label: project.name,
+							href: `/projects/${project.id}/memory`,
+							count
+						}
+					]
+				: [];
+		})
+	];
+};
+
 export class DefaultWorkspaceController implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
 	async getShellContext(actor: ActorContext): Promise<ShellContext> {
-		const [user, projects, noteTree, skills, pendingSuggestionCount] = await Promise.all([
+		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
 			this.dependencies.userReader.get(actor),
 			this.dependencies.projectLister.list(actor),
 			this.dependencies.noteTreeReader.list(actor),
 			this.dependencies.skillFinder.listEnabled(actor),
-			this.dependencies.suggestionLister.countByStatus(actor, 'proposed')
+			this.dependencies.suggestionLister.listByStatus(actor, 'proposed')
 		]);
-		return { user, projects, noteTree, skills, pendingSuggestionCount };
+		return {
+			user,
+			projects,
+			noteTree,
+			skills,
+			pendingSuggestionCount: pendingSuggestions.length,
+			pendingMemoryNotifications: toPendingMemoryNotifications(projects, pendingSuggestions)
+		};
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
 		const [due, waiting, pendingSuggestionCount, notes] = await Promise.all([

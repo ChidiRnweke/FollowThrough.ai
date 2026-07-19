@@ -5,13 +5,20 @@ import type {
 	ListMemoryInput,
 	CreateMemoryEntryInput,
 	UpdateMemoryEntryInput,
-	DeleteMemoryEntryInput
+	DeleteMemoryEntryInput,
+	ListPendingMemoryInput
 } from '$lib/models';
 
 export const getEntries = query(z.string().uuid().optional(), async (projectId) => {
 	const factory = AppFactory.controllerFactory();
 	return factory.memory().list(AppFactory.actor(), { projectId } as ListMemoryInput);
 });
+
+export const getPendingSuggestions = query(z.string().uuid().optional(), async (projectId) =>
+	AppFactory.controllerFactory()
+		.suggestions()
+		.listPendingMemory(AppFactory.actor(), { projectId } as ListPendingMemoryInput)
+);
 
 export const createEntry = command(
 	z.object({

@@ -1,4 +1,10 @@
-import type { ActorContext, Suggestion, SuggestionId } from '$lib/models';
+import type {
+	ActorContext,
+	Suggestion,
+	SuggestionId,
+	SuggestionStatus,
+	SuggestionView
+} from '$lib/models';
 import {
 	ExpiredSuggestionError,
 	ExternalServiceError,
@@ -9,12 +15,50 @@ import type {
 	SuggestionAccepter,
 	SuggestionCreator,
 	SuggestionFinder,
+	SuggestionLister,
 	SuggestionProposal,
 	SuggestionRejecter,
-	SuggestionReverter
+	SuggestionReverter,
+	SuggestionViewAssembler
 } from '$lib/services';
 import type { SnapshotParticipant } from './in-memory-transaction';
 import { testNow, testSuggestionId } from '../fixtures/domain-builders';
+
+export class InMemorySuggestionReader implements SuggestionLister, SuggestionViewAssembler {
+	suggestions: Suggestion[] = [];
+
+	async listByStatus(
+		_actor: ActorContext,
+		status: SuggestionStatus,
+		noteId?: Suggestion['noteId']
+	): Promise<readonly Suggestion[]> {
+		return this.suggestions.filter(
+			(suggestion) => suggestion.status === status && (!noteId || suggestion.noteId === noteId)
+		);
+	}
+
+	async countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number> {
+		return (await this.listByStatus(actor, status)).length;
+	}
+
+	async assemble(
+		actor: ActorContext,
+		suggestions: readonly Suggestion[]
+	): Promise<readonly SuggestionView[]> {
+		return suggestions.map((suggestion) => ({
+			suggestion,
+			provenance: {
+				id: suggestion.provenanceId,
+				userId: actor.userId,
+				producerKind: 'agent',
+				producerName: 'Agent memory',
+				pipeline: 'memory',
+				metadata: {},
+				createdAt: suggestion.createdAt
+			}
+		}));
+	}
+}
 
 export class InMemorySuggestions
 	implements

@@ -23,8 +23,8 @@
 
 <div
 	class={cn(
-		'mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8',
-		fill && 'min-h-full flex-1',
+		'mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-6 md:px-8',
+		fill && 'flex-1',
 		className
 	)}
 >
