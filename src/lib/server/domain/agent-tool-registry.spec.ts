@@ -26,6 +26,26 @@ const approvalFor = async (
 	return selected.needsApproval({} as never, {} as never, 'call-1');
 };
 
+const indirectToolFor = (
+	mode: 'approval_required' | 'auto_accept',
+	name: 'search_tools' | 'use_tool',
+	options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+): FunctionTool =>
+	new AgentToolRegistry(
+		options.factory ?? ({} as ControllerFactory),
+		testActor(),
+		mode,
+		{
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Help' },
+			model: 'openai/gpt-5.6'
+		},
+		undefined,
+		options.retriever
+	)
+		.agentTools()
+		.find((candidate) => candidate.name === name) as FunctionTool;
+
 describe('Agent tool coverage invariants', () => {
 	it('classifies every covered controller method', () => {
 		const classifications = Object.values(agentToolCoverage).flatMap((controller) =>
@@ -52,10 +72,10 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'list_user_memory')).toBe(false);
 	});
 
-	it('keeps all retrieval tools directly available when ranking selects another tool', async () => {
+	it('keeps only frequent grounding and memory-proposal tools directly available', () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_note'];
-		const selected = await new AgentToolRegistry(
+		const selected = new AgentToolRegistry(
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',
@@ -66,13 +86,124 @@ describe('Agent tool coverage invariants', () => {
 			},
 			undefined,
 			retriever
-		).agentTools('Create a note');
-		expect(selected.baseline.map((tool) => tool.name)).toEqual([
+		).agentTools();
+		expect(selected.map((tool) => tool.name)).toEqual([
 			'search',
 			'list_user_memory',
 			'list_project_memory',
-			'create_note'
+			'get_workspace_context',
+			'get_note',
+			'list_todos',
+			'load_skill',
+			'propose_memory_change',
+			'search_tools',
+			'use_tool'
 		]);
+	});
+
+	it('keeps action tools in the searchable long-tail catalog', () => {
+		expect(
+			registry('auto_accept')
+				.catalog()
+				.some((tool) => tool.name === 'create_note')
+		).toBe(true);
+	});
+
+	it('excludes first-class tools from the searchable long-tail catalog', () => {
+		const names = new Set(
+			registry('auto_accept')
+				.catalog()
+				.map((tool) => tool.name)
+		);
+		expect(
+			[
+				'search',
+				'list_user_memory',
+				'list_project_memory',
+				'get_workspace_context',
+				'get_note',
+				'list_todos',
+				'load_skill',
+				'propose_memory_change'
+			].filter((name) => names.has(name))
+		).toEqual([]);
+	});
+
+	it('returns exact long-tail schemas from tool search', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_note'];
+		const selected = indirectToolFor('auto_accept', 'search_tools', { retriever });
+		const result = await selected.invoke({} as never, JSON.stringify({ query: 'create a note' }));
+		expect(result).toMatchObject([
+			{
+				name: 'create_note',
+				classification: 'mutation',
+				input_schema: { type: 'object' }
+			}
+		]);
+	});
+
+	it('requires approval for long-tail mutations in approval-required mode', async () => {
+		const selected = indirectToolFor('approval_required', 'use_tool');
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{ name: 'create_note', payload: { title: 'Decision log' } } as never,
+				'call-1'
+			)
+		).toBe(true);
+	});
+
+	it('runs long-tail mutations without approval in auto-accept mode', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{ name: 'create_note', payload: { title: 'Decision log' } } as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('runs long-tail reads without approval', async () => {
+		const selected = indirectToolFor('approval_required', 'use_tool');
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{ name: 'list_projects', payload: {} } as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('dispatches an exact long-tail tool name to its controller', async () => {
+		const factory = {
+			projects: () => ({ list: async () => ['General'] })
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({ name: 'list_projects', payload: {} })
+		);
+		expect(result).toEqual(['General']);
+	});
+
+	it('does not execute a guessed long-tail tool name', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({ name: 'creat_note', payload: { title: 'Decision log' } })
+		);
+		expect(result).toEqual({ error: 'No tool named "creat_note". Did you mean "create_note"?' });
+	});
+
+	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({ name: 'create_note', payload: {} })
+		);
+		expect(result).toMatchObject({ error: expect.stringContaining('Invalid payload') });
 	});
 
 	it('does not expose the agent controller recursively', () => {

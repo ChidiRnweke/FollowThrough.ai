@@ -98,6 +98,55 @@ describe('Agent tool event invariants', () => {
 		});
 		expect(event).toMatchObject({ type: 'tool_completed', callId: 'call-2', failure: 'Denied' });
 	});
+
+	it('presents a dispatched long-tail call as its inner action', () => {
+		const event = new AgentToolEventMapper().map({
+			type: 'run_item_stream_event',
+			name: 'tool_called',
+			item: {
+				toJSON: () => ({
+					rawItem: {
+						callId: 'call-3',
+						name: 'use_tool',
+						arguments: JSON.stringify({
+							name: 'create_note',
+							payload: { title: 'Decision log' }
+						})
+					}
+				})
+			}
+		});
+		expect(event).toEqual({
+			type: 'tool_started',
+			callId: 'call-3',
+			name: 'create_note',
+			arguments: { title: 'Decision log' },
+			output: undefined
+		});
+	});
+
+	it('preserves the inner action name on dispatched tool output', () => {
+		const mapper = new AgentToolEventMapper();
+		mapper.map({
+			type: 'run_item_stream_event',
+			name: 'tool_called',
+			item: {
+				toJSON: () => ({
+					rawItem: {
+						callId: 'call-4',
+						name: 'use_tool',
+						arguments: JSON.stringify({ name: 'save_note', payload: { note: {} } })
+					}
+				})
+			}
+		});
+		const event = mapper.map({
+			type: 'run_item_stream_event',
+			name: 'tool_output',
+			item: { toJSON: () => ({ rawItem: { callId: 'call-4', name: 'use_tool' } }) }
+		});
+		expect(event).toEqual({ type: 'tool_completed', callId: 'call-4', name: 'save_note' });
+	});
 });
 
 describe('Agent context invariants', () => {

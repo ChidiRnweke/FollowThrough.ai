@@ -371,8 +371,7 @@ export class OpenAIDiagramAgent
 		try {
 			const runner = new Runner({
 				modelProvider: provider,
-				tracingDisabled: true,
-				traceIncludeSensitiveData: false
+				traceIncludeSensitiveData: true
 			});
 			const stream = await runner.run(agent, input.prompt, {
 				stream: true,

@@ -97,7 +97,7 @@ This document is the independent behavioural specification for backend models, s
 - A skill is a skill-kind document in a project and is loaded in full only after its summary is selected.
 - Agent context contains enabled skill summaries and trigger hints, never full instructions.
 - Loading a skill records the skill, context note when present, and provenance; merely advertising its summary does not record usage.
-- Each user has one idempotently provisioned FollowThrough skill stored in General and listed in Skills, and provisioning never overwrites an existing user-edited copy.
+- Each user has one idempotently provisioned FollowThrough guide stored in General and listed in Skills. Provisioning upgrades only recognized untouched stock versions and never overwrites an edited, renamed, published, or adopted legacy copy.
 - Restoring a skill version creates a new current immutable revision and preserves all earlier revisions.
 
 ## Retrieval and agent execution
@@ -115,7 +115,9 @@ This document is the independent behavioural specification for backend models, s
 - Search chunks are deterministic, carry a cryptographic content hash, and are replaced when their source revision changes.
 - Identical source content is not embedded twice for the same indexing version.
 - Vector candidates are reranked into the closed generic relationship label set.
-- The agent receives the current project, note, selection, conversation history, and enabled skill summaries as context; user memory, project memory, and knowledge-base evidence remain available through first-class retrieval tools rather than eager context injection.
+- The agent receives the current project, note, selection, conversation history, and enabled skill summaries as context. Workspace state, note content, todos, user and project memory, knowledge-base evidence, relevant skill instructions, and memory proposals remain available through a fixed first-class tool set rather than eager injection.
+- Every other app capability is excluded from the direct tool surface, discovered on demand through tool search, and dispatched only by its exact registered name and validated schema.
+- A dynamically dispatched mutation retains its classification and approval requirement; user-facing events expose the inner action while approval resumption remains keyed to the unchanged SDK call identity.
 - An agent turn belongs to an actor-owned conversation; a foreign conversation identifier is indistinguishable from a missing one.
 - Conversation model and execution-mode overrides persist independently of user defaults; precedence is conversation override, user default, then environment default.
 - The effective model is retained on assistant messages and agent provenance.

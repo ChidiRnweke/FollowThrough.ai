@@ -39,4 +39,19 @@ describe('Skill selection invariants', () => {
 		);
 		expect(selected).toEqual([]);
 	});
+
+	it('selects the FollowThrough guide for product terminology questions', async () => {
+		const selected = await new KeywordRelevantSkillSelector().select(
+			testActor(),
+			'How does memory work?',
+			[
+				skill({
+					name: 'FollowThrough',
+					description: 'Guide to FollowThrough features, terminology, navigation, and workflows',
+					triggerHints: ['how to', 'where', 'memory', 'skills', 'todos']
+				})
+			]
+		);
+		expect(selected.map((item) => item.name)).toEqual(['FollowThrough']);
+	});
 });

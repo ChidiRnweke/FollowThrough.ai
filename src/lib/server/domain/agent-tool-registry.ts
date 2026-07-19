@@ -31,12 +31,19 @@ import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/serv
 import { matchToolName } from './tool-name-matcher';
 
 /**
- * First-class tools that are always registered directly and excluded from the
- * retriever ranking: knowledge search plus the user and project memory reads.
- * The agent should reach for these liberally (and the two memory reads in
- * parallel) rather than discovering them.
+ * Stable, frequently used tools the agent can call without first discovering
+ * them. Everything else stays in the on-demand tool-search catalog.
  */
-const CORE_TOOL_NAMES = ['search', 'list_user_memory', 'list_project_memory'];
+const FIRST_CLASS_TOOL_NAMES = [
+	'search',
+	'list_user_memory',
+	'list_project_memory',
+	'get_workspace_context',
+	'get_note',
+	'list_todos',
+	'load_skill',
+	'propose_memory_change'
+];
 
 export type AgentToolClassification =
 	| { readonly kind: 'read' | 'proposal' | 'mutation' }
@@ -266,32 +273,18 @@ export class AgentToolRegistry {
 	}
 
 	/**
-	 * Context-reducing surface for the agent. A small always-on core (`search`)
-	 * plus the tools most relevant to `query` (retrieved by embedding lookup) are
-	 * registered as REAL tools the model calls directly — no dispatch indirection
-	 * for the common case. `search_tools` discovers the long tail and `use_tool`
-	 * dispatches those by name. Returns the tools and the baseline names selected.
+	 * Context-reducing surface for the agent. Frequently used grounding tools are
+	 * registered directly. `search_tools` discovers every long-tail capability and
+	 * `use_tool` dispatches it by exact name.
 	 */
-	async agentTools(
-		query: string,
-		topN = 12
-	): Promise<{ tools: Tool<unknown>[]; baseline: ToolDescriptor[] }> {
+	agentTools(): Tool<unknown>[] {
 		const definitions = this.definitions();
 		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
 		const names = definitions.map((definition) => definition.name);
-		const core = CORE_TOOL_NAMES;
-
-		const retrieved = this.toolRetriever
-			? await this.toolRetriever.retrieve(this.catalog(), query, topN)
-			: [];
-		const selected = [...core, ...retrieved.filter((name) => !core.includes(name))]
-			.map((name) => byName.get(name))
-			.filter((definition): definition is Definition => definition !== undefined);
+		const selected = FIRST_CLASS_TOOL_NAMES.map((name) => byName.get(name)).filter(
+			(definition): definition is Definition => definition !== undefined
+		);
 		const direct = selected.map((definition) => this.buildTool(definition));
-		const baseline: ToolDescriptor[] = selected.map((definition) => ({
-			name: definition.name,
-			description: definition.description
-		}));
 
 		const searchTools = tool({
 			name: 'search_tools',
@@ -359,13 +352,13 @@ export class AgentToolRegistry {
 			}
 		});
 
-		return { tools: [...direct, searchTools, useTool], baseline };
+		return [...direct, searchTools, useTool];
 	}
 
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
 		return this.definitions()
-			.filter((definition) => !CORE_TOOL_NAMES.includes(definition.name))
+			.filter((definition) => !FIRST_CLASS_TOOL_NAMES.includes(definition.name))
 			.map((definition) => ({ name: definition.name, description: definition.description }));
 	}
 

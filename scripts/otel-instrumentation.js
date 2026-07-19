@@ -2,25 +2,21 @@
  * OpenTelemetry + OpenInference preload for Phoenix.
  *
  * Loaded before app code via `node --import ./scripts/otel-instrumentation.js build`
- * so the OpenAI instrumentation patches the `openai` client before it is imported.
- * Modelled on TalkingCode's `talkingcode-frontend/scripts/otel-instrumentation.js`.
+ * so the OpenAI Agents instrumentation registers its TracingProcessor before the
+ * first Runner.run() call. Mirrors the Python TalkingCode pattern:
+ *   phoenix.otel.register(auto_instrument=True)
  *
  * Telemetry is opt-in: it initialises only when OTEL_EXPORTER_OTLP_ENDPOINT is set,
  * and otherwise no-ops. Export failures never propagate into request handling — the
  * fail-hard rule applies to config/secrets, not to trace export.
  */
-// Loaded before app code via `node --import`, so it runs before the app's own
-// dotenv. Load .env here too, or none of the PHOENIX_/OTEL_ vars would be visible.
 import 'dotenv/config';
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { resourceFromAttributes } from '@opentelemetry/resources';
-import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
-import { SEMRESATTRS_PROJECT_NAME } from '@arizeai/openinference-semantic-conventions';
-import { OpenAIInstrumentation } from '@arizeai/openinference-instrumentation-openai';
+import { register } from '@arizeai/phoenix-otel';
+import { OpenAIAgentsInstrumentation } from '@arizeai/openinference-instrumentation-openai-agents';
+import * as agents from '@openai/agents';
 
-/** @type {NodeSDK | null} */
-let sdk = null;
+/** @type {import('@opentelemetry/sdk-trace-node').NodeTracerProvider | null} */
+let provider = null;
 
 export function initTelemetry() {
 	const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
@@ -31,42 +27,36 @@ export function initTelemetry() {
 
 	const projectName = process.env.PHOENIX_PROJECT_NAME || 'followthrough';
 	process.stdout.write(
-		`[OTel] Initializing telemetry for ${projectName}. Exporting to ${endpoint}\n`
+		`[OTel] Initializing Phoenix telemetry for ${projectName}. Exporting to ${endpoint}\n`
 	);
 
-	const resource = resourceFromAttributes({
-		[ATTR_SERVICE_NAME]: projectName,
-		[ATTR_SERVICE_VERSION]: process.env.npm_package_version || '0.0.1',
-		[SEMRESATTRS_PROJECT_NAME]: projectName,
-		'deployment.environment': process.env.OTEL_ENVIRONMENT || process.env.NODE_ENV || 'development'
+	// register() creates a TracerProvider with OTLP export to the given endpoint,
+	// stamping the phoenix.project resource attribute for collector routing.
+	// It reads PHOENIX_API_KEY from env for auth headers automatically.
+	provider = register({
+		projectName,
+		endpoint: `${endpoint.replace(/\/+$/, '')}/v1/traces`,
+		headers: process.env.PHOENIX_API_KEY
+			? {
+					authorization: `Bearer ${process.env.PHOENIX_API_KEY}`,
+					api_key: process.env.PHOENIX_API_KEY
+				}
+			: undefined
 	});
 
-	// Self-hosted Phoenix behind an OTLP collector usually needs no auth; when a
-	// key is provided, forward it both ways so either collector config accepts it.
-	const headers = process.env.PHOENIX_API_KEY
-		? {
-				authorization: `Bearer ${process.env.PHOENIX_API_KEY}`,
-				api_key: process.env.PHOENIX_API_KEY
-			}
-		: undefined;
+	// Bridge the OpenAI Agents SDK's proprietary tracing to OTel/OpenInference
+	// spans. By default this replaces the SDK's built-in OpenAI exporter (which
+	// we don't need since we use OpenRouter, not OpenAI directly).
+	const instrumentation = new OpenAIAgentsInstrumentation({ tracerProvider: provider });
+	instrumentation.manuallyInstrument(agents);
 
-	sdk = new NodeSDK({
-		resource,
-		traceExporter: new OTLPTraceExporter({
-			url: `${endpoint.replace(/\/+$/, '')}/v1/traces`,
-			headers
-		}),
-		instrumentations: [new OpenAIInstrumentation()]
-	});
-
-	sdk.start();
-	process.stdout.write('[OTel] Telemetry initialized.\n');
-	return sdk;
+	process.stdout.write('[OTel] Phoenix telemetry + Agents instrumentation initialized.\n');
+	return provider;
 }
 
 export async function shutdownTelemetry() {
 	try {
-		if (sdk) await sdk.shutdown();
+		if (provider) await provider.shutdown();
 	} catch (err) {
 		process.stderr.write(`[OTel] Error shutting down telemetry: ${err}\n`);
 	}
