@@ -76,6 +76,11 @@ export class AgentRunExecutor {
 							updatedAt: new Date().toISOString() as DateTime
 						});
 					});
+					// Every other durable transition notifies; without this one a
+					// subscriber waiting on the run reaching a terminal status never
+					// learns it parked, because the preceding `approval_required`
+					// event fires while the run is still `running`.
+					this.deps.eventBus.notify(run.id);
 					return 'awaiting_approval';
 				}
 				await this.complete(run, actor, update.sessionItems, lastEvent?.cursor, decision?.callId);

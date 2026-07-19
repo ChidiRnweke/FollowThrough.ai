@@ -9,8 +9,18 @@ import type {
 export interface TemplateUploader {
 	initiateUpload(
 		actor: ActorContext,
-		input: { projectId: ProjectId; name: string; mediaType: string; byteSize: number; checksumSha256: string }
-	): Promise<{ templateId: TemplateId; uploadUrl: string; requiredHeaders: Record<string, string> }>;
+		input: {
+			projectId: ProjectId;
+			name: string;
+			mediaType: string;
+			byteSize: number;
+			checksumSha256: string;
+		}
+	): Promise<{
+		templateId: TemplateId;
+		uploadUrl: string;
+		requiredHeaders: Record<string, string>;
+	}>;
 	completeUpload(actor: ActorContext, templateId: TemplateId): Promise<ProjectTemplate>;
 }
 

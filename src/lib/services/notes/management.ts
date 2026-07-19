@@ -205,6 +205,7 @@ export class NoteManagementService
 			document: { type: 'doc', content: [] },
 			plainText: '',
 			currentRevision: 1,
+			publishedRevision: 0,
 			isPinned: false,
 			createdAt: timestamp,
 			updatedAt: timestamp

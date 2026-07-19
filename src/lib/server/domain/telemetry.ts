@@ -1,6 +1,9 @@
 import { trace, context, ROOT_CONTEXT, SpanStatusCode, type Span } from '@opentelemetry/api';
 import { setSession } from '@arizeai/openinference-core';
-import { SemanticConventions, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+import {
+	SemanticConventions,
+	OpenInferenceSpanKind
+} from '@arizeai/openinference-semantic-conventions';
 
 const TRACER_NAME = 'followthrough';
 
@@ -70,6 +73,7 @@ export async function* traceAgentTurn<T>(
 			attributes: {
 				[SemanticConventions.OPENINFERENCE_SPAN_KIND]: OpenInferenceSpanKind.AGENT,
 				[SemanticConventions.INPUT_VALUE]: params.input,
+				[SemanticConventions.INPUT_MIME_TYPE]: 'text/plain',
 				[SemanticConventions.SESSION_ID]: params.sessionId,
 				[SemanticConventions.LLM_MODEL_NAME]: params.model
 			}
@@ -80,6 +84,7 @@ export async function* traceAgentTurn<T>(
 		sessionId: params.sessionId
 	});
 
+	let errored = false;
 	try {
 		const iterator = body()[Symbol.asyncIterator]();
 		for (;;) {
@@ -87,9 +92,8 @@ export async function* traceAgentTurn<T>(
 			if (result.done) break;
 			yield result.value;
 		}
-		span.setAttribute(SemanticConventions.OUTPUT_VALUE, getOutput());
-		span.setStatus({ code: SpanStatusCode.OK });
 	} catch (error) {
+		errored = true;
 		span.setStatus({
 			code: SpanStatusCode.ERROR,
 			message: error instanceof Error ? error.message : String(error)
@@ -97,6 +101,14 @@ export async function* traceAgentTurn<T>(
 		if (error instanceof Error) span.recordException(error);
 		throw error;
 	} finally {
+		if (!errored) {
+			const output = getOutput();
+			if (output) {
+				span.setAttribute(SemanticConventions.OUTPUT_VALUE, output);
+				span.setAttribute(SemanticConventions.OUTPUT_MIME_TYPE, 'text/plain');
+			}
+			span.setStatus({ code: SpanStatusCode.OK });
+		}
 		span.end();
 	}
 }

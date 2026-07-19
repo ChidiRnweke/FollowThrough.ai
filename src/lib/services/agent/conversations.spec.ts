@@ -33,7 +33,8 @@ describe('Conversation visibility invariants', () => {
 
 	it('limits recent chat sessions at the journal boundary', async () => {
 		const journal = new PersistentConversationJournal(new InMemoryConversationRepository());
-		for (const prompt of ['One', 'Two', 'Three']) await journal.getOrCreate(testActor(), { prompt });
+		for (const prompt of ['One', 'Two', 'Three'])
+			await journal.getOrCreate(testActor(), { prompt });
 		expect(await journal.listConversations(testActor(), { limit: 2 })).toHaveLength(2);
 	});
 

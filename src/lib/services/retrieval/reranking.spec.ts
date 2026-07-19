@@ -48,7 +48,10 @@ describe('RerankingKnowledgeSearcher', () => {
 	});
 
 	it('narrows the reranked candidates down to the requested limit', async () => {
-		const searcher = new RerankingKnowledgeSearcher(new RecordingSearcher(wide), new TopNReranker());
+		const searcher = new RerankingKnowledgeSearcher(
+			new RecordingSearcher(wide),
+			new TopNReranker()
+		);
 		const results = await searcher.search(actor, 'query', 8);
 		expect(results).toHaveLength(8);
 	});

@@ -61,6 +61,12 @@ export const getNote = query(z.string().uuid(), async (noteId) => {
 	return view.note;
 });
 
+export const getNoteView = query(z.string().uuid(), async (noteId) => {
+	return AppFactory.controllerFactory()
+		.notes()
+		.get(AppFactory.actor(), { noteId: noteId as NoteId });
+});
+
 export const syncNote = command(
 	z.object({
 		note: noteSchema,

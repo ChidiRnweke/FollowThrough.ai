@@ -40,7 +40,10 @@ function headerImageToImageRun(dataUrl: string): ImageRun | null {
 	});
 }
 
-function headingFont(styles: ExtractedTemplateStyles, level: number): { name: string; size: number; bold: boolean; italics: boolean; color: string } {
+function headingFont(
+	styles: ExtractedTemplateStyles,
+	level: number
+): { name: string; size: number; bold: boolean; italics: boolean; color: string } {
 	const key = `Heading${level}`;
 	const h = styles.fonts.heading[key];
 	return {
@@ -58,10 +61,11 @@ function textRunFromNode(
 	isCode: boolean = false
 ): TextRun {
 	const text = (node.text as string) ?? '';
-	const marks = (node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
+	const marks =
+		(node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
 	let bold = false;
 	let italics = false;
-	let fontName = isCode ? 'Courier New' : styles.fonts.body.name ?? 'Calibri';
+	let fontName = isCode ? 'Courier New' : (styles.fonts.body.name ?? 'Calibri');
 	let fontSize = isCode ? 18 : (styles.fonts.body.size ?? 11) * 2;
 
 	for (const mark of marks) {
@@ -102,7 +106,16 @@ async function convertNode(
 			results.push(
 				new Paragraph({
 					heading: HEADING_LEVELS[level - 1],
-					children: [new TextRun({ text, font: h.name, size: h.size, bold: h.bold, italics: h.italics, color: h.color })]
+					children: [
+						new TextRun({
+							text,
+							font: h.name,
+							size: h.size,
+							bold: h.bold,
+							italics: h.italics,
+							color: h.color
+						})
+					]
 				})
 			);
 			break;
@@ -133,10 +146,12 @@ async function convertNode(
 							}
 						}
 					}
-					results.push(new Paragraph({
-						bullet: { level: depth },
-						children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
-					}));
+					results.push(
+						new Paragraph({
+							bullet: { level: depth },
+							children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
+						})
+					);
 				}
 			}
 			break;
@@ -155,10 +170,12 @@ async function convertNode(
 							}
 						}
 					}
-					results.push(new Paragraph({
-						numbering: { reference: 'default-numbering', level: depth },
-						children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
-					}));
+					results.push(
+						new Paragraph({
+							numbering: { reference: 'default-numbering', level: depth },
+							children: paraTexts.length > 0 ? paraTexts : [new TextRun({ text: '' })]
+						})
+					);
 				}
 			}
 			break;
@@ -166,18 +183,22 @@ async function convertNode(
 		case 'blockquote': {
 			for (const child of content) {
 				const childText = collectText(child);
-				results.push(new Paragraph({
-					indent: { left: 720 },
-					children: [new TextRun({ text: childText, italics: true })]
-				}));
+				results.push(
+					new Paragraph({
+						indent: { left: 720 },
+						children: [new TextRun({ text: childText, italics: true })]
+					})
+				);
 			}
 			break;
 		}
 		case 'codeBlock': {
 			const text = collectText(node);
-			results.push(new Paragraph({
-				children: [new TextRun({ text, font: 'Courier New', size: 18 })]
-			}));
+			results.push(
+				new Paragraph({
+					children: [new TextRun({ text, font: 'Courier New', size: 18 })]
+				})
+			);
 			break;
 		}
 		case 'horizontalRule': {
@@ -218,7 +239,14 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 	const titlePara = new Paragraph({
 		heading: HeadingLevel.HEADING_1,
 		alignment: AlignmentType.CENTER,
-		children: [new TextRun({ text: input.title, font: styles.fonts.body.name ?? 'Calibri', size: 24, bold: true })]
+		children: [
+			new TextRun({
+				text: input.title,
+				font: styles.fonts.body.name ?? 'Calibri',
+				size: 24,
+				bold: true
+			})
+		]
 	});
 	allParagraphs.push(titlePara);
 	allParagraphs.push(new Paragraph({ children: [] }));
@@ -228,7 +256,14 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 			allParagraphs.push(
 				new Paragraph({
 					heading: HeadingLevel.HEADING_2,
-					children: [new TextRun({ text: note.title, font: styles.fonts.body.name ?? 'Calibri', size: 26, bold: true })]
+					children: [
+						new TextRun({
+							text: note.title,
+							font: styles.fonts.body.name ?? 'Calibri',
+							size: 26,
+							bold: true
+						})
+					]
 				})
 			);
 		}
@@ -265,18 +300,20 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 			}
 		},
 		headers: { default: new Header(headerOptions) },
-		...(styles.footerContent ? {
-			footers: {
-				default: new Footer({
-					children: [
-						new Paragraph({
-							alignment: AlignmentType.CENTER,
-							children: [new TextRun({ text: styles.footerContent, size: 16 })]
+		...(styles.footerContent
+			? {
+					footers: {
+						default: new Footer({
+							children: [
+								new Paragraph({
+									alignment: AlignmentType.CENTER,
+									children: [new TextRun({ text: styles.footerContent, size: 16 })]
+								})
+							]
 						})
-					]
-				})
-			}
-		} : {}),
+					}
+				}
+			: {}),
 		children: allParagraphs as readonly (Paragraph | import('docx').Table)[]
 	};
 

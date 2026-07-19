@@ -74,6 +74,19 @@ export class Registry<K, V> {
 	}
 
 	/**
+	 * Returns the held store for `key` without acquiring a reference.  Use
+	 * this for read-only consumers (e.g. the right panel reading the focused
+	 * pane's selection / suggestions).  Returns `undefined` when no pane
+	 * currently holds the key, so callers can fall back gracefully.
+	 *
+	 * Unlike `for`, this does not bump the refcount and does not resurrect a
+	 * destroyed instance.
+	 */
+	peek(key: K): V | undefined {
+		return this.instances.get(key);
+	}
+
+	/**
 	 * Iterates every key currently referenced by at least one pane.  Used by
 	 * cross-pane updaters (e.g. todo mutations) that need to fan an update out
 	 * to whichever open note holds the matching record.

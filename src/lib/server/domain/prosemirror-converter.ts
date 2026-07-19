@@ -51,10 +51,7 @@ export function collectNodeText(node: Record<string, unknown>): string {
 	return content.map(collectNodeText).join('');
 }
 
-export function walkProseMirrorDoc(
-	doc: ProseMirrorDocument,
-	visitors: ProseMirrorVisitors
-): void {
+export function walkProseMirrorDoc(doc: ProseMirrorDocument, visitors: ProseMirrorVisitors): void {
 	const content = (doc.content as Array<Record<string, unknown>> | undefined) ?? [];
 	for (const node of content) {
 		walkNode(node, visitors, 0);
@@ -72,18 +69,42 @@ function walkNode(
 	const ctx: ProseMirrorVisitorContext = { node, depth, parentType, listItemIndex };
 
 	switch (type) {
-		case 'heading': visitors.heading?.(ctx); break;
-		case 'paragraph': visitors.paragraph?.(ctx); break;
-		case 'bulletList': visitors.bulletList?.(ctx); break;
-		case 'orderedList': visitors.orderedList?.(ctx); break;
-		case 'listItem': visitors.listItem?.(ctx); break;
-		case 'blockquote': visitors.blockquote?.(ctx); break;
-		case 'codeBlock': visitors.codeBlock?.(ctx); break;
-		case 'horizontalRule': visitors.horizontalRule?.(ctx); break;
-		case 'image': visitors.image?.(ctx); break;
-		case 'text': visitors.text?.(ctx); break;
-		case 'hardBreak': visitors.hardBreak?.(ctx); break;
-		default: visitors.unknown?.(ctx); break;
+		case 'heading':
+			visitors.heading?.(ctx);
+			break;
+		case 'paragraph':
+			visitors.paragraph?.(ctx);
+			break;
+		case 'bulletList':
+			visitors.bulletList?.(ctx);
+			break;
+		case 'orderedList':
+			visitors.orderedList?.(ctx);
+			break;
+		case 'listItem':
+			visitors.listItem?.(ctx);
+			break;
+		case 'blockquote':
+			visitors.blockquote?.(ctx);
+			break;
+		case 'codeBlock':
+			visitors.codeBlock?.(ctx);
+			break;
+		case 'horizontalRule':
+			visitors.horizontalRule?.(ctx);
+			break;
+		case 'image':
+			visitors.image?.(ctx);
+			break;
+		case 'text':
+			visitors.text?.(ctx);
+			break;
+		case 'hardBreak':
+			visitors.hardBreak?.(ctx);
+			break;
+		default:
+			visitors.unknown?.(ctx);
+			break;
 	}
 
 	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];

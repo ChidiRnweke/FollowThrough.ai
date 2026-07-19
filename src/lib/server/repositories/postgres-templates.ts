@@ -4,7 +4,8 @@ import type { TemplateRepository } from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
-const instant = (value: Date): ProjectTemplate['createdAt'] => value.toISOString() as ProjectTemplate['createdAt'];
+const instant = (value: Date): ProjectTemplate['createdAt'] =>
+	value.toISOString() as ProjectTemplate['createdAt'];
 
 const toTemplate = (row: typeof schema.projectTemplates.$inferSelect): ProjectTemplate => ({
 	id: row.id as TemplateId,
@@ -47,11 +48,16 @@ export class PostgresTemplateRepository implements TemplateRepository {
 		const [row] = await this.database
 			.select()
 			.from(schema.projectTemplates)
-			.where(and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId)));
+			.where(
+				and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId))
+			);
 		return row ? toTemplate(row) : undefined;
 	}
 
-	async listByProject(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTemplate[]> {
+	async listByProject(
+		actor: ActorContext,
+		projectId: ProjectId
+	): Promise<readonly ProjectTemplate[]> {
 		return (
 			await this.database
 				.select()
@@ -79,7 +85,10 @@ export class PostgresTemplateRepository implements TemplateRepository {
 				updatedAt: new Date()
 			})
 			.where(
-				and(eq(schema.projectTemplates.id, template.id), eq(schema.projectTemplates.userId, actor.userId))
+				and(
+					eq(schema.projectTemplates.id, template.id),
+					eq(schema.projectTemplates.userId, actor.userId)
+				)
 			)
 			.returning();
 		return toTemplate(row!);
@@ -88,6 +97,8 @@ export class PostgresTemplateRepository implements TemplateRepository {
 	async delete(actor: ActorContext, id: TemplateId): Promise<void> {
 		await this.database
 			.delete(schema.projectTemplates)
-			.where(and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId)));
+			.where(
+				and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId))
+			);
 	}
 }

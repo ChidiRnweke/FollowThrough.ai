@@ -30,6 +30,7 @@ const record = (overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord => ({
 	focusedNoteId: id(2),
 	pinnedTabs: [id(1)],
 	recentlyUsed: [id(2), id(1)],
+	stripHidden: false,
 	...overrides
 });
 

@@ -44,12 +44,42 @@ class WorkbenchStore {
 	/** Recently-focused tabs, most-recent first.  Used to pick a tab to focus when the active one closes. */
 	recentlyUsed = $state<readonly NoteId[]>([]);
 
+	/**
+	 * Whether the user has collapsed the global tab strip.  Display
+	 * preference only — does not affect open-tab state.  Persists in
+	 * localStorage (fast first-paint read) and in the IndexedDB
+	 * `WorkspaceRecord` (cross-device source of truth).
+	 */
+	stripHidden = $state(false);
+
 	private repository = new IndexedDbWorkspaceRepository();
 	private hydrated = $state(false);
 	/** Suppresses the URL→state effect while we're applying a user action this tick. */
 	private applyingFromUrl = false;
 	/** Suppresses persistence while we're restoring from IndexedDB on first load. */
 	private restoring = false;
+
+	private static readonly STRIP_HIDDEN_KEY = 'followthrough.workbench.stripHidden';
+
+	/**
+	 * Reads the persisted `stripHidden` preference synchronously from
+	 * localStorage so the first paint does not flash visible-then-hidden.
+	 * Safe to call during `hydrate()` (browser-only); a no-op on the server.
+	 */
+	private readStripHiddenFromStorage(): void {
+		if (typeof localStorage === 'undefined') return;
+		const stored = localStorage.getItem(WorkbenchStore.STRIP_HIDDEN_KEY);
+		if (stored === 'true') this.stripHidden = true;
+		else if (stored === 'false') this.stripHidden = false;
+	}
+
+	/** Toggles the strip hidden state and persists to both localStorage and IndexedDB. */
+	toggleStripHidden(): void {
+		this.stripHidden = !this.stripHidden;
+		if (typeof localStorage !== 'undefined')
+			localStorage.setItem(WorkbenchStore.STRIP_HIDDEN_KEY, String(this.stripHidden));
+		void this.persist();
+	}
 
 	/**
 	 * Returns `true` when the current URL is a workbench path (`/notes/<id>`).
@@ -79,12 +109,27 @@ class WorkbenchStore {
 	async hydrate(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): Promise<void> {
 		if (this.hydrated) return;
 		this.hydrated = true;
+		// Display preference: read synchronously from localStorage so the
+		// strip never flashes visible-then-hidden on first paint.
+		this.readStripHiddenFromStorage();
 		const urlState = parseWorkbenchUrl(page.url.pathname, page.url.searchParams);
 		if (!urlState) {
 			// Not a workbench path on cold start — leave the user on whatever
 			// route they landed on (Today, Todos, …).  The previous working
 			// set stays in IndexedDB until they next hit a `/notes/<id>`
 			// URL, at which point the merge below enriches the deep link.
+			// Still pick up the persisted strip-hidden and any pinned-tab
+			// metadata so the strip renders correctly on non-note routes.
+			try {
+				const record = await this.repository.get();
+				if (record) {
+					if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
+					this.pinnedTabs = record.pinnedTabs;
+					this.recentlyUsed = record.recentlyUsed;
+				}
+			} catch {
+				// IndexedDB may be unavailable; localStorage remains canonical.
+			}
 			void this.refreshActiveProjectId(shellProjectOf);
 			return;
 		}
@@ -95,14 +140,17 @@ class WorkbenchStore {
 		// because their IndexedDB record is empty.
 		try {
 			const record = await this.repository.get();
+			if (record) {
+				if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
+				this.pinnedTabs = record.pinnedTabs;
+				this.recentlyUsed = record.recentlyUsed;
+			}
 			if (
 				record &&
 				record.focusedNoteId &&
 				record.openTabs.includes(urlState.focusedNoteId) &&
 				(urlState.openTabs.length === 1 || record.openTabs.length > urlState.openTabs.length)
 			) {
-				this.pinnedTabs = record.pinnedTabs;
-				this.recentlyUsed = record.recentlyUsed;
 				const restored: WorkbenchUrlState = {
 					focusedNoteId: urlState.focusedNoteId,
 					openTabs: record.openTabs
@@ -174,7 +222,7 @@ class WorkbenchStore {
 	 */
 	async openTab(noteId: NoteId): Promise<void> {
 		const next = openTabInState(this.toUrlState(), noteId);
-		await this.navigate(next, /* replace */ false);
+		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/** Focus an already-open tab.  Pushes a new history entry. */
@@ -186,7 +234,7 @@ class WorkbenchStore {
 		}
 		const next = focusTabInState(current, noteId);
 		if (next === current) return;
-		await this.navigate(next, /* replace */ false);
+		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/** Close an open tab.  Pushes a new history entry; if the last tab is closed, redirects away from `/notes/*`. */
@@ -210,7 +258,7 @@ class WorkbenchStore {
 			});
 			return;
 		}
-		await this.navigate(next, /* replace */ false);
+		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/** Reorder a tab relative to another.  Replaces the current URL so Back doesn't walk reorderings. */
@@ -219,7 +267,7 @@ class WorkbenchStore {
 		if (!current) return;
 		const next = moveTabInState(current, from, to);
 		if (next === current) return;
-		await this.navigate(next, /* replace */ true);
+		await this.navigate(next, { replace: true, invalidate: false });
 	}
 
 	/** Pin or unpin a tab.  Persists the change without touching the URL. */
@@ -263,17 +311,23 @@ class WorkbenchStore {
 			current.focusedNoteId && known.has(current.focusedNoteId)
 				? current.focusedNoteId
 				: (this.recentlyUsed.find((id) => known.has(id)) ?? remaining[0]);
-		await this.navigate({ focusedNoteId: focused, openTabs: remaining }, /* replace */ true);
+		await this.navigate(
+			{ focusedNoteId: focused, openTabs: remaining },
+			{ replace: true, invalidate: true }
+		);
 	}
 
-	private async navigate(next: WorkbenchUrlState, replace: boolean): Promise<void> {
+	private async navigate(
+		next: WorkbenchUrlState,
+		options: { replace: boolean; invalidate: boolean }
+	): Promise<void> {
 		const url = serializeWorkbenchUrl(next);
-		await goto(url, { replaceState: replace, noScroll: true });
+		await goto(url, { replaceState: options.replace, noScroll: true });
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
 		// disagrees with the URL (e.g. a reload mid-navigation).
 		await this.persist();
-		await invalidateAll();
+		if (options.invalidate) await invalidateAll();
 	}
 
 	private async persist(override?: Partial<WorkspaceRecord>): Promise<void> {
@@ -283,7 +337,8 @@ class WorkbenchStore {
 			openTabs: override?.openTabs ?? this.openTabs,
 			focusedNoteId: override?.focusedNoteId ?? this.focusedNoteId ?? null,
 			pinnedTabs: override?.pinnedTabs ?? this.pinnedTabs,
-			recentlyUsed: override?.recentlyUsed ?? this.recentlyUsed
+			recentlyUsed: override?.recentlyUsed ?? this.recentlyUsed,
+			stripHidden: override?.stripHidden ?? this.stripHidden
 		};
 		try {
 			await this.repository.put(record);

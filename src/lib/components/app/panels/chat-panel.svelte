@@ -26,8 +26,9 @@
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import X from '@lucide/svelte/icons/x';
 	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
-	import { editorSelection } from '$lib/stores/editor-selection.svelte';
-	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
+	import { editorSelectionRegistry } from '$lib/stores/registries/editor-selection-registry.svelte';
+	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
+	import { workbench } from '$lib/stores/workbench.svelte';
 	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
@@ -155,7 +156,11 @@
 		if (!text || chat.isStreaming) return;
 		prompt = '';
 		saveDraft();
-		const selection = editorSelection.current;
+		// Read the focused pane's editor selection; falls back to undefined
+		// when no pane is mounted (e.g. a fresh `/chats/new` page).
+		const selection = workbench.focusedNoteId
+			? editorSelectionRegistry.peek(workbench.focusedNoteId)?.current
+			: undefined;
 		const request = chat.send({
 			prompt: text,
 			modelOverride: chat.modelOverride,
@@ -218,11 +223,11 @@
 		}
 	}
 
-	async function decide(
-		id: Parameters<typeof suggestionTray.decide>[0],
-		decision: 'accept' | 'reject'
-	) {
-		const ok = await suggestionTray.decide(id, decision);
+	async function decide(id: string, decision: 'accept' | 'reject') {
+		const tray = workbench.focusedNoteId
+			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
+			: undefined;
+		const ok = tray ? await tray.decide(id as never, decision) : false;
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
@@ -402,7 +407,11 @@
 					{#each entry.suggestions as view (view.suggestion.id)}
 						<SuggestionCard
 							{view}
-							busy={suggestionTray.busyIds.includes(view.suggestion.id)}
+							busy={(workbench.focusedNoteId &&
+								suggestionTrayRegistry
+									.peek(workbench.focusedNoteId)
+									?.busyIds.includes(view.suggestion.id)) ??
+								false}
 							onaccept={(id) => decide(id, 'accept')}
 							onreject={(id) => decide(id, 'reject')}
 						/>

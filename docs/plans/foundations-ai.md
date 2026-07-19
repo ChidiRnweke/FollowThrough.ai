@@ -7,7 +7,8 @@
 The AI audit (`docs/ai-systems-audit.md`) identified foundations that every later improvement depends on: silent fallbacks that hide bugs, scattered model-default chains, embeddings that can silently run on a fake, and zero observability. This milestone fixes those four things so the retrieval/compaction/authoring work that follows is measurable and runs on real infrastructure.
 
 **Non-negotiable correctness constraints:**
-- `deepseek-v4-flash` is the **generation/chat** default only. **Embeddings must remain `text-embedding-3-large` (3072-dim)** — the `search_chunks.embedding` column is `halfvec(3072)`; changing the embedder invalidates every stored vector. We only move the *provider* (OpenAI-direct → OpenRouter), not the model.
+
+- `deepseek-v4-flash` is the **generation/chat** default only. **Embeddings must remain `text-embedding-3-large` (3072-dim)** — the `search_chunks.embedding` column is `halfvec(3072)`; changing the embedder invalidates every stored vector. We only move the _provider_ (OpenAI-direct → OpenRouter), not the model.
 - **Fail hard applies to config/secrets/embeddings, not to telemetry export.** A missing key should crash at startup; a trace-export failure must never break a user request.
 
 ## Scope
@@ -36,7 +37,7 @@ The AI audit (`docs/ai-systems-audit.md`) identified foundations that every late
 - **Add `baseURL` + `defaultHeaders` to `OpenAIEmbeddingClient`** (`openai-embedding-capabilities.ts:6-13`), mirroring the OpenRouter client shape at `openai-reference-capabilities.ts:123-130` (`baseURL: 'https://openrouter.ai/api/v1'`, `HTTP-Referer` from `PUBLIC_APP_URL`, `X-OpenRouter-Title: 'FollowThrough'`). Model default → `openai/text-embedding-3-large` (**same underlying model, same 3072 dims** — provider/base-URL change only).
 - **Delete `DeterministicEmbeddingClient`** (`openai-embedding-capabilities.ts:36-55`) entirely.
 - **Rewire the factory** at `production-factory.ts:169-172`: remove the `openAIKey ? OpenAIEmbeddingClient : DeterministicEmbeddingClient` branch; construct `new OpenAIEmbeddingClient(OPENROUTER_API_KEY, { baseURL, headers, model })`. The single instance still feeds the five consumers unchanged (attachment svc `:180`, note indexer `:182`, diagram indexer `:183`, knowledge searcher `:184`, memory indexer `:231`). No changes to the `EmbeddingClient` interface (`services/retrieval/contracts.ts:18-21`), the `.embed()` call sites (`indexing.ts:88,147,207,263`, `semantic.ts:28`), or the test fake `InMemoryEmbeddingClient` (`in-memory-search.ts:183`).
-- **Reindex caveat:** if the deployment has been running without `OPENAI_API_KEY`, existing `search_chunks` vectors are fake and must be re-embedded once real embeddings are live. Same model via OpenRouter = compatible vectors, so if it *was* on real OpenAI embeddings, no reindex is needed.
+- **Reindex caveat:** if the deployment has been running without `OPENAI_API_KEY`, existing `search_chunks` vectors are fake and must be re-embedded once real embeddings are live. Same model via OpenRouter = compatible vectors, so if it _was_ on real OpenAI embeddings, no reindex is needed.
 
 ## Workstream C — Phoenix observability (OpenTelemetry + OpenInference)
 

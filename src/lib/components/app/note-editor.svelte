@@ -14,6 +14,7 @@
 	} from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
+	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import BubbleMenu from '$lib/components/edra/BubbleMenu.svelte';
@@ -27,8 +28,6 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import { editorSelection } from '$lib/stores/editor-selection.svelte';
-	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
 	import {
 		createSuggestionAnchorPlugin,
 		suggestionAnchorKey,
@@ -74,6 +73,7 @@
 		document,
 		references = [],
 		skills = [],
+		perNote,
 		onchange,
 		onaction,
 		onskill,
@@ -88,6 +88,7 @@
 		document: ProseMirrorDocument;
 		references?: readonly ReferenceView[];
 		skills?: readonly SkillSummary[];
+		perNote?: PerNoteEditorSlot;
 		onchange?: () => void;
 		onaction?: (action: NoteAiAction, selection?: TextSelection, insertAt?: number) => void;
 		onskill?: (skillName: string) => void;
@@ -140,7 +141,7 @@
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
 			onConvertMermaid: (source, instruction) => onconvertMermaid(source, instruction),
 			getDrawioSuggestion: (suggestionId) => {
-				const candidate = suggestionTray.items.find(
+				const candidate = perNote?.suggestions.items.find(
 					(item) => item.suggestion.id === suggestionId
 				)?.suggestion;
 				return candidate?.kind === 'diagram' && candidate.payload.kind === 'drawio'
@@ -162,6 +163,12 @@
 		},
 		[TodoNode(TodoNodeView as never)]
 	);
+	// Attach per-note stores so TipTap NodeViews (TodoNode, SuggestionInlineWidget)
+	// can resolve the right note's todos/suggestions without going through a
+	// singleton that would describe only the focused pane.
+	$effect(() => {
+		if (editor) editor.perNote = perNote;
+	});
 
 	function readSelection(): TextSelection | undefined {
 		if (!editor) return undefined;
@@ -193,7 +200,7 @@
 
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
-		suggestionTray.items.flatMap((item) =>
+		(perNote?.suggestions.items ?? []).flatMap((item) =>
 			item.anchor &&
 			item.suggestion.noteId === noteId &&
 			item.suggestion.status === 'proposed' &&
@@ -219,7 +226,7 @@
 					]
 				: []
 		),
-		...suggestionTray.items.flatMap((view) =>
+		...(perNote?.suggestions.items ?? []).flatMap((view) =>
 			view.anchor &&
 			view.suggestion.noteId === noteId &&
 			view.suggestion.status === 'proposed' &&
@@ -254,7 +261,10 @@
 					const target = window.document.createElement('div');
 					target.className = 'suggestion-inline-widget-host';
 					target.contentEditable = 'false';
-					const instance = mount(SuggestionInlineWidget, { target, props: { suggestionId } });
+					const instance = mount(SuggestionInlineWidget, {
+						target,
+						props: { suggestionId, editor }
+					});
 					return { dom: target, destroy: () => void unmount(instance) };
 				}
 			})
@@ -273,8 +283,8 @@
 		);
 		editor.on('selectionUpdate', () => {
 			const selection = readSelection();
-			if (selection) editorSelection.set(selection);
-			else editorSelection.clear();
+			if (selection) perNote?.selection.set(selection);
+			else perNote?.selection.clear();
 		});
 		hydrated = true;
 		return retainActiveLink;

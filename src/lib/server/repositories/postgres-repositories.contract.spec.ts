@@ -78,6 +78,7 @@ const seedNote = async (suffix: string, owner = actor(suffix)) => {
 		document: { type: 'doc', content: [] },
 		plainText: '',
 		currentRevision: 1,
+		publishedRevision: 0,
 		isPinned: false,
 		createdAt: now,
 		updatedAt: now
@@ -318,6 +319,7 @@ describe('Postgres note repository invariants', () => {
 			document: { type: 'doc', content: [] },
 			plainText: 'content',
 			currentRevision: 1,
+			publishedRevision: 0,
 			isPinned: false,
 			createdAt: timestamp,
 			updatedAt: timestamp
@@ -342,6 +344,7 @@ describe('Postgres note repository invariants', () => {
 			document: { type: 'doc', content: [] },
 			plainText: '',
 			currentRevision: 1,
+			publishedRevision: 0,
 			isPinned: false,
 			createdAt: now,
 			updatedAt: now
@@ -374,6 +377,7 @@ describe('Postgres note repository invariants', () => {
 			document: { type: 'doc', content: [] },
 			plainText: '',
 			currentRevision: 1,
+			publishedRevision: 0,
 			isPinned: false,
 			createdAt: now,
 			updatedAt: now

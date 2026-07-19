@@ -1,19 +1,24 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
 	import type { TodoId } from '$lib/models';
+	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { noteTodos } from '$lib/stores/note-todos.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import { formatDate, todayLocalDate } from './labels';
 
-	const { node }: NodeViewProps = $props();
+	let { node, editor }: NodeViewProps = $props();
 
+	// TipTap's NodeViewProps types `editor` as the base TiptapEditor; our
+	// `perNote` slot lives on the subclass in `CoreEditor.ts`.  Cast through
+	// `unknown` so we read the per-note stores that the owning NoteEditor
+	// attached on mount.
+	const perNote = $derived((editor as unknown as { perNote?: PerNoteEditorSlot }).perNote);
 	const todoId = $derived(node.attrs.todoId as TodoId | null);
-	const view = $derived(todoId !== null ? noteTodos.get(todoId) : undefined);
+	const view = $derived(todoId !== null ? perNote?.todos.get(todoId) : undefined);
 	const done = $derived(view?.todo.status === 'done');
 	const overdue = $derived(
 		view !== undefined &&

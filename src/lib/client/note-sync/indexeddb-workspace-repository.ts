@@ -20,6 +20,8 @@ export interface WorkspaceRecord {
 	readonly pinnedTabs: readonly NoteId[];
 	/** LRU ordering of recently-focused tabs, most-recent first. */
 	readonly recentlyUsed: readonly NoteId[];
+	/** Whether the user has collapsed the global tab strip.  Display preference. */
+	readonly stripHidden: boolean;
 }
 
 const STORE_NAME = 'workspace';

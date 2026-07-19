@@ -10,11 +10,24 @@
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import type { NoteId, ProjectId } from '$lib/models';
 	import { workbench } from '$lib/stores/workbench.svelte';
+	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 
 	let { data, children } = $props();
 
 	const isNavigating = $derived(navigating.to !== null);
+	// Suppress the thin progress bar during workbench-internal navigations
+	// (tab focus / open / close / reorder) — those are local state changes,
+	// not page loads, and the bar would strobe across the sticky tabs.
+	const isWorkbenchInternal = $derived(
+		Boolean(
+			navigating.to &&
+			navigating.from &&
+			navigating.from.url.pathname.startsWith('/notes/') &&
+			navigating.to.url.pathname.startsWith('/notes/')
+		)
+	);
+	const showProgressBar = $derived(isNavigating && !isWorkbenchInternal);
 
 	let insetRef = $state<HTMLElement | null>(null);
 
@@ -75,6 +88,11 @@
 	function onkeydown(event: KeyboardEvent): void {
 		keyboard.handle(event);
 	}
+
+	async function createNoteFromStrip(): Promise<void> {
+		const output = await projectActions.createNote('Untitled');
+		if (output) await workbench.openTab(output.note.id);
+	}
 </script>
 
 <svelte:window {onkeydown} />
@@ -90,14 +108,17 @@
 		bind:ref={insetRef}
 		class="relative min-w-0 overflow-y-auto border-l border-sidebar-border"
 	>
-		{#if isNavigating}
-			<div class="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden">
+		{#if showProgressBar}
+			<div class="absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden">
 				<div class="bg-primary h-full w-full origin-left animate-pulse"></div>
 			</div>
 		{/if}
-		{#if workbench.isWorkbenchPath}
-			<WorkspaceTabs shell={data.shell} />
-		{/if}
+		<WorkspaceTabs
+			shell={data.shell}
+			hidden={workbench.stripHidden}
+			oncreateNote={() => void createNoteFromStrip()}
+			ontoggleHidden={() => workbench.toggleStripHidden()}
+		/>
 		{@render children()}
 	</Sidebar.Inset>
 	<RightPanel

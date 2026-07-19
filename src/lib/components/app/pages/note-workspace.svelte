@@ -20,14 +20,15 @@
 	import PinOff from '@lucide/svelte/icons/pin-off';
 	import { toast } from 'svelte-sonner';
 	import { chat } from '$lib/stores/chat.svelte';
-	import { editorSelection } from '$lib/stores/editor-selection.svelte';
 	import { noteActions } from '$lib/stores/note-actions.svelte';
-	import { noteSync } from '$lib/stores/note-sync.svelte';
-	import { noteTodos } from '$lib/stores/note-todos.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import { suggestionToView } from '$lib/stores/suggestion-view';
-	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
+	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { NoteSyncStore } from '$lib/stores/note-sync.svelte';
+	import type { NoteTodosStore } from '$lib/stores/note-todos.svelte';
+	import type { SuggestionTrayStore } from '$lib/stores/suggestion-tray.svelte';
+	import type { EditorSelectionStore } from '$lib/stores/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
@@ -42,7 +43,32 @@
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';
 
-	let { view, shell }: { view: NoteView; shell: ShellContext } = $props();
+	let {
+		view,
+		shell,
+		noteSync,
+		noteTodos,
+		suggestionTray,
+		editorSelection
+	}: {
+		view: NoteView;
+		shell: ShellContext;
+		noteSync: NoteSyncStore;
+		noteTodos: NoteTodosStore;
+		suggestionTray: SuggestionTrayStore;
+		editorSelection: EditorSelectionStore;
+	} = $props();
+
+	// `perNote` is built once from the registry-backed store props supplied by
+	// the owning `WorkspacePane`.  Each registry returns a stable instance for
+	// a given `noteId`, so this capture is intentional and does not need to
+	// track prop identity changes that will never happen.
+	const perNote: PerNoteEditorSlot = untrack(() => ({
+		todos: noteTodos,
+		suggestions: suggestionTray,
+		selection: editorSelection,
+		sync: noteSync
+	}));
 
 	let exportOpen = $state(false);
 	let conflictOpen = $state(false);
@@ -667,6 +693,7 @@
 			references={view.references}
 			diagrams={view.diagrams}
 			skills={shell.skills}
+			{perNote}
 			onchange={markDirty}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}
@@ -676,7 +703,10 @@
 			onrejectDrawio={rejectDrawio}
 		/>
 	{:else}
-		<div class="flex flex-col gap-3" aria-label="Loading note from device">
+		<!-- Match the editor's eventual footprint (full viewport height minus the
+		     72px header row above) so IndexedDB init time doesn't cause
+		     vertical reflow between the short-skeleton and the hydrated editor. -->
+		<div class="flex min-h-[60vh] flex-col gap-3" aria-label="Loading note from device">
 			<Skeleton class="h-5 w-full" />
 			<Skeleton class="h-5 w-11/12" />
 			<Skeleton class="h-5 w-4/5" />

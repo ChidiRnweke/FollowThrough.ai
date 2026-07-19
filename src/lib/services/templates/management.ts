@@ -14,7 +14,9 @@ import type {
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class TemplateManagementService implements TemplateUploader, TemplateLister, TemplateDeleter, TemplateStyleExtractor {
+export class TemplateManagementService
+	implements TemplateUploader, TemplateLister, TemplateDeleter, TemplateStyleExtractor
+{
 	constructor(
 		private readonly storage: AttachmentStorage,
 		private readonly templateRepo: TemplateRepository,
@@ -23,8 +25,18 @@ export class TemplateManagementService implements TemplateUploader, TemplateList
 
 	async initiateUpload(
 		actor: ActorContext,
-		input: { projectId: ProjectId; name: string; mediaType: string; byteSize: number; checksumSha256: string }
-	): Promise<{ templateId: TemplateId; uploadUrl: string; requiredHeaders: Record<string, string> }> {
+		input: {
+			projectId: ProjectId;
+			name: string;
+			mediaType: string;
+			byteSize: number;
+			checksumSha256: string;
+		}
+	): Promise<{
+		templateId: TemplateId;
+		uploadUrl: string;
+		requiredHeaders: Record<string, string>;
+	}> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Template must be at least 1 byte');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
@@ -40,7 +52,9 @@ export class TemplateManagementService implements TemplateUploader, TemplateList
 			projectId: input.projectId,
 			name: input.name,
 			objectKey,
-			mediaType: input.mediaType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+			mediaType:
+				input.mediaType ||
+				'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 			byteSize: input.byteSize,
 			isDefault: false,
 			createdAt: timestamp,
@@ -108,7 +122,8 @@ export class TemplateManagementService implements TemplateUploader, TemplateList
 	async extractStyles(actor: ActorContext, templateId: TemplateId) {
 		const template = await this.templateRepo.findById(actor, templateId);
 		if (!template) throw new NotFoundError('Template not found');
-		if (template.extractedStyles) return template.extractedStyles as unknown as import('$lib/models').ExtractedTemplateStyles;
+		if (template.extractedStyles)
+			return template.extractedStyles as unknown as import('$lib/models').ExtractedTemplateStyles;
 		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
 		return extractTemplateStyles(Buffer.from(buffer));
 	}

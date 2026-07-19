@@ -1,7 +1,7 @@
 import { invalidateAll } from '$app/navigation';
 import type { ProjectId, TodoId, TodoStatus, UpdateTodoInput } from '$lib/models';
 import { updateTodo as updateTodoCommand, createTodo } from '$lib/remote/todos.remote';
-import { noteTodos } from './note-todos.svelte';
+import { applyTodoAcrossHeldStores } from './registries/note-todos-registry.svelte';
 import { rightPanel } from './right-panel.svelte';
 
 class TodoUpdatesStore {
@@ -17,7 +17,9 @@ class TodoUpdatesStore {
 		try {
 			const output = await updateTodoCommand({ todoId, ...patch });
 			if (rightPanel.todoView?.todo.id === todoId) rightPanel.todoView = output.view;
-			noteTodos.apply(output.todo);
+			// Cross-pane fan-out: whichever open note currently holds this todo
+			// (usually the source note) sees the mutation in place.
+			applyTodoAcrossHeldStores(output.todo);
 			await invalidateAll();
 			return true;
 		} catch {

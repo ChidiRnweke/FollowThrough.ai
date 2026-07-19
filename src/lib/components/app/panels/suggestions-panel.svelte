@@ -1,32 +1,41 @@
 <script lang="ts">
-	import type { DiagramSuggestion, SuggestionId } from '$lib/models';
+	import type { DiagramSuggestion, SuggestionId, SuggestionView } from '$lib/models';
 	import { toast } from 'svelte-sonner';
-	import { suggestionTray } from '$lib/stores/suggestion-tray.svelte';
+	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
+	import { workbench } from '$lib/stores/workbench.svelte';
 	import SuggestionCard from '../suggestion-card.svelte';
 
+	// The right-panel suggestions list always reflects the focused pane.
+	// If no pane is currently mounted (panel opened during a brief navigation
+	// window) we render the empty state; once the pane mounts this effect
+	// re-runs with the live tray.
+	const tray = $derived(
+		workbench.focusedNoteId ? suggestionTrayRegistry.peek(workbench.focusedNoteId) : undefined
+	);
+
 	async function decide(id: SuggestionId, decision: 'accept' | 'reject'): Promise<void> {
-		const ok = await suggestionTray.decide(id, decision);
+		const ok = tray ? await tray.decide(id, decision) : false;
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
 
-	function isDrawio(view: (typeof suggestionTray.items)[number]): boolean {
+	function isDrawio(view: SuggestionView): boolean {
 		return view.suggestion.kind === 'diagram' && view.suggestion.payload.kind === 'drawio';
 	}
 </script>
 
-{#if suggestionTray.items.length === 0}
+{#if !tray || tray.items.length === 0}
 	<p class="text-sm text-muted-foreground">No pending suggestions for this note.</p>
 {:else}
 	<div class="flex flex-col gap-3">
-		{#each suggestionTray.items as view (view.suggestion.id)}
+		{#each tray.items as view (view.suggestion.id)}
 			<SuggestionCard
 				{view}
-				busy={suggestionTray.busyIds.includes(view.suggestion.id)}
+				busy={tray.busyIds.includes(view.suggestion.id)}
 				onaccept={isDrawio(view) ? undefined : (id) => void decide(id, 'accept')}
 				onreject={(id) => void decide(id, 'reject')}
 				onreview={isDrawio(view) && view.suggestion.kind === 'diagram'
-					? () => suggestionTray.requestReview(view.suggestion as DiagramSuggestion)
+					? () => tray.requestReview(view.suggestion as DiagramSuggestion)
 					: undefined}
 			/>
 		{/each}

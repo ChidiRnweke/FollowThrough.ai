@@ -32,7 +32,8 @@ export const variables = defineEnvVars({
 	},
 	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString },
 	OTEL_EXPORTER_OTLP_ENDPOINT: {
-		description: 'OTLP/gRPC collector endpoint for Phoenix traces. Telemetry is disabled when unset.',
+		description:
+			'OTLP/gRPC collector endpoint for Phoenix traces. Telemetry is disabled when unset.',
 		schema: optionalString
 	},
 	PHOENIX_PROJECT_NAME: {

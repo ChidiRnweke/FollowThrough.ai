@@ -130,23 +130,30 @@ export async function extractTemplateStyles(docxBuffer: Buffer): Promise<Extract
 
 	try {
 		stylesXml = zip.readAsText('word/styles.xml');
-	} catch {
-	}
+	} catch {}
 
 	try {
 		documentXml = zip.readAsText('word/document.xml');
-	} catch {
-	}
+	} catch {}
 
 	const heading = extractHeadingStyles(stylesXml);
 	const body = extractBodyStyle(stylesXml);
 	const pageMargins = extractPageMargins(documentXml);
 
-	const mediaEntries = zip.getEntries().filter((e) => e.entryName.startsWith('word/media/') && !e.isDirectory);
+	const mediaEntries = zip
+		.getEntries()
+		.filter((e) => e.entryName.startsWith('word/media/') && !e.isDirectory);
 	for (const entry of mediaEntries) {
 		const buffer = entry.getData();
 		const ext = entry.entryName.split('.').pop()?.toLowerCase();
-		const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : 'image/png';
+		const mimeType =
+			ext === 'png'
+				? 'image/png'
+				: ext === 'jpg' || ext === 'jpeg'
+					? 'image/jpeg'
+					: ext === 'gif'
+						? 'image/gif'
+						: 'image/png';
 		headerImages.push(`data:${mimeType};base64,${buffer.toString('base64')}`);
 	}
 

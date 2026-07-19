@@ -17,6 +17,7 @@
 		"test:workflow": "vitest run --project server src/lib/controllers",
 		"test:repository": "vitest run --project contracts",
 		"test:capability": "vitest run --project server src/lib/services src/lib/server/domain",
+		"test:evals": "vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"test": "pnpm test:unit",
 		"db:start": "docker compose up",
 		"db:push": "drizzle-kit push",
@@ -25,6 +26,8 @@
 		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
+		"@arizeai/phoenix-client": "^6.14.0",
+		"@arizeai/phoenix-evals": "^1.2.0",
 		"@eslint/js": "latest",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",

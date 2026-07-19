@@ -122,6 +122,7 @@ export class SkillManagementService
 			},
 			plainText: selection.text,
 			currentRevision: 1,
+			publishedRevision: 0,
 			isPinned: false,
 			createdAt: timestamp,
 			updatedAt: timestamp

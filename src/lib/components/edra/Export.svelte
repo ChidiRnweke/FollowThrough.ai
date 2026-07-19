@@ -4,7 +4,8 @@
 	import { getEditor } from './commands/index.js';
 	import { ChevronDown, Download, FileText, FileOutput } from '@lucide/svelte';
 
-	let { onExportDocx, onExportPdf }: { onExportDocx?: () => void; onExportPdf?: () => void } = $props();
+	let { onExportDocx, onExportPdf }: { onExportDocx?: () => void; onExportPdf?: () => void } =
+		$props();
 
 	const editor = getEditor();
 	const handleExport = (as: 'markdown' | 'html' | 'json') => {

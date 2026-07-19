@@ -94,4 +94,34 @@ describe('Registry', () => {
 		registry.for('a');
 		expect(factory).toHaveBeenCalledTimes(1);
 	});
+
+	it('peek returns the held instance without bumping the refcount', () => {
+		const registry = new Registry<string, { id: string }>((id) => ({ id }));
+		registry.for('a');
+		const peeked = registry.peek('a');
+		expect(peeked).toBeDefined();
+		expect(peeked?.id).toBe('a');
+		expect(registry.refcount('a')).toBe(1);
+	});
+
+	it('peek returns undefined for keys not currently held', () => {
+		const destroyed: string[] = [];
+		const registry = new Registry<string, { id: string }>(
+			(id) => ({ id }),
+			(id) => destroyed.push(id)
+		);
+		expect(registry.peek('never-opened')).toBeUndefined();
+		registry.for('a');
+		registry.release('a');
+		expect(registry.peek('a')).toBeUndefined();
+	});
+
+	it('peek does not resurrect a destroyed instance', () => {
+		const factory = vi.fn((id: string) => ({ id }));
+		const registry = new Registry(factory);
+		registry.for('a');
+		registry.release('a');
+		expect(registry.peek('a')).toBeUndefined();
+		expect(factory).toHaveBeenCalledTimes(1);
+	});
 });
