@@ -1,6 +1,6 @@
 import type { TextSelection } from '$lib/models';
 
-class EditorSelectionStore {
+export class EditorSelectionStore {
 	current = $state<TextSelection | undefined>(undefined);
 
 	set(selection: TextSelection): void {

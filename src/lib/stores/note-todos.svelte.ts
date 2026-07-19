@@ -1,6 +1,6 @@
 import type { Todo, TodoId, TodoView } from '$lib/models';
 
-class NoteTodosStore {
+export class NoteTodosStore {
 	views = $state<TodoView[]>([]);
 
 	replace(views: readonly TodoView[]): void {

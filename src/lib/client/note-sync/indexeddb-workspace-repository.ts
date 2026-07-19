@@ -1,14 +1,29 @@
-import type { NoteId, NoteSyncRecord, UserId } from '$lib/models';
-import type { NoteSyncRepository } from './contracts';
+import type { NoteId } from '$lib/models';
 
-const STORE_NAME = 'note-sync-records';
-
-interface StoredRecord {
-	readonly key: string;
-	readonly record: NoteSyncRecord;
+/**
+ * Persisted workbench state.
+ *
+ * The URL is the canonical source of open tabs during a session (so Back /
+ * Forward and deep links keep working), but a small companion record in the
+ * same IndexedDB database that backs `NoteSyncRecord` is updated whenever the
+ * user opens, closes, or reorders tabs.  On the next session the layout reads
+ * this record to restore the working set.
+ *
+ * The repository is intentionally shape-compatible with the existing
+ * `IndexedDbNoteSyncRepository` so that the testing conventions and lifecycle
+ * match.
+ */
+export interface WorkspaceRecord {
+	readonly id: 'current';
+	readonly openTabs: readonly NoteId[];
+	readonly focusedNoteId: NoteId | null;
+	readonly pinnedTabs: readonly NoteId[];
+	/** LRU ordering of recently-focused tabs, most-recent first. */
+	readonly recentlyUsed: readonly NoteId[];
 }
 
-const recordKey = (userId: UserId, noteId: NoteId): string => `${userId}:${noteId}`;
+const STORE_NAME = 'workspace';
+const RECORD_KEY = 'current';
 
 const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
 	new Promise((resolve, reject) => {
@@ -25,35 +40,32 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-export class IndexedDbNoteSyncRepository implements NoteSyncRepository {
+export class IndexedDbWorkspaceRepository {
 	private database?: Promise<IDBDatabase>;
 
 	constructor(private readonly databaseName = 'followthrough-note-sync') {}
 
-	async get(userId: UserId, noteId: NoteId): Promise<NoteSyncRecord | undefined> {
+	async get(): Promise<WorkspaceRecord | undefined> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readonly');
-		const stored = await requestResult<StoredRecord | undefined>(
-			transaction.objectStore(STORE_NAME).get(recordKey(userId, noteId))
+		const stored = await requestResult<WorkspaceRecord | undefined>(
+			transaction.objectStore(STORE_NAME).get(RECORD_KEY)
 		);
 		await transactionDone(transaction);
-		return stored?.record;
+		return stored;
 	}
 
-	async put(record: NoteSyncRecord): Promise<void> {
+	async put(record: WorkspaceRecord): Promise<void> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readwrite');
-		transaction.objectStore(STORE_NAME).put({
-			key: recordKey(record.userId, record.noteId),
-			record
-		} satisfies StoredRecord);
+		transaction.objectStore(STORE_NAME).put(record);
 		await transactionDone(transaction);
 	}
 
-	async delete(userId: UserId, noteId: NoteId): Promise<void> {
+	async clear(): Promise<void> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readwrite');
-		transaction.objectStore(STORE_NAME).delete(recordKey(userId, noteId));
+		transaction.objectStore(STORE_NAME).delete(RECORD_KEY);
 		await transactionDone(transaction);
 	}
 
@@ -68,21 +80,22 @@ export class IndexedDbNoteSyncRepository implements NoteSyncRepository {
 				reject(new Error('Device storage is unavailable'));
 				return;
 			}
-			// Version 2 of the shared database: the new `workspace` object
-			// store (added by `IndexedDbWorkspaceRepository`) layers on top
-			// of this store.  This repository owns no schema change in v2;
-			// it only needs to open at the shared version so the two repos do
-			// not race for the database.
+			// Version 2 of the existing note-sync database: the new
+			// `workspace` object store is created alongside the original
+			// `note-sync-records` store.  Opening at v2 is a no-op for users
+			// who have already upgraded to v1 of the database; we only add
+			// the new store on upgrade.
 			const request = indexedDB.open(this.databaseName, 2);
 			request.onupgradeneeded = () => {
 				const database = request.result;
-				if (!database.objectStoreNames.contains(STORE_NAME))
-					database.createObjectStore(STORE_NAME, { keyPath: 'key' });
 				// Whichever repo triggers the v1→v2 upgrade owns the full
 				// schema.  Keep both stores in sync so that opening either
 				// repository first produces the same database layout.
-				if (!database.objectStoreNames.contains('workspace')) {
-					database.createObjectStore('workspace', { keyPath: 'id' });
+				if (!database.objectStoreNames.contains(STORE_NAME)) {
+					database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+				}
+				if (!database.objectStoreNames.contains('note-sync-records')) {
+					database.createObjectStore('note-sync-records', { keyPath: 'key' });
 				}
 			};
 			request.onsuccess = () => resolve(request.result);

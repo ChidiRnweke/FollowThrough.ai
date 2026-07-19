@@ -2,16 +2,17 @@ import { invalidateAll } from '$app/navigation';
 import type { DiagramSuggestion, SuggestionId, SuggestionView } from '$lib/models';
 import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
 
-class SuggestionTrayStore {
+export class SuggestionTrayStore {
 	items = $state<SuggestionView[]>([]);
 	reviewRequested = $state<DiagramSuggestion | null>(null);
+	busyIds = $state<SuggestionId[]>([]);
 
 	replace(views: readonly SuggestionView[]): void {
 		this.items = [...views];
 	}
 	add(views: readonly SuggestionView[]): void {
-		const known = new Set(this.items.map((item) => item.suggestion.id));
-		this.items = [...this.items, ...views.filter((view) => !known.has(view.suggestion.id))];
+		const known = this.items.map((item) => item.suggestion.id);
+		this.items = [...this.items, ...views.filter((view) => !known.includes(view.suggestion.id))];
 	}
 	remove(suggestionId: SuggestionId): void {
 		this.items = this.items.filter((item) => item.suggestion.id !== suggestionId);
@@ -30,7 +31,6 @@ class SuggestionTrayStore {
 			this.busyIds = this.busyIds.filter((id) => id !== suggestionId);
 		}
 	}
-	busyIds = $state<SuggestionId[]>([]);
 	requestReview(suggestion: DiagramSuggestion): void {
 		this.reviewRequested = suggestion;
 	}

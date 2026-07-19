@@ -9,7 +9,7 @@ const statusFor = (record: NoteSyncRecord): NoteSyncStatus => {
 	return record.state;
 };
 
-class NoteSyncStore {
+export class NoteSyncStore {
 	status = $state<NoteSyncStatus>('loading');
 	record = $state<NoteSyncRecord | undefined>(undefined);
 	lastError = $state<string | undefined>(undefined);
@@ -98,3 +98,9 @@ class NoteSyncStore {
 }
 
 export const noteSync = new NoteSyncStore();
+
+/**
+ * @deprecated Use `noteSyncRegistry.for(noteId)` instead.  The bare singleton
+ * remains only as a transitional helper for code paths that have not been
+ * wired through the workbench yet.
+ */

@@ -20,6 +20,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
+	import { workbench } from '$lib/stores/workbench.svelte';
 	import NameDialog from './name-dialog.svelte';
 	import TreeInlineInput from './tree-inline-input.svelte';
 
@@ -250,7 +251,7 @@
 				return;
 			}
 			inlineEdit = null;
-			await goto(`/notes/${output.note.id}`);
+			await workbench.openTab(output.note.id);
 		} else if (pending.kind === 'folder') {
 			const output = await projectActions.createFolder(pending.projectId, value, pending.parentId);
 			if (!output) {
@@ -265,7 +266,7 @@
 				return;
 			}
 			inlineEdit = null;
-			await goto(`/notes/${output.skill.note.id}`);
+			await workbench.openTab(output.skill.note.id);
 		}
 	}
 
@@ -450,7 +451,16 @@
 					{:else}
 						<Sidebar.MenuSubButton isActive={entry.id === activeNoteId}>
 							{#snippet child({ props })}
-								<a href="/notes/{entry.id}" {...props}>
+								<a
+									href="/notes/{entry.id}"
+									{...props}
+									onclick={(event) => {
+										if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+											return;
+										event.preventDefault();
+										void workbench.openTab(entry.id);
+									}}
+								>
 									{#if entry.kind === 'skill'}
 										<Wrench class="size-4 shrink-0 text-muted-foreground" />
 									{:else}

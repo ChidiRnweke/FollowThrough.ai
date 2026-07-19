@@ -1,19 +1,16 @@
 <script lang="ts">
 	import type { NoteSummary, ShellContext } from '$lib/models';
 	import * as Command from '$lib/components/ui/command';
-	import { goto } from '$app/navigation';
 	import FileText from '@lucide/svelte/icons/file-text';
 	import { commandRegistry } from '$lib/commands/registry';
 	import { palette } from '$lib/stores/palette.svelte';
+	import { workbench } from '$lib/stores/workbench.svelte';
 
 	let { shell }: { shell: ShellContext } = $props();
 
-	function go(path: string): void {
-		palette.close();
-		void goto(path);
-	}
 	function openNote(note: NoteSummary): void {
-		go(`/notes/${note.id}`);
+		palette.close();
+		void workbench.openTab(note.id);
 	}
 </script>
 
