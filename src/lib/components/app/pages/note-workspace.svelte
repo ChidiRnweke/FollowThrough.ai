@@ -39,6 +39,7 @@
 	import ArrowUpFromLine from '@lucide/svelte/icons/arrow-up-from-line';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import Lightbulb from '@lucide/svelte/icons/lightbulb';
+	import X from '@lucide/svelte/icons/x';
 	import ExportDialog from '../export-dialog.svelte';
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';
@@ -49,7 +50,8 @@
 		noteSync,
 		noteTodos,
 		suggestionTray,
-		editorSelection
+		editorSelection,
+		onCloseSplit
 	}: {
 		view: NoteView;
 		shell: ShellContext;
@@ -57,6 +59,7 @@
 		noteTodos: NoteTodosStore;
 		suggestionTray: SuggestionTrayStore;
 		editorSelection: EditorSelectionStore;
+		onCloseSplit?: () => void;
 	} = $props();
 
 	// `perNote` is built once from the registry-backed store props supplied by
@@ -555,6 +558,17 @@
 			<NoteBreadcrumb {shell} {note} />
 		</div>
 		<div class="ml-auto flex items-center gap-2">
+			{#if onCloseSplit}
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Close split view"
+					title="Close split view"
+					onclick={onCloseSplit}
+				>
+					<X />
+				</Button>
+			{/if}
 			{#if noteActions.running}
 				<LoaderCircle
 					class="size-4 animate-spin text-muted-foreground"

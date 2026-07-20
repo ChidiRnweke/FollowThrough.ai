@@ -63,7 +63,7 @@ class WorkbenchStore {
 	splitNoteId = $state<NoteId | undefined>(undefined);
 
 	/**
-	 * Width of the secondary pane as a fraction of 1 (clamped 0.1–0.9).
+	 * Width of the secondary pane as a fraction of 1 (clamped 0.25–0.75).
 	 * Display preference — like `stripHidden`, persists to localStorage
 	 * for instant first-paint and to the IndexedDB `WorkspaceRecord` for
 	 * cross-device synchronisation.  The URL never encodes the ratio.
@@ -127,8 +127,8 @@ class WorkbenchStore {
 
 	private static clampSplitRatio(ratio: number): number {
 		if (!Number.isFinite(ratio)) return 0.5;
-		if (ratio < 0.1) return 0.1;
-		if (ratio > 0.9) return 0.9;
+		if (ratio < 0.25) return 0.25;
+		if (ratio > 0.75) return 0.75;
 		return ratio;
 	}
 

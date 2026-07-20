@@ -11,11 +11,13 @@
 	let {
 		noteId,
 		shell,
-		initialView
+		initialView,
+		onCloseSplit
 	}: {
 		noteId: NoteId;
 		shell: ShellContext;
 		initialView?: NoteView;
+		onCloseSplit?: () => void;
 	} = $props();
 
 	// Acquire registry refs once for this pane's lifetime; `noteId` is stable
@@ -57,7 +59,15 @@
 
 <div class="flex w-full flex-1 flex-col" data-note-pane={noteId}>
 	{#if view}
-		<NoteWorkspace {view} {shell} {noteSync} {noteTodos} {suggestionTray} {editorSelection} />
+		<NoteWorkspace
+			{view}
+			{shell}
+			{noteSync}
+			{noteTodos}
+			{suggestionTray}
+			{editorSelection}
+			{onCloseSplit}
+		/>
 	{:else if loadingError}
 		<div class="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
 			{loadingError}

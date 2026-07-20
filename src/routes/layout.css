@@ -300,6 +300,134 @@
 	letter-spacing: var(--note-title-tracking);
 }
 
+/* Split-note geometry lives here so component markup remains declarative.
+   The ratio custom property is the only runtime input. */
+@layer components {
+	.workspace-panes {
+		--workspace-secondary-ratio: 0.5;
+		container-type: inline-size;
+	}
+
+	.workspace-pane-stack {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		flex: 1;
+		overflow: hidden;
+	}
+
+	.workspace-pane-layer {
+		position: absolute;
+		inset-block: 0;
+		min-width: 0;
+		min-height: 0;
+		padding-block: 1rem;
+	}
+
+	.workspace-pane-layer[data-pane-role='primary'] {
+		inset-inline-start: 0;
+		inset-inline-end: 0;
+	}
+
+	.workspace-panes[data-split-active='true'] .workspace-pane-layer[data-pane-role='primary'] {
+		inset-inline-end: calc(var(--workspace-secondary-ratio) * 100%);
+	}
+
+	.workspace-pane-layer[data-pane-role='split'] {
+		inset-inline-start: calc((1 - var(--workspace-secondary-ratio)) * 100%);
+		inset-inline-end: 0;
+	}
+
+	.workspace-pane-layer[data-pane-role='background'] {
+		display: none;
+	}
+
+	.workspace-pane-scroll-content {
+		display: flex;
+		min-width: 100%;
+		min-height: 100%;
+	}
+
+	.workspace-split-resizer {
+		pointer-events: none;
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+	}
+
+	.workspace-split-resizer-group > [data-pane] {
+		pointer-events: none;
+	}
+
+	.workspace-split-resizer-handle {
+		pointer-events: auto;
+		width: 0.25rem;
+		cursor: col-resize;
+		touch-action: none;
+		transition: background-color var(--duration-micro) var(--ease-standard);
+	}
+
+	.workspace-split-resizer-handle:hover,
+	.workspace-split-resizer-handle:focus-visible,
+	.workspace-split-resizer-handle[data-active] {
+		background-color: var(--color-primary);
+	}
+
+	.workspace-narrow-switcher {
+		display: none;
+		min-width: 0;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem 0;
+	}
+
+	.workspace-split-drop-preview {
+		pointer-events: none;
+		position: absolute;
+		inset-block: 0;
+		inset-inline-end: 0;
+		z-index: 30;
+		margin: 0.75rem;
+		display: flex;
+		width: calc(50% - 0.75rem);
+		align-items: center;
+		justify-content: center;
+		border: 2px dashed color-mix(in oklab, var(--color-primary) 40%, transparent);
+		border-radius: var(--radius);
+		background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+		color: var(--color-primary);
+		font-size: 0.75rem;
+		font-weight: 500;
+		letter-spacing: 0.025em;
+		text-transform: uppercase;
+	}
+
+	@media (min-width: 48rem) {
+		.workspace-pane-layer {
+			padding-block: 1.5rem;
+		}
+	}
+
+	@container (max-width: 47.999rem) {
+		.workspace-narrow-switcher {
+			display: flex;
+		}
+
+		.workspace-split-resizer {
+			display: none;
+		}
+
+		.workspace-panes[data-split-active='true'] .workspace-pane-layer {
+			inset-inline: 0;
+		}
+
+		.workspace-panes[data-split-active='true']
+			.workspace-pane-layer:not([data-narrow-active='true']) {
+			display: none;
+		}
+	}
+}
+
 @layer components {
 	.prose {
 		--tw-prose-body: var(--foreground);

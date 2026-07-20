@@ -29,6 +29,7 @@
 - Todo controls use the existing flat shadcn Select, Popover, Calendar, Command, Input, and Textarea components. Selection commits immediately; text commits on blur or Enter and restores its saved value on Escape or failure. Saving and errors are announced without a manual Save button.
 
 - **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.
+- **Split notes:** Document-within-Workbench pattern. Note routes occupy the shell's fixed remaining height and never make the shell scroll. Each mounted note pane owns independent vertical and horizontal scrolling. At narrow workspace widths, one pane is shown at a time without discarding the canonical split URL or the saved divider ratio.
 - Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
 - Note synchronization stays in the quiet utility row. Pending device saves and conflicts are explicit;

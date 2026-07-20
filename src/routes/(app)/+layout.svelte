@@ -12,6 +12,7 @@
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
+	import { cn } from '$lib/utils';
 
 	let { data, children } = $props();
 
@@ -28,6 +29,7 @@
 		)
 	);
 	const showProgressBar = $derived(isNavigating && !isWorkbenchInternal);
+	const isNoteWorkbench = $derived(page.url.pathname.startsWith('/notes/'));
 
 	let insetRef = $state<HTMLElement | null>(null);
 
@@ -106,7 +108,11 @@
 	/>
 	<Sidebar.Inset
 		bind:ref={insetRef}
-		class="relative min-w-0 overflow-y-auto border-l border-sidebar-border"
+		class={cn(
+			'relative min-h-0 min-w-0 border-l border-sidebar-border',
+			isNoteWorkbench ? 'overflow-hidden' : 'overflow-y-auto'
+		)}
+		data-note-workbench={isNoteWorkbench ? '' : undefined}
 	>
 		{#if showProgressBar}
 			<div

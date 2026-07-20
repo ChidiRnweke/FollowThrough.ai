@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
  *      (`?tabs=<...>&split=<id>`) and asserts both panes render.
  *   3. Drags the divider with the mouse and asserts the left pane
  *      shrinks; reloads and asserts the split + ratio both come back.
- *   4. Clicks the × on the divider and asserts the URL collapses back
+ *   4. Closes from the secondary note utility row and asserts the URL collapses back
  *      to a single pane.
  *
  * The drag-to-split *gesture* (carrying the note id in the
@@ -53,7 +53,7 @@ test('a deep-link URL with ?split= renders both panes side by side', async ({ pa
 	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeVisible();
 
 	// The divider is a `role="separator"` element between them.
-	const divider = page.getByRole('separator');
+	const divider = page.getByRole('separator', { name: 'Resize note panes' });
 	await expect(divider).toBeVisible();
 
 	// The URL retains the split param after the layout's $effect runs.
@@ -71,7 +71,7 @@ test('dragging the divider resizes the panes and survives reload', async ({ page
 	await page.goto(`/notes/${firstId}?tabs=${firstId},${secondId}&split=${secondId}`);
 	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeVisible();
 
-	const divider = page.getByRole('separator');
+	const divider = page.getByRole('separator', { name: 'Resize note panes' });
 	const dividerBox = (await divider.boundingBox())!;
 
 	// Capture the primary pane's width before dragging.
@@ -102,7 +102,7 @@ test('dragging the divider resizes the panes and survives reload', async ({ page
 	expect(primaryBoxReloaded.width).toBeLessThan(primaryBoxBefore.width - 100);
 });
 
-test('clicking the × on the divider closes the split and rewrites the URL', async ({ page }) => {
+test('closing the secondary pane clears split state but keeps its tab', async ({ page }) => {
 	const firstHref = await openFirstNote(page);
 	const secondHref = await findSecondNoteHref(page, firstHref);
 	test.skip(!secondHref, 'the dev database must seed at least two notes for this regression');
@@ -113,7 +113,10 @@ test('clicking the × on the divider closes the split and rewrites the URL', asy
 	await page.goto(`/notes/${firstId}?tabs=${firstId},${secondId}&split=${secondId}`);
 	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeVisible();
 
-	const closeButton = page.getByRole('button', { name: 'Close split pane' });
+	const secondaryTab = page.getByRole('tab').nth(1);
+	const closeButton = page
+		.locator(`[data-pane="${secondId}"]`)
+		.getByRole('button', { name: 'Close split view' });
 	await closeButton.click();
 
 	// URL no longer carries the split param.
@@ -122,4 +125,95 @@ test('clicking the × on the divider closes the split and rewrites the URL', asy
 	// The primary pane remains visible; the split wrapper goes `hidden`.
 	await expect(page.locator(`[data-note-pane="${firstId}"]`)).toBeVisible();
 	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeHidden();
+	await expect(secondaryTab).toBeAttached();
+});
+
+test('each note pane scrolls independently while the shell stays fixed', async ({ page }) => {
+	const firstHref = await openFirstNote(page);
+	const secondHref = await findSecondNoteHref(page, firstHref);
+	test.skip(!secondHref, 'the dev database must seed at least two notes for this regression');
+
+	const firstId = firstHref.replace('/notes/', '');
+	const secondId = secondHref!.replace('/notes/', '');
+	await page.goto(`/notes/${firstId}?tabs=${firstId},${secondId}&split=${secondId}`);
+
+	const primaryViewport = page.locator(
+		`[data-pane="${firstId}"] [data-slot="scroll-area-viewport"]`
+	);
+	const secondaryViewport = page.locator(
+		`[data-pane="${secondId}"] [data-slot="scroll-area-viewport"]`
+	);
+	for (const viewport of [primaryViewport, secondaryViewport]) {
+		await viewport.evaluate((element) => {
+			const content = element.querySelector('.workspace-pane-scroll-content') as HTMLElement;
+			content.style.width = '2000px';
+			content.style.height = '2000px';
+		});
+	}
+
+	await primaryViewport.evaluate((element) => element.scrollTo(140, 180));
+	await secondaryViewport.evaluate((element) => element.scrollTo(40, 60));
+
+	const positions = await page.evaluate(
+		({ first, second }) => {
+			const primary = document.querySelector(
+				`[data-pane="${first}"] [data-slot="scroll-area-viewport"]`
+			)!;
+			const secondary = document.querySelector(
+				`[data-pane="${second}"] [data-slot="scroll-area-viewport"]`
+			)!;
+			const shell = document.querySelector('[data-slot="sidebar-inset"]')!;
+			return [
+				primary.scrollLeft,
+				primary.scrollTop,
+				secondary.scrollLeft,
+				secondary.scrollTop,
+				shell.scrollTop
+			];
+		},
+		{ first: firstId, second: secondId }
+	);
+
+	expect(positions).toEqual([140, 180, 40, 60, 0]);
+});
+
+test('narrow split switches panes and restores side-by-side after widening', async ({ page }) => {
+	const firstHref = await openFirstNote(page);
+	const secondHref = await findSecondNoteHref(page, firstHref);
+	test.skip(!secondHref, 'the dev database must seed at least two notes for this regression');
+
+	const firstId = firstHref.replace('/notes/', '');
+	const secondId = secondHref!.replace('/notes/', '');
+	await page.goto(`/notes/${firstId}?tabs=${firstId},${secondId}&split=${secondId}`);
+	await page.setViewportSize({ width: 700, height: 800 });
+
+	const switcher = page.getByTestId('narrow-split-switcher');
+	await switcher.getByRole('radio').nth(1).click();
+	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeVisible();
+
+	await page.setViewportSize({ width: 1440, height: 900 });
+
+	await expect(page.getByRole('separator', { name: 'Resize note panes' })).toBeVisible();
+	await expect(page.locator(`[data-note-pane="${firstId}"]`)).toBeVisible();
+	await expect(page.locator(`[data-note-pane="${secondId}"]`)).toBeVisible();
+	await expect(page).toHaveURL(/&split=/);
+});
+
+test('narrow close removes split without closing either tab', async ({ page }) => {
+	const firstHref = await openFirstNote(page);
+	const secondHref = await findSecondNoteHref(page, firstHref);
+	test.skip(!secondHref, 'the dev database must seed at least two notes for this regression');
+
+	const firstId = firstHref.replace('/notes/', '');
+	const secondId = secondHref!.replace('/notes/', '');
+	await page.goto(`/notes/${firstId}?tabs=${firstId},${secondId}&split=${secondId}`);
+	await page.setViewportSize({ width: 700, height: 800 });
+
+	await page
+		.getByTestId('narrow-split-switcher')
+		.getByRole('button', { name: 'Close split view' })
+		.click();
+
+	await expect(page).not.toHaveURL(/&split=/);
+	await expect(page.getByRole('tab')).toHaveCount(2);
 });
