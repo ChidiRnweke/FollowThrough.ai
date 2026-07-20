@@ -177,15 +177,30 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('dispatches an exact long-tail tool name to its controller', async () => {
+		// Mirrors the real ListProjectsOutput shape. The agent-facing payload is a
+		// projection of it: id and name only, without the userId and audit stamps
+		// the model cannot use.
 		const factory = {
-			projects: () => ({ list: async () => ['General'] })
+			projects: () => ({
+				list: async () => ({
+					projects: [
+						{
+							id: 'project-1',
+							userId: 'user-1',
+							name: 'General',
+							createdAt: '2026-01-01T00:00:00.000Z',
+							updatedAt: '2026-01-01T00:00:00.000Z'
+						}
+					]
+				})
+			})
 		} as unknown as ControllerFactory;
 		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
 		const result = await selected.invoke(
 			{} as never,
 			JSON.stringify({ name: 'list_projects', payload: {} })
 		);
-		expect(result).toEqual(['General']);
+		expect(result).toEqual({ projects: [{ id: 'project-1', name: 'General' }] });
 	});
 
 	it('does not execute a guessed long-tail tool name', async () => {

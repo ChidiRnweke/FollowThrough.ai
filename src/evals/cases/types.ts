@@ -38,6 +38,15 @@ export interface EvalCase {
 export const ARCHETYPES = {
 	toolCalling: 'tool_calling',
 	toolDiscovery: 'tool_discovery',
+	/** Can the catalog surface the right tool at all, independent of the model? */
+	toolRetrieval: 'tool_retrieval_at_k',
+	/** Does the agent reach for the catalog when the capability is not in hand? */
+	toolSearchTrigger: 'tool_search_trigger',
+	/** Are the arguments it dispatches actually usable? */
+	toolPayload: 'tool_payload_validity',
+	diagramQuality: 'diagram_quality',
+	/** Did the requested change actually land in committed state? */
+	effect: 'effect_applied',
 	memoryAdherence: 'memory_adherence',
 	memoryPrecedence: 'memory_precedence',
 	memoryCapture: 'memory_capture',

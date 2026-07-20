@@ -30,8 +30,13 @@ export const suiteName = (archetype: string): string => `followthrough/agent · 
 export const evalModel = (): string =>
 	process.env.EVAL_MODEL ?? process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL;
 
-/** The judge model is pinned separately: changing what you measure with should be deliberate. */
-export const judgeModel = (): string => process.env.EVAL_JUDGE_MODEL ?? 'openai/gpt-5';
+/**
+ * The judge is pinned separately from the model under test, and to a stronger
+ * model than the default subject: a judge no better than the system it grades
+ * cannot reliably catch that system's mistakes. Changing it changes every
+ * historical comparison, so it should be a deliberate act.
+ */
+export const judgeModel = (): string => process.env.EVAL_JUDGE_MODEL ?? 'deepseek/deepseek-v4-pro';
 
 export const openRouterBaseUrl = (): string =>
 	process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL;

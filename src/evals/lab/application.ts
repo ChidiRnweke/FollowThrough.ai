@@ -14,12 +14,20 @@ import {
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
+import type { EmbeddingClient } from '$lib/services';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
 export interface Lab extends ProductionApplication {
 	readonly model: string;
+	/**
+	 * Exposed so tool-retrieval can be evaluated on its own, without paying for a
+	 * full agent turn. Whether the catalog surfaces the right tool for a goal is
+	 * a property of the retriever, and testing it directly covers dozens of tools
+	 * in the time one agent case takes.
+	 */
+	readonly embeddingClient: EmbeddingClient;
 	close(): Promise<void>;
 }
 
@@ -57,6 +65,10 @@ export async function createLab(options: LabOptions): Promise<Lab> {
 
 	const cache = new DiskCache(CACHE_PATH);
 	const clientOptions = { baseURL, appURL };
+	const embeddingClient = new CachedEmbeddingClient(
+		new OpenAIEmbeddingClient(openRouterApiKey, clientOptions),
+		cache
+	);
 
 	const application = createApplication({
 		db: database,
@@ -66,10 +78,7 @@ export async function createLab(options: LabOptions): Promise<Lab> {
 		appURL,
 		defaultAgentModel: model,
 		overrides: {
-			embeddingClient: new CachedEmbeddingClient(
-				new OpenAIEmbeddingClient(openRouterApiKey, clientOptions),
-				cache
-			),
+			embeddingClient,
 			reranker: new CachedReranker(new OpenRouterReranker(openRouterApiKey, clientOptions), cache),
 			condenser: new CachedCondenser(
 				new ConversationCondenser(openRouterApiKey, clientOptions),
@@ -83,6 +92,7 @@ export async function createLab(options: LabOptions): Promise<Lab> {
 	return {
 		...application,
 		model,
+		embeddingClient,
 		async close() {
 			await cache.flush();
 			await client.end();

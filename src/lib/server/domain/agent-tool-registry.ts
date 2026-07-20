@@ -29,6 +29,14 @@ import type {
 import { findProseMirrorDocumentIssue } from '$lib/models';
 import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/services';
 import { matchToolName } from './tool-name-matcher';
+import {
+	projectMemory,
+	projectNoteSummary,
+	projectProject,
+	projectSuggestion,
+	projectTodo,
+	projectUser
+} from './agent-tool-projections';
 
 /**
  * Stable, frequently used tools the agent can call without first discovering
@@ -421,7 +429,17 @@ export class AgentToolRegistry {
 				'Read projects, notes, skills, and pending work.',
 				'read',
 				none,
-				() => factory.workspace().getShellContext(actor)
+				async () => {
+					const shell = await factory.workspace().getShellContext(actor);
+					return {
+						user: projectUser(shell.user),
+						projects: shell.projects.map(projectProject),
+						// Structure only — the agent calls get_note for content.
+						noteTree: shell.noteTree.map(projectNoteSummary),
+						skills: shell.skills,
+						pendingSuggestionCount: shell.pendingSuggestionCount
+					};
+				}
 			),
 			define(
 				'get_today_view',
@@ -430,9 +448,9 @@ export class AgentToolRegistry {
 				z.object({ today: z.string() }),
 				(input) => factory.workspace().getTodayView(actor, input as never)
 			),
-			define('list_projects', 'List active projects.', 'read', none, () =>
-				factory.projects().list(actor)
-			),
+			define('list_projects', 'List active projects.', 'read', none, async () => ({
+				projects: (await factory.projects().list(actor)).projects.map(projectProject)
+			})),
 			define(
 				'get_project',
 				'Read a project and its note tree.',
@@ -553,7 +571,11 @@ export class AgentToolRegistry {
 					responsibility: z.enum(['mine', 'waiting_on']).optional(),
 					dueBefore: z.string().optional()
 				}),
-				(input) => factory.todos().list(actor, input as never)
+				async (input) => ({
+					todos: (await factory.todos().list(actor, input as never)).todos.map((view) =>
+						projectTodo(view.todo)
+					)
+				})
 			),
 			define(
 				'create_todo',
@@ -635,7 +657,11 @@ export class AgentToolRegistry {
 				'List reviewable suggestions by status.',
 				'read',
 				z.object({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
-				(input) => factory.suggestions().list(actor, input as never)
+				async (input) => ({
+					suggestions: (await factory.suggestions().list(actor, input as never)).groups.flatMap(
+						(group) => group.suggestions.map((view) => projectSuggestion(view.suggestion))
+					)
+				})
 			),
 			define(
 				'accept_suggestion',
@@ -746,18 +772,25 @@ export class AgentToolRegistry {
 				'Read the durable memory entries a specific project shares with agents: facts, decisions, constraints, terminology, and preferences. Use when the request concerns an active or referenced project and its projectId is known.',
 				'read',
 				z.object({ projectId: id }),
-				(input) =>
-					factory.memory().list(actor, {
-						projectId: input.projectId as ProjectId,
-						sharedOnly: true
-					})
+				async (input) => ({
+					entries: (
+						await factory.memory().list(actor, {
+							projectId: input.projectId as ProjectId,
+							sharedOnly: true
+						})
+					).entries.map(projectMemory)
+				})
 			),
 			define(
 				'list_user_memory',
 				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects. Use when personal context could improve the response.',
 				'read',
 				none,
-				() => factory.memory().list(actor, { sharedOnly: true })
+				async () => ({
+					entries: (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
+						projectMemory
+					)
+				})
 			),
 			define(
 				'propose_memory_change',

@@ -3,14 +3,30 @@ import { afterAll, beforeAll, inject } from 'vitest';
 import { createLab, type Lab } from '../lab/application';
 import { ARCHETYPES } from '../cases/types';
 import { toolCallingCases } from '../cases/tool-calling';
+import { toolRetrievalCases } from '../cases/tool-retrieval';
+import { toolInvocationCases, toolSearchTriggerCases } from '../cases/tool-invocation';
 import { memoryCases } from '../cases/memory';
 import { safetyCases } from '../cases/safety';
+import { diagramCases } from '../cases/diagrams';
+import { effectCases } from '../cases/effects';
 import { retrievalCases } from '../cases/retrieval';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
 
-const allCases = [...toolCallingCases, ...memoryCases, ...safetyCases, ...retrievalCases];
+const allCases = [
+	// Cheapest first: catalog ranking needs no agent turn, so a broken catalog
+	// surfaces in seconds rather than after the full suite has run.
+	...toolRetrievalCases,
+	...retrievalCases,
+	...toolCallingCases,
+	...toolInvocationCases,
+	...toolSearchTriggerCases,
+	...memoryCases,
+	...safetyCases,
+	...diagramCases,
+	...effectCases
+];
 
 /**
  * Every case in the app is registered into this one suite, which is what makes
@@ -45,7 +61,16 @@ px.describe(
 					input: evalCase.input,
 					expected: evalCase.expected,
 					splits: [...evalCase.splits],
-					...(evalCase.metadata ? { metadata: evalCase.metadata } : {})
+					// Splits are sent on upload but Phoenix 17.15.0 does not persist
+					// them — every example reads back `splits: null`, so the UI has
+					// nothing to filter on. Metadata does round-trip, so the archetype
+					// is mirrored here to keep the dataset sliceable today. Keep both:
+					// `splits` starts working the moment the server supports it.
+					metadata: {
+						archetype: evalCase.splits[0],
+						tags: [...evalCase.splits],
+						...evalCase.metadata
+					}
 				},
 				async () => {
 					await evalCase.run(lab);
