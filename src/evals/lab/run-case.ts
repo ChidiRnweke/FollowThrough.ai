@@ -46,6 +46,8 @@ export interface RunCaseInput {
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
 	readonly contextNoteIds?: readonly NoteId[];
+	readonly selection?: import('$lib/models').TextSelection;
+	readonly requestedSkillNames?: readonly string[];
 }
 
 /**
@@ -68,7 +70,9 @@ export async function runCase(
 		...(input.mode ? { mode: input.mode } : {}),
 		...(input.projectId ? { projectId: input.projectId } : {}),
 		...(input.noteId ? { noteId: input.noteId } : {}),
-		...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {})
+		...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
+		...(input.selection ? { selection: input.selection } : {}),
+		...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {})
 	});
 
 	const status = await waitForTerminalStatus(lab, actor, receipt.runId);

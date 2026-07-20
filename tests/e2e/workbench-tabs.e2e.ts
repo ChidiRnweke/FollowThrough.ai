@@ -1,6 +1,59 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type ProbeWindow = Window & { __paneMounts?: number[] };
+type ProbeWindow = Window & {
+	__paneMounts?: number[];
+	__navigationProgressMaxOpacity?: number;
+};
+
+async function installNavigationProgressProbe(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const probeWindow = window as ProbeWindow;
+		probeWindow.__navigationProgressMaxOpacity = 0;
+		const sample = () => {
+			const indicator = document.querySelector<HTMLElement>('[data-navigation-progress]');
+			if (indicator) {
+				probeWindow.__navigationProgressMaxOpacity = Math.max(
+					probeWindow.__navigationProgressMaxOpacity ?? 0,
+					Number.parseFloat(getComputedStyle(indicator).opacity)
+				);
+			}
+			requestAnimationFrame(sample);
+		};
+		requestAnimationFrame(sample);
+	});
+}
+
+async function navigationProgressWasRevealed(page: Page): Promise<boolean> {
+	return page.evaluate(() => ((window as ProbeWindow).__navigationProgressMaxOpacity ?? 0) > 0);
+}
+
+async function resetNavigationProgressProbe(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		(window as ProbeWindow).__navigationProgressMaxOpacity = 0;
+	});
+}
+
+async function cacheDataRequest(page: Page, pathname: string): Promise<void> {
+	let cachedResponse: { body: Buffer; headers: Record<string, string>; status: number } | undefined;
+	await page.route(`**${pathname}/__data.json*`, async (route) => {
+		if (!cachedResponse) {
+			const response = await route.fetch();
+			cachedResponse = {
+				body: await response.body(),
+				headers: response.headers(),
+				status: response.status()
+			};
+		}
+		await route.fulfill(cachedResponse);
+	});
+}
+
+async function delayDataRequest(page: Page, pathname: string, delayMs: number): Promise<void> {
+	await page.route(`**${pathname}/__data.json*`, async (route) => {
+		await new Promise((resolve) => setTimeout(resolve, delayMs));
+		await route.continue();
+	});
+}
 
 /**
  * Installs a MutationObserver that records the timestamp of every
@@ -11,15 +64,16 @@ async function installPaneMountProbe(page: Page): Promise<void> {
 	await page.addInitScript(() => {
 		const probeWindow = window as ProbeWindow;
 		probeWindow.__paneMounts = [];
-		new MutationObserver((mutations) => {
-			for (const mutation of mutations) {
-				for (const node of mutation.addedNodes) {
-					if (node instanceof HTMLElement && node.getAttribute('data-note-pane')) {
-						probeWindow.__paneMounts!.push(Date.now());
-					}
-				}
+		const seenPanes = new WeakSet<Element>();
+		const sample = () => {
+			for (const pane of document.querySelectorAll('[data-note-pane]')) {
+				if (seenPanes.has(pane)) continue;
+				seenPanes.add(pane);
+				probeWindow.__paneMounts!.push(Date.now());
 			}
-		}).observe(document.body, { childList: true, subtree: true });
+			requestAnimationFrame(sample);
+		};
+		requestAnimationFrame(sample);
 	});
 }
 
@@ -100,4 +154,65 @@ test('the tab strip stays visible while the editor scrolls', async ({ page }) =>
 		.first()
 		.evaluate((el) => el.scrollTo(0, 800));
 	await expect(tabStrip).toBeVisible();
+});
+
+test('a todo-to-note navigation finishing within the micro-duration never reveals progress', async ({
+	page
+}) => {
+	await installNavigationProgressProbe(page);
+	await page.goto('/todos');
+	const noteLink = page.locator('a[href^="/notes/"]').first();
+	const pathname = (await noteLink.getAttribute('href'))!;
+	await cacheDataRequest(page, pathname);
+	await noteLink.click();
+	await page.locator('[data-note-pane]').waitFor();
+	await page.goto('/todos');
+	await resetNavigationProgressProbe(page);
+	await page.locator(`a[href="${pathname}"]`).first().click();
+	await page.locator('[data-note-pane]').waitFor();
+
+	expect(await navigationProgressWasRevealed(page)).toBe(false);
+});
+
+test('a slow todo-to-note navigation reveals progress and removes it after completion', async ({
+	page
+}) => {
+	await installNavigationProgressProbe(page);
+	await page.goto('/todos');
+	const noteLink = page.locator('a[href^="/notes/"]').first();
+	const pathname = (await noteLink.getAttribute('href'))!;
+	await delayDataRequest(page, pathname, 250);
+	await noteLink.click();
+	await page.locator('[data-note-pane]').waitFor();
+
+	expect({
+		revealed: await navigationProgressWasRevealed(page),
+		removed: (await page.locator('[data-navigation-progress]').count()) === 0
+	}).toEqual({ revealed: true, removed: true });
+});
+
+test('a slow note-to-note navigation keeps progress suppressed', async ({ page }) => {
+	await installNavigationProgressProbe(page);
+	const firstHref = await openFirstNote(page);
+	const alternative = page.locator(`a[href^="/notes/"]:not([href="${firstHref}"])`).first();
+	const alternativeHref = await alternative.getAttribute('href');
+	test.skip(!alternativeHref, 'the dev database must seed at least two notes for this regression');
+	await delayDataRequest(page, alternativeHref!, 250);
+	await alternative.click();
+	await page.locator(`[data-note-pane="${alternativeHref!.replace('/notes/', '')}"]`).waitFor();
+
+	expect(await navigationProgressWasRevealed(page)).toBe(false);
+});
+
+test('a slow non-note navigation still reveals progress', async ({ page }) => {
+	await installNavigationProgressProbe(page);
+	await openFirstNote(page);
+	await delayDataRequest(page, '/todos', 250);
+	await page.locator('a[href="/todos"]').first().click();
+	await page.waitForURL(/\/todos$/);
+
+	expect({
+		revealed: await navigationProgressWasRevealed(page),
+		removed: (await page.locator('[data-navigation-progress]').count()) === 0
+	}).toEqual({ revealed: true, removed: true });
 });

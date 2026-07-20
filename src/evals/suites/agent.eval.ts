@@ -10,6 +10,12 @@ import { safetyCases } from '../cases/safety';
 import { diagramCases } from '../cases/diagrams';
 import { effectCases } from '../cases/effects';
 import { retrievalCases } from '../cases/retrieval';
+import { groundingCases } from '../cases/grounding';
+import { contextAwarenessCases } from '../cases/context-awareness';
+import { multiStepCases } from '../cases/multi-step';
+import { skillAdherenceCases } from '../cases/skill-adherence';
+import { selectionCases } from '../cases/selection';
+import { stoppingCases } from '../cases/stopping';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -20,9 +26,15 @@ const allCases = [
 	...toolRetrievalCases,
 	...retrievalCases,
 	...toolCallingCases,
+	...stoppingCases,
 	...toolInvocationCases,
 	...toolSearchTriggerCases,
+	...contextAwarenessCases,
+	...groundingCases,
 	...memoryCases,
+	...skillAdherenceCases,
+	...selectionCases,
+	...multiStepCases,
 	...safetyCases,
 	...diagramCases,
 	...effectCases

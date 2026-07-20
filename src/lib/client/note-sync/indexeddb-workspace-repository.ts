@@ -22,6 +22,14 @@ export interface WorkspaceRecord {
 	readonly recentlyUsed: readonly NoteId[];
 	/** Whether the user has collapsed the global tab strip.  Display preference. */
 	readonly stripHidden: boolean;
+	/**
+	 * Width of the secondary (split) pane as a fraction of 1, used only when
+	 * `splitNoteId` is active in the URL.  Display preference — the URL's
+	 * `?split=` carries which note is split, while this number carries the
+	 * ratio the user last preferred.  Missing on older records; treated as
+	 * 0.5 (default) on read.
+	 */
+	readonly splitRatio: number;
 }
 
 const STORE_NAME = 'workspace';

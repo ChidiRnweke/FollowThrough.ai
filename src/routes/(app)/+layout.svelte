@@ -109,8 +109,12 @@
 		class="relative min-w-0 overflow-y-auto border-l border-sidebar-border"
 	>
 		{#if showProgressBar}
-			<div class="absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden">
-				<div class="bg-primary h-full w-full origin-left animate-pulse"></div>
+			<div
+				data-navigation-progress
+				aria-hidden="true"
+				class="navigation-progress absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden"
+			>
+				<div class="motion-safe:animate-pulse bg-primary h-full w-full origin-left"></div>
 			</div>
 		{/if}
 		<WorkspaceTabs

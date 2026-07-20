@@ -31,6 +31,7 @@ const record = (overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord => ({
 	pinnedTabs: [id(1)],
 	recentlyUsed: [id(2), id(1)],
 	stripHidden: false,
+	splitRatio: 0.5,
 	...overrides
 });
 
@@ -98,5 +99,22 @@ describe('IndexedDB workspace storage', () => {
 		repository.close();
 		expect(stored?.focusedNoteId).toBe(id(2));
 		expect(noteSyncRoundtrip).toBeUndefined();
+	});
+
+	it('round-trips a non-default split ratio', async () => {
+		const { repository } = setup();
+		const original = record({ splitRatio: 0.35 });
+		await repository.put(original);
+		const stored = await repository.get();
+		repository.close();
+		expect(stored?.splitRatio).toBe(0.35);
+	});
+
+	it('returns the stored record verbatim even when splitRatio is at the default 0.5', async () => {
+		const { repository } = setup();
+		await repository.put(record({ splitRatio: 0.5 }));
+		const stored = await repository.get();
+		repository.close();
+		expect(stored?.splitRatio).toBe(0.5);
 	});
 });

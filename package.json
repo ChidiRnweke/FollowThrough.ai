@@ -118,7 +118,7 @@
 		"openai": "^6.46.0",
 		"pdf-parse": "^2.4.5",
 		"pdfmake": "^0.3.11",
-		"svelte-dnd-action": "^0.9.70",
+		"svelte-dnd-action": "^0.9.74",
 		"svelte-sonner": "^1.1.1",
 		"yaml": "^2.9.0",
 		"zod": "^4.4.3"

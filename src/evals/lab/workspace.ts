@@ -1,11 +1,27 @@
 import { randomUUID } from 'node:crypto';
-import type { ActorContext, NoteId, ProjectId, UserId } from '$lib/models';
+import type { ActorContext, NoteId, ProjectId, TodoId, UserId } from '$lib/models';
 import type { Lab } from './application';
 
 export interface SeedNote {
 	readonly title: string;
 	/** Plain text body; indexed for `search` exactly as a saved note would be. */
 	readonly body: string;
+}
+
+export interface SeedSkill {
+	readonly name: string;
+	readonly description?: string;
+	readonly triggerHints?: readonly string[];
+	/** The full skill instruction body. */
+	readonly body: string;
+	/** Reference to a project name in the same fixture. */
+	readonly projectName?: string;
+}
+
+export interface SeedTodo {
+	readonly title: string;
+	/** Reference to a project name in the same fixture. */
+	readonly projectName?: string;
 }
 
 export interface SeedProject {
@@ -19,12 +35,16 @@ export interface WorkspaceFixture {
 	/** User-scoped memory — what `list_user_memory` returns. */
 	readonly memories?: readonly string[];
 	readonly projects?: readonly SeedProject[];
+	readonly skills?: readonly SeedSkill[];
+	readonly todos?: readonly SeedTodo[];
 }
 
 export interface SeededWorkspace {
 	readonly actor: ActorContext;
 	readonly projectIds: ReadonlyMap<string, ProjectId>;
 	readonly noteIds: ReadonlyMap<string, NoteId>;
+	readonly skillIds: ReadonlyMap<string, NoteId>;
+	readonly todoIds: ReadonlyMap<string, TodoId>;
 }
 
 /**
@@ -43,6 +63,8 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 
 	const projectIds = new Map<string, ProjectId>();
 	const noteIds = new Map<string, NoteId>();
+	const skillIds = new Map<string, NoteId>();
+	const todoIds = new Map<string, TodoId>();
 
 	for (const content of fixture.memories ?? []) {
 		await lab.controllers.memory().create(actor, { content, shareWithAgents: true });
@@ -83,5 +105,35 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		}
 	}
 
-	return { actor, projectIds, noteIds };
+	for (const seedSkill of fixture.skills ?? []) {
+		const projectId = seedSkill.projectName ? projectIds.get(seedSkill.projectName) : undefined;
+		const { skill } = await lab.controllers.skills().create(actor, {
+			name: seedSkill.name,
+			...(seedSkill.description ? { description: seedSkill.description } : {}),
+			...(seedSkill.triggerHints ? { triggerHints: seedSkill.triggerHints } : {}),
+			...(projectId ? { projectId } : {})
+		});
+		skillIds.set(seedSkill.name, skill.note.id);
+		// Save the skill body so load_skill returns it.
+		await lab.controllers.skills().update(actor, {
+			noteId: skill.note.id,
+			raw: seedSkill.body
+		});
+	}
+
+	for (const seedTodo of fixture.todos ?? []) {
+		const projectId = seedTodo.projectName ? projectIds.get(seedTodo.projectName) : undefined;
+		if (!projectId)
+			throw new Error(
+				`Todo "${seedTodo.title}" references unknown project "${seedTodo.projectName}"`
+			);
+		const { todo } = await lab.controllers.todos().create(actor, {
+			title: seedTodo.title,
+			projectId,
+			responsibility: 'mine'
+		});
+		todoIds.set(seedTodo.title, todo.id);
+	}
+
+	return { actor, projectIds, noteIds, skillIds, todoIds };
 }

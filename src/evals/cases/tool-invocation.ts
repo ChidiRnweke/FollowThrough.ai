@@ -102,6 +102,53 @@ const CASES: readonly InvocationCase[] = [
 		name: 'exports a document when asked for a shareable file',
 		prompt: 'Turn my Background note into a PDF I can send to someone.',
 		tool: 'export_document'
+	},
+	{
+		id: 'invoke-search',
+		name: 'searches notes when asked to find something',
+		prompt: 'Find my notes about Postgres failover procedures.',
+		tool: 'search',
+		firstClass: true,
+		payload: (args) => (usableString(args.query) ? undefined : 'query was missing or empty')
+	},
+	{
+		id: 'invoke-get-note',
+		name: 'reads a note when asked for its content',
+		prompt: 'Read my Background note and tell me what it says.',
+		tool: 'get_note',
+		firstClass: true,
+		payload: (args) => (typeof args.noteId === 'string' ? undefined : 'noteId was missing')
+	},
+	{
+		id: 'invoke-publish-note',
+		name: 'publishes a note when asked to create a versioned snapshot',
+		prompt: 'Publish my "Checkout architecture" note so the team can reference it.',
+		tool: 'publish_note',
+		payload: (args) => (typeof args.noteId === 'string' ? undefined : 'noteId was missing')
+	},
+	{
+		id: 'invoke-save-note',
+		name: 'edits a note when asked to update its content',
+		prompt:
+			'Edit my Background note: add a paragraph at the end mentioning my new Kubernetes certification.',
+		tool: 'save_note'
+	},
+	{
+		id: 'invoke-rename-project',
+		name: 'renames a project when asked',
+		prompt: 'Rename my "Profile" project to "Personal".',
+		tool: 'rename_project',
+		payload: (args) =>
+			typeof args.name === 'string' && args.name.toLowerCase().includes('personal')
+				? undefined
+				: `new name did not reflect the request: ${JSON.stringify(args.name)}`
+	},
+	{
+		id: 'invoke-update-todo',
+		name: 'updates a todo when asked to change its details',
+		prompt: 'Change my TLS certificates todo to be due next Friday.',
+		tool: 'update_todo',
+		payload: (args) => (typeof args.todoId === 'string' ? undefined : 'todoId was missing')
 	}
 ];
 

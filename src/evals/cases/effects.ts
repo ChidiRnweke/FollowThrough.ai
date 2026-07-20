@@ -4,6 +4,7 @@ import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { poisonedWorkspace } from '../fixtures/workspaces/poisoned';
+import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { findCall } from '../assertions/tool-calls';
 import {
 	expectMemoryAbsent,
@@ -237,6 +238,72 @@ export const effectCases: readonly EvalCase[] = [
 			annotate(verdict);
 
 			expect(result.status, 'run should have parked for approval').toBe('awaiting_approval');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'effect-todo-created-in-project',
+		name: 'a todo created for a project is actually scoped to that project',
+		splits: [ARCHETYPES.effect, ARCHETYPES.multiStep],
+		input: { prompt: 'Add a todo to my Platform project: deploy v2 to production.' },
+		expected: { todoTitle: 'deploy', projectName: 'Platform' },
+		metadata: { layer: 'end-state', note: 'Tests that the projectId arg actually persists.' },
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, todosWorkspace);
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+
+			const verdict = await expectTodoCreated(lab, workspace.actor, 'deploy');
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'effect-note-content-saved',
+		name: 'editing a note persists the new content',
+		splits: [ARCHETYPES.effect, ARCHETYPES.toolDiscovery],
+		input: {
+			prompt: 'Edit my Background note: add a paragraph mentioning my new CKA certification.'
+		},
+		expected: { noteEdited: true },
+		metadata: { layer: 'end-state', note: 'save_note must produce a readable change.' },
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const noteId = workspace.noteIds.get('Background');
+			if (!noteId) throw new Error('Background note was not seeded');
+
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				noteId
+			});
+
+			// Read back the note and check the body changed to include the new content.
+			const noteView = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const body = noteView.note.plainText.toLowerCase();
+			const saved =
+				body.includes('cka') || body.includes('certification') || body.includes('kubernetes');
+
+			const verdict = {
+				passed: saved,
+				explanation: saved
+					? 'note body now mentions the certification'
+					: `note body does not contain expected content after save`
+			};
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
+			expect(result.status).toBe('completed');
 			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
 	}

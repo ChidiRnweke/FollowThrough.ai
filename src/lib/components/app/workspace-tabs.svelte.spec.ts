@@ -223,4 +223,40 @@ describe('WorkspaceTabs', () => {
 		await expect.element(screen.getByRole('button', { name: 'New note' })).toBeVisible();
 		expect(screen.container.querySelectorAll('[role="tab"]').length).toBe(0);
 	});
+
+	it('marks each tab as draggable so drag-to-split can carry its note id', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		const tabs = screen.container.querySelectorAll('[role="tab"]');
+		expect(tabs.length).toBe(3);
+		for (const tab of tabs) {
+			expect(tab.getAttribute('draggable')).toBe('true');
+		}
+	});
+
+	it('writes the dragged tab\'s note id to the dataTransfer on dragstart', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		const tabs = screen.container.querySelectorAll('[role="tab"]');
+		const firstTab = tabs[0] as HTMLElement;
+		// Chromium's DragEvent constructor rejects a fake `DataTransfer`, so
+		// we dispatch a plain `Event` and stub `dataTransfer` on it via
+		// `Object.defineProperty`.  Svelte's `ondragstart` only needs the
+		// `dataTransfer.setData` / `.effectAllowed` surface.
+		const dataTransfer = {
+			_data: {} as Record<string, string>,
+			setData(type: string, value: string) {
+				this._data[type] = value;
+			},
+			getData(type: string) {
+				return this._data[type] ?? '';
+			},
+			effectAllowed: 'none'
+		};
+		const event = new Event('dragstart', { bubbles: true, cancelable: true });
+		Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+		firstTab.dispatchEvent(event);
+		expect(dataTransfer._data['text/x-followthrough-note-id']).toBe(id(1));
+		expect(dataTransfer.effectAllowed).toBe('move');
+	});
 });

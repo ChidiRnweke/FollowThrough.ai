@@ -72,6 +72,18 @@
 	}
 }
 
+@keyframes navigation-progress-reveal {
+	to {
+		opacity: 1;
+	}
+}
+
+/* Avoid flashing progress for navigations that finish within one micro-duration. */
+.navigation-progress {
+	opacity: 0;
+	animation: navigation-progress-reveal 0s var(--duration-micro) forwards;
+}
+
 .chat-thinking-dots {
 	display: inline-flex;
 	gap: 0.1875rem;

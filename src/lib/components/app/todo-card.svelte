@@ -61,6 +61,8 @@
 	<Card.Header class="px-4">
 		<Card.Title class="flex items-start gap-2 text-sm font-medium">
 			{#if draggable}
+				<!-- svelte-dnd-action intentionally uses a non-passive listener here: touch dragging
+				     calls preventDefault(), so making it passive would break the drag handle. -->
 				<span
 					use:dragHandle
 					class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -12,6 +12,7 @@ import {
 	openTabInState,
 	parseWorkbenchUrl,
 	serializeWorkbenchUrl,
+	setSplitInState,
 	type WorkbenchUrlState
 } from './workbench-url';
 
@@ -52,6 +53,23 @@ class WorkbenchStore {
 	 */
 	stripHidden = $state(false);
 
+	/**
+	 * The note currently shown in the secondary (split) pane, or
+	 * `undefined` when there is no split.  URL-canonical via `?split=`, so
+	 * this field mirrors `page.url` rather than being independently
+	 * persisted.  Always distinct from `focusedNoteId` (invariant: a note
+	 * can't be both primary and split).
+	 */
+	splitNoteId = $state<NoteId | undefined>(undefined);
+
+	/**
+	 * Width of the secondary pane as a fraction of 1 (clamped 0.1–0.9).
+	 * Display preference — like `stripHidden`, persists to localStorage
+	 * for instant first-paint and to the IndexedDB `WorkspaceRecord` for
+	 * cross-device synchronisation.  The URL never encodes the ratio.
+	 */
+	splitRatio = $state(0.5);
+
 	private repository = new IndexedDbWorkspaceRepository();
 	private hydrated = $state(false);
 	/** Suppresses the URL→state effect while we're applying a user action this tick. */
@@ -60,6 +78,7 @@ class WorkbenchStore {
 	private restoring = false;
 
 	private static readonly STRIP_HIDDEN_KEY = 'followthrough.workbench.stripHidden';
+	private static readonly SPLIT_RATIO_KEY = 'followthrough.workbench.splitRatio';
 
 	/**
 	 * Reads the persisted `stripHidden` preference synchronously from
@@ -79,6 +98,38 @@ class WorkbenchStore {
 		if (typeof localStorage !== 'undefined')
 			localStorage.setItem(WorkbenchStore.STRIP_HIDDEN_KEY, String(this.stripHidden));
 		void this.persist();
+	}
+
+	/**
+	 * Reads the persisted `splitRatio` synchronously from localStorage so
+	 * the first paint of a split pane lands at the user's preferred width
+	 * instead of the 50% default.  No-op on the server.
+	 */
+	private readSplitRatioFromStorage(): void {
+		if (typeof localStorage === 'undefined') return;
+		const stored = localStorage.getItem(WorkbenchStore.SPLIT_RATIO_KEY);
+		if (stored === null) return;
+		const parsed = Number.parseFloat(stored);
+		if (Number.isFinite(parsed)) this.splitRatio = WorkbenchStore.clampSplitRatio(parsed);
+	}
+
+	/**
+	 * Sets the split pane's width ratio.  Persists to localStorage (so
+	 * the next session's first paint matches) and IndexedDB.  Does not
+	 * touch the URL — the ratio is a display preference only.
+	 */
+	setSplitRatio(ratio: number): void {
+		this.splitRatio = WorkbenchStore.clampSplitRatio(ratio);
+		if (typeof localStorage !== 'undefined')
+			localStorage.setItem(WorkbenchStore.SPLIT_RATIO_KEY, String(this.splitRatio));
+		void this.persist();
+	}
+
+	private static clampSplitRatio(ratio: number): number {
+		if (!Number.isFinite(ratio)) return 0.5;
+		if (ratio < 0.1) return 0.1;
+		if (ratio > 0.9) return 0.9;
+		return ratio;
 	}
 
 	/**
@@ -110,8 +161,12 @@ class WorkbenchStore {
 		if (this.hydrated) return;
 		this.hydrated = true;
 		// Display preference: read synchronously from localStorage so the
-		// strip never flashes visible-then-hidden on first paint.
+		// strip never flashes visible-then-hidden on first paint.  Same
+		// reason applies to the split ratio — the compare pane's width
+		// should land at the user's preferred size instead of flashing at
+		// 50% before IndexedDB comes back.
 		this.readStripHiddenFromStorage();
+		this.readSplitRatioFromStorage();
 		const urlState = parseWorkbenchUrl(page.url.pathname, page.url.searchParams);
 		if (!urlState) {
 			// Not a workbench path on cold start — leave the user on whatever
@@ -124,6 +179,8 @@ class WorkbenchStore {
 				const record = await this.repository.get();
 				if (record) {
 					if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
+					if (typeof record.splitRatio === 'number')
+						this.splitRatio = WorkbenchStore.clampSplitRatio(record.splitRatio);
 					this.pinnedTabs = record.pinnedTabs;
 					this.recentlyUsed = record.recentlyUsed;
 				}
@@ -142,6 +199,8 @@ class WorkbenchStore {
 			const record = await this.repository.get();
 			if (record) {
 				if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
+				if (typeof record.splitRatio === 'number')
+					this.splitRatio = WorkbenchStore.clampSplitRatio(record.splitRatio);
 				this.pinnedTabs = record.pinnedTabs;
 				this.recentlyUsed = record.recentlyUsed;
 			}
@@ -151,9 +210,15 @@ class WorkbenchStore {
 				record.openTabs.includes(urlState.focusedNoteId) &&
 				(urlState.openTabs.length === 1 || record.openTabs.length > urlState.openTabs.length)
 			) {
+				// Preserve the deep-link's `?split=` if it survives against
+				// the restored tab set; otherwise clear it.  `urlState`
+				// carries it from the deep link so we pass it through.
 				const restored: WorkbenchUrlState = {
 					focusedNoteId: urlState.focusedNoteId,
-					openTabs: record.openTabs
+					openTabs: record.openTabs,
+					...(urlState.splitNoteId && record.openTabs.includes(urlState.splitNoteId)
+						? { splitNoteId: urlState.splitNoteId }
+						: {})
 				};
 				this.restoring = true;
 				await goto(serializeWorkbenchUrl(restored), { replaceState: true, noScroll: true });
@@ -187,12 +252,14 @@ class WorkbenchStore {
 		if (
 			this.focusedNoteId === urlState.focusedNoteId &&
 			this.openTabs.length === urlState.openTabs.length &&
-			this.openTabs.every((id, i) => id === urlState.openTabs[i])
+			this.openTabs.every((id, i) => id === urlState.openTabs[i]) &&
+			this.splitNoteId === urlState.splitNoteId
 		)
 			return;
 		this.applyingFromUrl = true;
 		this.openTabs = urlState.openTabs;
 		this.focusedNoteId = urlState.focusedNoteId;
+		this.splitNoteId = urlState.splitNoteId;
 		this.recentlyUsed = [
 			urlState.focusedNoteId,
 			...this.recentlyUsed.filter((id) => id !== urlState.focusedNoteId)
@@ -213,7 +280,11 @@ class WorkbenchStore {
 	/** Returns the user's working set in URL-state form. */
 	private toUrlState(): WorkbenchUrlState | undefined {
 		if (!this.focusedNoteId || this.openTabs.length === 0) return undefined;
-		return { focusedNoteId: this.focusedNoteId, openTabs: this.openTabs };
+		return {
+			focusedNoteId: this.focusedNoteId,
+			openTabs: this.openTabs,
+			...(this.splitNoteId ? { splitNoteId: this.splitNoteId } : {})
+		};
 	}
 
 	/**
@@ -244,10 +315,11 @@ class WorkbenchStore {
 		const next = closeTabInState(current, noteId, { recentlyUsed: this.recentlyUsed });
 		if (!next) {
 			// Closing the last tab navigates to Today.  Remove from open list,
-			// clear focus, and let the URL change drive the layout swap.
+			// clear focus and split, and let the URL change drive the layout swap.
 			this.applyingFromUrl = true;
 			this.openTabs = [];
 			this.focusedNoteId = undefined;
+			this.splitNoteId = undefined;
 			this.applyingFromUrl = false;
 			await goto('/', { replaceState: false });
 			await this.persist({
@@ -268,6 +340,21 @@ class WorkbenchStore {
 		const next = moveTabInState(current, from, to);
 		if (next === current) return;
 		await this.navigate(next, { replace: true, invalidate: false });
+	}
+
+	/**
+	 * Open or close the split pane.  Pass a `noteId` to render that note
+	 * alongside the focused pane (the helper opens it as a tab first if it
+	 * isn't already).  Pass `undefined` to close the split — the underlying
+	 * tab stays open in the strip.  Pushes a new history entry so Back
+	 * restores the prior split state.
+	 */
+	async setSplit(noteId: NoteId | undefined): Promise<void> {
+		const current = this.toUrlState();
+		if (!current) return;
+		const next = setSplitInState(current, noteId);
+		if (next === current) return;
+		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/** Pin or unpin a tab.  Persists the change without touching the URL. */
@@ -297,6 +384,7 @@ class WorkbenchStore {
 			this.applyingFromUrl = true;
 			this.openTabs = [];
 			this.focusedNoteId = undefined;
+			this.splitNoteId = undefined;
 			this.applyingFromUrl = false;
 			await goto('/', { replaceState: false });
 			await this.persist({
@@ -311,8 +399,21 @@ class WorkbenchStore {
 			current.focusedNoteId && known.has(current.focusedNoteId)
 				? current.focusedNoteId
 				: (this.recentlyUsed.find((id) => known.has(id)) ?? remaining[0]);
+		// Drop the split if its note was pruned, or if it would collide with
+		// the new focused pane (invariant: split ≠ focused).
+		const split =
+			current.splitNoteId &&
+			known.has(current.splitNoteId) &&
+			current.splitNoteId !== focused &&
+			remaining.includes(current.splitNoteId)
+				? current.splitNoteId
+				: undefined;
 		await this.navigate(
-			{ focusedNoteId: focused, openTabs: remaining },
+			{
+				focusedNoteId: focused,
+				openTabs: remaining,
+				...(split ? { splitNoteId: split } : {})
+			},
 			{ replace: true, invalidate: true }
 		);
 	}
@@ -338,7 +439,8 @@ class WorkbenchStore {
 			focusedNoteId: override?.focusedNoteId ?? this.focusedNoteId ?? null,
 			pinnedTabs: override?.pinnedTabs ?? this.pinnedTabs,
 			recentlyUsed: override?.recentlyUsed ?? this.recentlyUsed,
-			stripHidden: override?.stripHidden ?? this.stripHidden
+			stripHidden: override?.stripHidden ?? this.stripHidden,
+			splitRatio: override?.splitRatio ?? this.splitRatio
 		};
 		try {
 			await this.repository.put(record);

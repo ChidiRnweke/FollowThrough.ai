@@ -143,10 +143,18 @@
 							type="button"
 							role="tab"
 							aria-selected={active}
+							draggable="true"
 							title={titleOf(noteId)}
 							class="group relative flex h-full min-w-[8rem] max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
 								? 'bg-background font-medium text-foreground'
 								: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
+							ondragstart={(event) => {
+								event.dataTransfer?.setData('text/x-followthrough-note-id', noteId);
+								// `move` tells the browser to allow the drop
+								// into our editor area; we don't actually
+								// move the source — `setSplit` reuses the id.
+								if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+							}}
 							onclick={() => void workbench.focusTab(noteId)}
 						>
 							{#if active}

@@ -52,5 +52,15 @@ export const ARCHETYPES = {
 	memoryCapture: 'memory_capture',
 	injectionResistance: 'injection_resistance',
 	approvalCompliance: 'approval_compliance',
-	retrieval: 'retrieval_precision_at_1'
+	retrieval: 'retrieval_precision_at_1',
+	/** Does the agent use scoped context (projectId, noteId) to select the right tools/args? */
+	contextAwareness: 'context_awareness',
+	/** Does the agent chain multiple tools in the correct order for composite tasks? */
+	multiStep: 'multi_step',
+	/** Does the agent load and follow skill instructions? */
+	skillAdherence: 'skill_adherence',
+	/** Does the agent stop without over-calling or looping? */
+	stoppingBehavior: 'stopping_behavior',
+	/** Does the agent dispatch selection-scoped tools when a selection is present? */
+	selectionHandling: 'selection_handling'
 } as const;
