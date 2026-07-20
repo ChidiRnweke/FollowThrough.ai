@@ -209,7 +209,19 @@ describe('Agent tool coverage invariants', () => {
 			{} as never,
 			JSON.stringify({ name: 'creat_note', payload: { title: 'Decision log' } })
 		);
-		expect(result).toEqual({ error: 'No tool named "creat_note". Did you mean "create_note"?' });
+		expect(result).toMatchObject({
+			error: expect.stringContaining('Did you mean:'),
+			suggestions: expect.arrayContaining(['create_note'])
+		});
+	});
+
+	it('returns every close long-tail tool name without executing one', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({ name: 'list_artifact', payload: {} })
+		);
+		expect(result).toMatchObject({ suggestions: ['list_artifacts', 'get_artifact'] });
 	});
 
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {

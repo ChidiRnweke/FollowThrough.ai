@@ -18,6 +18,7 @@ import { selectionCases } from '../cases/selection';
 import { stoppingCases } from '../cases/stopping';
 import { intentInterpretationCases } from '../cases/intent-interpretation';
 import { correctnessCases } from '../cases/correctness';
+import { multiTurnCorrectnessCases } from '../cases/multi-turn-correctness';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -43,7 +44,9 @@ const allCases = [
 	// Most expensive: vague multi-intent prompts that exercise interpretation.
 	...intentInterpretationCases,
 	// Correctness: right-target assertions for disambiguation.
-	...correctnessCases
+	...correctnessCases,
+	// Most expensive: multi-turn cases (2-3 API calls each).
+	...multiTurnCorrectnessCases
 ];
 
 /**

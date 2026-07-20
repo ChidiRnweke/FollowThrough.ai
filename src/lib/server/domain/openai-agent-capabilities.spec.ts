@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import {
+	Agent,
+	Runner,
+	type Model,
+	type ModelRequest,
+	type ModelResponse,
+	type StreamEvent
+} from '@openai/agents';
 import type { AgentRun, DateTime } from '$lib/models';
 import type { AgentSessionRepository } from '$lib/repositories';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
@@ -13,8 +21,63 @@ import { BasicAgent } from './basic-agent';
 import {
 	AgentToolEventMapper,
 	buildAgentInstructions,
+	createToolRecoveryConfig,
 	OpenAIAgentRunner
 } from './openai-agent-capabilities';
+
+class RecoveringToolCallModel implements Model {
+	async getResponse(): Promise<ModelResponse> {
+		throw new Error('This fake is only used for streaming runs');
+	}
+
+	async *getStreamedResponse(request: ModelRequest): AsyncIterable<StreamEvent> {
+		const recovered = JSON.stringify(request.input).includes('available only through');
+		const output = recovered
+			? [
+					{
+						type: 'message' as const,
+						role: 'assistant' as const,
+						status: 'completed' as const,
+						content: [{ type: 'output_text' as const, text: 'Recovered' }]
+					}
+				]
+			: [
+					{
+						type: 'function_call' as const,
+						callId: 'call-missing-tool',
+						name: 'save_note',
+						status: 'completed' as const,
+						arguments: '{}'
+					}
+				];
+		yield { type: 'response_started' };
+		yield {
+			type: 'response_done',
+			response: {
+				id: crypto.randomUUID(),
+				usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+				output
+			}
+		};
+	}
+}
+
+const formattedMissingTool = async (
+	toolName: string,
+	directNames: readonly string[],
+	catalogNames: readonly string[]
+): Promise<Readonly<Record<string, unknown>>> => {
+	const formatter = createToolRecoveryConfig(directNames, catalogNames).toolErrorFormatter!;
+	const output = await formatter({
+		kind: 'tool_not_found',
+		toolType: 'function',
+		toolName,
+		callId: 'call-1',
+		defaultMessage: `Tool '${toolName}' not found.`,
+		runContext: {} as never
+	});
+	return JSON.parse(output!) as Readonly<Record<string, unknown>>;
+};
 
 const timestamp = '2026-01-01T00:00:00.000Z' as DateTime;
 const run: AgentRun = {
@@ -52,6 +115,13 @@ describe('Agent runtime boundary', () => {
 		const instructions = buildAgentInstructions({ surface: 'today' });
 		expect(instructions).toContain('<application_context version="1">');
 	});
+
+	it('tells the model to dispatch searched tools through use_tool', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'Names returned by search_tools are not direct tools: invoke them only through use_tool'
+		);
+	});
+
 	it('fails clearly when no API key is configured', async () => {
 		const runner = new OpenAIAgentRunner(() => ({}) as never, sessions, '');
 		const updates = runner.execute({
@@ -63,6 +133,56 @@ describe('Agent runtime boundary', () => {
 			toolExecutor: { execute: async (_input, action) => action() }
 		});
 		await expect(updates[Symbol.asyncIterator]().next()).rejects.toThrow('OPENROUTER_API_KEY');
+	});
+});
+
+describe('Unknown agent tool recovery', () => {
+	it('routes an exact catalog tool name through use_tool', async () => {
+		expect(await formattedMissingTool('save_note', ['search'], ['save_note'])).toEqual({
+			failure: 'Tool "save_note" is available only through "use_tool", not as a direct call.',
+			suggestions: [{ name: 'save_note', invokeVia: 'use_tool' }],
+			recovery:
+				'Call "use_tool" with name "save_note" and pass the original arguments under "payload".'
+		});
+	});
+
+	it('returns every close direct and catalog suggestion', async () => {
+		expect(await formattedMissingTool('save_nte', ['save_notes'], ['save_note'])).toMatchObject({
+			suggestions: [
+				{ name: 'save_note', invokeVia: 'use_tool' },
+				{ name: 'save_notes', invokeVia: 'direct' }
+			]
+		});
+	});
+
+	it('sends unmatched names back to tool search', async () => {
+		expect(
+			await formattedMissingTool('completely_different', ['search'], ['save_note'])
+		).toMatchObject({
+			suggestions: [],
+			recovery:
+				'Call "search_tools" to discover the capability, then invoke a returned name through "use_tool".'
+		});
+	});
+
+	it('continues a streamed SDK run after an unknown function call', async () => {
+		const agent = new Agent({
+			name: 'Recovery test agent',
+			instructions: 'Finish after the tool error.',
+			model: new RecoveringToolCallModel(),
+			tools: []
+		});
+		const stream = await new Runner().run(agent, 'Save this note', {
+			stream: true,
+			maxTurns: 3,
+			...createToolRecoveryConfig([], ['save_note'])
+		});
+		for await (const event of stream) {
+			// Consume the stream so the SDK can perform its recovery turn.
+			void event;
+		}
+		await stream.completed;
+		expect(stream.finalOutput).toBe('Recovered');
 	});
 });
 

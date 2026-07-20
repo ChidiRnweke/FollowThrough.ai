@@ -28,7 +28,7 @@ import type {
 } from '$lib/models';
 import { findProseMirrorDocumentIssue } from '$lib/models';
 import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/services';
-import { matchToolName } from './tool-name-matcher';
+import { suggestToolNames } from './tool-name-matcher';
 import {
 	projectMemory,
 	projectNoteSummary,
@@ -338,11 +338,17 @@ export class AgentToolRegistry {
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
 			execute: async (input, _runContext, details) => {
 				const { name, payload } = input as { name: string; payload?: Record<string, unknown> };
-				const match = matchToolName(name, names);
-				if (match.kind === 'none') return { error: `No tool named "${name}".` };
-				if (match.kind === 'suggestion')
-					return { error: `No tool named "${name}". Did you mean "${match.name}"?` };
-				const target = byName.get(match.name)!;
+				const target = byName.get(name);
+				if (!target) {
+					const suggestions = suggestToolNames(name, names).map((suggestion) => suggestion.name);
+					if (suggestions.length === 0) return { error: `No tool named "${name}".` };
+					return {
+						error: `No tool named "${name}". Did you mean: ${suggestions
+							.map((suggestion) => `"${suggestion}"`)
+							.join(', ')}?`,
+						suggestions
+					};
+				}
 				const validation = target.parameters.safeParse(payload ?? {});
 				if (!validation.success)
 					return { error: `Invalid payload for "${target.name}": ${validation.error.message}` };

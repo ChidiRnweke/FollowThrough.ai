@@ -117,6 +117,7 @@ This document is the independent behavioural specification for backend models, s
 - Vector candidates are reranked into the closed generic relationship label set.
 - The agent receives the current project, note, selection, conversation history, and enabled skill summaries as context. Workspace state, note content, todos, user and project memory, knowledge-base evidence, relevant skill instructions, and memory proposals remain available through a fixed first-class tool set rather than eager injection.
 - Every other app capability is excluded from the direct tool surface, discovered on demand through tool search, and dispatched only by its exact registered name and validated schema.
+- An unknown or misrouted function name produces a failed tool result with every registered name within three Levenshtein edits, never executes a guessed tool, and returns control to the model instead of terminating the run.
 - A dynamically dispatched mutation retains its classification and approval requirement; user-facing events expose the inner action while approval resumption remains keyed to the unchanged SDK call identity.
 - An agent turn belongs to an actor-owned conversation; a foreign conversation identifier is indistinguishable from a missing one.
 - Conversation model and execution-mode overrides persist independently of user defaults; precedence is conversation override, user default, then environment default.
