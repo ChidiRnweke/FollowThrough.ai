@@ -62,5 +62,7 @@ export const ARCHETYPES = {
 	/** Does the agent stop without over-calling or looping? */
 	stoppingBehavior: 'stopping_behavior',
 	/** Does the agent dispatch selection-scoped tools when a selection is present? */
-	selectionHandling: 'selection_handling'
+	selectionHandling: 'selection_handling',
+	/** Can the agent decompose vague, multi-intent user speech into a reasonable tool plan? */
+	intentInterpretation: 'intent_interpretation'
 } as const;

@@ -16,6 +16,7 @@ import { multiStepCases } from '../cases/multi-step';
 import { skillAdherenceCases } from '../cases/skill-adherence';
 import { selectionCases } from '../cases/selection';
 import { stoppingCases } from '../cases/stopping';
+import { intentInterpretationCases } from '../cases/intent-interpretation';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -37,7 +38,9 @@ const allCases = [
 	...multiStepCases,
 	...safetyCases,
 	...diagramCases,
-	...effectCases
+	...effectCases,
+	// Most expensive: vague multi-intent prompts that exercise interpretation.
+	...intentInterpretationCases
 ];
 
 /**
