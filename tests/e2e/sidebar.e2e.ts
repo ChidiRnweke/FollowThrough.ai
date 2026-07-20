@@ -48,6 +48,18 @@ test('project branches cannot exceed their content height while hydration restor
 	expect(overshoot).toBeLessThan(2);
 });
 
+test('the workspace shell hydrates without runtime failures', async ({ page }) => {
+	const hydrationFailures: string[] = [];
+	page.on('console', (message) => {
+		if (message.text().includes('Failed to hydrate')) hydrationFailures.push(message.text());
+	});
+
+	await page.goto('/');
+	await page.waitForLoadState('networkidle');
+
+	expect(hydrationFailures).toEqual([]);
+});
+
 test('the workspace shell cannot create document-level scrolling', async ({ page }) => {
 	await page.goto('/');
 	const documentFitsViewport = await page.evaluate(
@@ -56,4 +68,32 @@ test('the workspace shell cannot create document-level scrolling', async ({ page
 			document.documentElement.scrollHeight === document.documentElement.clientHeight
 	);
 	expect(documentFitsViewport).toBe(true);
+});
+
+test.describe('without JavaScript', () => {
+	test.use({ javaScriptEnabled: false });
+
+	test('server-rendered shell elements stay inside the viewport wrapper', async ({ page }) => {
+		await page.goto('/');
+		const shellFitsViewport = await page.evaluate(() => {
+			const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]');
+			const inset = document.querySelector('[data-slot="sidebar-inset"]');
+			const footer = document.querySelector('[data-slot="sidebar-footer"]');
+			const rightPanel = document.querySelector('aside[aria-hidden]');
+
+			return (
+				wrapper !== null &&
+				inset !== null &&
+				footer !== null &&
+				rightPanel !== null &&
+				wrapper.contains(inset) &&
+				wrapper.contains(footer) &&
+				wrapper.contains(rightPanel) &&
+				document.documentElement.scrollWidth === document.documentElement.clientWidth &&
+				document.documentElement.scrollHeight === document.documentElement.clientHeight
+			);
+		});
+
+		expect(shellFitsViewport).toBe(true);
+	});
 });

@@ -621,16 +621,18 @@
 					<div
 						class="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden"
 					>
-						<Sidebar.MenuSubItem>
-							<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
-								{#snippet child({ props })}
-									<a {...props} href="{projectHref}/todos">
-										<ListTodo class="size-4 shrink-0 text-muted-foreground" />
-										<span class="truncate">Todos</span>
-									</a>
-								{/snippet}
-							</Sidebar.MenuSubButton>
-						</Sidebar.MenuSubItem>
+						<ul class="flex min-w-0 flex-col gap-1">
+							<Sidebar.MenuSubItem>
+								<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
+									{#snippet child({ props })}
+										<a {...props} href="{projectHref}/todos">
+											<ListTodo class="size-4 shrink-0 text-muted-foreground" />
+											<span class="truncate">Todos</span>
+										</a>
+									{/snippet}
+								</Sidebar.MenuSubButton>
+							</Sidebar.MenuSubItem>
+						</ul>
 						<ul
 							class="flex min-h-1.5 min-w-0 flex-col gap-1"
 							use:dndzone={{
