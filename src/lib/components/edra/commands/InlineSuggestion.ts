@@ -18,6 +18,9 @@ export interface InlineSuggestionRequestInput {
 	readonly prefix: string;
 	readonly suffix: string;
 	readonly heading?: string;
+	readonly headingPath: readonly string[];
+	readonly blockType: string;
+	readonly currentSection: string;
 }
 
 export interface InlineSuggestionOptions {
@@ -25,8 +28,22 @@ export interface InlineSuggestionOptions {
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
 	) => Promise<{ readonly text: string }>;
+	warmContext?: (input: InlineSuggestionRequestInput, signal: AbortSignal) => Promise<void>;
 	/** How long the caret must rest before we ask for a suggestion. */
 	idleDelayMs: number;
+	enabled: boolean;
+}
+
+interface InlineSuggestionStorage {
+	setEnabled: (enabled: boolean) => void;
+}
+
+declare module '@tiptap/core' {
+	interface Commands<ReturnType> {
+		inlineSuggestion: {
+			setInlineSuggestionsEnabled: (enabled: boolean) => ReturnType;
+		};
+	}
 }
 
 interface InlineSuggestionState {
@@ -41,31 +58,41 @@ export const inlineSuggestionKey = new PluginKey<InlineSuggestionState | null>('
 /** Transaction meta: `null` clears, an object offers. */
 type InlineSuggestionMeta = InlineSuggestionState | null;
 
-/**
- * Silence after an accept or dismiss. Longer than the idle delay on purpose:
- * accepting one suggestion must not immediately conjure the next.
- */
-const SUPPRESSION_MS = 900;
-
-const acceptedWordOf = (text: string): string => {
-	const match = /^\s*\S+/.exec(text);
-	return match ? match[0] : text;
-};
-
-export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
+export const InlineSuggestion = Extension.create<InlineSuggestionOptions, InlineSuggestionStorage>({
 	name: 'inlineSuggestion',
 	// Above the editor's own Tab handling so accepting never indents a list.
 	priority: 120,
 
 	addOptions() {
-		return { idleDelayMs: 300 };
+		return { idleDelayMs: 400, enabled: true };
+	},
+
+	addStorage() {
+		return { setEnabled: () => undefined };
+	},
+
+	addCommands() {
+		return {
+			setInlineSuggestionsEnabled: (enabled) => () => {
+				this.storage.setEnabled(enabled);
+				return true;
+			}
+		};
 	},
 
 	addProseMirrorPlugins() {
 		const options = this.options;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let inFlight: AbortController | undefined;
-		let suppressedUntil = 0;
+		let warmInFlight: AbortController | undefined;
+		let lastWarmKey = '';
+		let requiresEdit = false;
+		let composing = false;
+		let shouldSchedule = false;
+		let announce = (message: string) => void message;
+		let acceptedThisSession =
+			typeof sessionStorage !== 'undefined' &&
+			sessionStorage.getItem('inline-suggestion-accepted') === '1';
 
 		const cancel = () => {
 			if (timer !== undefined) clearTimeout(timer);
@@ -74,20 +101,54 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 			inFlight = undefined;
 		};
 
+		const cancelWarm = () => {
+			warmInFlight?.abort();
+			warmInFlight = undefined;
+		};
+
 		const clear = (view: EditorView) => {
 			cancel();
+			announce('');
 			if (inlineSuggestionKey.getState(view.state))
 				view.dispatch(view.state.tr.setMeta(inlineSuggestionKey, null as InlineSuggestionMeta));
+		};
+
+		const autoTriggerAllowed = (): boolean =>
+			typeof navigator === 'undefined' ||
+			!('maxTouchPoints' in navigator) ||
+			navigator.maxTouchPoints === 0 ||
+			typeof matchMedia === 'undefined' ||
+			!matchMedia('(pointer: coarse)').matches ||
+			matchMedia('(any-pointer: fine)').matches;
+
+		const warm = (view: EditorView) => {
+			if (!options.enabled || composing || !options.warmContext || !view.hasFocus()) return;
+			if (!autoTriggerAllowed()) return;
+			if (!shouldTrigger(caretContextOf(view.state, false))) return;
+			const context = caretWindowOf(view.state);
+			const key = `${context.headingPath.join('/')}::${Math.floor(context.currentSection.length / 300)}`;
+			if (key === lastWarmKey) return;
+			lastWarmKey = key;
+			cancelWarm();
+			const controller = new AbortController();
+			warmInFlight = controller;
+			void options
+				.warmContext(context, controller.signal)
+				.catch(() => undefined)
+				.finally(() => {
+					if (warmInFlight === controller) warmInFlight = undefined;
+				});
 		};
 
 		const request = (view: EditorView) => {
 			const fetchSuggestion = options.fetchSuggestion;
 			if (!fetchSuggestion) return;
+			if (!options.enabled || composing || !autoTriggerAllowed()) return;
 			// Focus is checked here rather than at schedule time: a programmatic
 			// caret move lands the selection change before DOM focus settles, and
 			// gating the schedule on focus would drop that first suggestion.
 			if (!view.hasFocus()) return;
-			if (!shouldTrigger(caretContextOf(view.state, Date.now() < suppressedUntil))) return;
+			if (!shouldTrigger(caretContextOf(view.state, requiresEdit))) return;
 			const origin = view.state.selection.$from.pos;
 			const controller = new AbortController();
 			inFlight = controller;
@@ -105,9 +166,10 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 							// Shown on every suggestion, not just the first: without a
 							// persistent affordance a re-triggered suggestion reads as
 							// plain grey text and is easy to miss.
-							showHint: true
+							showHint: !acceptedThisSession
 						} satisfies InlineSuggestionMeta)
 					);
+					announce('Writing suggestion available. Tab accepts; Escape dismisses.');
 				})
 				.catch(() => {
 					if (inFlight === controller) inFlight = undefined;
@@ -119,18 +181,29 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 			timer = setTimeout(() => request(view), options.idleDelayMs);
 		};
 
-		const accept = (view: EditorView, whole: boolean): boolean => {
+		const accept = (view: EditorView): boolean => {
 			const suggestion = inlineSuggestionKey.getState(view.state);
 			if (!suggestion) return false;
-			const text = whole ? suggestion.text : acceptedWordOf(suggestion.text);
+			const text = suggestion.text;
 			cancel();
-			suppressedUntil = Date.now() + SUPPRESSION_MS;
+			requiresEdit = true;
 			view.dispatch(
 				view.state.tr
 					.insertText(text, suggestion.from)
 					.setMeta(inlineSuggestionKey, null as InlineSuggestionMeta)
 			);
+			acceptedThisSession = true;
+			if (typeof sessionStorage !== 'undefined')
+				sessionStorage.setItem('inline-suggestion-accepted', '1');
 			return true;
+		};
+
+		this.storage.setEnabled = (enabled) => {
+			options.enabled = enabled;
+			if (!enabled && this.editor) {
+				clear(this.editor.view);
+				cancelWarm();
+			}
 		};
 
 		return [
@@ -141,11 +214,17 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 					init: () => null,
 					apply(transaction: Transaction, current: InlineSuggestionState | null) {
 						const meta = transaction.getMeta(inlineSuggestionKey) as
-							| InlineSuggestionMeta
-							| undefined;
+							InlineSuggestionMeta | undefined;
 						if (meta !== undefined) return meta;
 						// Any edit or caret move invalidates the offered text.
-						if (transaction.docChanged || transaction.selectionSet) return null;
+						if (transaction.docChanged) {
+							const uiEvent = transaction.getMeta('uiEvent');
+							shouldSchedule =
+								uiEvent !== 'paste' && uiEvent !== 'cut' && !transaction.getMeta('history$');
+							requiresEdit = false;
+							return null;
+						}
+						if (transaction.selectionSet) return null;
 						return current;
 					}
 				},
@@ -161,6 +240,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 									const span = document.createElement('span');
 									span.className = 'inline-suggestion';
 									span.setAttribute('contenteditable', 'false');
+									span.setAttribute('aria-hidden', 'true');
 									span.textContent = suggestion.text;
 									if (suggestion.showHint) {
 										const hint = document.createElement('span');
@@ -180,15 +260,11 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 						if (!suggestion) return false;
 						if (event.key === 'Tab' && !event.shiftKey) {
 							event.preventDefault();
-							return accept(view, true);
-						}
-						if (event.key === 'ArrowRight' && (event.metaKey || event.ctrlKey)) {
-							event.preventDefault();
-							return accept(view, false);
+							return accept(view);
 						}
 						if (event.key === 'Escape') {
 							event.preventDefault();
-							suppressedUntil = Date.now() + SUPPRESSION_MS;
+							requiresEdit = true;
 							clear(view);
 							return true;
 						}
@@ -202,17 +278,49 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 					}
 				},
 
-				view() {
+				view(view) {
+					const dom = view.dom;
+					const status = document.createElement('span');
+					status.className = 'sr-only';
+					status.setAttribute('aria-live', 'polite');
+					status.setAttribute('aria-atomic', 'true');
+					dom.parentElement?.append(status);
+					announce = (message) => {
+						status.textContent = message;
+					};
+					const onBlur = () => {
+						clear(view);
+						cancelWarm();
+					};
+					const onFocus = () => warm(view);
+					const onCompositionStart = () => {
+						composing = true;
+						clear(view);
+					};
+					const onCompositionEnd = () => {
+						composing = false;
+					};
+					dom.addEventListener('blur', onBlur, true);
+					dom.addEventListener('focus', onFocus, true);
+					dom.addEventListener('compositionstart', onCompositionStart);
+					dom.addEventListener('compositionend', onCompositionEnd);
 					return {
 						update(updated: EditorView, previous: EditorState) {
-							const changed =
-								!updated.state.doc.eq(previous.doc) ||
-								!updated.state.selection.eq(previous.selection);
-							if (!changed) return;
+							if (updated.state.doc.eq(previous.doc)) return;
 							if (inlineSuggestionKey.getState(updated.state)) return;
-							schedule(updated);
+							warm(updated);
+							if (shouldSchedule) schedule(updated);
+							shouldSchedule = false;
 						},
-						destroy: cancel
+						destroy() {
+							dom.removeEventListener('blur', onBlur, true);
+							dom.removeEventListener('focus', onFocus, true);
+							dom.removeEventListener('compositionstart', onCompositionStart);
+							dom.removeEventListener('compositionend', onCompositionEnd);
+							cancel();
+							cancelWarm();
+							status.remove();
+						}
 					};
 				}
 			})

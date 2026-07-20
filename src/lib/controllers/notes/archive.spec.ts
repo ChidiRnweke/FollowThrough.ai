@@ -6,6 +6,7 @@ import {
 	InMemoryNoteRepository
 } from '$lib/testing/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
+import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -18,10 +19,13 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const service = new NoteManagementService(notes, new InMemoryAnchorRepository(), projects);
+	const indexer = new InMemoryNoteContent();
 	const controller = new DefaultNotesController({
-		noteArchiver: service
+		noteArchiver: service,
+		noteIndexer: indexer,
+		transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
 	} as unknown as NotesDependencies);
-	return { notes, controller };
+	return { notes, controller, indexer };
 };
 
 describe('Note archive invariants', () => {
@@ -37,6 +41,13 @@ describe('Note archive invariants', () => {
 		notes.notes = [noteBuilder()];
 		await controller.archive(testActor(), { noteId: testNoteId() });
 		expect(await notes.listActive(testActor())).toEqual([]);
+	});
+
+	it('reindexes the archived note so retrieval removes its chunks', async () => {
+		const { notes, controller, indexer } = setup();
+		notes.notes = [noteBuilder()];
+		await controller.archive(testActor(), { noteId: testNoteId() });
+		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 
 	it('rejects archiving a folder with active contents', async () => {

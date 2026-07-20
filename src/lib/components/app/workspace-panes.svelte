@@ -12,10 +12,12 @@
 
 	let {
 		shell,
-		focusedInitialView
+		focusedInitialView,
+		inlineSuggestionsEnabled = true
 	}: {
 		shell: ShellContext;
 		focusedInitialView?: NoteView;
+		inlineSuggestionsEnabled?: boolean;
 	} = $props();
 
 	const focusedNoteId = $derived(workbench.focusedNoteId);
@@ -162,6 +164,7 @@
 						<WorkspacePane
 							{noteId}
 							{shell}
+							{inlineSuggestionsEnabled}
 							initialView={noteId === focusedInitialView?.note.id ? focusedInitialView : undefined}
 							onCloseSplit={isSplit ? closeSplit : undefined}
 						/>

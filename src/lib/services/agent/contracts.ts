@@ -74,13 +74,16 @@ export interface InlineCompletionGenerator {
 export interface InlineBriefCache {
 	get(key: string): InlineContextBrief | undefined;
 	set(key: string, brief: InlineContextBrief): void;
+	getOrLoad(key: string, load: () => Promise<InlineContextBrief>): Promise<InlineContextBrief>;
 }
 
 export interface InlineBriefKeyBuilder {
 	(input: {
 		readonly userId: string;
 		readonly noteId: string;
+		readonly projectId: string;
 		readonly heading?: string;
+		readonly passageLength: number;
 	}): string;
 }
 

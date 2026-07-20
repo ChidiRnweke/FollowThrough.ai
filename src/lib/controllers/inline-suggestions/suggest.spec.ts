@@ -12,6 +12,9 @@ import type {
 	InlineContextBriefer,
 	InlineSuggestionThrottle
 } from '$lib/services';
+import type { AgentPreferencesStore } from '$lib/services/agent/settings';
+import type { NoteReader } from '$lib/services/notes/contracts';
+import { noteBuilder, testNow } from '$lib/testing/fixtures/domain-builders';
 import {
 	DefaultInlineSuggestionsController,
 	type InlineSuggestionsDependencies
@@ -20,9 +23,13 @@ import {
 const actor: ActorContext = { userId: 'user-1' } as ActorContext;
 
 const request = (overrides: Partial<InlineSuggestionRequest> = {}): InlineSuggestionRequest => ({
+	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: 'note-1' as NoteId,
 	projectId: 'project-1' as ProjectId,
 	revision: 2,
+	blockType: 'paragraph',
+	headingPath: ['Migration'],
+	currentSection: 'The migration plan should account for the read-replica cutover',
 	prefix: 'The migration plan should account for the read-replica cutover',
 	suffix: '',
 	...overrides
@@ -58,16 +65,21 @@ class StubCache implements InlineBriefCache {
 	set(key: string, value: InlineContextBrief): void {
 		this.stored.set(key, value);
 	}
+	getOrLoad(_key: string, load: () => Promise<InlineContextBrief>): Promise<InlineContextBrief> {
+		return load();
+	}
 }
 
 class StubBriefer implements InlineContextBriefer {
 	calls = 0;
+	receivedRequest: InlineSuggestionRequest | undefined;
 	constructor(
 		private readonly result: () => Promise<InlineContextBrief>,
 		private readonly delayMs = 0
 	) {}
-	async brief(): Promise<InlineContextBrief> {
+	async brief(_actor: ActorContext, request: InlineSuggestionRequest): Promise<InlineContextBrief> {
 		this.calls++;
+		this.receivedRequest = request;
 		if (this.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
 		return this.result();
 	}
@@ -90,6 +102,29 @@ class ClosedThrottle implements InlineSuggestionThrottle {
 	release(): void {}
 }
 
+const preferencesWith = (inlineSuggestionsEnabled: boolean): AgentPreferencesStore => ({
+	get: async () => ({
+		userId: actor.userId,
+		executionMode: 'approval_required',
+		inlineSuggestionsEnabled,
+		createdAt: testNow,
+		updatedAt: testNow
+	}),
+	update: async (_actor, input) => ({
+		userId: actor.userId,
+		executionMode: input.executionMode,
+		inlineSuggestionsEnabled: input.inlineSuggestionsEnabled,
+		createdAt: testNow,
+		updatedAt: testNow
+	})
+});
+
+const preferences = preferencesWith(true);
+
+const noteReader: NoteReader = {
+	get: async (_actor, noteId) => noteBuilder({ id: noteId, projectId: 'project-1' as ProjectId })
+};
+
 const controller = (overrides: Partial<InlineSuggestionsDependencies> = {}) =>
 	new DefaultInlineSuggestionsController({
 		inlineCompletionGenerator: new RecordingGenerator(),
@@ -97,6 +132,8 @@ const controller = (overrides: Partial<InlineSuggestionsDependencies> = {}) =>
 		inlineBriefCache: new StubCache(),
 		inlineBriefKey: () => 'key-1',
 		inlineSuggestionThrottle: new OpenThrottle(),
+		noteReader,
+		preferences,
 		inlineBriefWaitMs: 50,
 		...overrides
 	});
@@ -117,6 +154,38 @@ describe('DefaultInlineSuggestionsController.suggest', () => {
 		expect(result.text).toBe(' window.');
 	});
 
+	it('does not call the model when the preference is disabled', async () => {
+		const generator = new RecordingGenerator();
+		await controller({
+			inlineCompletionGenerator: generator,
+			preferences: preferencesWith(false)
+		}).suggest(actor, request(), signal());
+		expect(generator.calls).toBe(0);
+	});
+
+	it('uses the note project instead of a client-provided project', async () => {
+		const briefer = new StubBriefer(async () => brief);
+		await controller({
+			inlineContextBriefer: briefer,
+			noteReader: {
+				get: async (_actor, noteId) =>
+					noteBuilder({ id: noteId, projectId: 'project-2' as ProjectId })
+			}
+		}).suggest(actor, request(), signal());
+		expect(briefer.receivedRequest?.projectId).toBe('project-2');
+	});
+
+	it('does not call the model for an archived note', async () => {
+		const generator = new RecordingGenerator();
+		await controller({
+			inlineCompletionGenerator: generator,
+			noteReader: {
+				get: async (_actor, noteId) => noteBuilder({ id: noteId, archivedAt: testNow })
+			}
+		}).suggest(actor, request(), signal());
+		expect(generator.calls).toBe(0);
+	});
+
 	it('reports a suggestion as grounded when a brief was already warm', async () => {
 		const result = await controller({ inlineBriefCache: new StubCache(brief) }).suggest(
 			actor,
@@ -131,12 +200,12 @@ describe('DefaultInlineSuggestionsController.suggest', () => {
 		expect(result.grounded).toBe(true);
 	});
 
-	it('reports a suggestion as ungrounded when the brief is slower than the wait', async () => {
+	it('returns no suggestion when grounding is slower than the wait', async () => {
 		const result = await controller({
 			inlineBriefWaitMs: 10,
 			inlineContextBriefer: new StubBriefer(async () => brief, 60)
 		}).suggest(actor, request(), signal());
-		expect(result.grounded).toBe(false);
+		expect(result).toEqual({ text: '', grounded: false });
 	});
 
 	it('caches a slow brief for the next suggestion even after timing out', async () => {
@@ -175,13 +244,13 @@ describe('DefaultInlineSuggestionsController.suggest', () => {
 		expect(cache.stored.get('key-1')).toEqual(brief);
 	});
 
-	it('still returns a suggestion when the briefing pass fails', async () => {
+	it('returns no suggestion when the briefing pass fails', async () => {
 		const result = await controller({
 			inlineContextBriefer: new StubBriefer(async () => {
 				throw new Error('search unavailable');
 			})
 		}).suggest(actor, request(), signal());
-		expect(result.text).toBe(' window.');
+		expect(result).toEqual({ text: '', grounded: false });
 	});
 
 	it('returns no suggestion when the throttle refuses the request', async () => {

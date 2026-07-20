@@ -830,18 +830,19 @@ export class AgentToolRegistry {
 			),
 			define(
 				'get_agent_preferences',
-				'Read default chat model and execution mode.',
+				'Read default chat model, execution mode, and inline suggestion preference.',
 				'read',
 				none,
 				() => factory.agentSettings().getPreferences(actor)
 			),
 			define(
 				'update_agent_preferences',
-				'Change default chat model or execution mode.',
+				'Change default chat model, execution mode, or inline suggestion preference.',
 				'mutation',
 				z.object({
 					defaultModel: z.string().nullable().optional(),
-					executionMode: z.enum(['approval_required', 'auto_accept'])
+					executionMode: z.enum(['approval_required', 'auto_accept']),
+					inlineSuggestionsEnabled: z.boolean()
 				}),
 				(input) => factory.agentSettings().updatePreferences(actor, input)
 			),

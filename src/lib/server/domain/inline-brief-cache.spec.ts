@@ -10,6 +10,8 @@ const brief = { voice: 'terse', facts: [], openThreads: [], avoid: [] };
 const key = {
 	userId: 'user-1',
 	noteId: 'note-1',
+	projectId: 'project-1',
+	passageLength: 450,
 	heading: 'Migration'
 };
 
@@ -39,6 +41,17 @@ describe('MemoryInlineBriefCache', () => {
 
 	it('returns nothing for a key that was never stored', () => {
 		expect(new MemoryInlineBriefCache().get('missing')).toBeUndefined();
+	});
+
+	it('coalesces concurrent loads for the same section', async () => {
+		const cache = new MemoryInlineBriefCache();
+		let calls = 0;
+		const load = async () => {
+			calls++;
+			return brief;
+		};
+		await Promise.all([cache.getOrLoad('a', load), cache.getOrLoad('a', load)]);
+		expect(calls).toBe(1);
 	});
 });
 

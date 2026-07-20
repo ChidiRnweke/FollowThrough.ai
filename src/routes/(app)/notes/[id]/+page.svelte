@@ -5,4 +5,8 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<WorkspacePanes shell={data.shell} focusedInitialView={data.focusedNoteView} />
+<WorkspacePanes
+	shell={data.shell}
+	focusedInitialView={data.focusedNoteView}
+	inlineSuggestionsEnabled={data.agentPreferences.inlineSuggestionsEnabled}
+/>

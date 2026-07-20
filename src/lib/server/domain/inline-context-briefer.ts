@@ -14,6 +14,7 @@ import type { ControllerFactory } from '$lib/factories';
 import type { InlineContextBriefer, KnowledgeSearcher, Reranker } from '$lib/services';
 import { createOpenRouterClient, DEFAULT_GENERATION_MODEL } from './openrouter-client';
 import { traceChainStep, traceInline } from './telemetry';
+import { countRetrievalTokens, retrievalEncoding } from '$lib/services/retrieval/tokenizer';
 
 /**
  * Tier two of inline suggestions: the grounding pass. It runs off the typing
@@ -42,10 +43,12 @@ const BriefOutput = z.object({
 });
 
 /** Wide recall for the reranker to trim; the reranker gives precision. */
-const CANDIDATE_LIMIT = 40;
+const CANDIDATE_LIMIT = 20;
+const RERANK_LIMIT = 16;
 const TOP_N = 8;
-const EXCERPT_LIMIT = 500;
-const PASSAGE_LIMIT = 1500;
+const PASSAGE_LIMIT = 8000;
+const RERANK_TOKEN_BUDGET = 48_000;
+const BRIEF_TOKEN_BUDGET = 12_000;
 /** Cap on the project inventory so a big project cannot dominate the prompt. */
 const INVENTORY_LIMIT = 30;
 
@@ -83,6 +86,95 @@ const sourceLabel = (match: SearchMatch): string => {
 	if (document.attachmentId) return 'attachment';
 	if (document.noteId) return 'note';
 	return 'workspace';
+};
+
+const sourceKey = (match: SearchMatch): string => {
+	const document = match.document;
+	return String(
+		document.attachmentId ??
+			document.diagramId ??
+			document.noteId ??
+			document.memoryEntryId ??
+			document.id
+	);
+};
+
+export const selectDiversePassages = (matches: readonly SearchMatch[]): readonly SearchMatch[] => {
+	const counts = new Map<string, number>();
+	const selected: SearchMatch[] = [];
+	for (const match of matches) {
+		const key = sourceKey(match);
+		if ((counts.get(key) ?? 0) >= 2) continue;
+		counts.set(key, (counts.get(key) ?? 0) + 1);
+		selected.push(match);
+		if (selected.length === TOP_N) break;
+	}
+	return selected;
+};
+
+const removeOverlap = (left: string, right: string): string => {
+	const maximum = Math.min(left.length, right.length);
+	for (let size = maximum; size >= 20; size--)
+		if (left.endsWith(right.slice(0, size))) return right.slice(size).trimStart();
+	return right;
+};
+
+export const mergeAdjacentPassages = (matches: readonly SearchMatch[]): readonly SearchMatch[] => {
+	const output: SearchMatch[] = [];
+	for (const match of matches) {
+		const adjacentIndex = output.findIndex(
+			(item) =>
+				sourceKey(item) === sourceKey(match) &&
+				Math.abs(item.document.chunkIndex - match.document.chunkIndex) === 1
+		);
+		if (adjacentIndex < 0) {
+			output.push(match);
+			continue;
+		}
+		const prior = output[adjacentIndex]!;
+		const ordered =
+			prior.document.chunkIndex < match.document.chunkIndex ? [prior, match] : [match, prior];
+		output[adjacentIndex] = {
+			...prior,
+			document: {
+				...prior.document,
+				chunkIndex: ordered[0]!.document.chunkIndex,
+				content: `${ordered[0]!.document.content}\n\n${removeOverlap(ordered[0]!.document.content, ordered[1]!.document.content)}`
+			}
+		};
+	}
+	return output;
+};
+
+const trimAtSentence = (text: string, maximumTokens: number): string => {
+	const encoding = retrievalEncoding();
+	const decoded = encoding.decode(encoding.encode(text).slice(0, maximumTokens));
+	const boundary = Math.max(
+		decoded.lastIndexOf('. '),
+		decoded.lastIndexOf('! '),
+		decoded.lastIndexOf('? ')
+	);
+	return (boundary > 0 ? decoded.slice(0, boundary + 1) : decoded).trim();
+};
+
+export const trimPassagesToBudget = (
+	matches: readonly SearchMatch[],
+	budget = BRIEF_TOKEN_BUDGET
+): readonly SearchMatch[] => {
+	const output: SearchMatch[] = [];
+	let remaining = budget;
+	for (const match of matches) {
+		if (remaining <= 0) break;
+		const count = countRetrievalTokens(match.document.content);
+		const content =
+			count <= remaining
+				? match.document.content
+				: trimAtSentence(match.document.content, remaining);
+		if (!content) break;
+		output.push({ ...match, document: { ...match.document, content } });
+		remaining -= Math.min(count, remaining);
+	}
+	return output;
 };
 
 /**
@@ -172,7 +264,11 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 	) {
 		const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
 		this.enabled = Boolean(deps.client) || Boolean(apiKey);
-		this.model = options.model ?? process.env.OPENROUTER_INLINE_MODEL ?? DEFAULT_GENERATION_MODEL;
+		this.model =
+			options.model ??
+			process.env.OPENROUTER_INLINE_BRIEF_MODEL ??
+			process.env.OPENROUTER_INLINE_MODEL ??
+			DEFAULT_GENERATION_MODEL;
 		this.client =
 			deps.client ??
 			(createOpenRouterClient(apiKey ?? 'missing', {
@@ -187,12 +283,18 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 		signal: AbortSignal
 	): Promise<InlineContextBrief> {
 		if (!this.enabled) return EMPTY_BRIEF;
-		const passage = request.prefix.slice(-PASSAGE_LIMIT);
+		const passage = (request.currentSection.trim() || request.prefix).slice(-PASSAGE_LIMIT);
 		return traceInline(
 			'inline.brief',
-			{ sessionId: request.noteId, model: this.model, input: passage },
+			{ sessionId: request.noteId, model: this.model, input: `section:${passage.length}` },
 			async () => {
-				const query = `${request.heading ? `${request.heading}\n` : ''}${plainPassage(passage)}`;
+				const query = [
+					request.headingPath.join(' > '),
+					plainPassage(passage),
+					plainPassage(request.suffix.slice(0, 500))
+				]
+					.filter(Boolean)
+					.join('\n');
 				const { pool, userMemory, inventory } = await this.retrieve(actor, request, query);
 				if (pool.length === 0 && userMemory.length === 0 && inventory.length === 0)
 					return EMPTY_BRIEF;
@@ -248,7 +350,14 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 						.then((result) => projectInventory(result.tree, request.noteId))
 						.catch(() => [] as string[])
 				]);
-				return { pool: this.combine(matches, projectMemory), userMemory, inventory };
+				return {
+					pool: this.combine(
+						matches.filter((match) => match.document.noteId !== request.noteId),
+						projectMemory
+					),
+					userMemory,
+					inventory
+				};
 			},
 			({ pool, userMemory, inventory }) =>
 				`${pool.length} candidates, ${userMemory.length} user memories, ${inventory.length} project docs`
@@ -276,6 +385,13 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 		pool: readonly SearchMatch[]
 	): Promise<readonly SearchMatch[]> {
 		if (pool.length === 0) return [];
+		let used = 0;
+		const budgeted = pool.filter((match) => {
+			const count = countRetrievalTokens(match.document.content);
+			if (used + count > RERANK_TOKEN_BUDGET) return false;
+			used += count;
+			return true;
+		});
 		return traceChainStep(
 			'inline.rerank',
 			query,
@@ -283,8 +399,9 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 			// own top-N by vector score.
 			() =>
 				this.deps.reranker
-					.rerank(query, pool, TOP_N)
-					.catch(() => [...pool].sort((a, b) => b.score - a.score).slice(0, TOP_N)),
+					.rerank(query, budgeted, RERANK_LIMIT)
+					.then(selectDiversePassages)
+					.catch(() => selectDiversePassages([...budgeted].sort((a, b) => b.score - a.score))),
 			(ranked) => `${ranked.length} kept`
 		);
 	}
@@ -296,6 +413,7 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 		inventory: readonly string[],
 		passage: string
 	): string {
+		const retrieved = trimPassagesToBudget(mergeAdjacentPassages(ranked));
 		const sections = [
 			userMemory.length
 				? `<user_memory>\n${userMemory.map((entry) => `- ${entry.content}`).join('\n')}\n</user_memory>`
@@ -306,16 +424,19 @@ export class RetrievalInlineContextBriefer implements InlineContextBriefer {
 			inventory.length
 				? `<project_documents>\n${inventory.map((title) => `- ${title}`).join('\n')}\n</project_documents>`
 				: '',
-			ranked.length
-				? `<retrieved>\n${ranked
+			retrieved.length
+				? `<retrieved>\n${retrieved
 						.map(
 							(match, index) =>
-								`[${index + 1}] (${sourceLabel(match)}) ${match.document.content.slice(0, EXCERPT_LIMIT)}`
+								`[${index + 1}] (${sourceLabel(match)}${match.document.sourceTitle ? `: ${match.document.sourceTitle}` : ''}${match.document.sectionPath ? ` / ${match.document.sectionPath}` : ''}) ${match.document.content}`
 						)
 						.join('\n\n')}\n</retrieved>`
 				: '',
-			request.heading ? `Section: ${request.heading}` : '',
-			`<passage>\n${passage}\n</passage>`
+			request.headingPath.length ? `Heading path: ${request.headingPath.join(' > ')}` : '',
+			`Block type: ${request.blockType}`,
+			`<current_section>\n${passage}\n</current_section>`,
+			`<before_caret>\n${request.prefix.slice(-2000)}\n</before_caret>`,
+			request.suffix ? `<after_caret>\n${request.suffix.slice(0, 1000)}\n</after_caret>` : ''
 		].filter((section) => section.length > 0);
 		return sections.join('\n\n');
 	}

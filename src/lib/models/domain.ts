@@ -341,6 +341,7 @@ export interface AgentPreferences {
 	readonly userId: UserId;
 	readonly defaultModel?: string;
 	readonly executionMode: AgentExecutionMode;
+	readonly inlineSuggestionsEnabled: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
@@ -413,6 +414,8 @@ export interface SearchDocument {
 	readonly memoryEntryId?: MemoryEntryId;
 	readonly attachmentId?: AttachmentId;
 	readonly attachmentPath?: string;
+	readonly sourceTitle?: string;
+	readonly sectionPath?: string;
 	readonly diagramId?: DiagramId;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly content: string;

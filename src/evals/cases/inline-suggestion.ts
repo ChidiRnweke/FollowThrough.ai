@@ -22,9 +22,13 @@ const requestFor = (
 	noteId: NoteId,
 	prefix: string
 ): InlineSuggestionRequest => ({
+	requestId: crypto.randomUUID(),
 	projectId,
 	noteId,
 	revision: 1,
+	blockType: 'paragraph',
+	headingPath: ['Migration plan'],
+	currentSection: prefix,
 	prefix,
 	suffix: '',
 	heading: 'Migration plan'
@@ -48,7 +52,11 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 
 			const suggestion = await lab.controllers
 				.inlineSuggestions()
-				.suggest(workspace.actor, requestFor(projectId, noteId, prefix), new AbortController().signal);
+				.suggest(
+					workspace.actor,
+					requestFor(projectId, noteId, prefix),
+					new AbortController().signal
+				);
 
 			const text = suggestion.text;
 			const lower = text.trim().toLowerCase();

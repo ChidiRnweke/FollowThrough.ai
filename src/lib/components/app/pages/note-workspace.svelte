@@ -52,6 +52,7 @@
 		noteTodos,
 		suggestionTray,
 		editorSelection,
+		inlineSuggestionsEnabled = true,
 		onCloseSplit
 	}: {
 		view: NoteView;
@@ -60,6 +61,7 @@
 		noteTodos: NoteTodosStore;
 		suggestionTray: SuggestionTrayStore;
 		editorSelection: EditorSelectionStore;
+		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
 
@@ -712,8 +714,8 @@
 		<NoteEditor
 			bind:this={editorRef}
 			noteId={note.id}
-			projectId={note.projectId}
 			revision={note.currentRevision}
+			{inlineSuggestionsEnabled}
 			document={note.document}
 			references={view.references}
 			diagrams={view.diagrams}

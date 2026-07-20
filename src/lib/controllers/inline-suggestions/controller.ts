@@ -11,26 +11,27 @@ import type {
 	InlineContextBriefer,
 	InlineSuggestionThrottle
 } from '$lib/services';
+import type { AgentPreferencesStore } from '$lib/services';
+import type { NoteReader } from '$lib/services/notes/contracts';
 
 /**
  * Orchestrates the two tiers of proactive ghost text.
  *
- * The completion always runs immediately against whatever grounding is already
- * warm; the tool-calling briefing pass is fired and forgotten so a cache miss
- * costs the writer nothing but a less-grounded first suggestion. Nothing here
- * touches the database: an unaccepted suggestion is not an event, and an
- * accepted one becomes an ordinary note edit.
+ * The completion runs only when a concrete, project-grounded brief is ready.
+ * The briefing pass can outlive an abandoned caret request, so a slow cache
+ * miss warms the next pause without ever showing speculative text. An accepted
+ * suggestion becomes an ordinary note edit; an unaccepted one is not persisted.
  */
 
 /** Below this, there is not enough of a sentence to continue meaningfully. */
 const MIN_PREFIX_LENGTH = 40;
 
 /**
- * How long a suggestion will wait for a cold brief before giving up and
- * generating ungrounded. Long enough for the first suggestion in a section to
- * land grounded when retrieval is quick; short enough not to stall the caret.
+ * How long a suggestion waits for a cold grounded brief before staying silent.
+ * Long enough for the first suggestion in a section to land when retrieval is
+ * quick; bounded so an abandoned request never sits on the typing path.
  */
-const INLINE_BRIEF_WAIT_MS = 800;
+const INLINE_BRIEF_WAIT_MS = 2_500;
 
 const NOTHING: InlineSuggestion = { text: '', grounded: false };
 
@@ -40,6 +41,11 @@ export interface InlineSuggestionsController {
 		request: InlineSuggestionRequest,
 		signal: AbortSignal
 	): Promise<InlineSuggestion>;
+	warm(
+		actor: ActorContext,
+		request: InlineSuggestionRequest,
+		signal: AbortSignal
+	): Promise<boolean>;
 }
 
 export interface InlineSuggestionsDependencies {
@@ -48,7 +54,9 @@ export interface InlineSuggestionsDependencies {
 	inlineBriefCache: InlineBriefCache;
 	inlineBriefKey: InlineBriefKeyBuilder;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
-	/** Head start given to a cold brief before generating ungrounded. Test seam. */
+	noteReader: NoteReader;
+	preferences: AgentPreferencesStore;
+	/** Maximum time a completion waits for a cold grounded brief. Test seam. */
 	inlineBriefWaitMs?: number;
 }
 
@@ -61,48 +69,99 @@ export class DefaultInlineSuggestionsController implements InlineSuggestionsCont
 		signal: AbortSignal
 	): Promise<InlineSuggestion> {
 		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return NOTHING;
+		const authoritativeRequest = await this.authorize(actor, request);
+		if (!authoritativeRequest) return NOTHING;
+		const key = this.key(actor, authoritativeRequest);
+		const brief =
+			this.dependencies.inlineBriefCache.get(key) ??
+			(await this.waitForBrief(this.load(actor, authoritativeRequest, key), signal));
+		if (!brief || !isGrounded(brief)) return NOTHING;
 		if (!this.dependencies.inlineSuggestionThrottle.admit(actor.userId)) return NOTHING;
 		try {
-			const key = this.dependencies.inlineBriefKey({
-				userId: actor.userId,
-				noteId: request.noteId,
-				...(request.heading ? { heading: request.heading } : {})
-			});
-			const brief =
-				this.dependencies.inlineBriefCache.get(key) ?? (await this.warmAndRace(actor, request, key));
 			const text = await this.dependencies.inlineCompletionGenerator.complete(
-				request,
+				authoritativeRequest,
 				brief,
 				signal
 			);
-			return { text, grounded: brief !== undefined };
+			return { text, grounded: true };
 		} finally {
 			this.dependencies.inlineSuggestionThrottle.release(actor.userId);
 		}
 	}
 
+	async warm(
+		actor: ActorContext,
+		request: InlineSuggestionRequest,
+		signal: AbortSignal
+	): Promise<boolean> {
+		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return false;
+		const authoritativeRequest = await this.authorize(actor, request);
+		if (!authoritativeRequest) return false;
+		const key = this.key(actor, authoritativeRequest);
+		const brief =
+			this.dependencies.inlineBriefCache.get(key) ??
+			(await this.waitForBrief(this.load(actor, authoritativeRequest, key), signal));
+		return Boolean(brief && isGrounded(brief));
+	}
+
 	/**
-	 * Start the briefing pass and give it a bounded head start. The brief runs on
-	 * its own detached signal so the timeout never cancels it: on a slow miss we
-	 * generate ungrounded now, and the brief still resolves and caches for the
-	 * next suggestion in this section. Its failures never reach the writer.
+	 * Start the briefing pass on a detached signal. A caret move can abandon the
+	 * waiting request without wasting retrieval already underway; a later pause
+	 * in the same section can reuse the in-flight or cached brief.
 	 */
-	private warmAndRace(
+	private load(
 		actor: ActorContext,
 		request: InlineSuggestionRequest,
 		key: string
+	): Promise<InlineContextBrief> {
+		return this.dependencies.inlineBriefCache.getOrLoad(key, () =>
+			this.dependencies.inlineContextBriefer
+				.brief(actor, request, new AbortController().signal)
+				.then((brief) => {
+					if (isGrounded(brief)) this.dependencies.inlineBriefCache.set(key, brief);
+					return brief;
+				})
+		);
+	}
+
+	private async waitForBrief(
+		pending: Promise<InlineContextBrief>,
+		signal: AbortSignal
 	): Promise<InlineContextBrief | undefined> {
-		const pending = this.dependencies.inlineContextBriefer
-			.brief(actor, request, new AbortController().signal)
-			.then((brief) => {
-				this.dependencies.inlineBriefCache.set(key, brief);
-				return brief;
-			})
-			.catch(() => undefined);
 		const waitMs = this.dependencies.inlineBriefWaitMs ?? INLINE_BRIEF_WAIT_MS;
-		return Promise.race([
-			pending,
-			new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), waitMs))
-		]);
+		const deadline = AbortSignal.timeout(waitMs);
+		const combined = AbortSignal.any([signal, deadline]);
+		if (combined.aborted) return undefined;
+		return new Promise((resolve) => {
+			const stop = () => resolve(undefined);
+			combined.addEventListener('abort', stop, { once: true });
+			void pending
+				.then(resolve, () => resolve(undefined))
+				.finally(() => combined.removeEventListener('abort', stop));
+		});
+	}
+
+	private async authorize(
+		actor: ActorContext,
+		request: InlineSuggestionRequest
+	): Promise<InlineSuggestionRequest | undefined> {
+		if (!(await this.dependencies.preferences.get(actor)).inlineSuggestionsEnabled)
+			return undefined;
+		const note = await this.dependencies.noteReader.get(actor, request.noteId);
+		if (note.archivedAt) return undefined;
+		return { ...request, projectId: note.projectId };
+	}
+
+	private key(actor: ActorContext, request: InlineSuggestionRequest): string {
+		const headingPath = request.headingPath.join(' > ');
+		return this.dependencies.inlineBriefKey({
+			userId: actor.userId,
+			noteId: request.noteId,
+			projectId: request.projectId!,
+			passageLength: request.currentSection.length,
+			...(headingPath || request.heading ? { heading: headingPath || request.heading } : {})
+		});
 	}
 }
+
+const isGrounded = (brief: InlineContextBrief): boolean => brief.facts.length > 0;

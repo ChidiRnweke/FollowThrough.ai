@@ -518,6 +518,7 @@ describe('Postgres agent settings repository invariants', () => {
 			userId: owner.userId,
 			defaultModel: 'anthropic/claude-test',
 			executionMode: 'auto_accept',
+			inlineSuggestionsEnabled: true,
 			createdAt: now,
 			updatedAt: now
 		});

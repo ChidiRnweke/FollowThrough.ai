@@ -21,6 +21,7 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
 	userId: row.userId as AgentPreferences['userId'],
 	...(row.defaultModel ? { defaultModel: row.defaultModel } : {}),
 	executionMode: row.executionMode,
+	inlineSuggestionsEnabled: row.inlineSuggestionsEnabled,
 	createdAt: row.createdAt.toISOString() as AgentPreferences['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as AgentPreferences['updatedAt']
 });
@@ -78,6 +79,7 @@ export class PostgresAgentPreferencesRepository implements AgentPreferencesRepos
 				userId: actor.userId,
 				defaultModel: preferences.defaultModel,
 				executionMode: preferences.executionMode,
+				inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
 				createdAt: new Date(preferences.createdAt),
 				updatedAt: new Date(preferences.updatedAt)
 			})
@@ -86,6 +88,7 @@ export class PostgresAgentPreferencesRepository implements AgentPreferencesRepos
 				set: {
 					defaultModel: preferences.defaultModel,
 					executionMode: preferences.executionMode,
+					inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
 					updatedAt: new Date(preferences.updatedAt)
 				}
 			})

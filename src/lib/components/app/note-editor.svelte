@@ -6,7 +6,6 @@
 		DiagramSuggestion,
 		DrawioDiagram,
 		NoteId,
-		ProjectId,
 		ProseMirrorDocument,
 		ReferenceView,
 		SkillSummary,
@@ -71,8 +70,8 @@
 
 	let {
 		noteId,
-		projectId,
 		revision,
+		inlineSuggestionsEnabled = true,
 		document,
 		references = [],
 		skills = [],
@@ -87,8 +86,8 @@
 		diagrams = []
 	}: {
 		noteId: NoteId;
-		projectId: ProjectId;
 		revision: number;
+		inlineSuggestionsEnabled?: boolean;
 		document: ProseMirrorDocument;
 		references?: readonly ReferenceView[];
 		skills?: readonly SkillSummary[];
@@ -152,13 +151,41 @@
 			const response = await fetch('/api/inline-suggestions', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ noteId, projectId, revision, ...input }),
+				body: JSON.stringify({
+					purpose: 'complete',
+					requestId: crypto.randomUUID(),
+					noteId,
+					revision,
+					...input
+				}),
 				signal
 			});
 			if (!response.ok) return { text: '' };
 			return (await response.json()) as { readonly text: string };
 		} catch {
 			return { text: '' };
+		}
+	}
+
+	async function warmInlineContext(
+		input: InlineSuggestionRequestInput,
+		signal: AbortSignal
+	): Promise<void> {
+		try {
+			await fetch('/api/inline-suggestions', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					purpose: 'warm',
+					requestId: crypto.randomUUID(),
+					noteId,
+					revision,
+					...input
+				}),
+				signal
+			});
+		} catch {
+			// Grounding prefetch is opportunistic and must never interrupt writing.
 		}
 	}
 
@@ -184,6 +211,7 @@
 			},
 			getNoteId: () => noteId,
 			getInlineSuggestion: requestInlineSuggestion,
+			warmInlineContext,
 			onUpdate: () => {
 				closeActiveLink();
 				if (initialized) onchange?.();
@@ -191,6 +219,9 @@
 		},
 		[TodoNode(TodoNodeView as never)]
 	);
+	$effect(() => {
+		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);
+	});
 	// Attach per-note stores so TipTap NodeViews (TodoNode, SuggestionInlineWidget)
 	// can resolve the right note's todos/suggestions without going through a
 	// singleton that would describe only the focused pane.

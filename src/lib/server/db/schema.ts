@@ -573,6 +573,7 @@ export const agentPreferences = pgTable('agent_preferences', {
 		.references(() => users.id, { onDelete: 'cascade' }),
 	defaultModel: text('default_model'),
 	executionMode: agentExecutionMode('execution_mode').notNull().default('approval_required'),
+	inlineSuggestionsEnabled: boolean('inline_suggestions_enabled').notNull().default(true),
 	...timestamps
 });
 
@@ -745,6 +746,8 @@ export const searchChunks = pgTable(
 		}),
 		attachmentId: uuid('attachment_id').references(() => attachments.id, { onDelete: 'cascade' }),
 		attachmentPath: text('attachment_path'),
+		sourceTitle: text('source_title'),
+		sectionPath: text('section_path'),
 		diagramId: uuid('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' }),
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'

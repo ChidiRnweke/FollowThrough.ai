@@ -125,6 +125,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      js-tiktoken:
+        specifier: ^1.0.21
+        version: 1.0.21
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
@@ -3321,6 +3324,9 @@ packages:
 
   js-md5@0.8.3:
     resolution: {integrity: sha512-qR0HB5uP6wCuRMrWPTrkMaev7MJZwJuuw4fnwAzRgP4J4/F8RwtodOKpGp4XpqsLBFzzgqIO42efFAyz2Et6KQ==}
+
+  js-tiktoken@1.0.21:
+    resolution: {integrity: sha512-biOj/6M5qdgx5TKjDnFT1ymSpM5tbd3ylwDtrQvFQSu0Z7bBYko2dF+W/aUkXUPuk6IVpRxk/3Q2sHOzGlS36g==}
 
   jsdom@29.1.1:
     resolution: {integrity: sha512-ECi4Fi2f7BdJtUKTflYRTiaMxIB0O6zfR1fX0GXpUrf6flp8QIYn1UT20YQqdSOfk2dfkCwS8LAFoJDEppNK5Q==}
@@ -7740,6 +7746,10 @@ snapshots:
     optional: true
 
   js-md5@0.8.3: {}
+
+  js-tiktoken@1.0.21:
+    dependencies:
+      base64-js: 1.5.1
 
   jsdom@29.1.1(@noble/hashes@1.8.0):
     dependencies:

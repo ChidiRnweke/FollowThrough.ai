@@ -3,12 +3,11 @@ import type { InlineBriefCache, InlineSuggestionThrottle } from '$lib/services';
 
 /**
  * Process-local cache for inline context briefs. Briefs are cheap to rebuild
- * and worthless once the passage moves on, so they never reach the database:
- * a cold process simply produces ungrounded ghost text until the first brief
- * lands.
+ * and worthless once the passage moves on, so they never reach the database.
+ * A cold process stays silent until the first grounded brief lands.
  */
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_TTL_MS = 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 500;
 
 interface Entry {
@@ -24,6 +23,7 @@ export interface InlineBriefCacheOptions {
 
 export class MemoryInlineBriefCache implements InlineBriefCache {
 	private readonly entries = new Map<string, Entry>();
+	private readonly pending = new Map<string, Promise<InlineContextBrief>>();
 	private readonly ttlMs: number;
 	private readonly maxEntries: number;
 	private readonly now: () => number;
@@ -55,6 +55,16 @@ export class MemoryInlineBriefCache implements InlineBriefCache {
 			if (oldest === undefined) break;
 			this.entries.delete(oldest);
 		}
+	}
+
+	getOrLoad(key: string, load: () => Promise<InlineContextBrief>): Promise<InlineContextBrief> {
+		const cached = this.get(key);
+		if (cached) return Promise.resolve(cached);
+		const active = this.pending.get(key);
+		if (active) return active;
+		const pending = load().finally(() => this.pending.delete(key));
+		this.pending.set(key, pending);
+		return pending;
 	}
 }
 
@@ -110,14 +120,16 @@ export class MemoryInlineSuggestionThrottle implements InlineSuggestionThrottle 
 export const inlineBriefKey = (input: {
 	readonly userId: string;
 	readonly noteId: string;
+	readonly projectId: string;
 	readonly heading?: string;
+	readonly passageLength: number;
 }): string => {
 	// Keyed at section altitude only. Not per keystroke (the passage tail changes
 	// every character) and deliberately NOT per revision: the editor autosaves as
 	// the user types, so revision advances on nearly every pause. Keying on it
 	// meant every suggestion was a fresh miss and grounding never warmed. The
 	// TTL bounds staleness instead; one brief per section is reused throughout.
-	const section = input.heading ?? '';
+	const section = `${input.projectId}:${input.heading ?? ''}:${Math.floor(input.passageLength / 300)}`;
 	let hash = 2166136261;
 	for (let index = 0; index < section.length; index++) {
 		hash ^= section.charCodeAt(index);

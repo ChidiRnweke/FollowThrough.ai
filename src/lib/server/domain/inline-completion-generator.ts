@@ -38,7 +38,9 @@ const briefSection = (brief: InlineContextBrief | undefined): string => {
 	if (!brief) return '';
 	const lines = [
 		brief.voice ? `Voice: ${brief.voice}` : '',
-		brief.facts.length > 0 ? `Grounded facts:\n${brief.facts.map((fact) => `- ${fact}`).join('\n')}` : '',
+		brief.facts.length > 0
+			? `Grounded facts:\n${brief.facts.map((fact) => `- ${fact}`).join('\n')}`
+			: '',
 		brief.openThreads.length > 0
 			? `Open threads:\n${brief.openThreads.map((thread) => `- ${thread}`).join('\n')}`
 			: '',
@@ -56,7 +58,7 @@ const userPrompt = (
 	request: InlineSuggestionRequest,
 	brief: InlineContextBrief | undefined
 ): string =>
-	`${briefSection(brief)}${request.heading ? `Section: ${request.heading}\n\n` : ''}<before_caret>\n${request.prefix}\n</before_caret>\n<after_caret>\n${request.suffix}\n</after_caret>\n\nContinue from the caret.`;
+	`${briefSection(brief)}${request.headingPath.length ? `Heading path: ${request.headingPath.join(' > ')}\n` : ''}Block type: ${request.blockType}\n\n<before_caret>\n${request.prefix}\n</before_caret>\n<after_caret>\n${request.suffix}\n</after_caret>\n\nContinue from the caret.`;
 
 const stripWrappers = (value: string): string => {
 	let text = value.replace(/^\s*```[a-z]*\n?/i, '').replace(/\n?```\s*$/, '');
@@ -123,7 +125,11 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 	private readonly model: string;
 
 	constructor(apiKey: string, options: InlineCompletionOptions = {}) {
-		this.model = options.model ?? process.env.OPENROUTER_INLINE_MODEL ?? DEFAULT_GENERATION_MODEL;
+		this.model =
+			options.model ??
+			process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
+			process.env.OPENROUTER_INLINE_MODEL ??
+			DEFAULT_GENERATION_MODEL;
 		this.client = createOpenRouterClient(apiKey, options);
 	}
 
@@ -134,7 +140,11 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 	): Promise<string> {
 		return traceInline(
 			'inline.complete',
-			{ sessionId: request.noteId, model: this.model, input: request.prefix.slice(-200) },
+			{
+				sessionId: request.noteId,
+				model: this.model,
+				input: `prefix:${request.prefix.length};suffix:${request.suffix.length};block:${request.blockType}`
+			},
 			async () => {
 				const completion = await this.client.chat.completions.create(
 					{

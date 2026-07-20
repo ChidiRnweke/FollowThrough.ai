@@ -20,7 +20,7 @@ import type {
 import { validateAttachmentPath } from '$lib/services/skills/manifest';
 import type { AttachmentManager } from './contracts';
 import type { RetrievalIndexRepository } from '$lib/repositories';
-import type { EmbeddingClient } from '$lib/services/retrieval/contracts';
+import type { ContentChunker, EmbeddingClient } from '$lib/services/retrieval/contracts';
 import { EmbeddedAttachmentIndexer } from '$lib/services/retrieval/indexing';
 
 const MAX_ATTACHMENT_BYTES = Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
@@ -35,7 +35,8 @@ export class AttachmentManagementService implements AttachmentManager {
 		private readonly storage: AttachmentStorage,
 		private readonly parsers: AttachmentParserRegistry,
 		private readonly retrieval?: RetrievalIndexRepository,
-		private readonly embeddingClient?: EmbeddingClient
+		private readonly embeddingClient?: EmbeddingClient,
+		private readonly chunker?: ContentChunker
 	) {}
 
 	async initiate(
@@ -234,11 +235,11 @@ export class AttachmentManagementService implements AttachmentManager {
 			if (isImage) {
 				const extractedText = await this.describeImage(view);
 				if (this.retrieval && this.embeddingClient)
-					await new EmbeddedAttachmentIndexer(this.retrieval, this.embeddingClient).index(
-						actor,
-						view.attachment,
-						extractedText
-					);
+					await new EmbeddedAttachmentIndexer(
+						this.retrieval,
+						this.embeddingClient,
+						this.chunker
+					).index(actor, view.attachment, extractedText);
 				await this.attachments.updateVersion(actor, {
 					...view.version,
 					parserKind: 'vision',
@@ -263,7 +264,8 @@ export class AttachmentManagementService implements AttachmentManager {
 			if (this.retrieval && this.embeddingClient) {
 				const result = await new EmbeddedAttachmentIndexer(
 					this.retrieval,
-					this.embeddingClient
+					this.embeddingClient,
+					this.chunker
 				).index(actor, view.attachment, extractedText);
 				if (result.truncated) status = 'partial';
 			}

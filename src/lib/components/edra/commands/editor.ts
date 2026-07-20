@@ -63,6 +63,7 @@ export interface EdraEditorProps {
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
 	) => Promise<{ readonly text: string }>;
+	warmInlineContext?: (input: InlineSuggestionRequestInput, signal: AbortSignal) => Promise<void>;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
@@ -99,7 +100,8 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			Callout(CalloutComp),
 			InlineSuggestion.configure({
 				...(props?.getInlineSuggestion ? { fetchSuggestion: props.getInlineSuggestion } : {}),
-				idleDelayMs: 300
+				...(props?.warmInlineContext ? { warmContext: props.warmInlineContext } : {}),
+				idleDelayMs: 400
 			}),
 			AIHighlight.configure({
 				callAI: props?.callAI || null

@@ -37,6 +37,7 @@ export class PersistentAgentPreferencesStore implements AgentPreferencesStore {
 			(await this.repository.get(actor)) ?? {
 				userId: actor.userId,
 				executionMode: 'approval_required',
+				inlineSuggestionsEnabled: true,
 				createdAt: now(),
 				updatedAt: now()
 			}
@@ -53,6 +54,7 @@ export class PersistentAgentPreferencesStore implements AgentPreferencesStore {
 					? { defaultModel: input.defaultModel }
 					: {}),
 			executionMode: input.executionMode,
+			inlineSuggestionsEnabled: input.inlineSuggestionsEnabled,
 			updatedAt: now()
 		});
 	}

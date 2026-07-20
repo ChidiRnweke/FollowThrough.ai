@@ -22,9 +22,13 @@ const actor: ActorContext = { userId: 'user-1' } as ActorContext;
 const projectId = 'project-1' as ProjectId;
 
 const request: InlineSuggestionRequest = {
+	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: 'note-1' as NoteId,
 	projectId,
 	revision: 1,
+	blockType: 'paragraph',
+	headingPath: ['Migration'],
+	currentSection: 'The read-replica cutover window is owned by',
 	prefix: 'The read-replica cutover window is owned by',
 	suffix: '',
 	heading: 'Migration'

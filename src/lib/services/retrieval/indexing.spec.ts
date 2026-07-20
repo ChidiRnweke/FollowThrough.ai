@@ -3,7 +3,8 @@ import {
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
-	ParagraphChunker
+	ParagraphChunker,
+	TokenAwareChunker
 } from './indexing';
 import {
 	InMemoryEmbeddingClient,
@@ -17,6 +18,7 @@ import {
 } from '$lib/testing/fixtures/domain-builders';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
 import type { Diagram, DiagramId } from '$lib/models';
+import { retrievalEncoding } from './tokenizer';
 
 const diagramBuilder = (overrides: Partial<Diagram> = {}): Diagram => ({
 	id: '00000000-0000-4000-8000-000000000090' as DiagramId,
@@ -31,6 +33,16 @@ const diagramBuilder = (overrides: Partial<Diagram> = {}): Diagram => ({
 });
 
 describe('Content chunking invariants', () => {
+	it('uses large token chunks with a generous overlap', () => {
+		const chunks = new TokenAwareChunker(20, 5).chunk(
+			Array.from({ length: 60 }, (_, index) => `word${index}`).join(' ')
+		);
+		const encoding = retrievalEncoding();
+		const left = encoding.encode(chunks[0]!);
+		const right = encoding.encode(chunks[1]!);
+		expect(right.slice(0, 5)).toEqual(left.slice(-5));
+	});
+
 	it('returns no chunks for empty content', () => {
 		expect(new ParagraphChunker(20).chunk('   ')).toEqual([]);
 	});

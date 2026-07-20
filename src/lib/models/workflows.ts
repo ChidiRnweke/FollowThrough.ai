@@ -207,9 +207,14 @@ export interface RunAgentInput {
  * sees ProseMirror JSON on this path.
  */
 export interface InlineSuggestionRequest {
+	readonly requestId: string;
 	readonly noteId: NoteId;
-	readonly projectId: ProjectId;
+	/** Authoritative project scope, populated by the server controller. */
+	readonly projectId?: ProjectId;
 	readonly revision: number;
+	readonly blockType: string;
+	readonly headingPath: readonly string[];
+	readonly currentSection: string;
 	readonly prefix: string;
 	readonly suffix: string;
 	readonly heading?: string;
@@ -302,6 +307,7 @@ export interface DecideAgentRunInput {
 export interface UpdateAgentPreferencesInput {
 	readonly defaultModel?: string | null;
 	readonly executionMode: import('./domain').AgentExecutionMode;
+	readonly inlineSuggestionsEnabled: boolean;
 }
 
 export interface RestoreSkillVersionInput {

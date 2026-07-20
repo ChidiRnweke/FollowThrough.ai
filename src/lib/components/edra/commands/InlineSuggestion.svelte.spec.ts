@@ -18,7 +18,7 @@ const mountEditor = (
 	return { editor, element };
 };
 
-const restCaretInside = (editor: Editor) => {
+const moveCaret = (editor: Editor) => {
 	// A caret at a word boundary well inside the paragraph, which is where the
 	// trigger policy permits a suggestion.
 	editor.commands.focus();
@@ -28,13 +28,30 @@ const restCaretInside = (editor: Editor) => {
 	);
 };
 
+const typeAtCaret = (editor: Editor) => {
+	moveCaret(editor);
+	editor.commands.insertContent(' ');
+};
+
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('InlineSuggestion extension', () => {
+	it('does not request a suggestion for a caret move without an edit', async () => {
+		let calls = 0;
+		const { editor } = mountEditor(async () => {
+			calls++;
+			return { text: ' to avoid data loss.' };
+		});
+		moveCaret(editor);
+		await settle(100);
+		editor.destroy();
+		expect(calls).toBe(0);
+	});
+
 	it('renders ghost text after the caret rests', async () => {
 		const { editor, element } = mountEditor(async () => ({ text: ' to avoid data loss.' }));
-		restCaretInside(editor);
-		await settle(60);
+		typeAtCaret(editor);
+		await settle(100);
 		const ghost = element.querySelector('.inline-suggestion');
 		editor.destroy();
 		expect(ghost?.textContent).toContain('to avoid data loss.');
@@ -42,8 +59,8 @@ describe('InlineSuggestion extension', () => {
 
 	it('inserts the suggestion on Tab and clears the ghost text', async () => {
 		const { editor, element } = mountEditor(async () => ({ text: ' to avoid data loss.' }));
-		restCaretInside(editor);
-		await settle(60);
+		typeAtCaret(editor);
+		await settle(100);
 		editor.view.dom.dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
 		);
@@ -51,7 +68,11 @@ describe('InlineSuggestion extension', () => {
 		const text = editor.getText();
 		const ghost = element.querySelector('.inline-suggestion');
 		editor.destroy();
-		expect({ hasGhost: ghost !== null, offered: state, includesText: text.includes('avoid data loss') }).toEqual({
+		expect({
+			hasGhost: ghost !== null,
+			offered: state,
+			includesText: text.includes('avoid data loss')
+		}).toEqual({
 			hasGhost: false,
 			offered: null,
 			includesText: true
@@ -60,8 +81,8 @@ describe('InlineSuggestion extension', () => {
 
 	it('dismisses the ghost text on Escape without inserting', async () => {
 		const { editor, element } = mountEditor(async () => ({ text: ' to avoid data loss.' }));
-		restCaretInside(editor);
-		await settle(60);
+		typeAtCaret(editor);
+		await settle(100);
 		editor.view.dom.dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
 		);
@@ -71,10 +92,26 @@ describe('InlineSuggestion extension', () => {
 		expect({ hasGhost: ghost !== null, inserted }).toEqual({ hasGhost: false, inserted: false });
 	});
 
+	it('does not immediately offer again after Escape', async () => {
+		let calls = 0;
+		const { editor } = mountEditor(async () => {
+			calls++;
+			return { text: ' to avoid data loss.' };
+		});
+		typeAtCaret(editor);
+		await settle(100);
+		editor.view.dom.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+		await settle(100);
+		editor.destroy();
+		expect(calls).toBe(1);
+	});
+
 	it('offers nothing when the model returns an empty string', async () => {
 		const { editor, element } = mountEditor(async () => ({ text: '' }));
-		restCaretInside(editor);
-		await settle(60);
+		typeAtCaret(editor);
+		await settle(100);
 		const ghost = element.querySelector('.inline-suggestion');
 		editor.destroy();
 		expect(ghost).toBeNull();

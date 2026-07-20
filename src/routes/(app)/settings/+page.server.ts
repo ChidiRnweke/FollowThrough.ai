@@ -34,10 +34,12 @@ export const actions: Actions = {
 		if (executionMode !== 'approval_required' && executionMode !== 'auto_accept')
 			return fail(400, { error: 'Choose a valid execution mode' });
 		const defaultModel = String(data.get('defaultModel') ?? '').trim();
+		const inlineSuggestionsEnabled = data.get('inlineSuggestionsEnabled') === 'true';
 		const factory = AppFactory.controllerFactory();
 		await factory.agentSettings().updatePreferences(AppFactory.actor(), {
 			defaultModel: defaultModel || null,
-			executionMode
+			executionMode,
+			inlineSuggestionsEnabled
 		});
 		return { saved: true };
 	},

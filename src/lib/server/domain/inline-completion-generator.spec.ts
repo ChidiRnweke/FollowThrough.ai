@@ -36,7 +36,10 @@ describe('sanitizeCompletion', () => {
 
 	it('keeps a continuation that incidentally repeats an earlier word', () => {
 		expect(
-			sanitizeCompletion('The cutover was risky, so we rehearsed it.', ' The cutover went smoothly.')
+			sanitizeCompletion(
+				'The cutover was risky, so we rehearsed it.',
+				' The cutover went smoothly.'
+			)
 		).toBe(' The cutover went smoothly.');
 	});
 

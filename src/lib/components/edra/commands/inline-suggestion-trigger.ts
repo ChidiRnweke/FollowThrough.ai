@@ -9,6 +9,7 @@ import type { EditorState } from '@tiptap/pm/state';
 
 /** Structured text where a prose continuation would be wrong or unwelcome. */
 const EXCLUDED_PARENTS = new Set([
+	'heading',
 	'codeBlock',
 	'mermaid',
 	'drawio',
@@ -19,15 +20,18 @@ const EXCLUDED_PARENTS = new Set([
 
 /** Below this the note has too little shape for a continuation to be useful. */
 const MIN_DOCUMENT_LENGTH = 40;
+const EXCLUDED_MARKS = new Set(['link', 'code', 'inlineCode']);
 
 const WORD_CHARACTER = /[\p{L}\p{N}]/u;
 
 export interface CaretContext {
 	readonly emptySelection: boolean;
 	readonly parentNames: readonly string[];
+	readonly markNames: readonly string[];
 	readonly documentLength: number;
 	readonly characterBefore: string;
 	readonly characterAfter: string;
+	readonly meaningfulPrefixLength: number;
 	readonly suppressed: boolean;
 }
 
@@ -39,8 +43,13 @@ export interface CaretContext {
 export const shouldTrigger = (caret: CaretContext): boolean => {
 	if (caret.suppressed) return false;
 	if (!caret.emptySelection) return false;
-	if (caret.documentLength < MIN_DOCUMENT_LENGTH) return false;
+	if (
+		caret.documentLength < MIN_DOCUMENT_LENGTH ||
+		caret.meaningfulPrefixLength < MIN_DOCUMENT_LENGTH
+	)
+		return false;
 	if (caret.parentNames.some((name) => EXCLUDED_PARENTS.has(name))) return false;
+	if (caret.markNames.some((name) => EXCLUDED_MARKS.has(name))) return false;
 	// A caret at the very start of a block has nothing to continue from.
 	if (!caret.characterBefore) return false;
 	// Mid-word: ghost text would render inside the word being typed.
@@ -57,12 +66,14 @@ export const caretContextOf = (state: EditorState, suppressed: boolean): CaretCo
 	return {
 		emptySelection: empty,
 		parentNames,
+		markNames: $from.marks().map((mark) => mark.type.name),
 		documentLength: state.doc.textBetween(0, state.doc.content.size, '\n', ' ').trim().length,
 		characterBefore: state.doc.textBetween(Math.max(0, $from.pos - 1), $from.pos),
 		characterAfter: state.doc.textBetween(
 			$from.pos,
 			Math.min(state.doc.content.size, $from.pos + 1)
 		),
+		meaningfulPrefixLength: state.doc.textBetween(0, $from.pos, '\n', ' ').trim().length,
 		suppressed
 	};
 };
@@ -72,10 +83,14 @@ export interface CaretWindow {
 	readonly prefix: string;
 	readonly suffix: string;
 	readonly heading?: string;
+	readonly headingPath: readonly string[];
+	readonly blockType: string;
+	readonly currentSection: string;
 }
 
-const PREFIX_LIMIT = 2000;
-const SUFFIX_LIMIT = 500;
+const PREFIX_LIMIT = 4000;
+const SUFFIX_LIMIT = 1000;
+const SECTION_LIMIT = 8000;
 
 export const caretWindowOf = (state: EditorState): CaretWindow => {
 	const position = state.selection.$from.pos;
@@ -83,17 +98,42 @@ export const caretWindowOf = (state: EditorState): CaretWindow => {
 	const suffix = state.doc
 		.textBetween(position, state.doc.content.size, '\n', ' ')
 		.slice(0, SUFFIX_LIMIT);
-	const heading = nearestHeading(state);
-	return { prefix, suffix, ...(heading ? { heading } : {}) };
+	const headingPath = headingsAbove(state);
+	const heading = headingPath.at(-1);
+	const currentSection = sectionAroundCaret(state);
+	return {
+		prefix,
+		suffix,
+		headingPath,
+		blockType: state.selection.$from.parent.type.name,
+		currentSection,
+		...(heading ? { heading } : {})
+	};
 };
 
-/** The closest heading above the caret, which names the section being written. */
-const nearestHeading = (state: EditorState): string | undefined => {
+const headingsAbove = (state: EditorState): string[] => {
 	const position = state.selection.$from.pos;
-	let heading: string | undefined;
+	const path: string[] = [];
 	state.doc.nodesBetween(0, position, (node) => {
-		if (node.type.name === 'heading') heading = node.textContent.trim() || heading;
+		if (node.type.name === 'heading') {
+			const level = Number(node.attrs.level ?? 1);
+			path.splice(Math.max(0, level - 1));
+			if (node.textContent.trim()) path[level - 1] = node.textContent.trim();
+		}
 		return true;
 	});
-	return heading;
+	return path.filter(Boolean);
+};
+
+const sectionAroundCaret = (state: EditorState): string => {
+	const caret = state.selection.$from.pos;
+	let start = 0;
+	let end = state.doc.content.size;
+	state.doc.descendants((node, position) => {
+		if (node.type.name !== 'heading') return true;
+		if (position < caret) start = position + node.nodeSize;
+		else if (end === state.doc.content.size) end = position;
+		return true;
+	});
+	return state.doc.textBetween(start, end, '\n', ' ').trim().slice(-SECTION_LIMIT);
 };

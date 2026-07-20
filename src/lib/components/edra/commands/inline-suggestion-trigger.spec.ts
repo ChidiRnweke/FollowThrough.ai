@@ -4,9 +4,11 @@ import { shouldTrigger, type CaretContext } from './inline-suggestion-trigger';
 const caret = (overrides: Partial<CaretContext> = {}): CaretContext => ({
 	emptySelection: true,
 	parentNames: ['paragraph'],
+	markNames: [],
 	documentLength: 200,
 	characterBefore: ' ',
 	characterAfter: '',
+	meaningfulPrefixLength: 200,
 	suppressed: false,
 	...overrides
 });

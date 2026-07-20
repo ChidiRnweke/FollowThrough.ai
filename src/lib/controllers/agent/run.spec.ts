@@ -24,6 +24,7 @@ const setup = () => {
 			get: async (actor) => ({
 				userId: actor.userId,
 				executionMode: 'approval_required',
+				inlineSuggestionsEnabled: true,
 				createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
 				updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
 			}),

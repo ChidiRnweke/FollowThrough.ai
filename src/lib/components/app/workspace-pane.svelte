@@ -13,11 +13,13 @@
 		noteId,
 		shell,
 		initialView,
+		inlineSuggestionsEnabled = true,
 		onCloseSplit
 	}: {
 		noteId: NoteId;
 		shell: ShellContext;
 		initialView?: NoteView;
+		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
 
@@ -114,6 +116,7 @@
 		<NoteWorkspace
 			{view}
 			{shell}
+			{inlineSuggestionsEnabled}
 			{noteSync}
 			{noteTodos}
 			{suggestionTray}

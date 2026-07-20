@@ -112,6 +112,7 @@
 		"docx": "^9.7.1",
 		"dompurify": "3.4.11",
 		"dotenv": "^17.4.2",
+		"js-tiktoken": "^1.0.21",
 		"jsdom": "^29.1.1",
 		"katex": "^0.17.0",
 		"lowlight": "^3.3.0",

@@ -6,14 +6,17 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
+	import { Switch } from '$lib/components/ui/switch';
 
 	let { preferences, models }: { preferences: AgentPreferences; models: readonly AgentModel[] } =
 		$props();
 	let model = $state<string | null>(null);
 	let mode = $state<AgentExecutionMode>('approval_required');
+	let inlineSuggestionsEnabled = $state(true);
 	$effect(() => {
 		model = preferences.defaultModel ?? null;
 		mode = preferences.executionMode;
+		inlineSuggestionsEnabled = preferences.inlineSuggestionsEnabled;
 	});
 </script>
 
@@ -31,6 +34,19 @@
 				defaultLabel="Use environment default"
 			/>
 			<Input type="hidden" name="defaultModel" value={model ?? ''} />
+		</Field.Field>
+		<Field.Separator />
+		<Field.Field orientation="responsive">
+			<Field.Content>
+				<Field.Title>Inline writing suggestions</Field.Title>
+				<Field.Description>Show grounded ghost text while you write notes.</Field.Description>
+			</Field.Content>
+			<Switch aria-label="Inline writing suggestions" bind:checked={inlineSuggestionsEnabled} />
+			<Input
+				type="hidden"
+				name="inlineSuggestionsEnabled"
+				value={String(inlineSuggestionsEnabled)}
+			/>
 		</Field.Field>
 		<Field.Separator />
 		<Field.Field orientation="responsive">

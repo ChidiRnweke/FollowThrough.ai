@@ -211,6 +211,10 @@ export class DefaultNotesController implements NotesController {
 		});
 	}
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
-		return { note: await this.dependencies.noteArchiver.archive(actor, input.noteId) };
+		return this.dependencies.transactionRunner.run(async () => {
+			const note = await this.dependencies.noteArchiver.archive(actor, input.noteId);
+			await this.dependencies.noteIndexer.index(actor, note);
+			return { note };
+		});
 	}
 }

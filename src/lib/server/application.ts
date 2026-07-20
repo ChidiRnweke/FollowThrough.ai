@@ -6,6 +6,7 @@ import {
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
+	retrievalChunkerFromEnv,
 	MemoryManagementService,
 	DiagramManagementService,
 	DiagramTransformationService,
@@ -240,16 +241,23 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		});
 	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
 	const attachmentRepository = new PostgresAttachmentRepository(db);
+	const retrievalChunker = retrievalChunkerFromEnv();
 	const attachments = new AttachmentManagementService(
 		attachmentRepository,
 		noteRepository,
 		attachmentStorage,
 		new AttachmentParserRegistry(),
 		searchRepository,
-		embeddingClient
+		embeddingClient,
+		retrievalChunker
 	);
-	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient);
-	const diagramIndexer = new EmbeddedDiagramIndexer(searchRepository, embeddingClient, notes);
+	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient, retrievalChunker);
+	const diagramIndexer = new EmbeddedDiagramIndexer(
+		searchRepository,
+		embeddingClient,
+		notes,
+		retrievalChunker
+	);
 	const knowledgeSearcher = new RerankingKnowledgeSearcher(
 		new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient),
 		reranker
@@ -302,7 +310,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		skillRepository
 	);
 	const provisionedSkills = new ProvisioningSkillFinder(builtInSkills, skills);
-	const memoryIndexer = new EmbeddedMemoryIndexer(searchRepository, embeddingClient);
+	const memoryIndexer = new EmbeddedMemoryIndexer(
+		searchRepository,
+		embeddingClient,
+		retrievalChunker
+	);
 	const memory = new MemoryManagementService(
 		new PostgresMemoryEntryRepository(db),
 		projectRepository,
@@ -516,6 +528,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			conversations: conversationJournal
 		},
 		inlineSuggestions: {
+			noteReader: notes,
+			preferences,
 			inlineCompletionGenerator: new FlashInlineCompletionGenerator(openRouterApiKey, {
 				baseURL: openRouterBaseURL,
 				appURL
