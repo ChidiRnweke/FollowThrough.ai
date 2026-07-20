@@ -316,7 +316,8 @@ export class OpenAIDiagramAgent
 		await this.dependencies.conversations.recordUserPrompt(actor, conversation.id, input.prompt);
 		const context = {
 			...(await this.dependencies.contextBuilder.build(actor, input, {
-				provenanceId: provenance.id
+				provenanceId: provenance.id,
+				conversationId: conversation.id
 			})),
 			conversationId: conversation.id,
 			effectiveModel: model,

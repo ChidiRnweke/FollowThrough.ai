@@ -29,6 +29,7 @@ export interface ToolCall {
 
 export interface AgentRunResult {
 	readonly runId: AgentRunId;
+	readonly conversationId: import('$lib/models').ConversationId;
 	readonly status: AgentRunStatus;
 	readonly finalResponse: string;
 	readonly toolCalls: readonly ToolCall[];
@@ -48,6 +49,8 @@ export interface RunCaseInput {
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly selection?: import('$lib/models').TextSelection;
 	readonly requestedSkillNames?: readonly string[];
+	readonly conversationId?: import('$lib/models').ConversationId;
+	readonly appContext?: import('$lib/models').AppContextSnapshotV1;
 }
 
 /**
@@ -67,6 +70,8 @@ export async function runCase(
 	const receipt = await agent.submit(actor, {
 		requestId: randomUUID(),
 		input: input.prompt,
+		...(input.conversationId ? { conversationId: input.conversationId } : {}),
+		...(input.appContext ? { appContext: input.appContext } : {}),
 		...(input.mode ? { mode: input.mode } : {}),
 		...(input.projectId ? { projectId: input.projectId } : {}),
 		...(input.noteId ? { noteId: input.noteId } : {}),
@@ -81,6 +86,7 @@ export async function runCase(
 
 	return {
 		runId: receipt.runId,
+		conversationId: receipt.conversationId,
 		status,
 		finalResponse: reconstructText(events),
 		toolCalls: reconstructToolCalls(events),

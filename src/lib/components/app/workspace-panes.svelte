@@ -8,6 +8,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
+	import { appContext } from '$lib/stores/app-context.svelte';
 
 	let {
 		shell,
@@ -87,6 +88,11 @@
 		const id = event.dataTransfer?.getData('text/x-followthrough-note-id');
 		if (id) void workbench.setSplit(id as NoteId);
 	}
+
+	function markInteraction(noteId: NoteId): void {
+		workbench.setInteractionFocus(noteId);
+		appContext.recordFocus(noteId);
+	}
 </script>
 
 <svelte:window
@@ -115,7 +121,10 @@
 				size="sm"
 				value={narrowPaneId}
 				onValueChange={(value) => {
-					if (value) narrowPaneId = value as NoteId;
+					if (value) {
+						narrowPaneId = value as NoteId;
+						markInteraction(value as NoteId);
+					}
 				}}
 				aria-label="Visible split note"
 				class="min-w-0 flex-1"
@@ -151,6 +160,8 @@
 				data-pane={noteId}
 				data-pane-role={isFocused ? 'primary' : isSplit ? 'split' : 'background'}
 				data-narrow-active={visible && noteId === narrowPaneId}
+				onfocusin={() => markInteraction(noteId)}
+				onpointerdown={() => markInteraction(noteId)}
 			>
 				<ScrollArea orientation="both" class="h-full min-h-0 min-w-0">
 					<div class="workspace-pane-scroll-content">

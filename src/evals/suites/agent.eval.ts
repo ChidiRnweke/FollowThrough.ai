@@ -17,6 +17,7 @@ import { skillAdherenceCases } from '../cases/skill-adherence';
 import { selectionCases } from '../cases/selection';
 import { stoppingCases } from '../cases/stopping';
 import { intentInterpretationCases } from '../cases/intent-interpretation';
+import { correctnessCases } from '../cases/correctness';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -40,7 +41,9 @@ const allCases = [
 	...diagramCases,
 	...effectCases,
 	// Most expensive: vague multi-intent prompts that exercise interpretation.
-	...intentInterpretationCases
+	...intentInterpretationCases,
+	// Correctness: right-target assertions for disambiguation.
+	...correctnessCases
 ];
 
 /**

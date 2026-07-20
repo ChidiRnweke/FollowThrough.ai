@@ -158,15 +158,20 @@
 		saveDraft();
 		// Read the focused pane's editor selection; falls back to undefined
 		// when no pane is mounted (e.g. a fresh `/chats/new` page).
-		const selection = workbench.focusedNoteId
-			? editorSelectionRegistry.peek(workbench.focusedNoteId)?.current
+		const interactionNoteId = workbench.interactionFocusedNoteId ?? workbench.focusedNoteId;
+		const selection = interactionNoteId
+			? editorSelectionRegistry.peek(interactionNoteId)?.current
 			: undefined;
+		const interactionProjectId = interactionNoteId
+			? (shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId as
+					ProjectId | undefined)
+			: activeProjectId;
 		const request = chat.send({
 			prompt: text,
 			modelOverride: chat.modelOverride,
 			executionModeOverride: chat.executionModeOverride,
-			...(activeNoteId !== undefined ? { noteId: activeNoteId } : {}),
-			...(activeProjectId !== undefined ? { projectId: activeProjectId } : {}),
+			...(interactionNoteId !== undefined ? { noteId: interactionNoteId } : {}),
+			...(interactionProjectId !== undefined ? { projectId: interactionProjectId } : {}),
 			...(autoChip !== undefined ? { contextNoteIds: [autoChip.id] } : {}),
 			...(selection !== undefined ? { selection, noteId: selection.noteId } : {})
 		});

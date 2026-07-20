@@ -1,10 +1,20 @@
-import type { ActorContext, Note, ProjectId, ProvenanceId, RunAgentInput } from '$lib/models';
+import type {
+	ActorContext,
+	ConversationId,
+	Note,
+	ProjectId,
+	ProvenanceId,
+	ResolvedAppContextV1,
+	RunAgentInput
+} from '$lib/models';
 import type {
 	AgentContextBuilder,
 	NoteReader,
 	SkillFinder,
 	RelevantSkillSelector,
-	SkillUsageRecorder
+	SkillUsageRecorder,
+	ConversationJournal,
+	ProjectReader
 } from '$lib/services';
 import { KeywordRelevantSkillSelector } from '$lib/services';
 
@@ -22,13 +32,15 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly skillFinder: SkillFinder,
 		private readonly noteReader: NoteReader,
 		private readonly skillSelector: RelevantSkillSelector = new KeywordRelevantSkillSelector(),
-		private readonly skillUsageRecorder?: SkillUsageRecorder
+		private readonly skillUsageRecorder?: SkillUsageRecorder,
+		private readonly conversations?: ConversationJournal,
+		private readonly projects?: ProjectReader
 	) {}
 
 	async build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId }
+		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
 	): Promise<Readonly<Record<string, unknown>>> {
 		const base = await this.base.build(actor, input, run);
 		const projectId =
@@ -50,6 +62,7 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		);
 		return {
 			...base,
+			...(await this.resolveAppContext(actor, input, run.conversationId)),
 			contextNotes: contextNotes.map((note) => ({
 				noteId: note.id,
 				title: note.title,
@@ -62,6 +75,41 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				description: summary.description,
 				triggerHints: summary.triggerHints
 			}))
+		};
+	}
+
+	private async resolveAppContext(
+		actor: ActorContext,
+		input: RunAgentInput,
+		conversationId?: ConversationId
+	): Promise<{ appContext?: ResolvedAppContextV1 }> {
+		if (!input.appContext) return {};
+		const conversation = conversationId
+			? await this.conversations?.get(actor, conversationId)
+			: undefined;
+		const originProjectId = conversation?.contextProjectId;
+		const originProject = originProjectId
+			? await this.projects?.get(actor, originProjectId).catch(() => undefined)
+			: undefined;
+		const currentProjectId =
+			input.appContext.currentProject?.id ?? input.appContext.activeResource?.projectId;
+		const projectTransition = !originProjectId
+			? 'origin_unscoped'
+			: !currentProjectId
+				? 'screen_unscoped'
+				: originProjectId === currentProjectId
+					? 'same_project'
+					: 'different_project';
+		return {
+			appContext: {
+				...input.appContext,
+				conversationOrigin: {
+					...(originProjectId ? { projectId: originProjectId } : {}),
+					...(originProject ? { projectName: originProject.name } : {}),
+					...(conversation?.contextNoteId ? { noteId: conversation.contextNoteId } : {})
+				},
+				projectTransition
+			}
 		};
 	}
 

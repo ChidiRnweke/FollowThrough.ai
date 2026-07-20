@@ -32,7 +32,7 @@ export interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId }
+		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
 	): Promise<Readonly<Record<string, unknown>>>;
 }
 export interface AgentRunner {

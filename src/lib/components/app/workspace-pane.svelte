@@ -7,6 +7,7 @@
 	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
 	import { noteTodosRegistry } from '$lib/stores/registries/note-todos-registry.svelte';
 	import NoteWorkspace from './pages/note-workspace.svelte';
+	import { appContext } from '$lib/stores/app-context.svelte';
 
 	let {
 		noteId,
@@ -31,8 +32,26 @@
 
 	let view = $state<NoteView | undefined>(untrack(() => initialView));
 	let loadingError = $state<string | undefined>(undefined);
+	let releaseContext: (() => void) | undefined;
 
 	onMount(() => {
+		releaseContext = appContext.registerPane(noteId, () => {
+			const note = noteSync.record?.local ?? view?.note;
+			if (!note) return undefined;
+			const dirty =
+				noteSync.record?.state === 'pending' ||
+				noteSync.record?.state === 'syncing' ||
+				noteSync.record?.state === 'conflict';
+			return {
+				id: note.id,
+				title: note.title,
+				projectId: note.projectId,
+				revision: note.currentRevision,
+				syncStatus: noteSync.status,
+				dirty,
+				...(dirty ? { dirtyExcerpt: note.plainText.slice(0, 4000) } : {})
+			};
+		});
 		if (view) return;
 		let cancelled = false;
 		void getNoteView(noteId)
@@ -50,6 +69,7 @@
 	});
 
 	onDestroy(() => {
+		releaseContext?.();
 		noteSyncRegistry.release(noteId);
 		editorSelectionRegistry.release(noteId);
 		suggestionTrayRegistry.release(noteId);

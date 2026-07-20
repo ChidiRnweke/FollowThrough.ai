@@ -141,3 +141,12 @@ This document is the independent behavioural specification for backend models, s
 - Nested domain operations participate in the existing transaction rather than committing independently.
 - Ownership checks occur before mutation, including join-table writes.
 - Foreign identifiers and nonexistent identifiers have indistinguishable not-found behaviour.
+
+## Ambient agent application context
+
+- Each UI chat submission captures one immutable, versioned application-context snapshot immediately before transport submission. Retries reuse that frozen input.
+- A conversation's origin project and note are fixed when the conversation is created. Per-turn screen context may change but never rewrites the origin.
+- References resolve in this order: selection, active resource or interaction-focused pane, the single other visible pane, explicit context chips, then background tabs as awareness only.
+- Full selected text remains in frozen run input for tools; model-facing application context is capped and dirty pane excerpts are never treated as authoritative saved content.
+- Application context is system-instruction data only. It is never appended to user prompts, persisted messages, SDK session items, SSE text events, or rendered chat output.
+- Crossing into a different project without explicit compare/merge or prior consent produces a text-only clarification before project-scoped tools or actions.

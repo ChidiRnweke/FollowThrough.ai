@@ -40,6 +40,8 @@ import {
 class WorkbenchStore {
 	openTabs = $state<readonly NoteId[]>([]);
 	focusedNoteId = $state<NoteId | undefined>(undefined);
+	/** Pane that most recently received real user interaction; distinct from URL-primary focus. */
+	interactionFocusedNoteId = $state<NoteId | undefined>(undefined);
 	pinnedTabs = $state<readonly NoteId[]>([]);
 
 	/** Recently-focused tabs, most-recent first.  Used to pick a tab to focus when the active one closes. */
@@ -143,7 +145,12 @@ class WorkbenchStore {
 
 	/** A view of the focused pane's NoteId; mirrors `focusedNoteId` for ergonomic consumers. */
 	get activeNoteId(): NoteId | undefined {
-		return this.focusedNoteId;
+		return this.interactionFocusedNoteId ?? this.focusedNoteId;
+	}
+
+	setInteractionFocus(noteId: NoteId): void {
+		if (noteId === this.focusedNoteId || noteId === this.splitNoteId)
+			this.interactionFocusedNoteId = noteId;
 	}
 
 	/** The project id of the focused pane, resolved from the shell's tab tree on demand. */
@@ -260,6 +267,11 @@ class WorkbenchStore {
 		this.openTabs = urlState.openTabs;
 		this.focusedNoteId = urlState.focusedNoteId;
 		this.splitNoteId = urlState.splitNoteId;
+		if (
+			this.interactionFocusedNoteId !== urlState.focusedNoteId &&
+			this.interactionFocusedNoteId !== urlState.splitNoteId
+		)
+			this.interactionFocusedNoteId = urlState.focusedNoteId;
 		this.recentlyUsed = [
 			urlState.focusedNoteId,
 			...this.recentlyUsed.filter((id) => id !== urlState.focusedNoteId)

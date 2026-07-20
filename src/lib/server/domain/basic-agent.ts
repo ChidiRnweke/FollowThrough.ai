@@ -15,7 +15,7 @@ export class BasicAgent implements AgentContextBuilder {
 	async build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		_run: { provenanceId: ProvenanceId }
+		_run: { provenanceId: ProvenanceId; conversationId?: import('$lib/models').ConversationId }
 	): Promise<Readonly<Record<string, unknown>>> {
 		void _run;
 		const note =

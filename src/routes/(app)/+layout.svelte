@@ -13,6 +13,7 @@
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
+	import { appContext } from '$lib/stores/app-context.svelte';
 
 	let { data, children } = $props();
 
@@ -53,6 +54,7 @@
 	// Forward and so the active-project derivation recomputes cleanly.
 	$effect(() => {
 		void page.url;
+		appContext.configure(data.shell, page.url);
 		workbench.syncFromUrl();
 		workbench.refreshActiveProjectId(shellProjectOf);
 		void pruneClosedTabs();

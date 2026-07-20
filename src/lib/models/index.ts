@@ -6,3 +6,4 @@ export * from './views';
 export * from './prosemirror';
 export * from './note-sync';
 export * from './agent-runs';
+export * from './app-context';

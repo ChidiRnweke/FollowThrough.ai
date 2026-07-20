@@ -308,7 +308,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		provisionedSkills,
 		notes,
 		undefined,
-		skills
+		skills,
+		conversationJournal,
+		projects
 	);
 	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
 	let controllerFactory: ProductionControllerFactory | undefined;

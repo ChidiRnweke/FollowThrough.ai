@@ -199,6 +199,7 @@ export interface RunAgentInput {
 	readonly modelOverride?: string | null;
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;
+	readonly appContext?: import('./app-context').AppContextSnapshotV1;
 }
 export interface SubmitAgentRunInput {
 	readonly requestId: string;
@@ -212,6 +213,7 @@ export interface SubmitAgentRunInput {
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
+	readonly appContext?: import('./app-context').AppContextSnapshotV1;
 }
 export type AgentEvent =
 	| {

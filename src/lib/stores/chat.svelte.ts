@@ -19,6 +19,7 @@ import { SessionAgentRunStorage } from '$lib/client/agent-runs/session-storage';
 import { refreshStale } from '$lib/remote/resource-queries';
 import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
 import { suggestionToView } from './suggestion-view';
+import { appContext } from './app-context.svelte';
 
 export type { ChatToolActivity } from './chat-tools';
 
@@ -252,12 +253,14 @@ export class ChatStore {
 		this.activeReply = reply;
 		this.runStatus = 'queued';
 		try {
+			const contextSnapshot = appContext.capture();
 			const receipt = await this.transport.submit({
 				requestId,
 				input: input.prompt,
 				...(this.conversationId ? { conversationId: this.conversationId } : {}),
 				model: this.modelOverride,
 				mode: this.executionModeOverride,
+				appContext: contextSnapshot,
 				...(input.projectId ? { projectId: input.projectId } : {}),
 				...(input.noteId ? { noteId: input.noteId } : {}),
 				...(input.selection ? { selection: input.selection } : {}),

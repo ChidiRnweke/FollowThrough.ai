@@ -54,3 +54,7 @@
 - Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.
 - Do not accept draw.io conversions from the general Suggestions inbox, render exported SVG as application HTML, enable iframe autosave, or add diagram revision/history chrome to the current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token, duplicate a prompt during retry, or hide chat entirely on mobile.
+
+## Agent context and transition UX
+
+Agent context is ambient and has no raw JSON UI. The chat follows the user's actual interaction focus in split panes without reordering panes or changing the URL-primary tab. Same-project movement is silent. An ambiguous cross-project continuation uses one concise text clarification naming both projects and offers either the existing New chat control or continuing in the current chat; no structured resolution card or model-controlled navigation is introduced.

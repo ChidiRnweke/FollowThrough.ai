@@ -135,7 +135,7 @@ export class DefaultAgentController implements AgentController {
 					pendingDecisions: [],
 					contextSnapshot: {},
 					inputSnapshot: runInput as unknown as Readonly<Record<string, unknown>>,
-					definitionVersion: 1,
+					definitionVersion: 2,
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
@@ -243,7 +243,7 @@ export class DefaultAgentController implements AgentController {
 					contextSnapshot: {},
 					inputSnapshot: original.inputSnapshot,
 					retryOfRunId: original.id,
-					definitionVersion: 1,
+					definitionVersion: 2,
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
@@ -283,18 +283,28 @@ export class DefaultAgentController implements AgentController {
 	}
 
 	private freezeInput(input: SubmitAgentRunInput): RunAgentInput {
+		const contextProjectId =
+			input.appContext?.currentProject?.id ?? input.appContext?.activeResource?.projectId;
+		const contextNoteId =
+			input.appContext?.workbench?.focusedNoteId ??
+			(input.appContext?.activeResource?.kind === 'note'
+				? (input.appContext.activeResource.id as import('$lib/models').NoteId)
+				: undefined);
 		return {
 			requestId: input.requestId,
 			prompt: input.input,
 			...(input.conversationId ? { conversationId: input.conversationId } : {}),
-			...(input.projectId ? { projectId: input.projectId } : {}),
-			...(input.noteId ? { noteId: input.noteId } : {}),
+			...((contextProjectId ?? input.projectId)
+				? { projectId: contextProjectId ?? input.projectId }
+				: {}),
+			...((contextNoteId ?? input.noteId) ? { noteId: contextNoteId ?? input.noteId } : {}),
 			...(input.selection ? { selection: input.selection } : {}),
 			...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
 			...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
 			...(input.requestedSkillNoteIds
 				? { requestedSkillNoteIds: input.requestedSkillNoteIds }
 				: {}),
+			...(input.appContext ? { appContext: structuredClone(input.appContext) } : {}),
 			...(input.model !== undefined ? { modelOverride: input.model } : {}),
 			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {})
 		};

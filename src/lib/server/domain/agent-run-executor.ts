@@ -138,7 +138,7 @@ export class AgentRunExecutor {
 			const context = await this.deps.contextBuilder.build(
 				actor,
 				run.inputSnapshot as unknown as RunAgentInput,
-				{ provenanceId: run.provenanceId! }
+				{ provenanceId: run.provenanceId!, conversationId: run.conversationId }
 			);
 			run = { ...run, contextSnapshot: context };
 			await this.deps.runs.update(actor, run);

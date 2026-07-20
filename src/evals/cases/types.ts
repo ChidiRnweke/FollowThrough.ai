@@ -64,5 +64,7 @@ export const ARCHETYPES = {
 	/** Does the agent dispatch selection-scoped tools when a selection is present? */
 	selectionHandling: 'selection_handling',
 	/** Can the agent decompose vague, multi-intent user speech into a reasonable tool plan? */
-	intentInterpretation: 'intent_interpretation'
+	intentInterpretation: 'intent_interpretation',
+	/** Does the agent pass the correct object ID when multiple plausible targets exist? */
+	targetCorrectness: 'target_correctness'
 } as const;

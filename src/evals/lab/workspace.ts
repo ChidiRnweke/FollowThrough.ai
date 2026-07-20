@@ -85,6 +85,8 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 				.notes()
 				.create(actor, { projectId: project.id, title: seedNote.title });
 			noteIds.set(seedNote.title, note.id);
+			// Composite key for disambiguation when multiple projects share a note title.
+			noteIds.set(`${seedNote.title}|${seedProject.name}`, note.id);
 			// Saving is what indexes the body; creation only establishes the title.
 			await lab.controllers.notes().save(actor, {
 				note: {
@@ -133,6 +135,10 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 			responsibility: 'mine'
 		});
 		todoIds.set(seedTodo.title, todo.id);
+		// Composite key for disambiguation when multiple projects share a todo title.
+		if (seedTodo.projectName) {
+			todoIds.set(`${seedTodo.title}|${seedTodo.projectName}`, todo.id);
+		}
 	}
 
 	return { actor, projectIds, noteIds, skillIds, todoIds };
