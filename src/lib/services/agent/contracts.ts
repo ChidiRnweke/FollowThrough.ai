@@ -9,6 +9,8 @@ import type {
 	ExtractPromisesOutput,
 	FindReferencesOutput,
 	GenerateMermaidDiagramOutput,
+	InlineContextBrief,
+	InlineSuggestionRequest,
 	Message,
 	ProvenanceId,
 	RelateSelectionOutput,
@@ -45,6 +47,54 @@ export interface AgentRunner {
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate>;
+}
+
+/**
+ * Tier two of inline suggestions: the tool-calling pass that gathers workspace
+ * grounding. It runs off the typing path, so it may take seconds.
+ */
+export interface InlineContextBriefer {
+	brief(
+		actor: ActorContext,
+		request: InlineSuggestionRequest,
+		signal: AbortSignal
+	): Promise<InlineContextBrief>;
+}
+
+/**
+ * Tier one: the hot path. No tools, no persistence — just the caret window and
+ * whatever brief is already warm.
+ */
+export interface InlineCompletionGenerator {
+	complete(
+		request: InlineSuggestionRequest,
+		brief: InlineContextBrief | undefined,
+		signal: AbortSignal
+	): Promise<string>;
+}
+
+export interface InlineBriefCache {
+	get(key: string): InlineContextBrief | undefined;
+	set(key: string, brief: InlineContextBrief): void;
+}
+
+export interface InlineBriefKeyBuilder {
+	(input: {
+		readonly userId: string;
+		readonly noteId: string;
+		readonly revision: number;
+		readonly heading?: string;
+	}): string;
+}
+
+/**
+ * Ghost text fires on every typing pause, so an abandoned request must never
+ * queue behind another. `admit` refuses a second concurrent request for one
+ * user and anything past the per-minute budget.
+ */
+export interface InlineSuggestionThrottle {
+	admit(userId: string): boolean;
+	release(userId: string): void;
 }
 
 export interface AgentToolExecutor {

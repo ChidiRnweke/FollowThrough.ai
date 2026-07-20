@@ -201,6 +201,37 @@ export interface RunAgentInput {
 	readonly prompt: string;
 	readonly appContext?: import('./app-context').AppContextSnapshotV1;
 }
+/**
+ * One request for proactive ghost text at the caret. The window around the
+ * caret is plain text: the editor serialises the document, so the model never
+ * sees ProseMirror JSON on this path.
+ */
+export interface InlineSuggestionRequest {
+	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly revision: number;
+	readonly prefix: string;
+	readonly suffix: string;
+	readonly heading?: string;
+}
+
+/**
+ * Grounding assembled by the background briefing agent and reused across many
+ * keystrokes. Kept small on purpose: it rides in every completion prompt.
+ */
+export interface InlineContextBrief {
+	readonly voice: string;
+	readonly facts: readonly string[];
+	readonly openThreads: readonly string[];
+	readonly avoid: readonly string[];
+}
+
+/** An empty `text` means the model had nothing worth suggesting. */
+export interface InlineSuggestion {
+	readonly text: string;
+	readonly grounded: boolean;
+}
+
 export interface SubmitAgentRunInput {
 	readonly requestId: string;
 	readonly conversationId?: ConversationId;

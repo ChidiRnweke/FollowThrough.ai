@@ -8,7 +8,8 @@
 		NoteView,
 		ShellContext,
 		SuggestionId,
-		TextSelection
+		TextSelection,
+		VersionedNote
 	} from '$lib/models';
 	import { noteEtag } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
@@ -145,7 +146,8 @@
 			dirty ||
 			reconciling ||
 			noteSync.status !== 'synced' ||
-			view.note.currentRevision <= note.currentRevision
+			view.note.currentRevision < note.currentRevision ||
+			(view.note.currentRevision === note.currentRevision && view.note.updatedAt <= note.updatedAt)
 		)
 			return;
 		reconciling = true;
@@ -523,8 +525,10 @@
 				noteId: note.id,
 				baseEtag: noteEtag(note)
 			});
-			const output = result as { note: typeof note; etag: string };
-			note = { ...output.note };
+			const output = result as VersionedNote;
+			const local = await noteSync.initialize(output);
+			note = { ...local };
+			editorRef?.replaceDocument(local.document);
 			toast.success('Published');
 			await invalidateAll();
 		} catch {
@@ -536,11 +540,17 @@
 
 	async function discardDraft(): Promise<void> {
 		if (note.publishedRevision === 0) return;
+		if (dirty) await save();
+		if (dirty || noteSync.status !== 'synced') {
+			toast.error('Save the note before discarding changes.');
+			return;
+		}
 		try {
 			const result = await discardNoteDraft({ noteId: note.id });
-			const output = result as { note: typeof note; etag: string };
-			note = { ...output.note };
-			editorRef?.replaceDocument(output.note.document);
+			const output = result as VersionedNote;
+			const local = await noteSync.initialize(output);
+			note = { ...local };
+			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Reverted to last published version');
 			await invalidateAll();
@@ -702,6 +712,7 @@
 		<NoteEditor
 			bind:this={editorRef}
 			noteId={note.id}
+			projectId={note.projectId}
 			revision={note.currentRevision}
 			document={note.document}
 			references={view.references}

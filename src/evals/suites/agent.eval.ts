@@ -19,6 +19,7 @@ import { stoppingCases } from '../cases/stopping';
 import { intentInterpretationCases } from '../cases/intent-interpretation';
 import { correctnessCases } from '../cases/correctness';
 import { multiTurnCorrectnessCases } from '../cases/multi-turn-correctness';
+import { inlineSuggestionCases } from '../cases/inline-suggestion';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -46,7 +47,9 @@ const allCases = [
 	// Correctness: right-target assertions for disambiguation.
 	...correctnessCases,
 	// Most expensive: multi-turn cases (2-3 API calls each).
-	...multiTurnCorrectnessCases
+	...multiTurnCorrectnessCases,
+	// Inline suggestions: drive the ghost-text controller directly, no agent turn.
+	...inlineSuggestionCases
 ];
 
 /**

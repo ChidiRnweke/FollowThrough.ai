@@ -654,3 +654,44 @@
 .tiptap .edra-callout-content > p + p {
 	margin-top: 0.5rem;
 }
+
+/* Inline suggestions (proactive ghost text) */
+
+.tiptap .inline-suggestion {
+	color: var(--muted-foreground);
+	opacity: 0.6;
+	/* Ghost text must read as a continuation of the sentence, so it inherits
+	   every type property and differs only in weight of colour. */
+	font: inherit;
+	white-space: pre-wrap;
+	pointer-events: none;
+	user-select: none;
+}
+
+.tiptap .inline-suggestion-hint {
+	display: inline-block;
+	margin-left: 0.4em;
+	padding: 0 0.3em;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	font-family: var(--font-mono);
+	font-size: 0.7em;
+	line-height: 1.4;
+	vertical-align: baseline;
+	opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.tiptap .inline-suggestion {
+		animation: inline-suggestion-fade 120ms ease-out;
+	}
+}
+
+@keyframes inline-suggestion-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 0.6;
+	}
+}

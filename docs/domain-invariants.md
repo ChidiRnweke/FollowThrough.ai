@@ -151,3 +151,21 @@ This document is the independent behavioural specification for backend models, s
 - Full selected text remains in frozen run input for tools; model-facing application context is capped and dirty pane excerpts are never treated as authoritative saved content.
 - Application context is system-instruction data only. It is never appended to user prompts, persisted messages, SDK session items, SSE text events, or rendered chat output.
 - Crossing into a different project without explicit compare/merge or prior consent produces a text-only clarification before project-scoped tools or actions.
+
+## Inline suggestions
+
+- An inline suggestion never mutates a note, creates an agent run, records provenance, or writes a
+  conversation message. Accepting one produces an ordinary note edit through the normal save path.
+- The inline briefing pass performs only read retrieval — project-scoped knowledge search, project
+  memory, and user memory; it never proposes, mutates, or dispatches an arbitrary tool.
+- A cached context brief is scoped to one user, note, content revision, and section (nearest
+  heading). It is never read across any of those boundaries, and is reused across the whole section
+  rather than rebuilt per keystroke.
+- The inline briefing search is restricted to the note's own project.
+- A completion never repeats text immediately preceding the caret, and yields at most two sentences.
+- A suggestion request that is superseded, refused by the spend budget, or fails is abandoned
+  silently: the writer sees no ghost text and no error.
+- A cold process or an unavailable briefing pass degrades to ungrounded ghost text rather than to no
+  ghost text.
+- Ghost text is offered only at a resting caret in ordinary prose: never across a selection, never
+  mid-word, and never inside code, diagram, math, or table content.

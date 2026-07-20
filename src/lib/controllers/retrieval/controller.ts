@@ -1,10 +1,12 @@
-import type { ActorContext, ConversationId, Message, NoteId } from '$lib/models';
+import type { ActorContext, ConversationId, Message, NoteId, ProjectId } from '$lib/models';
 import type { Condenser, ConversationJournal, KnowledgeSearcher } from '$lib/services';
 
 export interface SearchKnowledgeInput {
 	readonly query: string;
 	readonly conversationId?: ConversationId;
 	readonly limit?: number;
+	/** When set, restricts results to notes and facts in this project. */
+	readonly projectId?: ProjectId;
 }
 
 export interface KnowledgeSearchResult {
@@ -45,7 +47,12 @@ export class DefaultRetrievalController implements RetrievalController {
 	): Promise<readonly KnowledgeSearchResult[]> {
 		const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
 		const query = await this.resolveQuery(actor, input);
-		const matches = await this.dependencies.knowledgeSearcher.search(actor, query, limit);
+		const matches = await this.dependencies.knowledgeSearcher.search(
+			actor,
+			query,
+			limit,
+			input.projectId
+		);
 		return matches.map((match) => ({
 			noteId: match.document.noteId,
 			content: match.document.content.slice(0, CONTENT_EXCERPT_LIMIT),

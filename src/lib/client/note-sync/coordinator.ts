@@ -1,5 +1,5 @@
 import type { DateTime, Note, NoteId, NoteSyncRecord, UserId, VersionedNote } from '$lib/models';
-import { noteEtag, noteSyncContentEquals } from '$lib/models';
+import { noteEtag, noteMatchesEtag, noteSyncContentEquals } from '$lib/models';
 import type { NoteSyncRepository, NoteSyncTransport } from './contracts';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
@@ -20,7 +20,8 @@ export class NoteSyncCoordinator {
 			});
 
 		if (existing.state === 'synced') {
-			if (existing.base.etag === server.etag) return existing;
+			if (existing.base.etag === server.etag)
+				return this.store(this.syncedRecord(server, existing.editVersion));
 			return this.store(this.syncedRecord(server));
 		}
 
@@ -55,6 +56,21 @@ export class NoteSyncCoordinator {
 	async flush(userId: UserId, noteId: NoteId): Promise<NoteSyncRecord | undefined> {
 		const pending = await this.repository.get(userId, noteId);
 		if (!pending || (pending.state !== 'pending' && pending.state !== 'syncing')) return pending;
+		if (!noteMatchesEtag(pending.local, pending.base.etag)) {
+			try {
+				const authoritative = await this.transport.getVersion(noteId);
+				if (noteSyncContentEquals(pending.local, authoritative.note))
+					return this.store(this.syncedRecord(authoritative, pending.editVersion));
+				return this.store({
+					...pending,
+					state: 'conflict',
+					remote: authoritative,
+					updatedAt: now()
+				});
+			} catch {
+				return this.store({ ...pending, state: 'pending', updatedAt: now() });
+			}
+		}
 		const sent = await this.store({ ...pending, state: 'syncing', updatedAt: now() });
 		try {
 			const output = await this.transport.sync({

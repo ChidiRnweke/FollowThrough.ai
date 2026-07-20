@@ -4,6 +4,7 @@ import {
 	DefaultAttachmentsController,
 	DefaultDeliverablesController,
 	DefaultDiagramsController,
+	DefaultInlineSuggestionsController,
 	DefaultMemoryController,
 	DefaultNotesController,
 	DefaultProjectsController,
@@ -20,6 +21,7 @@ import {
 	type AttachmentsDependencies,
 	type DeliverablesDependencies,
 	type DiagramsDependencies,
+	type InlineSuggestionsDependencies,
 	type MemoryDependencies,
 	type NotesDependencies,
 	type ProjectsDependencies,
@@ -51,6 +53,7 @@ export interface ProductionControllerDependencies {
 	trustPolicies: TrustPoliciesDependencies;
 	memory: MemoryDependencies;
 	retrieval: RetrievalDependencies;
+	inlineSuggestions: InlineSuggestionsDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
@@ -102,5 +105,8 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	retrieval() {
 		return new DefaultRetrievalController(this.dependencies.retrieval);
+	}
+	inlineSuggestions() {
+		return new DefaultInlineSuggestionsController(this.dependencies.inlineSuggestions);
 	}
 }

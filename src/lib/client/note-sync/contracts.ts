@@ -1,4 +1,11 @@
-import type { NoteId, NoteSyncRecord, SyncNoteInput, SyncNoteOutput, UserId } from '$lib/models';
+import type {
+	NoteId,
+	NoteSyncRecord,
+	SyncNoteInput,
+	SyncNoteOutput,
+	UserId,
+	VersionedNote
+} from '$lib/models';
 
 export interface NoteSyncRepository {
 	get(userId: UserId, noteId: NoteId): Promise<NoteSyncRecord | undefined>;
@@ -8,5 +15,6 @@ export interface NoteSyncRepository {
 }
 
 export interface NoteSyncTransport {
+	getVersion(noteId: NoteId): Promise<VersionedNote>;
 	sync(input: SyncNoteInput): Promise<SyncNoteOutput>;
 }

@@ -4,6 +4,7 @@ import type {
 	AttachmentsController,
 	DeliverablesController,
 	DiagramsController,
+	InlineSuggestionsController,
 	MemoryController,
 	NotesController,
 	ProjectsController,
@@ -34,4 +35,5 @@ export interface ControllerFactory {
 	trustPolicies(): TrustPoliciesController;
 	memory(): MemoryController;
 	retrieval(): RetrievalController;
+	inlineSuggestions(): InlineSuggestionsController;
 }

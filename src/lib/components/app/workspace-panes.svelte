@@ -30,9 +30,6 @@
 
 	let root: HTMLElement | null = $state(null);
 	let narrowPaneId = $state<NoteId | undefined>(untrack(() => focusedNoteId));
-	let consumedFocusedInitial: NoteId | undefined = $state(
-		untrack(() => (focusedInitialView ? focusedInitialView.note.id : undefined))
-	);
 
 	$effect(() => {
 		root?.style.setProperty('--workspace-secondary-ratio', String(splitRatio));
@@ -40,9 +37,6 @@
 	});
 
 	$effect(() => {
-		if (consumedFocusedInitial && !openTabs.includes(consumedFocusedInitial)) {
-			consumedFocusedInitial = undefined;
-		}
 		if (narrowPaneId !== focusedNoteId && narrowPaneId !== splitNoteId) {
 			narrowPaneId = focusedNoteId;
 		}
@@ -168,7 +162,7 @@
 						<WorkspacePane
 							{noteId}
 							{shell}
-							initialView={noteId === consumedFocusedInitial ? focusedInitialView : undefined}
+							initialView={noteId === focusedInitialView?.note.id ? focusedInitialView : undefined}
 							onCloseSplit={isSplit ? closeSplit : undefined}
 						/>
 					</div>

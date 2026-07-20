@@ -421,13 +421,14 @@ export class AgentToolRegistry {
 		return [
 			define(
 				'search',
-				"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps.",
+				"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps. Pass projectId to restrict results to one project.",
 				'read',
-				z.object({ query: z.string().min(1) }),
+				z.object({ query: z.string().min(1), projectId: id.optional() }),
 				(input) =>
 					factory.retrieval().search(actor, {
 						query: input.query,
-						...(conversationId ? { conversationId } : {})
+						...(conversationId ? { conversationId } : {}),
+						...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
 					})
 			),
 			define(

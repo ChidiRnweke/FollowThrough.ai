@@ -6,6 +6,7 @@
 		DiagramSuggestion,
 		DrawioDiagram,
 		NoteId,
+		ProjectId,
 		ProseMirrorDocument,
 		ReferenceView,
 		SkillSummary,
@@ -13,6 +14,7 @@
 		TextSelection
 	} from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
+	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
@@ -69,6 +71,7 @@
 
 	let {
 		noteId,
+		projectId,
 		revision,
 		document,
 		references = [],
@@ -84,6 +87,7 @@
 		diagrams = []
 	}: {
 		noteId: NoteId;
+		projectId: ProjectId;
 		revision: number;
 		document: ProseMirrorDocument;
 		references?: readonly ReferenceView[];
@@ -135,6 +139,29 @@
 		};
 		wait(frames);
 	}
+	/**
+	 * Fetches proactive ghost text. Failures — including the abort the extension
+	 * issues on the next keystroke — resolve to no suggestion rather than
+	 * surfacing: an autocomplete that cannot answer should stay quiet.
+	 */
+	async function requestInlineSuggestion(
+		input: InlineSuggestionRequestInput,
+		signal: AbortSignal
+	): Promise<{ readonly text: string }> {
+		try {
+			const response = await fetch('/api/inline-suggestions', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ noteId, projectId, revision, ...input }),
+				signal
+			});
+			if (!response.ok) return { text: '' };
+			return (await response.json()) as { readonly text: string };
+		} catch {
+			return { text: '' };
+		}
+	}
+
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
@@ -156,6 +183,7 @@
 				return candidate?.kind === 'drawio' ? candidate : undefined;
 			},
 			getNoteId: () => noteId,
+			getInlineSuggestion: requestInlineSuggestion,
 			onUpdate: () => {
 				closeActiveLink();
 				if (initialized) onchange?.();

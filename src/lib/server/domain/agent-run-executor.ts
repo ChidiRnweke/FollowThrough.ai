@@ -38,10 +38,6 @@ export interface AgentRunExecutorDependencies {
 	readonly eventBus: AgentEventBus;
 }
 
-const passthroughToolExecutor: AgentToolExecutor = {
-	execute: (_input, action) => action()
-};
-
 export class AgentRunExecutor {
 	constructor(private readonly deps: AgentRunExecutorDependencies) {}
 
@@ -51,6 +47,15 @@ export class AgentRunExecutor {
 		const actor: ActorContext = { userId: run.userId };
 		const request = run.inputSnapshot as unknown as RunAgentInput;
 		const decision = await this.deps.decisions.loadUnconsumed(run.id);
+		const successfulMutations = new Map<string, string>();
+		const toolExecutor: AgentToolExecutor = {
+			execute: async (input, action) => {
+				const output = await action();
+				if (input.classification === 'mutation')
+					successfulMutations.set(input.callId, input.toolName);
+				return output;
+			}
+		};
 		let lastEvent: AgentRunEventRecord | undefined;
 		try {
 			for await (const update of this.deps.runner.execute({
@@ -60,10 +65,20 @@ export class AgentRunExecutor {
 				context: run.contextSnapshot ?? {},
 				...(decision ? { decision } : {}),
 				signal,
-				toolExecutor: passthroughToolExecutor
+				toolExecutor
 			})) {
 				if (update.type === 'event') {
 					lastEvent = await this.persistEvent(run, actor, update.event);
+					if (update.event.type === 'tool_completed' && !update.event.failure) {
+						const resource = successfulMutations.get(update.event.callId);
+						if (resource) {
+							successfulMutations.delete(update.event.callId);
+							lastEvent = await this.persistEvent(run, actor, {
+								type: 'resources_stale',
+								resources: [resource]
+							});
+						}
+					}
 					continue;
 				}
 				if (update.type === 'approval_checkpoint') {

@@ -83,6 +83,41 @@ describe('Local note synchronization invariants', () => {
 		expect(result?.state).toBe('pending');
 	});
 
+	it('never sends a poisoned local revision and base ETag pair', async () => {
+		const { coordinator, repository, transport } = setup();
+		const pending = pendingRecord();
+		const poisoned = {
+			...pending,
+			local: { ...pending.local, currentRevision: pending.local.currentRevision + 1 }
+		};
+		await repository.put(poisoned);
+		transport.version = { note: pending.base.note, etag: pending.base.etag };
+		const result = await coordinator.flush(pending.userId, pending.noteId);
+		expect(result?.state).toBe('conflict');
+	});
+
+	it('converges a poisoned record when its content already matches the server', async () => {
+		const { coordinator, repository, transport } = setup();
+		const pending = pendingRecord();
+		const authoritative = {
+			...pending.local,
+			currentRevision: pending.local.currentRevision + 1
+		};
+		await repository.put({ ...pending, local: authoritative });
+		transport.version = { note: authoritative, etag: noteEtag(authoritative) };
+		const result = await coordinator.flush(pending.userId, pending.noteId);
+		expect(result?.state).toBe('synced');
+	});
+
+	it('adopts same-revision server metadata when reopening a synced note', async () => {
+		const { coordinator } = setup();
+		const original = noteBuilder({ position: 0 });
+		await coordinator.open({ note: original, etag: noteEtag(original) });
+		const moved = { ...original, position: 4 };
+		const result = await coordinator.open({ note: moved, etag: noteEtag(moved) });
+		expect(result.local.position).toBe(4);
+	});
+
 	it('detects divergence when reopening a pending device copy', async () => {
 		const { coordinator, repository } = setup();
 		const pending = pendingRecord();

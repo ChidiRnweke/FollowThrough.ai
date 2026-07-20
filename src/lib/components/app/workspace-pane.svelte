@@ -33,6 +33,51 @@
 	let view = $state<NoteView | undefined>(untrack(() => initialView));
 	let loadingError = $state<string | undefined>(undefined);
 	let releaseContext: (() => void) | undefined;
+	let requestedVersion = $state('');
+
+	function isNewer(candidate: NoteView, current: NoteView | undefined): boolean {
+		return (
+			!current ||
+			candidate.note.currentRevision > current.note.currentRevision ||
+			candidate.note.updatedAt > current.note.updatedAt
+		);
+	}
+
+	async function refreshView(version: string): Promise<void> {
+		if (requestedVersion === version) return;
+		requestedVersion = version;
+		try {
+			const loaded = (await getNoteView(noteId)) as NoteView;
+			if (isNewer(loaded, view)) view = loaded;
+			loadingError = undefined;
+		} catch (error) {
+			loadingError = error instanceof Error ? error.message : 'Note could not be loaded.';
+		}
+	}
+
+	$effect(() => {
+		const incoming = initialView;
+		if (
+			incoming?.note.id === noteId &&
+			isNewer(
+				incoming,
+				untrack(() => view)
+			)
+		)
+			view = incoming;
+	});
+
+	$effect(() => {
+		const summary = shell.noteTree.find((entry) => entry.id === noteId);
+		if (!summary) return;
+		const current = untrack(() => view);
+		if (
+			!current ||
+			summary.currentRevision > current.note.currentRevision ||
+			summary.updatedAt > current.note.updatedAt
+		)
+			void refreshView(`${summary.currentRevision}:${summary.updatedAt}`);
+	});
 
 	onMount(() => {
 		releaseContext = appContext.registerPane(noteId, () => {
@@ -52,20 +97,7 @@
 				...(dirty ? { dirtyExcerpt: note.plainText.slice(0, 4000) } : {})
 			};
 		});
-		if (view) return;
-		let cancelled = false;
-		void getNoteView(noteId)
-			.then((loaded) => {
-				if (cancelled) return;
-				view = loaded as NoteView;
-			})
-			.catch((error) => {
-				if (cancelled) return;
-				loadingError = error instanceof Error ? error.message : 'Note could not be loaded.';
-			});
-		return () => {
-			cancelled = true;
-		};
+		if (!view) void refreshView('initial');
 	});
 
 	onDestroy(() => {

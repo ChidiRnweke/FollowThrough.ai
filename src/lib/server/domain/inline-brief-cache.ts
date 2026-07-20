@@ -1,0 +1,127 @@
+import type { InlineContextBrief } from '$lib/models';
+import type { InlineBriefCache, InlineSuggestionThrottle } from '$lib/services';
+
+/**
+ * Process-local cache for inline context briefs. Briefs are cheap to rebuild
+ * and worthless once the passage moves on, so they never reach the database:
+ * a cold process simply produces ungrounded ghost text until the first brief
+ * lands.
+ */
+
+const DEFAULT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_MAX_ENTRIES = 500;
+
+interface Entry {
+	readonly brief: InlineContextBrief;
+	readonly expiresAt: number;
+}
+
+export interface InlineBriefCacheOptions {
+	readonly ttlMs?: number;
+	readonly maxEntries?: number;
+	readonly now?: () => number;
+}
+
+export class MemoryInlineBriefCache implements InlineBriefCache {
+	private readonly entries = new Map<string, Entry>();
+	private readonly ttlMs: number;
+	private readonly maxEntries: number;
+	private readonly now: () => number;
+
+	constructor(options: InlineBriefCacheOptions = {}) {
+		this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+		this.maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+		this.now = options.now ?? Date.now;
+	}
+
+	get(key: string): InlineContextBrief | undefined {
+		const entry = this.entries.get(key);
+		if (!entry) return undefined;
+		if (entry.expiresAt <= this.now()) {
+			this.entries.delete(key);
+			return undefined;
+		}
+		// Re-insert so iteration order tracks recency for eviction.
+		this.entries.delete(key);
+		this.entries.set(key, entry);
+		return entry.brief;
+	}
+
+	set(key: string, brief: InlineContextBrief): void {
+		this.entries.delete(key);
+		this.entries.set(key, { brief, expiresAt: this.now() + this.ttlMs });
+		while (this.entries.size > this.maxEntries) {
+			const oldest = this.entries.keys().next().value;
+			if (oldest === undefined) break;
+			this.entries.delete(oldest);
+		}
+	}
+}
+
+const DEFAULT_REQUESTS_PER_MINUTE = 40;
+const MINUTE_MS = 60_000;
+
+export interface InlineSuggestionThrottleOptions {
+	readonly requestsPerMinute?: number;
+	readonly now?: () => number;
+}
+
+/**
+ * Process-local spend guard. Ghost text is fired by a timer rather than by a
+ * deliberate user action, so the budget lives on the server and is not
+ * something a runaway client can talk its way past.
+ */
+export class MemoryInlineSuggestionThrottle implements InlineSuggestionThrottle {
+	private readonly inFlight = new Set<string>();
+	private readonly recent = new Map<string, number[]>();
+	private readonly limit: number;
+	private readonly now: () => number;
+
+	constructor(options: InlineSuggestionThrottleOptions = {}) {
+		this.limit = options.requestsPerMinute ?? DEFAULT_REQUESTS_PER_MINUTE;
+		this.now = options.now ?? Date.now;
+	}
+
+	admit(userId: string): boolean {
+		if (this.inFlight.has(userId)) return false;
+		const now = this.now();
+		const window = (this.recent.get(userId) ?? []).filter(
+			(timestamp) => now - timestamp < MINUTE_MS
+		);
+		if (window.length >= this.limit) {
+			this.recent.set(userId, window);
+			return false;
+		}
+		this.recent.set(userId, [...window, now]);
+		this.inFlight.add(userId);
+		return true;
+	}
+
+	release(userId: string): void {
+		this.inFlight.delete(userId);
+	}
+}
+
+/**
+ * Cache identity for one caret position. The revision and the tail of the
+ * passage are both in the key, so a brief never outlives the text it describes
+ * and never crosses users or notes.
+ */
+export const inlineBriefKey = (input: {
+	readonly userId: string;
+	readonly noteId: string;
+	readonly revision: number;
+	readonly heading?: string;
+}): string => {
+	// Keyed at section altitude, not per keystroke. The passage tail changes on
+	// every character; keying on it meant the background brief was cached against
+	// text that no longer existed by the next lookup, so grounding almost never
+	// landed. One brief per section is reused across the whole section instead.
+	const section = input.heading ?? '';
+	let hash = 2166136261;
+	for (let index = 0; index < section.length; index++) {
+		hash ^= section.charCodeAt(index);
+		hash = Math.imul(hash, 16777619);
+	}
+	return `${input.userId}:${input.noteId}:${input.revision}:${(hash >>> 0).toString(36)}`;
+};

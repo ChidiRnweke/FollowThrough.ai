@@ -46,6 +46,13 @@ import { OpenAIAgentRunner } from './domain/openai-agent-capabilities';
 import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
 import { OpenAIEmbeddingClient } from './domain/openai-embedding-capabilities';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
+import { FlashInlineCompletionGenerator } from './domain/inline-completion-generator';
+import { AgentInlineContextBriefer } from './domain/inline-context-briefer';
+import {
+	inlineBriefKey,
+	MemoryInlineBriefCache,
+	MemoryInlineSuggestionThrottle
+} from './domain/inline-brief-cache';
 import { OpenRouterReranker } from './domain/openrouter-rerank-capabilities';
 import { ConversationCondenser } from './domain/conversation-condenser';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
@@ -507,6 +514,21 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			knowledgeSearcher,
 			condenser,
 			conversations: conversationJournal
+		},
+		inlineSuggestions: {
+			inlineCompletionGenerator: new FlashInlineCompletionGenerator(openRouterApiKey, {
+				baseURL: openRouterBaseURL,
+				appURL
+			}),
+			inlineContextBriefer: new AgentInlineContextBriefer(() => {
+				if (!controllerFactory) throw new Error('Controller factory is not initialized');
+				return controllerFactory;
+			}, { apiKey: openRouterApiKey, baseURL: openRouterBaseURL, appURL }),
+			// One cache and one throttle for the whole process: controllers are
+			// constructed per call, so this state cannot live on the controller.
+			inlineBriefCache: new MemoryInlineBriefCache(),
+			inlineSuggestionThrottle: new MemoryInlineSuggestionThrottle(),
+			inlineBriefKey
 		}
 	};
 	controllerFactory = new ProductionControllerFactory(dependencies);

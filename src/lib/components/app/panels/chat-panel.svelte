@@ -11,7 +11,6 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import * as Card from '$lib/components/ui/card';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -37,6 +36,8 @@
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
+	import ToolApprovalCard from '$lib/components/app/agent/tool-approval-card.svelte';
+	import { toolStatusLabel } from '$lib/components/app/agent/tool-presentation';
 
 	let {
 		shell,
@@ -331,29 +332,11 @@
 						{:else}
 							{@const tool = part.tool}
 							{#if tool.status === 'approval_required'}
-								<Card.Root>
-									<Card.Header>
-										<Card.Title class="text-sm">Approve {tool.name}?</Card.Title>
-										<Card.Description>This action changes saved workspace data.</Card.Description>
-									</Card.Header>
-									<Card.Content>
-										<pre class="max-h-40 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(
-												tool.arguments,
-												null,
-												2
-											)}</pre>
-									</Card.Content>
-									<Card.Footer class="gap-2">
-										<Button size="sm" onclick={() => void chat.decide(entry, tool, 'approve')}
-											>Approve</Button
-										>
-										<Button
-											size="sm"
-											variant="outline"
-											onclick={() => void chat.decide(entry, tool, 'reject')}>Reject</Button
-										>
-									</Card.Footer>
-								</Card.Root>
+								<ToolApprovalCard
+									{tool}
+									onapprove={() => void chat.decide(entry, tool, 'approve')}
+									onreject={() => void chat.decide(entry, tool, 'reject')}
+								/>
 							{:else}
 								<Collapsible.Root>
 									<Collapsible.Trigger>
@@ -370,13 +353,13 @@
 												{#if tool.status === 'running'}
 													<LoaderCircle class="size-3.5 animate-spin" />
 												{/if}
-												{tool.name} · {tool.status}
+												{toolStatusLabel(tool)}
 											</Button>
 										{/snippet}
 									</Collapsible.Trigger>
 									<Collapsible.Content>
 										<p class="pl-6 text-xs text-muted-foreground">
-											Tool {tool.name} · {tool.status === 'running' ? 'running' : 'completed'}
+											{tool.failure ?? toolStatusLabel(tool)}
 										</p>
 									</Collapsible.Content>
 								</Collapsible.Root>
@@ -392,8 +375,6 @@
 							label="Agent is working"
 							toolActive={entry.parts.some((part) => part.kind === 'tool')}
 						/>
-					{:else if entry.role === 'assistant' && entry.status === 'awaiting_approval'}
-						<p class="text-xs text-muted-foreground" role="status">Waiting for your approval.</p>
 					{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
 						<ChatActivity label="Cancellation requested" />
 					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}

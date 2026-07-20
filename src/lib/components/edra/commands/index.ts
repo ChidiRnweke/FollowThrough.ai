@@ -9,6 +9,8 @@ export * from './ColorHighlighter.js';
 export * from './CoreEditor.js';
 export * from './DiagramDeletion.js';
 export * from './ImageExtended.js';
+export * from './InlineSuggestion.js';
+export * from './inline-suggestion-trigger.js';
 export * from './MediaPlaceHolder.js';
 export * from './SvelteMarkViewRenderer.js';
 export * from './SvelteNodeViewRenderer.js';

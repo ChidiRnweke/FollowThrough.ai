@@ -28,6 +28,7 @@ import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
 import { setTocItems } from '../toc.svelte';
 import { DiagramDeletion } from './DiagramDeletion.js';
+import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
 
 const lowlight = createLowlight(all);
 
@@ -54,6 +55,14 @@ export interface EdraEditorProps {
 	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
 	getDrawioDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
 	getNoteId?: () => string;
+	/**
+	 * Proactive ghost text at the caret. Injected so the editor stays unaware of
+	 * transports; omitting it disables inline suggestions entirely.
+	 */
+	getInlineSuggestion?: (
+		input: InlineSuggestionRequestInput,
+		signal: AbortSignal
+	) => Promise<{ readonly text: string }>;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
@@ -88,6 +97,10 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			DiagramDeletion,
 			SlashCommand(SlashCommandComp),
 			Callout(CalloutComp),
+			InlineSuggestion.configure({
+				...(props?.getInlineSuggestion ? { fetchSuggestion: props.getInlineSuggestion } : {}),
+				idleDelayMs: 500
+			}),
 			AIHighlight.configure({
 				callAI: props?.callAI || null
 			}),

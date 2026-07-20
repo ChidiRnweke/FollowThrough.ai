@@ -10,7 +10,14 @@ import {
 	DiagramDeletion,
 	deleteDiagramBackward
 } from '$lib/components/edra/commands/DiagramDeletion';
-import type { DateTime, DiagramId, NoteId, ProseMirrorDocument, UserId } from '$lib/models';
+import type {
+	DateTime,
+	DiagramId,
+	NoteId,
+	ProjectId,
+	ProseMirrorDocument,
+	UserId
+} from '$lib/models';
 
 const MermaidNode = Node.create({
 	name: 'mermaid',
@@ -251,6 +258,7 @@ describe('Note editor keyboard integration', () => {
 			}) as ProseMirrorDocument;
 			const screen = render(NoteEditor, {
 				noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+				projectId: '00000000-0000-4000-8000-000000000003' as ProjectId,
 				revision: 1,
 				document: initialDocument,
 				onchange: () => {
