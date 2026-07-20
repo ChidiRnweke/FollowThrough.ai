@@ -30,7 +30,7 @@ const workbenchState = {
 	pinnedTabs: [] as NoteId[],
 	recentlyUsed: [] as NoteId[],
 	stripHidden: false,
-	isPinned: (_noteId: NoteId) => false,
+	isPinned: () => false,
 	focusTab: vi.fn(),
 	closeTab: vi.fn(),
 	toggleStripHidden: vi.fn()
@@ -193,7 +193,35 @@ describe('WorkspaceTabs', () => {
 		expect(ontoggleHidden).toHaveBeenCalledOnce();
 	});
 
-	it('collapses to a 4px rail when hidden and reveals only the show chevron', async () => {
+	it('uses the panel height transition tokens while expanded', async () => {
+		const screen = await render(WorkspaceTabs, { shell });
+		const strip = screen.getByRole('tablist', { name: 'Open notes' }).element();
+		expect(strip.className).toContain(
+			'transition-[height] duration-(--duration-panel) ease-(--ease-standard)'
+		);
+	});
+
+	it('uses the 36px expanded height endpoint', async () => {
+		const screen = await render(WorkspaceTabs, { shell });
+		const strip = screen.getByRole('tablist', { name: 'Open notes' }).element();
+		expect(strip.className).toContain('h-9');
+	});
+
+	it('uses the panel height transition tokens while collapsed', async () => {
+		const screen = await render(WorkspaceTabs, { shell, hidden: true });
+		const strip = screen.getByRole('tablist', { name: 'Open notes' }).element();
+		expect(strip.className).toContain(
+			'transition-[height] duration-(--duration-panel) ease-(--ease-standard)'
+		);
+	});
+
+	it('uses the 24px collapsed height endpoint', async () => {
+		const screen = await render(WorkspaceTabs, { shell, hidden: true });
+		const strip = screen.getByRole('tablist', { name: 'Open notes' }).element();
+		expect(strip.className).toContain('h-6');
+	});
+
+	it('collapses to a 24px strip when hidden and reveals only the show chevron', async () => {
 		useTabs([id(1), id(2), id(3)], id(2));
 		const ontoggleHidden = vi.fn();
 		const screen = await render(WorkspaceTabs, {
@@ -203,7 +231,7 @@ describe('WorkspaceTabs', () => {
 		});
 		const showButton = screen.getByRole('button', { name: 'Show tab strip' });
 		await expect.element(showButton).toBeVisible();
-		// Nothing else is rendered in the hidden rail: no `+`, no tabs,
+		// Nothing else is rendered in the hidden strip: no `+`, no tabs,
 		// no project groups.  `role="tab"` elements must be absent.
 		expect(screen.container.querySelectorAll('[role="tab"]').length).toBe(0);
 		const newNote = screen.container.querySelector('[aria-label="New note"]');
@@ -234,7 +262,7 @@ describe('WorkspaceTabs', () => {
 		}
 	});
 
-	it('writes the dragged tab\'s note id to the dataTransfer on dragstart', async () => {
+	it("writes the dragged tab's note id to the dataTransfer on dragstart", async () => {
 		useTabs([id(1), id(2), id(3)], id(2));
 		const screen = await render(WorkspaceTabs, { shell });
 		const tabs = screen.container.querySelectorAll('[role="tab"]');
