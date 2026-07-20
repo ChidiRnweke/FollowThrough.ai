@@ -836,6 +836,21 @@ export const artifacts = pgTable(
 	]
 );
 
+export const feedbackReports = pgTable(
+	'feedback_reports',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		body: text('body').notNull(),
+		url: text('url').notNull(),
+		appContext: jsonb('app_context').$type<JsonObject>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('feedback_reports_user_created_idx').on(table.userId, table.createdAt)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Note = typeof notes.$inferSelect;

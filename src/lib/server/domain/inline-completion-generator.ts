@@ -5,6 +5,7 @@ import {
 } from './openrouter-client';
 import type { InlineContextBrief, InlineSuggestionRequest } from '$lib/models';
 import type { InlineCompletionGenerator } from '$lib/services';
+import { traceInline } from './telemetry';
 
 /**
  * Tier one of inline suggestions. A single toolless completion on the cheap
@@ -17,19 +18,21 @@ const MAX_COMPLETION_TOKENS = 64;
 /** Two sentences is the most ghost text a writer can evaluate at a glance. */
 const MAX_SENTENCES = 2;
 const MAX_CHARACTERS = 240;
-/** How far back we look for the model simply restating what is already there. */
-const REPETITION_WINDOW = 200;
 const MAX_OVERLAP = 80;
 
 const SYSTEM_PROMPT = `You continue what a writer is typing in a note. You are an autocomplete engine, not an assistant.
 
+Your output is appended verbatim at the caret, so spacing matters:
+- If the text before the caret ends mid-word, finish that word with NO leading space (e.g. "migrat" -> "ion scales").
+- If it ends a complete word with no trailing space and you start a new word, begin with a single leading space.
+- If it already ends with whitespace or punctuation, do not add a leading space.
+
 Rules:
-- Continue directly from the caret. Your output is appended verbatim, so include a leading space when one is needed.
+- Offer a natural continuation: a few words up to two sentences. Prefer offering something over nothing.
+- Only return an empty string when there is genuinely no sensible continuation (e.g. the caret sits right after a finished thought).
 - Never restate, rephrase, or echo the text before the caret.
 - No preamble, no commentary, no quotation marks, no markdown fences, no bullet syntax.
-- At most two sentences. Prefer one.
-- Match the voice described in the context brief and use only facts it supplies. Never invent names, dates, or decisions.
-- If nothing genuinely useful comes next, return an empty string.`;
+- Match the voice described in the context brief and use only facts it supplies. Never invent names, dates, or decisions.`;
 
 const briefSection = (brief: InlineContextBrief | undefined): string => {
 	if (!brief) return '';
@@ -101,13 +104,13 @@ export const sanitizeCompletion = (prefix: string, raw: string): string => {
 	text = stripPrefixOverlap(prefix, text);
 	text = limitSentences(text).slice(0, MAX_CHARACTERS).replace(/\s+$/, '');
 	if (text.trim().length === 0) return '';
-	// Exactly one space joins the caret to the continuation, whichever side
-	// supplied it. Punctuation continuations join tight.
-	text = text.replace(/^\s+/, ' ');
-	if (/\s$/.test(prefix) || /^[.,;:!?)]/.test(text.trimStart())) text = text.replace(/^ +/, '');
-	else if (!text.startsWith(' ')) text = ` ${text}`;
-	const recent = prefix.slice(-REPETITION_WINDOW).toLowerCase();
-	if (recent.includes(text.trim().toLowerCase())) return '';
+	// Trust the model's spacing (the prompt owns it) so a mid-word completion
+	// like "migrat" + "ion" is not broken by an injected space. Only guard the
+	// seam against a double space when the prefix already ends with whitespace.
+	if (/\s$/.test(prefix)) text = text.replace(/^\s+/, '');
+	// Drop only an exact restatement of the text immediately before the caret;
+	// an incidental match elsewhere in the note is a fine continuation.
+	if (prefix.trimEnd().toLowerCase().endsWith(text.trim().toLowerCase())) return '';
 	return text;
 };
 
@@ -129,19 +132,26 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 		brief: InlineContextBrief | undefined,
 		signal: AbortSignal
 	): Promise<string> {
-		const completion = await this.client.chat.completions.create(
-			{
-				model: this.model,
-				max_tokens: MAX_COMPLETION_TOKENS,
-				temperature: 0.2,
-				stop: ['\n\n'],
-				messages: [
-					{ role: 'system', content: SYSTEM_PROMPT },
-					{ role: 'user', content: userPrompt(request, brief) }
-				]
+		return traceInline(
+			'inline.complete',
+			{ sessionId: request.noteId, model: this.model, input: request.prefix.slice(-200) },
+			async () => {
+				const completion = await this.client.chat.completions.create(
+					{
+						model: this.model,
+						max_tokens: MAX_COMPLETION_TOKENS,
+						temperature: 0.2,
+						stop: ['\n\n'],
+						messages: [
+							{ role: 'system', content: SYSTEM_PROMPT },
+							{ role: 'user', content: userPrompt(request, brief) }
+						]
+					},
+					{ signal }
+				);
+				return sanitizeCompletion(request.prefix, completion.choices[0]?.message.content ?? '');
 			},
-			{ signal }
+			(text) => text
 		);
-		return sanitizeCompletion(request.prefix, completion.choices[0]?.message.content ?? '');
 	}
 }

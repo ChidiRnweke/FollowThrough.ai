@@ -10,7 +10,6 @@ const brief = { voice: 'terse', facts: [], openThreads: [], avoid: [] };
 const key = {
 	userId: 'user-1',
 	noteId: 'note-1',
-	revision: 3,
 	heading: 'Migration'
 };
 
@@ -44,11 +43,12 @@ describe('MemoryInlineBriefCache', () => {
 });
 
 describe('inlineBriefKey', () => {
-	it('is stable for the same user, note, revision, and section', () => {
+	it('is stable for the same user, note, and section', () => {
 		expect(inlineBriefKey(key)).toBe(inlineBriefKey({ ...key }));
 	});
 
-	it('reuses one brief across the whole section regardless of the passage tail', () => {
+	it('reuses one brief across revisions of the same section', () => {
+		// Autosave advances the revision as the user types; the brief must survive it.
 		expect(inlineBriefKey({ ...key })).toBe(inlineBriefKey({ ...key }));
 	});
 
@@ -60,11 +60,7 @@ describe('inlineBriefKey', () => {
 		expect(inlineBriefKey({ ...key, noteId: 'note-2' })).not.toBe(inlineBriefKey(key));
 	});
 
-	it('separates two revisions of the same note', () => {
-		expect(inlineBriefKey({ ...key, revision: 4 })).not.toBe(inlineBriefKey(key));
-	});
-
-	it('separates two sections in the same revision', () => {
+	it('separates two sections of the same note', () => {
 		expect(inlineBriefKey({ ...key, heading: 'Rollback' })).not.toBe(inlineBriefKey(key));
 	});
 });

@@ -11,13 +11,15 @@ describe('sanitizeCompletion', () => {
 	});
 
 	it('strips a markdown fence wrapping the continuation', () => {
-		expect(sanitizeCompletion('The migration', '```\nthe cutover window\n```')).toBe(
-			' the cutover window'
+		expect(sanitizeCompletion('The migration', '```\n handles the cutover\n```')).toBe(
+			' handles the cutover'
 		);
 	});
 
 	it('strips quotation marks wrapping the whole continuation', () => {
-		expect(sanitizeCompletion('The migration', '"the cutover window"')).toBe(' the cutover window');
+		expect(sanitizeCompletion('The migration', '" handles the cutover"')).toBe(
+			' handles the cutover'
+		);
 	});
 
 	it('removes a leading repeat of the text before the caret', () => {
@@ -26,21 +28,31 @@ describe('sanitizeCompletion', () => {
 		);
 	});
 
-	it('drops a completion that only restates recent text', () => {
+	it('drops a completion that restates the text immediately before the caret', () => {
 		expect(sanitizeCompletion('The cutover window is short.', 'The cutover window is short.')).toBe(
 			''
 		);
 	});
 
-	it('joins to the caret with a single space when the prefix ends mid-word', () => {
-		expect(sanitizeCompletion('We need', 'more replicas.')).toBe(' more replicas.');
+	it('keeps a continuation that incidentally repeats an earlier word', () => {
+		expect(
+			sanitizeCompletion('The cutover was risky, so we rehearsed it.', ' The cutover went smoothly.')
+		).toBe(' The cutover went smoothly.');
 	});
 
-	it('adds no space when the prefix already ends with whitespace', () => {
-		expect(sanitizeCompletion('We need ', 'more replicas.')).toBe('more replicas.');
+	it('completes a partial word with no injected space', () => {
+		expect(sanitizeCompletion('The migrat', 'ion scales.')).toBe('ion scales.');
 	});
 
-	it('joins punctuation continuations without a space', () => {
+	it("passes through the model's leading space at a word boundary", () => {
+		expect(sanitizeCompletion('We need', ' more replicas.')).toBe(' more replicas.');
+	});
+
+	it('collapses a double space at the seam when the prefix ends with whitespace', () => {
+		expect(sanitizeCompletion('We need ', ' more replicas.')).toBe('more replicas.');
+	});
+
+	it('leaves a punctuation continuation exactly as written', () => {
 		expect(sanitizeCompletion('We need more replicas', ', as Ana noted.')).toBe(', as Ana noted.');
 	});
 

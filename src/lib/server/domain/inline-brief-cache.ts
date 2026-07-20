@@ -110,18 +110,18 @@ export class MemoryInlineSuggestionThrottle implements InlineSuggestionThrottle 
 export const inlineBriefKey = (input: {
 	readonly userId: string;
 	readonly noteId: string;
-	readonly revision: number;
 	readonly heading?: string;
 }): string => {
-	// Keyed at section altitude, not per keystroke. The passage tail changes on
-	// every character; keying on it meant the background brief was cached against
-	// text that no longer existed by the next lookup, so grounding almost never
-	// landed. One brief per section is reused across the whole section instead.
+	// Keyed at section altitude only. Not per keystroke (the passage tail changes
+	// every character) and deliberately NOT per revision: the editor autosaves as
+	// the user types, so revision advances on nearly every pause. Keying on it
+	// meant every suggestion was a fresh miss and grounding never warmed. The
+	// TTL bounds staleness instead; one brief per section is reused throughout.
 	const section = input.heading ?? '';
 	let hash = 2166136261;
 	for (let index = 0; index < section.length; index++) {
 		hash ^= section.charCodeAt(index);
 		hash = Math.imul(hash, 16777619);
 	}
-	return `${input.userId}:${input.noteId}:${input.revision}:${(hash >>> 0).toString(36)}`;
+	return `${input.userId}:${input.noteId}:${(hash >>> 0).toString(36)}`;
 };

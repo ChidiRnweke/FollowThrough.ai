@@ -156,8 +156,12 @@ This document is the independent behavioural specification for backend models, s
 
 - An inline suggestion never mutates a note, creates an agent run, records provenance, or writes a
   conversation message. Accepting one produces an ordinary note edit through the normal save path.
-- The inline briefing pass performs only read retrieval — project-scoped knowledge search, project
-  memory, and user memory; it never proposes, mutates, or dispatches an arbitrary tool.
+- The inline briefing pass performs only read retrieval — a project-scoped knowledge search across
+  every indexed source (notes, diagrams, attachments, indexed memory), plus project and user memory;
+  it never proposes, mutates, or dispatches an arbitrary tool.
+- The briefing pass ranks its combined candidate pool with a single reranker pass and keeps only the
+  most relevant; user-profile memory is always included regardless of rank. A reranker failure
+  degrades to vector order rather than dropping the brief.
 - A cached context brief is scoped to one user, note, content revision, and section (nearest
   heading). It is never read across any of those boundaries, and is reused across the whole section
   rather than rebuilt per keystroke.

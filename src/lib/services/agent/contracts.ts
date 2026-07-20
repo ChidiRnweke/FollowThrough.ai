@@ -1,6 +1,5 @@
 import type {
 	ActorContext,
-	AgentEvent,
 	AgentExecutionUpdate,
 	AgentRun,
 	AgentRunDecisionRecord,
@@ -15,7 +14,6 @@ import type {
 	ProvenanceId,
 	RelateSelectionOutput,
 	RunAgentInput,
-	DecideAgentRunInput,
 	TextSelection,
 	ToolActivity
 } from '$lib/models';
@@ -82,7 +80,6 @@ export interface InlineBriefKeyBuilder {
 	(input: {
 		readonly userId: string;
 		readonly noteId: string;
-		readonly revision: number;
 		readonly heading?: string;
 	}): string;
 }

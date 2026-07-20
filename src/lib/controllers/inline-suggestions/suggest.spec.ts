@@ -62,9 +62,13 @@ class StubCache implements InlineBriefCache {
 
 class StubBriefer implements InlineContextBriefer {
 	calls = 0;
-	constructor(private readonly result: () => Promise<InlineContextBrief>) {}
+	constructor(
+		private readonly result: () => Promise<InlineContextBrief>,
+		private readonly delayMs = 0
+	) {}
 	async brief(): Promise<InlineContextBrief> {
 		this.calls++;
+		if (this.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
 		return this.result();
 	}
 }
@@ -93,6 +97,7 @@ const controller = (overrides: Partial<InlineSuggestionsDependencies> = {}) =>
 		inlineBriefCache: new StubCache(),
 		inlineBriefKey: () => 'key-1',
 		inlineSuggestionThrottle: new OpenThrottle(),
+		inlineBriefWaitMs: 50,
 		...overrides
 	});
 
@@ -121,9 +126,28 @@ describe('DefaultInlineSuggestionsController.suggest', () => {
 		expect(result.grounded).toBe(true);
 	});
 
-	it('reports a suggestion as ungrounded on a cache miss', async () => {
+	it('reports a suggestion as grounded when a cold brief resolves within the wait', async () => {
 		const result = await controller().suggest(actor, request(), signal());
+		expect(result.grounded).toBe(true);
+	});
+
+	it('reports a suggestion as ungrounded when the brief is slower than the wait', async () => {
+		const result = await controller({
+			inlineBriefWaitMs: 10,
+			inlineContextBriefer: new StubBriefer(async () => brief, 60)
+		}).suggest(actor, request(), signal());
 		expect(result.grounded).toBe(false);
+	});
+
+	it('caches a slow brief for the next suggestion even after timing out', async () => {
+		const cache = new StubCache();
+		await controller({
+			inlineBriefCache: cache,
+			inlineBriefWaitMs: 10,
+			inlineContextBriefer: new StubBriefer(async () => brief, 40)
+		}).suggest(actor, request(), signal());
+		await new Promise((resolve) => setTimeout(resolve, 60));
+		expect(cache.stored.get('key-1')).toEqual(brief);
 	});
 
 	it('passes a warm brief to the completion generator', async () => {

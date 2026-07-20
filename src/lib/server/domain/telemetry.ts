@@ -47,6 +47,61 @@ export async function traceChainStep<T>(
 	}
 }
 
+export interface InlineSpanParams {
+	readonly sessionId: string;
+	readonly model: string;
+	readonly input: string;
+}
+
+/**
+ * Wrap one inline-suggestion pipeline (retrieve → rerank → LLM) in a parent
+ * CHAIN span so its stages and the auto-instrumented OpenAI SDK span nest
+ * together and land in one Phoenix session keyed by note id.
+ *
+ * Like `traceAgentTurn`, the span is created on a detached root context (Phoenix
+ * only honours `session.id` on a parentless span) and `body` runs with that
+ * context active so the OpenAI instrumentation's LLM span inherits the session.
+ * Safe when telemetry is disabled: the OTel API hands back a no-op tracer.
+ */
+export async function traceInline<T>(
+	name: string,
+	params: InlineSpanParams,
+	body: () => Promise<T>,
+	describeOutput: (result: T) => string
+): Promise<T> {
+	const span: Span = trace.getTracer(TRACER_NAME).startSpan(
+		name,
+		{
+			attributes: {
+				[SemanticConventions.OPENINFERENCE_SPAN_KIND]: OpenInferenceSpanKind.CHAIN,
+				[SemanticConventions.INPUT_VALUE]: params.input,
+				[SemanticConventions.INPUT_MIME_TYPE]: 'text/plain',
+				[SemanticConventions.SESSION_ID]: params.sessionId,
+				[SemanticConventions.LLM_MODEL_NAME]: params.model
+			}
+		},
+		ROOT_CONTEXT
+	);
+	const inlineContext = setSession(trace.setSpan(ROOT_CONTEXT, span), {
+		sessionId: params.sessionId
+	});
+	try {
+		const result = await context.with(inlineContext, body);
+		span.setAttribute(SemanticConventions.OUTPUT_VALUE, describeOutput(result));
+		span.setStatus({ code: SpanStatusCode.OK });
+		return result;
+	} catch (error) {
+		span.setStatus({
+			code: SpanStatusCode.ERROR,
+			message: error instanceof Error ? error.message : String(error)
+		});
+		if (error instanceof Error) span.recordException(error);
+		throw error;
+	} finally {
+		span.end();
+	}
+}
+
 /**
  * Wrap an agent turn in a manual OpenInference span.
  *

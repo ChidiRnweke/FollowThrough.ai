@@ -13,7 +13,9 @@
 import 'dotenv/config';
 import { register } from '@arizeai/phoenix-otel';
 import { OpenAIAgentsInstrumentation } from '@arizeai/openinference-instrumentation-openai-agents';
+import { OpenAIInstrumentation } from '@arizeai/openinference-instrumentation-openai';
 import * as agents from '@openai/agents';
+import OpenAI from 'openai';
 
 /** @type {import('@opentelemetry/sdk-trace-node').NodeTracerProvider | null} */
 let provider = null;
@@ -50,7 +52,14 @@ export function initTelemetry() {
 	const instrumentation = new OpenAIAgentsInstrumentation({ tracerProvider: provider });
 	instrumentation.manuallyInstrument(agents);
 
-	process.stdout.write('[OTel] Phoenix telemetry + Agents instrumentation initialized.\n');
+	// The inline-suggestion path (ghost text) calls the plain OpenAI SDK against
+	// OpenRouter — no Agents runtime — so it needs the OpenAI SDK instrumentation
+	// to appear in Phoenix. Patching the module prototype here, before any client
+	// is constructed, covers every chat.completions call on that path.
+	const openaiInstrumentation = new OpenAIInstrumentation({ tracerProvider: provider });
+	openaiInstrumentation.manuallyInstrument(OpenAI);
+
+	process.stdout.write('[OTel] Phoenix telemetry + Agents & OpenAI instrumentation initialized.\n');
 	return provider;
 }
 

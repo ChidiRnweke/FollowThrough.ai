@@ -7,6 +7,7 @@
 	import House from '@lucide/svelte/icons/house';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import MessageSquareWarning from '@lucide/svelte/icons/message-square-warning';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -18,6 +19,7 @@
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import ProjectTree from './project-tree.svelte';
 	import MemoryNotificationMenu from './memory-notification-menu.svelte';
+	import FeedbackDialog from './feedback-dialog.svelte';
 
 	let {
 		shell,
@@ -42,6 +44,7 @@
 	}
 
 	let tree = $state<ReturnType<typeof ProjectTree>>();
+	let feedbackOpen = $state(false);
 </script>
 
 <Sidebar.Root collapsible="icon">
@@ -192,8 +195,17 @@
 				<Button variant="ghost" size="icon-sm" aria-label="Toggle theme" onclick={toggleMode}>
 					<SunMoon class="size-4" />
 				</Button>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Send feedback"
+					onclick={() => (feedbackOpen = true)}
+				>
+					<MessageSquareWarning class="size-4" />
+				</Button>
 			</div>
 		</div>
 	</Sidebar.Footer>
 	<Sidebar.Rail />
+	<FeedbackDialog bind:open={feedbackOpen} />
 </Sidebar.Root>

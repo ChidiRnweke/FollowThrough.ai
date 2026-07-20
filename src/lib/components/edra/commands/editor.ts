@@ -99,7 +99,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			Callout(CalloutComp),
 			InlineSuggestion.configure({
 				...(props?.getInlineSuggestion ? { fetchSuggestion: props.getInlineSuggestion } : {}),
-				idleDelayMs: 500
+				idleDelayMs: 300
 			}),
 			AIHighlight.configure({
 				callAI: props?.callAI || null

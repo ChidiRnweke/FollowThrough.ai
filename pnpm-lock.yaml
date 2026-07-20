@@ -11,6 +11,9 @@ importers:
       '@arizeai/openinference-core':
         specifier: ^2.4.0
         version: 2.4.0
+      '@arizeai/openinference-instrumentation-openai':
+        specifier: ^4.1.5
+        version: 4.1.5
       '@arizeai/openinference-instrumentation-openai-agents':
         specifier: ^0.2.2
         version: 0.2.2(@openai/agents@0.13.2(@aws-sdk/credential-provider-node@3.972.68)(@smithy/signature-v4@5.6.5)(ws@8.21.0)(zod@4.4.3))
@@ -332,6 +335,9 @@ packages:
     resolution: {integrity: sha512-Yz64IzV2FrbNxiAnoubjh1H5yByZ+wG8ojHHUKu+jgCsjghp3aR5TiEGl+5wDIDkOVMZFQe4BTQ6OHpaUcB62Q==}
     peerDependencies:
       '@openai/agents': '>=0.1.0'
+
+  '@arizeai/openinference-instrumentation-openai@4.1.5':
+    resolution: {integrity: sha512-6HVRkk9pmme80grsW53ju/o/m9ymOZFQWroyfdDyKZzEL4oD4GRf+Z/DqdWPCjSkCANBDBWrrNn1bPscGm5viw==}
 
   '@arizeai/openinference-semantic-conventions@2.5.0':
     resolution: {integrity: sha512-4ZeSwiFX3YxB0WSE6x568wM4PVHiYmz3yiOxic6WGKVrE/KIGggMFP/eqUNQhikBKP68IDV0qiILlZAIYnheAQ==}
@@ -4735,6 +4741,16 @@ snapshots:
       '@arizeai/openinference-core': 2.4.0
       '@arizeai/openinference-semantic-conventions': 2.5.0
       '@openai/agents': 0.13.2(@aws-sdk/credential-provider-node@3.972.68)(@smithy/signature-v4@5.6.5)(ws@8.21.0)(zod@4.4.3)
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/instrumentation': 0.46.0(@opentelemetry/api@1.9.1)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@arizeai/openinference-instrumentation-openai@4.1.5':
+    dependencies:
+      '@arizeai/openinference-core': 2.4.0
+      '@arizeai/openinference-semantic-conventions': 2.5.0
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/instrumentation': 0.46.0(@opentelemetry/api@1.9.1)

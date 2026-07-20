@@ -1,4 +1,9 @@
-import type { ActorContext, InlineSuggestion, InlineSuggestionRequest } from '$lib/models';
+import type {
+	ActorContext,
+	InlineContextBrief,
+	InlineSuggestion,
+	InlineSuggestionRequest
+} from '$lib/models';
 import type {
 	InlineBriefCache,
 	InlineBriefKeyBuilder,
@@ -20,6 +25,13 @@ import type {
 /** Below this, there is not enough of a sentence to continue meaningfully. */
 const MIN_PREFIX_LENGTH = 40;
 
+/**
+ * How long a suggestion will wait for a cold brief before giving up and
+ * generating ungrounded. Long enough for the first suggestion in a section to
+ * land grounded when retrieval is quick; short enough not to stall the caret.
+ */
+const INLINE_BRIEF_WAIT_MS = 800;
+
 const NOTHING: InlineSuggestion = { text: '', grounded: false };
 
 export interface InlineSuggestionsController {
@@ -36,6 +48,8 @@ export interface InlineSuggestionsDependencies {
 	inlineBriefCache: InlineBriefCache;
 	inlineBriefKey: InlineBriefKeyBuilder;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
+	/** Head start given to a cold brief before generating ungrounded. Test seam. */
+	inlineBriefWaitMs?: number;
 }
 
 export class DefaultInlineSuggestionsController implements InlineSuggestionsController {
@@ -52,11 +66,10 @@ export class DefaultInlineSuggestionsController implements InlineSuggestionsCont
 			const key = this.dependencies.inlineBriefKey({
 				userId: actor.userId,
 				noteId: request.noteId,
-				revision: request.revision,
 				...(request.heading ? { heading: request.heading } : {})
 			});
-			const brief = this.dependencies.inlineBriefCache.get(key);
-			if (!brief) this.warm(actor, request, key);
+			const brief =
+				this.dependencies.inlineBriefCache.get(key) ?? (await this.warmAndRace(actor, request, key));
 			const text = await this.dependencies.inlineCompletionGenerator.complete(
 				request,
 				brief,
@@ -69,13 +82,27 @@ export class DefaultInlineSuggestionsController implements InlineSuggestionsCont
 	}
 
 	/**
-	 * Detached on purpose: the briefing pass outlives this request, so it gets its
-	 * own signal and its failures never reach the writer.
+	 * Start the briefing pass and give it a bounded head start. The brief runs on
+	 * its own detached signal so the timeout never cancels it: on a slow miss we
+	 * generate ungrounded now, and the brief still resolves and caches for the
+	 * next suggestion in this section. Its failures never reach the writer.
 	 */
-	private warm(actor: ActorContext, request: InlineSuggestionRequest, key: string): void {
-		void this.dependencies.inlineContextBriefer
+	private warmAndRace(
+		actor: ActorContext,
+		request: InlineSuggestionRequest,
+		key: string
+	): Promise<InlineContextBrief | undefined> {
+		const pending = this.dependencies.inlineContextBriefer
 			.brief(actor, request, new AbortController().signal)
-			.then((brief) => this.dependencies.inlineBriefCache.set(key, brief))
+			.then((brief) => {
+				this.dependencies.inlineBriefCache.set(key, brief);
+				return brief;
+			})
 			.catch(() => undefined);
+		const waitMs = this.dependencies.inlineBriefWaitMs ?? INLINE_BRIEF_WAIT_MS;
+		return Promise.race([
+			pending,
+			new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), waitMs))
+		]);
 	}
 }

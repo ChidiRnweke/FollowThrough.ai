@@ -58,7 +58,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions>({
 	priority: 120,
 
 	addOptions() {
-		return { idleDelayMs: 500 };
+		return { idleDelayMs: 300 };
 	},
 
 	addProseMirrorPlugins() {
