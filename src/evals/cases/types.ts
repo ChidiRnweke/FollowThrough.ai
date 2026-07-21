@@ -69,6 +69,6 @@ export const ARCHETYPES = {
 	targetCorrectness: 'target_correctness',
 	/** Is proactive ghost text a clean continuation: no preamble, no echo, short? */
 	inlineSuggestionShape: 'inline_suggestion_shape',
-	/** Does the briefing pass ground ghost text in memory the passage never states? */
+	/** Does project RAG ground ghost text in memory the passage never states? */
 	inlineGrounding: 'inline_grounding'
 } as const;

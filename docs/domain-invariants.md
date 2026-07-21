@@ -156,20 +156,22 @@ This document is the independent behavioural specification for backend models, s
 
 - An inline suggestion never mutates a note, creates an agent run, records provenance, or writes a
   conversation message. Accepting one produces an ordinary note edit through the normal save path.
-- The inline briefing pass performs only read retrieval — a project-scoped knowledge search across
-  every indexed source (notes, diagrams, attachments, indexed memory), plus project and user memory;
-  it never proposes, mutates, or dispatches an arbitrary tool.
-- The briefing pass ranks its combined candidate pool with a single reranker pass and keeps only the
-  most relevant; user-profile memory is always included regardless of rank. A reranker failure
-  degrades to vector order rather than dropping the brief.
-- A cached context brief is scoped to one user, note, content revision, and section (nearest
-  heading). It is never read across any of those boundaries, and is reused across the whole section
-  rather than rebuilt per keystroke.
-- The inline briefing search is restricted to the note's own project.
+- Each eligible typing pause issues one completion request. The server deterministically assembles
+  context and performs one completion-model call; there is no warm request, briefing-model call, or
+  cached model-generated brief.
+- Completion context contains the authoritative current note title and full text, active shared user
+  memory, and project-scoped retrieval across indexed notes, diagrams, attachments, and project
+  memory. Retrieved passages carry their source titles into both retrieval and the model prompt.
+- Up to twenty active shared user memories are included directly. Larger or oversized sets are
+  reranked against the caret context and bounded to eight entries and a fixed token budget; reranker
+  failure degrades to a deterministic recent-memory subset rather than dropping completion.
+- Project retrieval is restricted to the note's own project, excludes the already-injected current
+  note, and keeps at most eight reranked passages.
 - A completion never repeats text immediately preceding the caret, and yields at most two sentences.
 - A suggestion request that is superseded, refused by the spend budget, or fails is abandoned
   silently: the writer sees no ghost text and no error.
-- A cold process or an unavailable briefing pass degrades to ungrounded ghost text rather than to no
-  ghost text.
+- Empty or failed project retrieval does not suppress completion when note or user context remains.
+- Typing again aborts the stale request; an abandoned request cannot display ghost text at a newer
+  caret position.
 - Ghost text is offered only at a resting caret in ordinary prose: never across a selection, never
   mid-word, and never inside code, diagram, math, or table content.

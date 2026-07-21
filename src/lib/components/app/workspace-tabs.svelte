@@ -2,6 +2,7 @@
 	import type { NoteId, ProjectId, ShellContext } from '$lib/models';
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { cubicOut } from 'svelte/easing';
 	import { Button } from '$lib/components/ui/button';
 	import X from '@lucide/svelte/icons/x';
 	import Pin from '@lucide/svelte/icons/pin';
@@ -67,6 +68,24 @@
 	}
 
 	const hasTabs = $derived(workbench.openTabs.length > 0);
+
+	function horizontalPanelCollapse(node: HTMLElement) {
+		const width = node.offsetWidth;
+
+		return {
+			duration: 300,
+			easing: cubicOut,
+			css: (t: number) => `width: ${t * width}px`
+		};
+	}
+
+	function hasVisiblePredecessor(
+		projectId: ProjectId,
+		tabs: readonly NoteId[],
+		index: number
+	): boolean {
+		return tabs.slice(0, index).some((noteId) => showTab(projectId, noteId));
+	}
 </script>
 
 <div
@@ -124,74 +143,84 @@
 						</div>
 					</div>
 					{#each group.tabs as noteId, tabIndex (noteId)}
-						{#if showTab(group.projectId, noteId)}
-							{#if tabIndex > 0}
-								<!-- Thin vertical divider between adjacent tabs in the same project group,
-							     mirroring the divider between project groups but shorter so the
-							     group's accent rule remains the primary separator. -->
-								<div
-									class="w-px shrink-0 self-center bg-border"
-									style="height: 1rem;"
-									aria-hidden="true"
-								></div>
-							{/if}
-							{@const active = workbench.focusedNoteId === noteId}
-							<button
-								type="button"
-								role="tab"
-								aria-selected={active}
-								draggable="true"
-								title={titleOf(noteId)}
-								class="group relative flex h-full min-w-[8rem] max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
-									? 'bg-background font-medium text-foreground'
-									: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
-								ondragstart={(event) => {
-									event.dataTransfer?.setData('text/x-followthrough-note-id', noteId);
-									// `move` tells the browser to allow the drop
-									// into our editor area; we don't actually
-									// move the source — `setSplit` reuses the id.
-									if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-								}}
-								onclick={() => void workbench.focusTab(noteId)}
-							>
-								{#if active}
-									<!-- Inset accent: 4px tall, 2px in from the sides, with a rounded
+						{@const tabVisible = showTab(group.projectId, noteId)}
+						{@const active = workbench.focusedNoteId === noteId}
+						<div
+							class="flex shrink-0 overflow-hidden"
+							data-project-tab={noteId}
+							data-collapsed={!tabVisible}
+							aria-hidden={!tabVisible}
+							inert={!tabVisible}
+						>
+							{#if tabVisible}
+								<div class="flex shrink-0" transition:horizontalPanelCollapse|local>
+									{#if hasVisiblePredecessor(group.projectId, group.tabs, tabIndex)}
+										<!-- Thin vertical divider between adjacent visible tabs in the same project
+									     group. Keeping it inside the animated region prevents orphan rules. -->
+										<div
+											class="w-px shrink-0 self-center bg-border"
+											style="height: 1rem;"
+											aria-hidden="true"
+										></div>
+									{/if}
+									<button
+										type="button"
+										role="tab"
+										aria-selected={active}
+										draggable="true"
+										title={titleOf(noteId)}
+										class="group relative flex h-full min-w-[8rem] max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
+											? 'bg-background font-medium text-foreground'
+											: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
+										ondragstart={(event) => {
+											event.dataTransfer?.setData('text/x-followthrough-note-id', noteId);
+											// `move` tells the browser to allow the drop
+											// into our editor area; we don't actually
+											// move the source — `setSplit` reuses the id.
+											if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+										}}
+										onclick={() => void workbench.focusTab(noteId)}
+									>
+										{#if active}
+											<!-- Inset accent: 4px tall, 2px in from the sides, with a rounded
 								     bottom edge so it reads as a tab indicator rather than a
 								     strip-wide line. The inset keeps the green off the very top
 								     edge of the sticky strip where it would visually clip against
 								     the viewport. -->
-									<span
-										class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm bg-primary"
-										aria-hidden="true"
-									></span>
-								{/if}
-								{#if workbench.isPinned(noteId)}
-									<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-								{/if}
-								<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
-								<span
-									role="button"
-									tabindex={-1}
-									aria-label={`Close ${titleOf(noteId)}`}
-									class="ml-1 hidden size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
-										? 'flex'
-										: ''}"
-									onclick={(event) => {
-										event.stopPropagation();
-										void workbench.closeTab(noteId);
-									}}
-									onkeydown={(event) => {
-										if (event.key === 'Enter' || event.key === ' ') {
-											event.preventDefault();
-											event.stopPropagation();
-											void workbench.closeTab(noteId);
-										}
-									}}
-								>
-									<X class="size-3" />
-								</span>
-							</button>
-						{/if}
+											<span
+												class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm bg-primary"
+												aria-hidden="true"
+											></span>
+										{/if}
+										{#if workbench.isPinned(noteId)}
+											<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+										{/if}
+										<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
+										<span
+											role="button"
+											tabindex={-1}
+											aria-label={`Close ${titleOf(noteId)}`}
+											class="ml-1 hidden size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
+												? 'flex'
+												: ''}"
+											onclick={(event) => {
+												event.stopPropagation();
+												void workbench.closeTab(noteId);
+											}}
+											onkeydown={(event) => {
+												if (event.key === 'Enter' || event.key === ' ') {
+													event.preventDefault();
+													event.stopPropagation();
+													void workbench.closeTab(noteId);
+												}
+											}}
+										>
+											<X class="size-3" />
+										</span>
+									</button>
+								</div>
+							{/if}
+						</div>
 					{/each}
 				{/each}
 			{:else}

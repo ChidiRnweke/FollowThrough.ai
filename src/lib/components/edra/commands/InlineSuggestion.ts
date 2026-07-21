@@ -28,7 +28,6 @@ export interface InlineSuggestionOptions {
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
 	) => Promise<{ readonly text: string }>;
-	warmContext?: (input: InlineSuggestionRequestInput, signal: AbortSignal) => Promise<void>;
 	/** How long the caret must rest before we ask for a suggestion. */
 	idleDelayMs: number;
 	enabled: boolean;
@@ -82,10 +81,9 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 
 	addProseMirrorPlugins() {
 		const options = this.options;
+		const editor = this.editor;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let inFlight: AbortController | undefined;
-		let warmInFlight: AbortController | undefined;
-		let lastWarmKey = '';
 		let requiresEdit = false;
 		let composing = false;
 		let shouldSchedule = false;
@@ -101,11 +99,6 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 			inFlight = undefined;
 		};
 
-		const cancelWarm = () => {
-			warmInFlight?.abort();
-			warmInFlight = undefined;
-		};
-
 		const clear = (view: EditorView) => {
 			cancel();
 			announce('');
@@ -113,37 +106,10 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 				view.dispatch(view.state.tr.setMeta(inlineSuggestionKey, null as InlineSuggestionMeta));
 		};
 
-		const autoTriggerAllowed = (): boolean =>
-			typeof navigator === 'undefined' ||
-			!('maxTouchPoints' in navigator) ||
-			navigator.maxTouchPoints === 0 ||
-			typeof matchMedia === 'undefined' ||
-			!matchMedia('(pointer: coarse)').matches ||
-			matchMedia('(any-pointer: fine)').matches;
-
-		const warm = (view: EditorView) => {
-			if (!options.enabled || composing || !options.warmContext || !view.hasFocus()) return;
-			if (!autoTriggerAllowed()) return;
-			if (!shouldTrigger(caretContextOf(view.state, false))) return;
-			const context = caretWindowOf(view.state);
-			const key = `${context.headingPath.join('/')}::${Math.floor(context.currentSection.length / 300)}`;
-			if (key === lastWarmKey) return;
-			lastWarmKey = key;
-			cancelWarm();
-			const controller = new AbortController();
-			warmInFlight = controller;
-			void options
-				.warmContext(context, controller.signal)
-				.catch(() => undefined)
-				.finally(() => {
-					if (warmInFlight === controller) warmInFlight = undefined;
-				});
-		};
-
 		const request = (view: EditorView) => {
 			const fetchSuggestion = options.fetchSuggestion;
 			if (!fetchSuggestion) return;
-			if (!options.enabled || composing || !autoTriggerAllowed()) return;
+			if (!options.enabled || composing) return;
 			// Focus is checked here rather than at schedule time: a programmatic
 			// caret move lands the selection change before DOM focus settles, and
 			// gating the schedule on focus would drop that first suggestion.
@@ -195,15 +161,13 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 			acceptedThisSession = true;
 			if (typeof sessionStorage !== 'undefined')
 				sessionStorage.setItem('inline-suggestion-accepted', '1');
+			view.focus();
 			return true;
 		};
 
 		this.storage.setEnabled = (enabled) => {
 			options.enabled = enabled;
-			if (!enabled && this.editor) {
-				clear(this.editor.view);
-				cancelWarm();
-			}
+			if (!enabled && this.editor) clear(this.editor.view);
 		};
 
 		return [
@@ -241,11 +205,21 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 									span.className = 'inline-suggestion';
 									span.setAttribute('contenteditable', 'false');
 									span.setAttribute('aria-hidden', 'true');
+									span.addEventListener('pointerdown', (event) => {
+										// Keep ProseMirror from moving the caret or blurring the editor
+										// before the subsequent click can accept this offer.
+										event.preventDefault();
+									});
+									span.addEventListener('click', (event) => {
+										event.preventDefault();
+										event.stopPropagation();
+										accept(editor.view);
+									});
 									span.textContent = suggestion.text;
 									if (suggestion.showHint) {
 										const hint = document.createElement('span');
 										hint.className = 'inline-suggestion-hint';
-										hint.textContent = 'Tab';
+										hint.textContent = 'Tab or click';
 										span.append(hint);
 									}
 									return span;
@@ -290,9 +264,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 					};
 					const onBlur = () => {
 						clear(view);
-						cancelWarm();
 					};
-					const onFocus = () => warm(view);
 					const onCompositionStart = () => {
 						composing = true;
 						clear(view);
@@ -301,24 +273,20 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 						composing = false;
 					};
 					dom.addEventListener('blur', onBlur, true);
-					dom.addEventListener('focus', onFocus, true);
 					dom.addEventListener('compositionstart', onCompositionStart);
 					dom.addEventListener('compositionend', onCompositionEnd);
 					return {
 						update(updated: EditorView, previous: EditorState) {
 							if (updated.state.doc.eq(previous.doc)) return;
 							if (inlineSuggestionKey.getState(updated.state)) return;
-							warm(updated);
 							if (shouldSchedule) schedule(updated);
 							shouldSchedule = false;
 						},
 						destroy() {
 							dom.removeEventListener('blur', onBlur, true);
-							dom.removeEventListener('focus', onFocus, true);
 							dom.removeEventListener('compositionstart', onCompositionStart);
 							dom.removeEventListener('compositionend', onCompositionEnd);
 							cancel();
-							cancelWarm();
 							status.remove();
 						}
 					};

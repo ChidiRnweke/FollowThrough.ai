@@ -48,12 +48,8 @@ import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
 import { OpenAIEmbeddingClient } from './domain/openai-embedding-capabilities';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
 import { FlashInlineCompletionGenerator } from './domain/inline-completion-generator';
-import { RetrievalInlineContextBriefer } from './domain/inline-context-briefer';
-import {
-	inlineBriefKey,
-	MemoryInlineBriefCache,
-	MemoryInlineSuggestionThrottle
-} from './domain/inline-brief-cache';
+import { RetrievalInlineCompletionContextBuilder } from './domain/inline-completion-context';
+import { MemoryInlineSuggestionThrottle } from './domain/inline-suggestion-throttle';
 import { OpenRouterReranker } from './domain/openrouter-rerank-capabilities';
 import { ConversationCondenser } from './domain/conversation-condenser';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
@@ -258,10 +254,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		notes,
 		retrievalChunker
 	);
-	const knowledgeSearcher = new RerankingKnowledgeSearcher(
-		new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient),
-		reranker
+	const embeddedKnowledgeSearcher = new EmbeddedKnowledgeSearcher(
+		searchRepository,
+		embeddingClient
 	);
+	const knowledgeSearcher = new RerankingKnowledgeSearcher(embeddedKnowledgeSearcher, reranker);
 	const linkFinder = new ProjectScopedLinkFinder(
 		notes,
 		knowledgeSearcher,
@@ -534,24 +531,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 				baseURL: openRouterBaseURL,
 				appURL
 			}),
-			inlineContextBriefer: new RetrievalInlineContextBriefer(
-				{
-					controllers: () => {
-						if (!controllerFactory) throw new Error('Controller factory is not initialized');
-						return controllerFactory;
-					},
-					// A raw searcher (no inner rerank) so the briefer owns the single
-					// rerank pass over the combined multi-source pool.
-					searcher: new EmbeddedKnowledgeSearcher(searchRepository, embeddingClient),
-					reranker
-				},
-				{ apiKey: openRouterApiKey, baseURL: openRouterBaseURL, appURL }
-			),
-			// One cache and one throttle for the whole process: controllers are
-			// constructed per call, so this state cannot live on the controller.
-			inlineBriefCache: new MemoryInlineBriefCache(),
-			inlineSuggestionThrottle: new MemoryInlineSuggestionThrottle(),
-			inlineBriefKey
+			inlineCompletionContextBuilder: new RetrievalInlineCompletionContextBuilder({
+				searcher: embeddedKnowledgeSearcher,
+				memory,
+				reranker
+			}),
+			// Controllers are constructed per request, so the process-wide spend
+			// guard is wired once here.
+			inlineSuggestionThrottle: new MemoryInlineSuggestionThrottle()
 		}
 	};
 	controllerFactory = new ProductionControllerFactory(dependencies);

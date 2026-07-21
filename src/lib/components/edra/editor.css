@@ -658,14 +658,18 @@
 /* Inline suggestions (proactive ghost text) */
 
 .tiptap .inline-suggestion {
-	color: var(--muted-foreground);
-	opacity: 0.6;
+	color: color-mix(in oklch, var(--primary) 25%, var(--muted-foreground));
 	/* Ghost text must read as a continuation of the sentence, so it inherits
-	   every type property and differs only in weight of colour. */
+	   every type property and differs only in colour. */
 	font: inherit;
 	white-space: pre-wrap;
-	pointer-events: none;
+	cursor: pointer;
 	user-select: none;
+}
+
+.tiptap .inline-suggestion:hover,
+.tiptap .inline-suggestion:active {
+	color: color-mix(in oklch, var(--primary) 35%, var(--muted-foreground));
 }
 
 .tiptap .inline-suggestion-hint {
@@ -692,6 +696,6 @@
 		opacity: 0;
 	}
 	to {
-		opacity: 0.6;
+		opacity: 1;
 	}
 }

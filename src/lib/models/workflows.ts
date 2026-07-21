@@ -220,22 +220,35 @@ export interface InlineSuggestionRequest {
 	readonly heading?: string;
 }
 
-/**
- * Grounding assembled by the background briefing agent and reused across many
- * keystrokes. Kept small on purpose: it rides in every completion prompt.
- */
-export interface InlineContextBrief {
-	readonly voice: string;
-	readonly facts: readonly string[];
-	readonly openThreads: readonly string[];
-	readonly avoid: readonly string[];
+export interface InlineCompletionPassage {
+	readonly sourceTitle: string;
+	readonly sourceType: 'note' | 'attachment' | 'diagram' | 'project-memory';
+	readonly sectionPath?: string;
+	readonly content: string;
 }
 
-/** An empty `text` means the model had nothing worth suggesting. */
-export interface InlineSuggestion {
-	readonly text: string;
-	readonly grounded: boolean;
+/** Raw workspace context assembled deterministically for one caret completion. */
+export interface InlineCompletionContext {
+	readonly noteTitle: string;
+	readonly noteText: string;
+	readonly userMemory: readonly string[];
+	readonly projectPassages: readonly InlineCompletionPassage[];
 }
+
+export interface InlineSuggestionGrounding {
+	readonly currentNote: true;
+	readonly userMemoryCount: number;
+	readonly projectPassageCount: number;
+}
+
+export type InlineSuggestion =
+	| {
+			readonly outcome: 'suggested';
+			readonly text: string;
+			readonly grounding: InlineSuggestionGrounding;
+	  }
+	| { readonly outcome: 'no_suggestion'; readonly reason: 'ineligible' | 'empty_model' }
+	| { readonly outcome: 'busy' | 'rate_limited'; readonly retryAfterMs: number };
 
 export interface SubmitAgentRunInput {
 	readonly requestId: string;

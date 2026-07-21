@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
-import type { NoteId } from '$lib/models';
+import { ExternalServiceError, type NoteId } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
 import type { RequestHandler } from './$types';
 
@@ -14,7 +14,6 @@ import type { RequestHandler } from './$types';
 const id = z.string().uuid();
 
 const requestSchema = z.object({
-	purpose: z.enum(['warm', 'complete']).default('complete'),
 	noteId: id,
 	requestId: id,
 	revision: z.number().int().nonnegative(),
@@ -41,8 +40,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		suffix: input.suffix,
 		...(input.heading ? { heading: input.heading } : {})
 	};
-	if (input.purpose === 'warm')
-		return json({ ready: await controller.warm(actor, inlineRequest, request.signal) });
-	const suggestion = await controller.suggest(actor, inlineRequest, request.signal);
-	return json(suggestion);
+	try {
+		const suggestion = await controller.suggest(actor, inlineRequest, request.signal);
+		if (suggestion.outcome === 'busy' || suggestion.outcome === 'rate_limited') {
+			const retryAfterSeconds = Math.max(1, Math.ceil(suggestion.retryAfterMs / 1_000));
+			return json(suggestion, {
+				status: 429,
+				headers: { 'Retry-After': String(retryAfterSeconds) }
+			});
+		}
+		return json(suggestion);
+	} catch (error) {
+		if (request.signal.aborted) throw error;
+		if (error instanceof ExternalServiceError)
+			return json({ outcome: 'provider_failure' }, { status: 502 });
+		throw error;
+	}
 };

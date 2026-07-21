@@ -23,6 +23,12 @@ interface RerankResult {
 	readonly relevanceScore?: number;
 }
 
+/** Titles are retrieval evidence, not display-only metadata. */
+export const rerankDocumentText = (match: SearchMatch): string =>
+	[match.document.sourceTitle, match.document.sectionPath, match.document.content]
+		.filter(Boolean)
+		.join('\n');
+
 export class OpenRouterReranker implements Reranker {
 	private readonly endpoint: string;
 	private readonly appURL: string;
@@ -40,7 +46,8 @@ export class OpenRouterReranker implements Reranker {
 	async rerank(
 		query: string,
 		matches: readonly SearchMatch[],
-		topN: number
+		topN: number,
+		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]> {
 		if (matches.length === 0) return [];
 		try {
@@ -55,9 +62,10 @@ export class OpenRouterReranker implements Reranker {
 				body: JSON.stringify({
 					model: this.model,
 					query,
-					documents: matches.map((match) => match.document.content),
+					documents: matches.map(rerankDocumentText),
 					top_n: Math.min(topN, matches.length)
-				})
+				}),
+				signal
 			});
 			if (!response.ok)
 				throw new ExternalServiceError('Reranking failed', {
@@ -73,6 +81,7 @@ export class OpenRouterReranker implements Reranker {
 				})
 				.filter((match): match is SearchMatch => match !== undefined);
 		} catch (error) {
+			if (signal?.aborted) throw error;
 			if (error instanceof ExternalServiceError) throw error;
 			throw new ExternalServiceError('Reranking failed', {
 				cause: error instanceof Error ? error.message : String(error)

@@ -8,13 +8,11 @@ import { ARCHETYPES, type EvalCase } from './types';
 /**
  * Inline suggestion cases. These bypass the agent loop entirely and drive the
  * inline-suggestions controller directly, because that is the runtime the
- * feature actually uses: a toolless completion primed by a cached briefing
- * pass.
+ * feature actually uses: direct retrieval followed by one toolless completion.
  *
  * Two properties matter and are tested separately:
  *  - shape: the completion is a clean continuation, checkable in code.
- *  - grounding: the briefing pass surfaces a fact the passage never states, so
- *    a correct continuation proves tier two reached tier one.
+ *  - grounding: project RAG surfaces a fact the passage never states.
  */
 
 const requestFor = (
@@ -33,8 +31,6 @@ const requestFor = (
 	suffix: '',
 	heading: 'Migration plan'
 });
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const inlineSuggestionCases: readonly EvalCase[] = [
 	{
@@ -58,13 +54,17 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 					new AbortController().signal
 				);
 
-			const text = suggestion.text;
+			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
 			const lower = text.trim().toLowerCase();
 			const noPreamble = !/^(sure|here|certainly|okay|i )/i.test(text.trim());
 			const noEcho = !prefix.toLowerCase().includes(lower) || lower.length === 0;
 			const sentences = (text.match(/[.!?](\s|$)/g) ?? []).length;
 
-			px.logOutput({ prefix, suggestion: text, grounded: suggestion.grounded });
+			px.logOutput({
+				prefix,
+				suggestion: text,
+				grounding: suggestion.outcome === 'suggested' ? suggestion.grounding : undefined
+			});
 			px.logAnnotation({
 				name: ARCHETYPES.inlineSuggestionShape,
 				score: noPreamble && noEcho && sentences <= 2 ? 1 : 0,
@@ -85,7 +85,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 		expected: { mentionsOwner: 'Ana' },
 		metadata: {
 			layer: 'inline',
-			note: 'The owner lives only in project memory; a correct completion proves the briefing pass ran.'
+			note: 'The owner lives only in project memory; a correct completion proves project RAG ran.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, inlineSuggestionWorkspace);
@@ -95,38 +95,34 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 			const controller = lab.controllers.inlineSuggestions();
 			const request = requestFor(projectId, noteId, prefix);
 
-			// The first call misses the cache and fires the briefing pass. Poll
-			// until the warm brief lands, so grounding — not race timing — is what
-			// the assertion measures.
-			let suggestion = await controller.suggest(
+			const suggestion = await controller.suggest(
 				workspace.actor,
 				request,
 				new AbortController().signal
 			);
-			for (let attempt = 0; attempt < 20 && !suggestion.grounded; attempt++) {
-				await wait(500);
-				suggestion = await controller.suggest(
-					workspace.actor,
-					request,
-					new AbortController().signal
-				);
-			}
 
-			const mentionsOwner = suggestion.text.toLowerCase().includes('ana');
-			px.logOutput({ prefix, suggestion: suggestion.text, grounded: suggestion.grounded });
+			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
+			const hasProjectContext =
+				suggestion.outcome === 'suggested' && suggestion.grounding.projectPassageCount > 0;
+			const mentionsOwner = text.toLowerCase().includes('ana');
+			px.logOutput({ prefix, suggestion: text, hasProjectContext });
 			px.logAnnotation({
 				name: ARCHETYPES.inlineGrounding,
-				score: suggestion.grounded && mentionsOwner ? 1 : suggestion.grounded ? 0.5 : 0,
-				label: !suggestion.grounded ? 'no_brief' : mentionsOwner ? 'grounded' : 'brief_unused',
-				explanation: suggestion.grounded
+				score: hasProjectContext && mentionsOwner ? 1 : hasProjectContext ? 0.5 : 0,
+				label: !hasProjectContext
+					? 'no_project_context'
+					: mentionsOwner
+						? 'grounded'
+						: 'context_unused',
+				explanation: hasProjectContext
 					? mentionsOwner
 						? 'named the owner from project memory'
-						: 'brief was warm but the owner was not used'
-					: 'the briefing pass never produced a brief'
+						: 'project context was retrieved but the owner was not used'
+					: 'project RAG returned no context'
 			});
 
-			expect(suggestion.grounded, 'the briefing pass never warmed a brief').toBe(true);
-			expect(mentionsOwner, `continuation did not name the owner: "${suggestion.text}"`).toBe(true);
+			expect(hasProjectContext, 'project RAG returned no context').toBe(true);
+			expect(mentionsOwner, `continuation did not name the owner: "${text}"`).toBe(true);
 		}
 	}
 ];

@@ -19,7 +19,7 @@ const EXCLUDED_PARENTS = new Set([
 ]);
 
 /** Below this the note has too little shape for a continuation to be useful. */
-const MIN_DOCUMENT_LENGTH = 40;
+const MIN_DOCUMENT_LENGTH = 12;
 const EXCLUDED_MARKS = new Set(['link', 'code', 'inlineCode']);
 
 const WORD_CHARACTER = /[\p{L}\p{N}]/u;

@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
 	ActorContext,
-	InlineContextBrief,
+	InlineCompletionContext,
 	InlineSuggestionRequest,
+	Note,
 	NoteId,
 	ProjectId
 } from '$lib/models';
 import type {
-	InlineBriefCache,
+	InlineCompletionContextBuilder,
 	InlineCompletionGenerator,
-	InlineContextBriefer,
 	InlineSuggestionThrottle
 } from '$lib/services';
 import type { AgentPreferencesStore } from '$lib/services/agent/settings';
@@ -20,12 +20,18 @@ import {
 	type InlineSuggestionsDependencies
 } from './controller';
 
-const actor: ActorContext = { userId: 'user-1' } as ActorContext;
+const actor = { userId: 'user-1' } as ActorContext;
+const emptyContext: InlineCompletionContext = {
+	noteTitle: 'Migration',
+	noteText: 'Saved note text',
+	userMemory: [],
+	projectPassages: []
+};
 
 const request = (overrides: Partial<InlineSuggestionRequest> = {}): InlineSuggestionRequest => ({
 	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: 'note-1' as NoteId,
-	projectId: 'project-1' as ProjectId,
+	projectId: 'untrusted-project' as ProjectId,
 	revision: 2,
 	blockType: 'paragraph',
 	headingPath: ['Migration'],
@@ -35,69 +41,55 @@ const request = (overrides: Partial<InlineSuggestionRequest> = {}): InlineSugges
 	...overrides
 });
 
-const brief: InlineContextBrief = {
-	voice: 'terse',
-	facts: ['Ana owns the cutover'],
-	openThreads: [],
-	avoid: []
-};
+class ContextBuilder implements InlineCompletionContextBuilder {
+	constructor(
+		private readonly buildContext: (
+			request: InlineSuggestionRequest,
+			note: Note
+		) => InlineCompletionContext = () => emptyContext
+	) {}
+	async build(
+		_actor: ActorContext,
+		input: InlineSuggestionRequest,
+		note: Note
+	): Promise<InlineCompletionContext> {
+		return this.buildContext(input, note);
+	}
+}
 
-class RecordingGenerator implements InlineCompletionGenerator {
-	calls = 0;
-	receivedBrief: InlineContextBrief | undefined;
-	constructor(private readonly text = ' window.') {}
+class Generator implements InlineCompletionGenerator {
+	constructor(
+		private readonly generate: (context: InlineCompletionContext) => string = () => ' window.'
+	) {}
 	async complete(
 		_request: InlineSuggestionRequest,
-		received: InlineContextBrief | undefined
+		context: InlineCompletionContext
 	): Promise<string> {
-		this.calls++;
-		this.receivedBrief = received;
-		return this.text;
-	}
-}
-
-class StubCache implements InlineBriefCache {
-	readonly stored = new Map<string, InlineContextBrief>();
-	constructor(private readonly initial?: InlineContextBrief) {}
-	get(): InlineContextBrief | undefined {
-		return this.initial;
-	}
-	set(key: string, value: InlineContextBrief): void {
-		this.stored.set(key, value);
-	}
-	getOrLoad(_key: string, load: () => Promise<InlineContextBrief>): Promise<InlineContextBrief> {
-		return load();
-	}
-}
-
-class StubBriefer implements InlineContextBriefer {
-	calls = 0;
-	receivedRequest: InlineSuggestionRequest | undefined;
-	constructor(
-		private readonly result: () => Promise<InlineContextBrief>,
-		private readonly delayMs = 0
-	) {}
-	async brief(_actor: ActorContext, request: InlineSuggestionRequest): Promise<InlineContextBrief> {
-		this.calls++;
-		this.receivedRequest = request;
-		if (this.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
-		return this.result();
+		return this.generate(context);
 	}
 }
 
 class OpenThrottle implements InlineSuggestionThrottle {
-	released = 0;
-	admit(): boolean {
-		return true;
+	released = false;
+	consumed = false;
+	admit() {
+		return { allowed: true as const };
+	}
+	consume() {
+		this.consumed = true;
+		return { allowed: true as const };
 	}
 	release(): void {
-		this.released++;
+		this.released = true;
 	}
 }
 
 class ClosedThrottle implements InlineSuggestionThrottle {
-	admit(): boolean {
-		return false;
+	admit() {
+		return { allowed: false as const, reason: 'busy' as const, retryAfterMs: 250 };
+	}
+	consume() {
+		return { allowed: true as const };
 	}
 	release(): void {}
 }
@@ -119,171 +111,137 @@ const preferencesWith = (inlineSuggestionsEnabled: boolean): AgentPreferencesSto
 	})
 });
 
-const preferences = preferencesWith(true);
-
 const noteReader: NoteReader = {
-	get: async (_actor, noteId) => noteBuilder({ id: noteId, projectId: 'project-1' as ProjectId })
+	get: async (_actor, noteId) =>
+		noteBuilder({ id: noteId, projectId: 'project-1' as ProjectId, plainText: 'Saved note text' })
 };
 
 const controller = (overrides: Partial<InlineSuggestionsDependencies> = {}) =>
 	new DefaultInlineSuggestionsController({
-		inlineCompletionGenerator: new RecordingGenerator(),
-		inlineContextBriefer: new StubBriefer(async () => brief),
-		inlineBriefCache: new StubCache(),
-		inlineBriefKey: () => 'key-1',
+		inlineCompletionGenerator: new Generator(),
+		inlineCompletionContextBuilder: new ContextBuilder(),
 		inlineSuggestionThrottle: new OpenThrottle(),
 		noteReader,
-		preferences,
-		inlineBriefWaitMs: 50,
+		preferences: preferencesWith(true),
 		...overrides
 	});
 
 const signal = () => new AbortController().signal;
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('DefaultInlineSuggestionsController.suggest', () => {
-	it('returns no suggestion for a passage too short to continue', async () => {
+describe('direct inline completion', () => {
+	it('returns nothing when the passage is too short', async () => {
 		expect(await controller().suggest(actor, request({ prefix: 'Hi' }), signal())).toEqual({
-			text: '',
-			grounded: false
+			outcome: 'no_suggestion',
+			reason: 'ineligible'
 		});
 	});
 
-	it('returns the generated continuation', async () => {
-		const result = await controller().suggest(actor, request(), signal());
-		expect(result.text).toBe(' window.');
+	it('returns completion text even when project retrieval is empty', async () => {
+		expect(await controller().suggest(actor, request(), signal())).toEqual({
+			outcome: 'suggested',
+			text: ' window.',
+			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
+		});
 	});
 
-	it('does not call the model when the preference is disabled', async () => {
-		const generator = new RecordingGenerator();
-		await controller({
-			inlineCompletionGenerator: generator,
-			preferences: preferencesWith(false)
-		}).suggest(actor, request(), signal());
-		expect(generator.calls).toBe(0);
+	it('reports project retrieval without gating completion', async () => {
+		const context = {
+			...emptyContext,
+			projectPassages: [
+				{ sourceTitle: 'Runbook', sourceType: 'note' as const, content: 'Ana owns the cutover.' }
+			]
+		};
+		expect(
+			await controller({
+				inlineCompletionContextBuilder: new ContextBuilder(() => context)
+			}).suggest(actor, request(), signal())
+		).toEqual({
+			outcome: 'suggested',
+			text: ' window.',
+			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 1 }
+		});
 	});
 
-	it('uses the note project instead of a client-provided project', async () => {
-		const briefer = new StubBriefer(async () => brief);
-		await controller({
-			inlineContextBriefer: briefer,
-			noteReader: {
-				get: async (_actor, noteId) =>
-					noteBuilder({ id: noteId, projectId: 'project-2' as ProjectId })
-			}
-		}).suggest(actor, request(), signal());
-		expect(briefer.receivedRequest?.projectId).toBe('project-2');
-	});
-
-	it('does not call the model for an archived note', async () => {
-		const generator = new RecordingGenerator();
-		await controller({
-			inlineCompletionGenerator: generator,
-			noteReader: {
-				get: async (_actor, noteId) => noteBuilder({ id: noteId, archivedAt: testNow })
-			}
-		}).suggest(actor, request(), signal());
-		expect(generator.calls).toBe(0);
-	});
-
-	it('reports a suggestion as grounded when a brief was already warm', async () => {
-		const result = await controller({ inlineBriefCache: new StubCache(brief) }).suggest(
-			actor,
-			request(),
-			signal()
-		);
-		expect(result.grounded).toBe(true);
-	});
-
-	it('reports a suggestion as grounded when a cold brief resolves within the wait', async () => {
-		const result = await controller().suggest(actor, request(), signal());
-		expect(result.grounded).toBe(true);
-	});
-
-	it('returns no suggestion when grounding is slower than the wait', async () => {
+	it('uses the authoritative note project', async () => {
 		const result = await controller({
-			inlineBriefWaitMs: 10,
-			inlineContextBriefer: new StubBriefer(async () => brief, 60)
+			inlineCompletionContextBuilder: new ContextBuilder((input) => ({
+				...emptyContext,
+				noteTitle: input.projectId ?? 'missing'
+			})),
+			inlineCompletionGenerator: new Generator((context) => context.noteTitle)
 		}).suggest(actor, request(), signal());
-		expect(result).toEqual({ text: '', grounded: false });
+		expect(result.outcome === 'suggested' ? result.text : '').toBe('project-1');
 	});
 
-	it('caches a slow brief for the next suggestion even after timing out', async () => {
-		const cache = new StubCache();
-		await controller({
-			inlineBriefCache: cache,
-			inlineBriefWaitMs: 10,
-			inlineContextBriefer: new StubBriefer(async () => brief, 40)
-		}).suggest(actor, request(), signal());
-		await new Promise((resolve) => setTimeout(resolve, 60));
-		expect(cache.stored.get('key-1')).toEqual(brief);
-	});
-
-	it('passes a warm brief to the completion generator', async () => {
-		const generator = new RecordingGenerator();
-		await controller({
-			inlineCompletionGenerator: generator,
-			inlineBriefCache: new StubCache(brief)
-		}).suggest(actor, request(), signal());
-		expect(generator.receivedBrief).toEqual(brief);
-	});
-
-	it('does not run the briefing pass when a brief is already warm', async () => {
-		const briefer = new StubBriefer(async () => brief);
-		await controller({
-			inlineBriefCache: new StubCache(brief),
-			inlineContextBriefer: briefer
-		}).suggest(actor, request(), signal());
-		expect(briefer.calls).toBe(0);
-	});
-
-	it('caches the brief produced by a background briefing pass', async () => {
-		const cache = new StubCache();
-		await controller({ inlineBriefCache: cache }).suggest(actor, request(), signal());
-		await settle();
-		expect(cache.stored.get('key-1')).toEqual(brief);
-	});
-
-	it('returns no suggestion when the briefing pass fails', async () => {
+	it('passes the authoritative full note to context assembly', async () => {
 		const result = await controller({
-			inlineContextBriefer: new StubBriefer(async () => {
-				throw new Error('search unavailable');
-			})
+			inlineCompletionContextBuilder: new ContextBuilder((_input, note) => ({
+				...emptyContext,
+				noteText: note.plainText
+			})),
+			inlineCompletionGenerator: new Generator((context) => context.noteText)
 		}).suggest(actor, request(), signal());
-		expect(result).toEqual({ text: '', grounded: false });
+		expect(result.outcome === 'suggested' ? result.text : '').toBe('Saved note text');
 	});
 
-	it('returns no suggestion when the throttle refuses the request', async () => {
-		const result = await controller({ inlineSuggestionThrottle: new ClosedThrottle() }).suggest(
-			actor,
-			request(),
-			signal()
-		);
-		expect(result).toEqual({ text: '', grounded: false });
+	it('returns nothing when inline completion is disabled', async () => {
+		expect(
+			await controller({ preferences: preferencesWith(false) }).suggest(actor, request(), signal())
+		).toEqual({ outcome: 'no_suggestion', reason: 'ineligible' });
 	});
 
-	it('does not call the model when the throttle refuses the request', async () => {
-		const generator = new RecordingGenerator();
-		await controller({
-			inlineCompletionGenerator: generator,
-			inlineSuggestionThrottle: new ClosedThrottle()
-		}).suggest(actor, request(), signal());
-		expect(generator.calls).toBe(0);
+	it('returns nothing for an archived note', async () => {
+		expect(
+			await controller({
+				noteReader: {
+					get: async (_actor, noteId) => noteBuilder({ id: noteId, archivedAt: testNow })
+				}
+			}).suggest(actor, request(), signal())
+		).toEqual({ outcome: 'no_suggestion', reason: 'ineligible' });
 	});
 
-	it('releases the throttle after the completion fails', async () => {
+	it('returns nothing when the spend guard refuses the request', async () => {
+		expect(
+			await controller({ inlineSuggestionThrottle: new ClosedThrottle() }).suggest(
+				actor,
+				request(),
+				signal()
+			)
+		).toEqual({ outcome: 'busy', retryAfterMs: 250 });
+	});
+
+	it('releases the spend guard when completion fails', async () => {
 		const throttle = new OpenThrottle();
 		const failing: InlineCompletionGenerator = {
 			complete: async () => {
 				throw new Error('provider down');
 			}
 		};
-		await expect(
-			controller({
-				inlineSuggestionThrottle: throttle,
-				inlineCompletionGenerator: failing
-			}).suggest(actor, request(), signal())
-		).rejects.toThrow('provider down');
-		expect(throttle.released).toBe(1);
+		await controller({
+			inlineSuggestionThrottle: throttle,
+			inlineCompletionGenerator: failing
+		})
+			.suggest(actor, request(), signal())
+			.catch(() => undefined);
+		expect(throttle.released).toBe(true);
+	});
+
+	it('releases concurrency without consuming budget when retrieval aborts', async () => {
+		const throttle = new OpenThrottle();
+		const abortingBuilder: InlineCompletionContextBuilder = {
+			build: async () => {
+				throw new DOMException('stale caret', 'AbortError');
+			}
+		};
+		await controller({
+			inlineSuggestionThrottle: throttle,
+			inlineCompletionContextBuilder: abortingBuilder
+		})
+			.suggest(actor, request(), signal())
+			.catch(() => undefined);
+		expect({ released: throttle.released, consumed: throttle.consumed }).toEqual({
+			released: true,
+			consumed: false
+		});
 	});
 });

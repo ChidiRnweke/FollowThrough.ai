@@ -25,12 +25,12 @@ export class OpenAIEmbeddingClient implements EmbeddingClient {
 		this.client = createOpenRouterClient(apiKey, options);
 	}
 
-	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
+	async embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch> {
 		try {
-			const response = await this.client.embeddings.create({
-				model: this.model,
-				input: [...contents]
-			});
+			const response = await this.client.embeddings.create(
+				{ model: this.model, input: [...contents] },
+				{ signal }
+			);
 			const vectors = [...response.data]
 				.sort((a, b) => a.index - b.index)
 				.map((item) => item.embedding);
@@ -38,6 +38,7 @@ export class OpenAIEmbeddingClient implements EmbeddingClient {
 				throw new InvalidGeneratedContentError('Embedding result count did not match input count');
 			return { model: this.model, vectors };
 		} catch (error) {
+			if (signal?.aborted) throw error;
 			if (error instanceof InvalidGeneratedContentError) throw error;
 			throw new ExternalServiceError('Embedding generation failed', {
 				cause: error instanceof Error ? error.message : String(error)

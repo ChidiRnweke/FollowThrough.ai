@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeCompletion } from './inline-completion-generator';
+import type { InlineCompletionContext, InlineSuggestionRequest, NoteId } from '$lib/models';
+import { inlineCompletionPrompt, sanitizeCompletion } from './inline-completion-generator';
+
+const request: InlineSuggestionRequest = {
+	requestId: '00000000-0000-4000-8000-000000000001',
+	noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+	revision: 1,
+	headingPath: [],
+	blockType: 'paragraph',
+	currentSection: 'There is a totally unrelated document about',
+	prefix: 'There is a totally unrelated document about',
+	suffix: ''
+};
+
+const context: InlineCompletionContext = {
+	noteTitle: 'Current note',
+	noteText: 'The full note text.',
+	userMemory: ['The user prefers concise prose.'],
+	projectPassages: [
+		{
+			sourceTitle: 'The Odyssey',
+			sourceType: 'note',
+			content: 'An epic poem attributed to Homer.'
+		}
+	]
+};
 
 describe('sanitizeCompletion', () => {
 	it('returns empty text for an empty completion', () => {
@@ -67,5 +92,23 @@ describe('sanitizeCompletion', () => {
 		expect(sanitizeCompletion('Latency was', ' 1.5 seconds. Then it recovered.')).toBe(
 			' 1.5 seconds. Then it recovered.'
 		);
+	});
+});
+
+describe('inline completion grounding', () => {
+	it('includes source titles in the completion prompt', () => {
+		expect(inlineCompletionPrompt(request, context)).toContain('The Odyssey');
+	});
+
+	it('includes retrieved content in the completion prompt', () => {
+		expect(inlineCompletionPrompt(request, context)).toContain('An epic poem attributed to Homer.');
+	});
+
+	it('includes the authoritative note text in the completion prompt', () => {
+		expect(inlineCompletionPrompt(request, context)).toContain('The full note text.');
+	});
+
+	it('includes user memory in the completion prompt', () => {
+		expect(inlineCompletionPrompt(request, context)).toContain('The user prefers concise prose.');
 	});
 });

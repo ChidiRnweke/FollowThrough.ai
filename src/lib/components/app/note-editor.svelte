@@ -152,7 +152,6 @@
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					purpose: 'complete',
 					requestId: crypto.randomUUID(),
 					noteId,
 					revision,
@@ -161,31 +160,12 @@
 				signal
 			});
 			if (!response.ok) return { text: '' };
-			return (await response.json()) as { readonly text: string };
+			const result = (await response.json()) as
+				| { readonly outcome: 'suggested'; readonly text: string }
+				| { readonly outcome: 'no_suggestion' };
+			return result.outcome === 'suggested' ? { text: result.text } : { text: '' };
 		} catch {
 			return { text: '' };
-		}
-	}
-
-	async function warmInlineContext(
-		input: InlineSuggestionRequestInput,
-		signal: AbortSignal
-	): Promise<void> {
-		try {
-			await fetch('/api/inline-suggestions', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					purpose: 'warm',
-					requestId: crypto.randomUUID(),
-					noteId,
-					revision,
-					...input
-				}),
-				signal
-			});
-		} catch {
-			// Grounding prefetch is opportunistic and must never interrupt writing.
 		}
 	}
 
@@ -211,7 +191,6 @@
 			},
 			getNoteId: () => noteId,
 			getInlineSuggestion: requestInlineSuggestion,
-			warmInlineContext,
 			onUpdate: () => {
 				closeActiveLink();
 				if (initialized) onchange?.();

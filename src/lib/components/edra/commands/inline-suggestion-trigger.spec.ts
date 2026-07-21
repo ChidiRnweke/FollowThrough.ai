@@ -27,7 +27,11 @@ describe('shouldTrigger', () => {
 	});
 
 	it('stays silent in a note too short to continue', () => {
-		expect(shouldTrigger(caret({ documentLength: 12 }))).toBe(false);
+		expect(shouldTrigger(caret({ documentLength: 11 }))).toBe(false);
+	});
+
+	it('suggests early in a new note once there is a meaningful phrase', () => {
+		expect(shouldTrigger(caret({ documentLength: 18, meaningfulPrefixLength: 18 }))).toBe(true);
 	});
 
 	it('stays silent inside a code block', () => {

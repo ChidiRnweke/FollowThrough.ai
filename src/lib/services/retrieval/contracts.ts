@@ -5,7 +5,8 @@ export interface KnowledgeSearcher {
 		actor: ActorContext,
 		query: string,
 		limit?: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]>;
 }
 export interface ContentChunker {
@@ -17,13 +18,14 @@ export interface EmbeddingBatch {
 }
 export interface EmbeddingClient {
 	readonly model: string;
-	embed(contents: readonly string[]): Promise<EmbeddingBatch>;
+	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
 }
 export interface Reranker {
 	rerank(
 		query: string,
 		matches: readonly SearchMatch[],
-		topN: number
+		topN: number,
+		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]>;
 }
 export interface Condenser {

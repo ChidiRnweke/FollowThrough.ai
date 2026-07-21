@@ -22,10 +22,11 @@ export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {
 		actor: ActorContext,
 		query: string,
 		limit = 10,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
-		const batch = await this.embeddingClient.embed([query]);
+		const batch = await this.embeddingClient.embed([query], signal);
 		const embedding = batch.vectors[0];
 		if (!embedding || batch.vectors.length !== 1)
 			throw new InvalidGeneratedContentError('Query embedding returned an invalid result');
@@ -49,13 +50,14 @@ export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
 		actor: ActorContext,
 		query: string,
 		limit = 10,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
 		const wideLimit = Math.max(this.minCandidates, limit * this.candidateMultiplier);
-		const candidates = await this.inner.search(actor, query, wideLimit, projectId);
+		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal);
 		if (candidates.length <= limit) return candidates;
-		return this.reranker.rerank(query, candidates, limit);
+		return this.reranker.rerank(query, candidates, limit, signal);
 	}
 }
 

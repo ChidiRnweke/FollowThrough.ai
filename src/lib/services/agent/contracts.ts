@@ -8,9 +8,10 @@ import type {
 	ExtractPromisesOutput,
 	FindReferencesOutput,
 	GenerateMermaidDiagramOutput,
-	InlineContextBrief,
+	InlineCompletionContext,
 	InlineSuggestionRequest,
 	Message,
+	Note,
 	ProvenanceId,
 	RelateSelectionOutput,
 	RunAgentInput,
@@ -47,44 +48,23 @@ export interface AgentRunner {
 	}): AsyncIterable<AgentExecutionUpdate>;
 }
 
-/**
- * Tier two of inline suggestions: the tool-calling pass that gathers workspace
- * grounding. It runs off the typing path, so it may take seconds.
- */
-export interface InlineContextBriefer {
-	brief(
+/** Deterministically assembles note, memory, and project retrieval context. */
+export interface InlineCompletionContextBuilder {
+	build(
 		actor: ActorContext,
 		request: InlineSuggestionRequest,
+		note: Note,
 		signal: AbortSignal
-	): Promise<InlineContextBrief>;
+	): Promise<InlineCompletionContext>;
 }
 
-/**
- * Tier one: the hot path. No tools, no persistence — just the caret window and
- * whatever brief is already warm.
- */
+/** One toolless model call that turns assembled context into caret text. */
 export interface InlineCompletionGenerator {
 	complete(
 		request: InlineSuggestionRequest,
-		brief: InlineContextBrief | undefined,
+		context: InlineCompletionContext,
 		signal: AbortSignal
 	): Promise<string>;
-}
-
-export interface InlineBriefCache {
-	get(key: string): InlineContextBrief | undefined;
-	set(key: string, brief: InlineContextBrief): void;
-	getOrLoad(key: string, load: () => Promise<InlineContextBrief>): Promise<InlineContextBrief>;
-}
-
-export interface InlineBriefKeyBuilder {
-	(input: {
-		readonly userId: string;
-		readonly noteId: string;
-		readonly projectId: string;
-		readonly heading?: string;
-		readonly passageLength: number;
-	}): string;
 }
 
 /**
@@ -92,8 +72,17 @@ export interface InlineBriefKeyBuilder {
  * queue behind another. `admit` refuses a second concurrent request for one
  * user and anything past the per-minute budget.
  */
+export type InlineSuggestionAdmission =
+	| { readonly allowed: true }
+	| {
+			readonly allowed: false;
+			readonly reason: 'busy' | 'rate_limited';
+			readonly retryAfterMs: number;
+	  };
+
 export interface InlineSuggestionThrottle {
-	admit(userId: string): boolean;
+	admit(userId: string): InlineSuggestionAdmission;
+	consume(userId: string): InlineSuggestionAdmission;
 	release(userId: string): void;
 }
 

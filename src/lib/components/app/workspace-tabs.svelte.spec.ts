@@ -157,6 +157,71 @@ describe('WorkspaceTabs', () => {
 		}
 	});
 
+	it('marks a folded project as collapsed for assistive technology', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		const collapse = screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' });
+		const collapseButton = collapse.element();
+		await collapse.click();
+		expect(collapseButton.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('removes a folded unpinned tab from keyboard and assistive technology immediately', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		const wrapper = screen.container.querySelector(`[data-project-tab="${id(2)}"]`);
+		expect(wrapper?.hasAttribute('inert')).toBe(true);
+	});
+
+	it('keeps a folded unpinned tab mounted while its exit animation runs', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+		const exitingTab = screen.container.querySelector(`[data-project-tab="${id(2)}"] [role="tab"]`);
+		expect(exitingTab).not.toBeNull();
+	});
+
+	it('removes a folded unpinned tab after its exit animation', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		await new Promise((resolve) => setTimeout(resolve, 350));
+		const foldedTab = screen.container.querySelector(`[data-project-tab="${id(2)}"] [role="tab"]`);
+		expect(foldedTab).toBeNull();
+	});
+
+	it('keeps pinned tabs visible when their project is folded', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		workbenchState.isPinned = (noteId: NoteId) => noteId === id(1);
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		const pinnedTab = screen.container.querySelector(`[data-project-tab="${id(1)}"] [role="tab"]`);
+		expect(pinnedTab).not.toBeNull();
+	});
+
+	it('keeps other projects visible when one project is folded', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		const otherProjectTab = screen.container.querySelector(
+			`[data-project-tab="${id(3)}"] [role="tab"]`
+		);
+		expect(otherProjectTab).not.toBeNull();
+	});
+
+	it('restores folded tabs when their project is expanded', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
+		await screen.getByRole('button', { name: 'Collapse Acme rebrand tabs' }).click();
+		await screen.getByRole('button', { name: 'Expand Acme rebrand tabs' }).click();
+		const restoredTab = screen.container.querySelector(
+			`[data-project-tab="${id(2)}"] [role="tab"]`
+		);
+		expect(restoredTab).not.toBeNull();
+	});
+
 	it('renders a pin glyph for pinned tabs', async () => {
 		useTabs([id(1), id(2), id(3)], id(2));
 		// `isPinned` is set in the mock's initial definition to return true

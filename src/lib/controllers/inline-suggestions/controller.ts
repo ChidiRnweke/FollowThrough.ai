@@ -1,39 +1,20 @@
-import type {
-	ActorContext,
-	InlineContextBrief,
-	InlineSuggestion,
-	InlineSuggestionRequest
+import {
+	ExternalServiceError,
+	type ActorContext,
+	type InlineSuggestion,
+	type InlineSuggestionRequest,
+	type Note
 } from '$lib/models';
 import type {
-	InlineBriefCache,
-	InlineBriefKeyBuilder,
+	AgentPreferencesStore,
+	InlineCompletionContextBuilder,
 	InlineCompletionGenerator,
-	InlineContextBriefer,
 	InlineSuggestionThrottle
 } from '$lib/services';
-import type { AgentPreferencesStore } from '$lib/services';
 import type { NoteReader } from '$lib/services/notes/contracts';
 
-/**
- * Orchestrates the two tiers of proactive ghost text.
- *
- * The completion runs only when a concrete, project-grounded brief is ready.
- * The briefing pass can outlive an abandoned caret request, so a slow cache
- * miss warms the next pause without ever showing speculative text. An accepted
- * suggestion becomes an ordinary note edit; an unaccepted one is not persisted.
- */
-
-/** Below this, there is not enough of a sentence to continue meaningfully. */
-const MIN_PREFIX_LENGTH = 40;
-
-/**
- * How long a suggestion waits for a cold grounded brief before staying silent.
- * Long enough for the first suggestion in a section to land when retrieval is
- * quick; bounded so an abandoned request never sits on the typing path.
- */
-const INLINE_BRIEF_WAIT_MS = 2_500;
-
-const NOTHING: InlineSuggestion = { text: '', grounded: false };
+const MIN_PREFIX_LENGTH = 12;
+const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
 
 export interface InlineSuggestionsController {
 	suggest(
@@ -41,23 +22,14 @@ export interface InlineSuggestionsController {
 		request: InlineSuggestionRequest,
 		signal: AbortSignal
 	): Promise<InlineSuggestion>;
-	warm(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		signal: AbortSignal
-	): Promise<boolean>;
 }
 
 export interface InlineSuggestionsDependencies {
 	inlineCompletionGenerator: InlineCompletionGenerator;
-	inlineContextBriefer: InlineContextBriefer;
-	inlineBriefCache: InlineBriefCache;
-	inlineBriefKey: InlineBriefKeyBuilder;
+	inlineCompletionContextBuilder: InlineCompletionContextBuilder;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
-	/** Maximum time a completion waits for a cold grounded brief. Test seam. */
-	inlineBriefWaitMs?: number;
 }
 
 export class DefaultInlineSuggestionsController implements InlineSuggestionsController {
@@ -68,100 +40,57 @@ export class DefaultInlineSuggestionsController implements InlineSuggestionsCont
 		request: InlineSuggestionRequest,
 		signal: AbortSignal
 	): Promise<InlineSuggestion> {
-		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return NOTHING;
-		const authoritativeRequest = await this.authorize(actor, request);
-		if (!authoritativeRequest) return NOTHING;
-		const key = this.key(actor, authoritativeRequest);
-		const brief =
-			this.dependencies.inlineBriefCache.get(key) ??
-			(await this.waitForBrief(this.load(actor, authoritativeRequest, key), signal));
-		if (!brief || !isGrounded(brief)) return NOTHING;
-		if (!this.dependencies.inlineSuggestionThrottle.admit(actor.userId)) return NOTHING;
+		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return INELIGIBLE;
+		const note = await this.authorize(actor, request);
+		if (!note) return INELIGIBLE;
+		const admission = this.dependencies.inlineSuggestionThrottle.admit(actor.userId);
+		if (!admission.allowed)
+			return { outcome: admission.reason, retryAfterMs: admission.retryAfterMs };
+		const authoritativeRequest = { ...request, projectId: note.projectId };
 		try {
-			const text = await this.dependencies.inlineCompletionGenerator.complete(
+			const context = await this.dependencies.inlineCompletionContextBuilder.build(
+				actor,
 				authoritativeRequest,
-				brief,
+				note,
 				signal
 			);
-			return { text, grounded: true };
+			const budget = this.dependencies.inlineSuggestionThrottle.consume(actor.userId);
+			if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
+			let text: string;
+			try {
+				text = await this.dependencies.inlineCompletionGenerator.complete(
+					authoritativeRequest,
+					context,
+					signal
+				);
+			} catch (error) {
+				if (signal.aborted) throw error;
+				throw new ExternalServiceError('Inline completion provider failed', {
+					cause: error instanceof Error ? error.message : String(error)
+				});
+			}
+			if (!text) return { outcome: 'no_suggestion', reason: 'empty_model' };
+			return {
+				outcome: 'suggested',
+				text,
+				grounding: {
+					currentNote: true,
+					userMemoryCount: context.userMemory.length,
+					projectPassageCount: context.projectPassages.length
+				}
+			};
 		} finally {
 			this.dependencies.inlineSuggestionThrottle.release(actor.userId);
 		}
 	}
 
-	async warm(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		signal: AbortSignal
-	): Promise<boolean> {
-		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return false;
-		const authoritativeRequest = await this.authorize(actor, request);
-		if (!authoritativeRequest) return false;
-		const key = this.key(actor, authoritativeRequest);
-		const brief =
-			this.dependencies.inlineBriefCache.get(key) ??
-			(await this.waitForBrief(this.load(actor, authoritativeRequest, key), signal));
-		return Boolean(brief && isGrounded(brief));
-	}
-
-	/**
-	 * Start the briefing pass on a detached signal. A caret move can abandon the
-	 * waiting request without wasting retrieval already underway; a later pause
-	 * in the same section can reuse the in-flight or cached brief.
-	 */
-	private load(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		key: string
-	): Promise<InlineContextBrief> {
-		return this.dependencies.inlineBriefCache.getOrLoad(key, () =>
-			this.dependencies.inlineContextBriefer
-				.brief(actor, request, new AbortController().signal)
-				.then((brief) => {
-					if (isGrounded(brief)) this.dependencies.inlineBriefCache.set(key, brief);
-					return brief;
-				})
-		);
-	}
-
-	private async waitForBrief(
-		pending: Promise<InlineContextBrief>,
-		signal: AbortSignal
-	): Promise<InlineContextBrief | undefined> {
-		const waitMs = this.dependencies.inlineBriefWaitMs ?? INLINE_BRIEF_WAIT_MS;
-		const deadline = AbortSignal.timeout(waitMs);
-		const combined = AbortSignal.any([signal, deadline]);
-		if (combined.aborted) return undefined;
-		return new Promise((resolve) => {
-			const stop = () => resolve(undefined);
-			combined.addEventListener('abort', stop, { once: true });
-			void pending
-				.then(resolve, () => resolve(undefined))
-				.finally(() => combined.removeEventListener('abort', stop));
-		});
-	}
-
 	private async authorize(
 		actor: ActorContext,
 		request: InlineSuggestionRequest
-	): Promise<InlineSuggestionRequest | undefined> {
+	): Promise<Note | undefined> {
 		if (!(await this.dependencies.preferences.get(actor)).inlineSuggestionsEnabled)
 			return undefined;
 		const note = await this.dependencies.noteReader.get(actor, request.noteId);
-		if (note.archivedAt) return undefined;
-		return { ...request, projectId: note.projectId };
-	}
-
-	private key(actor: ActorContext, request: InlineSuggestionRequest): string {
-		const headingPath = request.headingPath.join(' > ');
-		return this.dependencies.inlineBriefKey({
-			userId: actor.userId,
-			noteId: request.noteId,
-			projectId: request.projectId!,
-			passageLength: request.currentSection.length,
-			...(headingPath || request.heading ? { heading: headingPath || request.heading } : {})
-		});
+		return note.archivedAt ? undefined : note;
 	}
 }
-
-const isGrounded = (brief: InlineContextBrief): boolean => brief.facts.length > 0;
