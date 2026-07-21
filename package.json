@@ -28,6 +28,8 @@
 	"devDependencies": {
 		"@arizeai/phoenix-client": "^6.14.0",
 		"@arizeai/phoenix-evals": "^1.2.0",
+		"@electric-sql/pglite": "^0.5.4",
+		"@electric-sql/pglite-pgvector": "^0.0.5",
 		"@eslint/js": "latest",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",
