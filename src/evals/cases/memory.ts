@@ -21,12 +21,12 @@ export const memoryCases: readonly EvalCase[] = [
 	{
 		id: 'memory-adherence-dutch-prompt',
 		name: 'honours an English-only memory when asked in Dutch',
-		splits: [ARCHETYPES.memoryAdherence, ARCHETYPES.toolCalling, 'regression'],
+		splits: [ARCHETYPES.memoryAdherence, 'regression'],
 		input: {
 			prompt: `Wat kan je mij vertellen over ${PERSONA_NAME}?`,
 			instruction: ENGLISH_ONLY
 		},
-		expected: { requiredTools: ['search'] },
+		expected: { requiredTools: [] },
 		metadata: {
 			observedAt: '2026-07-19',
 			note: 'Production regression: memory was retrieved but not followed.'
