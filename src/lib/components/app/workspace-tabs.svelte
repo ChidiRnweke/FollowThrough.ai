@@ -10,6 +10,7 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { hasInternalNoteDrag, readActiveNoteDrag, writeNoteDrag } from '$lib/client/note-drag';
 
 	let {
 		shell,
@@ -68,6 +69,30 @@
 	}
 
 	const hasTabs = $derived(workbench.openTabs.length > 0);
+	let noteDragOver = $state(false);
+
+	function onDragOver(event: DragEvent): void {
+		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		event.preventDefault();
+		noteDragOver = true;
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+	}
+
+	function onDragLeave(event: DragEvent): void {
+		if (event.currentTarget instanceof Node && event.relatedTarget instanceof Node) {
+			if (event.currentTarget.contains(event.relatedTarget)) return;
+		}
+		noteDragOver = false;
+	}
+
+	function onDrop(event: DragEvent): void {
+		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		event.preventDefault();
+		noteDragOver = false;
+		const noteId = readActiveNoteDrag(event.dataTransfer, shell.noteTree);
+		if (!noteId) return;
+		void workbench.openTabInBackground(noteId);
+	}
 
 	function horizontalPanelCollapse(node: HTMLElement) {
 		const width = node.offsetWidth;
@@ -93,7 +118,11 @@
 		? 'h-6'
 		: 'h-9'}"
 	role="tablist"
+	tabindex="-1"
 	aria-label="Open notes"
+	ondragover={onDragOver}
+	ondragleave={onDragLeave}
+	ondrop={onDrop}
 >
 	{#if hidden}
 		<!-- Collapsed strip: the 24px height keeps the reveal affordance visible
@@ -112,6 +141,13 @@
 		</div>
 	{:else}
 		<div class="flex h-9 items-stretch gap-0 overflow-x-auto px-2">
+			{#if noteDragOver}
+				<div
+					class="absolute inset-0 z-40 flex items-center justify-center border border-primary bg-background text-xs font-medium text-foreground"
+				>
+					Drop to add tab
+				</div>
+			{/if}
 			{#if hasTabs}
 				{#each groups as group, groupIndex (group.projectId)}
 					{#if groupIndex > 0}
@@ -136,7 +172,7 @@
 						<div class="flex items-center gap-1 pr-1">
 							<span class="h-4 w-px shrink-0 bg-primary/40" aria-hidden="true"></span>
 							<span
-								class="max-w-[10rem] cursor-default truncate text-xs font-medium uppercase tracking-wide text-muted-foreground"
+								class="max-w-40 cursor-default truncate text-xs font-medium uppercase tracking-wide text-muted-foreground"
 							>
 								{group.projectName}
 							</span>
@@ -169,15 +205,11 @@
 										aria-selected={active}
 										draggable="true"
 										title={titleOf(noteId)}
-										class="group relative flex h-full min-w-[8rem] max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
+										class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
 											? 'bg-background font-medium text-foreground'
 											: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
 										ondragstart={(event) => {
-											event.dataTransfer?.setData('text/x-followthrough-note-id', noteId);
-											// `move` tells the browser to allow the drop
-											// into our editor area; we don't actually
-											// move the source — `setSplit` reuses the id.
-											if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+											if (event.dataTransfer) writeNoteDrag(event.dataTransfer, noteId);
 										}}
 										onclick={() => void workbench.focusTab(noteId)}
 									>

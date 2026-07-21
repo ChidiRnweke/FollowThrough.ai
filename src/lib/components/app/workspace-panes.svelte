@@ -9,6 +9,7 @@
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
 	import { appContext } from '$lib/stores/app-context.svelte';
+	import { hasInternalNoteDrag, readActiveNoteDrag } from '$lib/client/note-drag';
 
 	let {
 		shell,
@@ -58,14 +59,16 @@
 	let dragCounter = 0;
 
 	function onDragEnter(event: DragEvent): void {
+		if (!hasInternalNoteDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		dragCounter += 1;
 		dragOverActive = true;
 	}
 
 	function onDragOver(event: DragEvent): void {
+		if (!hasInternalNoteDrag(event.dataTransfer)) return;
 		event.preventDefault();
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
 	}
 
 	function onDragLeave(event: DragEvent): void {
@@ -78,11 +81,14 @@
 	}
 
 	function onDrop(event: DragEvent): void {
+		if (!hasInternalNoteDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		dragOverActive = false;
 		dragCounter = 0;
-		const id = event.dataTransfer?.getData('text/x-followthrough-note-id');
-		if (id) void workbench.setSplit(id as NoteId);
+		const noteId = readActiveNoteDrag(event.dataTransfer, shell.noteTree);
+		if (!noteId || noteId === focusedNoteId || noteId === splitNoteId) return;
+		narrowPaneId = noteId;
+		void workbench.setSplit(noteId);
 	}
 
 	function markInteraction(noteId: NoteId): void {
@@ -183,7 +189,9 @@
 		{/if}
 	</div>
 
-	{#if dragOverActive && !splitActive}
-		<div class="workspace-split-drop-preview" aria-hidden="true">Drop to open side-by-side</div>
+	{#if dragOverActive}
+		<div class="workspace-split-drop-preview" aria-hidden="true">
+			{splitActive ? 'Drop to replace side-by-side note' : 'Drop to open side-by-side'}
+		</div>
 	{/if}
 </div>

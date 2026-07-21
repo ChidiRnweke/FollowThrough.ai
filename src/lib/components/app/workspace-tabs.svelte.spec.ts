@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup } from 'vitest-browser-svelte';
 import type { NoteId, NoteSummary, ProjectId, ShellContext } from '$lib/models';
+import { NOTE_DRAG_MIME } from '$lib/client/note-drag';
 
 const id = (n: number): NoteId =>
 	`00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as NoteId;
@@ -33,6 +34,7 @@ const workbenchState = {
 	isPinned: () => false,
 	focusTab: vi.fn(),
 	closeTab: vi.fn(),
+	openTabInBackground: vi.fn(),
 	toggleStripHidden: vi.fn()
 };
 
@@ -86,6 +88,7 @@ afterEach(() => {
 	workbenchState.recentlyUsed = [];
 	workbenchState.stripHidden = false;
 	workbenchState.isPinned = () => false;
+	workbenchState.openTabInBackground.mockClear();
 });
 
 const useTabs = (tabs: NoteId[], focused?: NoteId): void => {
@@ -349,7 +352,23 @@ describe('WorkspaceTabs', () => {
 		const event = new Event('dragstart', { bubbles: true, cancelable: true });
 		Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
 		firstTab.dispatchEvent(event);
-		expect(dataTransfer._data['text/x-followthrough-note-id']).toBe(id(1));
-		expect(dataTransfer.effectAllowed).toBe('move');
+		expect({
+			payload: dataTransfer._data[NOTE_DRAG_MIME],
+			effect: dataTransfer.effectAllowed
+		}).toEqual({ payload: id(1), effect: 'copy' });
+	});
+
+	it('opens a valid dropped note in the background', async () => {
+		useTabs([id(1)], id(1));
+		const screen = await render(WorkspaceTabs, { shell });
+		const dataTransfer = {
+			types: [NOTE_DRAG_MIME],
+			getData: (type: string) => (type === NOTE_DRAG_MIME ? id(2) : ''),
+			dropEffect: 'none'
+		};
+		const event = new Event('drop', { bubbles: true, cancelable: true });
+		Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+		screen.getByRole('tablist', { name: 'Open notes' }).element().dispatchEvent(event);
+		expect(workbenchState.openTabInBackground).toHaveBeenCalledWith(id(2));
 	});
 });

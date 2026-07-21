@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models';
 import {
+	addTabInBackgroundInState,
 	closeTabInState,
 	focusTabInState,
 	moveTabInState,
@@ -176,6 +177,26 @@ describe('openTabInState', () => {
 			focusedNoteId: id(2),
 			openTabs: [id(1), id(2)]
 		});
+	});
+});
+
+describe('addTabInBackgroundInState', () => {
+	it('creates and focuses the first tab without active workbench state', () => {
+		expect(addTabInBackgroundInState(undefined, id(1))).toEqual(state(id(1)));
+	});
+
+	it('appends while preserving focus and split', () => {
+		const s = splitState(id(1), id(2), id(1), id(2));
+		expect(addTabInBackgroundInState(s, id(3))).toEqual({
+			focusedNoteId: id(1),
+			openTabs: [id(1), id(2), id(3)],
+			splitNoteId: id(2)
+		});
+	});
+
+	it('returns the same state for a duplicate tab', () => {
+		const s = splitState(id(1), id(2), id(1), id(2));
+		expect(addTabInBackgroundInState(s, id(2))).toBe(s);
 	});
 });
 

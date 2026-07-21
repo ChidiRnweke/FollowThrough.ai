@@ -124,9 +124,7 @@ export function focusTabInState(state: WorkbenchUrlState, noteId: NoteId): Workb
 			splitNoteId: state.focusedNoteId
 		};
 	}
-	const openTabs = state.openTabs.includes(noteId)
-		? state.openTabs
-		: [...state.openTabs, noteId];
+	const openTabs = state.openTabs.includes(noteId) ? state.openTabs : [...state.openTabs, noteId];
 	return {
 		focusedNoteId: noteId,
 		openTabs,
@@ -147,6 +145,20 @@ export function openTabInState(
 	if (!state) return { focusedNoteId: noteId, openTabs: [noteId] };
 	if (state.openTabs.includes(noteId)) return focusTabInState(state, noteId);
 	return { focusedNoteId: noteId, openTabs: [...state.openTabs, noteId] };
+}
+
+/** Appends a note without disturbing the current focus, tab order, or split. */
+export function addTabInBackgroundInState(
+	state: WorkbenchUrlState | undefined,
+	noteId: NoteId
+): WorkbenchUrlState {
+	if (!state) return { focusedNoteId: noteId, openTabs: [noteId] };
+	if (state.openTabs.includes(noteId)) return state;
+	return {
+		focusedNoteId: state.focusedNoteId,
+		openTabs: [...state.openTabs, noteId],
+		...(state.splitNoteId ? { splitNoteId: state.splitNoteId } : {})
+	};
 }
 
 /**
@@ -236,8 +248,6 @@ export function setSplitInState(
 		};
 	}
 	if (state.splitNoteId === noteId) return state;
-	const openTabs = state.openTabs.includes(noteId)
-		? state.openTabs
-		: [...state.openTabs, noteId];
+	const openTabs = state.openTabs.includes(noteId) ? state.openTabs : [...state.openTabs, noteId];
 	return { focusedNoteId: state.focusedNoteId, openTabs, splitNoteId: noteId };
 }

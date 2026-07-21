@@ -6,6 +6,7 @@ import {
 	type WorkspaceRecord
 } from '$lib/client/note-sync/indexeddb-workspace-repository';
 import {
+	addTabInBackgroundInState,
 	closeTabInState,
 	focusTabInState,
 	moveTabInState,
@@ -352,6 +353,14 @@ class WorkbenchStore {
 		const next = moveTabInState(current, from, to);
 		if (next === current) return;
 		await this.navigate(next, { replace: true, invalidate: false });
+	}
+
+	/** Add a tab without changing focus, split context, ordering, or strip visibility. */
+	async openTabInBackground(noteId: NoteId): Promise<void> {
+		const current = this.toUrlState();
+		const next = addTabInBackgroundInState(current, noteId);
+		if (next === current) return;
+		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/**

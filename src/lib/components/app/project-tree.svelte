@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { NoteId, NoteSummary, Project, ProjectId } from '$lib/models';
 	import { goto } from '$app/navigation';
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
+	import { writeNoteDrag } from '$lib/client/note-drag';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -17,6 +18,7 @@
 	import Pin from '@lucide/svelte/icons/pin';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Wrench from '@lucide/svelte/icons/wrench';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
@@ -320,6 +322,11 @@
 		else if (parentId && !isFolderOpen(parentId)) toggled.add(parentId);
 	}
 
+	function openSideBySide(noteId: NoteId): void {
+		if (noteId === workbench.focusedNoteId || noteId === workbench.splitNoteId) return;
+		void workbench.setSplit(noteId);
+	}
+
 	function openNewProject(): void {
 		dialog = { kind: 'new-project' };
 	}
@@ -329,6 +336,13 @@
 
 <!-- Shared context/dropdown items for a tree entry (note, skill, or folder). -->
 {#snippet entryMenuItems(entry: NoteSummary, Menu: typeof ContextMenu | typeof DropdownMenu)}
+	{#if entry.kind === 'note'}
+		<Menu.Item onclick={() => void workbench.openTabInBackground(entry.id)}>
+			Open in background tab
+		</Menu.Item>
+		<Menu.Item onclick={() => openSideBySide(entry.id)}>Open side-by-side</Menu.Item>
+		<Menu.Separator />
+	{/if}
 	{#if entry.kind === 'folder'}
 		<Menu.Item onclick={() => startCreate('folder', entry.projectId, entry.id)}>
 			<FolderPlus class="size-4" />
@@ -423,6 +437,15 @@
 				oncancel={() => (inlineEdit = null)}
 			/>
 		{:else}
+			<button
+				type="button"
+				use:dragHandle
+				class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
+				aria-label="Reorder {entry.title}"
+				title="Reorder {entry.title}"
+			>
+				<GripVertical class="size-3" />
+			</button>
 			<ContextMenu.Root>
 				<ContextMenu.Trigger>
 					{#if isFolder}
@@ -454,6 +477,12 @@
 								<a
 									href="/notes/{entry.id}"
 									{...props}
+									draggable={entry.kind === 'note'}
+									ondragstart={(event) => {
+										if (entry.kind !== 'note' || !event.dataTransfer) return;
+										event.stopPropagation();
+										writeNoteDrag(event.dataTransfer, entry.id);
+									}}
 									onclick={(event) => {
 										if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
 											return;
@@ -507,7 +536,7 @@
 				<div class="min-h-0 overflow-hidden">
 					<ul
 						class="ml-3.5 flex min-h-1.5 min-w-0 flex-col gap-1 border-l border-sidebar-border py-0.5 pl-2.5"
-						use:dndzone={{
+						use:dragHandleZone={{
 							items: zoneItems(entry.projectId, entry.id),
 							type: `tree-${entry.projectId}`,
 							flipDurationMs: 125,
@@ -635,7 +664,7 @@
 						</ul>
 						<ul
 							class="flex min-h-1.5 min-w-0 flex-col gap-1"
-							use:dndzone={{
+							use:dragHandleZone={{
 								items: entries,
 								type: `tree-${project.id}`,
 								flipDurationMs: 125,
