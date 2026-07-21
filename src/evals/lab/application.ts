@@ -1,8 +1,4 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import { fileURLToPath } from 'node:url';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
 import { OpenAIEmbeddingClient } from '$lib/server/domain/openai-embedding-capabilities';
 import { OpenRouterReranker } from '$lib/server/domain/openrouter-rerank-capabilities';
@@ -16,6 +12,7 @@ import { DiskCache } from './cache/disk-cache';
 import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
 import type { EmbeddingClient } from '$lib/services';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
+import { createPGliteDatabase } from './pglite-database';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
@@ -32,19 +29,18 @@ export interface Lab extends ProductionApplication {
 }
 
 export interface LabOptions {
-	readonly databaseUrl: string;
 	/** Defaults to EVAL_MODEL, so a sweep is the same suite under a different env var. */
 	readonly model?: string;
 }
 
 /**
- * The production graph, pointed at a testcontainer database, with only the
+ * The production graph backed by an in-process PGlite database, with only the
  * non-deterministic external edges replaced: attachments stay in memory, the
  * model catalog stops calling OpenRouter, and the auxiliary LLM calls replay
  * from disk. The agent loop, tool registry, controllers and repositories are
  * exactly what runs in production.
  */
-export async function createLab(options: LabOptions): Promise<Lab> {
+export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	loadDotenv({ quiet: true });
 	const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 	if (!openRouterApiKey)
@@ -60,8 +56,7 @@ export async function createLab(options: LabOptions): Promise<Lab> {
 	const baseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL;
 	const appURL = 'http://localhost:5173';
 
-	const client = postgres(options.databaseUrl, { max: 4 });
-	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
+	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
 	const clientOptions = { baseURL, appURL };
@@ -95,7 +90,7 @@ export async function createLab(options: LabOptions): Promise<Lab> {
 		embeddingClient,
 		async close() {
 			await cache.flush();
-			await client.end();
+			await closeDatabase();
 		}
 	};
 }

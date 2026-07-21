@@ -14,7 +14,8 @@ import type {
 	RelevantSkillSelector,
 	SkillUsageRecorder,
 	ConversationJournal,
-	ProjectReader
+	ProjectReader,
+	MemoryEntryLister
 } from '$lib/services';
 import { KeywordRelevantSkillSelector } from '$lib/services';
 
@@ -34,7 +35,8 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly skillSelector: RelevantSkillSelector = new KeywordRelevantSkillSelector(),
 		private readonly skillUsageRecorder?: SkillUsageRecorder,
 		private readonly conversations?: ConversationJournal,
-		private readonly projects?: ProjectReader
+		private readonly projects?: ProjectReader,
+		private readonly memoryLister?: MemoryEntryLister
 	) {}
 
 	async build(
@@ -46,10 +48,12 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		const projectId =
 			input.projectId ??
 			(typeof base.projectId === 'string' ? (base.projectId as ProjectId) : undefined);
-		const [availableSkills, contextNotes] = await Promise.all([
+		const [availableSkills, contextNotes, allMemories] = await Promise.all([
 			this.skillFinder.listEnabled(actor, projectId),
-			this.loadContextNotes(actor, input.contextNoteIds ?? [])
+			this.loadContextNotes(actor, input.contextNoteIds ?? []),
+			this.memoryLister ? this.memoryLister.list(actor, {}) : Promise.resolve([])
 		]);
+		const userMemories = allMemories.filter((m) => m.shareWithAgents);
 		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
 		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
 		const selected = await this.skillSelector.select(actor, input.prompt, availableSkills);
@@ -63,6 +67,9 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		return {
 			...base,
 			...(await this.resolveAppContext(actor, input, run.conversationId)),
+			...(userMemories.length > 0
+				? { userMemory: userMemories.map((entry) => entry.content) }
+				: {}),
 			contextNotes: contextNotes.map((note) => ({
 				noteId: note.id,
 				title: note.title,

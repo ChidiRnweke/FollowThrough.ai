@@ -26,7 +26,7 @@ export const memoryCases: readonly EvalCase[] = [
 			prompt: `Wat kan je mij vertellen over ${PERSONA_NAME}?`,
 			instruction: ENGLISH_ONLY
 		},
-		expected: { requiredTools: ['list_user_memory', 'search'] },
+		expected: { requiredTools: ['search'] },
 		metadata: {
 			observedAt: '2026-07-19',
 			note: 'Production regression: memory was retrieved but not followed.'

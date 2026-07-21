@@ -1,5 +1,5 @@
 import * as px from '@arizeai/phoenix-client/vitest';
-import { afterAll, beforeAll, inject } from 'vitest';
+import { afterAll, beforeAll } from 'vitest';
 import { createLab, type Lab } from '../lab/application';
 import { ARCHETYPES } from '../cases/types';
 import { toolCallingCases } from '../cases/tool-calling';
@@ -70,7 +70,7 @@ px.describe(
 	suiteName('capabilities'),
 	() => {
 		beforeAll(async () => {
-			lab = await createLab({ databaseUrl: inject('databaseUrl') });
+			lab = await createLab();
 		});
 
 		afterAll(async () => {

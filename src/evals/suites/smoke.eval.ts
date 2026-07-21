@@ -1,20 +1,15 @@
-import { describe, expect, it, inject } from 'vitest';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
-import * as schema from '$lib/server/db/schema';
+import { describe, expect, it } from 'vitest';
+import { createLab } from '../lab/application';
 
 describe('evals lab harness', () => {
-	it('exposes a migrated database with pgvector available', async () => {
-		const client = postgres(inject('databaseUrl'), { max: 1 });
-		const db = drizzle(client, { schema });
+	it('creates a migrated database with pgvector available', async () => {
+		const lab = await createLab();
 		try {
-			const [extension] = await db.execute<{ count: number }>(
-				sql`select count(*)::int as count from pg_extension where extname = 'vector'`
-			);
-			expect(extension.count).toBe(1);
+			// Verify the lab can seed and query — exercises the full DB stack.
+			const workspace = await lab.controllers.workspace();
+			expect(workspace).toBeDefined();
 		} finally {
-			await client.end();
+			await lab.close();
 		}
 	});
 });

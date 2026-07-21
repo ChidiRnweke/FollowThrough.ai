@@ -790,14 +790,15 @@ export class AgentToolRegistry {
 			),
 			define(
 				'list_user_memory',
-				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects. Use when personal context could improve the response.',
+				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects.',
 				'read',
 				none,
-				async () => ({
-					entries: (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
+				async () => {
+					const entries = (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
 						projectMemory
-					)
-				})
+					);
+					return { entries };
+				}
 			),
 			define(
 				'propose_memory_change',
