@@ -145,7 +145,7 @@
 	$effect(() => {
 		void colorMode.current;
 		if (!isEditing && code !== undefined && container) {
-			debouncedRender(container, code, 300);
+			renderMermaid(container, code);
 		}
 	});
 
@@ -406,7 +406,7 @@
 </script>
 
 <NodeViewWrapper
-	class="diagram-node my-4! w-full flex flex-col items-center group relative rounded-lg overflow-hidden transition-all duration-200"
+	class="diagram-node my-4! w-full flex flex-col items-center group relative rounded-lg overflow-hidden"
 	contenteditable={false}
 >
 	{#if isEditing}
