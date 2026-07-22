@@ -5,13 +5,12 @@
 		Conversation,
 		NoteId,
 		ProjectId,
-		ShellContext,
-		TodoId,
-		TodoStatus
+		ShellContext
 	} from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
+	import * as Sheet from '$lib/components/ui/sheet';
 	import Plus from '@lucide/svelte/icons/plus';
 	import X from '@lucide/svelte/icons/x';
 	import { chat } from '$lib/stores/chat.svelte';
@@ -28,8 +27,7 @@
 		agentModels,
 		agentAvailable,
 		activeNoteId,
-		activeProjectId,
-		onstatus
+		activeProjectId
 	}: {
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
@@ -38,7 +36,6 @@
 		agentAvailable: boolean;
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;
-		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 	} = $props();
 
 	const titles = {
@@ -58,7 +55,7 @@
 </script>
 
 <aside
-	class="hidden h-full shrink-0 overflow-hidden bg-sidebar transition-[width] duration-(--duration-panel) ease-(--ease-standard) md:flex {open
+	class="hidden h-full shrink-0 overflow-hidden bg-sidebar transition-[width] duration-(--duration-panel) ease-(--ease-standard) 2xl:flex {open
 		? 'w-96 border-l border-border'
 		: 'w-0 border-l border-transparent'}"
 	aria-label={titles[renderedMode]}
@@ -104,7 +101,7 @@
 				/>
 			{:else if renderedMode === 'todo-detail'}
 				<ScrollArea class="h-full">
-					<TodoDetailPanel {onstatus} />
+					<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
 				</ScrollArea>
 			{:else if renderedMode === 'project-memory'}
 				<MemoryPanel />
@@ -116,3 +113,23 @@
 		</div>
 	</div>
 </aside>
+
+<Sheet.Root
+	open={open && (renderedMode === 'project-memory' || renderedMode === 'suggestions')}
+	onOpenChange={(value) => {
+		if (!value) rightPanel.close();
+	}}
+>
+	<Sheet.Content side="right" class="flex w-full max-w-full flex-col p-0 sm:max-w-lg 2xl:hidden">
+		<Sheet.Header class="shrink-0 border-b border-border px-4 py-3">
+			<Sheet.Title>{titles[renderedMode]}</Sheet.Title>
+		</Sheet.Header>
+		<div class="min-h-0 flex-1 overflow-y-auto p-4">
+			{#if renderedMode === 'project-memory'}
+				<MemoryPanel />
+			{:else if renderedMode === 'suggestions'}
+				<SuggestionsPanel />
+			{/if}
+		</div>
+	</Sheet.Content>
+</Sheet.Root>

@@ -13,6 +13,11 @@
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import { dragHandle } from 'svelte-dnd-action';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import MoreHorizontal from '@lucide/svelte/icons/ellipsis';
+	import { todoStatusLabels } from './labels';
+
+	const statuses: readonly TodoStatus[] = ['backlog', 'open', 'in_progress', 'done'];
 
 	let {
 		view,
@@ -101,6 +106,38 @@
 					sourceTitle={view.sourceNote?.title}
 					href={view.sourceNote ? `/notes/${view.sourceNote.id}` : undefined}
 				/>
+			</Card.Action>
+		{/if}
+		{#if onstatus}
+			<Card.Action>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon"
+								class="size-11 sm:size-8"
+								aria-label="Move todo"
+							>
+								<MoreHorizontal />
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Group>
+							<DropdownMenu.Label>Move to…</DropdownMenu.Label>
+							{#each statuses as status (status)}
+								<DropdownMenu.Item
+									disabled={status === view.todo.status}
+									onSelect={() => onstatus?.(view.todo.id, status)}
+								>
+									{todoStatusLabels[status]}
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Group>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			</Card.Action>
 		{/if}
 	</Card.Header>

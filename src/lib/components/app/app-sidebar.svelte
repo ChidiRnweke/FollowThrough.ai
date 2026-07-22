@@ -177,7 +177,7 @@
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					class="hidden md:inline-flex"
+					class="hidden 2xl:inline-flex"
 					aria-label="Toggle chat panel"
 					title="Toggle chat panel"
 					onclick={() => rightPanel.toggle('chat')}
@@ -187,7 +187,7 @@
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					class="md:hidden"
+					class="2xl:hidden"
 					aria-label="Open chat"
 					title="Open chat"
 					href="/chats/new"

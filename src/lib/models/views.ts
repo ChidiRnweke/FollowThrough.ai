@@ -54,6 +54,10 @@ export interface TodoView {
 	readonly provenance?: Provenance;
 }
 
+export interface GetTodoViewInput {
+	readonly todoId: TodoId;
+}
+
 export interface SuggestionView {
 	readonly suggestion: Suggestion;
 	readonly note?: NoteRef;

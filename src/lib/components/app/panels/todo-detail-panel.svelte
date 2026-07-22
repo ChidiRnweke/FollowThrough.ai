@@ -3,8 +3,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
-	import { page } from '$app/state';
-	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoTextField from '../todo-fields/todo-text-field.svelte';
 	import TodoStatusField from '../todo-fields/todo-status-field.svelte';
@@ -14,16 +12,21 @@
 	import TodoSourceField from '../todo-fields/todo-source-field.svelte';
 	import ConfirmDelete from '../confirm-delete.svelte';
 	import { toast } from 'svelte-sonner';
-	import type { TodoId } from '$lib/models';
+	import type { NoteSummary, TodoId, TodoView } from '$lib/models';
 
-	const view = $derived(rightPanel.todoView);
+	let {
+		view,
+		notes = [],
+		ondeleted
+	}: { view?: TodoView; notes?: readonly NoteSummary[]; ondeleted?: () => void } = $props();
 
 	async function remove(todoId: TodoId) {
 		const ok = await todoUpdates.remove(todoId);
-		if (ok) toast.success('Todo deleted');
-		else toast.error('Could not delete the todo. Try again.');
+		if (ok) {
+			toast.success('Todo deleted');
+			ondeleted?.();
+		} else toast.error('Could not delete the todo. Try again.');
 	}
-	const notes = $derived(page.data.shell?.noteTree ?? []);
 	const created = $derived(
 		view
 			? new Intl.DateTimeFormat('en-GB', {

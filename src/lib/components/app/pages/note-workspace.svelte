@@ -44,6 +44,7 @@
 	import ExportDialog from '../export-dialog.svelte';
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';
+	import { stageChatHandoff } from '$lib/stores/chat-handoff';
 
 	let {
 		view,
@@ -462,13 +463,25 @@
 			toast.error('Select some text first.');
 			return;
 		}
-		rightPanel.openChat();
-		void chat.send({
-			prompt: `Use the "${skillName}" skill on the selected text.`,
+		const prompt = `Use the "${skillName}" skill on the selected text.`;
+		if (window.matchMedia('(min-width: 96rem)').matches) {
+			rightPanel.openChat();
+			void chat.send({
+				prompt,
+				selection,
+				noteId: selection.noteId,
+				requestedSkillNames: [skillName]
+			});
+			return;
+		}
+		stageChatHandoff({
+			prompt,
 			selection,
 			noteId: selection.noteId,
+			projectId: view.note.projectId,
 			requestedSkillNames: [skillName]
 		});
+		void goto('/chats/new');
 	}
 
 	function onkeydown(event: KeyboardEvent): void {

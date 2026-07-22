@@ -108,6 +108,20 @@ describe('Todo lifecycle invariants', () => {
 });
 
 describe('Todo query isolation invariants', () => {
+	it('assembles an actor-scoped todo detail', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder()];
+		const result = await controller.get(testActor(), { todoId: testTodoId() });
+		expect(result.todo.id).toBe(testTodoId());
+	});
+
+	it('does not reveal another user’s todo detail', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder()];
+		await expect(controller.get(testActor(2), { todoId: testTodoId() })).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
+	});
 	it('project filtering returns only todos in that project', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2), projectId: testProjectId(2) })];

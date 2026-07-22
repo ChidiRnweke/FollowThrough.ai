@@ -7,13 +7,18 @@
 	import RightPanel from '$lib/components/app/right-panel.svelte';
 	import WorkspaceTabs from '$lib/components/app/workspace-tabs.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import type { NoteId, ProjectId } from '$lib/models';
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/app-context.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { palette } from '$lib/stores/palette.svelte';
+	import { openChatSurface } from '$lib/navigation/responsive-surfaces';
+	import Search from '@lucide/svelte/icons/search';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import MemoryNotificationMenu from '$lib/components/app/memory-notification-menu.svelte';
 
 	let { data, children } = $props();
 
@@ -31,6 +36,21 @@
 	);
 	const showProgressBar = $derived(isNavigating && !isWorkbenchInternal);
 	const isNoteWorkbench = $derived(page.url.pathname.startsWith('/notes/'));
+	const currentScreen = $derived.by(() => {
+		if (page.url.pathname === '/') return 'Today';
+		if (page.url.pathname.startsWith('/todos/')) return 'Todo';
+		if (page.url.pathname.startsWith('/todos')) return 'Todos';
+		if (page.url.pathname.startsWith('/chats')) return 'Chat';
+		if (page.url.pathname.startsWith('/notes/')) {
+			const noteId = page.url.pathname.split('/')[2];
+			return data.shell.noteTree.find((note) => note.id === noteId)?.title ?? 'Note';
+		}
+		if (page.url.pathname.startsWith('/projects/')) {
+			const projectId = page.url.pathname.split('/')[2];
+			return data.shell.projects.find((project) => project.id === projectId)?.name ?? 'Project';
+		}
+		return page.url.pathname.split('/')[1]?.replaceAll('-', ' ') || 'FollowThrough';
+	});
 
 	let insetRef = $state<HTMLElement | null>(null);
 
@@ -116,6 +136,31 @@
 		)}
 		data-note-workbench={isNoteWorkbench ? '' : undefined}
 	>
+		<header
+			class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden"
+		>
+			<Sidebar.Trigger class="size-11" />
+			<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>
+			<Button
+				variant="ghost"
+				size="icon"
+				class="size-11"
+				aria-label="Search notes, todos and commands"
+				onclick={() => palette.open()}
+			>
+				<Search />
+			</Button>
+			<MemoryNotificationMenu notifications={data.shell.pendingMemoryNotifications} />
+			<Button
+				variant="ghost"
+				size="icon"
+				class="size-11"
+				aria-label="Open chat"
+				onclick={openChatSurface}
+			>
+				<MessageSquare />
+			</Button>
+		</header>
 		{#if showProgressBar}
 			<div
 				data-navigation-progress
@@ -141,7 +186,6 @@
 		agentAvailable={data.agentAvailable}
 		{activeNoteId}
 		{activeProjectId}
-		onstatus={(todoId, status) => void todoUpdates.setStatus(todoId, status)}
 	/>
 </Sidebar.Provider>
 

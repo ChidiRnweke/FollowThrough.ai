@@ -3,7 +3,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import Pin from '@lucide/svelte/icons/pin';
-	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
+	import { page } from '$app/state';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from '../todo-card.svelte';
 	import { formatDateTime } from '../labels';
@@ -20,7 +21,7 @@
 		const match = [...view.overdue, ...view.dueToday, ...view.waitingOn].find(
 			(item) => item.todo.id === todoId
 		);
-		if (match) rightPanel.openTodo(match);
+		if (match) openTodoSurface(match, `${page.url.pathname}${page.url.search}`);
 	}
 
 	const hasActionable = $derived(

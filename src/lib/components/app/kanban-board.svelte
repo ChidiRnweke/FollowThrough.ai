@@ -74,15 +74,15 @@
 	}
 </script>
 
-<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+<div
+	class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0"
+>
 	{#each columns as status (status)}
 		<section
-			class="flex min-h-40 flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30"
+			class="flex min-h-40 w-[min(82vw,22rem)] shrink-0 snap-start flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:w-80 xl:w-auto"
 		>
 			<div class={['h-0.5 w-full', todoStatusStyle[status].accentClass]}></div>
-			<h3
-				class="eyebrow flex items-center justify-between px-3 pt-1"
-			>
+			<h3 class="eyebrow flex items-center justify-between px-3 pt-1">
 				<span class="flex items-center gap-1.5">
 					{todoStatusLabels[status]}
 					<span

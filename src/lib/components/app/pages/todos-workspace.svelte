@@ -6,7 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';
@@ -43,7 +43,7 @@
 
 	function open(todoId: TodoId): void {
 		const match = todos.find((item) => item.todo.id === todoId);
-		if (match) rightPanel.openTodo(match);
+		if (match) openTodoSurface(match, `${page.url.pathname}${page.url.search}`);
 	}
 
 	async function move(todoId: TodoId, status: Parameters<typeof todoUpdates.setStatus>[1]) {
@@ -76,7 +76,9 @@
 	}
 </script>
 
-<div class="flex flex-wrap items-center justify-between gap-2">
+<div
+	class="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+>
 	<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
 		<Tabs.List>
 			<Tabs.Trigger value="board">Board</Tabs.Trigger>
@@ -94,14 +96,14 @@
 			<ToggleGroup.Item value="detailed">Detailed</ToggleGroup.Item>
 		</ToggleGroup.Root>
 	{/if}
-	<div class="flex items-center gap-1">
+	<div class="flex flex-wrap items-center gap-1">
 		{#if projects && projects.length > 0}
 			<Select.Root
 				type="single"
 				value={projectFilter}
 				onValueChange={(value) => setParam('projectId', value === '' ? undefined : value)}
 			>
-				<Select.Trigger class="h-8 w-44" size="sm" aria-label="Filter by project">
+				<Select.Trigger class="h-11 w-full sm:h-8 sm:w-44" size="sm" aria-label="Filter by project">
 					{projectFilterLabel}
 				</Select.Trigger>
 				<Select.Content>

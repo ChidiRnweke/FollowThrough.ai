@@ -6,7 +6,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
+	import { page } from '$app/state';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import { formatDate, todayLocalDate } from './labels';
 
@@ -45,7 +46,7 @@
 				class="h-auto p-0 font-normal text-foreground {done
 					? 'text-muted-foreground line-through'
 					: ''}"
-				onclick={() => rightPanel.openTodo(view)}
+				onclick={() => openTodoSurface(view, `${page.url.pathname}${page.url.search}`)}
 			>
 				{view.todo.title}
 			</Button>

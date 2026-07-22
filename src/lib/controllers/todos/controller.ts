@@ -3,10 +3,12 @@ import type {
 	CreateTodoInput,
 	ExtractPromisesInput,
 	ExtractPromisesOutput,
+	GetTodoViewInput,
 	ListTodosOutput,
 	Todo,
 	TodoId,
 	TodoListFilter,
+	TodoView,
 	UpdateTodoInput,
 	UpdateTodoOutput
 } from '$lib/models';
@@ -30,6 +32,7 @@ import type {
 } from '$lib/services';
 
 export interface TodosController {
+	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
 	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
 	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
@@ -55,6 +58,11 @@ export interface TodosDependencies {
 }
 export class DefaultTodosController implements TodosController {
 	constructor(private readonly dependencies: TodosDependencies) {}
+	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
+		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
+		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
+		return view!;
+	}
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput> {
 		const todos = await this.dependencies.todoLister.list(actor, filter);
 		return { todos: await this.dependencies.todoViewAssembler.assemble(actor, todos) };

@@ -38,6 +38,7 @@
 	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
 	import ToolApprovalCard from '$lib/components/app/agent/tool-approval-card.svelte';
 	import { toolStatusLabel } from '$lib/components/app/agent/tool-presentation';
+	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/chat-handoff';
 
 	let {
 		shell,
@@ -67,11 +68,16 @@
 		if (initialConversationId === null) chat.clear();
 		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
 		else void chat.hydrate();
-		prompt = sessionStorage.getItem(draftKey()) ?? '';
+		const staged = consumeChatHandoff();
+		if (staged) {
+			prompt = staged.prompt;
+			handoff = staged;
+		} else prompt = sessionStorage.getItem(draftKey()) ?? '';
 		return release;
 	});
 
 	let prompt = $state('');
+	let handoff = $state<ChatHandoff | undefined>(undefined);
 	let viewport = $state<HTMLElement | null>(null);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
 	let followingLatest = $state(true);
@@ -171,11 +177,27 @@
 			prompt: text,
 			modelOverride: chat.modelOverride,
 			executionModeOverride: chat.executionModeOverride,
-			...(interactionNoteId !== undefined ? { noteId: interactionNoteId } : {}),
-			...(interactionProjectId !== undefined ? { projectId: interactionProjectId } : {}),
+			...(handoff?.noteId !== undefined
+				? { noteId: handoff.noteId }
+				: interactionNoteId !== undefined
+					? { noteId: interactionNoteId }
+					: {}),
+			...(handoff?.projectId !== undefined
+				? { projectId: handoff.projectId }
+				: interactionProjectId !== undefined
+					? { projectId: interactionProjectId }
+					: {}),
 			...(autoChip !== undefined ? { contextNoteIds: [autoChip.id] } : {}),
-			...(selection !== undefined ? { selection, noteId: selection.noteId } : {})
+			...(handoff?.selection !== undefined
+				? { selection: handoff.selection, noteId: handoff.selection.noteId }
+				: selection !== undefined
+					? { selection, noteId: selection.noteId }
+					: {}),
+			...(handoff?.requestedSkillNames
+				? { requestedSkillNames: [...handoff.requestedSkillNames] }
+				: {})
 		});
+		handoff = undefined;
 		await tick();
 		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
 		await request;
