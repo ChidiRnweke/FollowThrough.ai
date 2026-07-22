@@ -172,7 +172,7 @@
 						<div class="flex items-center gap-1 pr-1">
 							<span class="h-4 w-px shrink-0 bg-primary/40" aria-hidden="true"></span>
 							<span
-								class="max-w-40 cursor-default truncate text-xs font-medium uppercase tracking-wide text-muted-foreground"
+								class="eyebrow max-w-40 cursor-default truncate"
 							>
 								{group.projectName}
 							</span>

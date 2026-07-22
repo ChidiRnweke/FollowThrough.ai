@@ -81,7 +81,7 @@
 		>
 			<div class={['h-0.5 w-full', todoStatusStyle[status].accentClass]}></div>
 			<h3
-				class="flex items-center justify-between px-3 pt-1 text-xs font-semibold text-muted-foreground"
+				class="eyebrow flex items-center justify-between px-3 pt-1"
 			>
 				<span class="flex items-center gap-1.5">
 					{todoStatusLabels[status]}

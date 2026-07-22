@@ -24,6 +24,7 @@ export const createEntry = command(
 	z.object({
 		projectId: z.string().uuid().optional(),
 		content: z.string().min(1),
+		type: z.enum(['fact', 'decision', 'constraint', 'preference']).optional(),
 		shareWithAgents: z.boolean().optional()
 	}),
 	async (input) => {
@@ -37,6 +38,7 @@ export const updateEntry = command(
 	z.object({
 		memoryEntryId: z.string().uuid(),
 		content: z.string().optional(),
+		type: z.enum(['fact', 'decision', 'constraint', 'preference']).nullable().optional(),
 		shareWithAgents: z.boolean().optional()
 	}),
 	async (input) => {

@@ -61,6 +61,8 @@ export interface TextSelection {
 export type NoteKind = 'folder' | 'note' | 'skill';
 export type TodoStatus = 'backlog' | 'open' | 'in_progress' | 'done' | 'cancelled';
 export type TodoResponsibility = 'mine' | 'waiting_on';
+export type TodoPriority = 'low' | 'medium' | 'high';
+export type MemoryEntryType = 'fact' | 'decision' | 'constraint' | 'preference';
 export type PromiseStrength = 'explicit' | 'implied' | 'tentative';
 export type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
 export type DiagramKind = 'mermaid' | 'drawio';

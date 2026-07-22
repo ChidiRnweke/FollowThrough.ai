@@ -37,7 +37,7 @@
 	<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 		<div>
 			<p class="provenance-caption">Agent workspace</p>
-			<h1 class="text-3xl font-semibold tracking-tight">Chats</h1>
+			<h1 class="page-title">Chats</h1>
 			<p class="mt-1 text-sm text-muted-foreground">
 				Find conversations by title and return to their project or note context.
 			</p>

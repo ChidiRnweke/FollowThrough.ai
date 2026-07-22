@@ -106,6 +106,10 @@ export const agentToolCoverage = {
 		list: { kind: 'read' },
 		create: { kind: 'mutation' },
 		update: { kind: 'mutation' },
+		remove: {
+			kind: 'excluded',
+			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
+		},
 		extractPromises: { kind: 'proposal' }
 	},
 	relationships: { suggestFromSelection: { kind: 'proposal' } },

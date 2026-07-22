@@ -8,11 +8,21 @@
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoTextField from '../todo-fields/todo-text-field.svelte';
 	import TodoStatusField from '../todo-fields/todo-status-field.svelte';
+	import TodoPriorityField from '../todo-fields/todo-priority-field.svelte';
 	import TodoDueDateField from '../todo-fields/todo-due-date-field.svelte';
 	import TodoResponsibilityField from '../todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from '../todo-fields/todo-source-field.svelte';
+	import ConfirmDelete from '../confirm-delete.svelte';
+	import { toast } from 'svelte-sonner';
+	import type { TodoId } from '$lib/models';
 
 	const view = $derived(rightPanel.todoView);
+
+	async function remove(todoId: TodoId) {
+		const ok = await todoUpdates.remove(todoId);
+		if (ok) toast.success('Todo deleted');
+		else toast.error('Could not delete the todo. Try again.');
+	}
 	const notes = $derived(page.data.shell?.noteTree ?? []);
 	const created = $derived(
 		view
@@ -50,6 +60,10 @@
 			<Field.Field orientation="responsive">
 				<Field.FieldLabel>Status</Field.FieldLabel>
 				<TodoStatusField todoId={view.todo.id} value={view.todo.status} />
+			</Field.Field>
+			<Field.Field orientation="responsive">
+				<Field.FieldLabel>Priority</Field.FieldLabel>
+				<TodoPriorityField todoId={view.todo.id} value={view.todo.priority} />
 			</Field.Field>
 			<Field.Field orientation="responsive">
 				<Field.FieldLabel>Due date</Field.FieldLabel>
@@ -98,7 +112,7 @@
 		{#if view.anchor}
 			<Separator />
 			<section class="flex flex-col gap-2" aria-labelledby="original-context-heading">
-				<h3 id="original-context-heading" class="text-sm font-semibold">Original context</h3>
+				<h3 id="original-context-heading" class="section-title">Original context</h3>
 				<blockquote class="border-l-2 border-border pl-3 text-sm text-muted-foreground">
 					{view.anchor.quote}
 				</blockquote>
@@ -111,6 +125,25 @@
 					>{/if}
 			</section>
 		{/if}
+
+		<Separator />
+		<ConfirmDelete
+			title="Delete this todo?"
+			description="It will be removed from every board, list, and note that references it."
+			confirmLabel="Delete"
+			busy={todoUpdates.isPending(view.todo.id)}
+			onconfirm={() => remove(view.todo.id)}
+		>
+			{#snippet trigger(props)}
+				<Button
+					{...props}
+					variant="ghost"
+					size="sm"
+					class="self-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+					>Delete todo</Button
+				>
+			{/snippet}
+		</ConfirmDelete>
 
 		<p class="sr-only" aria-live="polite">
 			{todoUpdates.isPending(view.todo.id) ? 'Saving todo' : 'Todo saved'}

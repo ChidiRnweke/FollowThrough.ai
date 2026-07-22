@@ -5,6 +5,7 @@ import type {
 	ExtractPromisesOutput,
 	ListTodosOutput,
 	Todo,
+	TodoId,
 	TodoListFilter,
 	UpdateTodoInput,
 	UpdateTodoOutput
@@ -19,6 +20,7 @@ import type {
 	SuggestionAccepter,
 	SuggestionCreator,
 	TodoCreator,
+	TodoDeleter,
 	TodoEditor,
 	TodoLister,
 	TodoReader,
@@ -31,6 +33,7 @@ export interface TodosController {
 	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
 	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
+	remove(actor: ActorContext, todoId: TodoId): Promise<void>;
 	extractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<ExtractPromisesOutput>;
 }
 export interface TodosDependencies {
@@ -38,6 +41,7 @@ export interface TodosDependencies {
 	todoViewAssembler: TodoViewAssembler;
 	todoReader: TodoReader;
 	todoEditor: TodoEditor;
+	todoDeleter: TodoDeleter;
 	todoStatusChanger: TodoStatusChanger;
 	anchorCreator: SelectionAnchorCreator;
 	promiseExtractor: PromiseExtractor;
@@ -67,13 +71,20 @@ export class DefaultTodosController implements TodosController {
 		const edits: Partial<
 			Pick<
 				Todo,
-				'title' | 'description' | 'dueDate' | 'responsibility' | 'waitingOn' | 'linkedNoteId'
+				| 'title'
+				| 'description'
+				| 'dueDate'
+				| 'responsibility'
+				| 'priority'
+				| 'waitingOn'
+				| 'linkedNoteId'
 			>
 		> = {
 			...(input.title !== undefined ? { title: input.title } : {}),
 			...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
 			...(input.dueDate !== undefined ? { dueDate: input.dueDate ?? undefined } : {}),
 			...(input.responsibility !== undefined ? { responsibility: input.responsibility } : {}),
+			...(input.priority !== undefined ? { priority: input.priority ?? undefined } : {}),
 			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn ?? undefined } : {}),
 			...(input.linkedNoteId !== undefined ? { linkedNoteId: input.linkedNoteId ?? undefined } : {})
 		};
@@ -85,6 +96,10 @@ export class DefaultTodosController implements TodosController {
 		}
 		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
 		return { todo, view: view! };
+	}
+	async remove(actor: ActorContext, todoId: TodoId): Promise<void> {
+		await this.dependencies.todoReader.get(actor, todoId);
+		await this.dependencies.todoDeleter.softDelete(actor, todoId);
 	}
 	async extractPromises(
 		actor: ActorContext,

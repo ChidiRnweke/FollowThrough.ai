@@ -32,7 +32,9 @@ import type {
 	SuggestionId,
 	SuggestionStatus,
 	TemplateId,
+	MemoryEntryType,
 	TodoId,
+	TodoPriority,
 	TodoResponsibility,
 	TodoStatus,
 	Url,
@@ -140,6 +142,7 @@ export interface Todo {
 	readonly description?: string;
 	readonly status: TodoStatus;
 	readonly responsibility: TodoResponsibility;
+	readonly priority?: TodoPriority;
 	readonly waitingOn?: string;
 	readonly dueDate?: LocalDate;
 	readonly dueDateVerbatim?: string;
@@ -476,6 +479,7 @@ export interface MemoryEntry {
 	readonly userId: UserId;
 	readonly projectId?: ProjectId;
 	readonly content: string;
+	readonly type?: MemoryEntryType;
 	readonly shareWithAgents: boolean;
 	readonly provenanceId?: ProvenanceId;
 	readonly replacesEntryId?: MemoryEntryId;
@@ -586,4 +590,6 @@ export interface ArtifactView {
 	readonly createdAt: DateTime;
 	readonly projectName: string;
 	readonly templateName?: string;
+	/** True when a source note changed after this artifact was generated. */
+	readonly stale?: boolean;
 }

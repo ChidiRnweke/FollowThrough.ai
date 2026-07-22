@@ -22,7 +22,7 @@
 					</Breadcrumb.Item>
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
-			<h1 class="text-xl font-semibold tracking-tight">Todos</h1>
+			<h1 class="page-title">Todos</h1>
 			<p class="text-sm text-muted-foreground">
 				Commitments and follow-ups in {data.project.name}.
 			</p>

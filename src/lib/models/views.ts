@@ -8,6 +8,7 @@ import type {
 	SuggestionStatus,
 	TemplateId,
 	TodoId,
+	TodoPriority,
 	TodoResponsibility,
 	TodoStatus
 } from './shared';
@@ -279,6 +280,7 @@ export interface UpdateTodoInput {
 	readonly description?: string | null;
 	readonly dueDate?: LocalDate | null;
 	readonly responsibility?: TodoResponsibility;
+	readonly priority?: TodoPriority | null;
 	readonly waitingOn?: string | null;
 	readonly linkedNoteId?: NoteId | null;
 }

@@ -66,6 +66,7 @@ export class MemoryManagementService
 			userId: actor.userId,
 			...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
 			content,
+			...(input.type !== undefined ? { type: input.type } : {}),
 			shareWithAgents: input.shareWithAgents ?? true,
 			createdAt: timestamp,
 			updatedAt: timestamp
@@ -81,6 +82,7 @@ export class MemoryManagementService
 		const entry = await this.entries.update(actor, {
 			...current,
 			content,
+			...(input.type !== undefined ? { type: input.type ?? undefined } : {}),
 			shareWithAgents: input.shareWithAgents ?? current.shareWithAgents,
 			updatedAt: now()
 		});

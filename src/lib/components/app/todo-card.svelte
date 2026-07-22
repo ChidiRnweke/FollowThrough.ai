@@ -5,8 +5,10 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ProvenanceDot from './provenance-dot.svelte';
-	import { formatDate, todayLocalDate } from './labels';
+	import { formatDate, todayLocalDate, todoPriorityLabels, todoPriorityStyle } from './labels';
 	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
+	import TodoTextField from './todo-fields/todo-text-field.svelte';
+	import TodoPriorityField from './todo-fields/todo-priority-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
@@ -108,6 +110,7 @@
 		{/if}
 		{#if detail === 'detailed'}
 			<TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} />
+			<TodoPriorityField todoId={view.todo.id} value={view.todo.priority} />
 		{:else if view.todo.dueDate}
 			<Badge
 				variant="ghost"
@@ -117,6 +120,16 @@
 		{/if}
 		{#if detail === 'detailed'}
 			<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
+			{#if waiting}
+				<span class="max-w-40" title="Waiting on">
+					{#key `${view.todo.id}-waiting-${view.todo.updatedAt}`}<TodoTextField
+							todoId={view.todo.id}
+							value={view.todo.waitingOn}
+							field="waitingOn"
+							label="Waiting on"
+						/>{/key}
+				</span>
+			{/if}
 			<TodoSourceField
 				todoId={view.todo.id}
 				projectId={view.todo.projectId}
@@ -129,6 +142,11 @@
 		{:else if waiting}
 			<Badge variant="ghost" class="bg-warning/15 text-warning-foreground dark:text-warning"
 				>Waiting on {view.todo.waitingOn ?? 'someone'}</Badge
+			>
+		{/if}
+		{#if detail === 'basic' && view.todo.priority && view.todo.priority !== 'low'}
+			<Badge variant="ghost" class={todoPriorityStyle[view.todo.priority].badgeClass}
+				>{todoPriorityLabels[view.todo.priority]}</Badge
 			>
 		{/if}
 	</Card.Content>

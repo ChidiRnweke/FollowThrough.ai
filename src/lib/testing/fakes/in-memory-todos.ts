@@ -9,6 +9,7 @@ import type {
 } from '$lib/models';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/models';
 import type {
+	TodoDeleter,
 	TodoEditor,
 	TodoCreator,
 	TodoLister,
@@ -24,6 +25,7 @@ export class InMemoryTodos
 		TodoCreator,
 		TodoReader,
 		TodoEditor,
+		TodoDeleter,
 		TodoStatusChanger,
 		TodoLister,
 		TodoViewAssembler,
@@ -69,6 +71,12 @@ export class InMemoryTodos
 		const updated = { ...todo, title: todo.title.trim(), updatedAt: testNow };
 		this.todos = this.todos.map((candidate) => (candidate.id === todo.id ? updated : candidate));
 		return updated;
+	}
+
+	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
+		const current = await this.get(actor, todoId);
+		const deleted: Todo = { ...current, deletedAt: testNow, updatedAt: testNow };
+		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? deleted : candidate));
 	}
 
 	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {

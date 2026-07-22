@@ -3,6 +3,7 @@
 	import type {
 		MemoryEntry,
 		MemoryEntryId,
+		MemoryEntryType,
 		MemorySuggestionView,
 		ProjectId,
 		SuggestionId
@@ -13,6 +14,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Select from '$lib/components/ui/select';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
 	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
@@ -25,7 +27,7 @@
 		deleteEntry
 	} from '$lib/remote/memory.remote';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
-	import { formatRelativeTime } from './labels';
+	import { formatRelativeTime, memoryEntryTypeLabels } from './labels';
 
 	let {
 		projectId,
@@ -49,6 +51,8 @@
 	let loading = $state(false);
 	let busyIds = $state<SuggestionId[]>([]);
 	let draft = $state('');
+	let draftType = $state<MemoryEntryType | 'none'>('none');
+	const entryTypes: MemoryEntryType[] = ['fact', 'decision', 'constraint', 'preference'];
 	let editingId = $state<MemoryEntryId | undefined>(undefined);
 	let editingContent = $state('');
 	let deleteTarget = $state<MemoryEntry | undefined>(undefined);
@@ -136,9 +140,14 @@
 		const content = draft.trim();
 		if (!content) return;
 		try {
-			const { entry } = await createEntry({ projectId, content });
+			const { entry } = await createEntry({
+				projectId,
+				content,
+				...(draftType !== 'none' ? { type: draftType } : {})
+			});
 			entries = [entry, ...entries];
 			draft = '';
+			draftType = 'none';
 		} catch {
 			toast.error('Could not save the memory entry.');
 		}
@@ -190,10 +199,29 @@
 			{:else}
 				<span></span>
 			{/if}
-			<Button size="sm" disabled={!draft.trim()} onclick={add}>
-				<Plus data-icon />
-				Add memory
-			</Button>
+			<div class="flex items-center gap-2">
+				<Select.Root
+					type="single"
+					value={draftType}
+					onValueChange={(next) => (draftType = next as MemoryEntryType | 'none')}
+				>
+					<Select.Trigger size="sm" aria-label="Memory type">
+						{draftType === 'none' ? 'No type' : memoryEntryTypeLabels[draftType]}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Group>
+							<Select.Item value="none">No type</Select.Item>
+							{#each entryTypes as entryType (entryType)}
+								<Select.Item value={entryType}>{memoryEntryTypeLabels[entryType]}</Select.Item>
+							{/each}
+						</Select.Group>
+					</Select.Content>
+				</Select.Root>
+				<Button size="sm" disabled={!draft.trim()} onclick={add}>
+					<Plus data-icon />
+					Add memory
+				</Button>
+			</div>
 		</div>
 	</div>
 	{#if loading && items.length === 0}
@@ -261,7 +289,14 @@
 					{:else}
 						{@const entry = item.entry}
 						<div class="flex items-start justify-between gap-3">
-							<p class="min-w-0 flex-1 text-sm whitespace-pre-wrap">{entry.content}</p>
+							<div class="min-w-0 flex-1">
+								{#if entry.type}
+									<Badge variant="ghost" class="mb-1 text-muted-foreground"
+										>{memoryEntryTypeLabels[entry.type]}</Badge
+									>
+								{/if}
+								<p class="text-sm whitespace-pre-wrap">{entry.content}</p>
+							</div>
 							<div class="flex shrink-0 items-center gap-1.5">
 								<span class="text-xs text-muted-foreground">
 									{formatRelativeTime(entry.updatedAt)}

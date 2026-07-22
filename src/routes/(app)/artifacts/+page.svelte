@@ -112,7 +112,7 @@
 					></Breadcrumb.Root
 				>
 			{/if}
-			<h1 class="text-xl font-semibold tracking-tight">Artifacts</h1>
+			<h1 class="page-title">Artifacts</h1>
 			<p class="text-sm text-muted-foreground">
 				Documents and exports generated from your notes and project context.
 			</p>
@@ -197,6 +197,14 @@
 							</div>
 						</div>
 						<div class="flex items-center gap-2">
+							{#if artifact.stale}
+								<Badge
+									variant="ghost"
+									class="bg-warning/15 text-warning"
+									title="A source note changed after this was generated — regenerate to refresh"
+									>Source changed</Badge
+								>
+							{/if}
 							<Badge variant="outline" class="text-xs">{artifact.format.toUpperCase()}</Badge>
 							<Button
 								variant="ghost"

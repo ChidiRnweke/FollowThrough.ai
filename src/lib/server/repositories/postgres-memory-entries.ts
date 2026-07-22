@@ -42,6 +42,7 @@ export class PostgresMemoryEntryRepository implements MemoryEntryRepository {
 				userId: actor.userId,
 				projectId: entry.projectId,
 				content: entry.content,
+				type: entry.type,
 				shareWithAgents: entry.shareWithAgents,
 				provenanceId: entry.provenanceId,
 				replacesEntryId: entry.replacesEntryId,
@@ -58,6 +59,7 @@ export class PostgresMemoryEntryRepository implements MemoryEntryRepository {
 			.update(schema.memoryEntries)
 			.set({
 				content: entry.content,
+				type: entry.type ?? null,
 				shareWithAgents: entry.shareWithAgents,
 				provenanceId: entry.provenanceId,
 				replacesEntryId: entry.replacesEntryId,

@@ -300,6 +300,21 @@
 	letter-spacing: var(--note-title-tracking);
 }
 
+/* Named type scale — see DESIGN_SYSTEM.md "Type scale". App code uses these
+   instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
+   → body (sm) → section-title (base) → page-title (2xl) → note-title (clamp). */
+@utility page-title {
+	@apply text-2xl font-semibold tracking-tight;
+}
+
+@utility section-title {
+	@apply text-base font-semibold tracking-tight;
+}
+
+@utility eyebrow {
+	@apply text-xs font-medium tracking-wide text-muted-foreground uppercase;
+}
+
 /* Split-note geometry lives here so component markup remains declarative.
    The ratio custom property is the only runtime input. */
 @layer components {

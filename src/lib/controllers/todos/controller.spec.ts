@@ -17,6 +17,7 @@ const setup = () => {
 			todoViewAssembler: todos,
 			todoReader: todos,
 			todoEditor: todos,
+			todoDeleter: todos,
 			todoStatusChanger: todos
 		} as unknown as TodosDependencies)
 	};
@@ -129,5 +130,30 @@ describe('Todo query isolation invariants', () => {
 		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2), userId: testActor(2).userId })];
 		const result = await controller.list(testActor(), {});
 		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId()]);
+	});
+});
+
+describe('Todo removal invariants', () => {
+	it('a removed todo no longer appears in the active list', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2) })];
+		await controller.remove(testActor(), testTodoId());
+		const result = await controller.list(testActor(), {});
+		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId(2)]);
+	});
+
+	it('removing an unknown todo reports not found', async () => {
+		const { controller } = setup();
+		await expect(controller.remove(testActor(), testTodoId())).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
+	});
+
+	it('cannot remove another user’s todo', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder({ userId: testActor(2).userId })];
+		await expect(controller.remove(testActor(), testTodoId())).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 });

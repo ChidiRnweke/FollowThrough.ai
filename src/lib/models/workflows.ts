@@ -18,6 +18,7 @@ import type {
 	DiagramId,
 	LocalDate,
 	MemoryEntryId,
+	MemoryEntryType,
 	NoteId,
 	ProjectId,
 	PromiseStrength,
@@ -162,11 +163,13 @@ export interface CreateMemoryEntryInput {
 	/** Omit projectId to create a user-profile entry. */
 	readonly projectId?: ProjectId;
 	readonly content: string;
+	readonly type?: MemoryEntryType;
 	readonly shareWithAgents?: boolean;
 }
 export interface UpdateMemoryEntryInput {
 	readonly memoryEntryId: MemoryEntryId;
 	readonly content?: string;
+	readonly type?: MemoryEntryType | null;
 	readonly shareWithAgents?: boolean;
 }
 export interface DeleteMemoryEntryInput {

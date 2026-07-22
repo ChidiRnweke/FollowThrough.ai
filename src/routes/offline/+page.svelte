@@ -21,7 +21,7 @@
 			height="48"
 		/>
 		<p class="mb-2 text-xs font-medium tracking-wide text-primary uppercase">FollowThrough</p>
-		<h1 id="offline-title" class="text-3xl tracking-tight">You’re offline</h1>
+		<h1 id="offline-title" class="page-title">You’re offline</h1>
 		<p class="mt-4 max-w-sm leading-6 text-muted-foreground">
 			Reconnect to refresh uncached workspace data. Notes you previously opened may still be
 			available from the cached workspace.

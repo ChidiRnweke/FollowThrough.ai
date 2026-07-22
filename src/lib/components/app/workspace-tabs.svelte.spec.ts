@@ -118,7 +118,7 @@ describe('WorkspaceTabs', () => {
 			] as never
 		} as never;
 		const screen = await render(WorkspaceTabs, { shell: singleProjectShell });
-		const label = screen.container.querySelector('.uppercase.tracking-wide') as HTMLElement;
+		const label = screen.container.querySelector('.eyebrow') as HTMLElement;
 		expect(label).toBeTruthy();
 		if (label) await expect.element(label).toHaveTextContent('Acme rebrand');
 	});

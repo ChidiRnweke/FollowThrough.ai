@@ -371,6 +371,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoViewAssembler: todos,
 			todoReader: todos,
 			todoEditor: todos,
+			todoDeleter: todos,
 			todoStatusChanger: todos,
 			anchorCreator: notes,
 			promiseExtractor: new OpenAIPromiseExtractor(),

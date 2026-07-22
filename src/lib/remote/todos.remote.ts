@@ -12,6 +12,7 @@ export const updateTodo = command(
 			description: z.string().nullable().optional(),
 			dueDate: z.string().nullable().optional(),
 			responsibility: z.enum(['mine', 'waiting_on']).optional(),
+			priority: z.enum(['low', 'medium', 'high']).nullable().optional(),
 			waitingOn: z.string().nullable().optional(),
 			linkedNoteId: z.string().uuid().nullable().optional()
 		})
@@ -26,6 +27,15 @@ export const updateTodo = command(
 );
 
 export const updateTodoStatus = updateTodo;
+
+export const deleteTodo = command(
+	z.object({ todoId: z.string().uuid() }),
+	async (input) => {
+		await AppFactory.controllerFactory()
+			.todos()
+			.remove(AppFactory.actor(), input.todoId as never);
+	}
+);
 
 export const createTodo = command(
 	z.object({

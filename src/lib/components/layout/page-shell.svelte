@@ -34,7 +34,7 @@
 				{@render header()}
 			{:else}
 				<div class="flex flex-col gap-1">
-					<h1 class="text-xl font-semibold tracking-tight">{title}</h1>
+					<h1 class="page-title">{title}</h1>
 					{#if description}
 						<p class="text-sm text-muted-foreground">{description}</p>
 					{/if}

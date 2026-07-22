@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, or } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, or, sql } from 'drizzle-orm';
 import type {
 	ActorContext,
 	Artifact,
@@ -85,7 +85,13 @@ export class PostgresArtifactRepository implements ArtifactRepository {
 			.select({
 				artifact: schema.artifacts,
 				projectName: schema.projects.name,
-				templateName: schema.projectTemplates.name
+				templateName: schema.projectTemplates.name,
+				// A source note edited after generation makes the artifact stale.
+				stale: sql<boolean>`coalesce((
+					select max(n.updated_at) > ${schema.artifacts.createdAt}
+					from ${schema.notes} n
+					where n.id in (select value::uuid from jsonb_array_elements_text(${schema.artifacts.sourceNoteIds}))
+				), false)`
 			})
 			.from(schema.artifacts)
 			.innerJoin(schema.projects, eq(schema.projects.id, schema.artifacts.projectId))
@@ -100,10 +106,11 @@ export class PostgresArtifactRepository implements ArtifactRepository {
 		if (params.offset !== undefined) statement = statement.offset(params.offset);
 		const rows = await statement;
 		return {
-			artifacts: rows.map(({ artifact, projectName, templateName }) => ({
+			artifacts: rows.map(({ artifact, projectName, templateName, stale }) => ({
 				...toArtifact(artifact),
 				projectName,
-				templateName: templateName ?? undefined
+				templateName: templateName ?? undefined,
+				stale
 			})),
 			total
 		};

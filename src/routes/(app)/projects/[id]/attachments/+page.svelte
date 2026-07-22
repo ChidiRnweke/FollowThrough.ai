@@ -20,7 +20,7 @@
 					<Breadcrumb.Item><Breadcrumb.Page>Attachments</Breadcrumb.Page></Breadcrumb.Item>
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
-			<h1 class="text-xl font-semibold tracking-tight">Attachments</h1>
+			<h1 class="page-title">Attachments</h1>
 			<p class="text-sm text-muted-foreground">
 				Files and images available to {data.project.name} and its agents.
 			</p>

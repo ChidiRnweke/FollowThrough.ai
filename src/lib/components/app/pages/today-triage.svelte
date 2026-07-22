@@ -88,7 +88,7 @@
 	<div class="grid gap-6 lg:grid-cols-2">
 		<section class="space-y-3" aria-label="Due and overdue todos">
 			{#if view.overdue.length > 0}
-				<h2 class="text-sm font-semibold">Overdue</h2>
+				<h2 class="eyebrow">Overdue</h2>
 				{#each view.overdue as item (item.todo.id)}
 					<TodoCard
 						view={item}
@@ -99,7 +99,7 @@
 				{/each}
 			{/if}
 			{#if view.dueToday.length > 0}
-				<h2 class="text-sm font-semibold" class:pt-2={view.overdue.length > 0}>Due today</h2>
+				<h2 class="eyebrow" class:pt-2={view.overdue.length > 0}>Due today</h2>
 				{#each view.dueToday as item (item.todo.id)}
 					<TodoCard
 						view={item}
@@ -112,7 +112,7 @@
 		</section>
 		{#if view.waitingOn.length > 0}
 			<section class="space-y-3" aria-label="Waiting on others">
-				<h2 class="text-sm font-semibold">Waiting on</h2>
+				<h2 class="eyebrow">Waiting on</h2>
 				{#each view.waitingOn as item (item.todo.id)}
 					<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
 				{/each}
@@ -123,7 +123,7 @@
 
 <div class="grid gap-6 border-t border-border pt-6 lg:grid-cols-2">
 	<section class="space-y-2" aria-label="Pinned notes">
-		<h2 class="text-sm font-semibold">Pinned</h2>
+		<h2 class="eyebrow">Pinned</h2>
 		{#each view.pinnedNotes as note (note.id)}
 			{@render noteRow(note, true)}
 		{:else}
@@ -131,7 +131,7 @@
 		{/each}
 	</section>
 	<section class="space-y-2" aria-label="Recently edited notes">
-		<h2 class="text-sm font-semibold">Recent</h2>
+		<h2 class="eyebrow">Recent</h2>
 		{#each view.recentNotes as note (note.id)}
 			{@render noteRow(note, false)}
 		{:else}

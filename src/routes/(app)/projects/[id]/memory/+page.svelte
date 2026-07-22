@@ -20,7 +20,7 @@
 					<Breadcrumb.Item><Breadcrumb.Page>Memory</Breadcrumb.Page></Breadcrumb.Item>
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
-			<h1 class="text-xl font-semibold tracking-tight">Memory</h1>
+			<h1 class="page-title">Memory</h1>
 			<p class="text-sm text-muted-foreground">
 				Durable facts, decisions, constraints, and preferences for {data.project.name}.
 			</p>

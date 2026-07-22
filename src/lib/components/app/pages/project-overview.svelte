@@ -113,7 +113,7 @@
 	</div>
 {:else}
 	<section class="flex flex-col gap-2" aria-label="Documents">
-		<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+		<h2 class="eyebrow">
 			Documents · {countEntries(view.tree)}
 		</h2>
 		<ul class="divide-y divide-border rounded-lg border border-border">

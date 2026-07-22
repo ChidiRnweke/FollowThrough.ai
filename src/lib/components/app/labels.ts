@@ -1,11 +1,13 @@
 import type {
 	DateTime,
 	LocalDate,
+	MemoryEntryType,
 	PipelineKind,
 	Provenance,
 	ReferenceTier,
 	RelationshipKind,
 	SuggestionKind,
+	TodoPriority,
 	TodoStatus
 } from '$lib/models';
 
@@ -83,6 +85,38 @@ export const todoStatusStyle: Record<TodoStatus, StatusStyle> = {
 		badgeClass: 'text-muted-foreground',
 		accentClass: 'bg-border'
 	}
+};
+
+export const todoPriorityLabels: Record<TodoPriority, string> = {
+	low: 'Low',
+	medium: 'Medium',
+	high: 'High'
+};
+
+/** Priority is urgency, so it borrows the urgency ramp: quiet → warning → destructive. */
+export const todoPriorityStyle: Record<TodoPriority, StatusStyle> = {
+	low: {
+		dotClass: 'bg-muted-foreground/40',
+		badgeClass: 'text-muted-foreground',
+		accentClass: 'bg-border'
+	},
+	medium: {
+		dotClass: 'bg-warning',
+		badgeClass: 'bg-warning/15 text-warning',
+		accentClass: 'bg-warning'
+	},
+	high: {
+		dotClass: 'bg-destructive',
+		badgeClass: 'bg-destructive/10 text-destructive',
+		accentClass: 'bg-destructive'
+	}
+};
+
+export const memoryEntryTypeLabels: Record<MemoryEntryType, string> = {
+	fact: 'Fact',
+	decision: 'Decision',
+	constraint: 'Constraint',
+	preference: 'Preference'
 };
 
 /** Attachment ingestion state → semantic style. `ready` reads as confirmed. */

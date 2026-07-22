@@ -116,7 +116,7 @@
 	<Separator />
 	<section class="flex flex-col gap-3">
 		<div>
-			<h2 class="text-sm font-semibold">Skill bundle</h2>
+			<h2 class="section-title">Skill bundle</h2>
 			<p class="text-sm text-muted-foreground">
 				One canonical SKILL.md representation. Scripts are stored as resources and are never
 				executed.
@@ -212,7 +212,7 @@
 	<Separator />
 	<section class="flex flex-col gap-3">
 		<div>
-			<h2 class="text-sm font-semibold">Bundle resources</h2>
+			<h2 class="section-title">Bundle resources</h2>
 			<p class="text-sm text-muted-foreground">
 				Text, source, and PDF files can be read by the agent. Scripts are resources only and are
 				never executed.
@@ -263,7 +263,7 @@
 	</section>
 	<Separator />
 	<section class="flex flex-col gap-2">
-		<h2 class="text-sm font-semibold">Where the agent used it</h2>
+		<h2 class="section-title">Where the agent used it</h2>
 		{#each data.view.usages as usage (usage.usage.id)}
 			<div class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm">
 				{#if usage.contextNote}
@@ -283,7 +283,7 @@
 	</section>
 	<Separator />
 	<section class="flex flex-col gap-2">
-		<h2 class="text-sm font-semibold">Version history</h2>
+		<h2 class="section-title">Version history</h2>
 		{#each [...data.versions].reverse() as version (version.id)}
 			<div class="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm">
 				<div>

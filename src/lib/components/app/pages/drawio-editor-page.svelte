@@ -37,7 +37,7 @@
 		</Button>
 		<div class="min-w-0">
 			<p class="text-xs text-muted-foreground">draw.io diagram</p>
-			<h1 class="truncate text-xl font-semibold">{diagram.title ?? 'Untitled diagram'}</h1>
+			<h1 class="truncate text-xl font-semibold tracking-tight">{diagram.title ?? 'Untitled diagram'}</h1>
 		</div>
 	</div>
 	<DrawioEmbed xml={diagram.source} title={diagram.title ?? 'Untitled diagram'} oncommit={save} />

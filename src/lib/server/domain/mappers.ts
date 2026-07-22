@@ -90,6 +90,7 @@ export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
 	domain<Todo>({
 		...row,
 		description: row.description ?? undefined,
+		priority: row.priority ?? undefined,
 		dueDate: row.dueDate ? (row.dueDate as LocalDate) : undefined,
 		dueDateVerbatim: row.dueDateVerbatim ?? undefined,
 		promiseStrength: row.promiseStrength ?? undefined,
@@ -104,6 +105,7 @@ export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
 export const toMemoryEntry = (row: typeof schema.memoryEntries.$inferSelect): MemoryEntry =>
 	domain<MemoryEntry>({
 		...row,
+		type: row.type ?? undefined,
 		projectId: row.projectId ?? undefined,
 		provenanceId: row.provenanceId ?? undefined,
 		replacesEntryId: row.replacesEntryId ?? undefined,

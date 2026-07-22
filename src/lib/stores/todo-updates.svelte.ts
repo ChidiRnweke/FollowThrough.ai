@@ -1,19 +1,20 @@
 import { invalidateAll } from '$app/navigation';
+import { SvelteSet } from 'svelte/reactivity';
 import type { ProjectId, TodoId, TodoStatus, UpdateTodoInput } from '$lib/models';
-import { updateTodo as updateTodoCommand, createTodo } from '$lib/remote/todos.remote';
+import { updateTodo as updateTodoCommand, createTodo, deleteTodo } from '$lib/remote/todos.remote';
 import { applyTodoAcrossHeldStores } from './registries/note-todos-registry.svelte';
 import { rightPanel } from './right-panel.svelte';
 
 class TodoUpdatesStore {
 	creating = $state(false);
-	pendingIds = $state(new Set<TodoId>());
+	pendingIds = new SvelteSet<TodoId>();
 
 	isPending(todoId: TodoId): boolean {
 		return this.pendingIds.has(todoId);
 	}
 
 	async updateTodo(todoId: TodoId, patch: Omit<UpdateTodoInput, 'todoId'>): Promise<boolean> {
-		this.pendingIds = new Set(this.pendingIds).add(todoId);
+		this.pendingIds.add(todoId);
 		try {
 			const output = await updateTodoCommand({ todoId, ...patch });
 			if (rightPanel.todoView?.todo.id === todoId) rightPanel.todoView = output.view;
@@ -25,14 +26,26 @@ class TodoUpdatesStore {
 		} catch {
 			return false;
 		} finally {
-			const pending = new Set(this.pendingIds);
-			pending.delete(todoId);
-			this.pendingIds = pending;
+			this.pendingIds.delete(todoId);
 		}
 	}
 
 	async setStatus(todoId: TodoId, status: TodoStatus): Promise<boolean> {
 		return this.updateTodo(todoId, { status });
+	}
+
+	async remove(todoId: TodoId): Promise<boolean> {
+		this.pendingIds.add(todoId);
+		try {
+			await deleteTodo({ todoId });
+			if (rightPanel.todoView?.todo.id === todoId) rightPanel.close();
+			await invalidateAll();
+			return true;
+		} catch {
+			return false;
+		} finally {
+			this.pendingIds.delete(todoId);
+		}
 	}
 
 	async create(title: string, projectId?: ProjectId, status?: TodoStatus): Promise<boolean> {

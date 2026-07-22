@@ -3,6 +3,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import TodoStatusField from './todo-fields/todo-status-field.svelte';
+	import TodoPriorityField from './todo-fields/todo-priority-field.svelte';
 	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
@@ -23,14 +24,15 @@
 <Table.Root>
 	<Table.Header>
 		<Table.Row>
-			<Table.Head class="text-xs font-medium tracking-wide uppercase">Todo</Table.Head>
+			<Table.Head class="eyebrow">Todo</Table.Head>
 			{#if projectNames}
-				<Table.Head class="text-xs font-medium tracking-wide uppercase">Project</Table.Head>
+				<Table.Head class="eyebrow">Project</Table.Head>
 			{/if}
-			<Table.Head class="text-xs font-medium tracking-wide uppercase">Status</Table.Head>
-			<Table.Head class="text-xs font-medium tracking-wide uppercase">Due</Table.Head>
-			<Table.Head class="text-xs font-medium tracking-wide uppercase">Responsibility</Table.Head>
-			<Table.Head class="text-xs font-medium tracking-wide uppercase">Source</Table.Head>
+			<Table.Head class="eyebrow">Status</Table.Head>
+			<Table.Head class="eyebrow">Priority</Table.Head>
+			<Table.Head class="eyebrow">Due</Table.Head>
+			<Table.Head class="eyebrow">Responsibility</Table.Head>
+			<Table.Head class="eyebrow">Source</Table.Head>
 		</Table.Row>
 	</Table.Header>
 	<Table.Body>
@@ -59,14 +61,17 @@
 					</Table.Cell>
 				{/if}
 				<Table.Cell><TodoStatusField todoId={view.todo.id} value={view.todo.status} /></Table.Cell>
+				<Table.Cell
+					><TodoPriorityField todoId={view.todo.id} value={view.todo.priority} /></Table.Cell
+				>
 				<Table.Cell><TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} /></Table.Cell
 				>
-				<Table.Cell
-					><TodoResponsibilityField
-						todoId={view.todo.id}
-						value={view.todo.responsibility}
-					/></Table.Cell
-				>
+				<Table.Cell>
+					<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
+					{#if view.todo.responsibility === 'waiting_on' && view.todo.waitingOn}
+						<p class="provenance-caption mt-1">{view.todo.waitingOn}</p>
+					{/if}
+				</Table.Cell>
 				<Table.Cell
 					><TodoSourceField
 						todoId={view.todo.id}

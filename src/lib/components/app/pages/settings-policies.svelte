@@ -14,7 +14,7 @@
 </script>
 
 <section class="space-y-3">
-	<h2 class="text-sm font-semibold">Trust policies</h2>
+	<h2 class="section-title">Trust policies</h2>
 	<p class="text-sm text-muted-foreground">
 		Decide per pipeline whether accepted work needs your review first. Trust is earned one pipeline
 		at a time.

@@ -27,6 +27,13 @@ export const todoStatus = pgEnum('todo_status', [
 	'cancelled'
 ]);
 export const todoResponsibility = pgEnum('todo_responsibility', ['mine', 'waiting_on']);
+export const todoPriority = pgEnum('todo_priority', ['low', 'medium', 'high']);
+export const memoryEntryType = pgEnum('memory_entry_type', [
+	'fact',
+	'decision',
+	'constraint',
+	'preference'
+]);
 export const promiseStrength = pgEnum('promise_strength', ['explicit', 'implied', 'tentative']);
 export const diagramKind = pgEnum('diagram_kind', ['mermaid', 'drawio']);
 export const relationshipKind = pgEnum('relationship_kind', [
@@ -246,6 +253,7 @@ export const todos = pgTable(
 		description: text('description'),
 		status: todoStatus('status').notNull().default('open'),
 		responsibility: todoResponsibility('responsibility').notNull().default('mine'),
+		priority: todoPriority('priority'),
 		waitingOn: text('waiting_on'),
 		dueDate: date('due_date'),
 		dueDateVerbatim: text('due_date_verbatim'),
@@ -708,6 +716,7 @@ export const memoryEntries = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
 		content: text('content').notNull(),
+		type: memoryEntryType('type'),
 		shareWithAgents: boolean('share_with_agents').notNull().default(true),
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
 		replacesEntryId: uuid('replaces_entry_id').references((): AnyPgColumn => memoryEntries.id, {

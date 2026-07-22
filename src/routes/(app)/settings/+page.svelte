@@ -10,7 +10,7 @@
 <PageShell title="Settings" description="Agent defaults and per-pipeline trust policies.">
 	<section class="flex flex-col gap-4">
 		<div>
-			<h2 class="text-sm font-semibold">Agent</h2>
+			<h2 class="section-title">Agent</h2>
 			<p class="text-sm text-muted-foreground">
 				Choose the default model and how durable actions are approved.
 			</p>

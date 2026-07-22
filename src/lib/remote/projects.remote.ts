@@ -92,6 +92,7 @@ export const archiveNote = command(z.object({ noteId: z.string().uuid() }), asyn
 export const createSkill = command(
 	z.object({
 		name: z.string().min(1),
+		description: z.string().optional(),
 		projectId: z.string().uuid().optional(),
 		parentId: z.string().uuid().optional()
 	}),
