@@ -12,12 +12,13 @@
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
 	import {
 		deleteArtifact,
 		downloadArtifact,
 		regenerateArtifact
 	} from '$lib/remote/deliverables.remote';
-	import { formatDateTime } from '$lib/components/app/labels';
+	import { formatBytes, formatDateTime } from '$lib/components/app/labels';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Pagination from '$lib/components/ui/pagination';
@@ -188,6 +189,7 @@
 										: ''}
 									&middot;
 									{formatDateTime(artifact.createdAt)}
+									&middot; {formatBytes(artifact.byteSize)}
 									{#if artifact.templateName}
 										&middot; {artifact.templateName}
 									{/if}
@@ -216,16 +218,24 @@
 							>
 								<RefreshCw />
 							</Button>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Delete"
-								title="Delete"
-								disabled={busyId === artifact.id}
-								onclick={() => remove(artifact.id)}
+							<ConfirmDelete
+								title="Delete this artifact?"
+								description="The exported document will be permanently removed."
+								onconfirm={() => remove(artifact.id)}
 							>
-								<Trash2 />
-							</Button>
+								{#snippet trigger(props)}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-sm"
+										aria-label="Delete"
+										title="Delete"
+										disabled={busyId === artifact.id}
+									>
+										<Trash2 />
+									</Button>
+								{/snippet}
+							</ConfirmDelete>
 						</div>
 					</div>
 				{/each}
