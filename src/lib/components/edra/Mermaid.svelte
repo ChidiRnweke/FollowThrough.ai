@@ -20,7 +20,8 @@
 	import Shapes from '@lucide/svelte/icons/shapes';
 	import X from '@lucide/svelte/icons/x';
 	import { NodeViewWrapper } from './index.js';
-	import { sanitizeMermaidSvg } from './mermaid-rendering.js';
+	import { initializeMermaid, sanitizeMermaidSvg } from './mermaid-rendering.js';
+	import { mode as colorMode } from 'mode-watcher';
 	import Tooltip from './Tooltip.svelte';
 	import { Download } from '@lucide/svelte';
 	import DrawioReviewDialog from '$lib/components/app/drawio-review-dialog.svelte';
@@ -93,6 +94,8 @@
 
 		const id = `mermaid-${crypto.randomUUID().slice(0, 8)}`;
 		try {
+			// Re-apply the config each render so diagrams always use the current theme.
+			initializeMermaid(colorMode.current === 'dark');
 			const { svg } = await mermaid.render(id, source);
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;
@@ -120,15 +123,17 @@
 		debounceTimer = setTimeout(() => renderMermaid(target, source), delay);
 	}
 
-	// Render inline preview when code changes (not editing)
+	// Render inline preview when code or the color theme changes (not editing)
 	$effect(() => {
+		void colorMode.current;
 		if (!isEditing && code !== undefined && container) {
 			debouncedRender(container, code, 300);
 		}
 	});
 
-	// Render editor preview when editCode changes
+	// Render editor preview when editCode or the color theme changes
 	$effect(() => {
+		void colorMode.current;
 		if (isEditing && (mode === 'both' || mode === 'preview') && previewContainer && editCode) {
 			debouncedRender(previewContainer, editCode, 500);
 		}

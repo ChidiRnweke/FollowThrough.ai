@@ -8,7 +8,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { createMermaidConfig, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
+	import { initializeMermaid, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import {
 		generateDocument,
@@ -142,7 +142,7 @@
 		if (sources.length === 0) return {};
 		const svgs: Record<string, string> = {};
 		// Documents render on white regardless of the app theme.
-		mermaid.initialize(createMermaidConfig(false));
+		initializeMermaid(false);
 		try {
 			for (const source of sources) {
 				try {
@@ -155,7 +155,7 @@
 				}
 			}
 		} finally {
-			mermaid.initialize(createMermaidConfig(mode.current === 'dark'));
+			initializeMermaid(mode.current === 'dark');
 		}
 		return svgs;
 	}
