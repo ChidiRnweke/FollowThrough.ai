@@ -205,7 +205,7 @@
 									>Source changed</Badge
 								>
 							{/if}
-							<Badge variant="outline" class="text-xs">{artifact.format.toUpperCase()}</Badge>
+							<Badge variant="brand" class="text-xs">{artifact.format.toUpperCase()}</Badge>
 							<Button
 								variant="ghost"
 								size="icon-sm"
