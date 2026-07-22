@@ -64,7 +64,7 @@
 	>
 		<!-- Brand-wash icon chips give the four project spaces a shared identity
 		     without recoloring the cards themselves. -->
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15">
 			<ListTodo class="size-4" />
 		</span>
 		<span class="flex-1">Todos</span>
@@ -76,7 +76,7 @@
 		href="/projects/{project.id}/memory"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15">
 			<Brain class="size-4" />
 		</span>
 		<span class="flex-1">Memory</span>
@@ -88,7 +88,7 @@
 		href="/artifacts?projectId={project.id}"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15">
 			<PackageOpen class="size-4" />
 		</span>
 		<span class="flex-1">Artifacts</span>
@@ -100,7 +100,7 @@
 		href="/projects/{project.id}/attachments"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15">
 			<Paperclip class="size-4" />
 		</span>
 		<span class="flex-1">Attachments</span>
