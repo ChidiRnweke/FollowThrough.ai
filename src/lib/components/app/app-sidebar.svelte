@@ -179,6 +179,7 @@
 					size="icon-sm"
 					class="hidden md:inline-flex"
 					aria-label="Toggle chat panel"
+					title="Toggle chat panel"
 					onclick={() => rightPanel.toggle('chat')}
 				>
 					<MessageSquare class="size-4" />
@@ -188,17 +189,25 @@
 					size="icon-sm"
 					class="md:hidden"
 					aria-label="Open chat"
+					title="Open chat"
 					href="/chats/new"
 				>
 					<MessageSquare />
 				</Button>
-				<Button variant="ghost" size="icon-sm" aria-label="Toggle theme" onclick={toggleMode}>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Toggle theme"
+					title="Toggle theme"
+					onclick={toggleMode}
+				>
 					<SunMoon class="size-4" />
 				</Button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
 					aria-label="Send feedback"
+					title="Send feedback"
 					onclick={() => (feedbackOpen = true)}
 				>
 					<MessageSquareWarning class="size-4" />

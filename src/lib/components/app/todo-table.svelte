@@ -23,30 +23,34 @@
 <Table.Root>
 	<Table.Header>
 		<Table.Row>
-			<Table.Head>Todo</Table.Head>
+			<Table.Head class="text-xs font-medium tracking-wide uppercase">Todo</Table.Head>
 			{#if projectNames}
-				<Table.Head>Project</Table.Head>
+				<Table.Head class="text-xs font-medium tracking-wide uppercase">Project</Table.Head>
 			{/if}
-			<Table.Head>Status</Table.Head>
-			<Table.Head>Due</Table.Head>
-			<Table.Head>Responsibility</Table.Head>
-			<Table.Head>Source</Table.Head>
+			<Table.Head class="text-xs font-medium tracking-wide uppercase">Status</Table.Head>
+			<Table.Head class="text-xs font-medium tracking-wide uppercase">Due</Table.Head>
+			<Table.Head class="text-xs font-medium tracking-wide uppercase">Responsibility</Table.Head>
+			<Table.Head class="text-xs font-medium tracking-wide uppercase">Source</Table.Head>
 		</Table.Row>
 	</Table.Header>
 	<Table.Body>
 		{#each todos as view (view.todo.id)}
+			{@const done = view.todo.status === 'done' || view.todo.status === 'cancelled'}
 			<Table.Row>
 				<Table.Cell class="font-medium">
 					{#if onopen}
 						<Button
 							variant="link"
-							class="h-auto p-0 font-medium text-foreground"
+							class={[
+								'h-auto p-0 font-medium text-foreground',
+								done && 'text-muted-foreground line-through'
+							]}
 							onclick={() => onopen(view.todo.id)}
 						>
 							{view.todo.title}
 						</Button>
 					{:else}
-						{view.todo.title}
+						<span class={done ? 'text-muted-foreground line-through' : ''}>{view.todo.title}</span>
 					{/if}
 				</Table.Cell>
 				{#if projectNames}

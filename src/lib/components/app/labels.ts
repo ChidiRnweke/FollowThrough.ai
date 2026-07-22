@@ -47,6 +47,84 @@ export const todoStatusLabels: Record<TodoStatus, string> = {
 	cancelled: 'Cancelled'
 };
 
+/** Semantic presentation for a status value: a dot, a badge wash, and an accent bar. */
+export interface StatusStyle {
+	/** Background utility for a small status dot, e.g. `bg-success`. */
+	readonly dotClass: string;
+	/** Text + optional wash utilities for a badge/label. */
+	readonly badgeClass: string;
+	/** Background utility for a 2px accent bar (kanban column header). */
+	readonly accentClass: string;
+}
+
+export const todoStatusStyle: Record<TodoStatus, StatusStyle> = {
+	backlog: {
+		dotClass: 'bg-muted-foreground/40',
+		badgeClass: 'text-muted-foreground',
+		accentClass: 'bg-border'
+	},
+	open: {
+		dotClass: 'bg-primary',
+		badgeClass: 'bg-primary/10 text-primary',
+		accentClass: 'bg-primary'
+	},
+	in_progress: {
+		dotClass: 'bg-warning',
+		badgeClass: 'bg-warning/15 text-warning',
+		accentClass: 'bg-warning'
+	},
+	done: {
+		dotClass: 'bg-success',
+		badgeClass: 'bg-success/15 text-success',
+		accentClass: 'bg-success'
+	},
+	cancelled: {
+		dotClass: 'bg-muted-foreground/40',
+		badgeClass: 'text-muted-foreground',
+		accentClass: 'bg-border'
+	}
+};
+
+/** Attachment ingestion state → semantic style. `ready` reads as confirmed. */
+export function attachmentStatusStyle(
+	status: 'queued' | 'processing' | 'ready' | 'partial' | 'unsupported' | 'failed'
+): StatusStyle {
+	switch (status) {
+		case 'ready':
+			return {
+				dotClass: 'bg-success',
+				badgeClass: 'bg-success/15 text-success',
+				accentClass: 'bg-success'
+			};
+		case 'queued':
+		case 'processing':
+		case 'partial':
+			return {
+				dotClass: 'bg-warning',
+				badgeClass: 'bg-warning/15 text-warning',
+				accentClass: 'bg-warning'
+			};
+		case 'failed':
+		case 'unsupported':
+			return {
+				dotClass: 'bg-destructive',
+				badgeClass: 'bg-destructive/10 text-destructive',
+				accentClass: 'bg-destructive'
+			};
+	}
+}
+
+const byteUnits = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+
+/** Human-readable file size, e.g. `113409` → `111 KB`. */
+export function formatBytes(bytes: number): string {
+	if (bytes < 1) return '0 B';
+	const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), byteUnits.length - 1);
+	const value = bytes / 1024 ** exponent;
+	const rounded = exponent === 0 ? value : Math.round(value * 10) / 10;
+	return `${rounded} ${byteUnits[exponent]}`;
+}
+
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
 	day: 'numeric',

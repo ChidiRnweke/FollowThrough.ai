@@ -22,7 +22,25 @@
 		);
 		if (match) rightPanel.openTodo(match);
 	}
+
+	const hasActionable = $derived(
+		view.overdue.length > 0 || view.dueToday.length > 0 || view.waitingOn.length > 0
+	);
 </script>
+
+{#snippet statTile(label: string, count: number, tone: string, zero: string, some: string)}
+	<Card.Root class="gap-0 py-4">
+		<Card.Content class="flex flex-col gap-1 px-4">
+			<span class="text-sm text-muted-foreground">{label}</span>
+			<span
+				class={['text-2xl font-semibold tabular-nums', count > 0 ? tone : 'text-muted-foreground']}
+			>
+				{count}
+			</span>
+			<span class="text-xs text-muted-foreground">{count > 0 ? some : zero}</span>
+		</Card.Content>
+	</Card.Root>
+{/snippet}
 
 {#snippet noteRow(note: NoteSummary, pinned: boolean)}
 	<a
@@ -38,57 +56,70 @@
 				{projectName(note.projectId)}
 			</Badge>
 		{/if}
-		{#if !pinned}
-			<span class="shrink-0 text-xs text-muted-foreground">{formatDateTime(note.updatedAt)}</span>
-		{/if}
+		<span class="shrink-0 text-xs text-muted-foreground">{formatDateTime(note.updatedAt)}</span>
 	</a>
 {/snippet}
 
-<div class="grid gap-6 lg:grid-cols-2">
-	<section class="space-y-3" aria-label="Due and overdue todos">
-		<h2 class="flex items-center gap-2 text-sm font-semibold">
-			Overdue
+<section class="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Today at a glance">
+	{@render statTile(
+		'Overdue',
+		view.overdue.length,
+		'text-destructive',
+		'Nothing overdue. Well held.',
+		`${view.overdue.length} to catch up on`
+	)}
+	{@render statTile(
+		'Due today',
+		view.dueToday.length,
+		'text-warning',
+		'Nothing due today.',
+		`${view.dueToday.length} to finish`
+	)}
+	{@render statTile(
+		'Waiting on',
+		view.waitingOn.length,
+		'text-foreground',
+		'Not waiting on anyone.',
+		`${view.waitingOn.length} pending`
+	)}
+</section>
+
+{#if hasActionable}
+	<div class="grid gap-6 lg:grid-cols-2">
+		<section class="space-y-3" aria-label="Due and overdue todos">
 			{#if view.overdue.length > 0}
-				<Badge variant="ghost" class="bg-warning/15 text-warning">{view.overdue.length}</Badge>
+				<h2 class="text-sm font-semibold">Overdue</h2>
+				{#each view.overdue as item (item.todo.id)}
+					<TodoCard
+						view={item}
+						projectName={projectName(item.todo.projectId)}
+						onopen={open}
+						onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
+					/>
+				{/each}
 			{/if}
-		</h2>
-		{#if view.overdue.length === 0}
-			<p class="text-sm text-muted-foreground">Nothing overdue. Well held.</p>
-		{:else}
-			{#each view.overdue as item (item.todo.id)}
-				<TodoCard
-					view={item}
-					projectName={projectName(item.todo.projectId)}
-					onopen={open}
-					onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
-				/>
-			{/each}
+			{#if view.dueToday.length > 0}
+				<h2 class="text-sm font-semibold" class:pt-2={view.overdue.length > 0}>Due today</h2>
+				{#each view.dueToday as item (item.todo.id)}
+					<TodoCard
+						view={item}
+						projectName={projectName(item.todo.projectId)}
+						onopen={open}
+						onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
+					/>
+				{/each}
+			{/if}
+		</section>
+		{#if view.waitingOn.length > 0}
+			<section class="space-y-3" aria-label="Waiting on others">
+				<h2 class="text-sm font-semibold">Waiting on</h2>
+				{#each view.waitingOn as item (item.todo.id)}
+					<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
+				{/each}
+			</section>
 		{/if}
-		<h2 class="pt-2 text-sm font-semibold">Due today</h2>
-		{#if view.dueToday.length === 0}
-			<p class="text-sm text-muted-foreground">Nothing due today.</p>
-		{:else}
-			{#each view.dueToday as item (item.todo.id)}
-				<TodoCard
-					view={item}
-					projectName={projectName(item.todo.projectId)}
-					onopen={open}
-					onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
-				/>
-			{/each}
-		{/if}
-	</section>
-	<section class="space-y-3" aria-label="Waiting on others">
-		<h2 class="text-sm font-semibold">Waiting on</h2>
-		{#if view.waitingOn.length === 0}
-			<p class="text-sm text-muted-foreground">You are not waiting on anyone.</p>
-		{:else}
-			{#each view.waitingOn as item (item.todo.id)}
-				<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
-			{/each}
-		{/if}
-	</section>
-</div>
+	</div>
+{/if}
 
 <div class="grid gap-6 border-t border-border pt-6 lg:grid-cols-2">
 	<section class="space-y-2" aria-label="Pinned notes">

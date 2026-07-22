@@ -11,7 +11,8 @@ const labels: Readonly<Record<string, string>> = {
 	rename_project: 'Rename project',
 	archive_project: 'Archive project',
 	create_todo: 'Create todo',
-	update_todo: 'Update todo'
+	update_todo: 'Update todo',
+	get_note: 'Read note'
 };
 
 const completedLabels: Readonly<Record<string, string>> = {
@@ -22,7 +23,8 @@ const completedLabels: Readonly<Record<string, string>> = {
 	rename_project: 'Renamed project',
 	archive_project: 'Archived project',
 	create_todo: 'Created todo',
-	update_todo: 'Updated todo'
+	update_todo: 'Updated todo',
+	get_note: 'Read note'
 };
 
 export const friendlyToolLabel = (name: string): string =>

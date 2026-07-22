@@ -3,11 +3,14 @@
 	import ActionForm from '$lib/components/primitives/action-form.svelte';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 
-	let { action = '?/capture' }: { action?: string } = $props();
+	let { action = '?/capture', target = 'Inbox' }: { action?: string; target?: string } = $props();
 </script>
 
 <ActionForm {action}>
 	<InputGroup.Root>
+		<InputGroup.Addon align="inline-start">
+			<InputGroup.Text class="text-muted-foreground">{target}</InputGroup.Text>
+		</InputGroup.Addon>
 		<InputGroup.Input
 			id="quick-capture-input"
 			name="title"

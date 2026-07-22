@@ -13,6 +13,7 @@
 	import { deleteSession, renameSession } from '$lib/remote/chat.remote';
 	import { toast } from 'svelte-sonner';
 	import { chat } from '$lib/stores/chat.svelte';
+	import { formatRelativeTime } from '$lib/components/app/labels';
 
 	let {
 		sessions,
@@ -106,7 +107,7 @@
 							>{origin(session)}</span
 						>
 						<span class="text-left text-xs text-muted-foreground"
-							>{new Date(session.updatedAt).toLocaleDateString()}</span
+							>{formatRelativeTime(session.updatedAt)}</span
 						>
 					</span>
 				</Button>

@@ -6,7 +6,7 @@
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
-	import { todoStatusLabels } from './labels';
+	import { todoStatusLabels, todoStatusStyle } from './labels';
 	import { page } from '$app/state';
 	import { Input } from '$lib/components/ui/input';
 
@@ -74,51 +74,26 @@
 	}
 </script>
 
-<div class="grid gap-3 grid-cols-2 md:grid-cols-4">
+<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
 	{#each columns as status (status)}
-		<section class="flex min-h-48 flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2">
+		<section
+			class="flex min-h-40 flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30"
+		>
+			<div class={['h-0.5 w-full', todoStatusStyle[status].accentClass]}></div>
 			<h3
-				class="flex items-center justify-between px-1 text-xs font-semibold text-muted-foreground"
+				class="flex items-center justify-between px-3 pt-1 text-xs font-semibold text-muted-foreground"
 			>
-				{todoStatusLabels[status]}
-				<span class="flex items-center gap-1">
-					<span>{board[status].length}</span>
-					{#if status !== 'done'}
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							class="size-5"
-							aria-label="Add todo to {todoStatusLabels[status]}"
-							onclick={() => {
-								addingTo = status;
-								newTitle = '';
-							}}
-						>
-							<Plus class="size-3.5" />
-						</Button>
-					{/if}
+				<span class="flex items-center gap-1.5">
+					{todoStatusLabels[status]}
+					<span
+						class="inline-flex min-w-4 items-center justify-center rounded-full bg-background px-1 text-xs font-normal tabular-nums"
+					>
+						{board[status].length}
+					</span>
 				</span>
 			</h3>
-			{#if addingTo === status}
-				<div class="flex flex-col gap-1">
-					<Input
-						id={status === 'open' ? 'quick-todo-input' : undefined}
-						autofocus={status === 'open' && page.url.searchParams.has('quickTodo')}
-						placeholder="Todo title…"
-						bind:value={newTitle}
-						onkeydown={(e) => {
-							if (e.key === 'Escape') addingTo = null;
-							if (e.key === 'Enter') void addTodo(status);
-						}}
-					/>
-					<div class="flex gap-1">
-						<Button type="submit" size="sm" variant="default" class="flex-1">Add</Button>
-						<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
-					</div>
-				</div>
-			{/if}
 			<div
-				class="flex min-h-32 flex-1 flex-col gap-2"
+				class="flex min-h-20 flex-1 flex-col gap-2 px-2"
 				use:dragHandleZone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
 				onconsider={(event) => handleConsider(status, event)}
 				onfinalize={(event) => handleFinalize(status, event)}
@@ -135,6 +110,40 @@
 						onstatus={onmove}
 					/>
 				{/each}
+			</div>
+			<div class="px-2 pb-2">
+				{#if addingTo === status}
+					<div class="flex flex-col gap-1">
+						<Input
+							id={status === 'open' ? 'quick-todo-input' : undefined}
+							autofocus={status === 'open' && page.url.searchParams.has('quickTodo')}
+							placeholder="Todo title…"
+							bind:value={newTitle}
+							onkeydown={(e) => {
+								if (e.key === 'Escape') addingTo = null;
+								if (e.key === 'Enter') void addTodo(status);
+							}}
+						/>
+						<div class="flex gap-1">
+							<Button type="submit" size="sm" variant="default" class="flex-1">Add</Button>
+							<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
+						</div>
+					</div>
+				{:else if status !== 'done'}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="w-full justify-start text-muted-foreground hover:text-foreground"
+						aria-label="Add todo to {todoStatusLabels[status]}"
+						onclick={() => {
+							addingTo = status;
+							newTitle = '';
+						}}
+					>
+						<Plus class="size-3.5" />
+						Add
+					</Button>
+				{/if}
 			</div>
 		</section>
 	{/each}

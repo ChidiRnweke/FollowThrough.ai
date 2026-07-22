@@ -12,10 +12,11 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import Pencil from '@lucide/svelte/icons/pencil';
+	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
 	import Plus from '@lucide/svelte/icons/plus';
-	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import {
 		getEntries,
 		getPendingSuggestions,
@@ -29,12 +30,18 @@
 	let {
 		projectId,
 		placeholder,
-		emptyText
+		emptyText,
+		hideShare = false,
+		scopeLabel
 	}: {
 		/** Omit for the user's profile memory. */
 		projectId?: ProjectId;
 		placeholder: string;
 		emptyText: string;
+		/** Profile memory is always shared, so hide the per-entry toggle. */
+		hideShare?: boolean;
+		/** Optional caption clarifying where these memories apply. */
+		scopeLabel?: string;
 	} = $props();
 
 	let entries = $state<MemoryEntry[]>([]);
@@ -44,6 +51,19 @@
 	let draft = $state('');
 	let editingId = $state<MemoryEntryId | undefined>(undefined);
 	let editingContent = $state('');
+	let deleteTarget = $state<MemoryEntry | undefined>(undefined);
+	let deleteOpen = $state(false);
+
+	function askDelete(entry: MemoryEntry): void {
+		deleteTarget = entry;
+		deleteOpen = true;
+	}
+
+	async function confirmDelete(): Promise<void> {
+		if (deleteTarget) await remove(deleteTarget);
+		deleteOpen = false;
+		deleteTarget = undefined;
+	}
 	const items = $derived.by(() =>
 		[
 			...pending.map((view) => ({ kind: 'pending' as const, view, at: view.suggestion.createdAt })),
@@ -163,20 +183,29 @@
 
 <div class="flex h-full min-h-0 flex-col gap-3">
 	<div class="flex flex-col gap-2">
-		<Textarea bind:value={draft} {placeholder} rows={3} aria-label="New memory entry" />
-		<Button size="sm" class="self-end" disabled={!draft.trim()} onclick={add}>
-			<Plus data-icon />
-			Add memory
-		</Button>
+		<Textarea bind:value={draft} {placeholder} rows={2} aria-label="New memory entry" />
+		<div class="flex items-center justify-between gap-2">
+			{#if scopeLabel}
+				<span class="text-xs text-muted-foreground">{scopeLabel}</span>
+			{:else}
+				<span></span>
+			{/if}
+			<Button size="sm" disabled={!draft.trim()} onclick={add}>
+				<Plus data-icon />
+				Add memory
+			</Button>
+		</div>
 	</div>
 	{#if loading && items.length === 0}
 		<p class="text-sm text-muted-foreground">Loading memory…</p>
 	{:else if items.length === 0}
 		<p class="text-sm text-muted-foreground">{emptyText}</p>
 	{:else}
-		<ul class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+		<ul
+			class="min-h-0 flex-1 divide-y divide-border overflow-y-auto rounded-md border border-border"
+		>
 			{#each items as item (item.kind === 'pending' ? `pending-${item.view.suggestion.id}` : `saved-${item.entry.id}`)}
-				<li class="rounded-md border border-border p-3">
+				<li class="px-3 py-2.5">
 					{#if item.kind === 'pending'}
 						{@const view = item.view}
 						{@const suggestion = view.suggestion}
@@ -231,9 +260,38 @@
 						</div>
 					{:else}
 						{@const entry = item.entry}
-						<p class="text-sm whitespace-pre-wrap">{entry.content}</p>
-						<div class="mt-2 flex items-center justify-between gap-2">
-							<Label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+						<div class="flex items-start justify-between gap-3">
+							<p class="min-w-0 flex-1 text-sm whitespace-pre-wrap">{entry.content}</p>
+							<div class="flex shrink-0 items-center gap-1.5">
+								<span class="text-xs text-muted-foreground">
+									{formatRelativeTime(entry.updatedAt)}
+								</span>
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button {...props} variant="ghost" size="icon-sm" aria-label="Memory actions">
+												<MoreHorizontal data-icon />
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end">
+										<DropdownMenu.Item
+											onSelect={() => {
+												editingId = entry.id;
+												editingContent = entry.content;
+											}}
+										>
+											Edit
+										</DropdownMenu.Item>
+										<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(entry)}>
+											Delete
+										</DropdownMenu.Item>
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							</div>
+						</div>
+						{#if !hideShare}
+							<Label class="mt-1.5 flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
 								<Checkbox
 									checked={entry.shareWithAgents}
 									aria-label="Share with agents"
@@ -241,34 +299,27 @@
 								/>
 								Share with agents
 							</Label>
-							<div class="flex items-center gap-1">
-								<span class="text-xs text-muted-foreground">
-									{formatRelativeTime(entry.updatedAt)}
-								</span>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									aria-label="Edit memory entry"
-									onclick={() => {
-										editingId = entry.id;
-										editingContent = entry.content;
-									}}
-								>
-									<Pencil data-icon />
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									aria-label="Delete memory entry"
-									onclick={() => remove(entry)}
-								>
-									<Trash2 data-icon />
-								</Button>
-							</div>
-						</div>
+						{/if}
 					{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 </div>
+
+<AlertDialog.Root bind:open={deleteOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Delete this memory?</AlertDialog.Title>
+			<AlertDialog.Description>
+				The agent will no longer remember this. This cannot be undone.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={() => void confirmDelete()}>
+				Delete
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

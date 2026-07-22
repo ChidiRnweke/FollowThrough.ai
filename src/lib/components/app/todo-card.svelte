@@ -111,7 +111,7 @@
 		{:else if view.todo.dueDate}
 			<Badge
 				variant="ghost"
-				class={overdue ? 'bg-warning/15 text-warning' : 'text-muted-foreground'}
+				class={overdue ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'}
 				>{formatDate(view.todo.dueDate)}</Badge
 			>
 		{/if}

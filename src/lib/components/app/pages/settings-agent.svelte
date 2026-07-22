@@ -27,12 +27,7 @@
 				<Field.Title>Default chat model</Field.Title>
 				<Field.Description>Used when a conversation has no model override.</Field.Description>
 			</Field.Content>
-			<ModelPicker
-				{models}
-				bind:value={model}
-				allowDefault
-				defaultLabel="Use environment default"
-			/>
+			<ModelPicker {models} bind:value={model} allowDefault defaultLabel="App default" />
 			<Input type="hidden" name="defaultModel" value={model ?? ''} />
 		</Field.Field>
 		<Field.Separator />

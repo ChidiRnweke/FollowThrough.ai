@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { AttachmentView } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
+	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
+	import { attachmentStatusStyle, formatBytes } from './labels';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 
@@ -84,7 +85,6 @@
 	}
 
 	async function remove(id: string): Promise<void> {
-		if (!confirm('Remove this attachment?')) return;
 		const response = await fetch('/api/attachments', {
 			method: 'DELETE',
 			headers: { 'content-type': 'application/json' },
@@ -119,6 +119,7 @@
 	</div>
 	<div class="divide-y rounded-md border">
 		{#each items as item (item.attachment.id)}
+			{@const status = attachmentStatusStyle(item.version.processingStatus)}
 			<div class="flex items-center gap-3 p-3">
 				{#if item.version.mediaType.startsWith('image/')}
 					<img
@@ -130,13 +131,21 @@
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-sm font-medium">{item.attachment.path}</p>
 					<p class="text-xs text-muted-foreground">
-						{item.version.mediaType} · {item.version.byteSize} bytes
+						{item.version.mediaType} · {formatBytes(item.version.byteSize)}
 					</p>
 					{#if item.version.processingFailure}<p class="text-xs text-destructive">
 							{item.version.processingFailure}
 						</p>{/if}
 				</div>
-				<Badge variant="secondary">{item.version.processingStatus}</Badge>
+				<span
+					class={[
+						'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
+						status.badgeClass
+					]}
+				>
+					<span class={['size-1.5 rounded-full', status.dotClass]}></span>
+					{item.version.processingStatus}
+				</span>
 				<div class="flex gap-1">
 					<Button
 						variant="ghost"
@@ -148,9 +157,16 @@
 							size="sm"
 							onclick={() => void operation('retry', item.attachment.id)}>Retry</Button
 						>{/if}
-					<Button variant="ghost" size="sm" onclick={() => void remove(item.attachment.id)}
-						>Remove</Button
+					<ConfirmDelete
+						title="Remove this attachment?"
+						description="It will no longer be available to this project or its agents."
+						confirmLabel="Remove"
+						onconfirm={() => remove(item.attachment.id)}
 					>
+						{#snippet trigger(props)}
+							<Button {...props} variant="ghost" size="sm">Remove</Button>
+						{/snippet}
+					</ConfirmDelete>
 				</div>
 			</div>
 		{:else}<p class="p-4 text-sm text-muted-foreground">No attachments yet.</p>{/each}

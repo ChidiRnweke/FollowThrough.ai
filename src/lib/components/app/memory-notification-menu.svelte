@@ -24,6 +24,7 @@
 				size="icon-sm"
 				class="relative"
 				aria-label={total === 0 ? 'Memory notifications' : `${total} pending memory suggestions`}
+				title="Pending memories"
 			>
 				<Bell />
 				{#if total > 0}

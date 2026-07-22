@@ -12,6 +12,8 @@
 	import TodoTable from '../todo-table.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
+	import { Input } from '$lib/components/ui/input';
+	import Plus from '@lucide/svelte/icons/plus';
 
 	let {
 		todos,
@@ -60,6 +62,18 @@
 	const detail = $derived(
 		page.url.searchParams.get('detail') === 'detailed' ? 'detailed' : 'basic'
 	);
+
+	let addingListTodo = $state(false);
+	let listTitle = $state('');
+
+	async function addListTodo(): Promise<void> {
+		const title = listTitle.trim();
+		if (!title) return;
+		listTitle = '';
+		addingListTodo = false;
+		const ok = await todoUpdates.create(title, projectId, 'open');
+		if (!ok) toast.error('Could not add the todo. Try again.');
+	}
 </script>
 
 <div class="flex flex-wrap items-center justify-between gap-2">
@@ -134,6 +148,36 @@
 		</div>
 	{:else}
 		<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
+		<div class="mt-1">
+			{#if addingListTodo}
+				<div class="flex items-center gap-1">
+					<Input
+						autofocus
+						placeholder="Todo title…"
+						bind:value={listTitle}
+						onkeydown={(e) => {
+							if (e.key === 'Escape') addingListTodo = false;
+							if (e.key === 'Enter') void addListTodo();
+						}}
+					/>
+					<Button size="sm" onclick={() => void addListTodo()}>Add</Button>
+					<Button size="sm" variant="ghost" onclick={() => (addingListTodo = false)}>Cancel</Button>
+				</div>
+			{:else}
+				<Button
+					variant="ghost"
+					size="sm"
+					class="text-muted-foreground hover:text-foreground"
+					onclick={() => {
+						addingListTodo = true;
+						listTitle = '';
+					}}
+				>
+					<Plus class="size-3.5" />
+					Add todo
+				</Button>
+			{/if}
+		</div>
 	{/if}
 {:else}
 	<KanbanBoard

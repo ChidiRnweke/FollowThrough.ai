@@ -6,5 +6,7 @@
 	<MemoryEntryList
 		placeholder="Something about you the agent should always know — your role, goals, how you like to work…"
 		emptyText="Nothing here yet. Tell the agent about yourself in chat, or add what it should always know about you."
+		hideShare
+		scopeLabel="Applies across every project"
 	/>
 </div>

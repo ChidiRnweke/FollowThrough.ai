@@ -1,42 +1,54 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
+	import Pin from '@lucide/svelte/icons/pin';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 
 	let { data } = $props();
 </script>
 
-<PageShell title="Skills" description="Your methodology, written down where the agent can use it.">
+<PageShell title="Skills" description="Reusable methodology the agent loads when a task matches.">
 	{#if data.skills.length === 0}
 		<p class="text-sm text-muted-foreground">
 			No skills yet. Select a reusable structure in a note and save it as a skill.
 		</p>
 	{:else}
-		<div class="grid gap-3 sm:grid-cols-2">
+		<ul class="divide-y divide-border rounded-md border border-border">
 			{#each data.skills as skill (skill.noteId)}
-				<a href="/skills/{skill.noteId}" class="block">
-					<Card.Root class="h-full gap-1 py-3 transition-colors hover:bg-accent">
-						<Card.Header class="px-4">
-							<Card.Title class="text-sm font-medium">{skill.name}</Card.Title>
-							{#if !skill.isEnabled}
-								<Card.Action>
-									<Badge variant="ghost" class="text-muted-foreground">Disabled</Badge>
-								</Card.Action>
-							{/if}
-						</Card.Header>
-						<Card.Content class="space-y-1.5 px-4">
-							<p class="text-sm text-muted-foreground">{skill.description}</p>
-							<div class="flex flex-wrap gap-1">
-								{#each skill.triggerHints as hint (hint)}
-									<Badge variant="ghost" class="font-mono text-xs text-muted-foreground">
-										{hint}
-									</Badge>
-								{/each}
+				<li>
+					<a
+						href="/skills/{skill.noteId}"
+						class="row-interactive flex items-center gap-3 px-4 py-3"
+					>
+						<span
+							class={[
+								'size-2 shrink-0 rounded-full',
+								skill.isEnabled ? 'bg-success' : 'bg-muted-foreground/40'
+							]}
+							title={skill.isEnabled ? 'Enabled' : 'Disabled'}
+						></span>
+						<div class="min-w-0 flex-1">
+							<div class="flex items-center gap-2">
+								<span class="truncate text-sm font-medium">{skill.name}</span>
+								{#if skill.isPinned}
+									<Pin class="size-3.5 shrink-0 text-muted-foreground" />
+								{/if}
+								{#if !skill.isEnabled}
+									<Badge variant="ghost" class="shrink-0 text-muted-foreground">Disabled</Badge>
+								{/if}
 							</div>
-						</Card.Content>
-					</Card.Root>
-				</a>
+							<p class="truncate text-sm text-muted-foreground">{skill.description}</p>
+						</div>
+						<div class="hidden shrink-0 items-center gap-1 lg:flex">
+							{#each skill.triggerHints.slice(0, 3) as hint (hint)}
+								<Badge variant="ghost" class="font-mono text-xs text-muted-foreground">{hint}</Badge
+								>
+							{/each}
+						</div>
+						<ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+					</a>
+				</li>
 			{/each}
-		</div>
+		</ul>
 	{/if}
 </PageShell>

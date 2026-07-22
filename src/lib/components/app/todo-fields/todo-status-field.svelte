@@ -3,7 +3,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
-	import { todoStatusLabels } from '../labels';
+	import { todoStatusLabels, todoStatusStyle } from '../labels';
 
 	let {
 		todoId,
@@ -25,7 +25,10 @@
 	onValueChange={(next) => void change(next)}
 	disabled={todoUpdates.isPending(todoId)}
 >
-	<Select.Trigger size="sm" aria-label={label}>{todoStatusLabels[value]}</Select.Trigger>
+	<Select.Trigger size="sm" aria-label={label}>
+		<span class={['inline-block size-1.5 rounded-full', todoStatusStyle[value].dotClass]}></span>
+		{todoStatusLabels[value]}
+	</Select.Trigger>
 	<Select.Content>
 		<Select.Group>
 			{#each statuses as status (status)}<Select.Item value={status}
