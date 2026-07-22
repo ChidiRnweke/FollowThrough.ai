@@ -6,9 +6,15 @@ class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
 	todoView = $state<TodoView | undefined>(undefined);
 	memoryProjectId = $state<ProjectId | undefined>(undefined);
+	chatTrigger: HTMLElement | undefined;
 
-	openChat(): void {
+	openChat(trigger?: HTMLElement): void {
+		this.chatTrigger = trigger;
 		this.mode = 'chat';
+	}
+	restoreChatTriggerFocus(): void {
+		this.chatTrigger?.focus();
+		this.chatTrigger = undefined;
 	}
 	openTodo(view: TodoView): void {
 		this.todoView = view;

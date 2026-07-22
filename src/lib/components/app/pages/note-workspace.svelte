@@ -577,16 +577,20 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
-<div class="note-measure mx-auto flex w-full flex-1 flex-col gap-4">
-	<div class="flex min-h-8 flex-wrap items-center gap-2">
-		<div class="min-w-0 flex-1">
-			<NoteBreadcrumb {shell} {note} />
-		</div>
-		<div class="ml-auto flex items-center gap-2">
+<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
+	<div
+		class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
+		data-testid="note-utility-header"
+	>
+		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
+			<div class="min-w-0 flex-1">
+				<NoteBreadcrumb {shell} {note} />
+			</div>
 			{#if onCloseSplit}
 				<Button
 					variant="ghost"
 					size="icon-sm"
+					class="size-11 sm:size-8"
 					aria-label="Close split view"
 					title="Close split view"
 					onclick={onCloseSplit}
@@ -594,6 +598,8 @@
 					<X />
 				</Button>
 			{/if}
+		</div>
+		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
 			{#if noteActions.running}
 				<LoaderCircle
 					class="size-4 animate-spin text-muted-foreground"
@@ -601,42 +607,50 @@
 				/>
 			{/if}
 			{#if dirty && !note.title.trim()}
-				<span class="text-xs text-muted-foreground" aria-live="polite">Add a title to save</span>
+				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
+					>Add a title to save</span
+				>
 			{:else if saveFailed}
-				<span class="text-xs text-destructive" aria-live="polite">
+				<span class="min-w-0 flex-1 text-xs text-destructive sm:flex-none" aria-live="polite">
 					Couldn’t save · press Ctrl+S to retry
 				</span>
 			{:else if dirty}
-				<span class="text-xs text-muted-foreground" aria-live="polite">Unsaved changes</span>
-			{:else if hasUnpublishedChanges}
-				<span class="text-xs text-muted-foreground" aria-live="polite">Unpublished changes</span>
-			{:else}
-				<NoteSyncStatus
-					status={noteSync.status}
-					updatedAt={note.updatedAt}
-					onRetry={() => void retrySync()}
-					onReview={() => (conflictOpen = true)}
-				/>
-			{/if}
-			{#if hasUnpublishedChanges}
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={dirty || publishing}
-					aria-label="Publish note (Ctrl+S, S)"
-					onclick={() => void publish()}
+				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
+					>Unsaved changes</span
 				>
-					{#if publishing}
-						<LoaderCircle class="size-4 animate-spin" />
-					{:else}
-						<ArrowUpFromLine class="size-4" />
-					{/if}
-					Publish
-				</Button>
+			{:else if hasUnpublishedChanges}
+				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
+					>Unpublished changes</span
+				>
+			{:else}
+				<div class="min-w-0 flex-1 sm:flex-none">
+					<NoteSyncStatus
+						status={noteSync.status}
+						updatedAt={note.updatedAt}
+						onRetry={() => void retrySync()}
+						onReview={() => (conflictOpen = true)}
+					/>
+				</div>
 			{/if}
+			<Button
+				variant="outline"
+				size="sm"
+				class="h-11 sm:h-8"
+				disabled={!hasUnpublishedChanges || dirty || publishing}
+				aria-label="Publish note (Ctrl+S, S)"
+				onclick={() => void publish()}
+			>
+				{#if publishing}
+					<LoaderCircle class="size-4 animate-spin" />
+				{:else}
+					<ArrowUpFromLine class="size-4" />
+				{/if}
+				Publish
+			</Button>
 			<Button
 				variant="ghost"
 				size="icon-sm"
+				class="hidden sm:inline-flex"
 				aria-label="Export document"
 				onclick={() => (exportOpen = true)}
 			>
@@ -645,12 +659,23 @@
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="icon-sm" aria-label="Note actions">
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="size-11 sm:size-8"
+							aria-label="Note actions"
+						>
 							<Ellipsis />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
+					<DropdownMenu.Item class="sm:hidden" onclick={() => (exportOpen = true)}>
+						<FileOutput data-icon="inline-start" />
+						Export document
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator class="sm:hidden" />
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={togglePin}>
 							{#if note.isPinned}

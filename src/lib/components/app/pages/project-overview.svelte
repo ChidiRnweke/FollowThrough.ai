@@ -62,7 +62,11 @@
 		href="/projects/{project.id}/todos"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<ListTodo class="size-4 shrink-0 text-muted-foreground" />
+		<!-- Brand-wash icon chips give the four project spaces a shared identity
+		     without recoloring the cards themselves. -->
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+			<ListTodo class="size-4" />
+		</span>
 		<span class="flex-1">Todos</span>
 		{#if counts.todos > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.todos}</span>
@@ -72,7 +76,9 @@
 		href="/projects/{project.id}/memory"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<Brain class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+			<Brain class="size-4" />
+		</span>
 		<span class="flex-1">Memory</span>
 		{#if counts.memory > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.memory}</span>
@@ -82,7 +88,9 @@
 		href="/artifacts?projectId={project.id}"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<PackageOpen class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+			<PackageOpen class="size-4" />
+		</span>
 		<span class="flex-1">Artifacts</span>
 		{#if counts.artifacts > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.artifacts}</span>
@@ -92,7 +100,9 @@
 		href="/projects/{project.id}/attachments"
 		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		<Paperclip class="size-4 shrink-0 text-muted-foreground" />
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand">
+			<Paperclip class="size-4" />
+		</span>
 		<span class="flex-1">Attachments</span>
 		{#if counts.attachments > 0}
 			<span class="text-xs tabular-nums text-muted-foreground">{counts.attachments}</span>

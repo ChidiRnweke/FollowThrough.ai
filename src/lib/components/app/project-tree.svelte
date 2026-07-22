@@ -606,7 +606,9 @@
 					<Sidebar.MenuButton isActive={activePath === projectHref} tooltipContent={project.name}>
 						{#snippet child({ props })}
 							<a href={projectHref} {...props}>
-								<FolderKanban class="size-4 shrink-0" />
+								<!-- Project rows are identity moments: the icon stays brand-teal so
+								     projects stand apart from their gray child rows. -->
+								<FolderKanban class="size-4 shrink-0 text-brand" />
 								<span class="truncate font-medium">{project.name}</span>
 							</a>
 						{/snippet}

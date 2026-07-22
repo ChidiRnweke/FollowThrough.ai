@@ -115,17 +115,39 @@
 </aside>
 
 <Sheet.Root
-	open={open && (renderedMode === 'project-memory' || renderedMode === 'suggestions')}
+	open={open && renderedMode !== 'todo-detail'}
 	onOpenChange={(value) => {
 		if (!value) rightPanel.close();
 	}}
 >
-	<Sheet.Content side="right" class="flex w-full max-w-full flex-col p-0 sm:max-w-lg 2xl:hidden">
+	<Sheet.Content
+		side="right"
+		class="flex w-full max-w-full flex-col p-0 sm:max-w-sm 2xl:hidden"
+		onCloseAutoFocus={(event) => {
+			if (renderedMode !== 'chat') return;
+			event.preventDefault();
+			rightPanel.restoreChatTriggerFocus();
+		}}
+	>
 		<Sheet.Header class="shrink-0 border-b border-border px-4 py-3">
 			<Sheet.Title>{titles[renderedMode]}</Sheet.Title>
 		</Sheet.Header>
-		<div class="min-h-0 flex-1 overflow-y-auto p-4">
-			{#if renderedMode === 'project-memory'}
+		<div
+			class="min-h-0 flex-1 p-4 {renderedMode === 'chat'
+				? 'overflow-hidden pb-[max(1rem,env(safe-area-inset-bottom))]'
+				: 'overflow-y-auto'}"
+		>
+			{#if renderedMode === 'chat'}
+				<ChatPanel
+					{shell}
+					{sessions}
+					{activeNoteId}
+					{activeProjectId}
+					{agentPreferences}
+					{agentModels}
+					{agentAvailable}
+				/>
+			{:else if renderedMode === 'project-memory'}
 				<MemoryPanel />
 			{:else if renderedMode === 'suggestions'}
 				<SuggestionsPanel />

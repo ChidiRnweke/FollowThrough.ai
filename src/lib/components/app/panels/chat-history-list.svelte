@@ -103,9 +103,9 @@
 						<span class="w-full truncate text-left text-sm"
 							>{session.title ?? 'New conversation'}</span
 						>
-						<span class="w-full truncate text-left text-xs text-muted-foreground"
-							>{origin(session)}</span
-						>
+						<!-- Origin is project identity, so it carries the brand accent while
+						     the timestamp below stays muted. -->
+						<span class="w-full truncate text-left text-xs text-brand">{origin(session)}</span>
 						<span class="text-left text-xs text-muted-foreground"
 							>{formatRelativeTime(session.updatedAt)}</span
 						>

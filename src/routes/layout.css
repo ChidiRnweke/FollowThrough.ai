@@ -367,6 +367,7 @@
 		display: flex;
 		min-width: 100%;
 		min-height: 100%;
+		padding-inline: 1rem;
 	}
 
 	.workspace-split-resizer {
@@ -426,6 +427,10 @@
 	@media (min-width: 48rem) {
 		.workspace-pane-layer {
 			padding-block: 1.5rem;
+		}
+
+		.workspace-pane-scroll-content {
+			padding-inline: 0;
 		}
 	}
 
@@ -569,6 +574,12 @@
 	[data-slot='sidebar-menu-button'][data-active='true'],
 	[data-slot='tabs-trigger'][data-state='active'],
 	[data-slot='toggle-group-item'][data-state='on'] {
+		color: var(--color-brand);
+	}
+
+	/* Breadcrumb links are the way back — they are live, so they carry the brand
+	   accent; the current page segment stays foreground. */
+	[data-slot='breadcrumb-link'] {
 		color: var(--color-brand);
 	}
 }

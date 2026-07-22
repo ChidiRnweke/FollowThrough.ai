@@ -116,7 +116,7 @@
 <div
 	class="sticky top-0 z-30 shrink-0 overflow-hidden border-b border-border bg-background transition-[height] duration-(--duration-panel) ease-(--ease-standard) {hidden
 		? 'h-6'
-		: 'h-9'}"
+		: 'h-10'}"
 	role="tablist"
 	tabindex="-1"
 	aria-label="Open notes"
@@ -140,7 +140,7 @@
 			</button>
 		</div>
 	{:else}
-		<div class="flex h-9 items-stretch gap-0 overflow-x-auto px-2">
+		<div class="flex h-10 items-stretch gap-0 overflow-x-auto px-2">
 			{#if noteDragOver}
 				<div
 					class="absolute inset-0 z-40 flex items-center justify-center border border-primary bg-background text-xs font-medium text-foreground"
@@ -205,7 +205,7 @@
 										aria-selected={active}
 										draggable="true"
 										title={titleOf(noteId)}
-										class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-xs transition-colors {active
+										class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
 											? 'bg-background font-medium text-foreground'
 											: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
 										ondragstart={(event) => {
@@ -256,10 +256,10 @@
 					{/each}
 				{/each}
 			{:else}
-				<!-- Empty strip on non-note routes: keep the 36px height so opening
+				<!-- Empty strip on non-note routes: keep the 40px height so opening
 			     the first note doesn't shift the editor's vertical footprint. -->
 				<span
-					class="flex shrink-0 items-center px-2 text-xs text-muted-foreground/70"
+					class="flex shrink-0 items-center px-2 text-sm text-muted-foreground"
 					aria-label="No notes open"
 				>
 					No notes open

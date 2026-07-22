@@ -13,7 +13,6 @@ export function openTodoSurface(view: TodoView, returnTo: string): void {
 	void goto(`/todos/${view.todo.id}?returnTo=${encodeURIComponent(returnTo)}`);
 }
 
-export function openChatSurface(): void {
-	if (wideWorkbench()) rightPanel.openChat();
-	else void goto('/chats/new');
+export function openChatSurface(trigger?: HTMLElement): void {
+	rightPanel.openChat(trigger);
 }

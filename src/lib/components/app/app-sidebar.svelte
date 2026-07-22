@@ -58,9 +58,9 @@
 				class="flex min-w-0 items-center gap-2 rounded-md"
 				aria-label="FollowThrough — Today"
 			>
-				<BrandMark class="size-6 shrink-0" />
+				<BrandMark class="size-7 shrink-0" />
 				<span
-					class="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
+					class="truncate text-base font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
 				>
 					FollowThrough
 				</span>

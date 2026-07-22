@@ -269,10 +269,10 @@ describe('WorkspaceTabs', () => {
 		);
 	});
 
-	it('uses the 36px expanded height endpoint', async () => {
+	it('uses the 40px expanded height endpoint', async () => {
 		const screen = await render(WorkspaceTabs, { shell });
 		const strip = screen.getByRole('tablist', { name: 'Open notes' }).element();
-		expect(strip.className).toContain('h-9');
+		expect(strip.className).toContain('h-10');
 	});
 
 	it('uses the panel height transition tokens while collapsed', async () => {

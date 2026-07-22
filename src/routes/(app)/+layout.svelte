@@ -156,7 +156,7 @@
 				size="icon"
 				class="size-11"
 				aria-label="Open chat"
-				onclick={openChatSurface}
+				onclick={(event) => openChatSurface(event.currentTarget)}
 			>
 				<MessageSquare />
 			</Button>
