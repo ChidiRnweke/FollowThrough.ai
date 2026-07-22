@@ -49,6 +49,15 @@ export const todoStatusLabels: Record<TodoStatus, string> = {
 	cancelled: 'Cancelled'
 };
 
+/** One dry voice line per empty kanban column — see DESIGN_SYSTEM.md "Voice & tone". */
+export const todoStatusEmptyCopy: Record<TodoStatus, string> = {
+	backlog: 'Nothing waiting in the wings.',
+	open: 'Nothing open. Pull something in.',
+	in_progress: 'Nothing in flight.',
+	done: 'Nothing finished yet.',
+	cancelled: 'Nothing called off.'
+};
+
 /** Semantic presentation for a status value: a dot, a badge wash, and an accent bar. */
 export interface StatusStyle {
 	/** Background utility for a small status dot, e.g. `bg-success`. */

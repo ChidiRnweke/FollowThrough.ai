@@ -3,6 +3,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import Pin from '@lucide/svelte/icons/pin';
+	import FileText from '@lucide/svelte/icons/file-text';
+	import EmptyState from '../empty-state.svelte';
 	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
 	import { page } from '$app/state';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
@@ -53,7 +55,7 @@
 		{/if}
 		<span class="min-w-0 flex-1 truncate">{note.title}</span>
 		{#if projectName(note.projectId)}
-			<Badge variant="outline" class="shrink-0 text-muted-foreground">
+			<Badge variant="brand" class="shrink-0">
 				{projectName(note.projectId)}
 			</Badge>
 		{/if}
@@ -128,7 +130,7 @@
 		{#each view.pinnedNotes as note (note.id)}
 			{@render noteRow(note, true)}
 		{:else}
-			<p class="text-sm text-muted-foreground">Pin a note to keep it at hand.</p>
+			<EmptyState icon={Pin} title="Pin a note to keep it at hand." />
 		{/each}
 	</section>
 	<section class="space-y-2" aria-label="Recently edited notes">
@@ -136,7 +138,7 @@
 		{#each view.recentNotes as note (note.id)}
 			{@render noteRow(note, false)}
 		{:else}
-			<p class="text-sm text-muted-foreground">Notes you touch will show up here.</p>
+			<EmptyState icon={FileText} title="Notes you touch show up here." />
 		{/each}
 	</section>
 </div>

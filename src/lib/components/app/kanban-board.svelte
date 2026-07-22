@@ -6,7 +6,7 @@
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
-	import { todoStatusLabels, todoStatusStyle } from './labels';
+	import { todoStatusEmptyCopy, todoStatusLabels, todoStatusStyle } from './labels';
 	import { page } from '$app/state';
 	import { Input } from '$lib/components/ui/input';
 
@@ -92,24 +92,33 @@
 					</span>
 				</span>
 			</h3>
-			<div
-				class="flex min-h-20 flex-1 flex-col gap-2 px-2"
-				use:dragHandleZone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
-				onconsider={(event) => handleConsider(status, event)}
-				onfinalize={(event) => handleFinalize(status, event)}
-			>
-				{#each board[status] as item (item.id)}
-					<TodoCard
-						view={item.view}
-						compact
-						draggable
-						projectName={projectNames?.get(item.view.todo.projectId)}
-						{detail}
-						{notes}
-						{onopen}
-						onstatus={onmove}
-					/>
-				{/each}
+			<div class="relative flex min-h-20 flex-1 flex-col">
+				{#if board[status].length === 0}
+					<p
+						class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground/70"
+					>
+						{todoStatusEmptyCopy[status]}
+					</p>
+				{/if}
+				<div
+					class="flex min-h-20 flex-1 flex-col gap-2 px-2"
+					use:dragHandleZone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
+					onconsider={(event) => handleConsider(status, event)}
+					onfinalize={(event) => handleFinalize(status, event)}
+				>
+					{#each board[status] as item (item.id)}
+						<TodoCard
+							view={item.view}
+							compact
+							draggable
+							projectName={projectNames?.get(item.view.todo.projectId)}
+							{detail}
+							{notes}
+							{onopen}
+							onstatus={onmove}
+						/>
+					{/each}
+				</div>
 			</div>
 			<div class="px-2 pb-2">
 				{#if addingTo === status}

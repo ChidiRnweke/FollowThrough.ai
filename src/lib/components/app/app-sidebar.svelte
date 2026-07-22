@@ -17,6 +17,7 @@
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
+	import BrandMark from './brand-mark.svelte';
 	import ProjectTree from './project-tree.svelte';
 	import MemoryNotificationMenu from './memory-notification-menu.svelte';
 	import FeedbackDialog from './feedback-dialog.svelte';
@@ -49,12 +50,21 @@
 
 <Sidebar.Root collapsible="icon">
 	<Sidebar.Header>
-		<div class="flex h-8 items-center justify-between gap-1">
-			<span
-				class="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
+		<div
+			class="flex h-8 items-center justify-between gap-1 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2"
+		>
+			<a
+				href="/"
+				class="flex min-w-0 items-center gap-2 rounded-md"
+				aria-label="FollowThrough — Today"
 			>
-				FollowThrough
-			</span>
+				<BrandMark class="size-6 shrink-0" />
+				<span
+					class="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
+				>
+					FollowThrough
+				</span>
+			</a>
 			<Sidebar.Trigger class="text-muted-foreground" />
 		</div>
 		<button

@@ -143,7 +143,7 @@
 	</Card.Header>
 	<Card.Content class="flex flex-wrap items-center gap-1.5 px-4">
 		{#if projectName}
-			<Badge variant="outline" class="text-muted-foreground">{projectName}</Badge>
+			<Badge variant="brand">{projectName}</Badge>
 		{/if}
 		{#if detail === 'detailed'}
 			<TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} />
