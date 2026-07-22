@@ -30,8 +30,9 @@
 		insertAcceptedDrawioAfterMermaid,
 		setPendingDrawioSuggestion as applyPendingDrawioSuggestion
 	} from '$lib/client/drawio/tiptap-actions';
+	import { createMediaResize } from './media-resize.svelte.js';
 
-	const { node, editor, getPos, extension }: NodeViewProps = $props();
+	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
 	const options = $derived(
 		extension.options as {
 			onRevise?: (
@@ -75,8 +76,25 @@
 	// Render state
 	let container: HTMLDivElement | null = $state(null);
 	let previewContainer: HTMLDivElement | null = $state(null);
+	let previewWrapper: HTMLDivElement | null = $state(null);
 	let error: string | null = $state(null);
 	let isRendering = $state(false);
+
+	// Drag-resize (preview mode) — persists width as a node attribute, like
+	// images. Values above 100% zoom the diagram beyond the block width; the
+	// container then scrolls horizontally so labels can be made readable even
+	// for very wide diagrams.
+	const widthPercent = $derived(parseFloat((node.attrs.width as string) ?? '100') || 100);
+	/** Wrapper never exceeds the editor width — the SVG zooms inside it. */
+	const wrapperWidth = $derived(`${Math.min(widthPercent, 100)}%`);
+	/** SVG fills the wrapper (≤100%) or overflows it with scroll (>100%). */
+	const svgWidth = $derived(`${Math.max(widthPercent, 100)}%`);
+	const mediaResize = createMediaResize({
+		getParentEl: () => previewWrapper?.parentElement,
+		getWidthPercent: () => widthPercent,
+		maxWidthPercent: 300,
+		onWidth: (percent) => updateAttributes({ width: `${percent}%` })
+	});
 
 	// Debounce
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -140,12 +158,14 @@
 	});
 
 	onMount(() => {
+		mediaResize.attach();
 		if (container && code) {
 			renderMermaid(container, code);
 		}
 	});
 
 	onDestroy(() => {
+		mediaResize.detach();
 		if (debounceTimer) clearTimeout(debounceTimer);
 	});
 
@@ -523,7 +543,11 @@
 		</div>
 	{:else}
 		<!-- Preview Mode -->
-		<div class="relative w-full group/preview">
+		<div
+			bind:this={previewWrapper}
+			class="relative group/preview"
+			style={`width: ${wrapperWidth}; --mermaid-svg-width: ${svgWidth}`}
+		>
 			{#if !code || code.trim() === ''}
 				<button
 					class="flex w-full items-center gap-2 rounded-lg border border-dashed bg-muted/30 p-4 transition-colors hover:bg-muted/50 min-h-14"
@@ -538,7 +562,7 @@
 				<div class="border rounded-lg overflow-hidden">
 					<div
 						bind:this={container}
-						class="mermaid-container overflow-x-auto p-6 w-full flex justify-center min-h-24 items-center [&_svg]:max-w-full [&_svg]:h-auto [&_svg]:mx-auto"
+						class="mermaid-container overflow-x-auto p-6 w-full flex min-h-24 items-center [&_svg]:w-[var(--mermaid-svg-width)] [&_svg]:shrink-0 [&_svg]:mx-auto [&_svg]:max-w-none! [&_svg]:h-auto"
 					></div>
 					{#if error}
 						<div class="border-t bg-destructive/5 px-4 py-2 flex items-center gap-2">
@@ -575,6 +599,35 @@
 					>
 						{conversionError}
 					</p>
+				{/if}
+				<!-- Resize handles -->
+				{#if editor.isEditable}
+					<div
+						role="button"
+						tabindex="0"
+						aria-label="Resize diagram"
+						class="absolute inset-y-0 z-20 flex w-5 cursor-col-resize items-center justify-start p-2"
+						style="left: 0px"
+						onmousedown={(event: MouseEvent) => mediaResize.startResize(event, 'left')}
+						ontouchstart={(event: TouchEvent) => mediaResize.handleTouchStart(event, 'left')}
+					>
+						<div
+							class="bg-muted z-20 h-16 w-1 rounded-xl border opacity-0 transition-all group-hover/preview:opacity-100"
+						></div>
+					</div>
+					<div
+						role="button"
+						tabindex="0"
+						aria-label="Resize diagram"
+						class="absolute inset-y-0 z-20 flex w-5 cursor-col-resize items-center justify-end p-2"
+						style="right: 0px"
+						onmousedown={(event: MouseEvent) => mediaResize.startResize(event, 'right')}
+						ontouchstart={(event: TouchEvent) => mediaResize.handleTouchStart(event, 'right')}
+					>
+						<div
+							class="bg-muted z-20 h-16 w-1 rounded-xl border opacity-0 transition-all group-hover/preview:opacity-100"
+						></div>
+					</div>
 				{/if}
 				<!-- Hover actions -->
 				{#if editor.isEditable}

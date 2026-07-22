@@ -115,6 +115,11 @@ export const Mermaid = (component: Component<NodeViewProps>) =>
 		},
 		addAttributes() {
 			return {
+				width: {
+					default: '100%',
+					parseHTML: (element) => element.getAttribute('data-width') ?? '100%',
+					renderHTML: (attributes) => ({ 'data-width': attributes.width as string })
+				},
 				pendingDrawioSuggestionId: {
 					default: null,
 					parseHTML: (element) => element.getAttribute('data-pending-drawio-suggestion-id'),
