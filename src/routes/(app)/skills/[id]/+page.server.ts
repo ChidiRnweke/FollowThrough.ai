@@ -3,20 +3,21 @@ import { AppFactory } from '$lib/server/app-factory';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const factory = AppFactory.controllerFactory();
 	const noteId = params.id as NoteId;
 	const [view, versions, raw, attachments, projectsOutput] = await Promise.all([
-		factory.skills().get(AppFactory.actor(), { noteId }),
-		factory.skills().listVersions(AppFactory.actor(), { noteId }),
-		factory.skills().serialize(AppFactory.actor(), { noteId }),
-		factory.attachments().list(AppFactory.actor(), noteId),
-		factory.projects().list(AppFactory.actor())
+		factory.skills().get(AppFactory.actor(locals), { noteId }),
+		factory.skills().listVersions(AppFactory.actor(locals), { noteId }),
+		factory.skills().serialize(AppFactory.actor(locals), { noteId }),
+		factory.attachments().list(AppFactory.actor(locals), noteId),
+		factory.projects().list(AppFactory.actor(locals))
 	]);
 	const projectSkills = await Promise.all(
 		projectsOutput.projects.map(async (project) => ({
 			project,
-			skills: (await factory.skills().list(AppFactory.actor(), { projectId: project.id })).skills
+			skills: (await factory.skills().list(AppFactory.actor(locals), { projectId: project.id }))
+				.skills
 		}))
 	);
 	return {
@@ -32,7 +33,7 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	saveStructured: async ({ params, request }) => {
+	saveStructured: async ({ params, request, locals }) => {
 		const data = await request.formData();
 		try {
 			const metadataValue = JSON.parse(String(data.get('metadata') ?? '{}')) as unknown;
@@ -45,7 +46,7 @@ export const actions: Actions = {
 				throw new Error('Metadata must be a JSON object with string values');
 			await AppFactory.controllerFactory()
 				.skills()
-				.update(AppFactory.actor(), {
+				.update(AppFactory.actor(locals), {
 					noteId: params.id as NoteId,
 					displayName: String(data.get('displayName') ?? ''),
 					triggerHints: String(data.get('triggerHints') ?? '')
@@ -73,14 +74,14 @@ export const actions: Actions = {
 			});
 		}
 	},
-	save: async ({ params, request }) => {
+	save: async ({ params, request, locals }) => {
 		const data = await request.formData();
 		const raw = String(data.get('raw') ?? '');
 		const displayName = String(data.get('displayName') ?? '');
 		try {
 			await AppFactory.controllerFactory()
 				.skills()
-				.update(AppFactory.actor(), {
+				.update(AppFactory.actor(locals), {
 					noteId: params.id as NoteId,
 					displayName,
 					raw
@@ -92,33 +93,33 @@ export const actions: Actions = {
 			});
 		}
 	},
-	toggle: async ({ params, request }) => {
+	toggle: async ({ params, request, locals }) => {
 		const enabled = String((await request.formData()).get('enabled')) === 'true';
 		await AppFactory.controllerFactory()
 			.skills()
-			.update(AppFactory.actor(), {
+			.update(AppFactory.actor(locals), {
 				noteId: params.id as NoteId,
 				isEnabled: enabled
 			});
 		return { enabled };
 	},
-	setPinned: async ({ params, request }) => {
+	setPinned: async ({ params, request, locals }) => {
 		const data = await request.formData();
 		await AppFactory.controllerFactory()
 			.skills()
-			.setPinned(AppFactory.actor(), {
+			.setPinned(AppFactory.actor(locals), {
 				noteId: params.id as NoteId,
 				projectId: String(data.get('projectId')) as ProjectId,
 				pinned: String(data.get('pinned')) === 'true'
 			});
 		return { pinned: true };
 	},
-	removeAttachment: async ({ params, request }) => {
+	removeAttachment: async ({ params, request, locals }) => {
 		const path = String((await request.formData()).get('path') ?? '');
 		try {
 			await AppFactory.controllerFactory()
 				.attachments()
-				.remove(AppFactory.actor(), params.id as NoteId, path);
+				.remove(AppFactory.actor(locals), params.id as NoteId, path);
 			return { removed: path };
 		} catch (error) {
 			return fail(400, {
@@ -126,12 +127,12 @@ export const actions: Actions = {
 			});
 		}
 	},
-	restore: async ({ params, request }) => {
+	restore: async ({ params, request, locals }) => {
 		const revision = Number((await request.formData()).get('revision'));
 		if (!Number.isInteger(revision) || revision < 1)
 			return fail(400, { error: 'A valid revision is required' });
 		const factory = AppFactory.controllerFactory();
-		await factory.skills().restoreVersion(AppFactory.actor(), {
+		await factory.skills().restoreVersion(AppFactory.actor(locals), {
 			noteId: params.id as NoteId,
 			revision
 		});

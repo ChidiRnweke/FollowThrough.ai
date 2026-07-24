@@ -36,7 +36,10 @@ export class AppFactory {
 		return this.application().eventBus;
 	}
 
-	static actor(): ActorContext {
+	static actor(locals?: App.Locals): ActorContext {
+		if (this.isAuthEnabled() && locals?.user) {
+			return { userId: locals.user.id };
+		}
 		return { userId: localUserId };
 	}
 

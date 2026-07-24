@@ -2,10 +2,10 @@ import type { ProjectId } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const projectId = params.id as ProjectId;
 	const factory = AppFactory.controllerFactory();
-	const actor = AppFactory.actor();
+	const actor = AppFactory.actor(locals);
 
 	const [view, todosResult, memoryResult, artifactsResult, attachments] = await Promise.all([
 		factory.projects().get(actor, { projectId }),

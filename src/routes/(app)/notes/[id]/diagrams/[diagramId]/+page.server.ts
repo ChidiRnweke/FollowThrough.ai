@@ -2,10 +2,10 @@ import type { DiagramId, NoteId } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const diagram = await AppFactory.controllerFactory()
 		.diagrams()
-		.getDrawio(AppFactory.actor(), {
+		.getDrawio(AppFactory.actor(locals), {
 			noteId: params.id as NoteId,
 			diagramId: params.diagramId as DiagramId
 		});

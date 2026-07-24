@@ -25,10 +25,10 @@ const requestSchema = z.object({
 	heading: z.string().max(300).optional()
 });
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	const input = requestSchema.parse(await request.json());
 	const controller = AppFactory.controllerFactory().inlineSuggestions();
-	const actor = AppFactory.actor();
+	const actor = AppFactory.actor(locals);
 	const inlineRequest = {
 		requestId: input.requestId,
 		noteId: input.noteId as NoteId,

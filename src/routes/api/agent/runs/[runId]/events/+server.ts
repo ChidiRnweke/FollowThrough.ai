@@ -10,8 +10,8 @@ const cursorAfter = (request: Request, url: URL): string => {
 	return /^\d+$/.test(value) ? value : '0';
 };
 
-export const GET: RequestHandler = async ({ params, request, url }) => {
-	const actor = AppFactory.actor();
+export const GET: RequestHandler = async ({ params, request, url, locals }) => {
+	const actor = AppFactory.actor(locals);
 	const agent = AppFactory.controllerFactory().agent();
 	const eventBus = AppFactory.eventBus();
 	const runId = params.runId as AgentRunId;

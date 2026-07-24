@@ -7,22 +7,25 @@ import type { RequestHandler } from './$types';
 const id = z.string().uuid();
 const path = z.string().min(1).max(512);
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	const controller = AppFactory.controllerFactory().attachments();
 	const projectId = url.searchParams.get('projectId');
 	if (projectId)
 		return json(
-			await controller.listForProject(AppFactory.actor(), id.parse(projectId) as ProjectId)
+			await controller.listForProject(AppFactory.actor(locals), id.parse(projectId) as ProjectId)
 		);
 	return json(
-		await controller.list(AppFactory.actor(), id.parse(url.searchParams.get('noteId')) as NoteId)
+		await controller.list(
+			AppFactory.actor(locals),
+			id.parse(url.searchParams.get('noteId')) as NoteId
+		)
 	);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	const body = z.record(z.string(), z.unknown()).parse(await request.json());
 	const controller = AppFactory.controllerFactory().attachments();
-	const actor = AppFactory.actor();
+	const actor = AppFactory.actor(locals);
 	if (body.op === 'complete')
 		return json(await controller.complete(actor, id.parse(body.uploadId) as AttachmentUploadId));
 	if (body.op === 'download')
@@ -69,18 +72,18 @@ export const POST: RequestHandler = async ({ request }) => {
 	);
 };
 
-export const DELETE: RequestHandler = async ({ request }) => {
+export const DELETE: RequestHandler = async ({ request, locals }) => {
 	const body = z
 		.object({ noteId: id.optional(), path: path.optional(), attachmentId: id.optional() })
 		.parse(await request.json());
 	if (body.attachmentId) {
 		await AppFactory.controllerFactory()
 			.attachments()
-			.removeById(AppFactory.actor(), body.attachmentId as AttachmentId);
+			.removeById(AppFactory.actor(locals), body.attachmentId as AttachmentId);
 		return new Response(null, { status: 204 });
 	}
 	await AppFactory.controllerFactory()
 		.attachments()
-		.remove(AppFactory.actor(), body.noteId as NoteId, body.path!);
+		.remove(AppFactory.actor(locals), body.noteId as NoteId, body.path!);
 	return new Response(null, { status: 204 });
 };

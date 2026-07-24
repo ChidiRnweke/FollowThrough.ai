@@ -12,13 +12,13 @@ const pageUrl = (projectId: ProjectId, query: string, page: number): string => {
 	return `/artifacts?${params}`;
 };
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const projectId = url.searchParams.get('projectId') as ProjectId | null;
 	const query = url.searchParams.get('q')?.trim() ?? '';
 	const requestedPage = Number(url.searchParams.get('page') ?? '1');
 	const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 	const factory = AppFactory.controllerFactory();
-	const actor = AppFactory.actor();
+	const actor = AppFactory.actor(locals);
 
 	let artifacts: readonly ArtifactView[] = [];
 	let total = 0;

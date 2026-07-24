@@ -2,7 +2,7 @@ import type { ProjectId, TodoListFilter, TodoResponsibility, TodoStatus } from '
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const status = url.searchParams.get('status') as TodoStatus | null;
 	const responsibility = url.searchParams.get('responsibility') as TodoResponsibility | null;
 	const projectId = url.searchParams.get('projectId') as ProjectId | null;
@@ -12,6 +12,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		...(projectId !== null ? { projectId } : {})
 	};
 	const factory = AppFactory.controllerFactory();
-	const output = await factory.todos().list(AppFactory.actor(), filter);
+	const output = await factory.todos().list(AppFactory.actor(locals), filter);
 	return { todos: output.todos, view: url.searchParams.get('view') ?? 'board' };
 };

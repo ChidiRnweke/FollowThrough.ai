@@ -4,11 +4,11 @@ import { AppFactory } from '$lib/server/app-factory';
 import { safeReturnUrl } from '$lib/navigation/safe-return-url';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, locals }) => {
 	try {
 		const view = await AppFactory.controllerFactory()
 			.todos()
-			.get(AppFactory.actor(), { todoId: params.id as TodoId });
+			.get(AppFactory.actor(locals), { todoId: params.id as TodoId });
 		return { view, returnTo: safeReturnUrl(url.searchParams.get('returnTo')) };
 	} catch {
 		error(404, 'Todo not found');

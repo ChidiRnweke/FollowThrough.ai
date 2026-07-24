@@ -2,9 +2,9 @@ import { AppFactory } from '$lib/server/app-factory';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
 	const factory = AppFactory.controllerFactory();
-	const actor = AppFactory.actor();
+	const actor = AppFactory.actor(locals);
 	const output = await factory.trustPolicies().list(actor);
 	const preferences = await factory.agentSettings().getPreferences(actor);
 	let models = await factory
@@ -28,7 +28,7 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	agentPreferences: async ({ request }) => {
+	agentPreferences: async ({ request, locals }) => {
 		const data = await request.formData();
 		const executionMode = data.get('executionMode');
 		if (executionMode !== 'approval_required' && executionMode !== 'auto_accept')
@@ -36,7 +36,7 @@ export const actions: Actions = {
 		const defaultModel = String(data.get('defaultModel') ?? '').trim();
 		const inlineSuggestionsEnabled = data.get('inlineSuggestionsEnabled') === 'true';
 		const factory = AppFactory.controllerFactory();
-		await factory.agentSettings().updatePreferences(AppFactory.actor(), {
+		await factory.agentSettings().updatePreferences(AppFactory.actor(locals), {
 			defaultModel: defaultModel || null,
 			executionMode,
 			inlineSuggestionsEnabled
@@ -44,7 +44,7 @@ export const actions: Actions = {
 		return { saved: true };
 	},
 
-	updateTrustPolicy: async ({ request }) => {
+	updateTrustPolicy: async ({ request, locals }) => {
 		const data = await request.formData();
 		const pipeline = data.get('pipeline');
 		const autoAcceptEnabled = data.get('autoAcceptEnabled');
@@ -52,7 +52,7 @@ export const actions: Actions = {
 		if (typeof pipeline !== 'string' || !pipeline.trim())
 			return fail(400, { error: 'Missing pipeline.' });
 		const factory = AppFactory.controllerFactory();
-		const output = await factory.trustPolicies().update(AppFactory.actor(), {
+		const output = await factory.trustPolicies().update(AppFactory.actor(locals), {
 			pipeline: pipeline as never,
 			autoAcceptEnabled: autoAcceptEnabled === 'true',
 			...(minimumConfidence !== null && minimumConfidence !== ''

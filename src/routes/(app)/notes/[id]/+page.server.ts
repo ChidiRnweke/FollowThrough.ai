@@ -12,7 +12,7 @@ import { parseWorkbenchUrl } from '$lib/stores/workbench-url';
 //   2. Fetches the focused note's full `NoteView` so the focused pane
 //      SSR-hydrates on first paint instead of round-tripping through
 //      `getNoteView` on the client.  Background tabs hydrate lazily.
-export const load: PageServerLoad = async ({ params, url, parent }) => {
+export const load: PageServerLoad = async ({ params, url, parent, locals }) => {
 	const { shell } = await parent();
 	const workbenchState = parseWorkbenchUrl(url.pathname, url.searchParams);
 	if (!workbenchState) {
@@ -23,11 +23,11 @@ export const load: PageServerLoad = async ({ params, url, parent }) => {
 		const fallbackId = params.id as NoteId;
 		const view = await AppFactory.controllerFactory()
 			.notes()
-			.get(AppFactory.actor(), { noteId: fallbackId });
+			.get(AppFactory.actor(locals), { noteId: fallbackId });
 		return { shell, focusedNoteView: view };
 	}
 	const view = await AppFactory.controllerFactory()
 		.notes()
-		.get(AppFactory.actor(), { noteId: workbenchState.focusedNoteId as NoteId });
+		.get(AppFactory.actor(locals), { noteId: workbenchState.focusedNoteId as NoteId });
 	return { shell, focusedNoteView: view };
 };

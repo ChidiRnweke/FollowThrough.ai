@@ -4,15 +4,10 @@ import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 	// Determine the actor: use authenticated user or fallback to local user
-	let actor;
-	if (AppFactory.isAuthEnabled()) {
-		if (!locals.user) {
-			throw redirect(303, '/auth/login');
-		}
-		actor = { userId: locals.user.id };
-	} else {
-		actor = AppFactory.actor();
+	if (AppFactory.isAuthEnabled() && !locals.user) {
+		throw redirect(303, '/auth/login');
 	}
+	const actor = AppFactory.actor(locals);
 
 	const factory = AppFactory.controllerFactory();
 	const [shell, agentPreferences, sessions] = await Promise.all([
