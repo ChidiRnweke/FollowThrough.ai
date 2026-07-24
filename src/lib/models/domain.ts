@@ -27,6 +27,7 @@ import type {
 	RelationshipId,
 	RelationshipKind,
 	SearchDocumentId,
+	SessionId,
 	SkillUsageId,
 	SourceAnchorId,
 	SuggestionId,
@@ -38,7 +39,8 @@ import type {
 	TodoResponsibility,
 	TodoStatus,
 	Url,
-	UserId
+	UserId,
+	UserRole
 } from './shared';
 
 export interface User {
@@ -46,8 +48,18 @@ export interface User {
 	readonly email: string;
 	readonly displayName: string;
 	readonly avatarUrl?: Url;
+	readonly role: UserRole;
+	readonly authProvider?: string;
+	readonly authProviderId?: string;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+export interface Session {
+	readonly id: SessionId;
+	readonly userId: UserId;
+	readonly expiresAt: Date;
+	readonly createdAt: DateTime;
 }
 
 /** Name of the auto-created project that holds unsorted notes and todos. */

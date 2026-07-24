@@ -86,6 +86,7 @@ export const agentRunStatus = pgEnum('agent_run_status', [
 ]);
 export const agentRunDecision = pgEnum('agent_run_decision', ['approve', 'reject']);
 export const conversationKind = pgEnum('conversation_kind', ['chat', 'workflow']);
+export const userRole = pgEnum('user_role', ['USER', 'ADMIN', 'WAITING']);
 
 type ProseMirrorDocument = Record<string, unknown>;
 type JsonObject = Record<string, unknown>;
@@ -105,10 +106,25 @@ export const users = pgTable(
 		email: text('email').notNull(),
 		displayName: text('display_name').notNull(),
 		avatarUrl: text('avatar_url'),
+		role: userRole('role').notNull().default('WAITING'),
+		authProvider: text('auth_provider'),
+		authProviderId: text('auth_provider_id'),
 		...timestamps
 	},
-	(table) => [uniqueIndex('users_email_unique').on(sql`lower(${table.email})`)]
+	(table) => [
+		uniqueIndex('users_email_unique').on(sql`lower(${table.email})`),
+		uniqueIndex('users_auth_provider_id_unique').on(table.authProviderId)
+	]
 );
+
+export const sessions = pgTable('sessions', {
+	id: text('id').primaryKey(),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
 
 export const projects = pgTable(
 	'projects',

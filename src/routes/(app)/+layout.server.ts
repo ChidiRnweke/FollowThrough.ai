@@ -1,9 +1,21 @@
 import { AppFactory } from '$lib/server/app-factory';
+import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import type { UserId } from '$lib/models';
 
-export const load: LayoutServerLoad = async ({ cookies }) => {
+export const load: LayoutServerLoad = async ({ cookies, locals }) => {
+	// Determine the actor: use authenticated user or fallback to local user
+	let actor;
+	if (AppFactory.isAuthEnabled()) {
+		if (!locals.user) {
+			throw redirect(303, '/auth/login');
+		}
+		actor = { userId: locals.user.id };
+	} else {
+		actor = AppFactory.actor();
+	}
+
 	const factory = AppFactory.controllerFactory();
-	const actor = AppFactory.actor();
 	const [shell, agentPreferences, sessions] = await Promise.all([
 		factory.workspace().getShellContext(actor),
 		factory.agentSettings().getPreferences(actor),

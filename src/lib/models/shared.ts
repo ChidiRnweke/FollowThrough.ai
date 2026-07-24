@@ -24,12 +24,15 @@ export type AgentSessionItemId = Brand<string, 'AgentSessionItemId'>;
 export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 export type ArtifactId = Brand<string, 'ArtifactId'>;
 export type TemplateId = Brand<string, 'TemplateId'>;
+export type SessionId = Brand<string, 'SessionId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 export type LocalDate = Brand<string, 'LocalDate'>;
 export type Url = Brand<string, 'Url'>;
 export type ContentHash = Brand<string, 'ContentHash'>;
 export type Confidence = Brand<number, 'Confidence'>;
+
+export type UserRole = 'USER' | 'ADMIN' | 'WAITING';
 
 export interface ActorContext {
 	readonly userId: UserId;

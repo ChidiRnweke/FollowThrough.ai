@@ -9,6 +9,7 @@ import type {
 	NoteRevision,
 	Provenance,
 	Project,
+	Session,
 	Skill,
 	SourceAnchor,
 	Suggestion,
@@ -26,8 +27,19 @@ export const toUser = (row: typeof schema.users.$inferSelect): User =>
 	domain<User>({
 		...row,
 		avatarUrl: row.avatarUrl ? (row.avatarUrl as Url) : undefined,
+		role: row.role,
+		authProvider: row.authProvider ?? undefined,
+		authProviderId: row.authProviderId ?? undefined,
 		createdAt: instant(row.createdAt),
 		updatedAt: instant(row.updatedAt)
+	});
+
+export const toSession = (row: typeof schema.sessions.$inferSelect): Session =>
+	domain<Session>({
+		id: row.id,
+		userId: row.userId,
+		expiresAt: row.expiresAt,
+		createdAt: instant(row.createdAt)
 	});
 
 export const toProject = (row: typeof schema.projects.$inferSelect): Project =>
