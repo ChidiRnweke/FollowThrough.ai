@@ -41,7 +41,7 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	AUTHENTIK_CALLBACK_URL: 'http://localhost:5173/auth/callback',
 	EVAL_RECORD: '0',
 	EVAL_STRICT_CACHE: '0',
-	EVAL_MODEL: 'openai/gpt-5.6',
+	EVAL_MODEL: 'deepseek/deepseek-v4-pro',
 	EVAL_JUDGE_MODEL: 'deepseek/deepseek-v4-pro',
 	EVAL_GATE: '0'
 });
