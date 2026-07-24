@@ -15,5 +15,5 @@ export const GET: RequestHandler = async ({ cookies }) => {
 
 	// Redirect to Authentik authorization endpoint
 	const authUrl = await oauthService.getAuthorizationUrl(pkce.state, pkce.codeChallenge);
-	throw redirect(302, authUrl);
+	redirect(302, authUrl, { external: true });
 };

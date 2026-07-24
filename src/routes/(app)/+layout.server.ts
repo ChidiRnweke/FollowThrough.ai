@@ -1,7 +1,6 @@
 import { AppFactory } from '$lib/server/app-factory';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import type { UserId } from '$lib/models';
 
 export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 	// Determine the actor: use authenticated user or fallback to local user
