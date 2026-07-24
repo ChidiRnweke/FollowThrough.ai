@@ -80,7 +80,7 @@ export class OpenAIPromiseExtractor implements PromiseExtractor {
 				? new OpenAIStructuredPromiseClient(apiKey, {
 						model: options.model,
 						baseURL: process.env.OPENROUTER_BASE_URL,
-						appURL: process.env.PUBLIC_APP_URL
+						appURL: process.env.ORIGIN
 					})
 				: undefined);
 	}

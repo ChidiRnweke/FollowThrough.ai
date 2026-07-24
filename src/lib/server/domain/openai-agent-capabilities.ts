@@ -170,7 +170,7 @@ export class OpenAIAgentRunner implements AgentRunner {
 		private readonly sessions: AgentSessionRepository,
 		private readonly apiKey = process.env.OPENROUTER_API_KEY,
 		private readonly baseURL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
-		private readonly appURL = process.env.PUBLIC_APP_URL ?? 'http://localhost:5173',
+		private readonly appURL = process.env.ORIGIN ?? 'http://localhost:5173',
 		private readonly toolRetriever?: ToolRetriever
 	) {}
 

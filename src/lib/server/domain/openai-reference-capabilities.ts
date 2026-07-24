@@ -161,7 +161,7 @@ export class WebSearchReferenceFinder implements ReferenceFinder {
 			(apiKey
 				? new OpenRouterWebReferenceClient(apiKey, {
 						baseURL: options.baseURL ?? process.env.OPENROUTER_BASE_URL,
-						appURL: options.appURL ?? process.env.PUBLIC_APP_URL,
+						appURL: options.appURL ?? process.env.ORIGIN,
 						defaultModel: options.defaultModel ?? process.env.OPENROUTER_DEFAULT_MODEL
 					})
 				: undefined);

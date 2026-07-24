@@ -234,3 +234,17 @@ The practical test is:
 ## One-sentence description
 
 > **followthrough.ai is a focused Markdown project workspace with a lightweight deadline board, project-scoped agent memory, and contextual skills that turn notes into actions, artifacts, and finished deliverables.**
+
+# Configuration and production deployment
+
+Application configuration is loaded from Infisical with Universal Auth before the SvelteKit server is imported in both development and production. For local development, copy `.env.example` to `.env` and fill in only the Infisical bootstrap values; keep database, object-storage, model, and other application settings in the Infisical project. Use `.env.infiscal.example` as the import/reference template for those managed application values. `DATABASE_URL` and `OPENROUTER_API_KEY` are required; missing optional values use the defaults in that template. Shell variables take precedence over `.env`.
+
+Komodo supplies only the `INFISICAL_*` application bootstrap variables plus direct `OTEL_*` and `PHOENIX_*` telemetry variables.
+
+Before the first deployment, and before every release that contains Drizzle migrations, run the one-shot setup profile in Komodo:
+
+```sh
+docker compose -f docker-compose.prod.yml --profile setup run --rm migrate
+```
+
+After it succeeds, deploy or restart `app`. The setup task provisions/rotates the database role, stores `DATABASE_URL` in the application Infisical project, and runs committed migrations before exiting.

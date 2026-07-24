@@ -3,9 +3,24 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { loadEnv, type Plugin } from 'vite';
+import { initializeConfig, mergePlatformEnvironment } from './scripts/config-service.js';
+
+const managedConfiguration = (): Plugin => ({
+	name: 'followthrough-managed-configuration',
+	enforce: 'pre',
+	apply: 'serve',
+	async config(_config, { mode, isPreview }) {
+		if (isPreview || process.env.npm_lifecycle_event !== 'dev') return;
+		mergePlatformEnvironment(process.env, loadEnv(mode, process.cwd(), ''));
+		await initializeConfig();
+		await import('./scripts/otel-instrumentation.js');
+	}
+});
 
 export default defineConfig({
 	plugins: [
+		managedConfiguration(),
 		tailwindcss(),
 		sveltekit({
 			compilerOptions: {

@@ -6,7 +6,10 @@
 
 - theme: stone(hue~~107) neutrals + teal(hue~~186) primary. one accent.
 - principles: color=information | chrome-defers-to-document | data=gray
-- teal=interactive/primary. red=destructive-only. all else gray.
+- teal=interactive/primary + identity accents (active nav, selected segment, provenance chips, product mark). red=destructive-only. all else gray.
+- brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always in sidebar header.
+- project identity=brand teal, NEVER per-project hues. sidebar project icon, Badge variant="brand", breadcrumb links, chat origin line, artifact format badges, project-overview resource icon chips. canonical wash recipe=badge brand variant (text-brand + bg-brand/10, dark:bg-brand/15) — no separate wash tokens.
+- voice: calm/dry/second-person, one sentence w/ period, no exclamations, celebrates absence of work. empty states=empty-state.svelte (icon+voice line+≤1 action), never blank space.
 
 ## tokens.color (semantic only — never raw oklch/hex/tailwind palette)
 
@@ -27,7 +30,16 @@
 
 - font-sans: Inter Variable — everything. hierarchy via size/weight/color, not typeface
 - font-mono: JetBrains Mono. code, mermaid/drawio source, inline code, IDs, URLs. ligatures: off editable, ok read-only
-- chrome: text-sm base; text-xs+muted-fg for meta/provenance
+- NAMED SCALE (layout.css utilities — no raw heading size classes in app code):
+  - `page-title` 2xl/600/tight — one per page (page-shell h1 + custom-header pages)
+  - `section-title` base/600/tight — real content sections (settings groups, skill editor sections)
+  - `eyebrow` xs/500/uppercase/wide/muted-fg — labels a GROUP of items below it (list-group labels, table heads, kanban column headers)
+  - `provenance-caption` xs/muted-fg — annotates ONE item (timestamps, provenance)
+  - body sm (base) · `note-title` clamp/700 (note editor only)
+- form labels: shadcn `Label` (and `Field.FieldLabel`) = xs/500/muted-fg — label recedes, value leads. `Field.Title` stays sm/500 fg over `Field.Description` xs/muted (settings rows). override per-site if a dialog label needs prominence
+- ladder: eyebrow/caption (xs) → body (sm) → section-title (base) → page-title (2xl) → note-title (clamp)
+- exceptions: right-panel + drawio chrome-bar titles, sidebar brand = chrome, not content scale
+- chrome legibility floor: primary nav never below sm — workspace tab strip (h-10, sm labels), sidebar wordmark (base/semibold), empty-strip placeholder. xs=eyebrow/provenance only
 - prose(editor): 16px, lh~1.7, @tailwindcss/typography mapped to tokens (links→primary, quotes→border, code-bg→muted)
 - headings: w600; w700 note-title only; tracking −0.01/−0.02em ≥20px
 

@@ -7,8 +7,9 @@ export type { ProductionApplication } from './application';
 /**
  * Reads the environment and hands the resulting configuration to
  * `createApplication`. Kept separate from the wiring itself so that isolated
- * runners can build the same graph without importing `$lib/server/db`, which
- * fails fast when `DATABASE_URL` is absent.
+ * runners can build the same graph with their own database implementation.
+ * The production database resolves `DATABASE_URL` lazily on first use, after
+ * the process launcher has loaded runtime configuration.
  */
 export function createProductionFactory(): ProductionApplication {
 	const openRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -22,7 +23,7 @@ export function createProductionFactory(): ProductionApplication {
 		transactionRunner: postgresTransactionRunner,
 		openRouterApiKey,
 		openRouterBaseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL,
-		appURL: process.env.PUBLIC_APP_URL ?? 'http://localhost:5173',
+		appURL: process.env.ORIGIN ?? 'http://localhost:5173',
 		defaultAgentModel: process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL,
 		recommendedModels: (process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
 			.split(',')

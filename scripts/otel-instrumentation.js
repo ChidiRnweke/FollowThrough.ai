@@ -10,7 +10,6 @@
  * and otherwise no-ops. Export failures never propagate into request handling — the
  * fail-hard rule applies to config/secrets, not to trace export.
  */
-import 'dotenv/config';
 import { register } from '@arizeai/phoenix-otel';
 import { OpenAIAgentsInstrumentation } from '@arizeai/openinference-instrumentation-openai-agents';
 import { OpenAIInstrumentation } from '@arizeai/openinference-instrumentation-openai';

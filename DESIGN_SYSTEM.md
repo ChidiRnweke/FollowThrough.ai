@@ -9,14 +9,50 @@
 - **Product mark:** FollowThrough uses a flat teal tile with a continuous white F-to-check path.
   It replaces framework placeholder branding without adding gradients, shadows, or a broader
   ornament system.
+- **Mark usage:** The mark renders via `src/lib/components/app/brand-mark.svelte` (semantic
+  tokens, both color modes). It is always present in the sidebar header — the mark alone in
+  icon-collapsed mode — and on the offline page. It is never decorated, recolored per-context,
+  or repeated inside content surfaces.
+- **Accent discipline:** Teal marks the live thing; olive-neutral is everything at rest. Active
+  sidebar navigation, the selected segment of tabs/toggle groups, and provenance chips carry the
+  `--brand` accent. Data values, metadata, and resting chrome stay gray. `--brand` equals
+  `--primary` in light mode and lifts to the sidebar teal in dark mode for AA contrast on washes.
+- **Project identity:** Projects are identified by the brand teal, never by per-project hues.
+  The sidebar project icon, project badges (`Badge variant="brand"`), breadcrumb links,
+  chat origin lines, artifact format badges, and the project-overview resource icon chips all
+  use `--brand` text with the shared `bg-brand/10` wash (`dark:bg-brand/15`). No new wash
+  tokens: the badge `brand` variant is the canonical recipe.
 
 ## Tokens and composition
 
 - Colors must use the semantic OKLCH tokens in `src/routes/layout.css`; do not introduce raw Tailwind palette colors.
 - Inter is the display and body face, JetBrains Mono is reserved for code, and the note title uses the `note-title` typography utility.
+- **Chrome legibility floor:** primary navigation never renders below `sm` — the workspace tab
+  strip (40px tall, `sm` labels), the sidebar wordmark (`base`/semibold beside the mark), and the
+  empty-strip placeholder are chrome-scale exceptions, not content captions. `xs` is reserved for
+  eyebrows and provenance captions.
+- **Type scale:** app code uses the named utilities in `layout.css` instead of raw heading size classes — `page-title` (one per page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group of items), and `provenance-caption` (per-item metadata). The ladder is eyebrow/caption → body → section-title → page-title → note-title. Form labels (shadcn `Label`) are small and muted so values lead; `Field.Title` stays at body size above its muted description.
 - Spacing follows the existing Tailwind scale. Corners use the shared shadcn radius family and elevation stays flat.
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode stable variants such as the document title input.
 - Focus indicators, AA contrast, 44px touch targets for primary controls, reduced motion, and keyboard access are required.
+
+## Voice & tone
+
+Calm, dry, second person, present tense. One sentence, period included, no exclamation marks.
+The product celebrates the absence of work rather than apologizing for empty screens.
+
+- Canonical empty-state lines: "Nothing overdue. Well held." · "Nothing due today." ·
+  "Not waiting on anyone." · "Pin a note to keep it at hand." · "Notes you touch show up here." ·
+  kanban columns use `todoStatusEmptyCopy` in `src/lib/components/app/labels.ts`.
+- The Today page greets with the date as an eyebrow ("Tuesday · 22 July") and a time-aware
+  subtitle (morning/afternoon/evening variants). No user name, no weather, no emoji.
+- Errors state what happened and the fix, specifically and without apology.
+
+## Empty states
+
+Empty regions are invitations to act, never dead blank space. Use
+`src/lib/components/app/empty-state.svelte`: a quiet icon, one voice line, an optional hint,
+and at most one action. Kanban columns keep their drop zone and center the voice line inside it.
 
 ## UX patterns
 
@@ -38,7 +74,7 @@
 - Inline Mermaid diagrams may expose a compact draw.io conversion action. While conversion review is pending, the Mermaid block remains unchanged and carries a restrained review row; acceptance inserts a flat draw.io preview immediately after it, while dismissal removes only the pending state.
 - Draw.io conversion review uses a focused dialog over the source note. Accepted draw.io references render a reserved, non-shifting image preview with title, saved status, and one “Open in draw.io” action.
 - The note-scoped draw.io editor is a focused editing mode with a quiet back action, explicit Save, accessible loading/saving/failure announcements, and leave protection for modified content. It reuses the document visual system and does not introduce another workbench shell or new design tokens.
-- **Chat:** Conversational pattern. Desktop uses the contextual right panel for quick work; mobile and durable links use full-page `/chats/new` and `/chats/[id]` routes.
+- **Chat:** Conversational pattern. The contextual right panel stays inline at `2xl` and opens as a Sheet below `2xl`; durable links use full-page `/chats/new` and `/chats/[id]` routes.
 - Show no more than five recent chats in the panel. Full history belongs on `/chats`, with project/note origin visible in both locations.
 - A submitted turn renders immediate three-dot activity, then human-readable tool or streaming state. Stop, retry, failure, and cancellation are explicit and announced accessibly.
 - User messages expose copy and edit-in-composer actions; assistant messages expose copy and retry when eligible. Retrying never duplicates the visible user turn.
@@ -58,3 +94,15 @@
 ## Agent context and transition UX
 
 Agent context is ambient and has no raw JSON UI. The chat follows the user's actual interaction focus in split panes without reordering panes or changing the URL-primary tab. Same-project movement is silent. An ambiguous cross-project continuation uses one concise text clarification naming both projects and offers either the existing New chat control or continuing in the current chat; no structured resolution card or model-controlled navigation is introduced.
+
+## Responsive application contract
+
+FollowThrough uses Tailwind's standard `base`, `sm`, `md`, `lg`, `xl`, and `2xl` viewport breakpoints. Do not introduce bespoke viewport breakpoints. The note editor's existing container queries are an intentional exception because they respond to pane width rather than viewport width.
+
+- Base layouts prioritize one readable task at a time. Dense master-detail and workbench layouts collapse to route-backed drill-down surfaces.
+- Interactive controls on compact and touch layouts have a minimum 44 × 44px target. Desktop-only dense controls may remain smaller from `md` upward.
+- The application shell owns `100dvh` and prevents document-level overflow. Boards, matrices, code editors, and independently scrolling panes may own intentional overflow.
+- Compact bottom actions and composers include safe-area padding where they meet the viewport edge.
+- Below `2xl`, contextual chat, suggestions, and project memory use a full-width Sheet on phones and a constrained Sheet from `sm`; Todo details use full-page routes.
+- At `2xl`, the sidebar, content, and 24rem contextual panel may appear simultaneously. Their scrolling remains independent and the existing desktop content measures are preserved.
+- Responsive geometry must be identical in light and dark modes; only semantic token values change.

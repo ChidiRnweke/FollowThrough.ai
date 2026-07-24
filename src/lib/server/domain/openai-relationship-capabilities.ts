@@ -74,7 +74,7 @@ export class OpenAIRelationshipClassifier implements RelationshipClassifier {
 				? new OpenAIStructuredRelationshipClient(apiKey, {
 						model: options.model,
 						baseURL: process.env.OPENROUTER_BASE_URL,
-						appURL: process.env.PUBLIC_APP_URL
+						appURL: process.env.ORIGIN
 					})
 				: undefined);
 		this.fallback = options.fallback ?? new HeuristicRelationshipClassifier();
