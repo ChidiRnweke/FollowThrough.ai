@@ -11,11 +11,11 @@
 		FtDocumentPlus as FilePlus,
 		FtFolder as Folder,
 		FtFolderOpen as FolderOpen,
-		FtTodos as ListTodo,
 		FtArtifacts as PackageOpen,
 		FtAttachments as Paperclip,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '../name-dialog.svelte';

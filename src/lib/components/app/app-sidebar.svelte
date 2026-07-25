@@ -7,7 +7,6 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import {
 		FtToday as House,
-		FtTodos as ListTodo,
 		FtChat as MessageSquare,
 		FtChatAlert as MessageSquareWarning,
 		FtPlus as Plus,
@@ -17,6 +16,7 @@
 		FtProfile as UserRound,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';

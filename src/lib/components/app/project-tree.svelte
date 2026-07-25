@@ -17,12 +17,12 @@
 		FtFolderOpen as FolderOpen,
 		FtFolderBoard as FolderKanban,
 		FtFolderPlus as FolderPlus,
-		FtTodos as ListTodo,
 		FtPin as Pin,
 		FtPlus as Plus,
 		FtSkills as Wrench,
 		FtGrip as GripVertical
 	} from '$lib/components/icons';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';

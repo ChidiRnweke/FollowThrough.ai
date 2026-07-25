@@ -40,7 +40,7 @@ export default defineConfig({
 	],
 	test: {
 		expect: { requireAssertions: true },
-		maxWorkers: 4,
+		maxWorkers: 1,
 		minWorkers: 1,
 		projects: [
 			{
