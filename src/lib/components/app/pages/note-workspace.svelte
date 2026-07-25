@@ -39,7 +39,6 @@
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
 	import NoteSyncStatus from '../note-sync-status.svelte';
-	import NoteTitleInput from '../note-title-input.svelte';
 	import {
 		FtExport as FileOutput,
 		FtPublish as ArrowUpFromLine,
@@ -590,7 +589,15 @@
 	>
 		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
 			<div class="min-w-0 flex-1">
-				<NoteBreadcrumb {shell} {note} />
+				<NoteBreadcrumb
+					{shell}
+					{note}
+					oncommit={(title) => {
+						note = { ...note, title };
+						markDirty();
+					}}
+					onadvance={() => editorRef?.focusStart()}
+				/>
 			</div>
 			{#if onCloseSplit}
 				<Tip text="Close split view">
@@ -737,12 +744,6 @@
 			</DropdownMenu.Root>
 		</div>
 	</div>
-
-	<NoteTitleInput
-		bind:value={note.title}
-		oninput={markDirty}
-		onadvance={() => editorRef?.focusStart()}
-	/>
 
 	{#if view.backlinks.length > 0 || pendingCount > 0}
 		<div class="flex flex-wrap items-center gap-1.5">

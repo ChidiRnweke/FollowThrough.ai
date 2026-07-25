@@ -51,7 +51,7 @@
 	let feedbackOpen = $state(false);
 </script>
 
-<Sidebar.Root collapsible="icon">
+<Sidebar.Root collapsible="icon" variant="inset">
 	<Sidebar.Header>
 		<div
 			class="flex h-8 items-center justify-between gap-1 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2"

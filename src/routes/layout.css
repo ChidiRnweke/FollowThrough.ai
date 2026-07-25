@@ -67,10 +67,6 @@
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	--note-content-width: 90ch;
-	--note-title-size: clamp(2.25rem, 5vw, 3.5rem);
-	--note-title-leading: 1.05;
-	/* Serif needs less optical correction than Inter did at display sizes. */
-	--note-title-tracking: -0.02em;
 }
 
 @keyframes chat-thinking-dot {
@@ -311,17 +307,9 @@
 	max-width: var(--note-content-width);
 }
 
-@utility note-title {
-	font-family: var(--font-serif);
-	font-size: var(--note-title-size);
-	font-weight: 600;
-	line-height: var(--note-title-leading);
-	letter-spacing: var(--note-title-tracking);
-}
-
 /* Named type scale — see DESIGN_SYSTEM.md "Type scale". App code uses these
    instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
-   → body (sm) → section-title (base) → page-title (2xl) → note-title (clamp). */
+   → body (sm) → section-title (base) → page-title (2xl). */
 @utility page-title {
 	@apply font-serif text-3xl font-medium tracking-tight;
 }

@@ -61,9 +61,9 @@
 
 {#if docked.current}
 	<aside
-		class="flex h-full shrink-0 overflow-hidden bg-sidebar transition-[width] duration-(--duration-panel) ease-(--ease-standard) {open
-			? 'w-96 border-l border-border'
-			: 'w-0 border-l border-transparent'}"
+		class="flex shrink-0 overflow-hidden rounded-xl bg-sidebar transition-[width,margin] duration-(--duration-panel) ease-(--ease-standard) {open
+			? 'my-2 mr-2 w-96 ring-1 ring-foreground/10'
+			: 'my-0 mr-0 w-0 ring-0'}"
 		aria-label={titles[renderedMode]}
 		aria-hidden={!open}
 		inert={!open}

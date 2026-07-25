@@ -12,6 +12,10 @@ const waitForServiceWorker = async (page: Page): Promise<void> => {
 	});
 };
 
+/** The note's title lives in the breadcrumb's current-page segment. */
+const noteTitleCrumb = (page: Page) =>
+	page.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]');
+
 test('exposes installable FollowThrough metadata', async ({ page, context }) => {
 	await page.goto('/');
 	const session = await context.newCDPSession(page);
@@ -45,12 +49,12 @@ test('reopens a visited note from the cached workspace while offline', async ({
 	const noteTitle = (await noteLink.textContent())?.trim();
 	if (!noteTitle) throw new Error('A note is required for the offline workspace test');
 	await noteLink.click();
-	await page.getByLabel('Note title').waitFor();
+	await noteTitleCrumb(page).waitFor();
 	await page.goto('/');
 	await context.setOffline(true);
 	await page.reload();
 	await page.getByRole('link', { name: noteTitle, exact: true }).click();
-	expect(await page.getByLabel('Note title').inputValue()).toBe(noteTitle);
+	await expect(noteTitleCrumb(page)).toHaveText(noteTitle);
 });
 
 test('uses the offline fallback for an uncached route', async ({ page, context }) => {

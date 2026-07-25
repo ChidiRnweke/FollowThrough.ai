@@ -120,7 +120,10 @@
 
 <svelte:window {onkeydown} />
 
-<Sidebar.Provider open={data.sidebarOpen} class="h-dvh min-h-0 overflow-hidden">
+<Sidebar.Provider
+	open={data.sidebarOpen}
+	class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
+>
 	<AppSidebar
 		shell={data.shell}
 		activePath={page.url.pathname}
@@ -130,7 +133,7 @@
 	<Sidebar.Inset
 		bind:ref={insetRef}
 		class={cn(
-			'relative min-h-0 min-w-0 border-l border-sidebar-border',
+			'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
 			isNoteWorkbench ? 'overflow-hidden' : 'overflow-y-auto'
 		)}
 		data-note-workbench={isNoteWorkbench ? '' : undefined}

@@ -98,7 +98,11 @@ test('compact note chat opens without changing the note URL', async ({ page }) =
 test('compact note chat opens in a Sheet with note context', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 667 });
 	await openFirstNote(page);
-	const noteTitle = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
+	const noteTitle = (
+		await page
+			.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]')
+			.innerText()
+	).trim();
 	await page.getByRole('button', { name: 'Open chat' }).click();
 	await expect(page.getByLabel('Chat context')).toContainText(noteTitle);
 });
