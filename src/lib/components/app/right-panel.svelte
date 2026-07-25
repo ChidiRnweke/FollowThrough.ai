@@ -97,7 +97,7 @@
 	>
 		<div class="flex h-full w-96 shrink-0 flex-col">
 			<header class="flex h-12 shrink-0 items-center justify-between px-4">
-				<h2 class="truncate text-sm font-semibold">{headings[renderedMode]}</h2>
+				<h2 class="truncate text-sm font-medium">{headings[renderedMode]}</h2>
 				<div class="flex items-center gap-1">
 					{#if renderedMode === 'chat'}
 						{@render chatHeaderActions()}

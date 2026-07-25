@@ -40,8 +40,7 @@ export default defineConfig({
 	],
 	test: {
 		expect: { requireAssertions: true },
-		maxWorkers: 1,
-		minWorkers: 1,
+		maxWorkers: 4,
 		projects: [
 			{
 				extends: './vite.config.ts',
