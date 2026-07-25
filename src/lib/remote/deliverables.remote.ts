@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type { ArtifactId, GenerateDocumentInput, ProjectId, TemplateId } from '$lib/models';
 
 export const initiateTemplateUpload = command(
@@ -14,7 +15,7 @@ export const initiateTemplateUpload = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.initiateTemplateUpload(AppFactory.actor(), {
+			.initiateTemplateUpload(requestActor(), {
 				...input,
 				projectId: input.projectId as ProjectId
 			})
@@ -25,19 +26,19 @@ export const completeTemplateUpload = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.completeTemplateUpload(AppFactory.actor(), input.templateId as TemplateId)
+			.completeTemplateUpload(requestActor(), input.templateId as TemplateId)
 );
 
 export const listTemplates = query(z.string().uuid(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.listTemplates(AppFactory.actor(), projectId as ProjectId)
+		.listTemplates(requestActor(), projectId as ProjectId)
 );
 
 export const deleteTemplate = command(z.object({ templateId: z.string().uuid() }), async (input) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.deleteTemplate(AppFactory.actor(), input.templateId as TemplateId)
+		.deleteTemplate(requestActor(), input.templateId as TemplateId)
 );
 
 const exportSettingsSchema = z.object({
@@ -60,7 +61,7 @@ export const generateDocument = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.generateDocument(AppFactory.actor(), input as GenerateDocumentInput)
+			.generateDocument(requestActor(), input as GenerateDocumentInput)
 );
 
 export const previewDocument = command(
@@ -74,13 +75,13 @@ export const previewDocument = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.previewDocument(AppFactory.actor(), input as import('$lib/models').PreviewDocumentInput)
+			.previewDocument(requestActor(), input as import('$lib/models').PreviewDocumentInput)
 );
 
 export const getExportSettings = query(z.string().uuid(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.getExportSettings(AppFactory.actor(), projectId as ProjectId)
+		.getExportSettings(requestActor(), projectId as ProjectId)
 );
 
 export const updateExportSettings = command(
@@ -88,13 +89,13 @@ export const updateExportSettings = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.updateExportSettings(AppFactory.actor(), input.projectId as ProjectId, input.settings)
+			.updateExportSettings(requestActor(), input.projectId as ProjectId, input.settings)
 );
 
 export const listArtifacts = query(z.string().uuid(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.listArtifacts(AppFactory.actor(), projectId as ProjectId)
+		.listArtifacts(requestActor(), projectId as ProjectId)
 );
 
 export const downloadArtifact = command(
@@ -102,13 +103,13 @@ export const downloadArtifact = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.downloadArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
+			.downloadArtifact(requestActor(), input.artifactId as ArtifactId)
 );
 
 export const deleteArtifact = command(z.object({ artifactId: z.string().uuid() }), async (input) =>
 	AppFactory.controllerFactory()
 		.deliverables()
-		.deleteArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
+		.deleteArtifact(requestActor(), input.artifactId as ArtifactId)
 );
 
 export const regenerateArtifact = command(
@@ -116,5 +117,5 @@ export const regenerateArtifact = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.deliverables()
-			.regenerateArtifact(AppFactory.actor(), input.artifactId as ArtifactId)
+			.regenerateArtifact(requestActor(), input.artifactId as ArtifactId)
 );

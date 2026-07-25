@@ -14,6 +14,9 @@ import type { ProjectRepository, ProjectTreeRepository } from '$lib/repositories
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { toNote, toProject } from '../domain/mappers';
+import { isUniqueViolation } from './postgres-errors';
+
+const PROJECT_NAME_CONSTRAINT = 'projects_user_name_unique';
 
 export class PostgresProjectRepository implements ProjectRepository, ProjectTreeRepository {
 	constructor(private readonly database: Database) {}
@@ -27,7 +30,7 @@ export class PostgresProjectRepository implements ProjectRepository, ProjectTree
 				.returning();
 			return toProject(row!);
 		} catch (error) {
-			if (error instanceof Error && /unique|duplicate/i.test(error.message))
+			if (isUniqueViolation(error, PROJECT_NAME_CONSTRAINT))
 				throw new ConflictError('An active project with this name already exists');
 			throw error;
 		}
@@ -82,7 +85,7 @@ export class PostgresProjectRepository implements ProjectRepository, ProjectTree
 				.returning();
 			return toProject(row!);
 		} catch (error) {
-			if (error instanceof Error && /unique|duplicate/i.test(error.message))
+			if (isUniqueViolation(error, PROJECT_NAME_CONSTRAINT))
 				throw new ConflictError('An active project with this name already exists');
 			throw error;
 		}

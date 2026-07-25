@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type { NoteId } from '$lib/models';
 
 export const toggleSkill = command(
@@ -8,7 +9,7 @@ export const toggleSkill = command(
 	async (input) => {
 		await AppFactory.controllerFactory()
 			.skills()
-			.update(AppFactory.actor(), {
+			.update(requestActor(), {
 				noteId: input.noteId as NoteId,
 				isEnabled: input.enabled
 			});

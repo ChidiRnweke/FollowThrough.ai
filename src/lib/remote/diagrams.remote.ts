@@ -2,6 +2,7 @@ import { command } from '$app/server';
 import { z } from 'zod';
 import type { SaveDrawioDiagramInput } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 
 export const saveDrawioDiagram = command(
 	z.object({
@@ -13,5 +14,5 @@ export const saveDrawioDiagram = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.diagrams()
-			.saveDrawio(AppFactory.actor(), input as SaveDrawioDiagramInput)
+			.saveDrawio(requestActor(), input as SaveDrawioDiagramInput)
 );

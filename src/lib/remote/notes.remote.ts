@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type {
 	ExtractPromisesInput,
 	ConvertInlineMermaidInput,
@@ -51,20 +52,20 @@ const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
 export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
 	return AppFactory.controllerFactory()
 		.notes()
-		.save(AppFactory.actor(), input as never);
+		.save(requestActor(), input as never);
 });
 
 export const getNote = query(z.string().uuid(), async (noteId) => {
 	const view = await AppFactory.controllerFactory()
 		.notes()
-		.get(AppFactory.actor(), { noteId: noteId as NoteId });
+		.get(requestActor(), { noteId: noteId as NoteId });
 	return view.note;
 });
 
 export const getNoteView = query(z.string().uuid(), async (noteId) => {
 	return AppFactory.controllerFactory()
 		.notes()
-		.get(AppFactory.actor(), { noteId: noteId as NoteId });
+		.get(requestActor(), { noteId: noteId as NoteId });
 });
 
 export const syncNote = command(
@@ -76,7 +77,7 @@ export const syncNote = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.notes()
-			.sync(AppFactory.actor(), input as SyncNoteInput);
+			.sync(requestActor(), input as SyncNoteInput);
 	}
 );
 
@@ -88,7 +89,7 @@ export const publishNote = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.notes()
-			.publish(AppFactory.actor(), input as PublishNoteInput);
+			.publish(requestActor(), input as PublishNoteInput);
 	}
 );
 
@@ -99,7 +100,7 @@ export const discardNoteDraft = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.notes()
-			.discardDraft(AppFactory.actor(), input as DiscardNoteDraftInput);
+			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
 	}
 );
 
@@ -108,26 +109,26 @@ export const listNoteSyncInventory = query(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.notes()
-			.listSyncInventory(AppFactory.actor(), input as ListNoteSyncInventoryInput);
+			.listSyncInventory(requestActor(), input as ListNoteSyncInventoryInput);
 	}
 );
 
 export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllerFactory()
 		.todos()
-		.extractPromises(AppFactory.actor(), input as ExtractPromisesInput);
+		.extractPromises(requestActor(), input as ExtractPromisesInput);
 });
 
 export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllerFactory()
 		.relationships()
-		.suggestFromSelection(AppFactory.actor(), input as RelateSelectionInput);
+		.suggestFromSelection(requestActor(), input as RelateSelectionInput);
 });
 
 export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllerFactory()
 		.references()
-		.suggestFromSelection(AppFactory.actor(), input as never);
+		.suggestFromSelection(requestActor(), input as never);
 });
 
 export const generateDiagram = command(
@@ -135,7 +136,7 @@ export const generateDiagram = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.diagrams()
-			.generateMermaid(AppFactory.actor(), input as GenerateMermaidDiagramInput);
+			.generateMermaid(requestActor(), input as GenerateMermaidDiagramInput);
 	}
 );
 
@@ -149,7 +150,7 @@ export const reviseDiagram = command(
 		try {
 			return await AppFactory.controllerFactory()
 				.diagrams()
-				.reviseInlineMermaid(AppFactory.actor(), input as ReviseInlineMermaidInput);
+				.reviseInlineMermaid(requestActor(), input as ReviseInlineMermaidInput);
 		} catch (e) {
 			return { error: e instanceof Error ? e.message : 'Diagram revision failed.' };
 		}
@@ -165,6 +166,6 @@ export const convertDiagram = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.diagrams()
-			.convertInlineMermaid(AppFactory.actor(), input as ConvertInlineMermaidInput);
+			.convertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
 	}
 );

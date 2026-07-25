@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type { AgentRunId, ConversationId, SubmitAgentRunInput } from '$lib/models';
 
 const runIdInput = z.object({ runId: z.string().uuid() });
@@ -124,13 +125,13 @@ const submitAgentRunSchema = z
 export const submitAgentRun = command(submitAgentRunSchema, async (input) =>
 	AppFactory.controllerFactory()
 		.agent()
-		.submit(AppFactory.actor(), input as SubmitAgentRunInput)
+		.submit(requestActor(), input as SubmitAgentRunInput)
 );
 
 export const getAgentRun = query(runIdInput, async ({ runId }) =>
 	AppFactory.controllerFactory()
 		.agent()
-		.getRun(AppFactory.actor(), runId as AgentRunId)
+		.getRun(requestActor(), runId as AgentRunId)
 );
 
 export const decideAgentRun = command(
@@ -143,13 +144,13 @@ export const decideAgentRun = command(
 	async (input) =>
 		AppFactory.controllerFactory()
 			.agent()
-			.decide(AppFactory.actor(), input as never)
+			.decide(requestActor(), input as never)
 );
 
 export const cancelAgentRun = command(runIdInput, async ({ runId }) =>
 	AppFactory.controllerFactory()
 		.agent()
-		.cancel(AppFactory.actor(), runId as AgentRunId)
+		.cancel(requestActor(), runId as AgentRunId)
 );
 
 export const retryAgentRun = command(
@@ -157,12 +158,12 @@ export const retryAgentRun = command(
 	async ({ runId, requestId }) =>
 		AppFactory.controllerFactory()
 			.agent()
-			.retry(AppFactory.actor(), runId as AgentRunId, requestId)
+			.retry(requestActor(), runId as AgentRunId, requestId)
 );
 
 export const getSession = query(z.string().uuid(), async (conversationId) => {
 	const factory = AppFactory.controllerFactory();
-	return factory.agent().getSession(AppFactory.actor(), conversationId as ConversationId);
+	return factory.agent().getSession(requestActor(), conversationId as ConversationId);
 });
 
 export const renameSession = command(
@@ -170,7 +171,7 @@ export const renameSession = command(
 	async ({ conversationId, title }) =>
 		AppFactory.controllerFactory()
 			.agent()
-			.renameSession(AppFactory.actor(), conversationId as never, title)
+			.renameSession(requestActor(), conversationId as never, title)
 );
 
 export const deleteSession = command(
@@ -178,6 +179,6 @@ export const deleteSession = command(
 	async ({ conversationId }) => {
 		await AppFactory.controllerFactory()
 			.agent()
-			.deleteSession(AppFactory.actor(), conversationId as never);
+			.deleteSession(requestActor(), conversationId as never);
 	}
 );

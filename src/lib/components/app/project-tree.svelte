@@ -38,6 +38,10 @@
 		activePath: string;
 	} = $props();
 
+	// The store keeps the server's explanation when there was one (e.g. a name
+	// already in use); anything unexpected falls back to the generic copy.
+	const failureMessage = (fallback: string): string => projectActions.lastError ?? fallback;
+
 	const STORAGE_KEY = 'workbench.tree.expanded';
 	const MAX_DEPTH = 8;
 
@@ -180,7 +184,7 @@
 		if (!original) return;
 		if ((original.parentId ?? undefined) === parentId && original.position === index) return;
 		void projectActions.moveEntry(projectId, draggedId, parentId, index).then((output) => {
-			if (!output) toast.error('Could not move it. Try again.');
+			if (!output) toast.error(failureMessage('Could not move it. Try again.'));
 		});
 	}
 
@@ -240,7 +244,7 @@
 		if (pending.mode === 'rename') {
 			const output = await projectActions.renameNote(pending.entryId, value);
 			if (!output) {
-				toast.error('Could not rename it. Try again.');
+				toast.error(failureMessage('Could not rename it. Try again.'));
 				return;
 			}
 			inlineEdit = null;
@@ -249,7 +253,7 @@
 		if (pending.kind === 'note') {
 			const output = await projectActions.createNote(value, pending.projectId, pending.parentId);
 			if (!output) {
-				toast.error('Could not create the note. Try again.');
+				toast.error(failureMessage('Could not create the note. Try again.'));
 				return;
 			}
 			inlineEdit = null;
@@ -257,14 +261,14 @@
 		} else if (pending.kind === 'folder') {
 			const output = await projectActions.createFolder(pending.projectId, value, pending.parentId);
 			if (!output) {
-				toast.error('Could not create the folder. Try again.');
+				toast.error(failureMessage('Could not create the folder. Try again.'));
 				return;
 			}
 			inlineEdit = null;
 		} else {
 			const output = await projectActions.createSkill(value, pending.projectId, pending.parentId);
 			if (!output) {
-				toast.error('Could not create the skill. Try again.');
+				toast.error(failureMessage('Could not create the skill. Try again.'));
 				return;
 			}
 			inlineEdit = null;
@@ -279,26 +283,37 @@
 
 	let dialog = $state<ProjectDialog | null>(null);
 
-	async function submitDialog(value: string): Promise<void> {
-		if (!dialog) return;
+	// Returns false on failure so the dialog stays open with the name still typed —
+	// the toast now says what was wrong (e.g. the name is taken), so it is fixable.
+	async function submitDialog(value: string): Promise<boolean> {
+		if (!dialog) return true;
 		const pending = dialog;
 		if (pending.kind === 'new-project') {
 			const output = await projectActions.createProject(value);
-			if (!output) toast.error('Could not create the project. Try again.');
-			else await goto(`/projects/${output.project.id}`);
-		} else {
-			const output = await projectActions.renameProject(pending.projectId, value);
-			if (!output) toast.error('Could not rename the project. Try again.');
+			if (!output) {
+				toast.error(failureMessage('Could not create the project. Try again.'));
+				return false;
+			}
+			await goto(`/projects/${output.project.id}`);
+			return true;
 		}
+		const output = await projectActions.renameProject(pending.projectId, value);
+		if (!output) {
+			toast.error(failureMessage('Could not rename the project. Try again.'));
+			return false;
+		}
+		return true;
 	}
 
 	async function archiveEntry(entry: NoteSummary): Promise<void> {
 		const output = await projectActions.archiveNote(entry.id);
 		if (!output) {
 			toast.error(
-				entry.kind === 'folder'
-					? 'Could not archive the folder. Empty it first.'
-					: 'Could not archive it. Try again.'
+				failureMessage(
+					entry.kind === 'folder'
+						? 'Could not archive the folder. Empty it first.'
+						: 'Could not archive it. Try again.'
+				)
 			);
 			return;
 		}
@@ -308,7 +323,7 @@
 	async function archiveProject(project: Project): Promise<void> {
 		const output = await projectActions.archiveProject(project.id);
 		if (!output) {
-			toast.error('Could not archive the project. Try again.');
+			toast.error(failureMessage('Could not archive the project. Try again.'));
 			return;
 		}
 		if (activePath.startsWith(`/projects/${project.id}`)) await goto('/');
@@ -318,7 +333,7 @@
 		if ((entry.parentId ?? undefined) === parentId) return;
 		const position = entriesUnder(entry.projectId, parentId).length;
 		const output = await projectActions.moveEntry(entry.projectId, entry.id, parentId, position);
-		if (!output) toast.error('Could not move it. Try again.');
+		if (!output) toast.error(failureMessage('Could not move it. Try again.'));
 		else if (parentId && !isFolderOpen(parentId)) toggled.add(parentId);
 	}
 

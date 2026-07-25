@@ -1,9 +1,11 @@
-import type { ServerInit } from '@sveltejs/kit';
+import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
 import { hydrateEnvironment } from '$lib/server/secrets';
 
 import { redirect, type Handle } from '@sveltejs/kit';
 import { getSessionCookie } from '$lib/services/auth/authService';
+import { DomainError } from '$lib/models';
+import { DOMAIN_ERROR_STATUS, describeError } from '$lib/server/http-errors';
 
 // Prerendering during `vite build` and unit tests both run without a secrets
 // backend, and must not pull configuration (which would, among other things,
@@ -17,6 +19,19 @@ export const init: ServerInit = async () => {
 	const recovered = await AppFactory.recoverInterruptedRuns();
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
+};
+
+// Domain failures are expected outcomes, not bugs: they carry a status and their
+// own message, so the client can tell "name already taken" from "server broke".
+// Kit reads `status` off the object returned here for both page renders and
+// remote-function responses.
+export const handleError: HandleServerError = ({ error, message }) => {
+	if (error instanceof DomainError) {
+		console.warn(`[domain] ${error.code} ${error.message}`);
+		return { message: error.message, code: error.code, status: DOMAIN_ERROR_STATUS[error.code] };
+	}
+	console.error(`[unhandled] ${describeError(error)}`);
+	return { message };
 };
 
 export const handle: Handle = async ({ event, resolve }) => {

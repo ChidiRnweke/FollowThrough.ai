@@ -1,4 +1,5 @@
 import { invalidateAll } from '$app/navigation';
+import { isHttpError } from '@sveltejs/kit';
 import type {
 	ArchiveNoteOutput,
 	CreateFolderOutput,
@@ -25,14 +26,20 @@ import {
 
 class ProjectActionsStore {
 	busy = $state(false);
+	/** Message from the last failed action, when the server explained itself. */
+	lastError = $state<string | undefined>(undefined);
 
 	private async withInvalidation<T>(fn: () => Promise<T>): Promise<T | undefined> {
 		this.busy = true;
+		this.lastError = undefined;
 		try {
 			const result = await fn();
 			await invalidateAll();
 			return result;
-		} catch {
+		} catch (error) {
+			// Domain failures (name taken, folder not empty, …) carry a message worth
+			// showing; unexpected errors fall back to each caller's generic copy.
+			this.lastError = isHttpError(error) ? error.body.message : undefined;
 			return undefined;
 		} finally {
 			this.busy = false;

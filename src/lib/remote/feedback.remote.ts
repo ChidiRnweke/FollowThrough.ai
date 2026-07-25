@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import { db } from '$lib/server/db';
 import { feedbackReports } from '$lib/server/db/schema';
 
@@ -11,7 +12,7 @@ export const submitFeedback = command(
 		appContext: z.record(z.string(), z.unknown())
 	}),
 	async (input) => {
-		const actor = AppFactory.actor();
+		const actor = requestActor();
 		await db.insert(feedbackReports).values({
 			userId: actor.userId,
 			body: input.body,

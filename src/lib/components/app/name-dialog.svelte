@@ -18,7 +18,8 @@
 		submitLabel?: string;
 		initialValue?: string;
 		busy?: boolean;
-		onsubmit: (value: string) => void | Promise<void>;
+		/** Return `false` to keep the dialog open so the value can be corrected. */
+		onsubmit: (value: string) => boolean | void | Promise<boolean | void>;
 	} = $props();
 
 	let value = $state('');
@@ -31,7 +32,7 @@
 		event.preventDefault();
 		const trimmed = value.trim();
 		if (!trimmed) return;
-		await onsubmit(trimmed);
+		if ((await onsubmit(trimmed)) === false) return;
 		open = false;
 	}
 </script>

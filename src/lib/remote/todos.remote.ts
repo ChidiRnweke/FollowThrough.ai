@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type { UpdateTodoInput } from '$lib/models';
 
 export const updateTodo = command(
@@ -22,7 +23,7 @@ export const updateTodo = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.todos()
-			.update(AppFactory.actor(), input as UpdateTodoInput);
+			.update(requestActor(), input as UpdateTodoInput);
 	}
 );
 
@@ -33,7 +34,7 @@ export const deleteTodo = command(
 	async (input) => {
 		await AppFactory.controllerFactory()
 			.todos()
-			.remove(AppFactory.actor(), input.todoId as never);
+			.remove(requestActor(), input.todoId as never);
 	}
 );
 
@@ -45,7 +46,7 @@ export const createTodo = command(
 	}),
 	async (input) => {
 		const factory = AppFactory.controllerFactory();
-		const actor = AppFactory.actor();
+		const actor = requestActor();
 		let projectId = input.projectId;
 		if (!projectId) {
 			const { projects } = await factory.projects().list(actor);

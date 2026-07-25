@@ -29,6 +29,7 @@ import type {
 	Url,
 	UserId
 } from '$lib/models';
+import { ConflictError } from '$lib/models';
 import type { PostgresTestContext } from '$lib/server/db/testcontainer';
 import { startPostgresTestcontainer } from '$lib/server/db/testcontainer';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -154,6 +155,30 @@ describe('Postgres project repository invariants', () => {
 		await repository.archive(owner, project.id);
 		const replacement = await repository.insert(owner, { name: 'reusable' });
 		expect(replacement.name).toBe('reusable');
+	});
+
+	it('rejects a second active project whose name differs only in case', async () => {
+		const owner = actor('401');
+		const repository = new PostgresProjectRepository(context.db);
+		await repository.insert(owner, { name: 'Argenx' });
+		await expect(repository.insert(owner, { name: 'argenx' })).rejects.toThrow(ConflictError);
+	});
+
+	it('rejects renaming a project onto another active project name', async () => {
+		const owner = actor('402');
+		const repository = new PostgresProjectRepository(context.db);
+		await repository.insert(owner, { name: 'Taken name' });
+		const other = await repository.insert(owner, { name: 'Free name' });
+		await expect(
+			repository.update(owner, { projectId: other.id, name: 'taken name' })
+		).rejects.toThrow(ConflictError);
+	});
+
+	it('allows the same project name for a different actor', async () => {
+		const repository = new PostgresProjectRepository(context.db);
+		await repository.insert(actor('403'), { name: 'Shared name' });
+		const other = await repository.insert(actor('404'), { name: 'Shared name' });
+		expect(other.name).toBe('Shared name');
 	});
 });
 

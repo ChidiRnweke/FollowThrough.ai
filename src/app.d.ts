@@ -4,7 +4,13 @@ import type { Session, User } from '$lib/models';
 
 declare global {
 	namespace App {
-		// interface Error {}
+		interface Error {
+			message: string;
+			/** `DomainErrorCode` when the failure came from the domain layer. */
+			code?: string;
+			/** Set by `handleError` so kit uses it instead of defaulting to 500. */
+			status?: number;
+		}
 		interface Locals {
 			user?: User;
 			session?: Session;

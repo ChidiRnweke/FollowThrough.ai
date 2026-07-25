@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
+import { requestActor } from './actor';
 import type {
 	ListMemoryInput,
 	CreateMemoryEntryInput,
@@ -11,13 +12,13 @@ import type {
 
 export const getEntries = query(z.string().uuid().optional(), async (projectId) => {
 	const factory = AppFactory.controllerFactory();
-	return factory.memory().list(AppFactory.actor(), { projectId } as ListMemoryInput);
+	return factory.memory().list(requestActor(), { projectId } as ListMemoryInput);
 });
 
 export const getPendingSuggestions = query(z.string().uuid().optional(), async (projectId) =>
 	AppFactory.controllerFactory()
 		.suggestions()
-		.listPendingMemory(AppFactory.actor(), { projectId } as ListPendingMemoryInput)
+		.listPendingMemory(requestActor(), { projectId } as ListPendingMemoryInput)
 );
 
 export const createEntry = command(
@@ -30,7 +31,7 @@ export const createEntry = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.memory()
-			.create(AppFactory.actor(), input as CreateMemoryEntryInput);
+			.create(requestActor(), input as CreateMemoryEntryInput);
 	}
 );
 
@@ -44,7 +45,7 @@ export const updateEntry = command(
 	async (input) => {
 		return AppFactory.controllerFactory()
 			.memory()
-			.update(AppFactory.actor(), input as UpdateMemoryEntryInput);
+			.update(requestActor(), input as UpdateMemoryEntryInput);
 	}
 );
 
@@ -53,6 +54,6 @@ export const deleteEntry = command(
 	async (input) => {
 		await AppFactory.controllerFactory()
 			.memory()
-			.remove(AppFactory.actor(), input as DeleteMemoryEntryInput);
+			.remove(requestActor(), input as DeleteMemoryEntryInput);
 	}
 );
