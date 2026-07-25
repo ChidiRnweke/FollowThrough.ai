@@ -40,6 +40,8 @@ export default defineConfig({
 	],
 	test: {
 		expect: { requireAssertions: true },
+		maxWorkers: 4,
+		minWorkers: 1,
 		projects: [
 			{
 				extends: './vite.config.ts',
@@ -69,7 +71,8 @@ export default defineConfig({
 				test: {
 					name: 'contracts',
 					environment: 'node',
-					include: ['src/lib/server/**/*.contract.spec.ts']
+					include: ['src/lib/server/**/*.contract.spec.ts'],
+					fileParallelism: false
 				}
 			},
 			{

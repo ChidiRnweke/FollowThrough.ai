@@ -253,6 +253,17 @@ export async function provisionDatabase({
 			console.log(`User '${dbUser}' password updated.`);
 		}
 
+		// Transferring ownership requires the admin to be a member of the new role.
+		// Superusers bypass this check; a shared-PostgreSQL admin does not. Plain
+		// GRANT is version-safe: PG16+ defaults the SET option to TRUE, and the
+		// explicit WITH SET clause would be a syntax error on PG15 and older.
+		console.log(`Granting '${dbUser}' membership to the admin role...`);
+		try {
+			await adminSql.unsafe(`GRANT ${role} TO CURRENT_USER`);
+		} catch (err) {
+			console.warn(`Warning: could not grant '${dbUser}' to the admin role: ${err.message}`);
+		}
+
 		// Grant privileges - make user the owner for full control
 		console.log(`Granting privileges on database '${dbName}' to user '${dbUser}'...`);
 		await adminSql.unsafe(`ALTER DATABASE ${database} OWNER TO ${role}`);
@@ -261,16 +272,21 @@ export async function provisionDatabase({
 		await adminSql.end();
 	}
 
-	console.log(`Reconnecting to '${dbName}' to grant schema privileges...`);
-
-	const appDbConnectionString = buildDatabaseUrl({
-		user: adminUser,
-		password: adminPassword,
+	const databaseUrl = buildDatabaseUrl({
+		user: dbUser,
+		password: dbPassword,
 		host: postgresHost,
 		port,
 		database: dbName
 	});
-	const appDbSql = postgresClient(appDbConnectionString, { max: 1 });
+
+	// Connect as the provisioned role rather than the admin: it owns the database
+	// (so it owns `public` through pg_database_owner) and, critically, ALTER DEFAULT
+	// PRIVILEGES applies to the *current* role — migrations run as this role, so the
+	// defaults have to be set from here to mean anything.
+	console.log(`Reconnecting to '${dbName}' as '${dbUser}' to grant schema privileges...`);
+
+	const appDbSql = postgresClient(databaseUrl, { max: 1 });
 
 	try {
 		console.log(`Granting schema privileges on '${dbName}'...`);
@@ -292,15 +308,6 @@ export async function provisionDatabase({
 	} finally {
 		await appDbSql.end();
 	}
-
-	// Create connection string
-	const databaseUrl = buildDatabaseUrl({
-		user: dbUser,
-		password: dbPassword,
-		host: postgresHost,
-		port,
-		database: dbName
-	});
 
 	// Store credentials in app Infisical project
 	console.log('Storing database credentials in app Infisical project...');
