@@ -25,12 +25,14 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Separator } from '$lib/components/ui/separator';
-	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-	import Waypoints from '@lucide/svelte/icons/waypoints';
-	import BookOpen from '@lucide/svelte/icons/book-open';
-	import Workflow from '@lucide/svelte/icons/workflow';
-	import Wrench from '@lucide/svelte/icons/wrench';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import {
+		FtCopied as ClipboardCheck,
+		FtReferences as Waypoints,
+		FtReading as BookOpen,
+		FtWorkflow as Workflow,
+		FtSkills as Wrench,
+		FtChevronDown as ChevronDown
+	} from '$lib/components/icons';
 	import {
 		createSuggestionAnchorPlugin,
 		suggestionAnchorKey,

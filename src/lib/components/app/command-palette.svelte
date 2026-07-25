@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NoteSummary, ShellContext } from '$lib/models';
 	import * as Command from '$lib/components/ui/command';
-	import FileText from '@lucide/svelte/icons/file-text';
+	import { FtDocument as FileText } from '$lib/components/icons';
 	import { commandRegistry } from '$lib/commands/registry';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { workbench } from '$lib/stores/workbench.svelte';

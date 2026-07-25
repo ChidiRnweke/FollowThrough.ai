@@ -3,7 +3,7 @@
 	import { defaultExportSettings } from '$lib/models';
 	import mermaid from 'mermaid';
 	import { mode } from 'mode-watcher';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';

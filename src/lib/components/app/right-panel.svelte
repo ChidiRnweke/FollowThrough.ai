@@ -12,8 +12,7 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import Plus from '@lucide/svelte/icons/plus';
-	import X from '@lucide/svelte/icons/x';
+	import { FtPlus as Plus, FtClose as X } from '$lib/components/icons';
 	import { chat } from '$lib/stores/chat.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';

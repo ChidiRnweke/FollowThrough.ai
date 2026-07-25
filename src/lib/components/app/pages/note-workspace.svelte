@@ -16,10 +16,12 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-	import Pin from '@lucide/svelte/icons/pin';
-	import PinOff from '@lucide/svelte/icons/pin-off';
+	import {
+		FtEllipsis as Ellipsis,
+		FtLoader as LoaderCircle,
+		FtPin as Pin,
+		FtPinOff as PinOff
+	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { chat } from '$lib/stores/chat.svelte';
 	import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
@@ -38,11 +40,13 @@
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
 	import NoteSyncStatus from '../note-sync-status.svelte';
 	import NoteTitleInput from '../note-title-input.svelte';
-	import FileOutput from '@lucide/svelte/icons/file-output';
-	import ArrowUpFromLine from '@lucide/svelte/icons/arrow-up-from-line';
-	import Undo2 from '@lucide/svelte/icons/undo-2';
-	import Lightbulb from '@lucide/svelte/icons/lightbulb';
-	import X from '@lucide/svelte/icons/x';
+	import {
+		FtExport as FileOutput,
+		FtPublish as ArrowUpFromLine,
+		FtUndo as Undo2,
+		FtSuggestion as Lightbulb,
+		FtClose as X
+	} from '$lib/components/icons';
 	import ExportDialog from '../export-dialog.svelte';
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';

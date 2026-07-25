@@ -16,8 +16,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { openChatSurface } from '$lib/navigation/responsive-surfaces';
-	import Search from '@lucide/svelte/icons/search';
-	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
 	import MemoryNotificationMenu from '$lib/components/app/memory-notification-menu.svelte';
 
 	let { data, children } = $props();

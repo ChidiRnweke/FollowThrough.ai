@@ -2,7 +2,7 @@
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import { FtExternal as ExternalLink } from '$lib/components/icons';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoTextField from '../todo-fields/todo-text-field.svelte';
 	import TodoStatusField from '../todo-fields/todo-status-field.svelte';

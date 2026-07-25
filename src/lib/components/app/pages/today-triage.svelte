@@ -2,8 +2,7 @@
 	import type { NoteSummary, Project, TodayView } from '$lib/models';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import Pin from '@lucide/svelte/icons/pin';
-	import FileText from '@lucide/svelte/icons/file-text';
+	import { FtPin as Pin, FtDocument as FileText } from '$lib/components/icons';
 	import EmptyState from '../empty-state.svelte';
 	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
 	import { page } from '$app/state';

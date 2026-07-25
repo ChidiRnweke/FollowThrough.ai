@@ -3,7 +3,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
-	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+	import { FtChevronsUd as ChevronsUpDown } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 

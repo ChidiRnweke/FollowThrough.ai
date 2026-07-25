@@ -17,8 +17,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
-	import Plus from '@lucide/svelte/icons/plus';
+	import { FtEllipsis as MoreHorizontal, FtPlus as Plus } from '$lib/components/icons';
 	import {
 		getEntries,
 		getPendingSuggestions,

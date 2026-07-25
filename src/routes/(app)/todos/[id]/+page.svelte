@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import { FtArrowLeft as ArrowLeft } from '$lib/components/icons';
 	import TodoDetailPanel from '$lib/components/app/panels/todo-detail-panel.svelte';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Button } from '$lib/components/ui/button';

@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import Check from '@lucide/svelte/icons/check';
-	import Copy from '@lucide/svelte/icons/copy';
-	import FilePen from '@lucide/svelte/icons/file-pen';
+	import { FtCheck as Check, FtCopy as Copy, FtFileEdit as FilePen } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 
 	let {

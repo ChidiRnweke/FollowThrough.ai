@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { class: className = '' }: { class?: string } = $props();
+  import type { SVGAttributes } from 'svelte/elements';
+	let { class: className = '', ...rest }: SVGAttributes<SVGSVGElement> = $props();
 </script>
 
 <svg
@@ -10,11 +11,11 @@
   stroke-width="1.5"
   stroke-linecap="round"
   stroke-linejoin="round"
-  class={className}
+  class={className} {...rest}
   aria-hidden="true"
 >
-  <path d="M 15 3 H 6.5 C 5.67 3 5 3.67 5 4.5 V 19.5 C 5 20.33 5.67 21 6.5 21 H 17.5 C 18.33 21 19 20.33 19 19.5 V 7 L 15 3 Z" />
-  <polyline points="15,3 15,7 19,7" />
-  <line x1="12" y1="12" x2="12" y2="17" />
-  <line x1="9.5" y1="14.5" x2="14.5" y2="14.5" />
+  <path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5z" />
+  <polyline points="14 2 14 8 20 8" />
+  <line x1="12" y1="12" x2="12" y2="18" />
+  <line x1="9" y1="15" x2="15" y2="15" />
 </svg>

@@ -2,8 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import { FtLoader as LoaderCircle, FtRefresh as RotateCcw } from '$lib/components/icons';
 	import {
 		BrowserDrawioEmbedPort,
 		DRAWIO_EMBED_URL,

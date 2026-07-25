@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Note, NoteSummary, ShellContext } from '$lib/models';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-	import Folder from '@lucide/svelte/icons/folder';
+	import { FtFolder as Folder } from '$lib/components/icons';
 
 	let { shell, note }: { shell: ShellContext; note: Note } = $props();
 

@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { ArtifactId, ArtifactView } from '$lib/models';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import Download from '@lucide/svelte/icons/download';
-	import FileOutput from '@lucide/svelte/icons/file-output';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import PackageOpen from '@lucide/svelte/icons/package-open';
-	import Search from '@lucide/svelte/icons/search';
-	import X from '@lucide/svelte/icons/x';
-	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import {
+		FtDownload as Download,
+		FtExport as FileOutput,
+		FtDocument as FileText,
+		FtArtifacts as PackageOpen,
+		FtSearch as Search,
+		FtClose as X,
+		FtRetry as RefreshCw,
+		FtTrash as Trash2
+	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';

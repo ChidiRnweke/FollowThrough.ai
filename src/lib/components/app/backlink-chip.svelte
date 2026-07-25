@@ -2,8 +2,7 @@
 	import type { BacklinkView } from '$lib/models';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Badge } from '$lib/components/ui/badge';
-	import Link2 from '@lucide/svelte/icons/link-2';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { FtLink as Link2, FtWarning as TriangleAlert } from '$lib/components/icons';
 	import { formatDateTime, relationshipLabels } from './labels';
 
 	let {

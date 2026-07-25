@@ -12,10 +12,10 @@
 	import TodoPriorityField from './todo-fields/todo-priority-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
-	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import { FtGrip as GripVertical } from '$lib/components/icons';
 	import { dragHandle } from 'svelte-dnd-action';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import MoreHorizontal from '@lucide/svelte/icons/ellipsis';
+	import { FtEllipsis as MoreHorizontal } from '$lib/components/icons';
 	import { todoStatusLabels } from './labels';
 
 	const statuses: readonly TodoStatus[] = ['backlog', 'open', 'in_progress', 'done'];

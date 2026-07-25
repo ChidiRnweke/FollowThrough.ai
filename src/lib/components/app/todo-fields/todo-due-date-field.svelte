@@ -3,8 +3,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { Button } from '$lib/components/ui/button';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import X from '@lucide/svelte/icons/x';
+	import { FtCalendar as CalendarIcon, FtClose as X } from '$lib/components/icons';
 	import { parseDate, type DateValue } from '@internationalized/date';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';

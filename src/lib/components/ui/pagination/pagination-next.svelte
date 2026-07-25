@@ -2,7 +2,7 @@
 	import { Pagination as PaginationPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import { FtChevronRight as ChevronRightIcon } from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),

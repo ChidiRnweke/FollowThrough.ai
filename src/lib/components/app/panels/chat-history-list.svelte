@@ -4,11 +4,13 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
-	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
-	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import Pencil from '@lucide/svelte/icons/pencil';
+	import {
+		FtChat as MessageSquare,
+		FtEllipsis as MoreHorizontal,
+		FtExternal as ExternalLink,
+		FtTrash as Trash2,
+		FtEdit as Pencil
+	} from '$lib/components/icons';
 	import NameDialog from '$lib/components/app/name-dialog.svelte';
 	import { deleteSession, renameSession } from '$lib/remote/chat.remote';
 	import { toast } from 'svelte-sonner';

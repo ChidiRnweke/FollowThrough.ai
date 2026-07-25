@@ -5,16 +5,18 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import House from '@lucide/svelte/icons/house';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import MessageSquareWarning from '@lucide/svelte/icons/message-square-warning';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Search from '@lucide/svelte/icons/search';
-	import Settings from '@lucide/svelte/icons/settings';
-	import SunMoon from '@lucide/svelte/icons/sun-moon';
-	import UserRound from '@lucide/svelte/icons/user-round';
-	import Wrench from '@lucide/svelte/icons/wrench';
+	import {
+		FtToday as House,
+		FtTodos as ListTodo,
+		FtChat as MessageSquare,
+		FtChatAlert as MessageSquareWarning,
+		FtPlus as Plus,
+		FtSearch as Search,
+		FtSettings as Settings,
+		FtTheme as SunMoon,
+		FtProfile as UserRound,
+		FtSkills as Wrench
+	} from '$lib/components/icons';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/palette.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';

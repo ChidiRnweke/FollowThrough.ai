@@ -2,7 +2,7 @@
 	import type { NoteSummary, ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import { dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
-	import Plus from '@lucide/svelte/icons/plus';
+	import { FtPlus as Plus } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';

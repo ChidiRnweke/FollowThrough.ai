@@ -6,7 +6,7 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
-	import X from '@lucide/svelte/icons/x';
+	import { FtClose as X } from '$lib/components/icons';
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
 	import { appContext } from '$lib/stores/app-context.svelte';

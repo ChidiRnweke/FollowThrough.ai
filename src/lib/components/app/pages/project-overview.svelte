@@ -3,17 +3,19 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
-	import Brain from '@lucide/svelte/icons/brain';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import FilePlus from '@lucide/svelte/icons/file-plus';
-	import Folder from '@lucide/svelte/icons/folder';
-	import FolderOpen from '@lucide/svelte/icons/folder-open';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import PackageOpen from '@lucide/svelte/icons/package-open';
-	import Paperclip from '@lucide/svelte/icons/paperclip';
-	import Wrench from '@lucide/svelte/icons/wrench';
+	import {
+		FtMemory as Brain,
+		FtChevronRight as ChevronRight,
+		FtEllipsis as Ellipsis,
+		FtDocument as FileText,
+		FtDocumentPlus as FilePlus,
+		FtFolder as Folder,
+		FtFolderOpen as FolderOpen,
+		FtTodos as ListTodo,
+		FtArtifacts as PackageOpen,
+		FtAttachments as Paperclip,
+		FtSkills as Wrench
+	} from '$lib/components/icons';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '../name-dialog.svelte';

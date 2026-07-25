@@ -14,16 +14,18 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-	import Copy from '@lucide/svelte/icons/copy';
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
-	import Square from '@lucide/svelte/icons/square';
-	import Wrench from '@lucide/svelte/icons/wrench';
-	import X from '@lucide/svelte/icons/x';
+	import {
+		FtSend as SendHorizontal,
+		FtChevronRight as ChevronRight,
+		FtDocument as FileText,
+		FtLoader as LoaderCircle,
+		FtCopy as Copy,
+		FtEdit as Pencil,
+		FtRefresh as RotateCcw,
+		FtStop as Square,
+		FtSkills as Wrench,
+		FtClose as X
+	} from '$lib/components/icons';
 	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';

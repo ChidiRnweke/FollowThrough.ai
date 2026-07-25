@@ -1,0 +1,20 @@
+<script lang="ts">
+	import type { SVGAttributes } from 'svelte/elements';
+	let { class: className = '', ...rest }: SVGAttributes<SVGSVGElement> = $props();
+</script>
+
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+	viewBox="0 0 24 24"
+	fill="none"
+	stroke="currentColor"
+	stroke-width="1.5"
+	stroke-linecap="round"
+	stroke-linejoin="round"
+	class={className} {...rest}
+	aria-hidden="true"
+>
+	<rect x="8" y="2" width="8" height="4" rx="1" />
+	<path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+	<path d="M9 14l2 2 4-4" />
+</svg>

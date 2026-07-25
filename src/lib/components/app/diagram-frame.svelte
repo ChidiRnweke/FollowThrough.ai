@@ -4,7 +4,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
+	import { FtEllipsisV as EllipsisVertical } from '$lib/components/icons';
 	import SafeSvgPreview from './safe-svg-preview.svelte';
 
 	let {

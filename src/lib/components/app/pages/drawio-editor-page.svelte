@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { DrawioDiagram } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
-	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import { FtArrowLeft as ArrowLeft } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import DrawioEmbed from '../drawio-embed.svelte';
 	import { saveDrawioDiagram } from '$lib/remote/diagrams.remote';
@@ -37,7 +37,9 @@
 		</Button>
 		<div class="min-w-0">
 			<p class="text-xs text-muted-foreground">draw.io diagram</p>
-			<h1 class="truncate text-xl font-semibold tracking-tight">{diagram.title ?? 'Untitled diagram'}</h1>
+			<h1 class="truncate text-xl font-semibold tracking-tight">
+				{diagram.title ?? 'Untitled diagram'}
+			</h1>
 		</div>
 	</div>
 	<DrawioEmbed xml={diagram.source} title={diagram.title ?? 'Untitled diagram'} oncommit={save} />

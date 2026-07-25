@@ -1,10 +1,12 @@
 import { goto } from '$app/navigation';
 import type { Component } from 'svelte';
-import FilePlus from '@lucide/svelte/icons/file-plus';
-import ListTodo from '@lucide/svelte/icons/list-todo';
-import MessageSquare from '@lucide/svelte/icons/message-square';
-import Settings from '@lucide/svelte/icons/settings';
-import Sun from '@lucide/svelte/icons/sun';
+import {
+	FtDocumentPlus as FilePlus,
+	FtTodos as ListTodo,
+	FtChat as MessageSquare,
+	FtSettings as Settings,
+	FtTheme as Sun
+} from '$lib/components/icons';
 import { toggleMode } from 'mode-watcher';
 import { palette } from '$lib/stores/palette.svelte';
 import { rightPanel } from '$lib/stores/right-panel.svelte';

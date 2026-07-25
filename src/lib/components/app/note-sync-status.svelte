@@ -2,7 +2,7 @@
 	import type { DateTime, NoteSyncStatus } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { FtWarning as TriangleAlert } from '$lib/components/icons';
 	import { formatRelativeTime } from './labels';
 
 	let {

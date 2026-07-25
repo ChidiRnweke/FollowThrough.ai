@@ -6,7 +6,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
-	import Bell from '@lucide/svelte/icons/bell';
+	import { FtNotifications as Bell } from '$lib/components/icons';
 
 	let {
 		notifications

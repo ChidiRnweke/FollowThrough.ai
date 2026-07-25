@@ -7,9 +7,11 @@
 	import { mergeProps } from '$lib/utils';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import FilePlus from '@lucide/svelte/icons/file-plus';
-	import FolderPlus from '@lucide/svelte/icons/folder-plus';
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import {
+		FtDocumentPlus as FilePlus,
+		FtFolderPlus as FolderPlus,
+		FtEllipsis as Ellipsis
+	} from '$lib/components/icons';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '$lib/components/app/name-dialog.svelte';
 	import ExportSettingsDialog from '$lib/components/app/export-settings-dialog.svelte';

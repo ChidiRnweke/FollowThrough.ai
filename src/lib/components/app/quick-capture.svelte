@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import ActionForm from '$lib/components/primitives/action-form.svelte';
-	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
 	let { action = '?/capture', target = 'Inbox' }: { action?: string; target?: string } = $props();
 </script>

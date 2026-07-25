@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import { FtRetry as RefreshCw } from '$lib/components/icons';
 </script>
 
 <svelte:head>

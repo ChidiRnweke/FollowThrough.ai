@@ -4,9 +4,11 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Button } from '$lib/components/ui/button';
 	import * as Empty from '$lib/components/ui/empty';
-	import Search from '@lucide/svelte/icons/search';
-	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import Plus from '@lucide/svelte/icons/plus';
+	import {
+		FtSearch as Search,
+		FtChat as MessageSquare,
+		FtPlus as Plus
+	} from '$lib/components/icons';
 	import ChatHistoryList from '$lib/components/app/panels/chat-history-list.svelte';
 
 	let {

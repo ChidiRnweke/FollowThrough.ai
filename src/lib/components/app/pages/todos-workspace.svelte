@@ -13,7 +13,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Input } from '$lib/components/ui/input';
-	import Plus from '@lucide/svelte/icons/plus';
+	import { FtPlus as Plus } from '$lib/components/icons';
 
 	let {
 		todos,

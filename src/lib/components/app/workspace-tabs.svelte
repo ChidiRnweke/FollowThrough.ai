@@ -5,12 +5,14 @@
 	import { cubicOut } from 'svelte/easing';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import X from '@lucide/svelte/icons/x';
-	import Pin from '@lucide/svelte/icons/pin';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
-	import Plus from '@lucide/svelte/icons/plus';
+	import {
+		FtClose as X,
+		FtPin as Pin,
+		FtChevronDown as ChevronDown,
+		FtChevronRight as ChevronRight,
+		FtChevronUp as ChevronUp,
+		FtPlus as Plus
+	} from '$lib/components/icons';
 	import { hasInternalNoteDrag, readActiveNoteDrag, writeNoteDrag } from '$lib/client/note-drag';
 
 	let {

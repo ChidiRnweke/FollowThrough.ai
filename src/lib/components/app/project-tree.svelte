@@ -9,18 +9,20 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
 	import { toast } from 'svelte-sonner';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import Folder from '@lucide/svelte/icons/folder';
-	import FolderOpen from '@lucide/svelte/icons/folder-open';
-	import FolderKanban from '@lucide/svelte/icons/folder-kanban';
-	import FolderPlus from '@lucide/svelte/icons/folder-plus';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import Pin from '@lucide/svelte/icons/pin';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Wrench from '@lucide/svelte/icons/wrench';
-	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import {
+		FtChevronRight as ChevronRight,
+		FtEllipsis as Ellipsis,
+		FtDocument as FileText,
+		FtFolder as Folder,
+		FtFolderOpen as FolderOpen,
+		FtFolderBoard as FolderKanban,
+		FtFolderPlus as FolderPlus,
+		FtTodos as ListTodo,
+		FtPin as Pin,
+		FtPlus as Plus,
+		FtSkills as Wrench,
+		FtGrip as GripVertical
+	} from '$lib/components/icons';
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
