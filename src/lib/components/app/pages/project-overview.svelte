@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GetProjectOutput, NoteId, ProjectTreeNode } from '$lib/models';
+	import type { GetProjectOutput, NoteId, NoteSummary, ProjectTreeNode } from '$lib/models';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
@@ -17,7 +17,10 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '../name-dialog.svelte';
-	import { formatDateTime } from '../labels';
+	import ResourceRow from '../resource-row.svelte';
+	import EmptyState from '../empty-state.svelte';
+	import { pickTip } from '../resource-tips';
+	import { formatRelativeTime } from '../labels';
 
 	export interface ProjectCounts {
 		todos: number;
@@ -29,8 +32,17 @@
 	let {
 		view,
 		counts,
+		overdueTodoCount = 0,
+		tipSeed = 0,
 		oncreatenote
-	}: { view: GetProjectOutput; counts: ProjectCounts; oncreatenote?: () => void } = $props();
+	}: {
+		view: GetProjectOutput;
+		counts: ProjectCounts;
+		overdueTodoCount?: number;
+		// Comes from the loader so SSR and hydration pick the same tips.
+		tipSeed?: number;
+		oncreatenote?: () => void;
+	} = $props();
 
 	const project = $derived(view.project);
 	let renameEntryOpen = $state(false);
@@ -40,6 +52,40 @@
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
 	}
+
+	function flatten(nodes: readonly ProjectTreeNode[]): NoteSummary[] {
+		return nodes.flatMap((node) => [node.entry, ...flatten(node.children)]);
+	}
+
+	const entries = $derived(flatten(view.tree));
+
+	// Documents named by the default title are a standing invitation, surfaced
+	// beside the list heading rather than as a section of their own.
+	const unnamed = $derived(entries.filter((entry) => entry.title === 'Untitled'));
+
+	// A populated space states what it holds; an empty one gets a tip instead of a
+	// zero. `undefined` state means "empty", which is what makes the row show its
+	// tip — the two are deliberately exclusive.
+	const todoState = $derived.by(() => {
+		if (counts.todos === 0) return undefined;
+		const open = `${counts.todos} open`;
+		return overdueTodoCount > 0 ? `${open} · ${overdueTodoCount} overdue` : open;
+	});
+
+	const memoryState = $derived(
+		counts.memory === 0 ? undefined : `${counts.memory} the agent can use`
+	);
+
+	const artifactState = $derived(
+		counts.artifacts === 0 ? undefined : `${counts.artifacts} ready to download`
+	);
+
+	const attachmentState = $derived.by(() => {
+		if (counts.attachments === 0) return undefined;
+		return counts.attachments === 1
+			? '1 file grounding the agent'
+			: `${counts.attachments} files grounding the agent`;
+	});
 
 	// Folders have no page of their own, so the row opens in place — otherwise the
 	// nested notes counted in the heading are unreachable from here.
@@ -68,66 +114,50 @@
 	}
 </script>
 
-<!-- Destination strip -->
-<nav class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Project spaces">
-	<a
-		href="/projects/{project.id}/todos"
-		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-	>
-		<!-- Brand-wash icon chips give the four project spaces a shared identity
-		     without recoloring the cards themselves. -->
-		<span
-			class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
-		>
-			<ListTodo class="size-4" />
-		</span>
-		<span class="flex-1">Todos</span>
-		{#if counts.todos > 0}
-			<span class="text-xs tabular-nums text-muted-foreground">{counts.todos}</span>
-		{/if}
-	</a>
-	<a
-		href="/projects/{project.id}/memory"
-		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-	>
-		<span
-			class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
-		>
-			<Brain class="size-4" />
-		</span>
-		<span class="flex-1">Memory</span>
-		{#if counts.memory > 0}
-			<span class="text-xs tabular-nums text-muted-foreground">{counts.memory}</span>
-		{/if}
-	</a>
-	<a
-		href="/artifacts?projectId={project.id}"
-		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-	>
-		<span
-			class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
-		>
-			<PackageOpen class="size-4" />
-		</span>
-		<span class="flex-1">Artifacts</span>
-		{#if counts.artifacts > 0}
-			<span class="text-xs tabular-nums text-muted-foreground">{counts.artifacts}</span>
-		{/if}
-	</a>
-	<a
-		href="/projects/{project.id}/attachments"
-		class="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-	>
-		<span
-			class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
-		>
-			<Paperclip class="size-4" />
-		</span>
-		<span class="flex-1">Attachments</span>
-		{#if counts.attachments > 0}
-			<span class="text-xs tabular-nums text-muted-foreground">{counts.attachments}</span>
-		{/if}
-	</a>
+<!--
+	The four spaces are not peers, and grouping them is the explanation: two are
+	what the project has produced, two are what the agent reasons from. The
+	headings carry the meaning so the rows themselves stay quiet.
+-->
+<nav class="flex flex-col gap-6" aria-label="Project spaces">
+	<section class="flex flex-col gap-2">
+		<h2 class="eyebrow">Produced here</h2>
+		<ul class="-mx-3 divide-y divide-border border-t border-border">
+			<ResourceRow
+				href="/projects/{project.id}/todos"
+				label="Todos"
+				icon={ListTodo}
+				state={todoState}
+				tip={todoState ? undefined : pickTip('todos', tipSeed)}
+			/>
+			<ResourceRow
+				href="/artifacts?projectId={project.id}"
+				label="Artifacts"
+				icon={PackageOpen}
+				state={artifactState}
+				tip={artifactState ? undefined : pickTip('artifacts', tipSeed)}
+			/>
+		</ul>
+	</section>
+	<section class="flex flex-col gap-2">
+		<h2 class="eyebrow">What the agent works from</h2>
+		<ul class="-mx-3 divide-y divide-border border-t border-border">
+			<ResourceRow
+				href="/projects/{project.id}/memory"
+				label="Memory"
+				icon={Brain}
+				state={memoryState}
+				tip={memoryState ? undefined : pickTip('memory', tipSeed)}
+			/>
+			<ResourceRow
+				href="/projects/{project.id}/attachments"
+				label="Attachments"
+				icon={Paperclip}
+				state={attachmentState}
+				tip={attachmentState ? undefined : pickTip('attachments', tipSeed)}
+			/>
+		</ul>
+	</section>
 </nav>
 
 <!--
@@ -141,7 +171,7 @@
 		{#if isFolder}
 			<button
 				type="button"
-				class="row-interactive flex w-full items-center gap-2 py-2.5 pr-10 text-left text-sm"
+				class="row-interactive flex w-full items-center gap-2 py-3 pr-10 text-left text-sm"
 				style="padding-left: {12 + depth * 20}px"
 				aria-expanded={isOpen}
 				onclick={() => toggleFolder(node.entry.id)}
@@ -157,14 +187,14 @@
 					<Folder class="size-4 shrink-0 text-muted-foreground" />
 				{/if}
 				<span class="min-w-0 flex-1 truncate font-medium">{node.entry.title}</span>
-				<span class="shrink-0 text-xs text-muted-foreground">
+				<span class="provenance-caption shrink-0">
 					{node.children.length}
 					{node.children.length === 1 ? 'item' : 'items'}
 				</span>
 			</button>
 		{:else}
 			<a
-				class="row-interactive flex items-center gap-2 py-2.5 pr-10 text-sm"
+				class="row-interactive flex items-center gap-2 py-3 pr-10 text-sm"
 				style="padding-left: {12 + depth * 20}px"
 				href="/notes/{node.entry.id}"
 			>
@@ -174,8 +204,8 @@
 					<FileText class="size-4 shrink-0 text-muted-foreground" />
 				{/if}
 				<span class="min-w-0 flex-1 truncate">{node.entry.title}</span>
-				<span class="shrink-0 text-xs text-muted-foreground">
-					{formatDateTime(node.entry.updatedAt)}
+				<span class="provenance-caption shrink-0">
+					{formatRelativeTime(node.entry.updatedAt)}
 				</span>
 			</a>
 		{/if}
@@ -216,21 +246,40 @@
 
 <!-- Documents -->
 {#if view.tree.length === 0}
-	<div
-		class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-16 text-center"
+	<EmptyState
+		icon={FileText}
+		title="Nothing here yet."
+		hint="Notes you write in this project show up here."
+		class="rounded-lg border border-dashed border-border py-16"
 	>
-		<p class="text-sm text-muted-foreground">This project is empty.</p>
-		<Button size="sm" onclick={oncreatenote}>
-			<FilePlus class="size-4" />
-			Create the first note
-		</Button>
-	</div>
+		{#snippet action()}
+			<Button size="sm" onclick={oncreatenote}>
+				<FilePlus class="size-4" />
+				Create the first note
+			</Button>
+		{/snippet}
+	</EmptyState>
 {:else}
-	<section class="flex flex-col gap-2" aria-label="Documents">
-		<h2 class="eyebrow">
-			Documents · {countEntries(view.tree)}
-		</h2>
-		<ul class="divide-y divide-border rounded-lg border border-border">
+	<!--
+		A borderless divided list, not a card: the rows are homogeneous and
+		scannable, so hairlines and hover carry the structure on their own.
+	-->
+	<section class="flex flex-col gap-3" aria-label="Documents">
+		<div class="flex items-baseline justify-between gap-3">
+			<h2 class="eyebrow">
+				Documents · {countEntries(view.tree)}
+			</h2>
+			<!-- The one standing invitation the list itself cannot make. -->
+			{#if unnamed.length > 0}
+				<a class="provenance-caption hover:underline" href="/notes/{unnamed[0].id}">
+					{unnamed.length}
+					{unnamed.length === 1 ? 'document' : 'documents'} to name
+				</a>
+			{/if}
+		</div>
+		<!-- Bled 12px past the measure so row text aligns with the page title while
+		     the hover wash and hairlines still read as a continuous list. -->
+		<ul class="-mx-3 divide-y divide-border border-t border-border">
 			{#each view.tree as node (node.entry.id)}
 				{@render row(node, 0)}
 			{/each}

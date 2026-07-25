@@ -50,10 +50,7 @@
 </script>
 
 {#key project.id}
-	<PageShell
-		title={project.name}
-		description={project.description ?? 'Notes and todos for this project.'}
-	>
+	<PageShell title={project.name} description={project.description ?? undefined}>
 		{#snippet actions()}
 			<Button size="sm" onclick={() => (newNoteOpen = true)}>
 				<FilePlus class="size-4" />
@@ -85,6 +82,8 @@
 		<ProjectOverview
 			view={data.view}
 			counts={data.counts}
+			overdueTodoCount={data.overdueTodoCount}
+			tipSeed={data.tipSeed}
 			oncreatenote={() => (newNoteOpen = true)}
 		/>
 	</PageShell>
