@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NoteSummary, ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
+	import type { ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import { dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
 	import { FtPlus as Plus } from '$lib/components/icons';
@@ -21,9 +21,7 @@
 		projectId,
 		projectNames,
 		onmove,
-		onopen,
-		detail = 'basic',
-		notes = []
+		onopen
 	}: {
 		todos: readonly TodoView[];
 		columns?: readonly TodoStatus[];
@@ -31,8 +29,6 @@
 		projectNames?: ReadonlyMap<ProjectId, string>;
 		onmove?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
-		detail?: 'basic' | 'detailed';
-		notes?: readonly NoteSummary[];
 	} = $props();
 
 	let board = $derived.by(() => {
@@ -79,7 +75,7 @@
 >
 	{#each columns as status (status)}
 		<section
-			class="flex min-h-40 w-[min(82vw,22rem)] shrink-0 snap-start flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:w-80 xl:w-auto"
+			class="flex min-h-40 w-[min(82vw,22rem)] shrink-0 snap-start flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:w-80 xl:w-auto xl:min-w-0"
 		>
 			<div class={['h-0.5 w-full', todoStatusStyle[status].accentClass]}></div>
 			<h3 class="eyebrow flex items-center justify-between px-3 pt-1">
@@ -112,15 +108,15 @@
 							compact
 							draggable
 							projectName={projectNames?.get(item.view.todo.projectId)}
-							{detail}
-							{notes}
 							{onopen}
 							onstatus={onmove}
 						/>
 					{/each}
 				</div>
 			</div>
-			<div class="px-2 pb-2">
+			<!-- Height is reserved even where there is no Add action, so Done does not
+			     sit shorter than its peers and leave the board bottom ragged. -->
+			<div class="min-h-10 px-2 pb-2">
 				{#if addingTo === status}
 					<div class="flex flex-col gap-1">
 						<Input

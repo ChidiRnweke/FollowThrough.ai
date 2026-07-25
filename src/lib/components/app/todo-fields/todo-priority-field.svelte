@@ -8,8 +8,9 @@
 	let {
 		todoId,
 		value,
-		label = 'Todo priority'
-	}: { todoId: TodoId; value?: TodoPriority; label?: string } = $props();
+		label = 'Todo priority',
+		quiet = false
+	}: { todoId: TodoId; value?: TodoPriority; label?: string; quiet?: boolean } = $props();
 	const priorities: TodoPriority[] = ['low', 'medium', 'high'];
 	const none = 'none';
 
@@ -27,11 +28,18 @@
 	onValueChange={(next) => void change(next)}
 	disabled={todoUpdates.isPending(todoId)}
 >
-	<Select.Trigger size="sm" aria-label={label}>
+	<Select.Trigger
+		size="sm"
+		aria-label={label}
+		class={quiet ? 'field-quiet' : undefined}
+		data-empty={value ? undefined : 'true'}
+	>
 		{#if value}
 			<span class={['inline-block size-1.5 rounded-full', todoPriorityStyle[value].dotClass]}
 			></span>
 			{todoPriorityLabels[value]}
+		{:else if quiet}
+			<span aria-label="No priority">—</span>
 		{:else}
 			<span class="text-muted-foreground">No priority</span>
 		{/if}

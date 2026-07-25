@@ -13,7 +13,8 @@
 		value,
 		sourceTitle,
 		hasOrigin,
-		notes = []
+		notes = [],
+		quiet = false
 	}: {
 		todoId: TodoId;
 		projectId: ProjectId;
@@ -21,6 +22,7 @@
 		sourceTitle?: string;
 		hasOrigin?: boolean;
 		notes?: readonly NoteSummary[];
+		quiet?: boolean;
 	} = $props();
 	let open = $state(false);
 	const choices = $derived(
@@ -40,8 +42,10 @@
 				variant="ghost"
 				size="sm"
 				disabled={todoUpdates.isPending(todoId)}
-				class="max-w-48 justify-between"
-				><span class="truncate">{sourceTitle ?? 'No source'}</span><ChevronsUpDown
+				aria-label={sourceTitle ? `Source: ${sourceTitle}` : 'No source'}
+				class={['max-w-48 justify-between', quiet && 'field-quiet']}
+				data-empty={sourceTitle ? undefined : 'true'}
+				><span class="truncate">{sourceTitle ?? (quiet ? '—' : 'No source')}</span><ChevronsUpDown
 					data-icon="inline-end"
 				/></Button
 			>{/snippet}</Popover.Trigger

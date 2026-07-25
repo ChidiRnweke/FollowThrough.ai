@@ -8,8 +8,9 @@
 	let {
 		todoId,
 		value,
-		label = 'Todo status'
-	}: { todoId: TodoId; value: TodoStatus; label?: string } = $props();
+		label = 'Todo status',
+		quiet = false
+	}: { todoId: TodoId; value: TodoStatus; label?: string; quiet?: boolean } = $props();
 	const statuses: TodoStatus[] = ['backlog', 'open', 'in_progress', 'done', 'cancelled'];
 
 	async function change(status: string): Promise<void> {
@@ -25,7 +26,7 @@
 	onValueChange={(next) => void change(next)}
 	disabled={todoUpdates.isPending(todoId)}
 >
-	<Select.Trigger size="sm" aria-label={label}>
+	<Select.Trigger size="sm" aria-label={label} class={quiet ? 'field-quiet' : undefined}>
 		<span class={['inline-block size-1.5 rounded-full', todoStatusStyle[value].dotClass]}></span>
 		{todoStatusLabels[value]}
 	</Select.Trigger>

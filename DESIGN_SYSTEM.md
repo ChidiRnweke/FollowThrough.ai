@@ -35,7 +35,7 @@
 
 - Colors must use the semantic OKLCH tokens in `src/routes/layout.css`; do not introduce raw Tailwind palette colors.
 - **Faces:** Inter is the body, chrome, and metadata face. Newsreader is the display face and
-  reaches the page _only_ through the `page-title` and `note-title` utilities — never through
+  reaches the page _only_ through the `page-title` utility — never through
   `font-serif` applied by hand, and never on chrome, controls, or metadata. JetBrains Mono stays
   reserved for code. The base-layer `h1..h6` rule deliberately stays Inter so section headings,
   dialog titles, and settings groups do not inherit the display face.
@@ -45,9 +45,12 @@
   strip (40px tall, `sm` labels), the sidebar wordmark (`base`/semibold beside the mark), and the
   empty-strip placeholder are chrome-scale exceptions, not content captions. `xs` is reserved for
   eyebrows and provenance captions.
-- **Type scale:** app code uses the named utilities in `layout.css` instead of raw heading size classes — `page-title` (one per page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group of items), and `provenance-caption` (per-item metadata). The ladder is eyebrow/caption → body → section-title → page-title → note-title. Form labels (shadcn `Label`) are small and muted so values lead; `Field.Title` stays at body size above its muted description.
+- **Type scale:** app code uses the named utilities in `layout.css` instead of raw heading size classes — `page-title` (one per page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group of items), and `provenance-caption` (per-item metadata). The ladder is eyebrow/caption → body → section-title → page-title. Form labels (shadcn `Label`) are small and muted so values lead; `Field.Title` stays at body size above its muted description.
 - Spacing follows the existing Tailwind scale. Corners use the shared shadcn radius family and elevation stays flat.
-- Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode stable variants such as the document title input.
+- Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
+  stable variants, but a wrapper that fights a shadcn base class is the wrong tool: the document
+  title once applied a display-size utility to a shadcn `Input` whose own `md:text-sm` won, and it
+  shipped at caption size. Where a control needs to escape its base scale, write the bare element.
 - Focus indicators, AA contrast, 44px touch targets for primary controls, reduced motion, and keyboard access are required.
 
 ## Voice & tone
@@ -74,7 +77,17 @@ and at most one action. Kanban columns keep their drop zone and center the voice
   with the product mark, a plain-language connection explanation, and one retry action. Do not
   imply that uncached server data or online-only mutations are available.
 
-- **Todos:** Progressive disclosure combines three familiar work surfaces. Basic Kanban is the default scanning view; Detailed Kanban exposes committed metadata edits in place; List is a compact editable matrix; the independent right panel is the complete master-detail editor. Board detail and board/list mode stay URL-addressable. Editable popovers must not resize cards or rows, and provenance remains separate from the user-selected source.
+- **Todos:** Two scanning surfaces and one editor. Board and List are alternate views of the same
+  set and stay URL-addressable; the independent right panel is the complete master-detail editor.
+  There is no second board-density toggle — a card shows its title plus whatever metadata is
+  actually set, and anything more belongs in the panel. Editable popovers must not resize cards or
+  rows, and provenance remains separate from the user-selected source.
+- **Data surfaces get their own measure.** A board or table starved by the reading column produces
+  clipped titles and inner scrollbars, so `PageShell width="wide"` widens the content while the
+  header keeps the reading measure. Prose keeps the default `prose` width.
+- **Quiet at rest, control on hover.** Metadata values render as text and reveal their control on
+  hover, keyboard focus, or when open (`.field-quiet`). This keeps one-click editing without a page
+  of boxes competing with the content; the affordance is deferred, never removed.
 - **Project resources:** Todos, Memory, Artifacts, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.
 - **Project overview:** The four spaces are grouped by what they do for you — what the project
   produced versus what the agent works from — rather than listed as four equal nouns. A space that
@@ -87,7 +100,13 @@ and at most one action. Kanban columns keep their drop zone and center the voice
   however well its content is grouped.
 - Todo controls use the existing flat shadcn Select, Popover, Calendar, Command, Input, and Textarea components. Selection commits immediately; text commits on blur or Enter and restores its saved value on Escape or failure. Saving and errors are announced without a manual Save button.
 
-- **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.
+- **Notes:** Document pattern. A quiet utility row carrying the breadcrumb, save status, and note
+  actions precedes one continuous rich-text surface. The note's title lives in the breadcrumb's
+  current-page segment — the single place it appears — and is edited in place through a pencil that
+  reveals on hover (always visible while the note is untitled, since an untitled note cannot save).
+  Enter commits and moves the caret into the body, Escape reverts, blur commits. The document's own
+  first heading is what reads as its visual title. The authored body uses the wider `note-measure`
+  reading width and fills the remaining viewport.
 - **Split notes:** Document-within-Workbench pattern. Note routes occupy the shell's fixed remaining height and never make the shell scroll. Each mounted note pane owns independent vertical and horizontal scrolling. At narrow workspace widths, one pane is shown at a time without discarding the canonical split URL or the saved divider ratio.
 - Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
@@ -107,9 +126,15 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 ## Anti-patterns
 
 - Do not wrap the note in a card, add decorative shadows, or place a permanent formatting toolbar above it.
-- Do not place helper copy or secondary actions ahead of the title.
+- Do not reintroduce a second copy of the note title above the body; the breadcrumb segment is the
+  only one, and a standalone title element duplicated it.
 - Do not leave dead space beneath an empty note; the remaining document surface must accept focus.
 - Do not introduce arbitrary colors, widths, typography values, or raw form controls.
+- Do not render a chip, badge, or control for a value that is not set. An empty field shows nothing
+  on a card and an em dash in the property panel; a column of "No due date / No priority / No
+  source" is noise that reads as content.
+- Do not repeat the page title as the trailing breadcrumb crumb. The breadcrumb carries ancestors
+  and the exit path; the `h1` names the current page.
 - Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.
 - Do not accept draw.io conversions from the general Suggestions inbox, render exported SVG as application HTML, enable iframe autosave, or add diagram revision/history chrome to the current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token, duplicate a prompt during retry, or hide chat entirely on mobile.

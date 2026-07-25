@@ -6,27 +6,22 @@
 	let { data } = $props();
 </script>
 
-<PageShell>
-	{#snippet header()}
-		<div class="space-y-1">
-			<Breadcrumb.Root>
-				<Breadcrumb.List>
-					<Breadcrumb.Item>
-						<Breadcrumb.Link href="/projects/{data.project.id}">
-							{data.project.name}
-						</Breadcrumb.Link>
-					</Breadcrumb.Item>
-					<Breadcrumb.Separator />
-					<Breadcrumb.Item>
-						<Breadcrumb.Page>Todos</Breadcrumb.Page>
-					</Breadcrumb.Item>
-				</Breadcrumb.List>
-			</Breadcrumb.Root>
-			<h1 class="page-title">Todos</h1>
-			<p class="text-sm text-muted-foreground">
-				Commitments and follow-ups in {data.project.name}.
-			</p>
-		</div>
+<PageShell
+	width="wide"
+	title="Todos"
+	description="Commitments and follow-ups in {data.project.name}."
+>
+	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
+	{#snippet breadcrumb()}
+		<Breadcrumb.Root>
+			<Breadcrumb.List>
+				<Breadcrumb.Item>
+					<Breadcrumb.Link href="/projects/{data.project.id}">
+						{data.project.name}
+					</Breadcrumb.Link>
+				</Breadcrumb.Item>
+			</Breadcrumb.List>
+		</Breadcrumb.Root>
 	{/snippet}
 	<TodosWorkspace
 		todos={data.todos}

@@ -569,6 +569,31 @@
 		@apply min-h-8 text-sm;
 	}
 
+	/* Quiet-at-rest editable value. A metadata field reads as text until it is
+	   pointed at, then reveals its control — so a board card or property list is
+	   scannable rather than reading as a form. The affordance is never removed,
+	   only deferred: hover, keyboard focus, and the open state all surface it. */
+	.field-quiet {
+		@apply border-transparent bg-transparent px-2 font-normal;
+	}
+	.field-quiet > svg:last-child {
+		@apply opacity-0 transition-opacity;
+	}
+	.field-quiet:hover,
+	.field-quiet:focus-visible,
+	.field-quiet[data-state='open'] {
+		@apply border-input bg-input/30;
+	}
+	.field-quiet:hover > svg:last-child,
+	.field-quiet:focus-visible > svg:last-child,
+	.field-quiet[data-state='open'] > svg:last-child {
+		@apply opacity-100;
+	}
+	/* An unset value is stated, not advertised. */
+	.field-quiet[data-empty='true'] {
+		@apply text-muted-foreground;
+	}
+
 	/* Accent discipline — teal marks the live thing, olive-neutral is everything
 	   at rest. Selected navigation and segmented-control states carry the brand
 	   accent instead of reading as another gray fill. */

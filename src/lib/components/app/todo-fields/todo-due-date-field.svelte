@@ -9,7 +9,11 @@
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import { formatDate } from '../labels';
 
-	let { todoId, value }: { todoId: TodoId; value?: LocalDate } = $props();
+	let {
+		todoId,
+		value,
+		quiet = false
+	}: { todoId: TodoId; value?: LocalDate; quiet?: boolean } = $props();
 	let open = $state(false);
 	const calendarValue = $derived(value ? parseDate(value) : undefined);
 	async function commit(next: DateValue | undefined): Promise<void> {
@@ -27,9 +31,12 @@
 				variant="ghost"
 				size="sm"
 				disabled={todoUpdates.isPending(todoId)}
-				><CalendarIcon data-icon="inline-start" />{value
-					? formatDate(value)
-					: 'No due date'}</Button
+				aria-label={value ? `Due ${formatDate(value)}` : 'No due date'}
+				class={quiet ? 'field-quiet' : undefined}
+				data-empty={value ? undefined : 'true'}
+				>{#if value}<CalendarIcon data-icon="inline-start" />{formatDate(
+						value
+					)}{:else if quiet}—{:else}<CalendarIcon data-icon="inline-start" />No due date{/if}</Button
 			>{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-auto p-0" align="start">

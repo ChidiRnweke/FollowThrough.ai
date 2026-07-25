@@ -4,7 +4,11 @@
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 
-	let { todoId, value }: { todoId: TodoId; value: TodoResponsibility } = $props();
+	let {
+		todoId,
+		value,
+		quiet = false
+	}: { todoId: TodoId; value: TodoResponsibility; quiet?: boolean } = $props();
 	async function change(next: string): Promise<void> {
 		if (next === value) return;
 		if (!(await todoUpdates.updateTodo(todoId, { responsibility: next as TodoResponsibility })))
@@ -18,7 +22,10 @@
 	onValueChange={(next) => void change(next)}
 	disabled={todoUpdates.isPending(todoId)}
 >
-	<Select.Trigger size="sm" aria-label="Todo responsibility"
+	<Select.Trigger
+		size="sm"
+		aria-label="Todo responsibility"
+		class={quiet ? 'field-quiet' : undefined}
 		>{value === 'mine' ? 'Mine' : 'Waiting on'}</Select.Trigger
 	>
 	<Select.Content

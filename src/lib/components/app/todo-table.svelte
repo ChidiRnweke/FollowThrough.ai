@@ -72,8 +72,10 @@
 	{/each}
 </div>
 
-<div class="relative hidden max-w-full overflow-x-auto md:block">
-	<Table.Root class="min-w-5xl">
+<!-- No forced minimum wider than the canvas: the previous `min-w-5xl` inside a
+     `max-w-5xl` shell guaranteed a scrollbar no matter how much room was free. -->
+<div class="relative hidden max-w-full overflow-x-auto md:block" data-todo-table-scroll>
+	<Table.Root class="min-w-2xl">
 		<Table.Header class="sticky top-0 z-10 bg-background">
 			<Table.Row>
 				<Table.Head class="eyebrow">Todo</Table.Head>
@@ -113,16 +115,23 @@
 							{projectNames.get(view.todo.projectId) ?? '—'}
 						</Table.Cell>
 					{/if}
-					<Table.Cell><TodoStatusField todoId={view.todo.id} value={view.todo.status} /></Table.Cell
+					<!-- Metadata cells stay quiet so the title column keeps priority; the
+					     controls surface on hover rather than every row humming at once. -->
+					<Table.Cell
+						><TodoStatusField todoId={view.todo.id} value={view.todo.status} quiet /></Table.Cell
 					>
 					<Table.Cell
-						><TodoPriorityField todoId={view.todo.id} value={view.todo.priority} /></Table.Cell
+						><TodoPriorityField
+							todoId={view.todo.id}
+							value={view.todo.priority}
+							quiet
+						/></Table.Cell
 					>
 					<Table.Cell
-						><TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} /></Table.Cell
+						><TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} quiet /></Table.Cell
 					>
 					<Table.Cell>
-						<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
+						<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} quiet />
 						{#if view.todo.responsibility === 'waiting_on' && view.todo.waitingOn}
 							<p class="provenance-caption mt-1">{view.todo.waitingOn}</p>
 						{/if}
@@ -134,6 +143,7 @@
 							value={view.todo.linkedNoteId}
 							sourceTitle={view.sourceNote?.title}
 							hasOrigin={view.originNote !== undefined}
+							quiet
 							{notes}
 						/></Table.Cell
 					>

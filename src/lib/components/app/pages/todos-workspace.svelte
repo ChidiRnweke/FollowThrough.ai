@@ -58,10 +58,7 @@
 		void goto(`${basePath}?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
 
-	const responsibility = $derived(page.url.searchParams.get('responsibility'));
-	const detail = $derived(
-		page.url.searchParams.get('detail') === 'detailed' ? 'detailed' : 'basic'
-	);
+	const responsibility = $derived(page.url.searchParams.get('responsibility') ?? 'all');
 
 	let addingListTodo = $state(false);
 	let listTitle = $state('');
@@ -76,119 +73,108 @@
 	}
 </script>
 
-<div
-	class="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center"
->
-	<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
-		<Tabs.List>
-			<Tabs.Trigger value="board">Board</Tabs.Trigger>
-			<Tabs.Trigger value="list">List</Tabs.Trigger>
-		</Tabs.List>
-	</Tabs.Root>
-	{#if view === 'board'}
-		<ToggleGroup.Root
-			type="single"
-			value={detail}
-			onValueChange={(value) => setParam('detail', value === 'detailed' ? 'detailed' : undefined)}
-			aria-label="Board detail"
-		>
-			<ToggleGroup.Item value="basic">Basic</ToggleGroup.Item>
-			<ToggleGroup.Item value="detailed">Detailed</ToggleGroup.Item>
-		</ToggleGroup.Root>
-	{/if}
-	<div class="flex flex-wrap items-center gap-1">
-		{#if projects && projects.length > 0}
-			<Select.Root
-				type="single"
-				value={projectFilter}
-				onValueChange={(value) => setParam('projectId', value === '' ? undefined : value)}
-			>
-				<Select.Trigger class="h-11 w-full sm:h-8 sm:w-44" size="sm" aria-label="Filter by project">
-					{projectFilterLabel}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="">All projects</Select.Item>
-					{#each projects as project (project.id)}
-						<Select.Item value={project.id}>{project.name}</Select.Item>
-					{/each}
-				</Select.Content>
-			</Select.Root>
-		{/if}
-		<Button
-			variant={responsibility === null ? 'secondary' : 'ghost'}
-			size="sm"
-			onclick={() => setParam('responsibility')}
-		>
-			All
-		</Button>
-		<Button
-			variant={responsibility === 'mine' ? 'secondary' : 'ghost'}
-			size="sm"
-			onclick={() => setParam('responsibility', 'mine')}
-		>
-			Mine
-		</Button>
-		<Button
-			variant={responsibility === 'waiting_on' ? 'secondary' : 'ghost'}
-			size="sm"
-			onclick={() => setParam('responsibility', 'waiting_on')}
-		>
-			Waiting on
-		</Button>
-	</div>
-</div>
-
-{#if view === 'list'}
-	{#if todos.length === 0}
-		<div class="flex flex-col items-center justify-center gap-2 py-16 text-center">
-			<p class="text-sm text-muted-foreground">
-				No todos yet. Capture a promise from a note or add one from the board.
-			</p>
-			<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
-				Add a todo on the board
-			</Button>
-		</div>
-	{:else}
-		<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
-		<div class="mt-1">
-			{#if addingListTodo}
-				<div class="flex items-center gap-1">
-					<Input
-						autofocus
-						placeholder="Todo title…"
-						bind:value={listTitle}
-						onkeydown={(e) => {
-							if (e.key === 'Escape') addingListTodo = false;
-							if (e.key === 'Enter') void addListTodo();
-						}}
-					/>
-					<Button size="sm" onclick={() => void addListTodo()}>Add</Button>
-					<Button size="sm" variant="ghost" onclick={() => (addingListTodo = false)}>Cancel</Button>
-				</div>
-			{:else}
-				<Button
-					variant="ghost"
-					size="sm"
-					class="text-muted-foreground hover:text-foreground"
-					onclick={() => {
-						addingListTodo = true;
-						listTitle = '';
-					}}
+<!-- The controls sit closer to the surface they act on than to the page header,
+     so they read as belonging to the board rather than floating between the two. -->
+<div class="flex flex-col gap-4">
+	<div
+		class="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+	>
+		<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
+			<Tabs.List>
+				<Tabs.Trigger value="board">Board</Tabs.Trigger>
+				<Tabs.Trigger value="list">List</Tabs.Trigger>
+			</Tabs.List>
+		</Tabs.Root>
+		<div class="flex flex-wrap items-center gap-2">
+			{#if projects && projects.length > 0}
+				<Select.Root
+					type="single"
+					value={projectFilter}
+					onValueChange={(value) => setParam('projectId', value === '' ? undefined : value)}
 				>
-					<Plus class="size-3.5" />
-					Add todo
-				</Button>
+					<Select.Trigger
+						class="h-11 w-full sm:h-8 sm:w-44"
+						size="sm"
+						aria-label="Filter by project"
+					>
+						{projectFilterLabel}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="">All projects</Select.Item>
+						{#each projects as project (project.id)}
+							<Select.Item value={project.id}>{project.name}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
 			{/if}
+			<!-- Same segmented species as the view switcher; position, not styling,
+			     is what distinguishes filtering from switching surface. -->
+			<ToggleGroup.Root
+				type="single"
+				value={responsibility}
+				onValueChange={(value) =>
+					setParam('responsibility', value === '' || value === 'all' ? undefined : value)}
+				aria-label="Filter by responsibility"
+			>
+				<ToggleGroup.Item value="all">All</ToggleGroup.Item>
+				<ToggleGroup.Item value="mine">Mine</ToggleGroup.Item>
+				<ToggleGroup.Item value="waiting_on">Waiting on</ToggleGroup.Item>
+			</ToggleGroup.Root>
 		</div>
+	</div>
+
+	{#if view === 'list'}
+		{#if todos.length === 0}
+			<div class="flex flex-col items-center justify-center gap-2 py-16 text-center">
+				<p class="text-sm text-muted-foreground">
+					No todos yet. Capture a promise from a note or add one from the board.
+				</p>
+				<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
+					Add a todo on the board
+				</Button>
+			</div>
+		{:else}
+			<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
+			<div class="mt-1">
+				{#if addingListTodo}
+					<div class="flex items-center gap-1">
+						<Input
+							autofocus
+							placeholder="Todo title…"
+							bind:value={listTitle}
+							onkeydown={(e) => {
+								if (e.key === 'Escape') addingListTodo = false;
+								if (e.key === 'Enter') void addListTodo();
+							}}
+						/>
+						<Button size="sm" onclick={() => void addListTodo()}>Add</Button>
+						<Button size="sm" variant="ghost" onclick={() => (addingListTodo = false)}
+							>Cancel</Button
+						>
+					</div>
+				{:else}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="text-muted-foreground hover:text-foreground"
+						onclick={() => {
+							addingListTodo = true;
+							listTitle = '';
+						}}
+					>
+						<Plus class="size-3.5" />
+						Add todo
+					</Button>
+				{/if}
+			</div>
+		{/if}
+	{:else}
+		<KanbanBoard
+			{todos}
+			{projectId}
+			projectNames={projects ? projectNames : undefined}
+			onopen={open}
+			onmove={(id, status) => void move(id, status)}
+		/>
 	{/if}
-{:else}
-	<KanbanBoard
-		{todos}
-		{projectId}
-		projectNames={projects ? projectNames : undefined}
-		{notes}
-		{detail}
-		onopen={open}
-		onmove={(id, status) => void move(id, status)}
-	/>
-{/if}
+</div>

@@ -60,57 +60,64 @@
 						multiline
 					/>{/key}
 			</Field.Field>
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Status</Field.FieldLabel>
-				<TodoStatusField todoId={view.todo.id} value={view.todo.status} />
-			</Field.Field>
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Priority</Field.FieldLabel>
-				<TodoPriorityField todoId={view.todo.id} value={view.todo.priority} />
-			</Field.Field>
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Due date</Field.FieldLabel>
-				<TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} />
-			</Field.Field>
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Responsibility</Field.FieldLabel>
-				<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
-			</Field.Field>
+		</Field.FieldGroup>
+
+		<!-- A property list, not a form. `Field`'s responsive orientation switches at
+		     the @md/field-group container query (448px), which this panel (max-w-sm,
+		     384px) can never reach — so every row stacked label-above-input. An
+		     explicit grid gives the label/value reading the width actually allows. -->
+		<dl class="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-sm">
+			<dt class="text-muted-foreground">Status</dt>
+			<dd><TodoStatusField todoId={view.todo.id} value={view.todo.status} quiet /></dd>
+
+			<dt class="text-muted-foreground">Priority</dt>
+			<dd><TodoPriorityField todoId={view.todo.id} value={view.todo.priority} quiet /></dd>
+
+			<dt class="text-muted-foreground">Due date</dt>
+			<dd><TodoDueDateField todoId={view.todo.id} value={view.todo.dueDate} quiet /></dd>
+
+			<dt class="text-muted-foreground">Responsibility</dt>
+			<dd>
+				<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} quiet />
+			</dd>
+
 			{#if view.todo.responsibility === 'waiting_on'}
-				<Field.Field>
-					<Field.FieldLabel>Counterparty (optional)</Field.FieldLabel>
+				<dt class="text-muted-foreground">Counterparty</dt>
+				<dd>
 					{#key `${view.todo.id}-waiting-${view.todo.updatedAt}`}<TodoTextField
 							todoId={view.todo.id}
 							value={view.todo.waitingOn}
 							field="waitingOn"
 							label="Waiting on"
 						/>{/key}
-				</Field.Field>
+				</dd>
 			{/if}
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Source</Field.FieldLabel>
+
+			<dt class="text-muted-foreground">Source</dt>
+			<dd>
 				<TodoSourceField
 					todoId={view.todo.id}
 					projectId={view.todo.projectId}
 					value={view.todo.linkedNoteId}
 					sourceTitle={view.sourceNote?.title}
 					hasOrigin={view.originNote !== undefined}
+					quiet
 					{notes}
 				/>
-			</Field.Field>
+			</dd>
+
 			{#if view.sourceNote}
-				<Field.Field orientation="responsive">
-					<Field.FieldLabel>Open source</Field.FieldLabel>
-					<Button href="/notes/{view.sourceNote.id}" variant="link" size="sm"
+				<dt class="sr-only">Open source</dt>
+				<dd class="col-start-2">
+					<Button href="/notes/{view.sourceNote.id}" variant="link" size="sm" class="h-auto px-0"
 						>Open selected note<ExternalLink data-icon="inline-end" /></Button
 					>
-				</Field.Field>
+				</dd>
 			{/if}
-			<Field.Field orientation="responsive">
-				<Field.FieldLabel>Created</Field.FieldLabel>
-				<p class="text-sm text-muted-foreground">{created}</p>
-			</Field.Field>
-		</Field.FieldGroup>
+
+			<dt class="text-muted-foreground">Created</dt>
+			<dd class="text-muted-foreground">{created}</dd>
+		</dl>
 
 		{#if view.anchor}
 			<Separator />
@@ -138,11 +145,13 @@
 			onconfirm={() => remove(view.todo.id)}
 		>
 			{#snippet trigger(props)}
+				<!-- Neutral until pointed at: the confirm step carries the warning, so a
+				     permanently red control only competes with the todo's own content. -->
 				<Button
 					{...props}
 					variant="ghost"
 					size="sm"
-					class="self-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+					class="self-start text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
 					>Delete todo</Button
 				>
 			{/snippet}
