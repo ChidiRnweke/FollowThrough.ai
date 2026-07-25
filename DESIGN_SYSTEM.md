@@ -6,6 +6,14 @@
 - **Secondary styles and modifiers:** None. Forms, navigation, tables, and menus remain conventional.
 - **Ornament budget:** Zero decorative motifs. Use rules, type, and spacing instead of shadows or illustration.
 - **Color modes:** Preserve the existing semantic olive-neutral light and dark themes.
+- **Paper, not screen white:** Light-mode `--background`, `--card`, and `--popover` sit on the
+  stone hue rather than pure white, and `--sidebar` is held a step below them so the rail stays a
+  distinct surface. Dark mode is unchanged. Foreground and every other semantic token keep their
+  values; `--muted-foreground` was darkened only to clear AA against the new background.
+- **Surface rule — list before card:** A scannable collection of homogeneous rows is a borderless
+  divided list (hairline dividers plus the `row-interactive` hover wash), never a bordered card
+  wrapping bordered rows. Reserve a card for a surface holding heterogeneous content or its own
+  actions. Nesting same-weight rectangles is the failure mode this rule exists to prevent.
 - **Product mark:** FollowThrough uses a flat teal tile with a continuous white F-to-check path.
   It replaces framework placeholder branding without adding gradients, shadows, or a broader
   ornament system.
@@ -26,7 +34,13 @@
 ## Tokens and composition
 
 - Colors must use the semantic OKLCH tokens in `src/routes/layout.css`; do not introduce raw Tailwind palette colors.
-- Inter is the display and body face, JetBrains Mono is reserved for code, and the note title uses the `note-title` typography utility.
+- **Faces:** Inter is the body, chrome, and metadata face. Newsreader is the display face and
+  reaches the page _only_ through the `page-title` and `note-title` utilities — never through
+  `font-serif` applied by hand, and never on chrome, controls, or metadata. JetBrains Mono stays
+  reserved for code. The base-layer `h1..h6` rule deliberately stays Inter so section headings,
+  dialog titles, and settings groups do not inherit the display face.
+- **Rejected on purpose:** monospace metadata (dates, counts, provenance) was considered and
+  rejected — it reads as a developer tool and breaks the mono-means-code rule.
 - **Chrome legibility floor:** primary navigation never renders below `sm` — the workspace tab
   strip (40px tall, `sm` labels), the sidebar wordmark (`base`/semibold beside the mark), and the
   empty-strip placeholder are chrome-scale exceptions, not content captions. `xs` is reserved for
@@ -62,6 +76,15 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 
 - **Todos:** Progressive disclosure combines three familiar work surfaces. Basic Kanban is the default scanning view; Detailed Kanban exposes committed metadata edits in place; List is a compact editable matrix; the independent right panel is the complete master-detail editor. Board detail and board/list mode stay URL-addressable. Editable popovers must not resize cards or rows, and provenance remains separate from the user-selected source.
 - **Project resources:** Todos, Memory, Artifacts, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.
+- **Project overview:** The four spaces are grouped by what they do for you — what the project
+  produced versus what the agent works from — rather than listed as four equal nouns. A space that
+  is empty states its purpose through a rotating tip instead of showing a zero, and every tip must
+  describe behaviour the code actually has. Tips are chosen in the loader, never at render time.
+- **Grouping is spacing and similarity, not more rules.** On the overview the spaces cluster at
+  base size with no dividers while the documents list uses `sm` rows and hairlines, so the two read
+  as different kinds of thing. Gaps step 8px inside a group → 24px between groups → a further step
+  before the documents list. Equal gaps and repeated dividers flatten a page into peer sections
+  however well its content is grouped.
 - Todo controls use the existing flat shadcn Select, Popover, Calendar, Command, Input, and Textarea components. Selection commits immediately; text commits on blur or Enter and restores its saved value on Escape or failure. Saving and errors are announced without a manual Save button.
 
 - **Notes:** Document pattern. A quiet utility row precedes a prominent title and one continuous rich-text surface. The authored body uses the wider `note-measure` reading width and fills the remaining viewport.

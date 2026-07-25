@@ -5,6 +5,8 @@
 ## identity
 
 - theme: stone(hue~~107) neutrals + teal(hue~~186) primary. one accent.
+- light surfaces = paper, not white: bg/card/popover on stone hue, --sidebar held a step below. dark unchanged. muted-fg darkened only to clear AA vs paper
+- surface rule: homogeneous scannable rows = borderless divided list (hairline + row-interactive wash). card ONLY for heterogeneous content or self-owned actions. never card-wrapping-bordered-rows
 - principles: color=information | chrome-defers-to-document | data=gray
 - teal=interactive/primary + identity accents (active nav, selected segment, provenance chips, product mark). red=destructive-only. all else gray.
 - brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always in sidebar header.
@@ -28,20 +30,23 @@
 
 ## tokens.type
 
-- font-sans: Inter Variable — everything. hierarchy via size/weight/color, not typeface
+- font-sans: Inter Variable — body, chrome, metadata, controls. hierarchy via size/weight/color
+- font-serif: Newsreader Variable — DISPLAY ONLY, reached solely via `page-title`/`note-title` utilities. never hand-applied, never chrome/metadata. base h1..h6 stays Inter
 - font-mono: JetBrains Mono. code, mermaid/drawio source, inline code, IDs, URLs. ligatures: off editable, ok read-only
+- REJECTED (do not relitigate): mono metadata — reads as developer tool, breaks mono=code
 - NAMED SCALE (layout.css utilities — no raw heading size classes in app code):
-  - `page-title` 2xl/600/tight — one per page (page-shell h1 + custom-header pages)
+  - `page-title` 3xl/500/serif/tight — one per page (page-shell h1 + custom-header pages)
   - `section-title` base/600/tight — real content sections (settings groups, skill editor sections)
   - `eyebrow` xs/500/uppercase/wide/muted-fg — labels a GROUP of items below it (list-group labels, table heads, kanban column headers)
   - `provenance-caption` xs/muted-fg — annotates ONE item (timestamps, provenance)
-  - body sm (base) · `note-title` clamp/700 (note editor only)
+  - body sm (base) · `note-title` clamp/600/serif (note editor only)
 - form labels: shadcn `Label` (and `Field.FieldLabel`) = xs/500/muted-fg — label recedes, value leads. `Field.Title` stays sm/500 fg over `Field.Description` xs/muted (settings rows). override per-site if a dialog label needs prominence
-- ladder: eyebrow/caption (xs) → body (sm) → section-title (base) → page-title (2xl) → note-title (clamp)
+- ladder: eyebrow/caption (xs) → body (sm) → section-title (base) → page-title (3xl) → note-title (clamp)
+- project-overview resource rows sit at base/500 — one step above the sm documents list, because a space outranks a document
 - exceptions: right-panel + drawio chrome-bar titles, sidebar brand = chrome, not content scale
 - chrome legibility floor: primary nav never below sm — workspace tab strip (h-10, sm labels), sidebar wordmark (base/semibold), empty-strip placeholder. xs=eyebrow/provenance only
 - prose(editor): 16px, lh~1.7, @tailwindcss/typography mapped to tokens (links→primary, quotes→border, code-bg→muted)
-- headings: w600; w700 note-title only; tracking −0.01/−0.02em ≥20px
+- headings: w600 (Inter); display titles w500/w600 serif; tracking −0.01/−0.02em ≥20px
 
 ## tokens.shape+density
 

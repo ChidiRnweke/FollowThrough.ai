@@ -27,18 +27,20 @@
 
 <li>
 	<!-- min-h-11 keeps the 44px touch target the box padding used to provide. -->
-	<a {href} class="row-interactive flex min-h-11 items-center gap-3 px-3 py-2.5">
+	<a {href} class="row-interactive flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5">
 		<!-- Brand-wash icon chip — the canonical recipe, and the one identity cue
 		     that survives the loss of the tile. -->
 		<span
-			class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
+			class="flex size-9 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
 		>
-			<Icon class="size-4" />
+			<Icon class="size-[1.125rem]" />
 		</span>
-		<span class="flex min-w-0 flex-col">
-			<span class="truncate text-sm font-medium">{label}</span>
+		<span class="flex min-w-0 flex-col gap-0.5">
+			<!-- A space outranks a document, so it sits one step up the ladder: base
+			     against the documents list's sm. -->
+			<span class="truncate text-base font-medium">{label}</span>
 			{#if tip}
-				<span class="provenance-caption truncate">{tip}</span>
+				<span class="truncate text-sm text-muted-foreground">{tip}</span>
 			{/if}
 		</span>
 		{#if state}

@@ -84,6 +84,7 @@
 			counts={data.counts}
 			overdueTodoCount={data.overdueTodoCount}
 			tipSeed={data.tipSeed}
+			renderedAt={data.renderedAt}
 			oncreatenote={() => (newNoteOpen = true)}
 		/>
 	</PageShell>

@@ -185,8 +185,11 @@ export function formatDateTime(dateTime: DateTime): string {
 
 const relativeFormatter = new Intl.RelativeTimeFormat('en-GB', { numeric: 'auto' });
 
-export function formatRelativeTime(dateTime: DateTime): string {
-	const seconds = Math.round((new Date(dateTime).getTime() - Date.now()) / 1000);
+// `now` lets a server-rendered relative time be formatted against the instant the
+// loader captured. Reading the clock here during both the SSR pass and hydration
+// yields two different strings and a hydration mismatch.
+export function formatRelativeTime(dateTime: DateTime, now: number = Date.now()): string {
+	const seconds = Math.round((new Date(dateTime).getTime() - now) / 1000);
 	const minutes = Math.round(seconds / 60);
 	const hours = Math.round(minutes / 60);
 	const days = Math.round(hours / 24);

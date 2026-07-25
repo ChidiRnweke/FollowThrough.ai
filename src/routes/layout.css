@@ -323,7 +323,7 @@
    instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
    → body (sm) → section-title (base) → page-title (2xl) → note-title (clamp). */
 @utility page-title {
-	@apply font-serif text-2xl font-medium tracking-tight;
+	@apply font-serif text-3xl font-medium tracking-tight;
 }
 
 @utility section-title {

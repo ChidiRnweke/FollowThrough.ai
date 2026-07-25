@@ -34,6 +34,7 @@
 		counts,
 		overdueTodoCount = 0,
 		tipSeed = 0,
+		renderedAt,
 		oncreatenote
 	}: {
 		view: GetProjectOutput;
@@ -41,8 +42,13 @@
 		overdueTodoCount?: number;
 		// Comes from the loader so SSR and hydration pick the same tips.
 		tipSeed?: number;
+		// The loader's instant — every relative timestamp formats against it so the
+		// two first renders agree.
+		renderedAt: string;
 		oncreatenote?: () => void;
 	} = $props();
+
+	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
 	let renameEntryOpen = $state(false);
@@ -119,10 +125,16 @@
 	what the project has produced, two are what the agent reasons from. The
 	headings carry the meaning so the rows themselves stay quiet.
 -->
+<!--
+	Spacing carries the grouping: 8px inside a group, 24px between the two groups,
+	and the documents list is pushed a further step away below. Dividers are
+	deliberately absent here — the documents list uses them, so withholding them
+	is what stops four spaces from reading as five more documents.
+-->
 <nav class="flex flex-col gap-6" aria-label="Project spaces">
 	<section class="flex flex-col gap-2">
 		<h2 class="eyebrow">Produced here</h2>
-		<ul class="-mx-3 divide-y divide-border border-t border-border">
+		<ul class="-mx-3 flex flex-col">
 			<ResourceRow
 				href="/projects/{project.id}/todos"
 				label="Todos"
@@ -141,7 +153,7 @@
 	</section>
 	<section class="flex flex-col gap-2">
 		<h2 class="eyebrow">What the agent works from</h2>
-		<ul class="-mx-3 divide-y divide-border border-t border-border">
+		<ul class="-mx-3 flex flex-col">
 			<ResourceRow
 				href="/projects/{project.id}/memory"
 				label="Memory"
@@ -205,7 +217,7 @@
 				{/if}
 				<span class="min-w-0 flex-1 truncate">{node.entry.title}</span>
 				<span class="provenance-caption shrink-0">
-					{formatRelativeTime(node.entry.updatedAt)}
+					{formatRelativeTime(node.entry.updatedAt, now)}
 				</span>
 			</a>
 		{/if}
@@ -250,7 +262,7 @@
 		icon={FileText}
 		title="Nothing here yet."
 		hint="Notes you write in this project show up here."
-		class="rounded-lg border border-dashed border-border py-16"
+		class="py-16"
 	>
 		{#snippet action()}
 			<Button size="sm" onclick={oncreatenote}>
@@ -264,7 +276,9 @@
 		A borderless divided list, not a card: the rows are homogeneous and
 		scannable, so hairlines and hover carry the structure on their own.
 	-->
-	<section class="flex flex-col gap-3" aria-label="Documents">
+	<!-- pt-6 on top of the shell's own gap puts a clear step between the spaces
+	     cluster above and the documents list — the two are different in kind. -->
+	<section class="flex flex-col gap-3 pt-6" aria-label="Documents">
 		<div class="flex items-baseline justify-between gap-3">
 			<h2 class="eyebrow">
 				Documents · {countEntries(view.tree)}

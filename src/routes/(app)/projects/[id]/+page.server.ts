@@ -27,6 +27,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		view,
 		overdueTodoCount,
+		// The documents list renders relative timestamps. Both the SSR pass and
+		// hydration format against this one instant so their markup matches.
+		renderedAt: new Date().toISOString(),
 		// Chosen once, on the server, and serialised: a seed drawn at render time
 		// would differ between the SSR pass and hydration.
 		tipSeed: Math.floor(Math.random() * 1000),
