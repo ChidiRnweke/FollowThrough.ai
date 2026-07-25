@@ -104,6 +104,14 @@ export const agentToolCoverage = {
 	},
 	todos: {
 		list: { kind: 'read' },
+		get: {
+			kind: 'excluded',
+			reason: 'Reading one todo adds nothing over list, which already returns the same fields.'
+		},
+		count: {
+			kind: 'excluded',
+			reason: 'Counts serve the context bar; the agent reads todos through list.'
+		},
 		create: { kind: 'mutation' },
 		update: { kind: 'mutation' },
 		remove: {

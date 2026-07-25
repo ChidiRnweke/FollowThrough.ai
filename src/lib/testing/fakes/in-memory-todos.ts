@@ -33,6 +33,10 @@ export class InMemoryTodos
 {
 	todos: Todo[] = [];
 
+	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
+		return (await this.list(actor, filter)).length;
+	}
+
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
 		if (!input.projectId) throw new ValidationError('Todo project is required');
 		if (!input.title.trim()) throw new ValidationError('Todo title is required');

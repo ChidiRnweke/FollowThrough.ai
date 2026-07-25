@@ -34,6 +34,7 @@ export interface TodoSourceFinder {
 }
 export interface TodoLister {
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
+	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
 }
 export interface TodoViewAssembler {
 	assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]>;

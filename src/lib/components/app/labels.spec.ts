@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, todoStatusStyle, attachmentStatusStyle } from './labels';
+import { agentCapabilityCopy, formatBytes, todoStatusStyle, attachmentStatusStyle } from './labels';
 
 describe('formatBytes', () => {
 	it('reports whole bytes without a decimal', () => {
@@ -44,5 +44,27 @@ describe('attachmentStatusStyle', () => {
 
 	it('marks processing as warning', () => {
 		expect(attachmentStatusStyle('processing').dotClass).toBe('bg-warning');
+	});
+});
+
+describe('agentCapabilityCopy', () => {
+	it('lists only what the agent reads before it answers', () => {
+		expect(Object.keys(agentCapabilityCopy).sort()).toEqual([
+			'attachments',
+			'memory',
+			'notes',
+			'todos'
+		]);
+	});
+
+	it('leaves artifacts out, because the agent writes them rather than reading them', () => {
+		expect(agentCapabilityCopy).not.toHaveProperty('artifacts');
+	});
+
+	it('explains every capability, since each one shows its line on hover at any count', () => {
+		const explained = Object.values(agentCapabilityCopy).every(
+			(copy) => copy.teaches.length > 0 && copy.action.length > 0
+		);
+		expect(explained).toBe(true);
 	});
 });

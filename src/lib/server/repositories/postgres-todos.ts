@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, lte, type SQL } from 'drizzle-orm';
 import type { ActorContext, Todo, TodoId, TodoListFilter } from '$lib/models';
 import { NotFoundError } from '$lib/models';
 import type { TodoRepository } from '$lib/repositories/todos';
@@ -24,7 +24,15 @@ export class PostgresTodoRepository implements TodoRepository {
 		return row ? toTodo(row.todo) : undefined;
 	}
 
-	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
+	/**
+	 * Shared predicate for `list` and `count`. Returns undefined when the filter
+	 * cannot match anything — a note with no source anchors — so callers skip the
+	 * second query entirely.
+	 */
+	private async conditionsFor(
+		actor: ActorContext,
+		filter: TodoListFilter
+	): Promise<SQL[] | undefined> {
 		const conditions = [
 			eq(schema.todos.userId, actor.userId),
 			isNull(schema.todos.deletedAt),
@@ -43,7 +51,7 @@ export class PostgresTodoRepository implements TodoRepository {
 				.where(
 					and(eq(schema.sourceAnchors.noteId, filter.noteId), eq(schema.notes.userId, actor.userId))
 				);
-			if (anchors.length === 0) return [];
+			if (anchors.length === 0) return undefined;
 			conditions.push(
 				inArray(
 					schema.todos.sourceAnchorId,
@@ -51,6 +59,12 @@ export class PostgresTodoRepository implements TodoRepository {
 				)
 			);
 		}
+		return conditions;
+	}
+
+	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
+		const conditions = await this.conditionsFor(actor, filter);
+		if (!conditions) return [];
 		return (
 			await this.database
 				.select({ todo: schema.todos })
@@ -59,6 +73,17 @@ export class PostgresTodoRepository implements TodoRepository {
 				.where(and(...conditions))
 				.orderBy(asc(schema.todos.dueDate), desc(schema.todos.updatedAt))
 		).map((row) => toTodo(row.todo));
+	}
+
+	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
+		const conditions = await this.conditionsFor(actor, filter);
+		if (!conditions) return 0;
+		const [row] = await this.database
+			.select({ total: count() })
+			.from(schema.todos)
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.todos.projectId))
+			.where(and(...conditions));
+		return row?.total ?? 0;
 	}
 
 	async insert(actor: ActorContext, todo: Todo): Promise<Todo> {

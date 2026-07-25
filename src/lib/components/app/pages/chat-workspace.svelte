@@ -2,6 +2,7 @@
 	import type { AgentModel, AgentPreferences, Conversation, ShellContext } from '$lib/models';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import ChatPanel from '$lib/components/app/panels/chat-panel.svelte';
+	import AgentSettingsPopover from '$lib/components/app/agent/agent-settings-popover.svelte';
 
 	let {
 		shell,
@@ -50,13 +51,15 @@
 				>
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
+		<div class="ml-auto">
+			<AgentSettingsPopover {agentModels} />
+		</div>
 	</header>
 	<div class="mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 py-4 md:px-8">
 		<ChatPanel
 			{shell}
 			{sessions}
 			{agentPreferences}
-			{agentModels}
 			{agentAvailable}
 			initialConversationId={conversation?.id ?? null}
 			activeNoteId={conversation?.contextNoteId}

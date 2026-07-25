@@ -122,6 +122,29 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 - User messages expose copy and edit-in-composer actions; assistant messages expose copy and retry when eligible. Retrying never duplicates the visible user turn.
 - Conversation origin is fixed on its first turn and distinct from context chips added later. Full-page chats link back through project/note breadcrumbs.
 - Auto-scroll only while the reader is at the latest turn; preserve their position when they scroll upward.
+- The empty thread teaches before it lists. Route-aware starters name an action with a destination
+  ("extract commitments into todos"), never a bare question — they are the only place the panel can
+  show that the agent writes as well as answers. Recent chats sit below them, not above. Both groups
+  are borderless divided rows, never filled or outlined buttons: three pill buttons stacked in a
+  384px column read as a form, and nothing else in the app looks like that. Starters stay short
+  enough to hold one line at panel width.
+- The panel does not narrate its own context mechanics. "The open note travels along, type @ to add
+  more" was prose describing what the dismissible context chip above the composer and the composer
+  placeholder already show; the chip is the explanation.
+- Recent chats in the panel are one line each — title and time — and show three. `/chats` keeps the
+  fuller row where project/note origin is the reason to look. Five remains the panel's cap.
+- **Agent context bar:** one plain-language sentence above the thread naming the scope ("Before it
+  answers, the agent reads what is in Inbox:") followed by a quiet row of text links with counts,
+  including zero. It is written for someone who knows nothing about how models work, so it says what
+  happens rather than naming a mechanism. Only the project name carries the brand accent; the items
+  are muted text with a hairline icon, never chips or washes. Every item explains itself on hover at
+  any count. Artifacts are deliberately absent: they are the agent's output and are not indexed, so
+  they belong to the project overview's "Produced here" group. Navigating re-derives the row with a
+  short staggered re-entry, so a change of project reads as the agent re-orienting rather than as a
+  number quietly changing.
+- Execution mode stays visible in the composer. Auto-accept lets the agent change notes and todos
+  without asking; a mode that consequential is not a preference to hide behind a settings popover.
+  Model choice and prompt preferences, which are set once, do belong there.
 
 ## Anti-patterns
 
@@ -133,6 +156,11 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 - Do not render a chip, badge, or control for a value that is not set. An empty field shows nothing
   on a card and an em dash in the property panel; a column of "No due date / No priority / No
   source" is noise that reads as content.
+  - The one exception is the agent context bar, where a capability renders at zero. There the count
+    is not the point: `Memory 0` with its hover explanation is the only moment a user has a reason
+    to learn that project memory exists, so the empty state is doing the teaching. This holds only
+    for capabilities the agent reads, and only in that bar — it is not a licence to render empty
+    values anywhere else.
 - Do not repeat the page title as the trailing breadcrumb crumb. The breadcrumb carries ancestors
   and the exit path; the `h1` names the current page.
 - Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.

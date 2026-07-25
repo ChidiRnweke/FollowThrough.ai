@@ -34,6 +34,7 @@ import type {
 export interface TodosController {
 	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
 	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
+	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
 	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
 	remove(actor: ActorContext, todoId: TodoId): Promise<void>;
@@ -66,6 +67,9 @@ export class DefaultTodosController implements TodosController {
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput> {
 		const todos = await this.dependencies.todoLister.list(actor, filter);
 		return { todos: await this.dependencies.todoViewAssembler.assemble(actor, todos) };
+	}
+	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
+		return this.dependencies.todoLister.count(actor, filter);
 	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
 		const todo = await this.dependencies.todoCreator.create(actor, input);

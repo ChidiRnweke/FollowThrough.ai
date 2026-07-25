@@ -53,6 +53,37 @@ export function toolStatusLabel(tool: ChatToolActivity): string {
 	return friendlyToolLabel(tool.name);
 }
 
+/** Tools that change something the user owns, as opposed to just reading it. */
+const writeTools = new Set([
+	'save_note',
+	'publish_note',
+	'discard_note_draft',
+	'create_note',
+	'rename_note',
+	'archive_note',
+	'create_project',
+	'rename_project',
+	'archive_project',
+	'create_todo',
+	'update_todo',
+	'generate_document',
+	'delete_artifact',
+	'regenerate_artifact'
+]);
+
+export const isWriteTool = (name: string): boolean => writeTools.has(name);
+
+/**
+ * What to show when a tool row is expanded. The disclosure used to repeat its own
+ * trigger label, which told the user nothing they could not already see — so a
+ * failure, otherwise the arguments the tool actually ran with.
+ */
+export function toolDetailLines(tool: ChatToolActivity): string[] {
+	if (tool.failure) return [tool.failure];
+	const summaries = scalarSummaries(tool.arguments);
+	return summaries.length > 0 ? summaries : ['No arguments.'];
+}
+
 export function scalarSummaries(arguments_: Readonly<Record<string, unknown>>): string[] {
 	return Object.entries(arguments_)
 		.filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))

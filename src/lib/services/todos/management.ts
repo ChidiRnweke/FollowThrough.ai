@@ -124,6 +124,9 @@ export class TodoManagementService
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
 		return this.todos.list(actor, filter);
 	}
+	count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
+		return this.todos.count(actor, filter);
+	}
 	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]> {
 		return this.list(actor, { dueBefore: through as TodoListFilter['dueBefore'] });
 	}

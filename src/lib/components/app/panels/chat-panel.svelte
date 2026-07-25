@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import type {
-		AgentModel,
 		AgentPreferences,
 		Conversation,
 		NoteId,
@@ -11,7 +10,6 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import {
@@ -24,8 +22,11 @@
 		FtRefresh as RotateCcw,
 		FtStop as Square,
 		FtSkills as Wrench,
+		FtCheck as Check,
+		FtWorkflow as Workflow,
 		FtClose as X
 	} from '$lib/components/icons';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
@@ -33,13 +34,19 @@
 	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
-	import ModelPicker from '$lib/components/app/agent/model-picker.svelte';
-	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
+	import ChatStarters from '$lib/components/app/agent/chat-starters.svelte';
+	import AgentContextBar from '$lib/components/app/agent/agent-context-bar.svelte';
 	import ToolApprovalCard from '$lib/components/app/agent/tool-approval-card.svelte';
-	import { toolStatusLabel } from '$lib/components/app/agent/tool-presentation';
+	import {
+		isWriteTool,
+		toolDetailLines,
+		toolStatusLabel
+	} from '$lib/components/app/agent/tool-presentation';
+	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions.remote';
+	import { invalidateAll } from '$app/navigation';
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/chat-handoff';
 
 	let {
@@ -50,7 +57,6 @@
 		initialConversationId,
 		showHistory = true,
 		agentPreferences,
-		agentModels,
 		agentAvailable
 	}: {
 		shell?: ShellContext;
@@ -60,7 +66,6 @@
 		initialConversationId?: Conversation['id'] | null;
 		showHistory?: boolean;
 		agentPreferences: AgentPreferences;
-		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
 	} = $props();
 	$effect(() => chat.persistConversationChoices());
@@ -95,13 +100,18 @@
 	$effect(() => {
 		const node = viewport;
 		if (!node) return;
+		// Only a viewport that actually overflows can be scrolled away from, and only
+		// a thread with turns in it has a latest turn to jump to. Overflow alone was
+		// not enough: the empty state's own starters and history overflow the panel,
+		// which raised the button over a thread that had nothing below.
+		const scrollable = () => node.scrollHeight > node.clientHeight && chat.entries.length > 0;
 		const updatePosition = () => {
 			followingLatest = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
-			showJumpToLatest = !followingLatest;
+			showJumpToLatest = !followingLatest && scrollable();
 		};
 		const observer = new MutationObserver(() => {
 			if (followingLatest) node.scrollTo({ top: node.scrollHeight });
-			else showJumpToLatest = true;
+			else showJumpToLatest = scrollable();
 		});
 		node.addEventListener('scroll', updatePosition, { passive: true });
 		observer.observe(node, { childList: true, subtree: true, characterData: true });
@@ -257,9 +267,24 @@
 		const tray = workbench.focusedNoteId
 			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
 			: undefined;
-		const ok = tray ? await tray.decide(id as never, decision) : false;
+		// The tray only exists while a note pane is mounted. In the right panel there
+		// often is none, and routing through it there rejected every decision — so
+		// fall back to the controller, which is what the tray calls anyway.
+		const ok = tray ? await tray.decide(id as never, decision) : await decideDirectly(id, decision);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
+	}
+
+	async function decideDirectly(id: string, decision: 'accept' | 'reject'): Promise<boolean> {
+		try {
+			if (decision === 'accept') await acceptSuggestion({ suggestionId: id });
+			else await rejectSuggestion({ suggestionId: id });
+			chat.resolveSuggestion(id);
+			await invalidateAll();
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	async function handleApplyDiff(diffText: string): Promise<void> {
@@ -275,7 +300,22 @@
 	function requestRetry(entry: (typeof chat.entries)[number]): void {
 		void chat.retry(entry);
 	}
+
+	function useStarter(text: string): void {
+		prompt = text;
+		saveDraft();
+		textareaRef?.focus();
+	}
+
+	function toggleExecutionMode(): void {
+		chat.executionModeOverride =
+			chat.executionModeOverride === 'auto_accept' ? 'approval_required' : 'auto_accept';
+	}
 </script>
+
+{#snippet contextBar()}
+	<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
+{/snippet}
 
 {#snippet chipBadge(chip: ContextChip, auto: boolean)}
 	<Badge variant="secondary" class="max-w-44 gap-1 pr-1">
@@ -307,20 +347,52 @@
 			it.
 		</div>
 	{/if}
-	<ScrollArea class="min-h-0 flex-1 pr-2" bind:viewportRef={viewport}>
-		<div class="flex flex-col gap-3">
+
+	<!-- Above the transcript while a thread runs, and the first group of the empty
+	     state otherwise — where it has to be a flex sibling of the starters for the
+	     space between them to come from the panel's height rather than a number. -->
+	{#if chat.entries.length > 0}
+		{@render contextBar()}
+	{/if}
+	<ScrollArea class="min-h-0 flex-1 pr-2 " bind:viewportRef={viewport}>
+		<!-- `min-h-full` resolves because bits-ui's viewport is a flex column and its
+		     content child grows into it; it is what lets the empty state sink its
+		     history to the foot of the panel. -->
+		<div class="flex min-h-full flex-col gap-3">
 			{#if chat.entries.length === 0}
+				<!--
+					Groups held apart by spacing rather than boxes: what the agent can see,
+					what to set it to work on, and where you left off. The panel does not
+					explain in prose that the open note travels along — the context chip
+					above the composer and the placeholder show it.
+
+					Everything stacks from the head of the panel and the slack falls at the
+					foot, above the composer. Pushing the groups apart to fill the panel —
+					by a `lg:pt-32` or by `justify-between` — reads as a hole in the middle
+					rather than as air, because there is nothing between them to look at.
+					The steps do the grouping instead: 16px inside a group, 40px to the
+					starters, 56px down to history, which is the quietest thing here.
+				-->
+				<div class="flex flex-col gap-10">
+					<div>{@render contextBar()}</div>
+					<div>
+						<ChatStarters
+							hasNote={activeNoteId !== undefined}
+							hasProject={activeProjectId !== undefined}
+							onpick={useStarter}
+						/>
+					</div>
+				</div>
 				{#if showHistory && sessions.length > 0}
-					<ChatHistoryList
-						{sessions}
-						{shell}
-						onselect={(id) => void chat.switchToConversation(id)}
-					/>
-				{:else}
-					<p class="text-sm text-muted-foreground">
-						Ask about your projects, notes and todos. The open note and your selection travel along
-						— type <Kbd>@</Kbd> to add notes or invoke skills.
-					</p>
+					<div class="pt-14">
+						<ChatHistoryList
+							{sessions}
+							{shell}
+							limit={3}
+							density="compact"
+							onselect={(id) => void chat.switchToConversation(id)}
+						/>
+					</div>
 				{/if}
 			{/if}
 			{#each chat.entries as entry (entry.id)}
@@ -344,6 +416,15 @@
 									onclick={() => editMessage(entry)}
 								>
 									<Pencil />
+								</Button>
+							{:else if entry.status === 'completed' && entry.runId}
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									aria-label="Ask again"
+									onclick={() => requestRetry(entry)}
+								>
+									<RotateCcw />
 								</Button>
 							{/if}
 						</div>
@@ -369,7 +450,11 @@
 												{...props}
 												variant="ghost"
 												size="sm"
-												class="h-7 gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
+												class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
+													tool.name
+												)
+													? 'text-foreground'
+													: 'text-muted-foreground'}"
 											>
 												<ChevronRight
 													class="size-3.5 transition-transform duration-(--duration-micro)"
@@ -382,9 +467,11 @@
 										{/snippet}
 									</Collapsible.Trigger>
 									<Collapsible.Content>
-										<p class="pl-6 text-xs text-muted-foreground">
-											{tool.failure ?? toolStatusLabel(tool)}
-										</p>
+										<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
+											{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
+												<li class="break-words">{line}</li>
+											{/each}
+										</ul>
 									</Collapsible.Content>
 								</Collapsible.Root>
 							{/if}
@@ -445,18 +532,7 @@
 			{/each}
 		</div>
 	{/if}
-	<div class="flex flex-wrap items-center gap-2" aria-label="Chat model and execution mode">
-		<ModelPicker models={agentModels} bind:value={chat.modelOverride} allowDefault compact />
-		<ExecutionModeControl bind:value={chat.executionModeOverride} compact />
-		<Badge
-			variant="secondary"
-			class={chat.isStreaming && chat.connection !== 'connected' ? undefined : 'hidden'}
-			aria-live="polite"
-		>
-			{chat.connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
-		</Badge>
-	</div>
-	<div class="relative flex items-end gap-2">
+	<div class="relative flex flex-col gap-1">
 		{#if mentionCandidates.length > 0}
 			<div
 				class="absolute bottom-full left-0 z-50 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-md"
@@ -499,17 +575,56 @@
 			oninput={saveDraft}
 			disabled={!agentAvailable}
 		/>
-		<Button
-			size="icon"
-			aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
-			onclick={() => (chat.isStreaming ? void chat.stop() : void send())}
-			disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
-		>
-			{#if chat.isStreaming}
-				<Square />
-			{:else}
-				<SendHorizontal class="size-4" />
-			{/if}
-		</Button>
+		<div class="flex items-center gap-2">
+			<!--
+				Auto-accept lets the agent change notes and todos without asking, so it
+				stays legible in the composer rather than moving into the gear with the
+				model. Quiet when approval is required, accented when it is not.
+			-->
+			<Tip
+				text={chat.executionModeOverride === 'auto_accept'
+					? 'The agent applies changes without asking. Click to require approval.'
+					: 'The agent asks before it changes anything. Click to auto-accept.'}
+			>
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="xs"
+						aria-pressed={chat.executionModeOverride === 'auto_accept'}
+						class={chat.executionModeOverride === 'auto_accept'
+							? 'bg-brand/10 text-brand dark:bg-brand/15'
+							: 'text-muted-foreground'}
+						onclick={toggleExecutionMode}
+					>
+						{#if chat.executionModeOverride === 'auto_accept'}
+							<Workflow data-icon="inline-start" /> Auto-accept
+						{:else}
+							<Check data-icon="inline-start" /> Approval
+						{/if}
+					</Button>
+				{/snippet}
+			</Tip>
+			<Badge
+				variant="secondary"
+				class={chat.isStreaming && chat.connection !== 'connected' ? undefined : 'hidden'}
+				aria-live="polite"
+			>
+				{chat.connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
+			</Badge>
+			<Button
+				size="icon-sm"
+				class="ml-auto"
+				aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
+				onclick={() => (chat.isStreaming ? void chat.stop() : void send())}
+				disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
+			>
+				{#if chat.isStreaming}
+					<Square />
+				{:else}
+					<SendHorizontal class="size-4" />
+				{/if}
+			</Button>
+		</div>
 	</div>
 </div>

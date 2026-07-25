@@ -58,6 +58,50 @@ export const todoStatusEmptyCopy: Record<TodoStatus, string> = {
 	cancelled: 'Nothing called off.'
 };
 
+/**
+ * The agent's capabilities teach as much as they report, so each one carries a
+ * line explaining what the capability is and a way to start using it. Every one
+ * explains itself on hover, at any count: a zero is the only moment the user has
+ * a reason to learn the capability exists, and a non-zero one still has to say
+ * what those items do for an answer. See DESIGN_SYSTEM.md "Agent context bar".
+ *
+ * Artifacts are deliberately absent: they are what the agent has written, not
+ * something it reads, and they are not indexed for retrieval. They belong to the
+ * project overview's "Produced here" group instead.
+ */
+export interface CapabilityCopy {
+	readonly label: string;
+	/** One dry sentence — what this gives the agent. */
+	readonly teaches: string;
+	/** Label for the action inside the hover card. */
+	readonly action: string;
+}
+
+export const agentCapabilityCopy = {
+	memory: {
+		label: 'Memory',
+		teaches: 'Rules the agent follows in this project, like never suggesting a library you avoid.',
+		action: 'Manage memory'
+	},
+	attachments: {
+		label: 'Files',
+		teaches: 'Documents the agent can search and quote when you ask about them.',
+		action: 'Upload a file'
+	},
+	todos: {
+		label: 'Todos',
+		teaches: 'Open work in this project, which the agent can read and add to.',
+		action: 'See todos'
+	},
+	notes: {
+		label: 'Notes',
+		teaches: 'Notes in this project. The agent reads them to answer and to draft.',
+		action: 'See project'
+	}
+} as const satisfies Record<string, CapabilityCopy>;
+
+export type AgentCapability = keyof typeof agentCapabilityCopy;
+
 /** Semantic presentation for a status value: a dot, a badge wash, and an accent bar. */
 export interface StatusStyle {
 	/** Background utility for a small status dot, e.g. `bg-success`. */

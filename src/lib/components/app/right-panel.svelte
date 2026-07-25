@@ -13,6 +13,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { FtPlus as Plus, FtClose as X } from '$lib/components/icons';
+	import AgentSettingsPopover from './agent/agent-settings-popover.svelte';
 	import { chat } from '$lib/stores/chat.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
@@ -39,12 +40,21 @@
 		activeProjectId?: ProjectId;
 	} = $props();
 
-	const titles = {
-		chat: 'Chat',
+	// The landmark keeps a plain noun — an accessible name is how the panel is found
+	// in a landmark list, not where it makes its case. The heading is the case: the
+	// surface drives an agent that writes notes, todos and memory, and "Agent" alone
+	// let it read as a chatbot.
+	const landmarkTitles = {
+		chat: 'Agent',
 		'todo-detail': 'Todo',
 		'project-memory': 'Project memory',
 		suggestions: 'Suggestions',
 		closed: ''
+	} as const;
+
+	const headings = {
+		...landmarkTitles,
+		chat: 'Let FollowThrough act'
 	} as const;
 
 	const open = $derived(rightPanel.mode !== 'closed');
@@ -59,33 +69,38 @@
 	});
 </script>
 
+{#snippet chatHeaderActions()}
+	<AgentSettingsPopover {agentModels} />
+	<Tip text="New chat">
+		{#snippet children({ props })}
+			<Button
+				{...props}
+				variant="ghost"
+				size="icon-sm"
+				aria-label="New chat"
+				onclick={() => chat.clear()}
+			>
+				<Plus data-icon />
+			</Button>
+		{/snippet}
+	</Tip>
+{/snippet}
+
 {#if docked.current}
 	<aside
 		class="flex shrink-0 overflow-hidden rounded-xl bg-sidebar transition-[width,margin] duration-(--duration-panel) ease-(--ease-standard) {open
 			? 'my-2 mr-2 w-96 ring-1 ring-foreground/10'
 			: 'my-0 mr-0 w-0 ring-0'}"
-		aria-label={titles[renderedMode]}
+		aria-label={landmarkTitles[renderedMode]}
 		aria-hidden={!open}
 		inert={!open}
 	>
 		<div class="flex h-full w-96 shrink-0 flex-col">
 			<header class="flex h-12 shrink-0 items-center justify-between px-4">
-				<h2 class="text-sm font-semibold">{titles[renderedMode]}</h2>
+				<h2 class="truncate text-sm font-semibold">{headings[renderedMode]}</h2>
 				<div class="flex items-center gap-1">
 					{#if renderedMode === 'chat'}
-						<Tip text="New chat">
-							{#snippet children({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="icon-sm"
-									aria-label="New chat"
-									onclick={() => chat.clear()}
-								>
-									<Plus data-icon />
-								</Button>
-							{/snippet}
-						</Tip>
+						{@render chatHeaderActions()}
 					{/if}
 					<Button
 						variant="ghost"
@@ -106,7 +121,6 @@
 						{activeNoteId}
 						{activeProjectId}
 						{agentPreferences}
-						{agentModels}
 						{agentAvailable}
 					/>
 				{:else if renderedMode === 'todo-detail'}
@@ -141,7 +155,14 @@
 			}}
 		>
 			<Sheet.Header class="shrink-0 border-b border-border px-4 py-3">
-				<Sheet.Title>{titles[renderedMode]}</Sheet.Title>
+				<div class="flex items-center justify-between gap-2">
+					<Sheet.Title>{headings[renderedMode]}</Sheet.Title>
+					{#if renderedMode === 'chat'}
+						<div class="flex items-center gap-1">
+							{@render chatHeaderActions()}
+						</div>
+					{/if}
+				</div>
 			</Sheet.Header>
 			<div
 				class="min-h-0 flex-1 p-4 {renderedMode === 'chat'
@@ -155,7 +176,6 @@
 						{activeNoteId}
 						{activeProjectId}
 						{agentPreferences}
-						{agentModels}
 						{agentAvailable}
 					/>
 				{:else if renderedMode === 'project-memory'}

@@ -22,12 +22,20 @@
 		shell,
 		limit = 5,
 		showAllLink = true,
+		density = 'full',
 		onselect
 	}: {
 		sessions: readonly Conversation[];
 		shell?: ShellContext;
 		limit?: number;
 		showAllLink?: boolean;
+		/**
+		 * `compact` is the docked panel: one line per chat, title and time only.
+		 * Origin is dropped there because it almost always names the scope the
+		 * user is already in; `/chats` keeps the full three-line row where the
+		 * provenance is the reason to look.
+		 */
+		density?: 'full' | 'compact';
 		onselect: (id: Conversation['id']) => void;
 	} = $props();
 
@@ -85,78 +93,126 @@
 	}
 </script>
 
-<div class="flex flex-col gap-1">
-	<div class="flex items-center justify-between px-1">
-		<h3 class="provenance-caption">Recent chats</h3>
-		{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
-	</div>
-	{#if sessions.length === 0}
-		<p class="px-1 text-sm text-muted-foreground">No past conversations yet.</p>
-	{:else}
-		{#each sessions.slice(0, limit) as session (session.id)}
-			<div class="group flex min-w-0 items-center gap-1">
+{#snippet actions(session: Conversation)}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
 				<Button
+					{...props}
 					variant="ghost"
-					class="h-auto min-w-0 flex-1 justify-start gap-3 px-2 py-2.5"
-					onclick={() => onselect(session.id)}
+					size="icon-sm"
+					aria-label="Actions for {session.title ?? 'chat'}"
 				>
-					<MessageSquare data-icon="inline-start" />
-					<span class="flex min-w-0 flex-col items-start gap-0.5">
-						<span class="w-full truncate text-left text-sm"
-							>{session.title ?? 'New conversation'}</span
-						>
-						<!-- Origin is project identity, so it carries the brand accent while
-						     the timestamp below stays muted. -->
-						<span class="w-full truncate text-left text-xs text-brand">{origin(session)}</span>
-						<span class="text-left text-xs text-muted-foreground"
-							>{formatRelativeTime(session.updatedAt)}</span
-						>
-					</span>
+					<MoreHorizontal />
 				</Button>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Actions for {session.title ?? 'chat'}"
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content align="end">
+			<DropdownMenu.Group>
+				<DropdownMenu.Item
+					onclick={() => window.open(`/chats/${session.id}`, '_blank', 'noopener,noreferrer')}
+				>
+					<ExternalLink /> Open in new tab
+				</DropdownMenu.Item>
+				<DropdownMenu.Item
+					onclick={() => {
+						selected = session;
+						renameOpen = true;
+					}}
+				>
+					<Pencil /> Rename
+				</DropdownMenu.Item>
+				<DropdownMenu.Item
+					variant="destructive"
+					onclick={() => {
+						selected = session;
+						deleteOpen = true;
+					}}
+				>
+					<Trash2 /> Delete
+				</DropdownMenu.Item>
+			</DropdownMenu.Group>
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+{/snippet}
+
+{#if density === 'compact'}
+	<!--
+		One line per chat, rules dropped to match the starters above. Three-line rows
+		put twenty lines of history under an empty thread and pushed the starters off
+		screen. The uppercase eyebrow stays here where the starters lost theirs: down
+		at the foot of the panel this group is meant to recede, not compete.
+	-->
+	<div class="flex flex-col gap-1">
+		<div class="flex items-center justify-between gap-2 px-2">
+			<h3 class="eyebrow">Recent</h3>
+			{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
+		</div>
+		{#if sessions.length === 0}
+			<p class="px-2 text-sm text-muted-foreground">No past conversations yet.</p>
+		{:else}
+			<ul class="flex flex-col">
+				{#each sessions.slice(0, limit) as session (session.id)}
+					<li class="group relative">
+						<button
+							type="button"
+							class="row-interactive flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-sm"
+							onclick={() => onselect(session.id)}
+						>
+							<span class="min-w-0 flex-1 truncate">{session.title ?? 'New conversation'}</span>
+							<!-- Hidden while the row is hovered so the menu can take its place
+							     without the row reflowing under the pointer. -->
+							<span
+								class="provenance-caption shrink-0 group-hover:invisible group-focus-within:invisible"
 							>
-								<MoreHorizontal />
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end">
-						<DropdownMenu.Group>
-							<DropdownMenu.Item
-								onclick={() => window.open(`/chats/${session.id}`, '_blank', 'noopener,noreferrer')}
+								{formatRelativeTime(session.updatedAt)}
+							</span>
+						</button>
+						<div
+							class="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity duration-(--duration-micro) group-hover:opacity-100 group-focus-within:opacity-100 has-data-[state=open]:opacity-100"
+						>
+							{@render actions(session)}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+{:else}
+	<div class="flex flex-col gap-1">
+		<div class="flex items-center justify-between px-1">
+			<h3 class="provenance-caption">Recent chats</h3>
+			{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
+		</div>
+		{#if sessions.length === 0}
+			<p class="px-1 text-sm text-muted-foreground">No past conversations yet.</p>
+		{:else}
+			{#each sessions.slice(0, limit) as session (session.id)}
+				<div class="group flex min-w-0 items-center gap-1">
+					<Button
+						variant="ghost"
+						class="h-auto min-w-0 flex-1 justify-start gap-3 px-2 py-2.5"
+						onclick={() => onselect(session.id)}
+					>
+						<MessageSquare data-icon="inline-start" />
+						<span class="flex min-w-0 flex-col items-start gap-0.5">
+							<span class="w-full truncate text-left text-sm"
+								>{session.title ?? 'New conversation'}</span
 							>
-								<ExternalLink /> Open in new tab
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								onclick={() => {
-									selected = session;
-									renameOpen = true;
-								}}
+							<!-- Origin is project identity, so it carries the brand accent while
+							     the timestamp below stays muted. -->
+							<span class="w-full truncate text-left text-xs text-brand">{origin(session)}</span>
+							<span class="text-left text-xs text-muted-foreground"
+								>{formatRelativeTime(session.updatedAt)}</span
 							>
-								<Pencil /> Rename
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								variant="destructive"
-								onclick={() => {
-									selected = session;
-									deleteOpen = true;
-								}}
-							>
-								<Trash2 /> Delete
-							</DropdownMenu.Item>
-						</DropdownMenu.Group>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-			</div>
-		{/each}
-	{/if}
-</div>
+						</span>
+					</Button>
+					{@render actions(session)}
+				</div>
+			{/each}
+		{/if}
+	</div>
+{/if}
 
 <NameDialog
 	bind:open={renameOpen}

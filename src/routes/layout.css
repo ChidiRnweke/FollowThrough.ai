@@ -284,7 +284,11 @@
 
 /* Uniform interactive-row states for list rows outside the sidebar primitives. */
 @utility row-interactive {
-	transition-property: color, background-color;
+	/* Tailwind's preflight sets `cursor: default` on buttons, and most rows using
+	   this utility are buttons. Without this the panel's most actionable rows give
+	   no pointer feedback at all. */
+	cursor: pointer;
+	transition-property: color, background-color, box-shadow, transform;
 	transition-duration: var(--duration-micro);
 	transition-timing-function: var(--ease-standard);
 	&:hover {

@@ -228,6 +228,16 @@ export class ChatStore {
 		this.chips = this.chips.filter((known) => known.kind !== chip.kind || known.id !== chip.id);
 	}
 
+	/**
+	 * Drop a suggestion card once it has been accepted or rejected. The note tray
+	 * does this through its own registry; a decision made from the panel with no
+	 * note open has to say so here, or the card outlives the thing it proposed.
+	 */
+	resolveSuggestion(suggestionId: string): void {
+		for (const entry of this.entries)
+			entry.suggestions = entry.suggestions.filter((view) => view.suggestion.id !== suggestionId);
+	}
+
 	async send(input: Omit<RunAgentInput, 'conversationId'>): Promise<void> {
 		if (this.isStreaming) return;
 		const requestId = crypto.randomUUID();

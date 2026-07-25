@@ -23,6 +23,10 @@ export class InMemoryTodoRepository implements TodoRepository {
 		);
 	}
 
+	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
+		return (await this.list(actor, filter)).length;
+	}
+
 	async insert(_actor: ActorContext, todo: Todo): Promise<Todo> {
 		this.todos.push(todo);
 		return todo;
