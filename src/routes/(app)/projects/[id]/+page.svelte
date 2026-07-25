@@ -15,6 +15,8 @@
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '$lib/components/app/name-dialog.svelte';
 	import ExportSettingsDialog from '$lib/components/app/export-settings-dialog.svelte';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 
 	let { data } = $props();
 
@@ -56,6 +58,9 @@
 {#key project.id}
 	<PageShell title={project.name} description={project.description ?? undefined}>
 		{#snippet actions()}
+			<!-- Leftmost in every cluster in the app, so the agent always sits in the
+			     same place relative to the screen's own buttons. -->
+			<AgentAction action={agentActions.projectConnect} context={{ projectId: project.id }} />
 			<Button size="sm" onclick={() => (newNoteOpen = true)}>
 				<FilePlus class="size-4" />
 				New note

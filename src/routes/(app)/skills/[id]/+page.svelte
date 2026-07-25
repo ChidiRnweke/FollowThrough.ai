@@ -6,6 +6,8 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { formatDateTime } from '$lib/components/app/labels';
 	import ActionForm from '$lib/components/primitives/action-form.svelte';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -76,6 +78,7 @@
 
 <PageShell title={data.view.skill.name} description={data.view.skill.description}>
 	{#snippet actions()}
+		<AgentAction action={agentActions.skillDetail} context={{ noteId: data.view.skill.note.id }} />
 		<Button variant="outline" size="sm" href="/notes/{data.view.skill.note.id}">
 			Edit as note
 		</Button>

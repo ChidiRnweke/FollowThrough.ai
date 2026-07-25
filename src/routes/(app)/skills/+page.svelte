@@ -15,6 +15,8 @@
 	import { toast } from 'svelte-sonner';
 	import { createSkill } from '$lib/remote/projects.remote';
 	import { toggleSkill } from '$lib/remote/skills.remote';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import type { NoteId } from '$lib/models';
 
 	let { data } = $props();
@@ -56,6 +58,7 @@
 
 <PageShell title="Skills" description="Reusable methodology the agent loads when a task matches.">
 	{#snippet actions()}
+		<AgentAction action={agentActions.skills} />
 		<Button onclick={() => (createOpen = true)}><Plus data-icon="inline-start" />New skill</Button>
 	{/snippet}
 

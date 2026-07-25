@@ -76,12 +76,38 @@
 		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
 		else void chat.hydrate();
 		const staged = consumeChatHandoff();
-		if (staged) {
-			prompt = staged.prompt;
-			handoff = staged;
-		} else prompt = sessionStorage.getItem(draftKey()) ?? '';
+		if (staged) prefill(staged);
+		else prompt = sessionStorage.getItem(draftKey()) ?? '';
 		return release;
 	});
+
+	// An invocation point elsewhere in the app wrote a prompt while this panel was
+	// already mounted (the docked case, where `onMount` above has long since run).
+	$effect(() => {
+		const request = chat.staged;
+		if (!request) return;
+		chat.staged = undefined;
+		prefill(request);
+	});
+
+	/**
+	 * Put the sentence in the composer and hand over the caret — deliberately without
+	 * sending. Reading the prompt is how the invocation points teach what the agent
+	 * can be asked for, and an edit is always one keystroke away.
+	 */
+	function prefill(request: ChatHandoff): void {
+		prompt = request.prompt;
+		handoff = request;
+		saveDraft();
+		// The textarea may not be bound yet on the mount path, so go through the tick
+		// rather than `textareaRef` directly.
+		void tick().then(() => {
+			const node = textareaRef;
+			if (!node) return;
+			node.focus();
+			node.setSelectionRange(node.value.length, node.value.length);
+		});
+	}
 
 	let prompt = $state('');
 	let handoff = $state<ChatHandoff | undefined>(undefined);

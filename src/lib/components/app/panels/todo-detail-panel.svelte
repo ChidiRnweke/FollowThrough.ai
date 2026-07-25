@@ -11,6 +11,8 @@
 	import TodoResponsibilityField from '../todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from '../todo-fields/todo-source-field.svelte';
 	import ConfirmDelete from '../confirm-delete.svelte';
+	import AgentAction from '../agent/agent-action.svelte';
+	import { agentActions } from '../agent/agent-actions';
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary, TodoId, TodoView } from '$lib/models';
 
@@ -135,6 +137,15 @@
 					>{/if}
 			</section>
 		{/if}
+
+		<!-- Below the todo's own fields and above the destructive footer: what to do
+		     about this todo, once you have read it. -->
+		<AgentAction
+			action={agentActions.todoSource}
+			subject={view.todo.title}
+			context={{ projectId: view.todo.projectId }}
+			class="self-start"
+		/>
 
 		<Separator />
 		<ConfirmDelete

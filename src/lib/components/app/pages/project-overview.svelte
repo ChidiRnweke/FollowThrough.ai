@@ -21,6 +21,8 @@
 	import NameDialog from '../name-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
 	import EmptyState from '../empty-state.svelte';
+	import AgentAction from '../agent/agent-action.svelte';
+	import { agentActions } from '../agent/agent-actions';
 	import { pickTip } from '../resource-tips';
 	import { formatRelativeTime } from '../labels';
 
@@ -267,10 +269,22 @@
 		class="py-16"
 	>
 		{#snippet action()}
-			<Button size="sm" onclick={oncreatenote}>
-				<FilePlus class="size-4" />
-				Create the first note
-			</Button>
+			<div class="flex w-full max-w-xs flex-col items-stretch gap-2">
+				<Button size="sm" onclick={oncreatenote}>
+					<FilePlus class="size-4" />
+					Create the first note
+				</Button>
+				<!--
+					An empty project is where the agent is most useful and least known, so
+					here it gets the row treatment rather than the header's ghost button.
+					Still second: writing the first note yourself stays the primary path.
+				-->
+				<AgentAction
+					variant="row"
+					action={agentActions.projectEmpty}
+					context={{ projectId: project.id }}
+				/>
+			</div>
 		{/snippet}
 	</EmptyState>
 {:else}

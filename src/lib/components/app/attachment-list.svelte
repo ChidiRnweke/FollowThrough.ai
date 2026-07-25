@@ -6,7 +6,16 @@
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 
-	let { projectId, noteId }: { projectId?: string; noteId?: string } = $props();
+	let {
+		projectId,
+		noteId,
+		oncount
+	}: {
+		projectId?: string;
+		noteId?: string;
+		/** Reports how many attachments there are, for chrome that only makes sense with files. */
+		oncount?: (count: number) => void;
+	} = $props();
 	let items = $state<AttachmentView[]>([]);
 	let busy = $state(false);
 
@@ -18,6 +27,7 @@
 		const query = projectId ? `projectId=${projectId}` : `noteId=${noteId}`;
 		const response = await fetch(`/api/attachments?${query}`);
 		if (response.ok) items = await response.json();
+		oncount?.(items.length);
 	}
 
 	const hex = (bytes: ArrayBuffer): string =>

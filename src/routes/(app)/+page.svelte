@@ -2,6 +2,8 @@
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import QuickCapture from '$lib/components/app/quick-capture.svelte';
 	import TodayTriage from '$lib/components/app/pages/today-triage.svelte';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 
 	let { data } = $props();
 
@@ -23,6 +25,9 @@
 			<h1 class="page-title">Today</h1>
 			<p class="text-sm text-muted-foreground">{voiceLine}</p>
 		</div>
+	{/snippet}
+	{#snippet actions()}
+		<AgentAction action={agentActions.today} />
 	{/snippet}
 	<QuickCapture />
 	<TodayTriage view={data.view} projects={data.shell.projects} />

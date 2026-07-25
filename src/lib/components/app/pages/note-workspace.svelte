@@ -23,8 +23,10 @@
 		FtPinOff as PinOff
 	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { chat } from '$lib/stores/chat.svelte';
-	import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
+	import { askAgent } from '$lib/navigation/responsive-surfaces';
+	import { workbench } from '$lib/stores/workbench.svelte';
+	import AgentAction from '../agent/agent-action.svelte';
+	import { agentActions } from '../agent/agent-actions';
 	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
@@ -44,12 +46,13 @@
 		FtPublish as ArrowUpFromLine,
 		FtUndo as Undo2,
 		FtSuggestion as Lightbulb,
+		FtSuggestion as Suggestion,
+		FtDocument as FileText,
 		FtClose as X
 	} from '$lib/components/icons';
 	import ExportDialog from '../export-dialog.svelte';
 	import DrawioReviewDialog from '../drawio-review-dialog.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes.remote';
-	import { stageChatHandoff } from '$lib/stores/chat-handoff';
 
 	let {
 		view,
@@ -463,30 +466,43 @@
 	}
 
 	function runSkill(skillName: string): void {
+		askSelection(`Use the "${skillName}" skill on the selected text`, [skillName]);
+	}
+
+	// Only the primary pane offers it, so a split does not show the same question
+	// twice; `onCloseSplit` is supplied to the split pane alone.
+	const comparable = $derived(workbench.splitNoteId !== undefined && !onCloseSplit);
+
+	function askAboutNote(): void {
+		askAgent({
+			prompt: agentActions.note.prompt,
+			noteId: note.id,
+			projectId: view.note.projectId
+		});
+	}
+
+	function askCompare(): void {
+		askAgent({
+			prompt: agentActions.noteCompare.prompt,
+			noteId: note.id,
+			projectId: view.note.projectId
+		});
+	}
+
+	/** Every selection-scoped prompt goes through here, so they all carry the same context. */
+	function askSelection(prompt: string, skills?: readonly string[]): void {
 		const selection = editorSelection.current;
 		if (!selection) {
 			toast.error('Select some text first.');
 			return;
 		}
-		const prompt = `Use the "${skillName}" skill on the selected text.`;
-		if (dockedPanelFits()) {
-			rightPanel.openChat();
-			void chat.send({
-				prompt,
-				selection,
-				noteId: selection.noteId,
-				requestedSkillNames: [skillName]
-			});
-			return;
-		}
-		stageChatHandoff({
+		askAgent({
 			prompt,
 			selection,
 			noteId: selection.noteId,
 			projectId: view.note.projectId,
-			requestedSkillNames: [skillName]
+			...(skills ? { requestedSkillNames: skills } : {})
 		});
-		void goto('/chats/new');
 	}
 
 	function onkeydown(event: KeyboardEvent): void {
@@ -649,6 +665,16 @@
 					/>
 				</div>
 			{/if}
+			<!--
+				Labelled from `lg` up, and folded into the overflow menu below it — the
+				same trade the Export control in this header already makes, because a
+				note header that wraps costs more than a word of discoverability.
+			-->
+			<AgentAction
+				action={agentActions.note}
+				context={{ noteId: note.id, projectId: view.note.projectId }}
+				class="hidden lg:inline-flex"
+			/>
 			<Button
 				variant="outline"
 				size="sm"
@@ -688,6 +714,19 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
+					<DropdownMenu.Item class="lg:hidden" onclick={() => askAboutNote()}>
+						<Suggestion data-icon="inline-start" />
+						{agentActions.note.label}
+					</DropdownMenu.Item>
+					{#if comparable}
+						<!-- Two notes side by side is the one question this screen can ask
+						     that no other screen can, so it appears only when it applies. -->
+						<DropdownMenu.Item onclick={() => askCompare()}>
+							<FileText data-icon="inline-start" />
+							{agentActions.noteCompare.label}
+						</DropdownMenu.Item>
+					{/if}
+					<DropdownMenu.Separator class={comparable ? '' : 'lg:hidden'} />
 					<DropdownMenu.Item class="sm:hidden" onclick={() => (exportOpen = true)}>
 						<FileOutput data-icon="inline-start" />
 						Export document
@@ -773,6 +812,7 @@
 			onchange={markDirty}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}
+			onask={(prompt) => askSelection(prompt)}
 			onreviseMermaid={reviseMermaid}
 			onconvertMermaid={convertMermaid}
 			onacceptDrawio={acceptDrawio}

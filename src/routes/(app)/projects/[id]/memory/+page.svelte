@@ -2,6 +2,8 @@
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import MemoryEntryList from '$lib/components/app/memory-entry-list.svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 
 	let { data } = $props();
 </script>
@@ -25,6 +27,9 @@
 				Durable facts, decisions, constraints, and preferences for {data.project.name}.
 			</p>
 		</div>
+	{/snippet}
+	{#snippet actions()}
+		<AgentAction action={agentActions.projectDistil} context={{ projectId: data.project.id }} />
 	{/snippet}
 	<MemoryEntryList
 		projectId={data.project.id}

@@ -27,6 +27,8 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Pagination from '$lib/components/ui/pagination';
 	import * as Empty from '$lib/components/ui/empty';
+	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
@@ -122,6 +124,14 @@
 			</p>
 		</div>
 	{/snippet}
+	{#snippet actions()}
+		{#if data.selectedProjectId}
+			<AgentAction
+				action={agentActions.artifactsExport}
+				context={{ projectId: data.selectedProjectId }}
+			/>
+		{/if}
+	{/snippet}
 	{#if !data.selectedProjectId}
 		<div class="flex flex-col items-center justify-center gap-3 py-20 text-center">
 			<PackageOpen class="h-12 w-12 text-muted-foreground" />
@@ -174,6 +184,15 @@
 						>Export a document from a note or project to get started.</Empty.Description
 					></Empty.Header
 				>
+				<Empty.Content>
+					<div class="w-full max-w-xs">
+						<AgentAction
+							variant="row"
+							action={agentActions.artifactsExport}
+							context={{ projectId: data.selectedProjectId }}
+						/>
+					</div>
+				</Empty.Content>
 			</Empty.Root>
 		{:else}
 			<div class="divide-y rounded-lg border">

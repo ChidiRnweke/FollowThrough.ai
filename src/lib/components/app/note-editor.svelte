@@ -31,8 +31,10 @@
 		FtReading as BookOpen,
 		FtWorkflow as Workflow,
 		FtSkills as Wrench,
+		FtSuggestion as Suggestion,
 		FtChevronDown as ChevronDown
 	} from '$lib/components/icons';
+	import { agentActions } from './agent/agent-actions';
 	import {
 		createSuggestionAnchorPlugin,
 		suggestionAnchorKey,
@@ -83,6 +85,7 @@
 		onchange,
 		onaction,
 		onskill,
+		onask,
 		onreviseMermaid,
 		onconvertMermaid,
 		onacceptDrawio,
@@ -99,6 +102,8 @@
 		onchange?: () => void;
 		onaction?: (action: NoteAiAction, selection?: TextSelection, insertAt?: number) => void;
 		onskill?: (skillName: string) => void;
+		/** Hands an open-ended prompt about the current selection to the agent chat. */
+		onask?: (prompt: string) => void;
 		onreviseMermaid: (
 			source: string,
 			instruction: string
@@ -389,8 +394,32 @@
 		<Tiptap {editor}>
 			<BubbleMenu
 				{editor}
-				class="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+				class="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 			>
+				{#if onask}
+					<!--
+						The open-ended one, so it leads: the four beside it each do a single
+						fixed thing, and this is the one that says the agent will take any
+						instruction about the selection. Styled exactly like its neighbours —
+						the bubble is already an AI cluster, so the tinted mark the agent
+						carries elsewhere would only break the row's own consistency here.
+					-->
+					<Tip text="Open the chat with the selection attached">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="sm"
+								onmousedown={preserveEditorSelection}
+								onclick={() => onask(agentActions.selection.prompt)}
+							>
+								<Suggestion class="size-4" />
+								Ask about this
+							</Button>
+						{/snippet}
+					</Tip>
+					<Separator orientation="vertical" class="h-5" />
+				{/if}
 				<Tip text="Turn commitments in the selection into todos">
 					{#snippet children({ props })}
 						<Button

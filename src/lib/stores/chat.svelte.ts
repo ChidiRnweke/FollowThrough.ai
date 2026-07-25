@@ -20,6 +20,7 @@ import { refreshStale } from '$lib/remote/resource-queries';
 import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
 import { suggestionToView } from './suggestion-view';
 import { appContext } from './app-context.svelte';
+import type { ChatHandoff } from './chat-handoff';
 
 export type { ChatToolActivity } from './chat-tools';
 
@@ -97,6 +98,13 @@ export class ChatStore {
 	initialized = $state(false);
 	chips = $state<ContextChip[]>([]);
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
+	/**
+	 * A prompt written by an invocation point elsewhere in the app, waiting for the
+	 * composer to pick it up. `chat-handoff` covers the case where the panel has yet
+	 * to mount; this covers the docked panel, which is mounted already and so never
+	 * runs the `onMount` that consumes the handoff.
+	 */
+	staged = $state<ChatHandoff | undefined>(undefined);
 	runId = $state<AgentRunId | undefined>(undefined);
 	runStatus = $state<AgentRunStatus | undefined>(undefined);
 	cursor = $state('0');
@@ -123,6 +131,15 @@ export class ChatStore {
 		this.modelOverride = persisted.modelOverride ?? null;
 		this.executionModeOverride = persisted.executionModeOverride ?? defaultMode;
 		this.initialized = true;
+	}
+
+	/**
+	 * Write a prompt into the composer without sending it. The sentence is the point:
+	 * the user reads what the agent is about to be asked, edits it if they want, and
+	 * presses Enter. Nothing runs until they do.
+	 */
+	stage(request: ChatHandoff): void {
+		this.staged = request;
 	}
 
 	observe(): () => void {

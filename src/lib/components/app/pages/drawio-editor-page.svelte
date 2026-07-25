@@ -5,6 +5,8 @@
 	import { FtArrowLeft as ArrowLeft } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import DrawioEmbed from '../drawio-embed.svelte';
+	import AgentAction from '../agent/agent-action.svelte';
+	import { agentActions } from '../agent/agent-actions';
 	import { saveDrawioDiagram } from '$lib/remote/diagrams.remote';
 	import type { DrawioExport } from '$lib/client/drawio/embed-adapter';
 
@@ -41,6 +43,13 @@
 				{diagram.title ?? 'Untitled diagram'}
 			</h1>
 		</div>
+		<!-- The canvas fills the rest of the screen, so the only chrome is this row. -->
+		<AgentAction
+			action={agentActions.diagram}
+			subject={diagram.title ?? 'Untitled diagram'}
+			context={{ noteId: diagram.noteId }}
+			class="ml-auto shrink-0"
+		/>
 	</div>
 	<DrawioEmbed xml={diagram.source} title={diagram.title ?? 'Untitled diagram'} oncommit={save} />
 </div>

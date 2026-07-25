@@ -13,7 +13,10 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Input } from '$lib/components/ui/input';
-	import { FtPlus as Plus } from '$lib/components/icons';
+	import { FtPlus as Plus, FtTodos as ListTodo } from '$lib/components/icons';
+	import EmptyState from '../empty-state.svelte';
+	import AgentAction from '../agent/agent-action.svelte';
+	import { agentActions } from '../agent/agent-actions';
 
 	let {
 		todos,
@@ -120,19 +123,38 @@
 				<ToggleGroup.Item value="mine">Mine</ToggleGroup.Item>
 				<ToggleGroup.Item value="waiting_on">Waiting on</ToggleGroup.Item>
 			</ToggleGroup.Root>
+			<!-- Last in the row and the only thing in it that is not a filter: reading
+			     the controls left to right ends on what to do about what they show. -->
+			<AgentAction
+				action={agentActions.todosFromNotes}
+				context={projectId ? { projectId } : undefined}
+			/>
 		</div>
 	</div>
 
 	{#if view === 'list'}
 		{#if todos.length === 0}
-			<div class="flex flex-col items-center justify-center gap-2 py-16 text-center">
-				<p class="text-sm text-muted-foreground">
-					No todos yet. Capture a promise from a note or add one from the board.
-				</p>
-				<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
-					Add a todo on the board
-				</Button>
-			</div>
+			<EmptyState
+				icon={ListTodo}
+				title="No todos yet."
+				hint="Capture a promise from a note, or add one from the board."
+				class="py-16"
+			>
+				{#snippet action()}
+					<div class="flex w-full max-w-xs flex-col items-stretch gap-2">
+						<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
+							Add a todo on the board
+						</Button>
+						<!-- The notes almost certainly already hold the todos this screen is
+						     missing, which is the one thing an empty board cannot say itself. -->
+						<AgentAction
+							variant="row"
+							action={agentActions.todosFromNotes}
+							context={projectId ? { projectId } : undefined}
+						/>
+					</div>
+				{/snippet}
+			</EmptyState>
 		{:else}
 			<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
 			<div class="mt-1">
