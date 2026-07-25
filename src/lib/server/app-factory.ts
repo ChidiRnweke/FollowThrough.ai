@@ -10,10 +10,13 @@ import { PostgresSessionRepository } from './repositories/postgres-sessions';
 import { PostgresUserRepository } from './repositories/postgres-users';
 import { db } from './db';
 
-const localUserId = z
-	.string()
-	.uuid()
-	.parse(process.env.LOCAL_USER_ID ?? '00000000-0000-4000-8000-000000000001') as UserId;
+// Read lazily: secrets are hydrated into the environment per request, so a
+// module-load-time read would freeze whatever was set before the first hydration.
+const localUserId = (): UserId =>
+	z
+		.string()
+		.uuid()
+		.parse(process.env.LOCAL_USER_ID ?? '00000000-0000-4000-8000-000000000001') as UserId;
 
 export class AppFactory {
 	private static applicationInstance: ProductionApplication | undefined;
@@ -40,7 +43,7 @@ export class AppFactory {
 		if (this.isAuthEnabled() && locals?.user) {
 			return { userId: locals.user.id };
 		}
-		return { userId: localUserId };
+		return { userId: localUserId() };
 	}
 
 	static getAuthService(): IAuthService {

@@ -23,8 +23,12 @@ import type { RetrievalIndexRepository } from '$lib/repositories';
 import type { ContentChunker, EmbeddingClient } from '$lib/services/retrieval/contracts';
 import { EmbeddedAttachmentIndexer } from '$lib/services/retrieval/indexing';
 
-const MAX_ATTACHMENT_BYTES = Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
-const MAX_PARSE_BYTES = Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? MAX_ATTACHMENT_BYTES);
+// Read lazily: secrets are hydrated into the environment per request, so a
+// module-load-time read would freeze whatever was set before the first hydration.
+const maxAttachmentBytes = (): number =>
+	Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
+const maxParseBytes = (): number =>
+	Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? maxAttachmentBytes());
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -57,12 +61,9 @@ export class AttachmentManagementService implements AttachmentManager {
 		if (note?.archivedAt) throw new ValidationError('Archived notes cannot receive attachments');
 		const projectId = note?.projectId ?? input.projectId!;
 		const path = validateAttachmentPath(input.path);
-		if (
-			!Number.isSafeInteger(input.byteSize) ||
-			input.byteSize < 1 ||
-			input.byteSize > MAX_ATTACHMENT_BYTES
-		)
-			throw new ValidationError(`Attachment must be between 1 and ${MAX_ATTACHMENT_BYTES} bytes`);
+		const maxBytes = maxAttachmentBytes();
+		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > maxBytes)
+			throw new ValidationError(`Attachment must be between 1 and ${maxBytes} bytes`);
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
 		const timestamp = now();
@@ -250,7 +251,8 @@ export class AttachmentManagementService implements AttachmentManager {
 				return;
 			}
 			const parser = this.parsers.select(view.version.mediaType, view.attachment.path);
-			if (!parser || view.version.byteSize > MAX_PARSE_BYTES) {
+			const parseLimit = maxParseBytes();
+			if (!parser || view.version.byteSize > parseLimit) {
 				await this.attachments.updateVersion(actor, {
 					...view.version,
 					processingStatus: 'unsupported',
@@ -258,8 +260,8 @@ export class AttachmentManagementService implements AttachmentManager {
 				});
 				return;
 			}
-			const bytes = await this.storage.read(view.version.objectKey, MAX_PARSE_BYTES);
-			const extractedText = (await parser.parse(bytes)).slice(0, MAX_PARSE_BYTES);
+			const bytes = await this.storage.read(view.version.objectKey, parseLimit);
+			const extractedText = (await parser.parse(bytes)).slice(0, parseLimit);
 			let status: AttachmentVersion['processingStatus'] = 'ready';
 			if (this.retrieval && this.embeddingClient) {
 				const result = await new EmbeddedAttachmentIndexer(

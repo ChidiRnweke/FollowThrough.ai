@@ -4,7 +4,7 @@ import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { loadEnv, type Plugin } from 'vite';
-import { initializeConfig, mergePlatformEnvironment } from './scripts/config-service.js';
+import { hydrateEnvironment, mergePlatformEnvironment } from './src/lib/server/secrets';
 
 const managedConfiguration = (): Plugin => ({
 	name: 'followthrough-managed-configuration',
@@ -13,7 +13,7 @@ const managedConfiguration = (): Plugin => ({
 	async config(_config, { mode, isPreview }) {
 		if (isPreview || process.env.npm_lifecycle_event !== 'dev') return;
 		mergePlatformEnvironment(process.env, loadEnv(mode, process.cwd(), ''));
-		await initializeConfig();
+		await hydrateEnvironment();
 		await import('./scripts/otel-instrumentation.js');
 	}
 });

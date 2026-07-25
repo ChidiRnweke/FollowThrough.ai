@@ -3,6 +3,7 @@ services:
     image: ghcr.io/chidirnweke/followthrough.ai:latest
     restart: unless-stopped
     environment:
+      CONFIG_SOURCE: ${CONFIG_SOURCE:-infisical}
       INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
       INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
       INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
@@ -14,7 +15,7 @@ services:
       PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
     labels:
       caddy: notes.chidinweke.be
-      caddy.reverse_proxy: "{{upstreams 3000}}"
+      caddy.reverse_proxy: '{{upstreams 3000}}'
     networks:
       - reverse-proxy
       - postgres-network
@@ -23,16 +24,11 @@ services:
 
   migrate:
     image: ghcr.io/chidirnweke/followthrough.ai:latest
-    command:
-      [
-        "sh",
-        "-c",
-        "node scripts/provision-db.js && node scripts/prod-migrate.js",
-      ]
+    command: ['sh', '-c', 'node scripts/provision-db.js && node scripts/prod-migrate.js']
     profiles: [setup]
-    restart: "no"
+    restart: 'no'
     labels:
-      komodo.skip: "true"
+      komodo.skip: 'true'
     environment:
       INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
       INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
@@ -42,6 +38,8 @@ services:
       INFISICAL_ADMIN_CLIENT_ID: ${INFISICAL_ADMIN_CLIENT_ID}
       INFISICAL_ADMIN_CLIENT_SECRET: ${INFISICAL_ADMIN_CLIENT_SECRET}
       INFISICAL_ADMIN_PROJECT_ID: ${INFISICAL_ADMIN_PROJECT_ID}
+      DB_NAME: ${DB_NAME:-followthrough}
+      DB_USER: ${DB_USER:-followthrough}
     networks:
       - postgres-network
 

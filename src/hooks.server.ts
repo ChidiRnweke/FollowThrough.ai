@@ -1,17 +1,28 @@
 import type { ServerInit } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
+import { hydrateEnvironment } from '$lib/server/secrets';
 
 import { redirect, type Handle } from '@sveltejs/kit';
 import { getSessionCookie } from '$lib/services/auth/authService';
 
+// Prerendering during `vite build` and unit tests both run without a secrets
+// backend, and must not pull configuration (which would, among other things,
+// enable auth and redirect prerendered routes).
+const configurationDisabled = (): boolean =>
+	process.env.npm_lifecycle_event === 'build' || process.env.NODE_ENV === 'test';
+
 export const init: ServerInit = async () => {
-	if (process.env.npm_lifecycle_event === 'build' || process.env.NODE_ENV === 'test') return;
+	if (configurationDisabled()) return;
+	await hydrateEnvironment();
 	const recovered = await AppFactory.recoverInterruptedRuns();
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
+	if (!configurationDisabled()) await hydrateEnvironment();
+
 	const sessionId = getSessionCookie(event.cookies);
 
 	// If auth is enabled, validate sessions

@@ -33,11 +33,14 @@ class FakeSecretClient {
 
 	secrets() {
 		return {
-			getSecret: async ({ secretName }: { secretName: string }) => {
+			listSecrets: async () => {
 				if (this.error) throw this.error;
-				if (!(secretName in this.values))
-					throw Object.assign(new Error('missing'), { statusCode: 404 });
-				return { secretValue: this.values[secretName] };
+				return {
+					secrets: Object.entries(this.values).map(([secretKey, secretValue]) => ({
+						secretKey,
+						secretValue
+					}))
+				};
 			},
 			updateSecret: async () => undefined,
 			createSecret: async () => undefined
@@ -56,7 +59,7 @@ describe('database provisioning invariants', () => {
 				throw new Error('must not connect');
 			}
 		});
-		expect(result).toEqual({ created: false });
+		expect(result.created).toBe(false);
 	});
 
 	test('connection URL encodes credentials and database name', () => {
