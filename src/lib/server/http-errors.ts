@@ -33,7 +33,9 @@ export const describeError = (error: unknown): string => {
 		}
 		if (current instanceof Error) {
 			const code = (current as { code?: unknown }).code;
-			parts.push(`${current.name}: ${current.message}${typeof code === 'string' ? ` (${code})` : ''}`);
+			parts.push(
+				`${current.name}: ${current.message}${typeof code === 'string' ? ` (${code})` : ''}`
+			);
 			current = current.cause;
 		} else {
 			parts.push(String(current));

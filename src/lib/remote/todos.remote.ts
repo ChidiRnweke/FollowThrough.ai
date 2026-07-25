@@ -29,14 +29,11 @@ export const updateTodo = command(
 
 export const updateTodoStatus = updateTodo;
 
-export const deleteTodo = command(
-	z.object({ todoId: z.string().uuid() }),
-	async (input) => {
-		await AppFactory.controllerFactory()
-			.todos()
-			.remove(requestActor(), input.todoId as never);
-	}
-);
+export const deleteTodo = command(z.object({ todoId: z.string().uuid() }), async (input) => {
+	await AppFactory.controllerFactory()
+		.todos()
+		.remove(requestActor(), input.todoId as never);
+});
 
 export const createTodo = command(
 	z.object({
