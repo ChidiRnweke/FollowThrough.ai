@@ -5,6 +5,7 @@ import {
 	buildDatabaseUrl,
 	provisionDatabase,
 	quoteIdentifier,
+	quoteLiteral,
 	resolveDatabaseIdentity
 } from '../../../scripts/provision-db.js';
 
@@ -48,6 +49,40 @@ class FakeSecretClient {
 	}
 }
 
+const adminSecrets = () => ({
+	POSTGRES_ADMIN_USER: 'admin',
+	POSTGRES_ADMIN_PASSWORD: 'admin-password',
+	POSTGRES_HOST: 'db.example',
+	POSTGRES_PORT: '5432'
+});
+
+/** Records every statement a provisioning run issues against PostgreSQL. */
+function recordingPostgres() {
+	const statements: Array<{ query: string; params: unknown }> = [];
+	const client = () => {
+		const sql = async () => [];
+		sql.unsafe = async (query: string, params?: unknown) => {
+			statements.push({ query, params });
+			return [];
+		};
+		sql.end = async () => undefined;
+		return sql;
+	};
+	return { client, statements };
+}
+
+const provisionFresh = async (passwordFactory = () => 'generated-password') => {
+	const postgres = recordingPostgres();
+	await provisionDatabase({
+		environment,
+		appClient: new FakeSecretClient(),
+		adminClient: new FakeSecretClient(adminSecrets()),
+		postgresClient: postgres.client,
+		passwordFactory
+	});
+	return postgres.statements;
+};
+
 describe('database provisioning invariants', () => {
 	test('existing database URL returns without opening PostgreSQL', async () => {
 		const appClient = new FakeSecretClient({ DATABASE_URL: 'postgresql://existing' });
@@ -83,6 +118,45 @@ describe('database provisioning invariants', () => {
 
 	test('SQL identifiers double embedded quotes', () => {
 		expect(quoteIdentifier('role"name')).toBe('"role""name"');
+	});
+
+	test('SQL literals double embedded quotes', () => {
+		expect(quoteLiteral("pass'word")).toBe("'pass''word'");
+	});
+
+	test('role creation inlines the password as a quoted literal', async () => {
+		const statements = await provisionFresh();
+		expect(statements.find(({ query }) => query.startsWith('CREATE ROLE'))?.query).toBe(
+			`CREATE ROLE "followthrough" WITH LOGIN PASSWORD 'generated-password'`
+		);
+	});
+
+	test('password rotation inlines the password as a quoted literal', async () => {
+		const postgres = recordingPostgres();
+		await provisionDatabase({
+			environment,
+			appClient: new FakeSecretClient(),
+			adminClient: new FakeSecretClient(adminSecrets()),
+			// A non-empty probe result marks the database and role as already present.
+			postgresClient: () => {
+				const sql = async () => [{ exists: 1 }];
+				sql.unsafe = async (query: string, params?: unknown) => {
+					postgres.statements.push({ query, params });
+					return [];
+				};
+				sql.end = async () => undefined;
+				return sql;
+			},
+			passwordFactory: () => 'rotated-password'
+		});
+		expect(postgres.statements.find(({ query }) => query.startsWith('ALTER ROLE'))?.query).toBe(
+			`ALTER ROLE "followthrough" WITH LOGIN PASSWORD 'rotated-password'`
+		);
+	});
+
+	test('no statement uses bind parameters, which PostgreSQL rejects in utility commands', async () => {
+		const statements = await provisionFresh();
+		expect(statements.every(({ params }) => params === undefined)).toBe(true);
 	});
 
 	test('non-missing Infisical errors fail closed', async () => {

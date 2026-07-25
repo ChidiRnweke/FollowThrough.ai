@@ -18,6 +18,11 @@ function generatePassword() {
 
 export const quoteIdentifier = (value) => `"${value.replaceAll('"', '""')}"`;
 
+// PostgreSQL rejects bind parameters in utility statements (CREATE/ALTER ROLE),
+// so the password has to be inlined as a quoted literal. Doubling single quotes
+// is the correct escape under standard_conforming_strings (on by default).
+export const quoteLiteral = (value) => `'${value.replaceAll("'", "''")}'`;
+
 export function buildDatabaseUrl({ user, password, host, port, database }) {
 	return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
 }
@@ -240,11 +245,11 @@ export async function provisionDatabase({
 
 		if (!roleExists) {
 			console.log(`Creating user '${dbUser}'...`);
-			await adminSql.unsafe(`CREATE ROLE ${role} WITH LOGIN PASSWORD $1`, [dbPassword]);
+			await adminSql.unsafe(`CREATE ROLE ${role} WITH LOGIN PASSWORD ${quoteLiteral(dbPassword)}`);
 			console.log(`User '${dbUser}' created successfully.`);
 		} else {
 			console.log(`User '${dbUser}' already exists. Updating password...`);
-			await adminSql.unsafe(`ALTER ROLE ${role} WITH LOGIN PASSWORD $1`, [dbPassword]);
+			await adminSql.unsafe(`ALTER ROLE ${role} WITH LOGIN PASSWORD ${quoteLiteral(dbPassword)}`);
 			console.log(`User '${dbUser}' password updated.`);
 		}
 
