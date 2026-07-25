@@ -20,6 +20,8 @@
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import BubbleMenu from '$lib/components/edra/BubbleMenu.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Separator } from '$lib/components/ui/separator';
@@ -387,68 +389,87 @@
 				{editor}
 				class="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 			>
-				<Button
-					variant="ghost"
-					size="sm"
-					title="Turn commitments in the selection into todos"
-					onmousedown={preserveEditorSelection}
-					onclick={() => runSelectionAction('promises')}
-				>
-					<ClipboardCheck class="size-4" />
-					Extract promises
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					title="Find related notes and propose backlinks"
-					onmousedown={preserveEditorSelection}
-					onclick={() => runSelectionAction('relate')}
-				>
-					<Waypoints class="size-4" />
-					Find related
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					title="Find supporting external references"
-					onmousedown={preserveEditorSelection}
-					onclick={() => runSelectionAction('reference')}
-				>
-					<BookOpen class="size-4" />
-					Reference
-				</Button>
+				<Tip text="Turn commitments in the selection into todos">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="sm"
+							onmousedown={preserveEditorSelection}
+							onclick={() => runSelectionAction('promises')}
+						>
+							<ClipboardCheck class="size-4" />
+							Extract promises
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Find related notes and propose backlinks">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="sm"
+							onmousedown={preserveEditorSelection}
+							onclick={() => runSelectionAction('relate')}
+						>
+							<Waypoints class="size-4" />
+							Find related
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Find supporting external references">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="sm"
+							onmousedown={preserveEditorSelection}
+							onclick={() => runSelectionAction('reference')}
+						>
+							<BookOpen class="size-4" />
+							Reference
+						</Button>
+					{/snippet}
+				</Tip>
 				<Separator orientation="vertical" class="h-5" />
-				<Button
-					variant="ghost"
-					size="sm"
-					title="Generate a mermaid diagram from the selection and insert it"
-					onmousedown={preserveEditorSelection}
-					onclick={() => runSelectionAction('diagram')}
-				>
-					<Workflow class="size-4" />
-					Diagram
-				</Button>
+				<Tip text="Generate a mermaid diagram from the selection and insert it">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="sm"
+							onmousedown={preserveEditorSelection}
+							onclick={() => runSelectionAction('diagram')}
+						>
+							<Workflow class="size-4" />
+							Diagram
+						</Button>
+					{/snippet}
+				</Tip>
 				{#if skills.length > 0 && onskill}
 					<Separator orientation="vertical" class="h-5" />
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									title="Run one of your skills on the selection"
-								>
-									<Wrench class="size-4" />
-									Skills
-									<ChevronDown class="size-3" />
-								</Button>
+							{#snippet child({ props: menuProps })}
+								<Tip text="Run one of your skills on the selection">
+									{#snippet children({ props: tipProps })}
+										<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
+											<Wrench class="size-4" />
+											Skills
+											<ChevronDown class="size-3" />
+										</Button>
+									{/snippet}
+								</Tip>
 							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start">
 							{#each skills as skill (skill.noteId)}
-								<DropdownMenu.Item title={skill.description} onclick={() => onskill(skill.name)}>
-									{skill.name}
+								<DropdownMenu.Item onclick={() => onskill(skill.name)}>
+									<Tip text={skill.description} side="right">
+										{#snippet children({ props })}
+											<span {...props}>{skill.name}</span>
+										{/snippet}
+									</Tip>
 								</DropdownMenu.Item>
 							{/each}
 						</DropdownMenu.Content>

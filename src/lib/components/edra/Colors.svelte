@@ -45,7 +45,6 @@
 						? !$editorState.currentColor
 						: $editorState.currentColor === color.value}
 				<DropdownMenu.Item
-					title={color.label}
 					class="flex items-center justify-between cursor-pointer"
 					onclick={() => {
 						if (color.value === '' || color.label === 'Default') {
@@ -77,7 +76,6 @@
 						? !$editorState.currentHighlight
 						: $editorState.currentHighlight === `${color.value}50`}
 				<DropdownMenu.Item
-					title={color.label}
 					class="flex items-center justify-between cursor-pointer"
 					onclick={() => {
 						if (color.value === '' || color.label === 'Default') {

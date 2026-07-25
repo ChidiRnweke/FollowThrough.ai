@@ -8,6 +8,7 @@
 		ShellContext
 	} from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
@@ -73,15 +74,19 @@
 				<h2 class="text-sm font-semibold">{titles[renderedMode]}</h2>
 				<div class="flex items-center gap-1">
 					{#if renderedMode === 'chat'}
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							aria-label="New chat"
-							title="New chat"
-							onclick={() => chat.clear()}
-						>
-							<Plus data-icon />
-						</Button>
+						<Tip text="New chat">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon-sm"
+									aria-label="New chat"
+									onclick={() => chat.clear()}
+								>
+									<Plus data-icon />
+								</Button>
+							{/snippet}
+						</Tip>
 					{/if}
 					<Button
 						variant="ghost"

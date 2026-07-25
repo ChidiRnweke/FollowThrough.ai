@@ -4,6 +4,7 @@
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { cubicOut } from 'svelte/easing';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import X from '@lucide/svelte/icons/x';
 	import Pin from '@lucide/svelte/icons/pin';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -128,16 +129,20 @@
 		<!-- Collapsed strip: the 24px height keeps the reveal affordance visible
 		     while the persistent outer container animates between endpoints. -->
 		<div class="flex h-6 items-center justify-end">
-			<button
-				type="button"
-				class="mr-2 mt-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
-				aria-label="Show tab strip"
-				aria-expanded={false}
-				title="Show tab strip"
-				onclick={() => ontoggleHidden?.()}
-			>
-				<ChevronDown class="size-4" />
-			</button>
+			<Tip text="Show tab strip" side="bottom">
+				{#snippet children({ props })}
+					<button
+						{...props}
+						type="button"
+						class="mr-2 mt-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
+						aria-label="Show tab strip"
+						aria-expanded={false}
+						onclick={() => ontoggleHidden?.()}
+					>
+						<ChevronDown class="size-4" />
+					</button>
+				{/snippet}
+			</Tip>
 		</div>
 	{:else}
 		<div class="flex h-10 items-stretch gap-0 overflow-x-auto px-2">
@@ -171,9 +176,7 @@
 						</button>
 						<div class="flex items-center gap-1 pr-1">
 							<span class="h-4 w-px shrink-0 bg-primary/40" aria-hidden="true"></span>
-							<span
-								class="eyebrow max-w-40 cursor-default truncate"
-							>
+							<span class="eyebrow max-w-40 cursor-default truncate">
 								{group.projectName}
 							</span>
 						</div>
@@ -199,57 +202,64 @@
 											aria-hidden="true"
 										></div>
 									{/if}
-									<button
-										type="button"
-										role="tab"
-										aria-selected={active}
-										draggable="true"
-										title={titleOf(noteId)}
-										class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
-											? 'bg-background font-medium text-foreground'
-											: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
-										ondragstart={(event) => {
-											if (event.dataTransfer) writeNoteDrag(event.dataTransfer, noteId);
-										}}
-										onclick={() => void workbench.focusTab(noteId)}
-									>
-										{#if active}
-											<!-- Inset accent: 4px tall, 2px in from the sides, with a rounded
+									<!-- Tab labels truncate at 16rem, so the tooltip is the only way to read a
+								     long title. A longer delay than the default keeps it from flashing
+								     while the pointer sweeps across the strip. -->
+									<Tip text={titleOf(noteId)} side="bottom" delayDuration={700}>
+										{#snippet children({ props })}
+											<button
+												{...props}
+												type="button"
+												role="tab"
+												aria-selected={active}
+												draggable="true"
+												class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
+													? 'bg-background font-medium text-foreground'
+													: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
+												ondragstart={(event) => {
+													if (event.dataTransfer) writeNoteDrag(event.dataTransfer, noteId);
+												}}
+												onclick={() => void workbench.focusTab(noteId)}
+											>
+												{#if active}
+													<!-- Inset accent: 4px tall, 2px in from the sides, with a rounded
 								     bottom edge so it reads as a tab indicator rather than a
 								     strip-wide line. The inset keeps the green off the very top
 								     edge of the sticky strip where it would visually clip against
 								     the viewport. -->
-											<span
-												class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm bg-primary"
-												aria-hidden="true"
-											></span>
-										{/if}
-										{#if workbench.isPinned(noteId)}
-											<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-										{/if}
-										<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
-										<span
-											role="button"
-											tabindex={-1}
-											aria-label={`Close ${titleOf(noteId)}`}
-											class="ml-1 hidden size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
-												? 'flex'
-												: ''}"
-											onclick={(event) => {
-												event.stopPropagation();
-												void workbench.closeTab(noteId);
-											}}
-											onkeydown={(event) => {
-												if (event.key === 'Enter' || event.key === ' ') {
-													event.preventDefault();
-													event.stopPropagation();
-													void workbench.closeTab(noteId);
-												}
-											}}
-										>
-											<X class="size-3" />
-										</span>
-									</button>
+													<span
+														class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm bg-primary"
+														aria-hidden="true"
+													></span>
+												{/if}
+												{#if workbench.isPinned(noteId)}
+													<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+												{/if}
+												<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
+												<span
+													role="button"
+													tabindex={-1}
+													aria-label={`Close ${titleOf(noteId)}`}
+													class="ml-1 hidden size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
+														? 'flex'
+														: ''}"
+													onclick={(event) => {
+														event.stopPropagation();
+														void workbench.closeTab(noteId);
+													}}
+													onkeydown={(event) => {
+														if (event.key === 'Enter' || event.key === ' ') {
+															event.preventDefault();
+															event.stopPropagation();
+															void workbench.closeTab(noteId);
+														}
+													}}
+												>
+													<X class="size-3" />
+												</span>
+											</button>
+										{/snippet}
+									</Tip>
 								</div>
 							{/if}
 						</div>
@@ -269,16 +279,20 @@
 			<!-- `+` new-note button: teal glyph so it reads as a primary action,
 		     matching the sidebar's accent affordance. -->
 			{#if oncreateNote}
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="ml-auto shrink-0 self-center text-primary hover:text-primary"
-					aria-label="New note"
-					title="New note"
-					onclick={oncreateNote}
-				>
-					<Plus class="size-4" />
-				</Button>
+				<Tip text="New note" side="bottom">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="ml-auto shrink-0 self-center text-primary hover:text-primary"
+							aria-label="New note"
+							onclick={oncreateNote}
+						>
+							<Plus class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
 				<!-- Divider between the `+` action and the strip-hide chevron so the
 			     chevron reads as a strip control, not as a second action. -->
 				<div
@@ -291,16 +305,20 @@
 		     toggle is a stable click target regardless of tab count. `text-foreground`
 		     keeps it visible (black in light, white in dark) rather than melting
 		     into the strip's background. -->
-			<button
-				type="button"
-				class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
-				aria-label="Hide tab strip"
-				aria-expanded={true}
-				title="Hide tab strip"
-				onclick={() => ontoggleHidden?.()}
-			>
-				<ChevronUp class="size-3.5" />
-			</button>
+			<Tip text="Hide tab strip" side="bottom">
+				{#snippet children({ props })}
+					<button
+						{...props}
+						type="button"
+						class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+						aria-label="Hide tab strip"
+						aria-expanded={true}
+						onclick={() => ontoggleHidden?.()}
+					>
+						<ChevronUp class="size-3.5" />
+					</button>
+				{/snippet}
+			</Tip>
 		</div>
 	{/if}
 </div>

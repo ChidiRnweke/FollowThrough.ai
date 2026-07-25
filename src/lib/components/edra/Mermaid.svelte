@@ -445,13 +445,15 @@
 							</Tabs.Trigger>
 						</Tabs.List>
 					</Tabs.Root>
-					<Button size="icon-sm" variant="ghost" onclick={copyCode} title="Copy code">
-						{#if copied}
-							<Check class="text-green-500" />
-						{:else}
-							<Copy />
-						{/if}
-					</Button>
+					<Tooltip tooltip="Copy code">
+						<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
+							{#if copied}
+								<Check class="text-green-500" />
+							{:else}
+								<Copy />
+							{/if}
+						</Button>
+					</Tooltip>
 
 					<div class="bg-border mx-1 h-4 w-px"></div>
 
@@ -583,14 +585,16 @@
 							<Button size="sm" variant="outline" onclick={() => (reviewOpen = true)}>Review</Button
 							>
 						{/if}
-						<Button
-							size="icon-sm"
-							variant="ghost"
-							title="Dismiss conversion"
-							onclick={() => void rejectDrawio()}
-						>
-							<X />
-						</Button>
+						<Tooltip tooltip="Dismiss conversion">
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								aria-label="Dismiss conversion"
+								onclick={() => void rejectDrawio()}
+							>
+								<X />
+							</Button>
+						</Tooltip>
 					</div>
 				{:else if conversionError}
 					<p
@@ -641,7 +645,7 @@
 									variant="ghost"
 									disabled={isConverting}
 									onclick={() => void convertToDrawio()}
-									title="Convert to draw.io"
+									aria-label="Convert to draw.io"
 								>
 									{#if isConverting}<LoaderCircle class="animate-spin" />{:else}<Shapes
 											class="text-muted-foreground"
@@ -655,19 +659,24 @@
 									size="icon-sm"
 									variant="ghost"
 									onclick={enterAiRevision}
-									title="Revise with AI"
+									aria-label="Revise with AI"
 								>
 									<Sparkles class="text-muted-foreground" />
 								</Button>
 							</Tooltip>
 						{/if}
 						<Tooltip tooltip="Download Image">
-							<Button size="icon-sm" variant="ghost" onclick={downloadImage} title="Download Image">
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								onclick={downloadImage}
+								aria-label="Download image"
+							>
 								<Download class="text-muted-foreground" />
 							</Button>
 						</Tooltip>
 						<Tooltip tooltip="Copy Code">
-							<Button size="icon-sm" variant="ghost" onclick={copyCode} title="Copy code">
+							<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
 								{#if copied}
 									<Check class=" text-green-500" />
 								{:else}
@@ -676,7 +685,12 @@
 							</Button>
 						</Tooltip>
 						<Tooltip tooltip="Edit Mode">
-							<Button size="icon-sm" variant="ghost" onclick={enterEditMode} title="Edit diagram">
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								onclick={enterEditMode}
+								aria-label="Edit diagram"
+							>
 								<Pencil class="text-muted-foreground" />
 							</Button>
 						</Tooltip>

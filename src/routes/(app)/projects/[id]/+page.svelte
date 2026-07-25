@@ -3,6 +3,8 @@
 	import ProjectOverview from '$lib/components/app/pages/project-overview.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import FilePlus from '@lucide/svelte/icons/file-plus';
@@ -62,10 +64,19 @@
 			</Button>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="icon-sm" aria-label="Project actions">
-							<Ellipsis class="size-4" />
-						</Button>
+					{#snippet child({ props: menuProps })}
+						<Tip text="Project actions">
+							{#snippet children({ props: tipProps })}
+								<Button
+									{...mergeProps(menuProps, tipProps)}
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Project actions"
+								>
+									<Ellipsis class="size-4" />
+								</Button>
+							{/snippet}
+						</Tip>
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">

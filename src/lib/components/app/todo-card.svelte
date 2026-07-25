@@ -3,6 +3,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ProvenanceDot from './provenance-dot.svelte';
 	import { formatDate, todayLocalDate, todoPriorityLabels, todoPriorityStyle } from './labels';
@@ -70,14 +71,18 @@
 			{#if draggable}
 				<!-- svelte-dnd-action intentionally uses a non-passive listener here: touch dragging
 				     calls preventDefault(), so making it passive would break the drag handle. -->
-				<span
-					use:dragHandle
-					class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					aria-label="Drag {view.todo.title}"
-					title="Drag todo"
-				>
-					<GripVertical />
-				</span>
+				<Tip text="Drag todo">
+					{#snippet children({ props })}
+						<span
+							{...props}
+							use:dragHandle
+							class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							aria-label="Drag {view.todo.title}"
+						>
+							<GripVertical />
+						</span>
+					{/snippet}
+				</Tip>
 			{/if}
 			<Checkbox
 				checked={done}
@@ -158,7 +163,7 @@
 		{#if detail === 'detailed'}
 			<TodoResponsibilityField todoId={view.todo.id} value={view.todo.responsibility} />
 			{#if waiting}
-				<span class="max-w-40" title="Waiting on">
+				<span class="max-w-40">
 					{#key `${view.todo.id}-waiting-${view.todo.updatedAt}`}<TodoTextField
 							todoId={view.todo.id}
 							value={view.todo.waitingOn}

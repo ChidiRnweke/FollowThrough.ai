@@ -4,6 +4,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import Bell from '@lucide/svelte/icons/bell';
 
 	let {
@@ -17,25 +19,30 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
-		{#snippet child({ props })}
-			<Button
-				{...props}
-				variant="ghost"
-				size="icon-sm"
-				class="relative"
-				aria-label={total === 0 ? 'Memory notifications' : `${total} pending memory suggestions`}
-				title="Pending memories"
-			>
-				<Bell />
-				{#if total > 0}
-					<Badge
-						variant="secondary"
-						class="absolute -top-1 -right-1 min-w-5 origin-top-right scale-75 px-1"
+		{#snippet child({ props: menuProps })}
+			<Tip text="Pending memories">
+				{#snippet children({ props: tipProps })}
+					<Button
+						{...mergeProps(menuProps, tipProps)}
+						variant="ghost"
+						size="icon-sm"
+						class="relative"
+						aria-label={total === 0
+							? 'Memory notifications'
+							: `${total} pending memory suggestions`}
 					>
-						{total}
-					</Badge>
-				{/if}
-			</Button>
+						<Bell />
+						{#if total > 0}
+							<Badge
+								variant="secondary"
+								class="absolute -top-1 -right-1 min-w-5 origin-top-right scale-75 px-1"
+							>
+								{total}
+							</Badge>
+						{/if}
+					</Button>
+				{/snippet}
+			</Tip>
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="w-64">

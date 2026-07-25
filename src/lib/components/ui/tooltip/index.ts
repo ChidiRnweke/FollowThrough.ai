@@ -3,6 +3,7 @@ import Trigger from './tooltip-trigger.svelte';
 import Content from './tooltip-content.svelte';
 import Provider from './tooltip-provider.svelte';
 import Portal from './tooltip-portal.svelte';
+import Tip from './tooltip-tip.svelte';
 
 export {
 	Root,
@@ -10,6 +11,7 @@ export {
 	Content,
 	Provider,
 	Portal,
+	Tip,
 	//
 	Root as Tooltip,
 	Content as TooltipContent,

@@ -13,6 +13,7 @@
 	} from '$lib/models';
 	import { noteEtag } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -588,16 +589,20 @@
 				<NoteBreadcrumb {shell} {note} />
 			</div>
 			{#if onCloseSplit}
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="size-11 sm:size-8"
-					aria-label="Close split view"
-					title="Close split view"
-					onclick={onCloseSplit}
-				>
-					<X />
-				</Button>
+				<Tip text="Close split view">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="size-11 sm:size-8"
+							aria-label="Close split view"
+							onclick={onCloseSplit}
+						>
+							<X />
+						</Button>
+					{/snippet}
+				</Tip>
 			{/if}
 		</div>
 		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">

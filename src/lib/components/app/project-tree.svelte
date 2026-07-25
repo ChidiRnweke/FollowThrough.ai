@@ -6,6 +6,8 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import { toast } from 'svelte-sonner';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -455,7 +457,7 @@
 {#snippet entryRow(entry: NoteSummary, depth: number)}
 	{@const isFolder = entry.kind === 'folder'}
 	{@const isOpen = isFolderOpen(entry.id)}
-	<Sidebar.MenuSubItem class="group/entry">
+	<Sidebar.MenuSubItem>
 		{#if inlineEdit?.mode === 'rename' && inlineEdit.entryId === entry.id}
 			<TreeInlineInput
 				icon={isFolder ? Folder : entry.kind === 'skill' ? Wrench : FileText}
@@ -466,112 +468,130 @@
 				oncancel={() => (inlineEdit = null)}
 			/>
 		{:else}
-			<button
-				type="button"
-				use:dragHandle
-				class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
-				aria-label="Reorder {entry.title}"
-				title="Reorder {entry.title}"
-			>
-				<GripVertical class="size-3" />
-			</button>
-			<ContextMenu.Root>
-				<ContextMenu.Trigger>
-					{#if isFolder}
-						<Sidebar.MenuSubButton class="w-full cursor-pointer">
-							{#snippet child({ props })}
-								<button
-									type="button"
-									{...props}
-									onclick={() => toggle(entry.id)}
-									aria-expanded={isOpen}
-								>
-									<ChevronRight
-										class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
-											? 'rotate-90'
-											: ''}"
-									/>
-									{#if isOpen}
-										<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
-									{:else}
-										<Folder class="size-4 shrink-0 text-muted-foreground" />
-									{/if}
-									<span class="truncate">{entry.title}</span>
-								</button>
+			<!-- The row's own positioning context. Without this wrapper the absolutely
+			     positioned affordances below resolve against `Sidebar.MenuSubItem`, whose
+			     `<li>` also contains the expanded subtree — so `top-1/2` would centre them
+			     over the children instead of the row. Scoping `group/entry` here also stops
+			     a hovered child row from revealing its parent's buttons. -->
+			<div class="group/entry relative">
+				<Tip text="Reorder {entry.title}" side="right">
+					{#snippet children({ props })}
+						<button
+							{...props}
+							type="button"
+							use:dragHandle
+							class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
+							aria-label="Reorder {entry.title}"
+						>
+							<GripVertical class="size-3" />
+						</button>
+					{/snippet}
+				</Tip>
+				<ContextMenu.Root>
+					<ContextMenu.Trigger>
+						{#if isFolder}
+							<Sidebar.MenuSubButton class="w-full cursor-pointer">
+								{#snippet child({ props })}
+									<button
+										type="button"
+										{...props}
+										onclick={() => toggle(entry.id)}
+										aria-expanded={isOpen}
+									>
+										<ChevronRight
+											class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
+												? 'rotate-90'
+												: ''}"
+										/>
+										{#if isOpen}
+											<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+										{:else}
+											<Folder class="size-4 shrink-0 text-muted-foreground" />
+										{/if}
+										<span class="truncate">{entry.title}</span>
+									</button>
+								{/snippet}
+							</Sidebar.MenuSubButton>
+						{:else}
+							<Sidebar.MenuSubButton isActive={entry.id === activeNoteId}>
+								{#snippet child({ props })}
+									<a
+										href="/notes/{entry.id}"
+										{...props}
+										draggable={entry.kind === 'note'}
+										ondragstart={(event) => {
+											if (entry.kind !== 'note' || !event.dataTransfer) return;
+											event.stopPropagation();
+											writeNoteDrag(event.dataTransfer, entry.id);
+										}}
+										onclick={(event) => {
+											if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+												return;
+											event.preventDefault();
+											void workbench.openTab(entry.id);
+										}}
+									>
+										{#if entry.kind === 'skill'}
+											<Wrench class="size-4 shrink-0 text-muted-foreground" />
+										{:else}
+											<FileText class="size-4 shrink-0 text-muted-foreground" />
+										{/if}
+										<span class="truncate">{entry.title}</span>
+										{#if entry.isPinned}
+											<Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
+										{/if}
+									</a>
+								{/snippet}
+							</Sidebar.MenuSubButton>
+						{/if}
+					</ContextMenu.Trigger>
+					<ContextMenu.Content>
+						{@render entryMenuItems(entry, ContextMenu)}
+					</ContextMenu.Content>
+				</ContextMenu.Root>
+				{#if isFolder}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props: menuProps })}
+								<Tip text="Create in {entry.title}">
+									{#snippet children({ props: tipProps })}
+										<button
+											{...mergeProps(menuProps, tipProps)}
+											class="absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+											aria-label="Create in {entry.title}"
+										>
+											<Plus class="size-3.5" />
+										</button>
+									{/snippet}
+								</Tip>
 							{/snippet}
-						</Sidebar.MenuSubButton>
-					{:else}
-						<Sidebar.MenuSubButton isActive={entry.id === activeNoteId}>
-							{#snippet child({ props })}
-								<a
-									href="/notes/{entry.id}"
-									{...props}
-									draggable={entry.kind === 'note'}
-									ondragstart={(event) => {
-										if (entry.kind !== 'note' || !event.dataTransfer) return;
-										event.stopPropagation();
-										writeNoteDrag(event.dataTransfer, entry.id);
-									}}
-									onclick={(event) => {
-										if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
-											return;
-										event.preventDefault();
-										void workbench.openTab(entry.id);
-									}}
-								>
-									{#if entry.kind === 'skill'}
-										<Wrench class="size-4 shrink-0 text-muted-foreground" />
-									{:else}
-										<FileText class="size-4 shrink-0 text-muted-foreground" />
-									{/if}
-									<span class="truncate">{entry.title}</span>
-									{#if entry.isPinned}
-										<Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
-									{/if}
-								</a>
-							{/snippet}
-						</Sidebar.MenuSubButton>
-					{/if}
-				</ContextMenu.Trigger>
-				<ContextMenu.Content>
-					{@render entryMenuItems(entry, ContextMenu)}
-				</ContextMenu.Content>
-			</ContextMenu.Root>
-			{#if isFolder}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start">
+							{@render createMenuItems(entry.projectId, entry.id, DropdownMenu)}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/if}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<button
-								{...props}
-								class="absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
-								aria-label="Create in {entry.title}"
-								title="Create in {entry.title}"
-							>
-								<Plus class="size-3.5" />
-							</button>
+						{#snippet child({ props: menuProps })}
+							<Tip text="Actions for {entry.title}">
+								{#snippet children({ props: tipProps })}
+									<button
+										{...mergeProps(menuProps, tipProps)}
+										class="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+										aria-label="Actions for {entry.title}"
+									>
+										<Ellipsis class="size-3.5" />
+									</button>
+								{/snippet}
+							</Tip>
 						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="start">
-						{@render createMenuItems(entry.projectId, entry.id, DropdownMenu)}
+						{@render entryMenuItems(entry, DropdownMenu)}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
-			{/if}
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<button
-							{...props}
-							class="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
-							aria-label="Actions for {entry.title}"
-						>
-							<Ellipsis class="size-3.5" />
-						</button>
-					{/snippet}
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="start">
-					{@render entryMenuItems(entry, DropdownMenu)}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
+			</div>
 		{/if}
 		{#if isFolder && depth < MAX_DEPTH}
 			<div
@@ -664,10 +684,18 @@
 				class="right-[3.25rem]"
 				aria-label="Actions for {project.name}"
 			>
-				{#snippet child({ props })}
+				{#snippet child({ props: actionProps })}
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger {...props}>
-							<Ellipsis class="size-3.5" />
+						<DropdownMenu.Trigger>
+							{#snippet child({ props: menuProps })}
+								<Tip text="Actions for {project.name}">
+									{#snippet children({ props: tipProps })}
+										<button {...mergeProps(actionProps, menuProps, tipProps)}>
+											<Ellipsis class="size-3.5" />
+										</button>
+									{/snippet}
+								</Tip>
+							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start">
 							{@render projectMenuItems(project, DropdownMenu)}
@@ -676,10 +704,18 @@
 				{/snippet}
 			</Sidebar.MenuAction>
 			<Sidebar.MenuAction showOnHover class="right-7" aria-label="Create in {project.name}">
-				{#snippet child({ props })}
+				{#snippet child({ props: actionProps })}
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger {...props} title="Create in {project.name}">
-							<Plus class="size-3.5" />
+						<DropdownMenu.Trigger>
+							{#snippet child({ props: menuProps })}
+								<Tip text="Create in {project.name}">
+									{#snippet children({ props: tipProps })}
+										<button {...mergeProps(actionProps, menuProps, tipProps)}>
+											<Plus class="size-3.5" />
+										</button>
+									{/snippet}
+								</Tip>
+							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start">
 							{@render createMenuItems(project.id, undefined, DropdownMenu)}

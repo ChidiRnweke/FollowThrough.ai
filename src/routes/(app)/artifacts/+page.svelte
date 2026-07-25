@@ -12,6 +12,8 @@
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
 	import {
 		deleteArtifact,
@@ -198,50 +200,62 @@
 						</div>
 						<div class="flex items-center gap-2">
 							{#if artifact.stale}
-								<Badge
-									variant="ghost"
-									class="bg-warning/15 text-warning"
-									title="A source note changed after this was generated — regenerate to refresh"
-									>Source changed</Badge
-								>
+								<Tip text="A source note changed after this was generated — regenerate to refresh">
+									{#snippet children({ props })}
+										<Badge {...props} variant="ghost" class="bg-warning/15 text-warning">
+											Source changed
+										</Badge>
+									{/snippet}
+								</Tip>
 							{/if}
 							<Badge variant="brand" class="text-xs">{artifact.format.toUpperCase()}</Badge>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Download"
-								title="Download"
-								disabled={busyId === artifact.id}
-								onclick={() => download(artifact.id)}
-							>
-								<Download />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Regenerate"
-								title="Regenerate"
-								disabled={busyId === artifact.id}
-								onclick={() => regenerate(artifact.id)}
-							>
-								<RefreshCw />
-							</Button>
+							<Tip text="Download">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-sm"
+										aria-label="Download"
+										disabled={busyId === artifact.id}
+										onclick={() => download(artifact.id)}
+									>
+										<Download />
+									</Button>
+								{/snippet}
+							</Tip>
+							<Tip text="Regenerate">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-sm"
+										aria-label="Regenerate"
+										disabled={busyId === artifact.id}
+										onclick={() => regenerate(artifact.id)}
+									>
+										<RefreshCw />
+									</Button>
+								{/snippet}
+							</Tip>
 							<ConfirmDelete
 								title="Delete this artifact?"
 								description="The exported document will be permanently removed."
 								onconfirm={() => remove(artifact.id)}
 							>
-								{#snippet trigger(props)}
-									<Button
-										{...props}
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Delete"
-										title="Delete"
-										disabled={busyId === artifact.id}
-									>
-										<Trash2 />
-									</Button>
+								{#snippet trigger(confirmProps)}
+									<Tip text="Delete">
+										{#snippet children({ props: tipProps })}
+											<Button
+												{...mergeProps(confirmProps as Record<string, unknown>, tipProps)}
+												variant="ghost"
+												size="icon-sm"
+												aria-label="Delete"
+												disabled={busyId === artifact.id}
+											>
+												<Trash2 />
+											</Button>
+										{/snippet}
+									</Tip>
 								{/snippet}
 							</ConfirmDelete>
 						</div>

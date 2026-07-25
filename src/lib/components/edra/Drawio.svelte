@@ -32,12 +32,7 @@
 			{diagram ? 'Saved' : 'Loading…'}
 		</span>
 		{#if noteId}
-			<Button
-				href={`/notes/${noteId}/diagrams/${diagramId}`}
-				variant="ghost"
-				size="sm"
-				title="Open this diagram in draw.io"
-			>
+			<Button href={`/notes/${noteId}/diagrams/${diagramId}`} variant="ghost" size="sm">
 				<ExternalLink />
 				Open in draw.io
 			</Button>

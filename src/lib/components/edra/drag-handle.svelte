@@ -275,7 +275,6 @@
 							<DropdownMenu.Label>Texts</DropdownMenu.Label>
 							{#each quickcolors as color (color.label)}
 								<DropdownMenu.Item
-									title={color.value}
 									onclick={() => {
 										if (color.value === '' || color.label === 'Default')
 											editor?.chain().setNodeSelection(currentNodePos).unsetColor().run();
@@ -293,7 +292,6 @@
 							<DropdownMenu.Label>Background</DropdownMenu.Label>
 							{#each quickcolors as color (color.label)}
 								<DropdownMenu.Item
-									title={color.value}
 									onclick={() => {
 										if (color.value === '' || color.label === 'Default')
 											editor?.chain().setNodeSelection(currentNodePos).unsetHighlight().run();

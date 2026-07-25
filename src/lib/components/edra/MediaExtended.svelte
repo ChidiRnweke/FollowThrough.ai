@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import { cn } from '$lib/utils.js';
+	import { cn, mergeProps } from '$lib/utils.js';
+	import { Tip } from '$lib/components/ui/tooltip/index.js';
 	import AlignCenter from '@lucide/svelte/icons/text-align-center';
 	import AlignLeft from '@lucide/svelte/icons/text-align-start';
 	import AlignRight from '@lucide/svelte/icons/text-align-end';
@@ -199,42 +200,66 @@
 					openedMore && 'opacity-100'
 				)}
 			>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					class={cn(node.attrs.align === 'left' && 'bg-muted')}
-					onclick={() => updateAttributes({ align: 'left' })}
-					title={strings.extension.media.alignLeft}
-				>
-					<AlignLeft />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					class={cn(node.attrs.align === 'center' && 'bg-muted')}
-					onclick={() => updateAttributes({ align: 'center' })}
-					title={strings.extension.media.alignCenter}
-				>
-					<AlignCenter />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					class={cn(node.attrs.align === 'right' && 'bg-muted')}
-					onclick={() => updateAttributes({ align: 'right' })}
-					title={strings.extension.media.alignRight}
-				>
-					<AlignRight />
-				</Button>
+				<Tip text={strings.extension.media.alignLeft}>
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-xs"
+							class={cn(node.attrs.align === 'left' && 'bg-muted')}
+							onclick={() => updateAttributes({ align: 'left' })}
+							aria-label={strings.extension.media.alignLeft}
+						>
+							<AlignLeft />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text={strings.extension.media.alignCenter}>
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-xs"
+							class={cn(node.attrs.align === 'center' && 'bg-muted')}
+							onclick={() => updateAttributes({ align: 'center' })}
+							aria-label={strings.extension.media.alignCenter}
+						>
+							<AlignCenter />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text={strings.extension.media.alignRight}>
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-xs"
+							class={cn(node.attrs.align === 'right' && 'bg-muted')}
+							onclick={() => updateAttributes({ align: 'right' })}
+							aria-label={strings.extension.media.alignRight}
+						>
+							<AlignRight />
+						</Button>
+					{/snippet}
+				</Tip>
 				<DropdownMenu.Root
 					bind:open={openedMore}
 					onOpenChange={(value: boolean) => (openedMore = value)}
 				>
-					<DropdownMenu.Trigger
-						class={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
-						title={strings.extension.media.moreOptions}
-					>
-						<EllipsisVertical />
+					<DropdownMenu.Trigger>
+						{#snippet child({ props: menuProps })}
+							<Tip text={strings.extension.media.moreOptions}>
+								{#snippet children({ props: tipProps })}
+									<button
+										{...mergeProps(menuProps, tipProps)}
+										class={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
+										aria-label={strings.extension.media.moreOptions}
+									>
+										<EllipsisVertical />
+									</button>
+								{/snippet}
+							</Tip>
+						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="start" class="mt-1 overflow-auto text-sm">
 						<DropdownMenu.Item

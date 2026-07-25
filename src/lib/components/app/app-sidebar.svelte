@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import House from '@lucide/svelte/icons/house';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
@@ -120,14 +121,18 @@
 			data-loading={loading || undefined}
 		>
 			<Sidebar.GroupLabel>Projects</Sidebar.GroupLabel>
-			<Sidebar.GroupAction
-				class="top-2.5 rounded-full"
-				title="New project"
-				onclick={() => tree?.openNewProject()}
-			>
-				<Plus class="size-4" />
-				<span class="sr-only">New project</span>
-			</Sidebar.GroupAction>
+			<Tip text="New project">
+				{#snippet children({ props })}
+					<Sidebar.GroupAction
+						{...props}
+						class="top-2.5 rounded-full"
+						onclick={() => tree?.openNewProject()}
+					>
+						<Plus class="size-4" />
+						<span class="sr-only">New project</span>
+					</Sidebar.GroupAction>
+				{/snippet}
+			</Tip>
 			<Sidebar.GroupContent>
 				{#if loading && !shell.projects.length}
 					<Sidebar.Menu>
@@ -184,44 +189,60 @@
 			</span>
 			<div class="flex items-center group-data-[collapsible=icon]:flex-col">
 				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="hidden lg:inline-flex"
-					aria-label="Toggle chat panel"
-					title="Toggle chat panel"
-					onclick={() => rightPanel.toggle('chat')}
-				>
-					<MessageSquare class="size-4" />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="lg:hidden"
-					aria-label="Open chat"
-					title="Open chat"
-					href="/chats/new"
-				>
-					<MessageSquare />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Toggle theme"
-					title="Toggle theme"
-					onclick={toggleMode}
-				>
-					<SunMoon class="size-4" />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Send feedback"
-					title="Send feedback"
-					onclick={() => (feedbackOpen = true)}
-				>
-					<MessageSquareWarning class="size-4" />
-				</Button>
+				<Tip text="Toggle chat panel">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="hidden lg:inline-flex"
+							aria-label="Toggle chat panel"
+							onclick={() => rightPanel.toggle('chat')}
+						>
+							<MessageSquare class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Open chat">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="lg:hidden"
+							aria-label="Open chat"
+							href="/chats/new"
+						>
+							<MessageSquare />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Toggle theme">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Toggle theme"
+							onclick={toggleMode}
+						>
+							<SunMoon class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Send feedback">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Send feedback"
+							onclick={() => (feedbackOpen = true)}
+						>
+							<MessageSquareWarning class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
 			</div>
 		</div>
 	</Sidebar.Footer>

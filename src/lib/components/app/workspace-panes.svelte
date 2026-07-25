@@ -3,6 +3,7 @@
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import type { NoteId, NoteView, ShellContext } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import X from '@lucide/svelte/icons/x';
@@ -138,15 +139,19 @@
 					<span class="truncate">{secondaryTitle}</span>
 				</ToggleGroup.Item>
 			</ToggleGroup.Root>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Close split view"
-				title="Close split view"
-				onclick={closeSplit}
-			>
-				<X />
-			</Button>
+			<Tip text="Close split view">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						aria-label="Close split view"
+						onclick={closeSplit}
+					>
+						<X />
+					</Button>
+				{/snippet}
+			</Tip>
 		</div>
 	{/if}
 
