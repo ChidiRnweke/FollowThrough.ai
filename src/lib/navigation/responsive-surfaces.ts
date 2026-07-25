@@ -1,12 +1,10 @@
 import { goto } from '$app/navigation';
 import type { TodoView } from '$lib/models';
+import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
 import { rightPanel } from '$lib/stores/right-panel.svelte';
 
-const wideWorkbench = (): boolean =>
-	typeof window !== 'undefined' && window.matchMedia('(min-width: 96rem)').matches;
-
 export function openTodoSurface(view: TodoView, returnTo: string): void {
-	if (wideWorkbench()) {
+	if (dockedPanelFits()) {
 		rightPanel.openTodo(view);
 		return;
 	}

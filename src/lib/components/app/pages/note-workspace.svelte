@@ -21,6 +21,7 @@
 	import PinOff from '@lucide/svelte/icons/pin-off';
 	import { toast } from 'svelte-sonner';
 	import { chat } from '$lib/stores/chat.svelte';
+	import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
 	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
@@ -464,7 +465,7 @@
 			return;
 		}
 		const prompt = `Use the "${skillName}" skill on the selected text.`;
-		if (window.matchMedia('(min-width: 96rem)').matches) {
+		if (dockedPanelFits()) {
 			rightPanel.openChat();
 			void chat.send({
 				prompt,

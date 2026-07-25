@@ -349,6 +349,27 @@
 	export { openNewProject };
 </script>
 
+<!-- The one place creation lives. Rendered by the hover `+` action, and reused at
+     the top of the right-click / overflow menus so every route to "new" agrees. -->
+{#snippet createMenuItems(
+	projectId: ProjectId,
+	parentId: NoteId | undefined,
+	Menu: typeof ContextMenu | typeof DropdownMenu
+)}
+	<Menu.Item onclick={() => startCreate('note', projectId, parentId)}>
+		<FileText class="size-4" />
+		New note
+	</Menu.Item>
+	<Menu.Item onclick={() => startCreate('folder', projectId, parentId)}>
+		<FolderPlus class="size-4" />
+		New folder
+	</Menu.Item>
+	<Menu.Item onclick={() => startCreate('skill', projectId, parentId)}>
+		<Wrench class="size-4" />
+		New skill
+	</Menu.Item>
+{/snippet}
+
 <!-- Shared context/dropdown items for a tree entry (note, skill, or folder). -->
 {#snippet entryMenuItems(entry: NoteSummary, Menu: typeof ContextMenu | typeof DropdownMenu)}
 	{#if entry.kind === 'note'}
@@ -359,14 +380,7 @@
 		<Menu.Separator />
 	{/if}
 	{#if entry.kind === 'folder'}
-		<Menu.Item onclick={() => startCreate('folder', entry.projectId, entry.id)}>
-			<FolderPlus class="size-4" />
-			New folder
-		</Menu.Item>
-		<Menu.Item onclick={() => startCreate('skill', entry.projectId, entry.id)}>
-			<Wrench class="size-4" />
-			New skill
-		</Menu.Item>
+		{@render createMenuItems(entry.projectId, entry.id, Menu)}
 		<Menu.Separator />
 	{/if}
 	<Menu.Item
@@ -523,6 +537,25 @@
 					{@render entryMenuItems(entry, ContextMenu)}
 				</ContextMenu.Content>
 			</ContextMenu.Root>
+			{#if isFolder}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								class="absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+								aria-label="Create in {entry.title}"
+								title="Create in {entry.title}"
+							>
+								<Plus class="size-3.5" />
+							</button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="start">
+						{@render createMenuItems(entry.projectId, entry.id, DropdownMenu)}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/if}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -569,7 +602,9 @@
 							{@render inlineCreateRow(inlineEdit, 'inline')}
 						</div>
 					{/if}
-					{#if !isCreatingIn(entry.projectId, entry.id)}
+					<!-- Creation lives on the row's hover `+`; the dashed button survives only
+					     as an empty state, where there is nothing else to aim at. -->
+					{#if !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
 						<div class="ml-3.5 pl-2.5">
 							<button
 								type="button"
@@ -577,9 +612,7 @@
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
-								{zoneItems(entry.projectId, entry.id).length === 0
-									? 'Create your first note'
-									: 'New note'}
+								Create your first note
 							</button>
 						</div>
 					{/if}
@@ -590,14 +623,7 @@
 {/snippet}
 
 {#snippet projectMenuItems(project: Project, Menu: typeof ContextMenu | typeof DropdownMenu)}
-	<Menu.Item onclick={() => startCreate('folder', project.id)}>
-		<FolderPlus class="size-4" />
-		New folder
-	</Menu.Item>
-	<Menu.Item onclick={() => startCreate('skill', project.id)}>
-		<Wrench class="size-4" />
-		New skill
-	</Menu.Item>
+	{@render createMenuItems(project.id, undefined, Menu)}
 	<Menu.Separator />
 	<Menu.Item
 		onclick={() =>
@@ -633,7 +659,11 @@
 					{@render projectMenuItems(project, ContextMenu)}
 				</ContextMenu.Content>
 			</ContextMenu.Root>
-			<Sidebar.MenuAction showOnHover class="right-7" aria-label="Actions for {project.name}">
+			<Sidebar.MenuAction
+				showOnHover
+				class="right-[3.25rem]"
+				aria-label="Actions for {project.name}"
+			>
 				{#snippet child({ props })}
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger {...props}>
@@ -641,6 +671,18 @@
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start">
 							{@render projectMenuItems(project, DropdownMenu)}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/snippet}
+			</Sidebar.MenuAction>
+			<Sidebar.MenuAction showOnHover class="right-7" aria-label="Create in {project.name}">
+				{#snippet child({ props })}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger {...props} title="Create in {project.name}">
+							<Plus class="size-3.5" />
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start">
+							{@render createMenuItems(project.id, undefined, DropdownMenu)}
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				{/snippet}
@@ -697,14 +739,14 @@
 						{#if inlineEdit?.mode === 'create' && isCreatingIn(project.id, undefined)}
 							{@render inlineCreateRow(inlineEdit, 'inline')}
 						{/if}
-						{#if !isCreatingIn(project.id, undefined)}
+						{#if !isCreatingIn(project.id, undefined) && entries.length === 0}
 							<button
 								type="button"
 								class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 								onclick={() => startCreate('note', project.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
-								{entries.length === 0 ? 'Create your first note' : 'New note'}
+								Create your first note
 							</button>
 						{/if}
 					</div>
