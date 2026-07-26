@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
+
 	let { data } = $props();
 </script>
 
@@ -10,12 +12,7 @@
 			approval. You'll be able to access the app once your account is approved.
 		</p>
 		<form method="POST" action="/auth/logout">
-			<button
-				type="submit"
-				class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-			>
-				Sign Out
-			</button>
+			<Button type="submit">Sign Out</Button>
 		</form>
 	</div>
 </div>

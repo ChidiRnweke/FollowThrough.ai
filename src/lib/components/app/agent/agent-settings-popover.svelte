@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { AgentModel } from '$lib/models';
+	import { mergeProps } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtSettings as Settings } from '$lib/components/icons';
 	import { chat } from '$lib/stores/chat.svelte';
 	import ModelPicker from './model-picker.svelte';
@@ -17,10 +19,19 @@
 -->
 <Popover.Root>
 	<Popover.Trigger>
-		{#snippet child({ props })}
-			<Button {...props} variant="ghost" size="icon-sm" aria-label="Agent settings">
-				<Settings data-icon />
-			</Button>
+		{#snippet child({ props: triggerProps })}
+			<Tip text="Agent settings">
+				{#snippet children({ props: tipProps })}
+					<Button
+						{...mergeProps(triggerProps, tipProps)}
+						variant="ghost"
+						size="icon-sm"
+						aria-label="Agent settings"
+					>
+						<Settings data-icon />
+					</Button>
+				{/snippet}
+			</Tip>
 		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content align="end" class="w-72 gap-3">

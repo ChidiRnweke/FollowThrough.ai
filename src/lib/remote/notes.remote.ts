@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { redirect } from '@sveltejs/kit';
+import { command, form, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from './actor';
 import type {
@@ -167,5 +168,13 @@ export const convertDiagram = command(
 		return AppFactory.controllerFactory()
 			.diagrams()
 			.convertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
+	}
+);
+
+export const captureNote = form(
+	z.object({ title: z.string().trim().min(1, 'Give the note a title first.') }),
+	async ({ title }) => {
+		const { note } = await AppFactory.controllerFactory().notes().create(requestActor(), { title });
+		redirect(303, `/notes/${note.id}`);
 	}
 );

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray } from 'drizzle-orm';
 import type { ActorContext, Conversation, Message } from '$lib/models';
 import { NotFoundError } from '$lib/models';
 import type { ConversationListOptions, ConversationRepository } from '$lib/repositories';
@@ -149,5 +149,19 @@ export class PostgresConversationRepository implements ConversationRepository {
 				.where(eq(schema.messages.conversationId, id))
 				.orderBy(asc(schema.messages.createdAt))
 		).map(toMessage);
+	}
+
+	async deleteMessages(
+		actor: ActorContext,
+		id: Conversation['id'],
+		messageIds: readonly Message['id'][]
+	): Promise<void> {
+		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+		if (messageIds.length === 0) return;
+		await this.database
+			.delete(schema.messages)
+			.where(
+				and(eq(schema.messages.conversationId, id), inArray(schema.messages.id, [...messageIds]))
+			);
 	}
 }

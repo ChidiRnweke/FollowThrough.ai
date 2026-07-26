@@ -260,6 +260,32 @@
 		font-variant-ligatures: none;
 	}
 
+	/* Interaction contract — see DESIGN_SYSTEM.md "Interaction states".
+	   Tailwind v4's preflight dropped the `cursor: pointer` that browsers and
+	   every previous version gave clickable things, which left the whole app —
+	   shadcn controls, the vendored editor's toolbars, bare buttons — reading as
+	   inert. Restored here by role rather than per component, so a control that
+	   never passes through our primitives is still covered.
+
+	   In `@layer base` deliberately: a `cursor-*` utility on the element still
+	   wins, which is how the drag handles (`cursor-grab`), the split resizer
+	   (`cursor-col-resize`), and the editor surface (`cursor-text`) keep theirs. */
+	button:not(:disabled):not([aria-disabled='true']),
+	summary,
+	a[href],
+	label:has(> input[type='file']),
+	[role='button']:not([aria-disabled='true']),
+	[role='tab']:not([aria-disabled='true']),
+	[role='option']:not([aria-disabled='true']),
+	[role='menuitem']:not([aria-disabled='true']),
+	[role='menuitemcheckbox']:not([aria-disabled='true']),
+	[role='menuitemradio']:not([aria-disabled='true']),
+	[role='switch']:not([aria-disabled='true']),
+	[role='checkbox']:not([aria-disabled='true']),
+	[role='radio']:not([aria-disabled='true']) {
+		cursor: pointer;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		*,
 		*::before,
@@ -294,16 +320,60 @@
 	&:hover {
 		background-color: var(--color-accent);
 		color: var(--color-accent-foreground);
+		/* Motion, not elevation — the row rises to meet the pointer and settles
+		   back on press. No shadow; the flat-surface rule still holds. */
+		transform: translateY(-1px);
 	}
 	&:focus-visible {
 		outline: none;
 		background-color: var(--color-accent);
 		box-shadow: 0 0 0 2px var(--color-ring);
+		transform: translateY(-1px);
+	}
+	&:active {
+		transform: none;
 	}
 	&[aria-current='page'] {
 		background-color: var(--color-sidebar-accent);
 		color: var(--color-sidebar-accent-foreground);
 		font-weight: 500;
+	}
+}
+
+/* The hover lift is motion, so it is opted out of entirely rather than merely
+   un-transitioned — the base reduced-motion guard only collapses durations,
+   which would turn the lift into a jump. Unlayered so it beats the utility. */
+@media (prefers-reduced-motion: reduce) {
+	.row-interactive:hover,
+	.row-interactive:focus-visible,
+	.tactile:hover,
+	.tactile:focus-visible,
+	[data-slot='button']:hover,
+	[data-slot='button']:focus-visible {
+		transform: none;
+	}
+}
+
+/* The interaction contract for discrete clickable targets that are not shadcn
+   controls — bare `<button>`s, `<label>`s standing in for one. Same cue as
+   `buttonVariants.base`: pointer, 1px lift, settle back on press. Rows use
+   `row-interactive` instead; do not hand-roll `cursor-pointer`. */
+@utility tactile {
+	cursor: pointer;
+	transition-property: color, background-color, border-color, opacity, transform;
+	transition-duration: var(--duration-micro);
+	transition-timing-function: var(--ease-standard);
+	&:hover,
+	&:focus-visible {
+		transform: translateY(-1px);
+	}
+	&:active {
+		transform: none;
+	}
+	&:disabled,
+	&[aria-disabled='true'] {
+		cursor: default;
+		transform: none;
 	}
 }
 

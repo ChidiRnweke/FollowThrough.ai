@@ -110,6 +110,28 @@ export class PersistentConversationJournal implements ConversationJournal {
 		return this.repository.listMessages(actor, conversationId);
 	}
 
+	/**
+	 * Drop the `ordinal`-th user turn and everything after it, counting user
+	 * messages only. Tolerates an ordinal past the end: the caller derives it from
+	 * a client transcript that may have moved on.
+	 */
+	async truncateFromUserMessage(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		ordinal: number
+	): Promise<void> {
+		if (ordinal < 1) return;
+		const messages = await this.repository.listMessages(actor, conversationId);
+		const anchor = messages.filter((message) => message.role === 'user')[ordinal - 1];
+		if (!anchor) return;
+		const from = messages.indexOf(anchor);
+		await this.repository.deleteMessages(
+			actor,
+			conversationId,
+			messages.slice(from).map((message) => message.id)
+		);
+	}
+
 	async recordUserPrompt(
 		actor: ActorContext,
 		conversationId: ConversationId,

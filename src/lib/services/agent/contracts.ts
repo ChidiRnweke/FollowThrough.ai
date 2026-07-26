@@ -118,6 +118,12 @@ export interface ConversationJournal extends ConversationRecorder {
 	): Promise<Conversation>;
 	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
 	listMessages(actor: ActorContext, conversationId: ConversationId): Promise<readonly Message[]>;
+	/** Drop the `ordinal`-th user turn (1-based, user messages only) and all later turns. */
+	truncateFromUserMessage(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		ordinal: number
+	): Promise<void>;
 	recordUserPrompt(
 		actor: ActorContext,
 		conversationId: ConversationId,

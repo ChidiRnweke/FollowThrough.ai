@@ -50,11 +50,7 @@
 	}
 </script>
 
-<Card.Root
-	data-compact={compact || undefined}
-	class="group/card gap-1.5 py-3 [&_a]:cursor-pointer [&_button]:cursor-pointer"
-	onclick={openBody}
->
+<Card.Root data-compact={compact || undefined} class="group/card gap-1.5 py-3" onclick={openBody}>
 	<Card.Header class="px-4">
 		<Card.Title class="flex min-w-0 items-start gap-2 text-sm font-medium">
 			{#if draggable}

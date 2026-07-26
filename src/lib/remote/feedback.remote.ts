@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { command } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from './actor';
 import { db } from '$lib/server/db';
 import { feedbackReports } from '$lib/server/db/schema';

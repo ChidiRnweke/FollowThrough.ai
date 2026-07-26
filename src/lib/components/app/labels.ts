@@ -80,12 +80,14 @@ export interface CapabilityCopy {
 export const agentCapabilityCopy = {
 	memory: {
 		label: 'Memory',
-		teaches: 'Rules the agent follows in this project, like never suggesting a library you avoid.',
+		teaches:
+			'Rules the agent follows in this project, like writing style, acronyms and jargon used in this project.',
 		action: 'Manage memory'
 	},
 	attachments: {
 		label: 'Files',
-		teaches: 'Documents the agent can search and quote when you ask about them.',
+		teaches:
+			'Documents the agent can reference to improve its actions, like writing notes and drafting Todos.',
 		action: 'Upload a file'
 	},
 	todos: {

@@ -1,15 +1,25 @@
 <script lang="ts">
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models';
 	import { toast } from 'svelte-sonner';
-	import { policyUpdates } from '$lib/stores/policy-updates.svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { updateTrustPolicy } from '$lib/remote/settings.remote';
 	import TrustPolicyControl from '../trust-policy-control.svelte';
 
 	let { policies }: { policies: readonly TrustPolicy[] } = $props();
+	let busy = $state(false);
 
 	async function change(input: UpdateTrustPolicyInput): Promise<void> {
-		const ok = await policyUpdates.update(input);
-		if (ok) toast.success('Policy updated');
-		else toast.error('Could not update the policy. Try again.');
+		busy = true;
+		try {
+			await updateTrustPolicy(input);
+			// The policies come from the page load, so that is what has to be re-read.
+			await invalidateAll();
+			toast.success('Policy updated');
+		} catch {
+			toast.error('Could not update the policy. Try again.');
+		} finally {
+			busy = false;
+		}
 	}
 </script>
 
@@ -24,11 +34,7 @@
 	{:else}
 		<div class="grid gap-3 lg:grid-cols-2">
 			{#each policies as policy (policy.pipeline)}
-				<TrustPolicyControl
-					{policy}
-					disabled={policyUpdates.busy}
-					onchange={(input) => void change(input)}
-				/>
+				<TrustPolicyControl {policy} disabled={busy} onchange={(input) => void change(input)} />
 			{/each}
 		</div>
 	{/if}

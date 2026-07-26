@@ -71,14 +71,14 @@
 {#if variant === 'row'}
 	<div class="group w-full">
 		<!--
-			The lift is pure CSS, like the starters': Svelte's JS transitions escape
-			the global reduced-motion guard in layout.css, a CSS transition does not.
+			The pointer and the 1px lift come from `row-interactive`, which is the
+			same contract `Button` carries — so this variant and `inline` below feel
+			identical under the hand without either restating it.
 		-->
 		<button
 			type="button"
 			class={[
 				'row-interactive flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm',
-				'hover:-translate-y-px hover:shadow-sm focus-visible:-translate-y-px',
 				className
 			]}
 			onclick={invoke}

@@ -390,7 +390,10 @@
 </script>
 
 {#if hydrated && editor}
-	<div class="flex min-h-96 flex-1 cursor-text flex-col">
+	<!-- No `cursor-text` here: this wrapper is wider and taller than the editable
+	     surface, so the I-beam extended into dead margin where clicking places no
+	     caret. `.tiptap` declares it for the surface that actually takes text. -->
+	<div class="flex min-h-96 flex-1 flex-col">
 		<Tiptap {editor}>
 			<BubbleMenu
 				{editor}

@@ -145,7 +145,12 @@ describe('WorkspaceTabs', () => {
 		expect(dividers.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('makes tabs and the project chevron pointer-cursor clickable', async () => {
+	// A tab takes the cursor but not the lift: it holds a nested close button, so
+	// lifting both would double the travel. The chevron is a free target and opts
+	// into the full contract via `tactile`. See DESIGN_SYSTEM.md "Interaction
+	// states" — the bare `cursor: pointer` for every other button now comes from
+	// the base layer in layout.css rather than from any class here.
+	it('makes tabs pointer-cursor clickable without lifting them', async () => {
 		useTabs([id(1), id(2), id(3)], id(2));
 		const screen = await render(WorkspaceTabs, { shell });
 		const tabs = screen.container.querySelectorAll('[role="tab"]');
@@ -153,10 +158,15 @@ describe('WorkspaceTabs', () => {
 		for (const tab of tabs) {
 			expect(tab.className).toContain('cursor-pointer');
 		}
+	});
+
+	it('gives the project chevron the tactile hover contract', async () => {
+		useTabs([id(1), id(2), id(3)], id(2));
+		const screen = await render(WorkspaceTabs, { shell });
 		const chevrons = screen.container.querySelectorAll('button[aria-expanded]');
 		expect(chevrons.length).toBeGreaterThan(0);
 		for (const chevron of chevrons) {
-			expect(chevron.className).toContain('cursor-pointer');
+			expect(chevron.className).toContain('tactile');
 		}
 	});
 

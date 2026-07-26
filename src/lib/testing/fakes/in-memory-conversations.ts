@@ -69,6 +69,17 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		return this.messages.filter((message) => message.conversationId === id);
 	}
 
+	async deleteMessages(
+		actor: ActorContext,
+		id: ConversationId,
+		messageIds: readonly Message['id'][]
+	): Promise<void> {
+		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+		this.messages = this.messages.filter(
+			(message) => message.conversationId !== id || !messageIds.includes(message.id)
+		);
+	}
+
 	snapshot(): unknown {
 		return structuredClone({ conversations: this.conversations, messages: this.messages });
 	}

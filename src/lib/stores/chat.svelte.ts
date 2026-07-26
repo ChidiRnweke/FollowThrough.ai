@@ -76,6 +76,13 @@ export interface ChatEntry {
 	retryable?: boolean;
 }
 
+/** The prose of a turn, with tool activity left out. */
+export const entryText = (entry: ChatEntry): string =>
+	entry.parts
+		.filter((part) => part.kind === 'text')
+		.map((part) => part.text)
+		.join('\n');
+
 const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
 	entry.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
 
@@ -255,7 +262,9 @@ export class ChatStore {
 			entry.suggestions = entry.suggestions.filter((view) => view.suggestion.id !== suggestionId);
 	}
 
-	async send(input: Omit<RunAgentInput, 'conversationId'>): Promise<void> {
+	async send(
+		input: Omit<RunAgentInput, 'conversationId'> & { readonly retryUserOrdinal?: number }
+	): Promise<void> {
 		if (this.isStreaming) return;
 		const requestId = crypto.randomUUID();
 		const noteChips = this.chips.filter((chip) => chip.kind === 'note').map((chip) => chip.id);
@@ -295,6 +304,9 @@ export class ChatStore {
 				requestedSkillNames: [...new Set([...(input.requestedSkillNames ?? []), ...skillChips])],
 				...(input.requestedSkillNoteIds
 					? { requestedSkillNoteIds: input.requestedSkillNoteIds }
+					: {}),
+				...(input.retryUserOrdinal !== undefined
+					? { retryUserOrdinal: input.retryUserOrdinal }
 					: {})
 			});
 			this.conversationId = receipt.conversationId;
@@ -320,6 +332,47 @@ export class ChatStore {
 		} catch {
 			if (reply) reply.error = 'Cancellation has not been confirmed yet.';
 		}
+	}
+
+	/**
+	 * The user turn a reply answers, so an answer can be asked again with the
+	 * question that produced it.
+	 */
+	precedingUserEntry(reply: ChatEntry): ChatEntry | undefined {
+		const index = this.entries.indexOf(reply);
+		if (index < 0) return undefined;
+		return this.entries.slice(0, index).findLast((entry) => entry.role === 'user');
+	}
+
+	/**
+	 * One-based position of a user turn among the user turns. This, rather than an
+	 * id, is how the server addresses the turn to rewind to: an optimistically sent
+	 * entry carries a client uuid, not the message id the server assigned it.
+	 */
+	private userOrdinalOf(entry: ChatEntry): number | undefined {
+		let ordinal = 0;
+		for (const candidate of this.entries) {
+			if (candidate.role !== 'user') continue;
+			ordinal += 1;
+			if (candidate === entry) return ordinal;
+		}
+		return undefined;
+	}
+
+	/**
+	 * Replace a question and everything it led to. The turn and its successors leave
+	 * the transcript here; the run carries the ordinal so the server discards the
+	 * same span from its own record before the agent replays the conversation.
+	 * Returns false when the resubmission could not be started at all.
+	 */
+	async resubmit(entry: ChatEntry, input: Omit<RunAgentInput, 'conversationId'>): Promise<boolean> {
+		if (this.isStreaming || entry.role !== 'user' || !input.prompt.trim()) return false;
+		const ordinal = this.userOrdinalOf(entry);
+		const index = this.entries.indexOf(entry);
+		if (ordinal === undefined || index < 0) return false;
+		this.entries = this.entries.slice(0, index);
+		await this.send({ ...input, retryUserOrdinal: ordinal });
+		return true;
 	}
 
 	async retry(reply: ChatEntry): Promise<void> {

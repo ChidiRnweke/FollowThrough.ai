@@ -18,11 +18,13 @@ import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
 	AgentRunRepository,
+	AgentSessionRepository,
 	TransactionRunner
 } from '$lib/repositories';
 import type { AgentModelCatalog, AgentPreferencesStore, ConversationJournal } from '$lib/services';
 import { resolveAgentExecutionMode, resolveAgentModel } from '$lib/services';
 import type { AgentRunExecutor } from '$lib/server/domain/agent-run-executor';
+import { rewindToUserItem } from '$lib/server/domain/agent-session-rewind';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -66,6 +68,7 @@ export interface AgentDependencies {
 	runs: AgentRunRepository;
 	events: AgentRunEventRepository;
 	decisions: AgentRunDecisionRepository;
+	sessions: AgentSessionRepository;
 	transactionRunner: TransactionRunner;
 	defaultModel: string;
 	executor: AgentRunExecutor;
@@ -123,6 +126,8 @@ export class DefaultAgentController implements AgentController {
 					actor,
 					runInput
 				);
+				if (input.retryUserOrdinal !== undefined)
+					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
 				const preferences = await this.dependencies.preferences.get(actor);
 				const run: AgentRun = {
 					id: crypto.randomUUID() as AgentRunId,
@@ -280,6 +285,32 @@ export class DefaultAgentController implements AgentController {
 			cleanup();
 			console.error(`[agent-run] Background execution failed for ${runId}:`, error);
 		});
+	}
+
+	/**
+	 * Discard a user turn and everything after it, so an edited or re-asked
+	 * question can be submitted as an ordinary run. Both halves of the record
+	 * have to go: the transcript the client hydrates from, and the provider
+	 * session the run replays.
+	 */
+	private async rewind(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		ordinal: number
+	): Promise<void> {
+		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
+		if (active) throw new ValidationError('Wait for the current agent run to finish first');
+		await this.dependencies.conversationJournal.truncateFromUserMessage(
+			actor,
+			conversationId,
+			ordinal
+		);
+		const items = await this.dependencies.sessions.list(actor, conversationId);
+		const rewound = rewindToUserItem(
+			items.map((item) => item.item),
+			ordinal
+		);
+		if (rewound) await this.dependencies.sessions.replace(conversationId, rewound);
 	}
 
 	private freezeInput(input: SubmitAgentRunInput): RunAgentInput {

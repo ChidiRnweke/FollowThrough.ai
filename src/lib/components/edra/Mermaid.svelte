@@ -19,6 +19,8 @@
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Shapes from '@lucide/svelte/icons/shapes';
 	import X from '@lucide/svelte/icons/x';
+	import Minus from '@lucide/svelte/icons/minus';
+	import Plus from '@lucide/svelte/icons/plus';
 	import { NodeViewWrapper } from './index.js';
 	import { initializeMermaid, sanitizeMermaidSvg } from './mermaid-rendering.js';
 	import { mode as colorMode } from 'mode-watcher';
@@ -89,6 +91,76 @@
 	const wrapperWidth = $derived(`${Math.min(widthPercent, 100)}%`);
 	/** SVG fills the wrapper (≤100%) or overflows it with scroll (>100%). */
 	const svgWidth = $derived(`${Math.max(widthPercent, 100)}%`);
+	// Edit-mode zoom. Deliberately transient and separate from `node.attrs.width`:
+	// that attribute is the diagram's width *in the document*, whereas this only
+	// magnifies the preview pane while you work on the source.
+	const EDIT_ZOOM_MIN = 25;
+	const EDIT_ZOOM_MAX = 400;
+	const EDIT_ZOOM_STEP = 25;
+	let editZoom = $state(100);
+
+	function setEditZoom(percent: number) {
+		editZoom = Math.min(EDIT_ZOOM_MAX, Math.max(EDIT_ZOOM_MIN, Math.round(percent)));
+	}
+
+	/** Snap onto the step grid, so the buttons stay predictable after a pinch. */
+	function stepEditZoom(direction: 1 | -1) {
+		const grid =
+			direction === 1
+				? Math.floor(editZoom / EDIT_ZOOM_STEP)
+				: Math.ceil(editZoom / EDIT_ZOOM_STEP);
+		setEditZoom((grid + direction) * EDIT_ZOOM_STEP);
+	}
+
+	/** Trackpad pinch and ctrl+wheel arrive as the same event. */
+	function handlePreviewWheel(event: WheelEvent) {
+		if (!event.ctrlKey && !event.metaKey) return;
+		event.preventDefault();
+		// Continuous rather than stepped: a pinch that only moved the zoom in 25%
+		// jumps would feel like a ratchet rather than a gesture.
+		setEditZoom(editZoom * Math.exp(-event.deltaY / 180));
+	}
+
+	// Touch pinch. Two fingers scale the diagram; anything else is left to the
+	// pane's own scrolling.
+	let pinchStartDistance = 0;
+	let pinchStartZoom = 100;
+
+	const touchDistance = (touches: TouchList): number =>
+		Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+	function handlePreviewTouchStart(event: TouchEvent) {
+		if (event.touches.length !== 2) return;
+		pinchStartDistance = touchDistance(event.touches);
+		pinchStartZoom = editZoom;
+	}
+
+	function handlePreviewTouchMove(event: TouchEvent) {
+		if (event.touches.length !== 2 || pinchStartDistance === 0) return;
+		event.preventDefault();
+		setEditZoom((pinchStartZoom * touchDistance(event.touches)) / pinchStartDistance);
+	}
+
+	function handlePreviewTouchEnd() {
+		pinchStartDistance = 0;
+	}
+
+	// The zoomed canvas needs a width that does not itself depend on the zoom.
+	// `width: 100%` would be re-resolved inside the zoomed coordinate space and
+	// the diagram would never grow — hence measuring the pane in real pixels.
+	let previewPane: HTMLDivElement | null = $state(null);
+	let paneWidth = $state(0);
+
+	$effect(() => {
+		const pane = previewPane;
+		if (!pane) return;
+		const observer = new ResizeObserver(([entry]) => {
+			paneWidth = entry.contentRect.width;
+		});
+		observer.observe(pane);
+		return () => observer.disconnect();
+	});
+
 	const mediaResize = createMediaResize({
 		getParentEl: () => previewWrapper?.parentElement,
 		getWidthPercent: () => widthPercent,
@@ -173,6 +245,7 @@
 		if (!editor.isEditable) return;
 		editCode = code;
 		isEditing = true;
+		editZoom = 100;
 		error = null;
 		showAiRevision = false;
 		revisionError = null;
@@ -491,7 +564,9 @@
 			<!-- Editor Content -->
 			<div class="flex flex-1 min-h-0 overflow-hidden">
 				{#if mode === 'both' || mode === 'code'}
-					<div class={cn('flex-1 min-h-0 relative', mode === 'both' ? 'border-r' : '')}>
+					<div
+						class={cn('flex-1 min-h-0 min-w-0 basis-0 relative', mode === 'both' ? 'border-r' : '')}
+					>
 						<textarea
 							bind:value={editCode}
 							onkeydown={handleEditorKeydown}
@@ -509,36 +584,98 @@
 					</div>
 				{/if}
 				{#if mode === 'both' || mode === 'preview'}
-					<div
-						class="flex-1 min-h-0 overflow-auto bg-background flex items-center justify-center p-6 relative"
-					>
-						{#if error}
-							<div class="flex flex-col items-center gap-2 text-center max-w-xs">
-								<div class="bg-destructive/10 flex size-8 items-center justify-center rounded-lg">
-									<TriangleAlert class="text-destructive size-4" />
+					<!-- The preview is a canvas: it scrolls in both axes inside a fixed
+					     box, it zooms, and the zoom controls live on it rather than in the
+					     toolbar so they sit next to the thing they act on. Centring is
+					     `safe` (see `.mermaid-preview` in editor.css) — ordinary centring
+					     puts overflow past the scroll origin, out of reach. -->
+					<!-- `min-w-0` is load-bearing: a flex item defaults to `min-width: auto`,
+					     so without it a zoomed diagram widens this pane and eats the code
+					     editor beside it — and the pane's own width feeds the zoom
+					     measurement, so it runs away. -->
+					<div class="relative flex flex-1 basis-0 min-h-0 min-w-0 overflow-hidden">
+						<!-- `role="img"` states what the pane is: the diagram made visible.
+						     The pinch handlers are an enhancement on top of the buttons
+						     below, which are the accessible path to the same zoom. -->
+						<div
+							bind:this={previewPane}
+							role="img"
+							aria-label="Diagram preview"
+							class="mermaid-preview flex-1 min-w-0 bg-background p-6"
+							onwheel={handlePreviewWheel}
+							ontouchstart={handlePreviewTouchStart}
+							ontouchmove={handlePreviewTouchMove}
+							ontouchend={handlePreviewTouchEnd}
+							ontouchcancel={handlePreviewTouchEnd}
+						>
+							{#if error}
+								<div class="flex flex-col items-center gap-2 text-center max-w-xs">
+									<div class="bg-destructive/10 flex size-8 items-center justify-center rounded-lg">
+										<TriangleAlert class="text-destructive size-4" />
+									</div>
+									<p class="text-destructive text-xs font-medium">Syntax Error</p>
+									<p
+										class="text-muted-foreground font-mono text-[10px] leading-relaxed max-h-24 overflow-auto"
+									>
+										{error}
+									</p>
 								</div>
-								<p class="text-destructive text-xs font-medium">Syntax Error</p>
-								<p
-									class="text-muted-foreground font-mono text-[10px] leading-relaxed max-h-24 overflow-auto"
-								>
-									{error}
-								</p>
-							</div>
-						{:else if isRendering && !previewContainer?.innerHTML}
-							<div class="flex flex-col items-center gap-2">
-								<div
-									class="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary"
-								></div>
-								<span class="text-muted-foreground text-[10px]">Rendering...</span>
+							{:else if isRendering && !previewContainer?.innerHTML}
+								<div class="flex flex-col items-center gap-2">
+									<div
+										class="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary"
+									></div>
+									<span class="text-muted-foreground text-[10px]">Rendering...</span>
+								</div>
+							{/if}
+							<div
+								bind:this={previewContainer}
+								style={`width: ${paneWidth}px; zoom: ${editZoom / 100}`}
+								class={cn(
+									'shrink-0 [&_svg]:max-w-full [&_svg]:h-auto [&_svg]:mx-auto [&_svg]:block',
+									error ? 'hidden' : ''
+								)}
+							></div>
+						</div>
+						{#if !error}
+							<div
+								class="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full border bg-background/90 p-0.5 backdrop-blur-sm"
+							>
+								<Tooltip tooltip="Zoom out">
+									<Button
+										size="icon-sm"
+										variant="ghost"
+										aria-label="Zoom out"
+										disabled={editZoom <= EDIT_ZOOM_MIN}
+										onclick={() => stepEditZoom(-1)}
+									>
+										<Minus />
+									</Button>
+								</Tooltip>
+								<Tooltip tooltip="Reset to 100%">
+									<Button
+										size="xs"
+										variant="ghost"
+										aria-label="Reset zoom"
+										class="w-12 tabular-nums text-muted-foreground"
+										onclick={() => setEditZoom(100)}
+									>
+										{Math.round(editZoom)}%
+									</Button>
+								</Tooltip>
+								<Tooltip tooltip="Zoom in">
+									<Button
+										size="icon-sm"
+										variant="ghost"
+										aria-label="Zoom in"
+										disabled={editZoom >= EDIT_ZOOM_MAX}
+										onclick={() => stepEditZoom(1)}
+									>
+										<Plus />
+									</Button>
+								</Tooltip>
 							</div>
 						{/if}
-						<div
-							bind:this={previewContainer}
-							class={cn(
-								'mermaid-preview flex items-center justify-center [&_svg]:max-w-full [&_svg]:h-auto',
-								error ? 'hidden' : ''
-							)}
-						></div>
 					</div>
 				{/if}
 			</div>

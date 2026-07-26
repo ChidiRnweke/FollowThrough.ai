@@ -53,6 +53,46 @@
   shipped at caption size. Where a control needs to escape its base scale, write the bare element.
 - Focus indicators, AA contrast, 44px touch targets for primary controls, reduced motion, and keyboard access are required.
 
+### Interaction states
+
+Every clickable surface says so. It shows `cursor: pointer` and rises 1px on hover and keyboard
+focus, at `--duration-micro` / `--ease-standard`, settling back to its resting position on
+`:active` so the press reads as a press. **Motion, not elevation** — no hover shadows; the
+flat-surface rule above still holds, and a 1px travel is feedback rather than ornament.
+
+Three exceptions, all for the same reason — a surface that moves out from under the pointer
+mid-click causes mis-selection:
+
+- Menu, select, and command rows take the cursor but never the lift.
+- A control holding a nested control (a workspace tab and its close button) takes the cursor only,
+  so the two lifts don't compound.
+- Sidebar tree rows sit in a dense stack under absolutely-positioned hover actions; cursor only.
+
+**The cursor is not your problem.** A `@layer base` rule in `layout.css` gives `cursor: pointer`
+to every `button`, `summary`, `a[href]`, file-input `label`, and ARIA interactive role, restoring
+what Tailwind v4's preflight removed. It covers shadcn, our own components, and the vendored
+editor's toolbars alike. Because it sits in `base`, a `cursor-*` utility on the element still
+wins — which is how the drag handles keep `cursor-grab`, the split resizer keeps
+`cursor-col-resize`, and the editable surface keeps `cursor-text`. **Never hand-roll
+`cursor-pointer`**; if a control lacks the pointer, it is not reachable by that rule and the fix
+belongs in the rule.
+
+The lift is stated in exactly three places:
+
+- `buttonVariants.base` (`ui/button/button.svelte`) — every shadcn `Button` and `Button href`.
+- `@utility row-interactive` (`layout.css`) — list rows.
+- `@utility tactile` (`layout.css`) — discrete targets that are not shadcn controls: a bare
+  `<button>`, or a `<label>` standing in for one.
+
+An unlayered `prefers-reduced-motion` block opts the lift out entirely rather than merely
+un-transitioning it, since the base guard only collapses durations and would turn the lift into
+a jump.
+
+Inside the editor, `.tiptap` sets `cursor: text` for the whole editable surface, and
+`editor.css` walks it back for anything that is not text — block node views, images, media,
+diagrams — with nested `[contenteditable='true']` islands taking it back again. An I-beam over
+a light diagram fill is effectively invisible, which is how the pointer gets lost.
+
 ## Voice & tone
 
 Calm, dry, second person, present tense. One sentence, period included, no exclamation marks.
@@ -113,6 +153,13 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 - Note synchronization stays in the quiet utility row. Pending device saves and conflicts are explicit;
   three-way comparison belongs in a focused dialog, and resolution always preserves a complete rich
   document version.
+- **Diagram editing is a canvas, not a preview.** The Mermaid editor's preview half is a fixed box
+  that scrolls in both axes, with its own zoom: a floating −/percentage/+ cluster on the canvas
+  rather than in the toolbar, ctrl/⌘+wheel and trackpad pinch for continuous zoom, and the
+  percentage as a reset. The zoom is transient and never touches the block's width in the document
+  — those are different questions and conflating them resizes the note as a side effect of reading.
+  Centring on a scrollable canvas must be `safe`: ordinary centring, and `margin: auto` on a flex
+  item, put overflow past the scroll origin where no scrollbar reaches it.
 - Inline Mermaid diagrams may expose a compact draw.io conversion action. While conversion review is pending, the Mermaid block remains unchanged and carries a restrained review row; acceptance inserts a flat draw.io preview immediately after it, while dismissal removes only the pending state.
 - Draw.io conversion review uses a focused dialog over the source note. Accepted draw.io references render a reserved, non-shifting image preview with title, saved status, and one “Open in draw.io” action.
 - The note-scoped draw.io editor is a focused editing mode with a quiet back action, explicit Save, accessible loading/saving/failure announcements, and leave protection for modified content. It reuses the document visual system and does not introduce another workbench shell or new design tokens.
@@ -153,6 +200,12 @@ and at most one action. Kanban columns keep their drop zone and center the voice
   only one, and a standalone title element duplicated it.
 - Do not leave dead space beneath an empty note; the remaining document surface must accept focus.
 - Do not introduce arbitrary colors, widths, typography values, or raw form controls.
+- Do not hand-roll `cursor-pointer`, a hover lift, or a hover shadow on a control. The contract is
+  global (see "Interaction states"); a local copy is how it drifted the first time.
+- Do not pin diagram colors that the diagram source can override anyway. Mermaid theme variables
+  lose to a diagram's own `classDef`, `style`, and `linkStyle`, so adding more of them in response
+  to an unreadable diagram fixes nothing and leaves a parallel palette to maintain. Keep the theme
+  to the tokens that describe our surfaces.
 - Do not render a chip, badge, or control for a value that is not set. An empty field shows nothing
   on a card and an em dash in the property panel; a column of "No due date / No priority / No
   source" is noise that reads as content.

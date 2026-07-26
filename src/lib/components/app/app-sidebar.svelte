@@ -72,7 +72,7 @@
 		</div>
 		<button
 			type="button"
-			class="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground group-data-[collapsible=icon]:hidden"
+			class="tactile flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground group-data-[collapsible=icon]:hidden"
 			aria-label="Search notes, todos and commands"
 			onclick={() => palette.open()}
 		>

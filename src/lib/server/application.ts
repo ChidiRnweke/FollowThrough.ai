@@ -434,6 +434,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runs: runRepository,
 			events: runEvents,
 			decisions: runDecisions,
+			sessions: agentSessions,
 			transactionRunner,
 			defaultModel: defaultAgentModel,
 			executor: undefined as unknown as AgentRunExecutor // set below after cyclic wiring

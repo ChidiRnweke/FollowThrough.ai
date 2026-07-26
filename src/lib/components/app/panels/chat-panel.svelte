@@ -5,6 +5,7 @@
 		Conversation,
 		NoteId,
 		ProjectId,
+		RunAgentInput,
 		ShellContext
 	} from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
@@ -27,7 +28,7 @@
 		FtClose as X
 	} from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { chat, type ContextChip } from '$lib/stores/chat.svelte';
+	import { chat, entryText, type ChatEntry, type ContextChip } from '$lib/stores/chat.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
 	import { workbench } from '$lib/stores/workbench.svelte';
@@ -196,11 +197,12 @@
 		textareaRef?.focus();
 	}
 
-	async function send(): Promise<void> {
-		const text = prompt.trim();
-		if (!text || chat.isStreaming) return;
-		prompt = '';
-		saveDraft();
+	/**
+	 * The context a prompt travels with — open note, project, editor selection,
+	 * handoff. Shared by the composer and by resubmitting an edited question, so an
+	 * edited turn is grounded exactly like a freshly typed one.
+	 */
+	function requestFor(text: string): Omit<RunAgentInput, 'conversationId'> {
 		// Read the focused pane's editor selection; falls back to undefined
 		// when no pane is mounted (e.g. a fresh `/chats/new` page).
 		const interactionNoteId = workbench.interactionFocusedNoteId ?? workbench.focusedNoteId;
@@ -211,7 +213,7 @@
 			? (shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId as
 					ProjectId | undefined)
 			: activeProjectId;
-		const request = chat.send({
+		return {
 			prompt: text,
 			modelOverride: chat.modelOverride,
 			executionModeOverride: chat.executionModeOverride,
@@ -234,28 +236,86 @@
 			...(handoff?.requestedSkillNames
 				? { requestedSkillNames: [...handoff.requestedSkillNames] }
 				: {})
-		});
+		};
+	}
+
+	async function send(): Promise<void> {
+		const text = prompt.trim();
+		if (!text || chat.isStreaming) return;
+		prompt = '';
+		saveDraft();
+		const request = chat.send(requestFor(text));
 		handoff = undefined;
 		await tick();
 		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
 		await request;
 	}
 
-	function editMessage(entry: (typeof chat.entries)[number]): void {
-		prompt = entry.parts
-			.filter((part) => part.kind === 'text')
-			.map((part) => part.text)
-			.join('\n');
-		saveDraft();
-		textareaRef?.focus();
+	// --- editing a question that was already asked ---
+
+	let editingId = $state<string | undefined>(undefined);
+	let editDraft = $state('');
+
+	// Hoisted so the attachment is a stable reference: an inline closure would be
+	// recreated on every keystroke and drag the caret back to the end each time.
+	const focusAtEnd = (node: HTMLTextAreaElement): void => {
+		node.focus();
+		node.setSelectionRange(node.value.length, node.value.length);
+	};
+
+	function startEditing(entry: ChatEntry): void {
+		editingId = entry.id;
+		editDraft = entryText(entry);
 	}
 
-	async function copyMessage(entry: (typeof chat.entries)[number]): Promise<void> {
-		const text = entry.parts
-			.filter((part) => part.kind === 'text')
-			.map((part) => part.text)
-			.join('\n');
-		await navigator.clipboard.writeText(text);
+	function cancelEditing(): void {
+		editingId = undefined;
+		editDraft = '';
+	}
+
+	/**
+	 * Send an already-asked question again, edited or not. Everything from that turn
+	 * onwards is discarded, here and on the server, so the thread reads as though the
+	 * question had been asked this way the first time.
+	 */
+	async function resubmit(entry: ChatEntry, text: string): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed) return;
+		cancelEditing();
+		const started = await chat.resubmit(entry, requestFor(trimmed));
+		if (!started) {
+			toast.error(
+				chat.isStreaming ? 'Wait for the current answer to finish.' : 'That could not be resent.'
+			);
+			return;
+		}
+		await tick();
+		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
+	}
+
+	function askAgain(reply: ChatEntry): void {
+		const question = chat.precedingUserEntry(reply);
+		if (!question) {
+			toast.error('The question behind this answer is no longer in the thread.');
+			return;
+		}
+		void resubmit(question, entryText(question));
+	}
+
+	function handleEditKeydown(event: KeyboardEvent, entry: ChatEntry): void {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			cancelEditing();
+			return;
+		}
+		if (event.key === 'Enter' && !event.shiftKey) {
+			event.preventDefault();
+			void resubmit(entry, editDraft);
+		}
+	}
+
+	async function copyMessage(entry: ChatEntry): Promise<void> {
+		await navigator.clipboard.writeText(entryText(entry));
 		toast.success('Copied to clipboard.');
 	}
 
@@ -323,8 +383,12 @@
 		else if (noteActions.lastError) toast.error(noteActions.lastError);
 	}
 
-	function requestRetry(entry: (typeof chat.entries)[number]): void {
-		void chat.retry(entry);
+	async function requestRetry(entry: ChatEntry): Promise<void> {
+		try {
+			await chat.retry(entry);
+		} catch {
+			toast.error('That run could not be retried.');
+		}
 	}
 
 	function useStarter(text: string): void {
@@ -338,10 +402,6 @@
 			chat.executionModeOverride === 'auto_accept' ? 'approval_required' : 'auto_accept';
 	}
 </script>
-
-{#snippet contextBar()}
-	<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
-{/snippet}
 
 {#snippet chipBadge(chip: ContextChip, auto: boolean)}
 	<Badge variant="secondary" class="max-w-44 gap-1 pr-1">
@@ -374,12 +434,13 @@
 		</div>
 	{/if}
 
-	<!-- Above the transcript while a thread runs, and the first group of the empty
-	     state otherwise — where it has to be a flex sibling of the starters for the
-	     space between them to come from the panel's height rather than a number. -->
-	{#if chat.entries.length > 0}
-		{@render contextBar()}
-	{/if}
+	<!-- One instance, always mounted above the transcript, so the collapse into the
+	     compact row is one element changing size rather than two unrelated ones
+	     swapping. In the empty state it is the first group and the padding below
+	     stands in for the flex gap it used to get from its siblings. -->
+	<div class={chat.entries.length === 0 ? 'pb-8' : ''}>
+		<AgentContextBar {shell} {activeProjectId} {activeNoteId} compact={chat.entries.length > 0} />
+	</div>
 	<ScrollArea class="min-h-0 flex-1 pr-2 " bind:viewportRef={viewport}>
 		<!-- `min-h-full` resolves because bits-ui's viewport is a flex column and its
 		     content child grows into it; it is what lets the empty state sink its
@@ -387,28 +448,24 @@
 		<div class="flex min-h-full flex-col gap-3">
 			{#if chat.entries.length === 0}
 				<!--
-					Groups held apart by spacing rather than boxes: what the agent can see,
-					what to set it to work on, and where you left off. The panel does not
-					explain in prose that the open note travels along — the context chip
-					above the composer and the placeholder show it.
+					Groups held apart by spacing rather than boxes: what the agent can see
+					(the context bar, just above this scroll area), what to set it to work
+					on, and where you left off. The panel does not explain in prose that the
+					open note travels along — the context chip above the composer and the
+					placeholder show it.
 
 					Everything stacks from the head of the panel and the slack falls at the
 					foot, above the composer. Pushing the groups apart to fill the panel —
 					by a `lg:pt-32` or by `justify-between` — reads as a hole in the middle
 					rather than as air, because there is nothing between them to look at.
-					The steps do the grouping instead: 16px inside a group, 40px to the
+					The steps do the grouping instead: 40px from the context bar to the
 					starters, 56px down to history, which is the quietest thing here.
 				-->
-				<div class="flex flex-col gap-10">
-					<div>{@render contextBar()}</div>
-					<div>
-						<ChatStarters
-							hasNote={activeNoteId !== undefined}
-							hasProject={activeProjectId !== undefined}
-							onpick={useStarter}
-						/>
-					</div>
-				</div>
+				<ChatStarters
+					hasNote={activeNoteId !== undefined}
+					hasProject={activeProjectId !== undefined}
+					onpick={useStarter}
+				/>
 				{#if showHistory && sessions.length > 0}
 					<div class="pt-14">
 						<ChatHistoryList
@@ -422,42 +479,33 @@
 				{/if}
 			{/if}
 			{#each chat.entries as entry (entry.id)}
-				<div class="flex flex-col gap-1.5">
-					<div class="flex items-center justify-between gap-2">
-						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
-						<div class="flex items-center gap-1">
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								aria-label="Copy message"
-								onclick={() => void copyMessage(entry)}
-							>
-								<Copy />
-							</Button>
-							{#if entry.role === 'user'}
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label="Edit question in composer"
-									onclick={() => editMessage(entry)}
-								>
-									<Pencil />
-								</Button>
-							{:else if entry.status === 'completed' && entry.runId}
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label="Ask again"
-									onclick={() => requestRetry(entry)}
-								>
-									<RotateCcw />
-								</Button>
-							{/if}
+				<div class="group/turn flex flex-col gap-1.5">
+					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
+					{#if editingId === entry.id}
+						<!-- Editing happens where the question is, not in the composer: the
+						     turn being replaced has to stay in view while it is rewritten. -->
+						<div class="flex flex-col gap-1.5">
+							<Textarea
+								bind:value={editDraft}
+								rows={2}
+								class="min-h-16 resize-none"
+								aria-label="Edit question"
+								onkeydown={(event) => handleEditKeydown(event, entry)}
+								{@attach focusAtEnd}
+							/>
+							<div class="flex items-center gap-1.5">
+								<Button size="xs" onclick={() => void resubmit(entry, editDraft)}>Resubmit</Button>
+								<Button variant="ghost" size="xs" onclick={cancelEditing}>Cancel</Button>
+								<span class="text-xs text-muted-foreground">
+									Replaces everything below this question.
+								</span>
+							</div>
 						</div>
-					</div>
+					{/if}
 					{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
 						{#if part.kind === 'text'}
-							{#if part.text}
+							<!-- While the editor is open it stands in for the prose it replaces. -->
+							{#if part.text && editingId !== entry.id}
 								<ChatMarkdown content={part.text} onapplydiff={handleApplyDiff} />
 							{/if}
 						{:else}
@@ -521,9 +569,65 @@
 									(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
 							>
 							{#if entry.status === 'failed' && entry.retryable && entry.runId}
-								<Button variant="outline" size="xs" onclick={() => requestRetry(entry)}>
+								<Button variant="outline" size="xs" onclick={() => void requestRetry(entry)}>
 									<RotateCcw data-icon="inline-start" /> Retry
 								</Button>
+							{/if}
+						</div>
+					{/if}
+					<!--
+						Actions belong under the thing they act on, aligned with it, and stay
+						hidden until the turn is hovered or tabbed into so a long thread is
+						not a wall of buttons. Tooltips point up, over the message the
+						buttons came from rather than over the turn below.
+					-->
+					{#if editingId !== entry.id && entryText(entry)}
+						<div
+							class="flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
+						>
+							<Tip text="Copy">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-xs"
+										aria-label="Copy message"
+										onclick={() => void copyMessage(entry)}
+									>
+										<Copy />
+									</Button>
+								{/snippet}
+							</Tip>
+							{#if entry.role === 'user'}
+								<Tip text="Edit and resubmit">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon-xs"
+											aria-label="Edit and resubmit question"
+											disabled={chat.isStreaming}
+											onclick={() => startEditing(entry)}
+										>
+											<Pencil />
+										</Button>
+									{/snippet}
+								</Tip>
+							{:else if entry.status === 'completed'}
+								<Tip text="Ask again">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon-xs"
+											aria-label="Ask again"
+											disabled={chat.isStreaming}
+											onclick={() => askAgain(entry)}
+										>
+											<RotateCcw />
+										</Button>
+									{/snippet}
+								</Tip>
 							{/if}
 						</div>
 					{/if}

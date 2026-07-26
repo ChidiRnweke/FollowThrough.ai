@@ -4,53 +4,54 @@
 	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
 	import { attachmentStatusStyle, formatBytes } from './labels';
 	import { toast } from 'svelte-sonner';
-	import { onMount } from 'svelte';
+	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
+	import {
+		listAttachments,
+		initiateAttachmentUpload,
+		completeAttachmentUpload,
+		downloadAttachment,
+		retryAttachment,
+		removeAttachment
+	} from '$lib/remote/attachments.remote';
 
 	let {
 		projectId,
 		noteId,
+		initial,
 		oncount
 	}: {
 		projectId?: string;
 		noteId?: string;
+		/** Server-loaded list, so the page renders its attachments without a client round trip. */
+		initial?: readonly AttachmentView[];
 		/** Reports how many attachments there are, for chrome that only makes sense with files. */
 		oncount?: (count: number) => void;
 	} = $props();
-	let items = $state<AttachmentView[]>([]);
+
 	let busy = $state(false);
 
-	onMount(() => {
-		void refresh();
-	});
+	const owner = $derived<{ projectId?: string; noteId?: string }>(
+		projectId ? { projectId } : { noteId }
+	);
 
-	export async function refresh(): Promise<void> {
-		const query = projectId ? `projectId=${projectId}` : `noteId=${noteId}`;
-		const response = await fetch(`/api/attachments?${query}`);
-		if (response.ok) items = await response.json();
-		oncount?.(items.length);
-	}
+	// Mounted in the attachments page (which passes `initial`) and in a dialog (which
+	// cannot, having no load function of its own), so the query has to cover both: it
+	// backs the dialog outright, and elsewhere it carries post-mutation refreshes.
+	const query = $derived(listAttachments(owner));
+	const items = $derived<readonly AttachmentView[]>(query.current ?? initial ?? []);
 
-	const hex = (bytes: ArrayBuffer): string =>
-		[...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
+	$effect(() => oncount?.(items.length));
 
 	async function upload(file: File): Promise<void> {
 		busy = true;
 		try {
-			const checksumSha256 = hex(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
-			const initiated = await fetch('/api/attachments', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					projectId,
-					noteId,
-					path: file.name,
-					mediaType: file.type || 'application/octet-stream',
-					byteSize: file.size,
-					checksumSha256
-				})
+			const intent = await initiateAttachmentUpload({
+				...owner,
+				path: file.name,
+				mediaType: file.type || 'application/octet-stream',
+				byteSize: file.size,
+				checksumSha256: await fileChecksumSha256(file)
 			});
-			if (!initiated.ok) throw new Error('The upload could not be prepared');
-			const intent = await initiated.json();
 			const stored = await fetch(intent.uploadUrl, {
 				method: 'PUT',
 				headers: intent.requiredHeaders,
@@ -64,13 +65,10 @@
 						: `Object storage rejected the upload (${stored.status})`
 				);
 			}
-			const completed = await fetch('/api/attachments', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ op: 'complete', uploadId: intent.upload.id })
-			});
-			if (!completed.ok) throw new Error('The attachment could not be finalized');
-			await refresh();
+			// Single-flight: the mutation and the refreshed list arrive in one response.
+			await completeAttachmentUpload({ uploadId: intent.upload.id }).updates(
+				listAttachments(owner)
+			);
 			toast.success('Attachment queued for processing');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Upload failed');
@@ -79,39 +77,36 @@
 		}
 	}
 
-	async function operation(op: 'retry' | 'downloadById', id: string): Promise<void> {
-		const response = await fetch('/api/attachments', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ op, attachmentId: id })
-		});
-		if (!response.ok) {
+	async function download(attachmentId: string): Promise<void> {
+		try {
+			const { url } = await downloadAttachment({ attachmentId });
+			window.open(url, '_blank', 'noopener,noreferrer');
+		} catch {
 			toast.error('The attachment action failed');
-			return;
 		}
-		if (op === 'downloadById')
-			window.open((await response.json()).url, '_blank', 'noopener,noreferrer');
-		else await refresh();
 	}
 
-	async function remove(id: string): Promise<void> {
-		const response = await fetch('/api/attachments', {
-			method: 'DELETE',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ attachmentId: id })
-		});
-		if (!response.ok) {
-			toast.error('The attachment could not be removed');
-			return;
+	async function retry(attachmentId: string): Promise<void> {
+		try {
+			await retryAttachment({ attachmentId }).updates(listAttachments(owner));
+		} catch {
+			toast.error('The attachment action failed');
 		}
-		await refresh();
+	}
+
+	async function remove(attachmentId: string): Promise<void> {
+		try {
+			await removeAttachment({ attachmentId }).updates(listAttachments(owner));
+		} catch {
+			toast.error('The attachment could not be removed');
+		}
 	}
 </script>
 
 <div class="flex flex-col gap-3">
 	<div class="flex flex-wrap items-center gap-2">
 		<label
-			class="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm hover:bg-accent"
+			class="tactile inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-accent"
 		>
 			{busy ? 'Uploading…' : 'Add attachment'}
 			<input
@@ -125,7 +120,7 @@
 				}}
 			/>
 		</label>
-		<Button variant="ghost" size="sm" onclick={() => void refresh()}>Refresh</Button>
+		<Button variant="ghost" size="sm" onclick={() => void query.refresh()}>Refresh</Button>
 	</div>
 	<div class="divide-y rounded-md border">
 		{#each items as item (item.attachment.id)}
@@ -157,15 +152,13 @@
 					{item.version.processingStatus}
 				</span>
 				<div class="flex gap-1">
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={() => void operation('downloadById', item.attachment.id)}>Download</Button
-					>
+					<Button variant="ghost" size="sm" onclick={() => void download(item.attachment.id)}>
+						Download
+					</Button>
 					{#if item.version.processingStatus === 'failed'}<Button
 							variant="ghost"
 							size="sm"
-							onclick={() => void operation('retry', item.attachment.id)}>Retry</Button
+							onclick={() => void retry(item.attachment.id)}>Retry</Button
 						>{/if}
 					<ConfirmDelete
 						title="Remove this attachment?"

@@ -97,7 +97,8 @@ const submitAgentRunSchema = z
 		contextNoteIds: z.array(id).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
 		requestedSkillNoteIds: z.array(id).optional(),
-		appContext: appContextSchema.optional()
+		appContext: appContextSchema.optional(),
+		retryUserOrdinal: z.number().int().min(1).optional()
 	})
 	.superRefine((value, context) => {
 		if (!value.appContext) return;

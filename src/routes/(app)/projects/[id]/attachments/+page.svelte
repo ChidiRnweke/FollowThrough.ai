@@ -9,7 +9,8 @@
 
 	// Nothing to read until something is uploaded, and DESIGN_SYSTEM.md is explicit
 	// that a control for a value that is not set reads as noise.
-	let attachmentCount = $state(0);
+	let reportedCount = $state<number>();
+	const attachmentCount = $derived(reportedCount ?? data.attachments.length);
 </script>
 
 <PageShell>
@@ -40,5 +41,9 @@
 			/>
 		{/if}
 	{/snippet}
-	<AttachmentList projectId={data.project.id} oncount={(count) => (attachmentCount = count)} />
+	<AttachmentList
+		projectId={data.project.id}
+		initial={data.attachments}
+		oncount={(count) => (reportedCount = count)}
+	/>
 </PageShell>

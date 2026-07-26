@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { AgentExecutionMode, AgentModel, AgentPreferences } from '$lib/models';
-	import ActionForm from '$lib/components/primitives/action-form.svelte';
+	import { saveAgentPreferences } from '$lib/remote/settings.remote';
 	import ModelPicker from '$lib/components/app/agent/model-picker.svelte';
 	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -20,7 +20,7 @@
 	});
 </script>
 
-<ActionForm action="?/agentPreferences" class="max-w-3xl">
+<form {...saveAgentPreferences} class="max-w-3xl">
 	<Field.Group>
 		<Field.Field orientation="responsive">
 			<Field.Content>
@@ -28,6 +28,9 @@
 				<Field.Description>Used when a conversation has no model override.</Field.Description>
 			</Field.Content>
 			<ModelPicker {models} bind:value={model} allowDefault defaultLabel="App default" />
+			<!-- Plain named inputs, not `fields.x.as('hidden', …)`: these values are driven by the
+			     controls above and change after first render, and the field name is all the schema
+			     needs for a string. -->
 			<Input type="hidden" name="defaultModel" value={model ?? ''} />
 		</Field.Field>
 		<Field.Separator />
@@ -59,4 +62,4 @@
 			<Button type="submit">Save agent defaults</Button>
 		</Field.Field>
 	</Field.Group>
-</ActionForm>
+</form>

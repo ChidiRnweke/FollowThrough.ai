@@ -136,7 +136,7 @@
 					<button
 						{...props}
 						type="button"
-						class="mr-2 mt-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
+						class="mr-2 mt-1 tactile flex size-7 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
 						aria-label="Show tab strip"
 						aria-expanded={false}
 						onclick={() => ontoggleHidden?.()}
@@ -163,7 +163,7 @@
 					<div class="flex shrink-0 items-center gap-1 pl-1 pr-1">
 						<button
 							type="button"
-							class="flex cursor-pointer items-center rounded px-0.5 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+							class="tactile flex items-center rounded px-0.5 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 							aria-label={folded.has(group.projectId)
 								? `Expand ${group.projectName} tabs`
 								: `Collapse ${group.projectName} tabs`}
@@ -209,6 +209,9 @@
 								     while the pointer sweeps across the strip. -->
 									<Tip text={titleOf(noteId)} side="bottom" delayDuration={700}>
 										{#snippet children({ props })}
+											<!-- Cursor only, not `tactile`: the tab holds a nested close
+											     button, so hovering that would lift both and double the
+											     travel. A tab is seated in the strip, not a free target. -->
 											<button
 												{...props}
 												type="button"
@@ -242,7 +245,7 @@
 													role="button"
 													tabindex={-1}
 													aria-label={`Close ${titleOf(noteId)}`}
-													class="ml-1 hidden size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
+													class="tactile ml-1 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
 														? 'flex'
 														: ''}"
 													onclick={(event) => {
@@ -312,7 +315,7 @@
 					<button
 						{...props}
 						type="button"
-						class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+						class="tactile flex size-5 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
 						aria-label="Hide tab strip"
 						aria-expanded={true}
 						onclick={() => ontoggleHidden?.()}

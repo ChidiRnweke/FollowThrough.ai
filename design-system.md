@@ -1,6 +1,6 @@
 # design-system.agent.md — compressed reference
 
-> Machine-oriented digest of design-system.md. Usage rules only. Values live in app.css. Conflict → flag, don't guess. Uncovered decision → append to design-system.md decision log.
+> Machine-oriented digest of DESIGN_SYSTEM.md. Usage rules only. Values live in src/routes/layout.css. Conflict → flag, don't guess. Uncovered decision → append to DESIGN_SYSTEM.md.
 
 ## identity
 
@@ -59,6 +59,8 @@
 - base: shadcn-svelte, extend don't fork. edra shadcn flavor shares tokens — verify after edra customization
 - icons: lucide-svelte. size-4 chrome, size-3.5 chips/captions. currentColor only
 - buttons: default(teal)=single primary/view. else secondary/ghost/outline. destructive=click destroys
+- interaction contract: every clickable surface = cursor:pointer + 1px hover/focus lift @ --duration-micro/--ease-standard, returns to 0 on :active. motion NOT elevation — no hover shadows. exceptions (cursor only, no lift): menu/select/command rows, a control holding a nested control, sidebar tree rows
+- stated in exactly 3 places: buttonVariants.base (ui/button/button.svelte), @utility row-interactive, @utility tactile (bare <button>/<label>). cursor comes from the @layer base tag+role rule in layout.css — NEVER hand-roll cursor-pointer. a cursor-* utility still wins (cursor-grab handles, cursor-col-resize, cursor-text)
 - focus ring visible on everything interactive. keyboard-first
 - dark mode: class .dark, first-class. test every component both themes
 
@@ -76,6 +78,9 @@
 - backlink chip: secondary/muted pill. relationship on hover. contradicts→warning tint (only relationship with color)
 - reference card: icon+title+tier-badge(docs/standard/vendor/blog)+relevance-note muted-fg. docs/standards outrank blogs visually
 - diagram frame: card+hairline, header=kind(mermaid/drawio)+actions(edit/promote/regenerate). mermaid error=muted error state inside frame + failing source, never blank
+- mermaid edit mode = canvas: fixed box, both-axis scroll, floating −/%/+ on the canvas (not toolbar), ctrl/⌘+wheel + pinch continuous, % resets. zoom transient, NEVER writes node.attrs.width. centring on a scrollable canvas MUST be `safe` — plain center/margin:auto puts overflow past the scroll origin
+- mermaid theme = our tokens only (background/foreground/muted/muted-fg/border/surface + brand on sequence activations). theme vars LOSE to a diagram's own classDef/style/linkStyle, so do not add more of them to fix an unreadable diagram
+- editor cursor: .tiptap=text, non-text node views/images/media/diagrams=default, nested [contenteditable=true]=text again. a light-mode I-beam over a pale diagram fill is invisible
 
 ## chat panel
 
@@ -86,9 +91,9 @@
 ## motion (expressive, budgeted)
 
 - svelte springs=physical (panels/cards/reorder), css=micro
-- budget priority: 1) suggestion lifecycle: card springs in; Accept→card travels to destination (todo settles, chip pops w/ overshoot); Dismiss→quick exit. 2) panel slide choreography, animated-height tool rows. 3) hover lift 100–150ms
+- budget priority: 1) suggestion lifecycle: card springs in; Accept→card travels to destination (todo settles, chip pops w/ overshoot); Dismiss→quick exit. 2) panel slide choreography, animated-height tool rows. 3) hover lift = 1px @ --duration-micro (125ms), no shadow
 - springs settle <400ms, no wobble. prose NEVER animates. 1 orchestrated moment/interaction
-- prefers-reduced-motion→fast fades. day one
+- prefers-reduced-motion→fast fades. day one. the hover lift is opted OUT entirely (unlayered block in layout.css), not just un-transitioned — the base guard only collapses durations, which turns a lift into a jump
 
 ## copy
 
@@ -108,6 +113,6 @@
 
 ## hard rules
 
-- missing token → add token first (app.css + design-system.md) → then build
+- missing token → add token first (src/routes/layout.css + DESIGN_SYSTEM.md) → then build
 - check shadcn/edra component exists before creating new
-- app.css=values, design-system.md=usage, this file=digest. digest conflicts with source → source wins, update digest
+- src/routes/layout.css=values, DESIGN_SYSTEM.md=usage, this file=digest. digest conflicts with source → source wins, update digest

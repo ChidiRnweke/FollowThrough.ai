@@ -492,7 +492,7 @@
 				<ContextMenu.Root>
 					<ContextMenu.Trigger>
 						{#if isFolder}
-							<Sidebar.MenuSubButton class="w-full cursor-pointer">
+							<Sidebar.MenuSubButton class="w-full">
 								{#snippet child({ props })}
 									<button
 										type="button"
@@ -559,7 +559,7 @@
 									{#snippet children({ props: tipProps })}
 										<button
 											{...mergeProps(menuProps, tipProps)}
-											class="absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+											class="tactile absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 											aria-label="Create in {entry.title}"
 										>
 											<Plus class="size-3.5" />
@@ -580,7 +580,7 @@
 								{#snippet children({ props: tipProps })}
 									<button
 										{...mergeProps(menuProps, tipProps)}
-										class="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+										class="tactile absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 										aria-label="Actions for {entry.title}"
 									>
 										<Ellipsis class="size-3.5" />
@@ -630,7 +630,7 @@
 						<div class="ml-3.5 pl-2.5">
 							<button
 								type="button"
-								class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
@@ -780,7 +780,7 @@
 						{#if !isCreatingIn(project.id, undefined) && entries.length === 0}
 							<button
 								type="button"
-								class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 								onclick={() => startCreate('note', project.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />

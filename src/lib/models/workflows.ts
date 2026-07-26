@@ -266,6 +266,14 @@ export interface SubmitAgentRunInput {
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly appContext?: import('./app-context').AppContextSnapshotV1;
+	/**
+	 * One-based position of the user message this submission replaces, counted
+	 * among user messages only. Set when a question is edited or asked again: the
+	 * conversation is rewound to just before that turn before the new run starts.
+	 * Control flag, not part of the frozen input — a retry of the resulting run
+	 * must not rewind a second time.
+	 */
+	readonly retryUserOrdinal?: number;
 }
 export type AgentEvent =
 	| {

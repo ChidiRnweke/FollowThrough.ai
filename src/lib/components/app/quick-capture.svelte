@@ -1,19 +1,19 @@
 <script lang="ts">
 	import * as InputGroup from '$lib/components/ui/input-group';
-	import ActionForm from '$lib/components/primitives/action-form.svelte';
+	import { captureNote } from '$lib/remote/notes.remote';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
-	let { action = '?/capture', target = 'Inbox' }: { action?: string; target?: string } = $props();
+	let { target = 'Inbox' }: { target?: string } = $props();
 </script>
 
-<ActionForm {action}>
+<form {...captureNote}>
 	<InputGroup.Root>
 		<InputGroup.Addon align="inline-start">
 			<InputGroup.Text class="text-muted-foreground">{target}</InputGroup.Text>
 		</InputGroup.Addon>
 		<InputGroup.Input
 			id="quick-capture-input"
-			name="title"
+			{...captureNote.fields.title.as('text')}
 			placeholder="Capture a note and start writing…"
 			autocomplete="off"
 			required
@@ -24,4 +24,4 @@
 			</InputGroup.Button>
 		</InputGroup.Addon>
 	</InputGroup.Root>
-</ActionForm>
+</form>

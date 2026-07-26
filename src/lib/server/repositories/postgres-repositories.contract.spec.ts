@@ -514,6 +514,36 @@ describe('Postgres conversation repository invariants', () => {
 		expect(sessions.map((session) => session.title)).toEqual(['Owned session']);
 	});
 
+	it('deletes only the named messages of a rewound turn', async () => {
+		const owner = actor('16');
+		await new PostgresUserRepository(context.db).ensureLocal(owner);
+		const repository = new PostgresConversationRepository(context.db);
+		const conversation: Conversation = {
+			id: '20000000-0000-4000-8000-000000000016' as ConversationId,
+			userId: owner.userId,
+			kind: 'chat',
+			title: 'Rewind',
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, conversation);
+		// Same instant on purpose: the cut is by identity, not by timestamp.
+		for (const [index, text] of ['keep', 'discard', 'discard too'].entries())
+			await repository.appendMessage(owner, {
+				id: `31000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}` as MessageId,
+				conversationId: conversation.id,
+				role: 'user',
+				content: { text },
+				createdAt: now
+			});
+		await repository.deleteMessages(owner, conversation.id, [
+			'31000000-0000-4000-8000-000000000002' as MessageId,
+			'31000000-0000-4000-8000-000000000003' as MessageId
+		]);
+		const messages = await repository.listMessages(owner, conversation.id);
+		expect(messages.map((message) => message.content.text)).toEqual(['keep']);
+	});
+
 	it('persists conversation model and execution-mode overrides', async () => {
 		const owner = actor('71');
 		await new PostgresUserRepository(context.db).ensureLocal(owner);

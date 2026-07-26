@@ -38,6 +38,44 @@
 	outline-offset: 2px;
 }
 
+/* `.tiptap` sets `cursor: text` on everything it contains, but a block node is
+   not text. Over the light node fills the inherited I-beam is a 1px black line
+   on near-white, which is effectively invisible — the pointer gets lost while
+   scrolling. Interactive children override this via the base-layer rule in
+   layout.css, so buttons inside a node still show a pointer. */
+.tiptap [contenteditable='false'],
+.diagram-node,
+.mermaid-container,
+.mermaid-preview,
+.tiptap img,
+.tiptap video,
+.tiptap iframe,
+.tiptap hr {
+	cursor: default;
+}
+
+/* …but an editable island nested inside a non-editable node view still takes
+   text, so the I-beam returns exactly where typing works. */
+.tiptap [contenteditable='true'] {
+	cursor: text;
+}
+
+/* The Mermaid edit-mode canvas. A fixed box that scrolls in both axes, so a
+   zoomed diagram stays fully reachable.
+
+   `safe` is what makes that true: plain `center` pushes overflow above and to
+   the left of the scroll origin, where no scrollbar can ever reach it — the
+   same trap as `margin: auto` on a flex item. With `safe`, centring applies
+   only while the content fits, and the box falls back to start alignment the
+   moment it does not. Browsers without `safe` drop the declaration and land on
+   start alignment, which scrolls correctly too. */
+.mermaid-preview {
+	display: flex;
+	overflow: auto;
+	align-items: safe center;
+	justify-content: safe center;
+}
+
 @keyframes diagram-cursor-blink {
 	to {
 		visibility: hidden;
@@ -62,8 +100,9 @@
 	margin: 0.5rem 0;
 }
 
-/* For Placeholder */
-.tiptap .is-empty:not(blockquote.is-empty)::before {
+/* For Placeholder — both classes together mean "empty node in an empty document",
+   so an empty paragraph in the middle of a written note stays silent. */
+.tiptap .is-empty.is-editor-empty:not(blockquote)::before {
 	float: left;
 	height: 0;
 	color: var(--color-muted-foreground);

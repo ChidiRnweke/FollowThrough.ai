@@ -56,7 +56,11 @@ export default [
 		multicolor: true
 	}),
 	Placeholder.configure({
-		emptyEditorClass: 'is-empty',
+		// Must stay distinct from Tiptap's default `emptyNodeClass: 'is-empty'`.
+		// Setting this to 'is-empty' too collapsed the two into one class, so the
+		// CSS could no longer tell "empty document" from "empty paragraph in the
+		// middle of a written note" — and the placeholder showed in both.
+		emptyEditorClass: 'is-editor-empty',
 		// Use a placeholder:
 		// Use different placeholders depending on the node type:
 		placeholder: ({ node }) => {

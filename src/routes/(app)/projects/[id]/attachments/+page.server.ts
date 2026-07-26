@@ -4,8 +4,11 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const projectId = params.id as ProjectId;
-	const projectView = await AppFactory.controllerFactory()
-		.projects()
-		.get(AppFactory.actor(locals), { projectId });
-	return { project: projectView.project };
+	const factory = AppFactory.controllerFactory();
+	const actor = AppFactory.actor(locals);
+	const [projectView, attachments] = await Promise.all([
+		factory.projects().get(actor, { projectId }),
+		factory.attachments().listForProject(actor, projectId)
+	]);
+	return { project: projectView.project, attachments };
 };

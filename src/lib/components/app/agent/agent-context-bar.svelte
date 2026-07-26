@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { fly, slide } from 'svelte/transition';
 	import { page } from '$app/state';
 	import type { NoteId, ProjectId, ShellContext } from '$lib/models';
 	import { starterSurface } from './chat-starters';
@@ -23,11 +23,18 @@
 	let {
 		shell,
 		activeProjectId,
-		activeNoteId
+		activeNoteId,
+		compact = false
 	}: {
 		shell?: ShellContext;
 		activeProjectId?: ProjectId;
 		activeNoteId?: NoteId;
+		/**
+		 * Once a thread is running the transcript needs the height more than the
+		 * orientation does: the sentence collapses away and the stats fall back to a
+		 * single row of icon and count, with the hover cards carrying the words.
+		 */
+		compact?: boolean;
 	} = $props();
 
 	const reduced = new PrefersReducedMotion();
@@ -106,6 +113,9 @@
 	// fallback the CSS guard in layout.css cannot give us for JS transitions.
 	const settle = (index: number) =>
 		reduced.current ? { duration: 125 } : { y: 4, delay: index * STAGGER, duration: 150 };
+	// The sentence collapsing its own height is what makes the shrink read as one
+	// movement rather than as a disappearance. Reduced motion takes it instantly.
+	const collapse = $derived(reduced.current ? { duration: 0 } : { duration: 160 });
 </script>
 
 <!--
@@ -122,29 +132,50 @@
 	content look like its loudest control. Type scale and the space beneath the
 	stat row do the separating instead, which is the same currency every group
 	below it trades in.
+
+	All of that describes the expanded state, which is the empty state. Once a
+	question is asked the same instance goes compact and gives that height back to
+	the transcript: sentence gone, labels collapsed, one row of icon and count. The
+	map does not disappear — it stops narrating, and the hover cards still hold
+	every word.
 -->
 {#key scopeKey}
-	<div class="@container flex flex-col gap-3 pb-2" aria-label="Agent context">
-		<p class="section-title text-balance">
-			{#if !project}
-				Before it answers, the agent reads what is in your workspace
-			{:else if surface === 'note'}
-				Before it answers, the agent reads this note and what is in your
-				<a class="text-brand hover:underline" href="/projects/{project.id}">{project.name}</a>
-				project
-			{:else if surface === 'todos'}
-				Before it answers, the agent reads what is on your
-				<a class="text-brand hover:underline" href="/projects/{project.id}/todos">{project.name}</a>
-				todo board
-			{:else}
-				Before it answers, the agent reads what is in your
-				<a class="text-brand hover:underline" href="/projects/{project.id}">{project.name}</a>
-				project
-			{/if}
-		</p>
+	<!-- The space under the sentence is the sentence's own padding, not a flex gap:
+	     `slide` animates padding, so the whole block — words and the air beneath
+	     them — collapses as one movement instead of the gap snapping shut first. -->
+	<div class="@container flex flex-col pb-2">
+		{#if !compact}
+			<p class="section-title pb-3 text-balance" transition:slide={collapse}>
+				{#if !project}
+					Before it answers, the agent reads what is in your workspace
+				{:else if surface === 'note'}
+					Before it answers, the agent reads this note and what is in your
+					<a class="text-brand hover:underline" href="/projects/{project.id}">{project.name}</a>
+					project
+				{:else if surface === 'todos'}
+					Before it answers, the agent reads what is on your
+					<a class="text-brand hover:underline" href="/projects/{project.id}/todos"
+						>{project.name}</a
+					>
+					todo board
+				{:else}
+					Before it answers, the agent reads what is in your
+					<a class="text-brand hover:underline" href="/projects/{project.id}">{project.name}</a>
+					project
+				{/if}
+			</p>
+		{/if}
 		<!-- The block is its own container: the panel is user-resizable, and four
-		     stat columns stop fitting well before the panel hits its minimum. -->
-		<div class="grid grid-cols-2 gap-x-2 gap-y-3 @[15rem]:grid-cols-4">
+		     stat columns stop fitting well before the panel hits its minimum. Compact
+		     drops the grid for one wrapping row, and carries the scope the collapsed
+		     sentence used to state in its own label. -->
+		<div
+			class={compact
+				? 'flex flex-wrap items-center gap-x-4 gap-y-1'
+				: 'grid grid-cols-2 gap-x-2 gap-y-3 @[15rem]:grid-cols-4'}
+			role="group"
+			aria-label="Agent context: {project?.name ?? 'workspace'}"
+		>
 			{#each capabilities as capability, index (capability.key)}
 				{@const copy = agentCapabilityCopy[capability.key]}
 				{@const Icon = capability.icon}
@@ -155,7 +186,10 @@
 								<a
 									{...props}
 									href={capability.href}
-									class="group/stat flex min-w-0 flex-col gap-0.5 rounded-md text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+									aria-label="{copy.label}: {capability.count}"
+									class="group/stat flex min-w-0 gap-0.5 rounded-md text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring {compact
+										? 'flex-row items-center'
+										: 'flex-col'}"
 								>
 									<!--
 										A zero stays rendered but recedes to muted, so the row reads as a
@@ -163,19 +197,31 @@
 										both information here.
 									-->
 									<span
-										class="flex items-center gap-1.5 text-sm tabular-nums {capability.count > 0
+										class="flex items-center gap-1.5 tabular-nums {compact
+											? 'text-xs'
+											: 'text-sm'} {capability.count > 0
 											? 'text-foreground'
 											: 'text-muted-foreground'} group-hover/stat:text-brand"
 									>
-										<Icon class="size-3.5 shrink-0" />
+										<Icon class="shrink-0 {compact ? 'size-3' : 'size-3.5'}" />
 										{capability.count}
 									</span>
-									<span class="eyebrow truncate group-hover/stat:text-foreground">{copy.label}</span
+									<!-- The label collapses by width rather than unmounting, so the row
+									     narrows into the icons instead of the words blinking out. -->
+									<span
+										class="eyebrow truncate transition-[max-width,opacity] duration-150 group-hover/stat:text-foreground {compact
+											? 'max-w-0 opacity-0'
+											: 'max-w-40 opacity-100'}">{copy.label}</span
 									>
 								</a>
 							{/snippet}
 						</HoverCard.Trigger>
 						<HoverCard.Content class="w-64 gap-2" side="top" align="start">
+							<!-- Compact hides the visible label, so the card has to name what it
+							     is explaining before it explains it. -->
+							{#if compact}
+								<p class="eyebrow">{copy.label}</p>
+							{/if}
 							<p class="text-sm">{copy.teaches}</p>
 							<Button variant="outline" size="xs" href={capability.href} class="self-start">
 								{copy.action}

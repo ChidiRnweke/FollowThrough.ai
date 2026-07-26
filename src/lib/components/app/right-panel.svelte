@@ -102,14 +102,19 @@
 					{#if renderedMode === 'chat'}
 						{@render chatHeaderActions()}
 					{/if}
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						aria-label="Close panel"
-						onclick={() => rightPanel.close()}
-					>
-						<X data-icon />
-					</Button>
+					<Tip text="Close panel">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Close panel"
+								onclick={() => rightPanel.close()}
+							>
+								<X data-icon />
+							</Button>
+						{/snippet}
+					</Tip>
 				</div>
 			</header>
 			<Separator />

@@ -14,6 +14,7 @@
 	import { noteEtag } from '$lib/models';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
+	import { mergeProps } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import {
@@ -715,42 +716,58 @@
 				context={{ noteId: note.id, projectId: view.note.projectId }}
 				class="hidden lg:inline-flex"
 			/>
-			<Button
-				variant="outline"
-				size="sm"
-				class="h-11 sm:h-8"
-				disabled={!hasUnpublishedChanges || dirty || publishing}
-				aria-label="Publish note (Ctrl+S, S)"
-				onclick={() => void publish()}
-			>
-				{#if publishing}
-					<LoaderCircle class="size-4 animate-spin" />
-				{:else}
-					<ArrowUpFromLine class="size-4" />
-				{/if}
-				Publish
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				class="hidden sm:inline-flex"
-				aria-label="Export document"
-				onclick={() => (exportOpen = true)}
-			>
-				<FileOutput class="size-4" />
-			</Button>
+			<!-- Both carry a keyboard shortcut and Export is icon-only, so the label
+			     is the only place either fact is stated. -->
+			<Tip text="Publish note (Ctrl+S)">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="outline"
+						size="sm"
+						class="h-11 sm:h-8"
+						disabled={!hasUnpublishedChanges || dirty || publishing}
+						aria-label="Publish note (Ctrl+S, S)"
+						onclick={() => void publish()}
+					>
+						{#if publishing}
+							<LoaderCircle class="size-4 animate-spin" />
+						{:else}
+							<ArrowUpFromLine class="size-4" />
+						{/if}
+						Publish
+					</Button>
+				{/snippet}
+			</Tip>
+			<Tip text="Export document">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						class="hidden sm:inline-flex"
+						aria-label="Export document"
+						onclick={() => (exportOpen = true)}
+					>
+						<FileOutput class="size-4" />
+					</Button>
+				{/snippet}
+			</Tip>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="icon-sm"
-							class="size-11 sm:size-8"
-							aria-label="Note actions"
-						>
-							<Ellipsis />
-						</Button>
+					{#snippet child({ props: menuProps })}
+						<Tip text="Note actions">
+							{#snippet children({ props: tipProps })}
+								<Button
+									{...mergeProps(menuProps, tipProps)}
+									variant="ghost"
+									size="icon-sm"
+									class="size-11 sm:size-8"
+									aria-label="Note actions"
+								>
+									<Ellipsis />
+								</Button>
+							{/snippet}
+						</Tip>
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
