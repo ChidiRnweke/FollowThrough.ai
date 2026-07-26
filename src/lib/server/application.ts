@@ -14,6 +14,7 @@ import {
 	ExpiringSuggestionLister,
 	OpenRouterModelCatalog,
 	PersistentAgentPreferencesStore,
+	PersistentToolPreferenceStore,
 	PersistentAgentRunStore,
 	PersistentConversationJournal,
 	ProjectManagementService,
@@ -87,6 +88,7 @@ import { PostgresTemplateRepository } from './repositories/postgres-templates';
 import { PostgresArtifactRepository } from './repositories/postgres-artifacts';
 import { TemplateManagementService } from '$lib/services/templates/management';
 import { ArtifactManagementService } from '$lib/services/artifacts/management';
+import { agentToolCatalog } from './domain/agent-tool-catalog';
 import { generateDocx } from './domain/docx-generator';
 import { generatePdf } from './domain/pdf-generator';
 import {
@@ -94,6 +96,7 @@ import {
 	PostgresAgentRunRepository,
 	PostgresAgentSessionRepository
 } from './repositories/postgres-agent-settings';
+import { PostgresToolPreferenceRepository } from './repositories/postgres-tool-preferences';
 import {
 	PostgresAgentRunDecisionRepository,
 	PostgresAgentRunEventRepository
@@ -184,6 +187,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		new PostgresAgentPreferencesRepository(db)
 	);
 	const apiTokenService = new ApiTokenService(new PostgresApiTokenRepository(db));
+	const toolPreferences = new PersistentToolPreferenceStore(
+		new PostgresToolPreferenceRepository(db),
+		agentToolCatalog
+	);
 	const runRepository = new PostgresAgentRunRepository(db);
 	const runStore = new PersistentAgentRunStore(runRepository);
 	const runEvents = new PostgresAgentRunEventRepository(db);
@@ -452,6 +459,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		agentSettings: { preferences, models: modelCatalog },
 		apiTokens: { tokens: apiTokenService },
+		toolPreferences: { preferences: toolPreferences },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
 			templateUploader: templates,

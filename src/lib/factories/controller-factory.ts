@@ -15,6 +15,7 @@ import type {
 	SkillsController,
 	SuggestionsController,
 	TodosController,
+	ToolPreferencesController,
 	TrustPoliciesController,
 	WorkspaceController
 } from '../controllers';
@@ -32,6 +33,7 @@ export interface ControllerFactory {
 	agent(): AgentController;
 	agentSettings(): AgentSettingsController;
 	apiTokens(): ApiTokensController;
+	toolPreferences(): ToolPreferencesController;
 	attachments(): AttachmentsController;
 	deliverables(): DeliverablesController;
 	trustPolicies(): TrustPoliciesController;

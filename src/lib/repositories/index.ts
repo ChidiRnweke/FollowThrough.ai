@@ -18,6 +18,7 @@ export * from './retrieval-index';
 export * from './memory-entries';
 export * from './export-settings';
 export * from './agent-settings';
+export * from './tool-preferences';
 export * from './agent-runs';
 export * from './attachments';
 export * from './templates';

@@ -43,12 +43,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		metadata: { scope: authenticated.scope }
 	});
 
+	// An MCP client has no ambient project, so the user's workspace-wide tool
+	// selection is the whole story here; project overrides apply in-app only.
+	const controllers = AppFactory.controllerFactory();
+	const preferences = await controllers.toolPreferences().list(authenticated.actor);
+	const disabled = new Set(
+		preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
+	);
+
 	const server = createMcpToolSurface({
-		controllers: AppFactory.controllerFactory(),
+		controllers,
 		actor: authenticated.actor,
 		scope: authenticated.scope,
 		provenanceId: provenance.id,
-		toolRetriever: AppFactory.toolRetriever()
+		toolRetriever: AppFactory.toolRetriever(),
+		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
 	});
 
 	// Stateless: no session to keep alive between requests, so this survives

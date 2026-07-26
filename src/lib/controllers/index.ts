@@ -12,6 +12,7 @@ export * from './memory/controller';
 export * from './projects/controller';
 export * from './agent-settings/controller';
 export * from './api-tokens/controller';
+export * from './tool-preferences/controller';
 export * from './attachments/controller';
 export * from './deliverables/controller';
 export * from './retrieval/controller';

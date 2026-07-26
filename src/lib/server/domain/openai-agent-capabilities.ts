@@ -14,7 +14,7 @@ import { AgentProviderFailure, ValidationError } from '$lib/models';
 import type { ControllerFactory } from '$lib/factories';
 import type { AgentSessionRepository } from '$lib/repositories';
 import type { AgentRunner, ToolRetriever } from '$lib/services';
-import { AgentToolRegistry } from './agent-tool-registry';
+import { AgentToolRegistry, type ToolAccessPolicy } from './agent-tool-registry';
 import { withOpenRouterWebSearch } from './openrouter-server-tools';
 import { BufferedAgentSession } from './buffered-agent-session';
 import { traceAgentTurn } from './telemetry';
@@ -191,7 +191,7 @@ export class OpenAIAgentRunner implements AgentRunner {
 				false
 			);
 		const provider = this.provider();
-		const registry = this.buildRegistry(actor, request, context, run, toolExecutor);
+		const registry = await this.buildRegistry(actor, request, context, run, toolExecutor);
 		const session = new BufferedAgentSession(this.sessions, actor, run.conversationId);
 		try {
 			const tools = registry.agentTools();
@@ -301,22 +301,40 @@ export class OpenAIAgentRunner implements AgentRunner {
 		}
 	}
 
-	private buildRegistry(
+	private async buildRegistry(
 		actor: ActorContext,
 		input: RunAgentInput,
 		context: Readonly<Record<string, unknown>>,
 		run: AgentRun,
 		toolExecutor: import('$lib/services').AgentToolExecutor
-	): AgentToolRegistry {
+	): Promise<AgentToolRegistry> {
 		const provenanceId = (context.provenanceId ?? crypto.randomUUID()) as ProvenanceId;
+		// Resolved once per turn, so a tool the agent disables mid-run stays
+		// callable until the next one. That is deliberate: the surface a model was
+		// given at the start of a turn should not shift underneath it.
+		const toolAccess = await this.resolveToolAccess(actor, input.projectId);
 		return new AgentToolRegistry(
 			this.controllers(),
 			actor,
 			run.executionMode,
 			{ provenanceId, input, model: run.model },
 			toolExecutor,
-			this.toolRetriever
+			this.toolRetriever,
+			toolAccess
 		);
+	}
+
+	private async resolveToolAccess(
+		actor: ActorContext,
+		projectId: RunAgentInput['projectId']
+	): Promise<ToolAccessPolicy> {
+		const preferences = await this.controllers()
+			.toolPreferences()
+			.list(actor, projectId ? { projectId } : {});
+		const disabled = new Set(
+			preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
+		);
+		return { isEnabled: (toolName) => !disabled.has(toolName) };
 	}
 
 	private buildAgent(

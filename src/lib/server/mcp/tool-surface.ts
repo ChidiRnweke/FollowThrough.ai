@@ -6,7 +6,8 @@ import type { ToolRetriever } from '$lib/services';
 import {
 	AgentToolRegistry,
 	FIRST_CLASS_TOOL_NAMES,
-	type AgentToolDefinition
+	type AgentToolDefinition,
+	type ToolAccessPolicy
 } from '../domain/agent-tool-registry';
 import {
 	invalidUseToolPayload,
@@ -20,6 +21,8 @@ export interface McpToolSurfaceOptions {
 	readonly scope: ApiTokenScope;
 	readonly provenanceId: ProvenanceId;
 	readonly toolRetriever: ToolRetriever;
+	/** The user's tool selection; omitted, every tool the scope allows is offered. */
+	readonly toolAccess?: ToolAccessPolicy;
 }
 
 /** MCP carries results as content blocks; every tool here returns JSON text. */
@@ -67,9 +70,9 @@ const annotationsFor = (definition: AgentToolDefinition) => ({
  * keeps the advertised tool list small enough to sit in a host's context
  * alongside its own tools.
  *
- * The scope filter is applied to a single `permitted` list that both the
- * direct registrations and `use_tool` dispatch from, so a `read` token cannot
- * reach a mutation by name.
+ * The scope filter and the user's tool selection are applied to a single
+ * `permitted` list that both the direct registrations and `use_tool` dispatch
+ * from, so neither a `read` token nor a deselected tool can be reached by name.
  */
 export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer => {
 	const registry = new AgentToolRegistry(
@@ -84,9 +87,12 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 			// MCP caller is not editing a note or in a conversation.
 			input: { prompt: '' },
 			model: 'mcp'
-		}
+		},
 		// No AgentToolExecutor: its only job is emitting `resources_stale` for
 		// the in-app SSE stream, which has no meaning for an external client.
+		undefined,
+		undefined,
+		options.toolAccess
 	);
 
 	const permitted = registry.definitions(

@@ -40,6 +40,7 @@ import type {
 	TodoPriority,
 	TodoResponsibility,
 	TodoStatus,
+	ToolClassification,
 	Url,
 	UserId,
 	UserRole
@@ -376,6 +377,23 @@ export interface AgentPreferences {
 	readonly inlineSuggestionsEnabled: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+/**
+ * One agent tool as the settings surface sees it: its identity from the code,
+ * its resolved on/off state, and which layer decided that state.
+ *
+ * `source` is what lets the UI distinguish "off everywhere" from "off just for
+ * this project", which is the only way a per-project override can be reset.
+ */
+export interface ToolPreference {
+	readonly name: string;
+	readonly description: string;
+	readonly classification: ToolClassification;
+	readonly enabled: boolean;
+	/** Locked tools are always enabled; turning them off would strand the agent. */
+	readonly locked: boolean;
+	readonly source: 'default' | 'user' | 'project';
 }
 
 export interface PendingAgentDecision {

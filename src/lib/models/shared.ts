@@ -79,3 +79,8 @@ export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' 
  * tools; `full` exposes proposals and mutations too.
  */
 export type ApiTokenScope = 'read' | 'full';
+/**
+ * What a tool does to the workspace. `read` never writes, `proposal` queues a
+ * suggestion for the user, `mutation` changes state directly.
+ */
+export type ToolClassification = 'read' | 'proposal' | 'mutation';

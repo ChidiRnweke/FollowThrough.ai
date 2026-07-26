@@ -42,3 +42,4 @@ export * from './templates/management';
 export * from './artifacts/contracts';
 export * from './artifacts/management';
 export * from './tools/tool-retriever';
+export * from './tools/preferences';

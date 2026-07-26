@@ -6,6 +6,8 @@
 	import SettingsPolicies from '$lib/components/app/pages/settings-policies.svelte';
 	import SettingsAgent from '$lib/components/app/pages/settings-agent.svelte';
 	import SettingsMcp from '$lib/components/app/pages/settings-mcp.svelte';
+	import SettingsTools from '$lib/components/app/pages/settings-tools.svelte';
+	import type { ProjectId } from '$lib/models';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import * as Tabs from '$lib/components/ui/tabs';
@@ -19,11 +21,24 @@
 		params.set('tab', tab);
 		void goto(`/settings?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
+
+	// Settings has no ambient project, so the scope the tool list is edited in
+	// lives in the URL alongside the tab.
+	const toolProjectId = $derived(
+		(page.url.searchParams.get('project') ?? undefined) as ProjectId | undefined
+	);
+
+	function selectToolScope(projectId: string): void {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		if (projectId === 'all') params.delete('project');
+		else params.set('project', projectId);
+		void goto(`/settings?${params.toString()}`, { keepFocus: true, noScroll: true });
+	}
 </script>
 
 <PageShell
 	title="Settings"
-	description="Agent defaults, MCP access, and per-pipeline trust policies."
+	description="Agent defaults, the tools it may use, MCP access, and per-pipeline trust policies."
 >
 	{#snippet actions()}
 		<AgentAction action={agentActions.settings} />
@@ -31,6 +46,7 @@
 	<Tabs.Root value={data.tab} onValueChange={selectTab}>
 		<Tabs.List variant="line">
 			<Tabs.Trigger value="agent">Agent</Tabs.Trigger>
+			<Tabs.Trigger value="tools">Tools</Tabs.Trigger>
 			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
 			<Tabs.Trigger value="policies">Trust policies</Tabs.Trigger>
 		</Tabs.List>
@@ -41,6 +57,15 @@
 		<Tabs.Content value="agent" class="pt-6">
 			{#if data.tab === 'agent'}
 				<SettingsAgent preferences={data.preferences} models={data.models} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="tools" class="pt-6">
+			{#if data.tab === 'tools'}
+				<SettingsTools
+					projects={data.projects}
+					projectId={toolProjectId}
+					onscopechange={selectToolScope}
+				/>
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="mcp" class="pt-6">

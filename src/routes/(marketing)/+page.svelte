@@ -47,7 +47,7 @@
 		<Reveal delay={100}>
 			<Shot
 				id="in-editor-chat"
-				label="Solution design · agent"
+				label="Editor · agent"
 				alt="A note open in the editor while the agent panel creates a new note from it, every tool call listed"
 			/>
 		</Reveal>
@@ -69,7 +69,7 @@
 		<Reveal>
 			<Shot
 				id="project-context"
-				label="Architecture · project"
+				label="Project · memory"
 				alt="A project page split into what was produced here and what the agent works from: memory, attachments"
 			/>
 		</Reveal>
@@ -91,7 +91,7 @@
 				<div class="pt-2">
 					<Shot
 						id="in-editor-ai"
-						label="Solution design · selection"
+						label="Editor · selection"
 						alt="A selected passage in a note with the AI toolbar above it: ask, extract promises, find related, diagram"
 					/>
 				</div>
@@ -130,7 +130,7 @@
 		<Reveal>
 			<Shot
 				id="todo-board"
-				label="Architecture · todos"
+				label="Board · todos"
 				alt="A kanban board of commitments while the agent updates cards and summarises what it changed"
 			/>
 		</Reveal>
@@ -152,7 +152,7 @@
 				<div class="pt-2">
 					<Shot
 						id="skill-support"
-						label="planning-features · skill"
+						label="Skill · definition"
 						alt="A skill page: when the agent should load it, and the instructions it follows when it does"
 					/>
 				</div>

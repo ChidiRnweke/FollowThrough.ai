@@ -15,6 +15,7 @@ import {
 	DefaultSkillsController,
 	DefaultSuggestionsController,
 	DefaultTodosController,
+	DefaultToolPreferencesController,
 	DefaultTrustPoliciesController,
 	DefaultWorkspaceController,
 	type AgentDependencies,
@@ -33,6 +34,7 @@ import {
 	type SkillsDependencies,
 	type SuggestionsDependencies,
 	type TodosDependencies,
+	type ToolPreferencesDependencies,
 	type TrustPoliciesDependencies,
 	type WorkspaceDependencies
 } from '../controllers';
@@ -51,6 +53,7 @@ export interface ProductionControllerDependencies {
 	agent: AgentDependencies;
 	agentSettings: AgentSettingsDependencies;
 	apiTokens: ApiTokensDependencies;
+	toolPreferences: ToolPreferencesDependencies;
 	attachments: AttachmentsDependencies;
 	deliverables: DeliverablesDependencies;
 	trustPolicies: TrustPoliciesDependencies;
@@ -96,6 +99,9 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	apiTokens() {
 		return new DefaultApiTokensController(this.dependencies.apiTokens);
+	}
+	toolPreferences() {
+		return new DefaultToolPreferencesController(this.dependencies.toolPreferences);
 	}
 	attachments() {
 		return new DefaultAttachmentsController(this.dependencies.attachments);

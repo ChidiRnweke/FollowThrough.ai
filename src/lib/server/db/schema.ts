@@ -628,6 +628,48 @@ export const agentPreferences = pgTable('agent_preferences', {
 	...timestamps
 });
 
+/**
+ * Which agent tools the user has turned off. Rows are sparse: an absent tool is
+ * enabled, so the default surface needs no rows at all and a newly added tool is
+ * available without a backfill.
+ *
+ * `tool_name` is plain text rather than an enum because the tool list lives in
+ * code. A renamed or deleted tool must decay into an ignored row, not a failed
+ * migration.
+ */
+export const toolPreferences = pgTable(
+	'tool_preferences',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		toolName: text('tool_name').notNull(),
+		enabled: boolean('enabled').notNull(),
+		...timestamps
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.toolName] })]
+);
+
+/** Per-project departures from `tool_preferences`; an absent row defers to it. */
+export const projectToolOverrides = pgTable(
+	'project_tool_overrides',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		toolName: text('tool_name').notNull(),
+		enabled: boolean('enabled').notNull(),
+		...timestamps
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.projectId, table.toolName] }),
+		index('project_tool_overrides_project_idx').on(table.userId, table.projectId)
+	]
+);
+
 export const agentRuns = pgTable(
 	'agent_runs',
 	{
@@ -914,3 +956,5 @@ export type Todo = typeof todos.$inferSelect;
 export type Suggestion = typeof suggestions.$inferSelect;
 export type Artifact = typeof artifacts.$inferSelect;
 export type ProjectTemplate = typeof projectTemplates.$inferSelect;
+export type ToolPreferenceRow = typeof toolPreferences.$inferSelect;
+export type ProjectToolOverrideRow = typeof projectToolOverrides.$inferSelect;

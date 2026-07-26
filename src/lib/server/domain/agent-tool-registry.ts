@@ -15,6 +15,7 @@ import type {
 	SkillsController,
 	SuggestionsController,
 	TodosController,
+	ToolPreferencesController,
 	TrustPoliciesController,
 	WorkspaceController
 } from '$lib/controllers';
@@ -59,6 +60,32 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	'propose_memory_change'
 ];
 
+/**
+ * Tools the user cannot deselect. Without `get_workspace_context` and
+ * `load_skill` the agent loses its grounding and its instructions, and without
+ * the two preference tools it could disable its own way back — a selection that
+ * cannot be undone from the agent is a trap, not a setting.
+ *
+ * `search_tools` and `use_tool` need no entry: they are assembled in
+ * `agentTools()` and in the MCP surface rather than being definitions, so no
+ * preference can reach them.
+ */
+export const LOCKED_TOOL_NAMES = [
+	'get_workspace_context',
+	'load_skill',
+	'list_tool_preferences',
+	'set_tool_enabled'
+];
+
+/**
+ * The user's resolved tool selection, already collapsed from the stored user
+ * defaults and project overrides. It is a plain predicate because the registry
+ * builds its definitions synchronously, so every caller resolves first.
+ */
+export interface ToolAccessPolicy {
+	isEnabled(toolName: string): boolean;
+}
+
 export type AgentToolClassification =
 	| { readonly kind: 'read' | 'proposal' | 'mutation' }
 	| { readonly kind: 'excluded'; readonly reason: string };
@@ -76,6 +103,7 @@ export interface AgentToolCoverage {
 	readonly suggestions: Coverage<SuggestionsController>;
 	readonly skills: Coverage<SkillsController>;
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
+	readonly toolPreferences: Coverage<ToolPreferencesController>;
 	readonly agentSettings: Coverage<AgentSettingsController>;
 	readonly apiTokens: Coverage<ApiTokensController>;
 	readonly attachments: Coverage<AttachmentsController>;
@@ -209,6 +237,15 @@ export const agentToolCoverage = {
 		regenerateArtifact: { kind: 'mutation' }
 	},
 	trustPolicies: { list: { kind: 'read' }, update: { kind: 'mutation' } },
+	toolPreferences: {
+		list: { kind: 'read' },
+		setEnabled: { kind: 'mutation' },
+		clearOverride: {
+			kind: 'excluded',
+			reason:
+				'Resetting a project override to the workspace default is a settings-page affordance; the agent turns a tool on or off outright.'
+		}
+	},
 	memory: {
 		list: { kind: 'read' },
 		propose: { kind: 'proposal' },
@@ -278,7 +315,8 @@ export class AgentToolRegistry {
 		private readonly mode: AgentExecutionMode,
 		private readonly context: RegistryContext,
 		private readonly toolExecutor?: AgentToolExecutor,
-		private readonly toolRetriever?: ToolRetriever
+		private readonly toolRetriever?: ToolRetriever,
+		private readonly toolAccess?: ToolAccessPolicy
 	) {}
 
 	tools(
@@ -290,6 +328,11 @@ export class AgentToolRegistry {
 	/**
 	 * The raw capability list, for surfaces that do their own wrapping. The
 	 * in-app agent uses `tools()`/`agentTools()`; MCP builds from these.
+	 *
+	 * This is the one place the user's tool selection is applied, so a deselected
+	 * tool disappears from the in-app agent, from `search_tools` ranking, from
+	 * `use_tool` dispatch and from the MCP surface at once — there is no path to
+	 * a capability that does not come through here.
 	 */
 	definitions(
 		options: { classifications?: readonly Definition['classification'][] } = {}
@@ -298,7 +341,11 @@ export class AgentToolRegistry {
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
 		return this.buildDefinitions().filter(
-			(definition) => !allowed || allowed.has(definition.classification)
+			(definition) =>
+				(!allowed || allowed.has(definition.classification)) &&
+				(LOCKED_TOOL_NAMES.includes(definition.name) ||
+					!this.toolAccess ||
+					this.toolAccess.isEnabled(definition.name))
 		);
 	}
 
@@ -879,6 +926,32 @@ export class AgentToolRegistry {
 					minimumConfidence: z.number().int().min(0).max(100).optional()
 				}),
 				(input) => factory.trustPolicies().update(actor, input as never)
+			),
+			define(
+				'list_tool_preferences',
+				"List every FollowThrough tool with whether it is currently turned on, and whether that came from the workspace default or a project override. Use it before changing a tool's availability, or when the user asks what the assistant can and cannot do. Pass projectId to see one project's resolved list.",
+				'read',
+				z.object({ projectId: id.optional() }),
+				(input) =>
+					factory
+						.toolPreferences()
+						.list(actor, input.projectId ? { projectId: input.projectId as ProjectId } : {})
+			),
+			define(
+				'set_tool_enabled',
+				'Turn a FollowThrough tool on or off, adding or removing a capability. Use it whenever the user asks to enable, disable, add or remove a tool, or tells the assistant to stop doing a kind of work entirely. Without projectId this sets the workspace default; with it, only that project changes. A few core tools are always available and will be refused.',
+				'mutation',
+				z.object({
+					toolName: z.string().min(1),
+					enabled: z.boolean(),
+					projectId: id.optional()
+				}),
+				(input) =>
+					factory.toolPreferences().setEnabled(actor, {
+						toolName: input.toolName,
+						enabled: input.enabled,
+						...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
+					})
 			),
 			define(
 				'get_agent_preferences',

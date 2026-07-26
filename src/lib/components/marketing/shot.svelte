@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { mode } from 'mode-watcher';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { capturedShot } from './screenshots';
 	import Surface from './surface.svelte';
 
@@ -17,6 +18,17 @@
 
 <Surface {label}>
 	{#if src}
-		<img {src} {alt} class="w-full" loading="lazy" decoding="async" />
+		<Dialog.Root>
+			<Dialog.Trigger class="block w-full cursor-zoom-in transition-opacity hover:opacity-90">
+				<img {src} {alt} class="w-full" loading="lazy" decoding="async" />
+			</Dialog.Trigger>
+			<Dialog.Content
+				class="max-h-[95vh] w-full max-w-[calc(100vw-1rem)] gap-0 overflow-auto border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-[90rem]"
+			>
+				<Dialog.Title class="sr-only">{label}</Dialog.Title>
+				<Dialog.Description class="sr-only">{alt}</Dialog.Description>
+				<img {src} {alt} class="max-h-[92vh] w-full object-contain" />
+			</Dialog.Content>
+		</Dialog.Root>
 	{/if}
 </Surface>

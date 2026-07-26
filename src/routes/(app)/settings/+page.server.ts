@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 
 // Not exported: SvelteKit only permits `load`/`actions`/etc. out of a
 // +page.server.ts, and rejects the module at runtime otherwise.
-const SETTINGS_TABS = ['agent', 'mcp', 'policies'] as const;
+const SETTINGS_TABS = ['agent', 'tools', 'mcp', 'policies'] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 /**
@@ -45,8 +45,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			...models
 		];
 	}
+	// `/settings` has no ambient project, so the tool-scope picker needs the list
+	// to offer. Only the tools tab uses it.
+	const projects =
+		tab === 'tools'
+			? (await factory.projects().list(actor)).projects
+					.filter((project) => !project.archivedAt)
+					.map((project) => ({ id: project.id, name: project.name }))
+			: [];
 	return {
 		tab,
+		projects,
 		policies: output.policies,
 		preferences,
 		models,

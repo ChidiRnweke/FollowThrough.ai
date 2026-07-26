@@ -9,14 +9,19 @@ import { createMcpToolSurface } from './tool-surface';
 
 const connect = async (
 	scope: ApiTokenScope,
-	options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+	options: {
+		factory?: ControllerFactory;
+		retriever?: InMemoryToolRetriever;
+		disabled?: readonly string[];
+	} = {}
 ): Promise<Client> => {
 	const server = createMcpToolSurface({
 		controllers: options.factory ?? ({} as ControllerFactory),
 		actor: testActor(),
 		scope,
 		provenanceId: testProvenanceId(),
-		toolRetriever: options.retriever ?? new InMemoryToolRetriever()
+		toolRetriever: options.retriever ?? new InMemoryToolRetriever(),
+		toolAccess: { isEnabled: (name) => !(options.disabled ?? []).includes(name) }
 	});
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: 'test', version: '1.0.0' });
@@ -144,5 +149,22 @@ describe('MCP tool surface', () => {
 			arguments: { query: 'add a task' }
 		});
 		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
+	});
+});
+
+describe('Deselected tools over MCP', () => {
+	it('stops advertising a deselected first-class tool', async () => {
+		const client = await connect('full', { disabled: ['get_note'] });
+		const { tools } = await client.listTools();
+		expect(tools.map((tool) => tool.name)).not.toContain('get_note');
+	});
+
+	it('refuses a deselected tool called by name through use_tool', async () => {
+		const client = await connect('full', { disabled: ['archive_project'] });
+		const result = await client.callTool({
+			name: 'use_tool',
+			arguments: { name: 'archive_project', payload: {} }
+		});
+		expect(result.isError).toBe(true);
 	});
 });

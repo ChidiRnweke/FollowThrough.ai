@@ -6,7 +6,9 @@ import { noteBuilder, testActor, testProvenanceId } from '$lib/testing/fixtures/
 import {
 	AgentToolRegistry,
 	agentToolCoverage,
-	type AgentToolClassification
+	LOCKED_TOOL_NAMES,
+	type AgentToolClassification,
+	type ToolAccessPolicy
 } from './agent-tool-registry';
 
 const registry = (mode: 'approval_required' | 'auto_accept') =>
@@ -442,5 +444,72 @@ describe('Agent tool coverage invariants', () => {
 			})
 		);
 		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
+	});
+});
+
+describe('Deselected tools', () => {
+	const without = (...disabled: string[]): AgentToolRegistry => {
+		const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
+		return new AgentToolRegistry(
+			{} as ControllerFactory,
+			testActor(),
+			'auto_accept',
+			{ provenanceId: testProvenanceId(), input: { prompt: 'Help' }, model: 'openai/gpt-5.6' },
+			undefined,
+			undefined,
+			policy
+		);
+	};
+
+	it('drops the tool from the definition list', () => {
+		expect(
+			without('archive_project')
+				.definitions()
+				.some((definition) => definition.name === 'archive_project')
+		).toBe(false);
+	});
+
+	it('drops the tool from the searchable long-tail catalog', () => {
+		expect(
+			without('archive_project')
+				.catalog()
+				.some((tool) => tool.name === 'archive_project')
+		).toBe(false);
+	});
+
+	it('leaves the tools that were not deselected alone', () => {
+		expect(
+			without('archive_project')
+				.definitions()
+				.some((definition) => definition.name === 'create_note')
+		).toBe(true);
+	});
+
+	it('drops a deselected first-class tool from the agent surface', () => {
+		expect(
+			without('get_note')
+				.agentTools()
+				.some((tool) => tool.name === 'get_note')
+		).toBe(false);
+	});
+
+	it('keeps locked tools even when the policy rejects them', () => {
+		const names = new Set(
+			without(...LOCKED_TOOL_NAMES)
+				.definitions()
+				.map((definition) => definition.name)
+		);
+		expect(LOCKED_TOOL_NAMES.filter((name) => !names.has(name))).toEqual([]);
+	});
+
+	it('refuses a deselected tool by name through use_tool', async () => {
+		const selected = without('archive_project')
+			.agentTools()
+			.find((candidate) => candidate.name === 'use_tool') as FunctionTool;
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({ name: 'archive_project', payload: {} })
+		);
+		expect((result as { failure?: string }).failure).toBeDefined();
 	});
 });

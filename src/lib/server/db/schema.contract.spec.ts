@@ -89,4 +89,22 @@ describe('Postgres schema contracts', () => {
 		>`select enumlabel from pg_enum join pg_type on pg_type.oid = pg_enum.enumtypid where pg_type.typname = 'note_kind' order by enumsortorder`;
 		expect(rows.map((row) => row.enumlabel)).toEqual(['folder', 'note', 'skill']);
 	});
+	it('keys a tool preference by user and tool', async () => {
+		const rows = await context.client<
+			{ column_name: string }[]
+		>`select column_name from information_schema.key_column_usage where constraint_name = 'tool_preferences_user_id_tool_name_pk' order by ordinal_position`;
+		expect(rows.map((row) => row.column_name)).toEqual(['user_id', 'tool_name']);
+	});
+	it('keys a project tool override by user, project, and tool', async () => {
+		const rows = await context.client<
+			{ column_name: string }[]
+		>`select column_name from information_schema.key_column_usage where constraint_name = 'project_tool_overrides_user_id_project_id_tool_name_pk' order by ordinal_position`;
+		expect(rows.map((row) => row.column_name)).toEqual(['user_id', 'project_id', 'tool_name']);
+	});
+	it('stores tool names as free text so a removed tool decays into an ignored row', async () => {
+		const rows = await context.client<
+			{ data_type: string }[]
+		>`select data_type from information_schema.columns where table_name = 'tool_preferences' and column_name = 'tool_name'`;
+		expect(rows[0]?.data_type).toBe('text');
+	});
 });
