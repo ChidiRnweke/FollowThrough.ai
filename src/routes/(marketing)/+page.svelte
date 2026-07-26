@@ -59,7 +59,7 @@
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pt-16 pb-16 sm:pt-20 sm:pb-20">
 		<Reveal class="flex flex-col gap-3">
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
-				It <Crayon>remembers</Crayon>, because you told it once.
+				Your agent <Crayon>remembers</Crayon>.
 			</h2>
 			<p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
 				Every project keeps its own decisions, constraints, and preferences. Come back in three
@@ -121,7 +121,7 @@
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="flex flex-col gap-3">
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
-				<Crayon>You</Crayon> didn't build this board.
+				<Crayon>You</Crayon> didn't build this board. Your agent did.
 			</h2>
 			<p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
 				The agent opened every card from a note, and keeps them moving as the notes change.
@@ -143,7 +143,7 @@
 		<Reveal class="grid gap-8 lg:grid-cols-2">
 			<div class="flex min-w-0 flex-col gap-3">
 				<h3 class="font-serif text-2xl font-medium tracking-tight">
-					Teach it your workflow <Crayon>once</Crayon>. It runs it on cue.
+					Teach your agent your workflow <Crayon>once</Crayon>. It runs it on cue.
 				</h3>
 				<p class="text-sm text-muted-foreground">
 					A skill is a trigger description plus your instructions. The agent loads it the moment
@@ -187,8 +187,15 @@
 				Ready to work fully agentic?
 			</h2>
 			<p class="max-w-md text-base text-muted-foreground">
-				FollowThrough is in closed beta — access is approved by hand, so signing in tells me you're
-				waiting.
+				FollowThrough is in closed beta. Want in?
+				<Button
+					href="https://github.com/ChidiRnweke/FollowThrough.ai/issues"
+					variant="link"
+					target="_blank"
+					rel="noreferrer"
+					class="h-auto px-0.5 text-base font-medium text-foreground underline decoration-brand decoration-2 underline-offset-4 hover:decoration-4"
+					>Raise an issue on GitHub</Button
+				> and I'll know you're waiting.
 			</p>
 			<Button href="/auth/login" size="lg">Sign in</Button>
 		</Reveal>

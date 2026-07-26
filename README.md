@@ -37,16 +37,16 @@ the agent panel and it reports what it already knows, offers to remember what ma
 acts: creating notes and updating boards with every tool call — successes and failures — on the
 record.
 
-|                                                                                                         |                                                                                                              |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| ![The AI toolbar above a selected passage](static/product-screenshots/in-editor-ai-light.jpg)           | ![The agent working alongside the note](static/product-screenshots/in-editor-chat-light.jpg)                 |
-| **One selection away** — ask, extract promises, find related, reference, diagram.                       | **The agent in the editor** — it reads the workspace first, then acts, showing its work.                     |
-| ![The Today screen](static/product-screenshots/today-screen-light.jpg)                                  | ![The commitments board](static/product-screenshots/todo-board-light.jpg)                                    |
-| **Today** — overdue, due today, and who *you* are waiting on.                                           | **The board** — the agent opens cards from notes and keeps them moving.                                      |
-| ![A project's context](static/product-screenshots/project-context-light.jpg)                            | ![A skill definition](static/product-screenshots/skill-support-light.jpg)                                    |
-| **The context layer** — what was produced here vs. what the agent works from: memory, attachments.      | **Skills** — teach it your workflow once; it runs it on cue.                                                 |
-| ![The Mermaid diagram editor](static/product-screenshots/diagram-render-light.jpg)                      | ![Agent settings with an open model picker](static/product-screenshots/open-model-access-light.jpg)          |
-| **First-class diagrams** — Mermaid source, live render, Revise with AI.                                 | **Your editor, your model, your choice** — any provider; approval or auto-accept per pipeline.               |
+|                                                                                                    |                                                                                                     |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| ![The AI toolbar above a selected passage](static/product-screenshots/in-editor-ai-light.jpg)      | ![The agent working alongside the note](static/product-screenshots/in-editor-chat-light.jpg)        |
+| **One selection away** — ask, extract promises, find related, reference, diagram.                  | **The agent in the editor** — it reads the workspace first, then acts, showing its work.            |
+| ![The Today screen](static/product-screenshots/today-screen-light.jpg)                             | ![The commitments board](static/product-screenshots/todo-board-light.jpg)                           |
+| **Today** — overdue, due today, and who _you_ are waiting on.                                      | **The board** — the agent opens cards from notes and keeps them moving.                             |
+| ![A project's context](static/product-screenshots/project-context-light.jpg)                       | ![A skill definition](static/product-screenshots/skill-support-light.jpg)                           |
+| **The context layer** — what was produced here vs. what the agent works from: memory, attachments. | **Skills** — teach it your workflow once; it runs it on cue.                                        |
+| ![The Mermaid diagram editor](static/product-screenshots/diagram-render-light.jpg)                 | ![Agent settings with an open model picker](static/product-screenshots/open-model-access-light.jpg) |
+| **First-class diagrams** — Mermaid source, live render, Revise with AI.                            | **Your editor, your model, your choice** — any provider; approval or auto-accept per pipeline.      |
 
 ## The five moves
 
