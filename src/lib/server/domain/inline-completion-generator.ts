@@ -5,7 +5,7 @@ import {
 } from './openrouter-client';
 import type { InlineCompletionContext, InlineSuggestionRequest } from '$lib/models';
 import type { InlineCompletionGenerator } from '$lib/services';
-import { traceInline } from './telemetry';
+import { traceOperation } from './telemetry';
 
 /**
  * A single toolless completion over deterministic note, memory, and project
@@ -139,12 +139,12 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 		context: InlineCompletionContext,
 		signal: AbortSignal
 	): Promise<string> {
-		const result = await traceInline(
-			'inline.complete',
+		const prompt = inlineCompletionPrompt(request, context);
+		const result = await traceOperation(
+			'inline.generate',
 			{
-				sessionId: request.noteId,
-				model: this.model,
-				input: `prefix:${request.prefix.length};suffix:${request.suffix.length};block:${request.blockType}`
+				input: prompt,
+				metadata: { model: this.model }
 			},
 			async () => {
 				const completion = await this.client.chat.completions.create(
@@ -155,7 +155,7 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 						temperature: 0.2,
 						messages: [
 							{ role: 'system', content: SYSTEM_PROMPT },
-							{ role: 'user', content: inlineCompletionPrompt(request, context) }
+							{ role: 'user', content: prompt }
 						]
 					},
 					{ signal }

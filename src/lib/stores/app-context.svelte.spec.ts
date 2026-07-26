@@ -3,7 +3,7 @@ import { surfaceFor } from './app-context.svelte';
 
 describe('application surface mapping', () => {
 	it.each([
-		['/', 'today'],
+		['/today', 'today'],
 		['/todos', 'todos'],
 		['/projects/p1', 'project'],
 		['/projects/p1/todos', 'project_todos'],

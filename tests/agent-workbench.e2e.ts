@@ -72,7 +72,7 @@ const mockSubmit = async (page: Page, runId: string) => {
 };
 
 const openHome = async (page: Page) => {
-	await page.goto('/');
+	await page.goto('/today');
 	await page.locator('#quick-capture-input').waitFor();
 };
 

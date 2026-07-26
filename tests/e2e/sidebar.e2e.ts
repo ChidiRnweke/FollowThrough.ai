@@ -41,7 +41,7 @@ test('project branches cannot exceed their content height while hydration restor
 	page
 }) => {
 	await installSidebarHydrationProbe(page);
-	await page.goto('/');
+	await page.goto('/today');
 	const overshoot = await page.evaluate(
 		() => (window as SidebarLayoutProbeWindow).__sidebarHydrationOvershoot
 	);
@@ -54,14 +54,14 @@ test('the workspace shell hydrates without runtime failures', async ({ page }) =
 		if (message.text().includes('Failed to hydrate')) hydrationFailures.push(message.text());
 	});
 
-	await page.goto('/');
+	await page.goto('/today');
 	await page.waitForLoadState('networkidle');
 
 	expect(hydrationFailures).toEqual([]);
 });
 
 test('the workspace shell cannot create document-level scrolling', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	const documentFitsViewport = await page.evaluate(
 		() =>
 			document.documentElement.scrollWidth === document.documentElement.clientWidth &&
@@ -74,7 +74,7 @@ test.describe('without JavaScript', () => {
 	test.use({ javaScriptEnabled: false });
 
 	test('server-rendered shell elements stay inside the viewport wrapper', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/today');
 		const shellFitsViewport = await page.evaluate(() => {
 			const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]');
 			const inset = document.querySelector('[data-slot="sidebar-inset"]');

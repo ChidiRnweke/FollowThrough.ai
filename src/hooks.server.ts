@@ -54,8 +54,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const user = event.locals.user;
 		const path = event.url.pathname;
 
-		// Allow auth routes without session
-		if (path.startsWith('/auth/')) {
+		// Public surface: the auth flow, and the landing page at the root.
+		if (path.startsWith('/auth/') || path === '/') {
 			return resolve(event);
 		}
 
@@ -74,12 +74,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		// Redirect out of /waiting if approved
 		if (user.role !== 'WAITING' && path === '/waiting') {
-			throw redirect(303, '/');
+			throw redirect(303, '/today');
 		}
 
 		// Role: ADMIN required for /_admin
 		if (path.startsWith('/_admin') && user.role !== 'ADMIN') {
-			throw redirect(303, '/');
+			throw redirect(303, '/today');
 		}
 	} else {
 		// Auth disabled — single-user mode (dev)

@@ -5,6 +5,7 @@ import {
 	DEFAULT_GENERATION_MODEL,
 	type OpenRouterClientOptions
 } from './openrouter-client';
+import { traceOperation } from './telemetry';
 
 /**
  * Condenses a conversation transcript into a single focused retrieval statement
@@ -31,14 +32,21 @@ export class ConversationCondenser implements Condenser {
 
 	async condense(text: string): Promise<string> {
 		try {
-			const completion = await this.client.chat.completions.create({
-				model: this.model,
-				messages: [
-					{ role: 'system', content: CONDENSE_PROMPT },
-					{ role: 'user', content: text }
-				]
-			});
-			return completion.choices[0]?.message.content?.trim() || text;
+			return await traceOperation(
+				'conversation.condense',
+				{ input: text, metadata: { model: this.model } },
+				async () => {
+					const completion = await this.client.chat.completions.create({
+						model: this.model,
+						messages: [
+							{ role: 'system', content: CONDENSE_PROMPT },
+							{ role: 'user', content: text }
+						]
+					});
+					return completion.choices[0]?.message.content?.trim() || text;
+				},
+				(result) => result
+			);
 		} catch (error) {
 			throw new ExternalServiceError('Conversation condensation failed', {
 				cause: error instanceof Error ? error.message : String(error)

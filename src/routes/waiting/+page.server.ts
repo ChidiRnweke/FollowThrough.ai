@@ -7,7 +7,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	if (locals.user.role !== 'WAITING') {
-		throw redirect(303, '/');
+		throw redirect(303, '/today');
 	}
 
 	return { user: { email: locals.user.email, displayName: locals.user.displayName } };

@@ -51,7 +51,7 @@
 			toast.error('Could not archive the project. Try again.');
 			return;
 		}
-		await goto('/');
+		await goto('/today');
 	}
 </script>
 

@@ -2,7 +2,7 @@
 	"name": "FollowThrough",
 	"short_name": "FollowThrough",
 	"description": "A focused workspace that turns notes into actions and carries work through to completion.",
-	"start_url": "/",
+	"start_url": "/today",
 	"scope": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",

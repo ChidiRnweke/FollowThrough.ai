@@ -41,6 +41,7 @@ export interface SkillEditor {
 		input: {
 			noteId: NoteId;
 			displayName?: string;
+			description?: string;
 			raw?: string;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];

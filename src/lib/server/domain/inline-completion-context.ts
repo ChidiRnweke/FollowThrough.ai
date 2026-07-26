@@ -15,7 +15,8 @@ import type {
 	Reranker
 } from '$lib/services';
 import { countRetrievalTokens } from '$lib/services/retrieval/tokenizer';
-import { traceChainStep, traceInline } from './telemetry';
+import { OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+import { traceOperation } from './telemetry';
 
 const USER_MEMORY_THRESHOLD = 20;
 const USER_MEMORY_LIMIT = 8;
@@ -93,9 +94,9 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 		signal: AbortSignal
 	): Promise<InlineCompletionContext> {
 		const query = retrievalQuery(request);
-		return traceInline(
+		return traceOperation(
 			'inline.context',
-			{ sessionId: request.noteId, model: 'retrieval', input: `query:${query.length}` },
+			{ input: query },
 			async () => {
 				signal.throwIfAborted();
 				const [projectPassages, userEntries] = await Promise.all([
@@ -131,29 +132,29 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 		query: string,
 		signal: AbortSignal
 	): Promise<readonly InlineCompletionPassage[]> {
-		return traceChainStep(
-			'inline.project-rag',
-			`query:${query.length}`,
+		const matches = await traceOperation(
+			'retrieval.vector-search',
+			{ input: query, kind: OpenInferenceSpanKind.RETRIEVER },
 			async () => {
-				const matches = await this.dependencies.searcher.search(
+				return this.dependencies.searcher.search(
 					actor,
 					query,
 					PROJECT_CANDIDATE_LIMIT,
 					request.projectId,
 					signal
 				);
-				const candidates = matches.filter((match) => match.document.noteId !== request.noteId);
-				if (candidates.length <= PROJECT_PASSAGE_LIMIT) return candidates.map(passageOf);
-				const ranked = await this.dependencies.reranker
-					.rerank(query, candidates, PROJECT_PASSAGE_LIMIT, signal)
-					.catch((error) => {
-						if (signal.aborted) throw error;
-						return candidates.slice(0, PROJECT_PASSAGE_LIMIT);
-					});
-				return ranked.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
 			},
-			(passages) => `${passages.length} kept`
+			(results) => JSON.stringify({ matchCount: results.length })
 		);
+		const candidates = matches.filter((match) => match.document.noteId !== request.noteId);
+		if (candidates.length <= PROJECT_PASSAGE_LIMIT) return candidates.map(passageOf);
+		const ranked = await this.dependencies.reranker
+			.rerank(query, candidates, PROJECT_PASSAGE_LIMIT, signal)
+			.catch((error) => {
+				if (signal.aborted) throw error;
+				return candidates.slice(0, PROJECT_PASSAGE_LIMIT);
+			});
+		return ranked.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
 	}
 
 	private async userMemory(

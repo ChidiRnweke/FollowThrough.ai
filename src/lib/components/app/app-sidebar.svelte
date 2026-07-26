@@ -47,7 +47,7 @@
 	]);
 
 	function isActive(href: string): boolean {
-		return href === '/' ? activePath === '/' : activePath.startsWith(href);
+		return activePath.startsWith(href);
 	}
 
 	let tree = $state<ReturnType<typeof ProjectTree>>();
@@ -67,7 +67,7 @@
 			class="flex h-8 items-center justify-between gap-1 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2"
 		>
 			<a
-				href="/"
+				href="/today"
 				class="flex min-w-0 items-center gap-2 rounded-md"
 				aria-label="FollowThrough — Today"
 			>
@@ -117,9 +117,9 @@
 			<Sidebar.GroupContent>
 				<Sidebar.Menu>
 					<Sidebar.MenuItem>
-						<Sidebar.MenuButton isActive={isActive('/')} tooltipContent="Today">
+						<Sidebar.MenuButton isActive={isActive('/today')} tooltipContent="Today">
 							{#snippet child({ props })}
-								<a href="/" {...props}>
+								<a href="/today" {...props}>
 									<House class="size-4" />
 									<span>Today</span>
 								</a>

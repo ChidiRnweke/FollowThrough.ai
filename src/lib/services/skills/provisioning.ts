@@ -60,7 +60,7 @@ FollowThrough is a connected workbench for turning source material into durable 
 
 ## Where work happens
 
-- **Today** at "/" is the daily triage view for overdue work, work due today, waiting-on items, pinned notes, and recent notes.
+- **Today** at "/today" is the daily triage view for overdue work, work due today, waiting-on items, pinned notes, and recent notes.
 - **Projects** are opened from the sidebar at "/projects/{projectId}". A project hub contains its note tree and links to project Todos, Memory, Attachments, and Artifacts.
 - **Notes** live at "/notes/{noteId}". Use the editor for source material and the selection actions to extract promises, find relationships or references, create diagrams, or turn a method into a skill. Note changes autosave; publishing records a durable revision.
 - **Todos** at "/todos" show commitments across projects. Project-specific todos live at "/projects/{projectId}/todos". Use them to review status, due dates, responsibility, waiting-on parties, and source notes.

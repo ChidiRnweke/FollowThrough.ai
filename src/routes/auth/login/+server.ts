@@ -4,7 +4,7 @@ import { setPKCECookie } from '$lib/services/auth/authenthikAuthService';
 
 export const GET: RequestHandler = async ({ cookies }) => {
 	if (!AppFactory.isAuthEnabled()) {
-		throw redirect(302, '/');
+		throw redirect(302, '/today');
 	}
 
 	const oauthService = AppFactory.getOAuthService();

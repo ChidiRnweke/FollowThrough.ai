@@ -144,7 +144,7 @@ export class SkillManagementService
 		actor: ActorContext,
 		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
 	): Promise<void> {
-		const skill = await this.load(actor, input.skillNoteId);
+		await this.load(actor, input.skillNoteId);
 		if (input.contextNoteId) {
 			const context = await this.notes.findById(actor, input.contextNoteId);
 			if (!context) throw new NotFoundError('Skill context note was not found');
@@ -211,6 +211,7 @@ export class SkillManagementService
 		input: {
 			noteId: NoteId;
 			displayName?: string;
+			description?: string;
 			raw?: string;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];
@@ -220,6 +221,21 @@ export class SkillManagementService
 		const current = await this.load(actor, input.noteId);
 		if (input.raw !== undefined && input.manifest !== undefined)
 			throw new ValidationError('Provide raw SKILL.md or structured fields, not both');
+		if (input.raw === undefined && input.manifest === undefined) {
+			// Metadata-only update: the note — its document, revision, and revision
+			// history — belongs to the note sync path and must not be touched here.
+			return this.skills.update(actor, {
+				...current,
+				...(input.displayName?.trim() ? { name: input.displayName.trim() } : {}),
+				...(input.description !== undefined
+					? { description: input.description.trim() || current.description }
+					: {}),
+				...(input.triggerHints
+					? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
+					: {}),
+				...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
+			});
+		}
 		const manifest =
 			input.raw !== undefined
 				? this.manifests.parse(input.raw)

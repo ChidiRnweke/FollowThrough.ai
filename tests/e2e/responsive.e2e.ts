@@ -12,7 +12,7 @@ const viewports = [
 ] as const;
 
 async function openFirstNote(page: import('@playwright/test').Page): Promise<string> {
-	await page.goto('/');
+	await page.goto('/today');
 	const noteLink = page.locator('a[href^="/notes/"]').first();
 	await noteLink.waitFor({ state: 'attached' });
 	const href = (await noteLink.getAttribute('href'))!;
@@ -34,7 +34,7 @@ for (const viewport of viewports) {
 
 test('mobile application navigation is reachable outside the sidebar sheet', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 667 });
-	await page.goto('/');
+	await page.goto('/today');
 	await expect(
 		page.locator('header').getByRole('button', { name: 'Toggle Sidebar' })
 	).toBeVisible();
@@ -139,7 +139,7 @@ test('compact todo list uses stacked records', async ({ page }) => {
 
 test('2xl retains the inline contextual panel width', async ({ page }) => {
 	await page.setViewportSize({ width: 1536, height: 960 });
-	await page.goto('/');
+	await page.goto('/today');
 	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
 	const width = await page
 		.locator('aside[aria-label="Chat"]')

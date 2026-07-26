@@ -4,6 +4,7 @@ import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models'
 import type { ReferenceFinder, ReferenceSearchOptions, WebReferenceClient } from '$lib/services';
 import { openRouterWebSearchTool } from './openrouter-server-tools';
 import { createOpenRouterClient, DEFAULT_GENERATION_MODEL } from './openrouter-client';
+import { traceOperation } from './telemetry';
 
 const REFERENCE_PROMPT = `Search the web for sources that directly support or clarify the selected architecture text.
 Prefer standards and official documentation, then vendor documentation, then community sources.
@@ -128,17 +129,25 @@ export class OpenRouterWebReferenceClient implements WebReferenceClient {
 		selectionText: string,
 		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceCandidate[] | undefined> {
-		const response = await this.client.responses.create({
-			model: options.model ?? this.defaultModel,
-			tools: [openRouterWebSearchTool() as never],
-			input: [
-				{ role: 'system', content: REFERENCE_PROMPT },
-				{ role: 'user', content: selectionText }
-			]
-		});
-		return referenceCandidatesFrom(
-			response.output as unknown as readonly OpenRouterOutputItem[],
-			selectionText
+		const model = options.model ?? this.defaultModel;
+		return traceOperation(
+			'reference.search',
+			{ input: selectionText, metadata: { model }, tags: ['reference', 'web-search'] },
+			async () => {
+				const response = await this.client.responses.create({
+					model,
+					tools: [openRouterWebSearchTool() as never],
+					input: [
+						{ role: 'system', content: REFERENCE_PROMPT },
+						{ role: 'user', content: selectionText }
+					]
+				});
+				return referenceCandidatesFrom(
+					response.output as unknown as readonly OpenRouterOutputItem[],
+					selectionText
+				);
+			},
+			(results) => JSON.stringify(results)
 		);
 	}
 }

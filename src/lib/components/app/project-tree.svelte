@@ -321,7 +321,7 @@
 			);
 			return;
 		}
-		if (activeNoteId === entry.id) await goto('/');
+		if (activeNoteId === entry.id) await goto('/today');
 	}
 
 	async function archiveProject(project: Project): Promise<void> {
@@ -330,7 +330,7 @@
 			toast.error(failureMessage('Could not archive the project. Try again.'));
 			return;
 		}
-		if (activePath.startsWith(`/projects/${project.id}`)) await goto('/');
+		if (activePath.startsWith(`/projects/${project.id}`)) await goto('/today');
 	}
 
 	async function moveEntry(entry: NoteSummary, parentId?: NoteId): Promise<void> {

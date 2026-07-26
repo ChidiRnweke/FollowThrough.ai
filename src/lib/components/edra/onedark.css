@@ -89,88 +89,88 @@
 	background-color: #ffeef0;
 }
 
-/* Dark Theme (All dark styles consolidated in one media query) */
-html.dark {
-	.tiptap pre code {
-		color: #abb2bf;
-	}
+/* Dark Theme — flat selectors only: nested rules can be dropped by CSS
+   pipelines that do not compile nesting, which leaves the light palette on the
+   dark code-block surface (dark text on dark background). */
+html.dark .tiptap pre code {
+	color: #abb2bf;
+}
 
-	/* Comment */
-	.hljs-comment,
-	.hljs-quote {
-		color: #5c6370;
-	}
+/* Comment */
+html.dark .hljs-comment,
+html.dark .hljs-quote {
+	color: #5c6370;
+}
 
-	/* Red */
-	.hljs-variable,
-	.hljs-template-variable,
-	.hljs-tag,
-	.hljs-name,
-	.hljs-selector-id,
-	.hljs-selector-class,
-	.hljs-regexp,
-	.hljs-deletion {
-		color: #e06c75;
-	}
+/* Red */
+html.dark .hljs-variable,
+html.dark .hljs-template-variable,
+html.dark .hljs-tag,
+html.dark .hljs-name,
+html.dark .hljs-selector-id,
+html.dark .hljs-selector-class,
+html.dark .hljs-regexp,
+html.dark .hljs-deletion {
+	color: #e06c75;
+}
 
-	/* Orange */
-	.hljs-number,
-	.hljs-built_in,
-	.hljs-literal,
-	.hljs-type,
-	.hljs-params,
-	.hljs-meta,
-	.hljs-link {
-		color: #d19a66;
-	}
+/* Orange */
+html.dark .hljs-number,
+html.dark .hljs-built_in,
+html.dark .hljs-literal,
+html.dark .hljs-type,
+html.dark .hljs-params,
+html.dark .hljs-meta,
+html.dark .hljs-link {
+	color: #d19a66;
+}
 
-	/* Yellow */
-	.hljs-attribute {
-		color: #e5c07b;
-	}
+/* Yellow */
+html.dark .hljs-attribute {
+	color: #e5c07b;
+}
 
-	/* Green */
-	.hljs-string,
-	.hljs-symbol,
-	.hljs-bullet,
-	.hljs-addition {
-		color: #98c379;
-	}
+/* Green */
+html.dark .hljs-string,
+html.dark .hljs-symbol,
+html.dark .hljs-bullet,
+html.dark .hljs-addition {
+	color: #98c379;
+}
 
-	/* Blue */
-	.hljs-title,
-	.hljs-section {
-		color: #61afef;
-	}
+/* Blue */
+html.dark .hljs-title,
+html.dark .hljs-section {
+	color: #61afef;
+}
 
-	/* Purple */
-	.hljs-keyword,
-	.hljs-selector-tag {
-		color: #c678dd;
-	}
+/* Purple */
+html.dark .hljs-keyword,
+html.dark .hljs-selector-tag {
+	color: #c678dd;
+}
 
-	/* Cyan */
-	.hljs-emphasis {
-		color: #56b6c2;
-	}
+/* Cyan */
+html.dark .hljs-emphasis {
+	color: #56b6c2;
+}
 
-	/* Base styles */
-	.hljs-doctag,
-	.hljs-formula {
-		color: #c678dd;
-	}
+/* Base styles */
+html.dark .hljs-doctag,
+html.dark .hljs-formula {
+	color: #c678dd;
+}
 
-	.hljs-attr,
-	.hljs-subst {
-		color: #abb2bf;
-	}
+html.dark .hljs-attr,
+html.dark .hljs-subst {
+	color: #abb2bf;
+}
 
-	/* Line highlights */
-	.hljs-addition {
-		background-color: #283428;
-	}
+/* Line highlights */
+html.dark .hljs-addition {
+	background-color: #283428;
+}
 
-	.hljs-deletion {
-		background-color: #342828;
-	}
+html.dark .hljs-deletion {
+	background-color: #342828;
 }

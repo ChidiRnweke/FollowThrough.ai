@@ -12,6 +12,7 @@ import type {
 	StructuredRelationshipClient
 } from '$lib/services';
 import { HeuristicRelationshipClassifier } from '$lib/services';
+import { traceOperation } from './telemetry';
 
 const RelationshipOutput = z.object({
 	kind: z.enum(['prior_decision', 'contradicts', 'elaborates', 'mentions']),
@@ -43,15 +44,23 @@ export class OpenAIStructuredRelationshipClient implements StructuredRelationshi
 		sourceText: string,
 		targetText: string
 	): Promise<RelationshipClassification | undefined> {
-		const completion = await this.client.chat.completions.parse({
-			model: this.model,
-			messages: [
-				{ role: 'system', content: SYSTEM_PROMPT },
-				{ role: 'user', content: `SOURCE:\n${sourceText}\n\nTARGET:\n${targetText}` }
-			],
-			response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
-		});
-		return completion.choices[0]?.message.parsed ?? undefined;
+		const input = `SOURCE:\n${sourceText}\n\nTARGET:\n${targetText}`;
+		return traceOperation(
+			'relationship.classify',
+			{ input, metadata: { model: this.model } },
+			async () => {
+				const completion = await this.client.chat.completions.parse({
+					model: this.model,
+					messages: [
+						{ role: 'system', content: SYSTEM_PROMPT },
+						{ role: 'user', content: input }
+					],
+					response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
+				});
+				return completion.choices[0]?.message.parsed ?? undefined;
+			},
+			(result) => JSON.stringify(result)
+		);
 	}
 }
 

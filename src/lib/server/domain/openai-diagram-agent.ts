@@ -36,6 +36,7 @@ import { resolveAgentModel } from '$lib/services';
 import { AgentToolEventMapper } from './openai-agent-capabilities';
 import { PersistentAgentSession } from './persistent-agent-session';
 import { DrawioXmlValidator } from './drawio-content';
+import { traceWorkflow } from './telemetry';
 
 const SubmitDiagram = z.object({
 	title: z.string().trim().min(1).max(120).optional(),
@@ -370,48 +371,67 @@ export class OpenAIDiagramAgent
 		});
 
 		try {
-			const runner = new Runner({
-				modelProvider: provider,
-				traceIncludeSensitiveData: true
-			});
-			const stream = await runner.run(agent, input.prompt, {
-				stream: true,
-				session: new PersistentAgentSession(this.dependencies.sessions, actor, conversation.id),
-				maxTurns: 12
-			});
-			const mapper = new AgentToolEventMapper();
-			for await (const event of stream) {
-				const toolEvent = mapper.map(event);
-				if (toolEvent?.type === 'tool_started')
-					await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
-						callId: toolEvent.callId,
-						name: toolEvent.name,
-						input: toolEvent.arguments,
-						status: 'running'
+			return await traceWorkflow(
+				'diagram.agent-turn',
+				{
+					input: input.prompt,
+					sessionId: conversation.id,
+					userId: actor.userId,
+					metadata: {
+						runId: run.id,
+						noteId: task.noteId,
+						operation: task.operation,
+						model
+					},
+					tags: ['agent', 'diagram']
+				},
+				async () => {
+					const runner = new Runner({
+						modelProvider: provider,
+						traceIncludeSensitiveData: true
 					});
-				if (toolEvent?.type === 'tool_completed')
-					await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
-						callId: toolEvent.callId,
-						name: toolEvent.name,
-						input: {},
-						output: toolEvent.output,
-						failure: toolEvent.failure,
-						status: toolEvent.failure ? 'failed' : 'succeeded'
+					const stream = await runner.run(agent, input.prompt, {
+						stream: true,
+						session: new PersistentAgentSession(this.dependencies.sessions, actor, conversation.id),
+						maxTurns: 12
 					});
-				if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
-					assistantText += event.data.delta;
-			}
-			await stream.completed;
-			if (!draft) throw new ValidationError('The Diagram Agent did not submit a valid diagram.');
-			if (assistantText)
-				await this.dependencies.conversations.recordAssistantText(
-					actor,
-					conversation.id,
-					assistantText,
-					model
-				);
-			await this.dependencies.runs.complete(actor, run.id);
-			return { ...draft, provenanceId: provenance.id };
+					const mapper = new AgentToolEventMapper();
+					for await (const event of stream) {
+						const toolEvent = mapper.map(event);
+						if (toolEvent?.type === 'tool_started')
+							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
+								callId: toolEvent.callId,
+								name: toolEvent.name,
+								input: toolEvent.arguments,
+								status: 'running'
+							});
+						if (toolEvent?.type === 'tool_completed')
+							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
+								callId: toolEvent.callId,
+								name: toolEvent.name,
+								input: {},
+								output: toolEvent.output,
+								failure: toolEvent.failure,
+								status: toolEvent.failure ? 'failed' : 'succeeded'
+							});
+						if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
+							assistantText += event.data.delta;
+					}
+					await stream.completed;
+					if (!draft)
+						throw new ValidationError('The Diagram Agent did not submit a valid diagram.');
+					if (assistantText)
+						await this.dependencies.conversations.recordAssistantText(
+							actor,
+							conversation.id,
+							assistantText,
+							model
+						);
+					await this.dependencies.runs.complete(actor, run.id);
+					return { ...draft, provenanceId: provenance.id };
+				},
+				(result) => JSON.stringify(result)
+			);
 		} catch (error) {
 			await this.dependencies.runs.fail(
 				actor,

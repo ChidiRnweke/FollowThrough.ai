@@ -13,6 +13,7 @@ import type {
 	StructuredPromiseResult
 } from '$lib/services';
 import { DeterministicPromiseExtractor } from './deterministic-promise-extractor';
+import { traceOperation } from './telemetry';
 
 const PromiseExtraction = z.object({
 	promises: z.array(
@@ -48,15 +49,22 @@ export class OpenAIStructuredPromiseClient implements StructuredPromiseClient {
 	}
 
 	async extract(text: string): Promise<readonly StructuredPromiseResult[] | undefined> {
-		const completion = await this.client.chat.completions.parse({
-			model: this.model,
-			messages: [
-				{ role: 'system', content: SYSTEM_PROMPT },
-				{ role: 'user', content: text }
-			],
-			response_format: zodResponseFormat(PromiseExtraction, 'promise_extraction')
-		});
-		return completion.choices[0]?.message.parsed?.promises;
+		return traceOperation(
+			'promise.extract',
+			{ input: text, metadata: { model: this.model } },
+			async () => {
+				const completion = await this.client.chat.completions.parse({
+					model: this.model,
+					messages: [
+						{ role: 'system', content: SYSTEM_PROMPT },
+						{ role: 'user', content: text }
+					],
+					response_format: zodResponseFormat(PromiseExtraction, 'promise_extraction')
+				});
+				return completion.choices[0]?.message.parsed?.promises;
+			},
+			(result) => JSON.stringify(result)
+		);
 	}
 }
 

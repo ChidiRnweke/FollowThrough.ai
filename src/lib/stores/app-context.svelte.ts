@@ -22,7 +22,7 @@ export function surfaceFor(
 	}
 	const parts = pathname.split('/').filter(Boolean);
 	let kind: AppContextSnapshotV1['surface']['kind'] = 'unknown';
-	if (pathname === '/') kind = 'today';
+	if (parts[0] === 'today') kind = 'today';
 	else if (parts[0] === 'todos') kind = 'todos';
 	else if (parts[0] === 'notes' && parts[2] === 'diagrams') kind = 'diagram_editor';
 	else if (parts[0] === 'notes') kind = 'note_workbench';

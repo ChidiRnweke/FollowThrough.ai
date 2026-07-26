@@ -347,7 +347,7 @@ class WorkbenchStore {
 			this.focusedNoteId = undefined;
 			this.splitNoteId = undefined;
 			this.applyingFromUrl = false;
-			await goto('/', { replaceState: false });
+			await goto('/today', { replaceState: false });
 			await this.persist({
 				openTabs: [],
 				focusedNoteId: null,
@@ -420,7 +420,7 @@ class WorkbenchStore {
 			this.focusedNoteId = undefined;
 			this.splitNoteId = undefined;
 			this.applyingFromUrl = false;
-			await goto('/', { replaceState: false });
+			await goto('/today', { replaceState: false });
 			await this.persist({
 				openTabs: [],
 				focusedNoteId: null,

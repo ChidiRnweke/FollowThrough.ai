@@ -1,6 +1,7 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
 import type { EmbeddingBatch, EmbeddingClient } from '$lib/services';
 import { createOpenRouterClient, type OpenRouterClientOptions } from './openrouter-client';
+import { traceOperation } from './telemetry';
 
 /**
  * Embeddings run on OpenRouter. The model stays `openai/text-embedding-3-large`
@@ -27,16 +28,29 @@ export class OpenAIEmbeddingClient implements EmbeddingClient {
 
 	async embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch> {
 		try {
-			const response = await this.client.embeddings.create(
-				{ model: this.model, input: [...contents] },
-				{ signal }
+			return await traceOperation(
+				'embedding.batch',
+				{
+					input: JSON.stringify(contents),
+					metadata: { model: this.model, inputCount: contents.length },
+					tags: ['embedding']
+				},
+				async () => {
+					const response = await this.client.embeddings.create(
+						{ model: this.model, input: [...contents] },
+						{ signal }
+					);
+					const vectors = [...response.data]
+						.sort((a, b) => a.index - b.index)
+						.map((item) => item.embedding);
+					if (vectors.length !== contents.length)
+						throw new InvalidGeneratedContentError(
+							'Embedding result count did not match input count'
+						);
+					return { model: this.model, vectors };
+				},
+				(result) => JSON.stringify({ model: result.model, vectorCount: result.vectors.length })
 			);
-			const vectors = [...response.data]
-				.sort((a, b) => a.index - b.index)
-				.map((item) => item.embedding);
-			if (vectors.length !== contents.length)
-				throw new InvalidGeneratedContentError('Embedding result count did not match input count');
-			return { model: this.model, vectors };
 		} catch (error) {
 			if (signal?.aborted) throw error;
 			if (error instanceof InvalidGeneratedContentError) throw error;

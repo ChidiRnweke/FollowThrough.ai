@@ -82,7 +82,7 @@ async function readPaneMounts(page: Page): Promise<number> {
 }
 
 async function openFirstNote(page: Page): Promise<string> {
-	await page.goto('/');
+	await page.goto('/today');
 	const noteLink = page.locator('a[href^="/notes/"]').first();
 	await noteLink.waitFor({ state: 'attached' });
 	const href = (await noteLink.getAttribute('href'))!;

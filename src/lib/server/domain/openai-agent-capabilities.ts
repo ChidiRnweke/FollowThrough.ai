@@ -278,7 +278,13 @@ export class OpenAIAgentRunner implements AgentRunner {
 				yield { type: 'completed', sessionItems: await session.snapshot() };
 			};
 			yield* traceAgentTurn(
-				{ input: request.prompt ?? '', sessionId: run.conversationId, model: run.model },
+				{
+					input: request.prompt ?? '',
+					sessionId: run.conversationId,
+					model: run.model,
+					userId: actor.userId,
+					runId: run.id
+				},
 				() => runTurn(),
 				() => outputText
 			);

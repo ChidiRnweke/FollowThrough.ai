@@ -74,7 +74,7 @@
 			{
 				key: 'notes',
 				count: noteCount,
-				href: scope ? `/projects/${scope}` : '/',
+				href: scope ? `/projects/${scope}` : '/today',
 				icon: Document
 			},
 			{
@@ -86,7 +86,7 @@
 			{
 				key: 'attachments',
 				count: counts.attachments,
-				href: scope ? `/projects/${scope}/attachments` : '/',
+				href: scope ? `/projects/${scope}/attachments` : '/today',
 				icon: Attachments
 			}
 		];

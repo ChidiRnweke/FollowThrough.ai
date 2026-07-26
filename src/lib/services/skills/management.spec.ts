@@ -115,6 +115,35 @@ describe('Skill management invariants', () => {
 		expect(skills.usages[0]?.contextNoteId).toBe(testNoteId(2));
 	});
 
+	it('updates skill metadata without touching the note or its revision history', async () => {
+		const { service, skills, notes } = setup();
+		const skillNote = noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: '## Steps\n1. Write decisions clearly.',
+			currentRevision: 2
+		});
+		notes.notes[0] = skillNote;
+		skills.skills = [
+			{
+				note: skillNote,
+				name: 'Decision writing',
+				description: 'Writes decisions',
+				triggerHints: ['decision'],
+				isEnabled: true
+			}
+		];
+		const updated = await service.update(testActor(), {
+			noteId: skillNote.id,
+			description: 'Use when writing or reviewing decisions',
+			isEnabled: false
+		});
+		expect(updated.description).toBe('Use when writing or reviewing decisions');
+		expect(updated.isEnabled).toBe(false);
+		expect(notes.notes[0]).toEqual(skillNote);
+		expect(notes.revisions).toHaveLength(0);
+	});
+
 	it('restores an immutable skill snapshot as a new current revision', async () => {
 		const { service, skills, notes } = setup();
 		const current = noteBuilder({

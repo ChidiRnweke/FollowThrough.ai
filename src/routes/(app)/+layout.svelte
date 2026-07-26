@@ -36,7 +36,7 @@
 	const showProgressBar = $derived(isNavigating && !isWorkbenchInternal);
 	const isNoteWorkbench = $derived(page.url.pathname.startsWith('/notes/'));
 	const currentScreen = $derived.by(() => {
-		if (page.url.pathname === '/') return 'Today';
+		if (page.url.pathname === '/today') return 'Today';
 		if (page.url.pathname.startsWith('/todos/')) return 'Todo';
 		if (page.url.pathname.startsWith('/todos')) return 'Todos';
 		if (page.url.pathname.startsWith('/chats')) return 'Chat';

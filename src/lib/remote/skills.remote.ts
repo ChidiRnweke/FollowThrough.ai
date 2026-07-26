@@ -61,6 +61,60 @@ const jsonStringMap = z.string().transform((raw, ctx) => {
 	return parsed as Record<string, string>;
 });
 
+/** Mirrors the portable-name fallback in SkillManagementService. */
+const fallbackSlug = (value: string): string =>
+	value
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 64) || `skill-${crypto.randomUUID().slice(0, 8)}`;
+
+export const saveSkillDraft = command(
+	z.object({ noteId, description: z.string(), instructions: z.string() }),
+	async (input) => {
+		const factory = AppFactory.controllerFactory();
+		const actor = requestActor();
+		const { skill } = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+		await factory.skills().update(actor, {
+			noteId: input.noteId as NoteId,
+			manifest: {
+				slug: skill.slug ?? fallbackSlug(skill.name),
+				description: input.description.trim() || skill.description,
+				...(skill.license ? { license: skill.license } : {}),
+				...(skill.compatibility ? { compatibility: skill.compatibility } : {}),
+				metadata: skill.metadata ?? {},
+				allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
+				instructions: input.instructions
+			}
+		});
+		return { saved: true };
+	}
+);
+
+export const saveSkillDescription = command(
+	z.object({ noteId, description: z.string() }),
+	async (input) => {
+		await AppFactory.controllerFactory()
+			.skills()
+			.update(requestActor(), { noteId: input.noteId as NoteId, description: input.description });
+		return { saved: true };
+	}
+);
+
+export const renameSkill = command(z.object({ noteId, name: z.string().min(1) }), async (input) => {
+	await AppFactory.controllerFactory()
+		.skills()
+		.update(requestActor(), { noteId: input.noteId as NoteId, displayName: input.name });
+	return { saved: true };
+});
+
+export const importSkillMarkdown = command(z.object({ noteId, raw: z.string() }), async (input) => {
+	await AppFactory.controllerFactory()
+		.skills()
+		.update(requestActor(), { noteId: input.noteId as NoteId, raw: input.raw });
+	return { saved: true };
+});
+
 export const saveSkillBundle = form(
 	z.object({
 		noteId,

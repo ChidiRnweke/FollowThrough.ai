@@ -27,7 +27,9 @@ describe('Starter surface follows what the user is looking at', () => {
 	});
 
 	it('falls back to unscoped starters with nothing in scope', () => {
-		expect(starterSurface({ hasNote: false, hasProject: false, pathname: '/' })).toBe('unscoped');
+		expect(starterSurface({ hasNote: false, hasProject: false, pathname: '/today' })).toBe(
+			'unscoped'
+		);
 	});
 });
 

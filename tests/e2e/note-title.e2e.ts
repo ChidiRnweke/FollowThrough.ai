@@ -7,7 +7,7 @@ const titleCrumb = (page: Page) =>
 const titleField = (page: Page) => page.getByRole('textbox', { name: 'Note title' });
 
 async function openFirstNote(page: Page): Promise<void> {
-	await page.goto('/');
+	await page.goto('/today');
 	const noteLink = page.locator('a[href^="/notes/"]').first();
 	await noteLink.waitFor({ state: 'attached' });
 	await page.goto((await noteLink.getAttribute('href'))!);

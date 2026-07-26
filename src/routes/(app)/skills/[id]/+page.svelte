@@ -1,322 +1,454 @@
 <script lang="ts">
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
-	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { Separator } from '$lib/components/ui/separator';
-	import { formatDateTime } from '$lib/components/app/labels';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import SkillEditor from '$lib/components/app/skill-editor.svelte';
+	import NoteConflictDialog from '$lib/components/app/note-conflict-dialog.svelte';
+	import NoteSyncStatus from '$lib/components/app/note-sync-status.svelte';
+	import NoteTitleInlineInput from '$lib/components/app/note-title-inline-input.svelte';
+	import { noteSyncRegistry } from '$lib/stores/registries/note-sync-registry.svelte';
+	import {
+		FtDownload as Download,
+		FtEdit as Pencil,
+		FtExport as FileOutput,
+		FtLoader as LoaderCircle
+	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
-		initiateAttachmentUpload,
-		completeAttachmentUpload,
-		downloadAttachmentByPath,
-		removeAttachmentByPath
-	} from '$lib/remote/attachments.remote';
-	import {
-		setSkillEnabled,
-		setSkillPinned,
-		saveSkillBundle,
-		saveSkillRaw,
-		restoreSkillVersion
+		importSkillMarkdown,
+		renameSkill,
+		saveSkillDescription
 	} from '$lib/remote/skills.remote';
 
 	let { data } = $props();
-	let uploading = $state(false);
 
-	// Remote forms carry no route params, so the skill's note id travels as a hidden field.
 	const noteId = $derived(data.view.skill.note.id);
-	const bundle = saveSkillBundle.fields;
 
-	async function upload(file: File): Promise<void> {
-		uploading = true;
-		try {
-			const intent = await initiateAttachmentUpload({
-				noteId: data.view.skill.note.id,
-				path: file.name,
-				mediaType: file.type || 'application/octet-stream',
-				byteSize: file.size,
-				checksumSha256: await fileChecksumSha256(file)
-			});
-			const stored = await fetch(intent.uploadUrl, {
-				method: 'PUT',
-				headers: intent.requiredHeaders,
-				body: file
-			});
-			if (!stored.ok) {
-				const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
-				throw new Error(
-					detail
-						? `Object storage rejected the upload: ${detail}`
-						: `Object storage rejected the upload (${stored.status})`
-				);
+	// Same store the notes workspace uses, acquired per note id — the etag and
+	// conflict handling below are exactly the notes save path.
+	const noteSync = untrack(() => noteSyncRegistry.for(noteId));
+	onDestroy(() => noteSyncRegistry.release(noteId));
+
+	let describeRef: SkillEditor | undefined = $state();
+	let bodyRef: SkillEditor | undefined = $state();
+	let editorEpoch = $state(0);
+	let syncReady = $state(false);
+	let dirty = $state(false);
+	let saveFailed = $state(false);
+	let conflictOpen = $state(false);
+	let importing = $state(false);
+	let exporting = $state(false);
+	let editingTitle = $state(false);
+	let fileInput: HTMLInputElement | undefined = $state();
+	let editVersion = 0;
+	let saveQueued = false;
+	let activeSave: Promise<void> | undefined;
+	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+	// Local copies so sync results and device-copy content survive between loads.
+	let note = $state(untrack(() => ({ ...data.view.skill.note })));
+	let savedDescription = $state(untrack(() => data.view.skill.description));
+
+	// Any state where the device copy has not reached the server.
+	const unsynced = $derived(
+		noteSync.status === 'pending' || noteSync.status === 'conflict' || noteSync.status === 'error'
+	);
+
+	onMount(() => {
+		let cancelled = false;
+		const stopListening = noteSync.listenForReconnect();
+		void noteSync.initialize({ note: data.view.skill.note, etag: data.etag }).then((local) => {
+			if (cancelled) return;
+			// Server-authoritative fields come from the load; content fields come
+			// from the device copy, which may hold unsynced edits.
+			note = {
+				...data.view.skill.note,
+				title: local.title,
+				document: local.document,
+				plainText: local.plainText,
+				currentRevision: local.currentRevision,
+				updatedAt: local.updatedAt
+			};
+			conflictOpen = noteSync.status === 'conflict';
+			syncReady = true;
+		});
+		return () => {
+			cancelled = true;
+			stopListening();
+			noteSync.reset();
+		};
+	});
+
+	const AUTOSAVE_DELAY = 2000;
+
+	function markDirty(): void {
+		editVersion += 1;
+		dirty = true;
+		saveFailed = false;
+		clearTimeout(autosaveTimer);
+		autosaveTimer = setTimeout(() => void save({ auto: true }), AUTOSAVE_DELAY);
+	}
+
+	$effect(() => () => clearTimeout(autosaveTimer));
+
+	function save(options: { auto?: boolean } = {}): Promise<void> {
+		if (!bodyRef || !describeRef) return Promise.resolve();
+		if (!dirty) {
+			// Content staged on the device but not on the server: a manual save has
+			// to mean "flush what is stuck" rather than silently doing nothing.
+			if (!options.auto && unsynced) return retrySync();
+			return Promise.resolve();
+		}
+		clearTimeout(autosaveTimer);
+		saveQueued = true;
+		activeSave ??= flushSaves(options).finally(() => {
+			activeSave = undefined;
+		});
+		return activeSave;
+	}
+
+	async function flushSaves(options: { auto?: boolean }): Promise<void> {
+		while (saveQueued && bodyRef && describeRef) {
+			saveQueued = false;
+			const savingVersion = editVersion;
+			// The description lives on the skills row and saves without touching
+			// the note revision, so it cannot disturb the sync store's base etag.
+			// Trimmed: the markdown serializer's trailing newline is not an edit.
+			const description = describeRef.getMarkdown().trim();
+			if (description !== savedDescription) {
+				try {
+					await saveSkillDescription({ noteId: note.id, description });
+					savedDescription = description;
+				} catch {
+					saveFailed = true;
+					dirty = true;
+					if (!options.auto) toast.error('Could not save the description. Try again.');
+					return;
+				}
 			}
-			await completeAttachmentUpload({ uploadId: intent.upload.id });
-			await invalidateAll();
-			toast.success('Resource attached');
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Upload failed');
-		} finally {
-			uploading = false;
+			const record = await noteSync.save({
+				...note,
+				document: bodyRef.getDocument(),
+				plainText: bodyRef.getMarkdown()
+			});
+			if (!record) {
+				saveFailed = true;
+				dirty = true;
+				if (!options.auto) toast.error('Could not save the skill. Try again.');
+				return;
+			}
+
+			saveFailed = false;
+			if (savingVersion === editVersion) {
+				note = { ...record.local };
+				dirty = false;
+			} else {
+				note = {
+					...note,
+					currentRevision: record.local.currentRevision,
+					updatedAt: record.local.updatedAt
+				};
+				dirty = true;
+				saveQueued = true;
+			}
+			if (record.state === 'conflict') {
+				conflictOpen = true;
+				if (!saveQueued) return;
+			} else if (record.state === 'synced') {
+				await invalidateAll();
+			}
 		}
 	}
 
-	async function download(path: string): Promise<void> {
+	async function retrySync(): Promise<void> {
+		const record = await noteSync.retry();
+		if (!record) {
+			toast.error(
+				noteSync.lastError ?? 'Could not reach the note on this device. Reload the page.'
+			);
+			return;
+		}
+		note = { ...record.local };
+		conflictOpen = record.state === 'conflict';
+		if (record.state === 'synced') {
+			await invalidateAll();
+			return;
+		}
+		if (record.state === 'pending')
+			toast.error(noteSync.lastError ?? 'Still could not sync. Check your connection.');
+	}
+
+	async function useRemoteVersion(): Promise<void> {
+		const remote = await noteSync.useRemote();
+		if (!remote) return;
+		note = { ...remote };
+		dirty = false;
+		editorEpoch += 1;
+		await invalidateAll();
+	}
+
+	async function keepLocalVersion(): Promise<void> {
+		const record = await noteSync.keepLocal();
+		if (!record) return;
+		note = { ...record.local };
+		conflictOpen = record.state === 'conflict';
+		editorEpoch += 1;
+		if (record.state === 'synced') await invalidateAll();
+	}
+
+	function commitTitle(title: string): void {
+		editingTitle = false;
+		if (!title || title === note.title) return;
+		note = { ...note, title };
+		// The note sync carries the title to the notes table; the skills row gets
+		// its own rename so the two never wait on each other.
+		markDirty();
+		renameSkill({ noteId: note.id, name: title }).catch(() =>
+			toast.error('Could not rename the skill. Try again.')
+		);
+	}
+
+	function onkeydown(event: KeyboardEvent): void {
+		if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+			event.preventDefault();
+			void save();
+		}
+	}
+
+	function onbeforeunload(event: BeforeUnloadEvent): void {
+		if (dirty) event.preventDefault();
+	}
+
+	async function ensureSynchronized(message: string): Promise<boolean> {
+		if (dirty) await save({ auto: true });
+		if (dirty || noteSync.status !== 'synced') {
+			toast.error(message);
+			return false;
+		}
+		return true;
+	}
+
+	async function exportSkill(): Promise<void> {
+		if (exporting) return;
+		exporting = true;
 		try {
-			const { url } = await downloadAttachmentByPath({ noteId: data.view.skill.note.id, path });
-			window.open(url, '_blank', 'noopener,noreferrer');
-		} catch {
-			toast.error('Download link could not be created');
+			// The export must reflect the canvas, so flush pending edits first.
+			if (!(await ensureSynchronized('Save the skill before exporting.'))) return;
+			await invalidateAll();
+			const slug = data.view.skill.slug ?? 'skill';
+			const blob = new Blob([data.raw], { type: 'text/markdown;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = `${slug}.skill.md`;
+			anchor.click();
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Skill could not be exported');
+		} finally {
+			exporting = false;
+		}
+	}
+
+	async function importSkill(file: File): Promise<void> {
+		importing = true;
+		try {
+			const raw = await file.text();
+			await importSkillMarkdown({ noteId: note.id, raw });
+			await invalidateAll();
+			// The import rewrote the note server-side, so rebase the sync store on
+			// the fresh version before the next save, then remount the editors.
+			const local = await noteSync.initialize({ note: data.view.skill.note, etag: data.etag });
+			note = { ...local };
+			savedDescription = data.view.skill.description;
+			dirty = false;
+			editorEpoch += 1;
+			toast.success('Skill imported');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'That file is not a valid SKILL.md');
+		} finally {
+			importing = false;
 		}
 	}
 </script>
 
-<PageShell title={data.view.skill.name} description={data.view.skill.description}>
-	{#snippet actions()}
-		<AgentAction action={agentActions.skillDetail} context={{ noteId: data.view.skill.note.id }} />
-		<Button variant="outline" size="sm" href="/notes/{data.view.skill.note.id}">
-			Edit as note
-		</Button>
-	{/snippet}
-	<div class="flex flex-wrap gap-1.5">
-		{#each data.view.skill.triggerHints as hint (hint)}
-			<Badge variant="ghost" class="font-mono text-xs text-muted-foreground">{hint}</Badge>
-		{/each}
-		{#if !data.view.skill.isEnabled}
-			<Badge variant="ghost" class="text-muted-foreground">Disabled</Badge>
-		{/if}
+<svelte:window {onkeydown} {onbeforeunload} />
+
+{#snippet syncStatus()}
+	<div class="min-w-0 flex-1 sm:flex-none">
+		<NoteSyncStatus
+			status={noteSync.status}
+			updatedAt={note.updatedAt}
+			reason={noteSync.lastError}
+			onRetry={() => void retrySync()}
+			onReview={() => (conflictOpen = true)}
+		/>
 	</div>
-	<form {...setSkillEnabled}>
-		<input {...setSkillEnabled.fields.noteId.as('hidden', noteId)} />
-		<Button
-			variant="outline"
-			size="sm"
-			{...setSkillEnabled.fields.enabled.as('submit', String(!data.view.skill.isEnabled))}
-		>
-			{data.view.skill.isEnabled ? 'Disable skill' : 'Enable skill'}
-		</Button>
-	</form>
-	{#if data.projectPins.length > 0}
-		<div class="flex flex-col gap-2 rounded-md border p-3">
-			<p class="text-sm font-medium">Prioritize in projects</p>
-			<div class="flex flex-wrap gap-2">
-				{#each data.projectPins as item (item.project.id)}
-					{@const pin = setSkillPinned.for(item.project.id)}
-					<form {...pin}>
-						<input {...pin.fields.noteId.as('hidden', noteId)} />
-						<input {...pin.fields.projectId.as('hidden', item.project.id)} />
-						<Button
-							variant={item.pinned ? 'secondary' : 'outline'}
-							size="sm"
-							{...pin.fields.pinned.as('submit', String(!item.pinned))}
-						>
-							{item.project.name}{item.pinned ? ' · pinned' : ''}
-						</Button>
-					</form>
-				{/each}
+{/snippet}
+
+<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4 px-4 pt-6 pb-6 md:px-8">
+	<div
+		class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
+		data-testid="note-utility-header"
+	>
+		<div class="group/title flex min-w-0 items-center gap-1 sm:flex-1">
+			<div class="flex min-w-0 flex-1 items-center">
+				{#if editingTitle}
+					<NoteTitleInlineInput
+						initialValue={note.title}
+						onsubmit={commitTitle}
+						oncancel={() => (editingTitle = false)}
+						onadvance={() => describeRef?.focus()}
+					/>
+				{:else}
+					<h1 class="page-title truncate">{note.title}</h1>
+					<Tip text="Rename skill">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-xs"
+								class="size-11 shrink-0 transition-opacity sm:size-6 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/title:opacity-100"
+								aria-label="Rename skill"
+								onclick={() => (editingTitle = true)}
+							>
+								<Pencil />
+							</Button>
+						{/snippet}
+					</Tip>
+				{/if}
 			</div>
 		</div>
-	{/if}
-	<Separator />
-	<section class="flex flex-col gap-3">
-		<div>
-			<h2 class="section-title">Skill bundle</h2>
-			<p class="text-sm text-muted-foreground">
-				One canonical SKILL.md representation. Scripts are stored as resources and are never
-				executed.
-			</p>
-		</div>
-		<form {...saveSkillBundle} class="grid gap-3 sm:grid-cols-2">
-			<input {...bundle.noteId.as('hidden', noteId)} />
-			<label class="grid gap-1 text-sm">
-				<span>Display name</span>
-				<input
-					class="rounded-md border bg-background px-3 py-2"
-					{...bundle.displayName.as('text', data.view.skill.name)}
-				/>
-			</label>
-			<label class="grid gap-1 text-sm">
-				<span>Portable name</span>
-				<input
-					class="rounded-md border bg-background px-3 py-2 font-mono"
-					{...bundle.slug.as('text', data.view.skill.slug ?? '')}
-					required
-				/>
-			</label>
-			<label class="grid gap-1 text-sm sm:col-span-2">
-				<span>Description</span>
-				<textarea
-					class="min-h-20 rounded-md border bg-background p-3"
-					{...bundle.description.as('text', data.view.skill.description)}
-					required></textarea>
-			</label>
-			<label class="grid gap-1 text-sm">
-				<span>License</span>
-				<input
-					class="rounded-md border bg-background px-3 py-2"
-					{...bundle.license.as('text', data.view.skill.license ?? '')}
-				/>
-			</label>
-			<label class="grid gap-1 text-sm">
-				<span>Compatibility</span>
-				<input
-					class="rounded-md border bg-background px-3 py-2"
-					{...bundle.compatibility.as('text', data.view.skill.compatibility ?? '')}
-				/>
-			</label>
-			<label class="grid gap-1 text-sm sm:col-span-2">
-				<span>Trigger hints <span class="text-muted-foreground">(comma-separated)</span></span>
-				<input
-					class="rounded-md border bg-background px-3 py-2"
-					{...bundle.triggerHints.as('text', data.view.skill.triggerHints.join(', '))}
-				/>
-			</label>
-			<label class="grid gap-1 text-sm sm:col-span-2">
-				<span>Instructions</span>
-				<textarea
-					class="min-h-72 rounded-md border bg-background p-3 font-mono text-xs"
-					{...bundle.instructions.as('text', data.view.skill.note.plainText)}></textarea>
-			</label>
-			<label class="grid gap-1 text-sm sm:col-span-2">
-				<span>Metadata <span class="text-muted-foreground">(JSON string map)</span></span>
-				<textarea
-					class="min-h-24 rounded-md border bg-background p-3 font-mono text-xs"
-					{...bundle.metadata.as('text', JSON.stringify(data.view.skill.metadata ?? {}, null, 2))}
-				></textarea>
-			</label>
-			<label class="flex items-center gap-2 text-sm sm:col-span-2">
-				<input
-					{...bundle.allowImplicitInvocation.as('checkbox')}
-					checked={data.view.skill.allowImplicitInvocation !== false}
-				/>
-				Allow automatic discovery from prompt relevance
-			</label>
-			{#each bundle.allIssues() ?? [] as issue (issue.message)}
-				<p class="text-sm text-destructive sm:col-span-2">{issue.message}</p>
-			{/each}
-			<div class="sm:col-span-2"><Button type="submit" size="sm">Save bundle</Button></div>
-		</form>
-		<details class="rounded-md border p-3">
-			<summary class="cursor-pointer text-sm font-medium">Raw SKILL.md</summary>
-			<form {...saveSkillRaw} class="mt-3 flex flex-col gap-3">
-				<input {...saveSkillRaw.fields.noteId.as('hidden', noteId)} />
-				<input {...saveSkillRaw.fields.displayName.as('hidden', data.view.skill.name)} />
-				<label class="grid gap-1 text-sm">
-					<span class="sr-only">Raw SKILL.md</span>
-					<textarea
-						class="min-h-96 rounded-md border bg-background p-3 font-mono text-xs"
-						{...saveSkillRaw.fields.raw.as('text', data.raw)}></textarea>
-				</label>
-				{#each saveSkillRaw.fields.allIssues() ?? [] as issue (issue.message)}
-					<p class="text-sm text-destructive">{issue.message}</p>
-				{/each}
-				<div><Button type="submit" variant="outline" size="sm">Save raw bundle</Button></div>
-			</form>
-		</details>
-	</section>
-	<Separator />
-	<section class="flex flex-col gap-3">
-		<div>
-			<h2 class="section-title">Bundle resources</h2>
-			<p class="text-sm text-muted-foreground">
-				Text, source, and PDF files can be read by the agent. Scripts are resources only and are
-				never executed.
-			</p>
-		</div>
-		<label
-			class="tactile inline-flex w-fit items-center rounded-md border px-3 py-2 text-sm hover:bg-accent"
-		>
-			{uploading ? 'Uploading…' : 'Attach resource'}
+		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
+			{#if saveFailed}
+				<Tip text={noteSync.lastError ?? 'The skill could not be saved. Your text is still here.'}>
+					{#snippet children({ props })}
+						<span
+							{...props}
+							class="min-w-0 flex-1 text-xs text-destructive sm:flex-none"
+							aria-live="polite"
+						>
+							Couldn’t save · press Ctrl+S to retry
+						</span>
+					{/snippet}
+				</Tip>
+				<!-- A stuck sync outranks the hint below it: it is the skill's one route
+				     back to saved. -->
+			{:else if unsynced || noteSync.status === 'saving'}
+				{@render syncStatus()}
+			{:else if dirty}
+				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
+					>Unsaved changes</span
+				>
+			{:else}
+				{@render syncStatus()}
+			{/if}
+			<AgentAction
+				action={agentActions.skillDetail}
+				context={{ noteId: note.id }}
+				class="hidden lg:inline-flex"
+			/>
+			<Tip text="Import SKILL.md">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						disabled={importing}
+						aria-label="Import SKILL.md"
+						onclick={() => fileInput?.click()}
+					>
+						{#if importing}
+							<LoaderCircle class="size-4 animate-spin" />
+						{:else}
+							<Download class="size-4" />
+						{/if}
+					</Button>
+				{/snippet}
+			</Tip>
+			<Tip text="Export as SKILL.md">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						disabled={exporting}
+						aria-label="Export as SKILL.md"
+						onclick={() => void exportSkill()}
+					>
+						{#if exporting}
+							<LoaderCircle class="size-4 animate-spin" />
+						{:else}
+							<FileOutput class="size-4" />
+						{/if}
+					</Button>
+				{/snippet}
+			</Tip>
 			<input
+				bind:this={fileInput}
 				type="file"
+				accept=".md,text/markdown"
 				class="sr-only"
-				disabled={uploading}
 				onchange={(event) => {
 					const file = event.currentTarget.files?.[0];
-					if (file) void upload(file);
+					if (file) void importSkill(file);
 					event.currentTarget.value = '';
 				}}
 			/>
-		</label>
-		<div class="divide-y rounded-md border">
-			{#each data.attachments as item (item.attachment.id)}
-				{@const removal = removeAttachmentByPath.for(item.attachment.id)}
-				<div class="flex items-center justify-between gap-3 p-3 text-sm">
-					<div class="min-w-0">
-						<p class="truncate font-mono text-xs">{item.attachment.path}</p>
-						<p class="text-xs text-muted-foreground">
-							{item.version.mediaType} · {item.version.byteSize} bytes
-							{item.version.parserKind
-								? ` · readable as ${item.version.parserKind}`
-								: ' · download only'}
-						</p>
-					</div>
-					<div class="flex gap-2">
-						<Button variant="ghost" size="sm" onclick={() => void download(item.attachment.path)}
-							>Download</Button
-						>
-						<form {...removal}>
-							<input {...removal.fields.noteId.as('hidden', noteId)} />
-							<Button
-								variant="ghost"
-								size="sm"
-								{...removal.fields.path.as('submit', item.attachment.path)}>Remove</Button
-							>
-						</form>
-					</div>
-				</div>
-			{:else}
-				<p class="p-3 text-sm text-muted-foreground">No resources attached.</p>
-			{/each}
 		</div>
-	</section>
-	<Separator />
-	<section class="flex flex-col gap-2">
-		<h2 class="section-title">Where the agent used it</h2>
-		{#each data.view.usages as usage (usage.usage.id)}
-			<div class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm">
-				{#if usage.contextNote}
-					<a href="/notes/{usage.contextNote.id}" class="hover:underline">
-						{usage.contextNote.title}
-					</a>
-				{:else}
-					<span class="text-muted-foreground">Chat session</span>
-				{/if}
-				<span class="text-xs text-muted-foreground">{formatDateTime(usage.usage.createdAt)}</span>
+	</div>
+
+	{#if syncReady}
+		{#key `${noteId}:${editorEpoch}`}
+			<div class="flex flex-1 flex-col rounded-lg border border-border">
+				<section class="flex flex-col gap-1 p-4 md:p-6">
+					<h2 class="section-title">Describe your skill</h2>
+					<p class="text-sm text-muted-foreground">
+						When should your agent trigger it? This is what the agent reads to decide when to load
+						this skill.
+					</p>
+					<SkillEditor
+						bind:this={describeRef}
+						compact
+						ariaLabel="Skill description"
+						initialMarkdown={savedDescription}
+						onchange={markDirty}
+					/>
+				</section>
+				<Separator />
+				<section class="flex flex-1 flex-col gap-1 p-4 md:p-6">
+					<h2 class="section-title">What should the agent do?</h2>
+					<p class="text-sm text-muted-foreground">
+						Markdown instructions the agent follows when this skill loads.
+					</p>
+					<SkillEditor
+						bind:this={bodyRef}
+						ariaLabel="Skill instructions"
+						initialMarkdown={note.plainText}
+						onchange={markDirty}
+					/>
+				</section>
 			</div>
-		{:else}
-			<p class="text-sm text-muted-foreground">
-				Not used yet. It will be loaded when a prompt matches its trigger hints.
-			</p>
-		{/each}
-	</section>
-	<Separator />
-	<section class="flex flex-col gap-2">
-		<h2 class="section-title">Version history</h2>
-		{#each [...data.versions].reverse() as version (version.id)}
-			<div class="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm">
-				<div>
-					<p>Revision {version.revision}</p>
-					<p class="text-xs text-muted-foreground">{formatDateTime(version.createdAt)}</p>
-				</div>
-				{#if version.revision !== data.view.skill.note.currentRevision}
-					{@const restore = restoreSkillVersion.for(version.id)}
-					<form {...restore}>
-						<input {...restore.fields.noteId.as('hidden', noteId)} />
-						<Button
-							variant="outline"
-							size="sm"
-							{...restore.fields.revision.as('submit', version.revision)}
-						>
-							Restore
-						</Button>
-					</form>
-				{:else}
-					<Badge variant="secondary">Current</Badge>
-				{/if}
-			</div>
-		{/each}
-	</section>
-</PageShell>
+		{/key}
+	{:else}
+		<div class="space-y-3 rounded-lg border border-border p-4 md:p-6">
+			<Skeleton class="h-5 w-3/4" />
+			<Skeleton class="h-5 w-full" />
+			<Skeleton class="h-5 w-2/3" />
+		</div>
+	{/if}
+</div>
+
+{#if noteSync.record}
+	<NoteConflictDialog
+		bind:open={conflictOpen}
+		record={noteSync.record}
+		onUseRemote={useRemoteVersion}
+		onKeepLocal={keepLocalVersion}
+	/>
+{/if}

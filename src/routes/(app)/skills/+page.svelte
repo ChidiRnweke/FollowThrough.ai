@@ -14,7 +14,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { createSkill } from '$lib/remote/projects.remote';
-	import { toggleSkill } from '$lib/remote/skills.remote';
+	import { saveSkillDraft, toggleSkill } from '$lib/remote/skills.remote';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import type { NoteId } from '$lib/models';
@@ -23,18 +23,32 @@
 
 	let createOpen = $state(false);
 	let creating = $state(false);
+	let step = $state<1 | 2>(1);
 	let draftName = $state('');
+	let draftDescription = $state('');
+	let draftInstructions = $state('');
 	const togglingIds = new SvelteSet<NoteId>();
 
-	async function submitCreate(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
+	function resetWizard(): void {
+		step = 1;
+		draftName = '';
+		draftDescription = '';
+		draftInstructions = '';
+	}
+
+	async function submitCreate(): Promise<void> {
 		const name = draftName.trim();
 		if (!name || creating) return;
 		creating = true;
 		try {
 			const { skill } = await createSkill({ name });
+			const description = draftDescription.trim();
+			const instructions = draftInstructions.trim();
+			if (description || instructions) {
+				await saveSkillDraft({ noteId: skill.note.id, description, instructions });
+			}
 			createOpen = false;
-			draftName = '';
+			resetWizard();
 			await goto(`/skills/${skill.note.id}`);
 		} catch {
 			toast.error('Could not create the skill. Try again.');
@@ -106,26 +120,71 @@
 	{/if}
 </PageShell>
 
-<Dialog.Root bind:open={createOpen}>
+<Dialog.Root
+	bind:open={createOpen}
+	onOpenChange={(open) => {
+		if (!open) resetWizard();
+	}}
+>
 	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>New skill</Dialog.Title>
-			<Dialog.Description>
-				A skill is a single note the agent loads when a task matches. Name it, then write the
-				instructions.
-			</Dialog.Description>
-		</Dialog.Header>
-		<form class="flex flex-col gap-4" onsubmit={submitCreate}>
-			<Input
-				bind:value={draftName}
-				placeholder="e.g. Reviewing pull requests"
-				aria-label="Skill name"
-				disabled={creating}
-			/>
-			<Dialog.Footer>
-				<Button type="button" variant="ghost" onclick={() => (createOpen = false)}>Cancel</Button>
-				<Button type="submit" disabled={creating || !draftName.trim()}>Create skill</Button>
-			</Dialog.Footer>
-		</form>
+		{#if step === 1}
+			<Dialog.Header>
+				<Dialog.Title>Describe your skill</Dialog.Title>
+				<Dialog.Description>
+					When should your agent trigger it? This is what the agent reads to decide when to load the
+					skill.
+				</Dialog.Description>
+			</Dialog.Header>
+			<form
+				class="flex flex-col gap-4"
+				onsubmit={(event) => {
+					event.preventDefault();
+					if (draftName.trim()) step = 2;
+				}}
+			>
+				<Input
+					bind:value={draftName}
+					placeholder="e.g. Reviewing pull requests"
+					aria-label="Skill name"
+				/>
+				<textarea
+					bind:value={draftDescription}
+					class="min-h-24 rounded-md border bg-background p-3 text-sm"
+					placeholder="Use this skill when reviewing code changes, checking for bugs, style issues, and missed edge cases…"
+					aria-label="When should your agent trigger this skill?"></textarea>
+				<Dialog.Footer>
+					<Button type="button" variant="ghost" onclick={() => (createOpen = false)}>Cancel</Button>
+					<Button type="submit" disabled={!draftName.trim()}>Next</Button>
+				</Dialog.Footer>
+			</form>
+		{:else}
+			<Dialog.Header>
+				<Dialog.Title>What should the agent do?</Dialog.Title>
+				<Dialog.Description>
+					Markdown instructions the agent follows when this skill loads. You can also draft them on
+					the canvas afterwards.
+				</Dialog.Description>
+			</Dialog.Header>
+			<form
+				class="flex flex-col gap-4"
+				onsubmit={(event) => {
+					event.preventDefault();
+					void submitCreate();
+				}}
+			>
+				<textarea
+					bind:value={draftInstructions}
+					class="min-h-40 rounded-md border bg-background p-3 font-mono text-xs"
+					placeholder="## Steps&#10;1. Read the diff…&#10;2. Check for…"
+					aria-label="Skill instructions"
+					disabled={creating}></textarea>
+				<Dialog.Footer>
+					<Button type="button" variant="ghost" onclick={() => (step = 1)} disabled={creating}>
+						Back
+					</Button>
+					<Button type="submit" disabled={creating}>Create skill</Button>
+				</Dialog.Footer>
+			</form>
+		{/if}
 	</Dialog.Content>
 </Dialog.Root>

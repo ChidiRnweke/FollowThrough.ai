@@ -26,7 +26,7 @@
 			Reconnect to refresh uncached workspace data. Notes you previously opened may still be
 			available from the cached workspace.
 		</p>
-		<Button href="/" class="mt-8 min-h-11">
+		<Button href="/today" class="mt-8 min-h-11">
 			<RefreshCw class="size-4" />
 			Retry workspace
 		</Button>

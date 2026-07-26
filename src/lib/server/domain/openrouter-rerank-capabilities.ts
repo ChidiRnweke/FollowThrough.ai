@@ -1,7 +1,9 @@
 import { ExternalServiceError } from '$lib/models';
 import type { SearchMatch } from '$lib/models';
 import type { Reranker } from '$lib/services';
+import { OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import { DEFAULT_OPENROUTER_BASE_URL, type OpenRouterClientOptions } from './openrouter-client';
+import { traceOperation } from './telemetry';
 
 /**
  * Reranker backed by Cohere models served through OpenRouter's `/rerank`
@@ -51,35 +53,55 @@ export class OpenRouterReranker implements Reranker {
 	): Promise<readonly SearchMatch[]> {
 		if (matches.length === 0) return [];
 		try {
-			const response = await fetch(this.endpoint, {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					authorization: `Bearer ${this.apiKey}`,
-					'HTTP-Referer': this.appURL,
-					'X-Title': 'FollowThrough'
+			return await traceOperation(
+				'retrieval.rerank',
+				{
+					input: JSON.stringify({
+						query,
+						documents: matches.map(rerankDocumentText)
+					}),
+					kind: OpenInferenceSpanKind.RERANKER,
+					metadata: { model: this.model, topN }
 				},
-				body: JSON.stringify({
-					model: this.model,
-					query,
-					documents: matches.map(rerankDocumentText),
-					top_n: Math.min(topN, matches.length)
-				}),
-				signal
-			});
-			if (!response.ok)
-				throw new ExternalServiceError('Reranking failed', {
-					cause: `OpenRouter rerank returned ${response.status}`
-				});
-			const body = (await response.json()) as { results?: readonly RerankResult[] };
-			return (body.results ?? [])
-				.map((result) => {
-					const match = matches[result.index];
-					if (!match) return undefined;
-					const score = result.relevance_score ?? result.relevanceScore ?? match.score;
-					return { document: match.document, score };
-				})
-				.filter((match): match is SearchMatch => match !== undefined);
+				async () => {
+					const response = await fetch(this.endpoint, {
+						method: 'POST',
+						headers: {
+							'content-type': 'application/json',
+							authorization: `Bearer ${this.apiKey}`,
+							'HTTP-Referer': this.appURL,
+							'X-Title': 'FollowThrough'
+						},
+						body: JSON.stringify({
+							model: this.model,
+							query,
+							documents: matches.map(rerankDocumentText),
+							top_n: Math.min(topN, matches.length)
+						}),
+						signal
+					});
+					if (!response.ok)
+						throw new ExternalServiceError('Reranking failed', {
+							cause: `OpenRouter rerank returned ${response.status}`
+						});
+					const body = (await response.json()) as { results?: readonly RerankResult[] };
+					return (body.results ?? [])
+						.map((result) => {
+							const match = matches[result.index];
+							if (!match) return undefined;
+							const score = result.relevance_score ?? result.relevanceScore ?? match.score;
+							return { document: match.document, score };
+						})
+						.filter((match): match is SearchMatch => match !== undefined);
+				},
+				(results) =>
+					JSON.stringify(
+						results.map((result) => ({
+							documentId: result.document.id,
+							score: result.score
+						}))
+					)
+			);
 		} catch (error) {
 			if (signal?.aborted) throw error;
 			if (error instanceof ExternalServiceError) throw error;

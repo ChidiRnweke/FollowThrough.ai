@@ -1,250 +1,161 @@
-# followthrough.ai
+<div align="center">
+  <img src="static/icons/followthrough-192.png" alt="FollowThrough" width="72" height="72" />
+  <h1>followthrough.ai</h1>
+  <p><strong>A focused Markdown project workspace with a lightweight deadline board, project-scoped agent memory, and contextual skills that turn notes into actions, artifacts, and finished deliverables.</strong></p>
+</div>
 
-> A focused project workspace that turns notes into actions, keeps project context available to agents, and helps carry work through to a finished deliverable.
+---
 
-## What followthrough.ai is
+**It already knows what you're working on.** A notes editor with an agent that carries the whole
+project — the decisions, the constraints, the people you're waiting on. You never brief it again.
 
-followthrough.ai is a personal workspace for project-based knowledge work.
+Paste a standup transcript into a note and you get back a cleaned note, two todos with the right
+owner and the right deadline, and an entry proposed for the project's memory. Nothing in the paste
+said "31 July"; the project did.
 
-It combines four things that are usually separated:
+## Why I built it
 
-- Markdown notes for thinking and drafting
-- A lightweight Kanban board with deadlines
-- Project-scoped memory for agents
-- Contextual skills that transform work into useful outputs
+I was running Claude, Codex, and opencode in terminals inside VS Code, having them write markdown,
+then rendering that markdown somewhere else to actually read it. Every session started by
+re-explaining the same project. The context lived in my head, the notes lived in files, the tasks
+lived nowhere, and the agent knew none of it.
 
-The goal is not simply to capture information. The goal is to help work move forward.
+FollowThrough is the editor those agents should have been running inside.
 
-A note should be able to become a task.  
-A paragraph should be able to become a diagram.  
-A project should retain the context needed to continue without repeated explanation.  
-A rough draft should be able to become a polished document or presentation.
+<!-- SCREENSHOT: hero.png — the Today page at 1440x900, dark mode, with overdue and due-today
+     populated. Full window, no browser chrome. -->
 
-The core promise is:
+> **I want to see this there** — a hero shot of the Today page.
 
-> **Think in notes. Track what matters. Preserve the context. Finish the work.**
+## What it looks like
 
-## Why it exists
+Six screenshots belong here. The capture brief for each — route, viewport, theme, and what has to
+be on screen — is in [`docs/screenshots/CAPTURE_PLAN.md`](docs/screenshots/CAPTURE_PLAN.md).
 
-The current workflow often spans multiple tools:
+|                                                                                                                                   |                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| <!-- SCREENSHOT: today-triage.png --> **I want to see this there** — Today: overdue, due today, waiting on, pinned.               | <!-- SCREENSHOT: note-split.png --> **I want to see this there** — the editor with two notes side by side.                          |
+| <!-- SCREENSHOT: board.png --> **I want to see this there** — the board, with a card mid-drag.                                    | <!-- SCREENSHOT: transcript-to-todos.png --> **I want to see this there** — extracting todos from a transcript, suggestions inline. |
+| <!-- SCREENSHOT: agent-approval.png --> **I want to see this there** — an agent run paused on a tool-approval card, diff visible. | <!-- SCREENSHOT: artifacts.png --> **I want to see this there** — the artifacts list with a generated PDF.                          |
 
-1. Write in Markdown.
-2. Open a terminal agent.
-3. Explain the project context again.
-4. Copy content between tools.
-5. Create tasks separately.
-6. Build diagrams and find images manually.
-7. Reformat the result into a document or presentation.
+A short screen recording of `paste transcript → accept suggestions → open the board` would carry
+more than all six stills. **I want to see that there too.**
 
-followthrough.ai brings that flow into one focused environment.
+The public landing page at `/` shows the same transformations rebuilt in HTML, so it works before
+any of these are captured.
 
-It should feel less like using a collection of disconnected tools and more like working inside a project that understands its own context.
-
-## The core workflow
-
-### 1. Capture and develop ideas
-
-Write notes in Markdown.
-
-Notes can contain rough thinking, meeting notes, research, plans, explanations, decisions, drafts, and source material.
-
-Markdown is the working surface because it is fast, flexible, and easy to edit.
-
-### 2. Turn thinking into action
-
-Create cards directly from notes or ask an agent to suggest them.
-
-Cards live on a simple Kanban board and may have deadlines.
-
-The board should make it easy to see:
-
-- What needs to be done
-- What is in progress
-- What is waiting
-- What is overdue
-- What is due soon
-- What has been completed
-
-The connection between a card and the note it came from should remain clear, so action never loses its original context.
-
-### 3. Preserve project context
-
-Each project has its own memory.
-
-Project memory contains the facts, decisions, constraints, terminology, preferences, and current state that agents need in order to help effectively.
-
-This memory should make it possible to reopen a project after several days or weeks and continue without rebuilding the context from scratch.
-
-Agents may suggest updates to project memory, but the user remains in control of what becomes part of the project’s durable understanding.
-
-### 4. Transform content in place
-
-Skills act directly on selected content, notes, cards, or project context.
-
-Examples:
-
-- Turn a paragraph into a Mermaid diagram
-- Turn a diagram into an editable draw.io artifact
-- Find and insert a relevant image
-- Rewrite or expand a section
-- Extract action items
-- Draft a follow-up
-- Create a brief
-- Turn notes into a presentation draft
-- Produce a document from the current project
-
-The intended interaction is simple:
-
-> **Select something → run a skill → review the result → continue working**
-
-AI should operate on the work itself, not merely sit beside it in a chat panel.
-
-### 5. Produce finished deliverables
-
-The workspace should help turn rough project material into outputs that can leave the app.
-
-That includes:
-
-- Documents
-- Presentations
-- Diagrams
-- Images
-- Reports
-- Briefs
-- Emails
-- Other project artifacts
-
-A project’s notes, board state, memory, and generated artifacts should work together when producing these outputs.
-
-The final step is not “generate something.” It is “finish something useful.”
-
-## The main concepts
-
-### Projects
-
-Projects are the primary unit of work.
-
-A project brings together its notes, board, deadlines, memory, skills, and outputs.
-
-Opening a project should immediately answer:
-
-- What is this project about?
-- What matters now?
-- What is due?
-- What am I waiting on?
-- What has already been decided?
-- What context should the agent know?
-- What can I produce next?
-
-### Notes
-
-Notes are where thinking happens.
-
-They are the main source material for tasks, memory, diagrams, drafts, and deliverables.
-
-### Project context and files
-
-RAG based on the project’s notes, memory, and artifacts should give agents the context they need to help without repeated prompting.
-
-### Board
-
-The board is a lightweight way to track movement.
-
-Its purpose is to show what work exists, where it is, and when it is due.
-
-### Memory
-
-Memory gives agents project-specific understanding.
-
-It should reduce repetitive prompting and help outputs stay consistent with the project’s goals, terminology, history, and constraints.
-
-### User profile and memory
-
-The user profile contains the user’s preferences, style, and other personal context. It should be available to agents across projects, but the user remains in control of what is stored and shared. For instance, writing style, job title, what they know / don't know.
-
-### Skills
-
-Skills are reusable actions that transform project material.
-
-They should feel like tools inside the workspace, not generic prompts the user has to reconstruct each time.
-
-### Artifacts
-
-Artifacts are the things created from the work: diagrams, images, documents, presentations, and other outputs. Diagrams are rendered as much as possible inside the app.
-
-They are part of the project, not isolated generations.
-
-## How agents should behave
-
-Agents should be project-aware, contextual, and reviewable.
-
-They should:
-
-- Use the current project’s context
-- Act on the selected material
-- Propose rather than silently commit important changes
-- Keep generated work connected to its source
-- Help move work toward completion
-- Prefer concrete outputs over open-ended conversation
-
-The user remains the source of truth.
-
-A useful guiding principle is:
-
-> **Agents propose. The user accepts.**
-
-## Product experience
-
-followthrough.ai should feel:
-
-- Focused rather than general-purpose
-- Calm rather than crowded
-- Contextual rather than prompt-heavy
-- Direct rather than conversational
-- Inspectable rather than magical
-- Oriented toward completion rather than accumulation
-
-The best interactions should be short and obvious:
+## The five moves
 
 ```text
-Note → Card
-Selection → Diagram
-Selection → Image
+Note            → Card
+Selection       → Diagram
+Selection       → Image
 Project context → Draft
-Draft → Deliverable
+Draft           → Deliverable
 ```
 
-## Success criteria
+Agents propose. The user accepts. Nothing important is committed silently, and everything
+generated stays connected to the note it came from.
 
-followthrough.ai is successful when it becomes the preferred place to resume and advance project work.
+## Running it locally
 
-It should make it easier to:
+**Prerequisites** — Node 22, pnpm, Docker (for Postgres), and an Infisical project holding the
+application config.
 
-- Understand the current state of a project
-- See what needs attention
-- Continue without rebuilding context
-- Turn notes into actions
-- Turn ideas into artifacts
-- Turn rough work into finished outputs
+```sh
+pnpm install
+cp .env.example .env          # Infisical bootstrap values only
+pnpm db:start                 # Postgres with pgvector, via docker compose
+pnpm dev
+```
 
-The practical test is:
+Configuration is loaded from Infisical before the SvelteKit server is imported, in both dev and
+production. `.env` carries only the `INFISICAL_*` bootstrap values; database, object-storage, and
+model settings live in the Infisical project, with `.env.infiscal.example` as the reference
+template for those. `DATABASE_URL` and `OPENROUTER_API_KEY` are required; other values fall back to
+the defaults in that template. Shell variables win over `.env`.
 
-> **Do I increasingly choose followthrough.ai instead of opening a Markdown editor and a terminal agent to do the same work manually?**
+Auth is disabled in single-user dev mode, so `/` redirects straight to `/today`. Append `?landing`
+to reach the public landing page while working on it.
 
-## One-sentence description
+**Schema changes.** The dev database is push-managed:
 
-> **followthrough.ai is a focused Markdown project workspace with a lightweight deadline board, project-scoped agent memory, and contextual skills that turn notes into actions, artifacts, and finished deliverables.**
+```sh
+pnpm db:push        # dev — apply the schema directly
+pnpm db:generate    # generate a migration for production
+pnpm db:studio      # browse the data
+```
 
-# Configuration and production deployment
+`pnpm db:migrate` is not usable against the dev database — its journal is out of sync. After
+`db:generate`, apply new columns to dev with `psql` (or `db:push`) rather than running the migrate
+task locally.
 
-Application configuration is loaded from Infisical with Universal Auth before the SvelteKit server is imported in both development and production. For local development, copy `.env.example` to `.env` and fill in only the Infisical bootstrap values; keep database, object-storage, model, and other application settings in the Infisical project. Use `.env.infiscal.example` as the import/reference template for those managed application values. `DATABASE_URL` and `OPENROUTER_API_KEY` are required; missing optional values use the defaults in that template. Shell variables take precedence over `.env`.
+**Checks and tests.**
 
-Komodo supplies only the `INFISICAL_*` application bootstrap variables plus direct `OTEL_*` and `PHOENIX_*` telemetry variables.
+```sh
+pnpm check          # svelte-check
+pnpm lint           # prettier + eslint
+pnpm format         # prettier --write
 
-Before the first deployment, and before every release that contains Drizzle migrations, run the one-shot setup profile in Komodo:
+pnpm test           # unit: client + server projects
+pnpm test:repository  # contracts, against PGlite
+pnpm test:evals       # model evals, reported to Phoenix
+npx playwright test   # end-to-end
+```
+
+Vitest is split into four projects — `client`, `server`, `contracts`, and `evals` — so a change to
+a repository can be checked against a real schema without booting the app.
+
+## Architecture
+
+| Where                           | What                                                                                                     |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/routes/(app)/`             | Every authenticated page. Guarded in `src/hooks.server.ts` and again in `(app)/+layout.server.ts`.       |
+| `src/routes/(marketing)/`       | The public landing page at `/`. The only unauthenticated route besides `/auth/*`.                        |
+| `src/lib/remote/*.remote.ts`    | SvelteKit remote functions — the client-to-server surface.                                               |
+| `src/lib/server/app-factory.ts` | `AppFactory` / `ControllerFactory`. Wiring lives here; routes ask the factory, never construct services. |
+| `src/lib/server/db/schema.ts`   | The Drizzle schema — ~40 tables, notes through agent runs.                                               |
+| `src/lib/services/retrieval/`   | Indexing, semantic search, and reranking over `search_chunks` (`halfvec(3072)`, pgvector).               |
+| `src/lib/components/edra/`      | The vendored TipTap 3 editor.                                                                            |
+| `src/lib/components/ui/`        | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                                   |
+
+UI conventions — tokens, type scale, the interaction contract — are in
+[`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Read it before adding a component.
+
+## Observability
+
+Agent runs are instrumented with OpenTelemetry and exported to Arize Phoenix, so every model call,
+tool call, and retrieval is inspectable after the fact.
+
+<!-- SCREENSHOT: llm-traces.png and llm-spans.png already exist in docs/screenshots/ -->
+
+![Agent run traces in Phoenix](docs/screenshots/llm-traces.png)
+
+![Span detail for a single agent run](docs/screenshots/llm-spans.png)
+
+Collector config is in `otel-collector-config.yaml`; the Node instrumentation bootstrap is
+`scripts/otel-instrumentation.js`, loaded via `--import` in `pnpm start`.
+
+## Deployment
+
+Komodo supplies only the `INFISICAL_*` bootstrap variables plus the direct `OTEL_*` and `PHOENIX_*`
+telemetry variables.
+
+Before the first deployment, and before every release containing Drizzle migrations, run the
+one-shot setup profile:
 
 ```sh
 docker compose -f docker-compose.prod.yml --profile setup run --rm migrate
 ```
 
-After it succeeds, deploy or restart `app`. The setup task provisions/rotates the database role, stores `DATABASE_URL` in the application Infisical project, and runs committed migrations before exiting.
+It provisions or rotates the database role, stores `DATABASE_URL` in the application Infisical
+project, and runs committed migrations before exiting. Deploy or restart `app` once it succeeds.
+
+## Why it exists
+
+The long version — the workflow this replaces, what each concept is for, and how agents are
+expected to behave — is in [`docs/VISION.md`](docs/VISION.md).
+
+The short version:
+
+> **Think in notes. Track what matters. Preserve the context. Finish the work.**

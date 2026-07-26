@@ -65,7 +65,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		icon: FilePlus,
 		async run() {
 			palette.close();
-			await goto('/');
+			await goto('/today');
 			focus('#quick-capture-input');
 		}
 	},

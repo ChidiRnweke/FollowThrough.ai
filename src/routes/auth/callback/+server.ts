@@ -48,5 +48,5 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Redirect to home
-	throw redirect(302, '/');
+	throw redirect(302, '/today');
 };

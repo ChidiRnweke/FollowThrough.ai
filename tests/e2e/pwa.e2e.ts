@@ -17,7 +17,7 @@ const noteTitleCrumb = (page: Page) =>
 	page.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]');
 
 test('exposes installable FollowThrough metadata', async ({ page, context }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	const session = await context.newCDPSession(page);
 	const manifest = await session.send('Page.getAppManifest');
 	expect({
@@ -30,7 +30,7 @@ test('exposes installable FollowThrough metadata', async ({ page, context }) => 
 });
 
 test('registers a service worker for the workspace', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	await waitForServiceWorker(page);
 	expect(
 		await page.evaluate(() =>
@@ -43,14 +43,14 @@ test('reopens a visited note from the cached workspace while offline', async ({
 	page,
 	context
 }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	await waitForServiceWorker(page);
 	const noteLink = page.locator('a[href^="/notes/"]').first();
 	const noteTitle = (await noteLink.textContent())?.trim();
 	if (!noteTitle) throw new Error('A note is required for the offline workspace test');
 	await noteLink.click();
 	await noteTitleCrumb(page).waitFor();
-	await page.goto('/');
+	await page.goto('/today');
 	await context.setOffline(true);
 	await page.reload();
 	await page.getByRole('link', { name: noteTitle, exact: true }).click();
@@ -58,7 +58,7 @@ test('reopens a visited note from the cached workspace while offline', async ({
 });
 
 test('uses the offline fallback for an uncached route', async ({ page, context }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	await waitForServiceWorker(page);
 	await context.setOffline(true);
 	await page.goto(`/uncached-${crypto.randomUUID()}`);
@@ -66,7 +66,7 @@ test('uses the offline fallback for an uncached route', async ({ page, context }
 });
 
 test('keeps remote functions and API responses out of Cache Storage', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/today');
 	await waitForServiceWorker(page);
 	const cachedUrls = await page.evaluate(async () => {
 		const urls: string[] = [];
