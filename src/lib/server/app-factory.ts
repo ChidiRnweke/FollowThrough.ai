@@ -4,6 +4,9 @@ import type { AgentEventBus } from './domain/agent-event-bus';
 import { z } from 'zod';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
 import { AuthService, type IAuthService } from '$lib/services/auth/authService';
+import { ApiTokenService, type IApiTokenService } from '$lib/services/auth/apiTokenService';
+import type { ProvenanceRecorder, ToolRetriever } from '$lib/services';
+import { PostgresApiTokenRepository } from './repositories/postgres-api-tokens';
 import { AuthentikOAuthService } from '$lib/services/auth/authenthikAuthService';
 import type { IOAuthService } from '$lib/services/auth/interfaces';
 import { PostgresSessionRepository } from './repositories/postgres-sessions';
@@ -21,6 +24,7 @@ const localUserId = (): UserId =>
 export class AppFactory {
 	private static applicationInstance: ProductionApplication | undefined;
 	private static authServiceInstance: IAuthService | undefined;
+	private static apiTokenServiceInstance: IApiTokenService | undefined;
 	private static oauthServiceInstance: IOAuthService | undefined;
 
 	private static application(): ProductionApplication {
@@ -39,6 +43,14 @@ export class AppFactory {
 		return this.application().eventBus;
 	}
 
+	static provenance(): ProvenanceRecorder {
+		return this.application().provenance;
+	}
+
+	static toolRetriever(): ToolRetriever {
+		return this.application().toolRetriever;
+	}
+
 	static actor(locals?: App.Locals): ActorContext {
 		if (this.isAuthEnabled() && locals?.user) {
 			return { userId: locals.user.id };
@@ -52,6 +64,12 @@ export class AppFactory {
 			this.authServiceInstance = new AuthService(sessionRepo);
 		}
 		return this.authServiceInstance;
+	}
+
+	static getApiTokenService(): IApiTokenService {
+		return (this.apiTokenServiceInstance ??= new ApiTokenService(
+			new PostgresApiTokenRepository(db)
+		));
 	}
 
 	static getOAuthService(): IOAuthService {

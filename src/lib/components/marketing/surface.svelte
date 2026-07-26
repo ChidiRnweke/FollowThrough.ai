@@ -1,9 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	// A slice of the real application, rebuilt from the same tokens: card radius,
 	// hairline ring, no shadow. `muted` marks raw input — the thing you paste in —
-	// so the eye can tell source from product without needing a legend.
+	// so the eye can tell source from product without needing a legend. The label
+	// is keyed so a figure that retitles its card (the morphing transcript demo)
+	// swaps the words with a short fade instead of a snap.
 	let {
 		label,
 		muted = false,
@@ -23,7 +26,9 @@
 				class="size-1.5 shrink-0 rounded-full {muted ? 'bg-muted-foreground/40' : 'bg-brand'}"
 				aria-hidden="true"
 			></span>
-			<span class="eyebrow truncate">{label}</span>
+			{#key label}
+				<span in:fade={{ duration: 250 }} class="eyebrow truncate">{label}</span>
+			{/key}
 		</div>
 	{/if}
 	{@render children()}

@@ -25,6 +25,7 @@ export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 export type ArtifactId = Brand<string, 'ArtifactId'>;
 export type TemplateId = Brand<string, 'TemplateId'>;
 export type SessionId = Brand<string, 'SessionId'>;
+export type ApiTokenId = Brand<string, 'ApiTokenId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 export type LocalDate = Brand<string, 'LocalDate'>;
@@ -73,3 +74,8 @@ export type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
 export type ProducerKind = 'user' | 'pipeline' | 'agent';
 export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
+/**
+ * What an MCP bearer token may reach. `read` exposes only read-classified
+ * tools; `full` exposes proposals and mutations too.
+ */
+export type ApiTokenScope = 'read' | 'full';

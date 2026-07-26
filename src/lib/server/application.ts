@@ -34,8 +34,10 @@ import {
 	type AgentModelCatalog,
 	type Condenser,
 	type EmbeddingClient,
+	type ProvenanceRecorder,
 	type ReferenceFinder,
-	type Reranker
+	type Reranker,
+	type ToolRetriever
 } from '$lib/services';
 import type { TransactionRunner } from '$lib/repositories';
 import type { Database } from './db';
@@ -133,6 +135,13 @@ export interface ProductionApplication {
 	readonly controllers: ProductionControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
+	/**
+	 * Not reachable through `ControllerFactory`, but the MCP server needs to
+	 * mint a provenance row per session so tool writes are attributable.
+	 */
+	readonly provenance: ProvenanceRecorder;
+	/** Shared so MCP's `search_tools` reuses the process-wide vector cache. */
+	readonly toolRetriever: ToolRetriever;
 }
 
 /**
@@ -563,6 +572,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		recoverInterruptedRuns: async () =>
 			(await runRepository.recoverInterrupted('Process restarted')) +
 			(await attachmentRepository.failInterrupted()),
-		eventBus
+		eventBus,
+		provenance,
+		toolRetriever
 	};
 }

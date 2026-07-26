@@ -1,27 +1,57 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import SettingsPolicies from '$lib/components/app/pages/settings-policies.svelte';
 	import SettingsAgent from '$lib/components/app/pages/settings-agent.svelte';
-	import { Separator } from '$lib/components/ui/separator';
+	import SettingsMcp from '$lib/components/app/pages/settings-mcp.svelte';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import * as Tabs from '$lib/components/ui/tabs';
 
 	let { data } = $props();
+
+	// The tab lives in the URL so it survives reload and the `invalidateAll()`
+	// that follows a trust-policy change.
+	function selectTab(tab: string): void {
+		const params = new SvelteURLSearchParams(page.url.searchParams);
+		params.set('tab', tab);
+		void goto(`/settings?${params.toString()}`, { keepFocus: true, noScroll: true });
+	}
 </script>
 
-<PageShell title="Settings" description="Agent defaults and per-pipeline trust policies.">
+<PageShell
+	title="Settings"
+	description="Agent defaults, MCP access, and per-pipeline trust policies."
+>
 	{#snippet actions()}
 		<AgentAction action={agentActions.settings} />
 	{/snippet}
-	<section class="flex flex-col gap-4">
-		<div>
-			<h2 class="section-title">Agent</h2>
-			<p class="text-sm text-muted-foreground">
-				Choose the default model and how durable actions are approved.
-			</p>
-		</div>
-		<SettingsAgent preferences={data.preferences} models={data.models} />
-	</section>
-	<Separator />
-	<SettingsPolicies policies={data.policies} />
+	<Tabs.Root value={data.tab} onValueChange={selectTab}>
+		<Tabs.List variant="line">
+			<Tabs.Trigger value="agent">Agent</Tabs.Trigger>
+			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
+			<Tabs.Trigger value="policies">Trust policies</Tabs.Trigger>
+		</Tabs.List>
+		<!-- Tabs.Content renders every panel and hides the inactive ones, so each
+		     body is gated on the active tab: switching tabs is a `goto` that
+		     re-runs `load` anyway, and this keeps the MCP panel's token query
+		     from firing while you are on another tab. -->
+		<Tabs.Content value="agent" class="pt-6">
+			{#if data.tab === 'agent'}
+				<SettingsAgent preferences={data.preferences} models={data.models} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="mcp" class="pt-6">
+			{#if data.tab === 'mcp'}
+				<SettingsMcp endpoint={data.mcpEndpoint} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="policies" class="pt-6">
+			{#if data.tab === 'policies'}
+				<SettingsPolicies policies={data.policies} />
+			{/if}
+		</Tabs.Content>
+	</Tabs.Root>
 </PageShell>

@@ -2,6 +2,7 @@ export * from './transaction';
 export * from './projects';
 export * from './users';
 export * from './sessions';
+export * from './api-tokens';
 export * from './notes';
 export * from './source-anchors';
 export * from './todos';

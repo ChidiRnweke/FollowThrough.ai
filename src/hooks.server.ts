@@ -38,6 +38,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
 	if (!configurationDisabled()) await hydrateEnvironment();
 
+	// The MCP endpoint authenticates with a bearer token and speaks JSON-RPC.
+	// It must never see the 303 to /auth/login below, which an MCP client
+	// cannot interpret — the route answers 401 itself. Skipping the block
+	// entirely also keeps its behaviour identical when auth is disabled in dev.
+	if (event.url.pathname.startsWith('/mcp')) return resolve(event);
+
 	const sessionId = getSessionCookie(event.cookies);
 
 	// If auth is enabled, validate sessions

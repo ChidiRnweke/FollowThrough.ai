@@ -42,7 +42,7 @@ import {
  * Stable, frequently used tools the agent can call without first discovering
  * them. Everything else stays in the on-demand tool-search catalog.
  */
-const FIRST_CLASS_TOOL_NAMES = [
+export const FIRST_CLASS_TOOL_NAMES = [
 	'search',
 	'list_user_memory',
 	'list_project_memory',
@@ -263,13 +263,20 @@ interface RegistryContext {
 	readonly model: string;
 }
 
-interface Definition {
+/**
+ * A capability, independent of how it is presented to a model. `tools()` and
+ * `agentTools()` wrap these for the in-app `@openai/agents` runner; the MCP
+ * server (`$lib/server/mcp`) wraps the same values for external hosts.
+ */
+export interface AgentToolDefinition {
 	readonly name: string;
 	readonly description: string;
 	readonly classification: 'read' | 'proposal' | 'mutation';
 	readonly parameters: z.ZodObject;
 	readonly execute: (input: Record<string, unknown>) => Promise<unknown>;
 }
+
+type Definition = AgentToolDefinition;
 
 export class AgentToolRegistry {
 	constructor(
@@ -284,12 +291,22 @@ export class AgentToolRegistry {
 	tools(
 		options: { classifications?: readonly Definition['classification'][] } = {}
 	): Tool<unknown>[] {
+		return this.definitions(options).map((definition) => this.buildTool(definition));
+	}
+
+	/**
+	 * The raw capability list, for surfaces that do their own wrapping. The
+	 * in-app agent uses `tools()`/`agentTools()`; MCP builds from these.
+	 */
+	definitions(
+		options: { classifications?: readonly Definition['classification'][] } = {}
+	): AgentToolDefinition[] {
 		const allowed = options.classifications
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
-		return this.definitions()
-			.filter((definition) => !allowed || allowed.has(definition.classification))
-			.map((definition) => this.buildTool(definition));
+		return this.buildDefinitions().filter(
+			(definition) => !allowed || allowed.has(definition.classification)
+		);
 	}
 
 	/**
@@ -413,7 +430,7 @@ export class AgentToolRegistry {
 		});
 	}
 
-	private definitions(): Definition[] {
+	private buildDefinitions(): Definition[] {
 		const actor = this.actor;
 		const factory = this.controllers;
 		const conversationId = this.context.input.conversationId;

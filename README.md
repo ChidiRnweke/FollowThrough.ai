@@ -1,13 +1,14 @@
 <div align="center">
   <img src="static/icons/followthrough-192.png" alt="FollowThrough" width="72" height="72" />
   <h1>followthrough.ai</h1>
-  <p><strong>A focused Markdown project workspace with a lightweight deadline board, project-scoped agent memory, and contextual skills that turn notes into actions, artifacts, and finished deliverables.</strong></p>
+  <p><strong>An AI-native note editor you never have to brief — with project-scoped agent memory, a lightweight deadline board, and contextual skills that turn notes into actions, artifacts, and finished deliverables.</strong></p>
 </div>
 
 ---
 
-**It already knows what you're working on.** A notes editor with an agent that carries the whole
-project — the decisions, the constraints, the people you're waiting on. You never brief it again.
+**FollowThrough's agent already knows what you're working on.** An AI-native note editor you
+never have to brief. The agent carries the whole project — the decisions, the constraints, the
+people you're waiting on. You never brief it again.
 
 Paste a standup transcript into a note and you get back a cleaned note, two todos with the right
 owner and the right deadline, and an entry proposed for the project's memory. Nothing in the paste
@@ -16,6 +17,8 @@ said "31 July"; the project did.
 ## Why I built it
 
 I was running Claude, Codex, and opencode in terminals inside VS Code, having them write markdown, then rendering that markdown somewhere else to actually read it. Every session started by re-explaining the same project. The context lived in my head, the notes lived in files, the tasks lived nowhere, and the agent knew none of it.
+
+To be fair: a VS Code agent can grep your repo. The friction is everything around that. There is no durable context layer — no project memory that survives the session, no task management the agent can read and write, no clean export of the result to PDF or Word. You can assemble all of that yourself, per project, per machine — or you can work somewhere it already exists.
 
 FollowThrough is the editor those agents should have been running inside.
 

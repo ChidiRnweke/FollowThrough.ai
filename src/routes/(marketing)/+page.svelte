@@ -10,10 +10,10 @@
 		{ n: '1', title: 'Write the note', line: 'Meeting notes, research, a rough plan, a paste.' },
 		{
 			n: '2',
-			title: 'It reads the project',
+			title: 'The agent reads the project',
 			line: 'Past decisions, standing constraints, deadlines.'
 		},
-		{ n: '3', title: 'It proposes', line: 'Todos, links, diagrams, memory entries.' },
+		{ n: '3', title: 'The agent proposes', line: 'Todos, links, diagrams, memory entries.' },
 		{ n: '4', title: 'You accept', line: 'Or you reject, and nothing is written.' }
 	];
 
@@ -36,9 +36,11 @@
 			<h1
 				class="font-serif text-4xl leading-[1.08] font-medium tracking-tight text-balance sm:text-6xl"
 			>
-				It already knows what you're working on.
+				FollowThrough's agent already knows what you're working on.
 			</h1>
-			<p class="max-w-lg text-lg text-muted-foreground">A notes editor you never have to brief.</p>
+			<p class="max-w-lg text-lg text-muted-foreground">
+				An AI-native note editor that you never have to brief.
+			</p>
 			<div class="flex flex-wrap items-center justify-center gap-3">
 				<Button href="/auth/login" size="lg">Sign in</Button>
 				<Button
@@ -87,10 +89,10 @@
 
 <!-- 4 · Memory: one wide panel, the single biggest feature moment -->
 <section class="border-b border-border bg-muted/30">
-	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-16 sm:pb-20">
+	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pt-16 pb-16 sm:pt-20 sm:pb-20">
 		<Reveal class="flex flex-col gap-3">
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
-				It knows, because you told it once.
+				It remembers, because you told it once.
 			</h2>
 			<p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
 				Every project keeps its own decisions, constraints, and preferences. Come back in three

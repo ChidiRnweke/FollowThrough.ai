@@ -26,6 +26,7 @@ export const todoStatus = pgEnum('todo_status', [
 	'done',
 	'cancelled'
 ]);
+export const apiTokenScope = pgEnum('api_token_scope', ['read', 'full']);
 export const todoResponsibility = pgEnum('todo_responsibility', ['mine', 'waiting_on']);
 export const todoPriority = pgEnum('todo_priority', ['low', 'medium', 'high']);
 export const memoryEntryType = pgEnum('memory_entry_type', [
@@ -125,6 +126,32 @@ export const sessions = pgTable('sessions', {
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+/**
+ * Bearer credentials for the MCP endpoint. Only the sha256 of the token is
+ * stored; the plaintext is shown to the user once at mint time. `scope`
+ * decides which tool classifications the token can reach.
+ */
+export const apiTokens = pgTable(
+	'api_tokens',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		tokenHash: text('token_hash').notNull(),
+		scope: apiTokenScope('scope').notNull().default('read'),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }),
+		revokedAt: timestamp('revoked_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('api_tokens_token_hash_unique').on(table.tokenHash),
+		index('api_tokens_user_created_idx').on(table.userId, table.createdAt)
+	]
+);
 
 export const projects = pgTable(
 	'projects',

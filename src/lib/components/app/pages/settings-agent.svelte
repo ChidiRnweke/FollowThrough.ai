@@ -20,6 +20,10 @@
 	});
 </script>
 
+<p class="mb-4 text-sm text-muted-foreground">
+	Choose the default model and how durable actions are approved.
+</p>
+
 <form {...saveAgentPreferences} class="max-w-3xl">
 	<Field.Group>
 		<Field.Field orientation="responsive">

@@ -1,6 +1,8 @@
 import type {
 	AgentRunId,
 	AgentSessionItemId,
+	ApiTokenId,
+	ApiTokenScope,
 	ArtifactId,
 	AttachmentId,
 	AttachmentUploadId,
@@ -59,6 +61,21 @@ export interface Session {
 	readonly id: SessionId;
 	readonly userId: UserId;
 	readonly expiresAt: Date;
+	readonly createdAt: DateTime;
+}
+
+/**
+ * A bearer credential for the MCP endpoint. Never carries the plaintext token —
+ * that exists only in the return value of `ApiTokenService.mint`.
+ */
+export interface ApiToken {
+	readonly id: ApiTokenId;
+	readonly userId: UserId;
+	readonly name: string;
+	readonly scope: ApiTokenScope;
+	readonly lastUsedAt?: DateTime;
+	readonly expiresAt?: DateTime;
+	readonly revokedAt?: DateTime;
 	readonly createdAt: DateTime;
 }
 

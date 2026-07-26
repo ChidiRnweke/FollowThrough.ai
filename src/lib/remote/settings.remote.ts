@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { command, form } from '$app/server';
+import { command, form, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from './actor';
-import type { UpdateTrustPolicyInput } from '$lib/models';
+import type { ApiTokenId, UpdateTrustPolicyInput } from '$lib/models';
 
 /**
  * The settings switches are custom controls backed by hidden inputs, so their
@@ -44,3 +44,25 @@ export const updateTrustPolicy = command(
 			.trustPolicies()
 			.update(requestActor(), input as UpdateTrustPolicyInput)
 );
+
+export const listApiTokens = query(async () =>
+	AppFactory.getApiTokenService().list(requestActor())
+);
+
+/**
+ * Returns the plaintext credential — the only time it exists outside the
+ * client's config. The caller must show it immediately; it is not recoverable.
+ */
+export const createApiToken = command(
+	z.object({ name: z.string().min(1).max(80), scope: z.enum(['read', 'full']) }),
+	async (input) => {
+		const minted = await AppFactory.getApiTokenService().mint(requestActor().userId, input);
+		await listApiTokens().refresh();
+		return { token: minted.token, plaintext: minted.plaintext };
+	}
+);
+
+export const revokeApiToken = command(z.string().uuid(), async (id) => {
+	await AppFactory.getApiTokenService().revoke(requestActor(), id as ApiTokenId);
+	await listApiTokens().refresh();
+});

@@ -1,4 +1,5 @@
 import type {
+	ApiToken,
 	DateTime,
 	Diagram,
 	ExternalReference,
@@ -39,6 +40,18 @@ export const toSession = (row: typeof schema.sessions.$inferSelect): Session =>
 		id: row.id,
 		userId: row.userId,
 		expiresAt: row.expiresAt,
+		createdAt: instant(row.createdAt)
+	});
+
+export const toApiToken = (row: typeof schema.apiTokens.$inferSelect): ApiToken =>
+	domain<ApiToken>({
+		id: row.id,
+		userId: row.userId,
+		name: row.name,
+		scope: row.scope,
+		lastUsedAt: row.lastUsedAt ? instant(row.lastUsedAt) : undefined,
+		expiresAt: row.expiresAt ? instant(row.expiresAt) : undefined,
+		revokedAt: row.revokedAt ? instant(row.revokedAt) : undefined,
 		createdAt: instant(row.createdAt)
 	});
 
