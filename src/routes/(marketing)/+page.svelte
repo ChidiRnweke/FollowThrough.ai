@@ -137,8 +137,30 @@
 	</div>
 </section>
 
-<!-- 7 · Skills and models: your way of working, your choice of brain -->
+<!-- 7 · Tools: everything you can do, it can do — under your toggles -->
 <section class="border-b border-border bg-muted/30">
+	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
+		<Reveal class="flex flex-col gap-3">
+			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
+				Your agent <Crayon>lives</Crayon> inside FollowThrough and can do anything you can.
+			</h2>
+			<p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
+				Create notes, todos, and projects; publish; export. Every capability is a tool you can turn
+				off — and a tool you turn off disappears from chat, tool search, and MCP clients.
+			</p>
+		</Reveal>
+		<Reveal>
+			<Shot
+				id="tools"
+				label="Settings · tools"
+				alt="The agent's tool list: every capability with a toggle, filtered by changes, proposals, and reading"
+			/>
+		</Reveal>
+	</div>
+</section>
+
+<!-- 8 · Skills and models: your way of working, your choice of brain -->
+<section class="border-b border-border">
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="grid gap-8 lg:grid-cols-2">
 			<div class="flex min-w-0 flex-col gap-3">
@@ -177,7 +199,7 @@
 	</div>
 </section>
 
-<!-- 8 · Close: centred, a question, and the one human fact on the page -->
+<!-- 9 · Close: centred, a question, and the one human fact on the page -->
 <section>
 	<div
 		class="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 px-6 py-20 text-center sm:py-28"

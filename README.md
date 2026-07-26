@@ -47,6 +47,8 @@ record.
 | **The context layer** — what was produced here vs. what the agent works from: memory, attachments. | **Skills** — teach it your workflow once; it runs it on cue.                                        |
 | ![The Mermaid diagram editor](static/product-screenshots/diagram-render-light.jpg)                 | ![Agent settings with an open model picker](static/product-screenshots/open-model-access-light.jpg) |
 | **First-class diagrams** — Mermaid source, live render, Revise with AI.                            | **Your editor, your model, your choice** — any provider; approval or auto-accept per pipeline.      |
+| ![The agent panel](static/product-screenshots/agent-tab-light.jpg)                                 | ![The agent's tool list with per-tool toggles](static/product-screenshots/tools-light.jpg)          |
+| **The agent panel** — it reads memory, notes, todos, and files before it answers.                  | **Anything you can do, it can do** — every capability a tool, every tool yours to turn off.         |
 
 ## The five moves
 
