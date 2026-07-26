@@ -26,9 +26,7 @@
 	const openTabs = $derived(workbench.openTabs);
 	const splitNoteId = $derived(workbench.splitNoteId);
 	const splitRatio = $derived(workbench.splitRatio);
-	const splitActive = $derived(
-		splitNoteId !== undefined && splitNoteId !== focusedNoteId && openTabs.includes(splitNoteId)
-	);
+	const splitActive = $derived(workbench.splitActive);
 	const primaryTitle = $derived(noteTitle(focusedNoteId));
 	const secondaryTitle = $derived(noteTitle(splitNoteId));
 

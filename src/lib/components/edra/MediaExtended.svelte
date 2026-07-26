@@ -136,7 +136,10 @@
 <NodeViewWrapper
 	id="resizable-container-media"
 	class={cn(
-		'relative my-4! flex flex-col rounded-md border border-transparent',
+		// `max-w-full`: the width attribute is a percentage today, but a persisted
+		// `>100%` value would overflow the pane, and media is the one block with no
+		// scroller of its own.
+		'relative my-4! flex max-w-full flex-col rounded-md border border-transparent',
 		selected && 'ring-1',
 		node.attrs.align === 'left' && 'left-0 translate-x-0',
 		node.attrs.align === 'center' && 'left-1/2 -translate-x-1/2',

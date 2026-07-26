@@ -144,6 +144,19 @@ class WorkbenchStore {
 		return parseWorkbenchUrl(page.url.pathname, page.url.searchParams) !== undefined;
 	}
 
+	/**
+	 * Whether a second pane is actually on screen.  A `splitNoteId` alone is not
+	 * enough: it must differ from the focused note and still be open as a tab.
+	 * Lives here so the panes and the sidebar's space cue agree on one rule.
+	 */
+	get splitActive(): boolean {
+		return (
+			this.splitNoteId !== undefined &&
+			this.splitNoteId !== this.focusedNoteId &&
+			this.openTabs.includes(this.splitNoteId)
+		);
+	}
+
 	/** A view of the focused pane's NoteId; mirrors `focusedNoteId` for ergonomic consumers. */
 	get activeNoteId(): NoteId | undefined {
 		return this.interactionFocusedNoteId ?? this.focusedNoteId;

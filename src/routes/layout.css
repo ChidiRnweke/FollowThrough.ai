@@ -418,6 +418,10 @@
 		min-width: 0;
 		min-height: 0;
 		padding-block: 1rem;
+		/* The reading gutter keys off the pane's own width, not the viewport's:
+		   in a split the pane is a fraction of the shell and a media query
+		   cannot see the divider ratio. */
+		container-type: inline-size;
 	}
 
 	.workspace-pane-layer[data-pane-role='primary'] {
@@ -443,6 +447,23 @@
 		min-width: 100%;
 		min-height: 100%;
 		padding-inline: 1rem;
+	}
+
+	@container (min-width: 40rem) {
+		.workspace-pane-scroll-content {
+			padding-inline: 2rem;
+		}
+	}
+
+	/* bits-ui puts `min-width: fit-content` inline on its scroll-content wrapper
+	   whenever a horizontal scrollbar is mounted.  Left alone, one wide diagram
+	   or table stretches the entire pane and carries the utility row out of
+	   view.  Constraining the wrapper to the pane makes wide blocks use their
+	   own scrollers instead; the pane's horizontal scrollbar stays behind them
+	   as the fallback for anything that genuinely cannot shrink.  The inline
+	   style is why this needs `!important`. */
+	.workspace-pane-layer [data-scroll-area-content] {
+		min-width: 100% !important;
 	}
 
 	.workspace-split-resizer {
@@ -502,10 +523,6 @@
 	@media (min-width: 48rem) {
 		.workspace-pane-layer {
 			padding-block: 1.5rem;
-		}
-
-		.workspace-pane-scroll-content {
-			padding-inline: 0;
 		}
 	}
 

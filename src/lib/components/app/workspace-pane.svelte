@@ -111,7 +111,7 @@
 	});
 </script>
 
-<div class="flex w-full flex-1 flex-col" data-note-pane={noteId}>
+<div class="flex w-full min-w-0 flex-1 flex-col" data-note-pane={noteId}>
 	{#if view}
 		<NoteWorkspace
 			{view}

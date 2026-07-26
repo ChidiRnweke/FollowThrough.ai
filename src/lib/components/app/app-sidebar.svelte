@@ -4,7 +4,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
 	import { Tip } from '$lib/components/ui/tooltip';
+	import { cn } from '$lib/utils';
 	import {
 		FtToday as House,
 		FtChat as MessageSquare,
@@ -19,6 +21,7 @@
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/palette.svelte';
+	import { workbench } from '$lib/stores/workbench.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import BrandMark from './brand-mark.svelte';
 	import ProjectTree from './project-tree.svelte';
@@ -49,6 +52,13 @@
 
 	let tree = $state<ReturnType<typeof ProjectTree>>();
 	let feedbackOpen = $state(false);
+
+	// Two split note panes plus an expanded sidebar is where reading width runs
+	// out first.  Rather than adding another control, the trigger already here
+	// takes the accent and says what collapsing buys.  The `max-xl:` gate below
+	// keeps it muted on displays wide enough for a comfortable split.
+	const sidebar = useSidebar();
+	const spaceTight = $derived(workbench.splitActive && sidebar.state === 'expanded');
 </script>
 
 <Sidebar.Root collapsible="icon" variant="inset">
@@ -68,7 +78,18 @@
 					FollowThrough
 				</span>
 			</a>
-			<Sidebar.Trigger class="text-muted-foreground" />
+			<Tip
+				text={spaceTight ? 'Collapse the sidebar for more room' : 'Toggle sidebar'}
+				shortcut="⌘B"
+				side="bottom"
+			>
+				{#snippet children({ props })}
+					<Sidebar.Trigger
+						{...props}
+						class={cn('text-muted-foreground', spaceTight && 'max-xl:text-primary')}
+					/>
+				{/snippet}
+			</Tip>
 		</div>
 		<button
 			type="button"
