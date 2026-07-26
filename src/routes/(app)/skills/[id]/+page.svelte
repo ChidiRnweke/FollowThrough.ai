@@ -406,32 +406,40 @@
 	{#if syncReady}
 		{#key `${noteId}:${editorEpoch}`}
 			<div class="flex flex-1 flex-col rounded-lg border border-border">
-				<section class="flex flex-col gap-1 p-4 md:p-6">
-					<h2 class="section-title">Describe your skill</h2>
-					<p class="text-sm text-muted-foreground">
-						When should your agent trigger it? This is what the agent reads to decide when to load
-						this skill.
-					</p>
-					<SkillEditor
-						bind:this={describeRef}
-						compact
-						ariaLabel="Skill description"
-						initialMarkdown={savedDescription}
-						onchange={markDirty}
-					/>
+				<section class="flex flex-col p-4 md:p-6">
+					<div class="flex flex-col gap-1">
+						<h2 class="section-title">Describe your skill</h2>
+						<p class="text-sm text-muted-foreground">
+							When should your agent trigger it? This is what the agent reads to decide when to load
+							this skill.
+						</p>
+					</div>
+					<div class="mt-6 flex flex-col">
+						<SkillEditor
+							bind:this={describeRef}
+							compact
+							ariaLabel="Skill description"
+							initialMarkdown={savedDescription}
+							onchange={markDirty}
+						/>
+					</div>
 				</section>
 				<Separator />
-				<section class="flex flex-1 flex-col gap-1 p-4 md:p-6">
-					<h2 class="section-title">What should the agent do?</h2>
-					<p class="text-sm text-muted-foreground">
-						Markdown instructions the agent follows when this skill loads.
-					</p>
-					<SkillEditor
-						bind:this={bodyRef}
-						ariaLabel="Skill instructions"
-						initialMarkdown={note.plainText}
-						onchange={markDirty}
-					/>
+				<section class="flex flex-1 flex-col p-4 md:p-6">
+					<div class="flex flex-col gap-1">
+						<h2 class="section-title">What should the agent do?</h2>
+						<p class="text-sm text-muted-foreground">
+							Markdown instructions the agent follows when this skill loads.
+						</p>
+					</div>
+					<div class="mt-6 flex flex-1 flex-col">
+						<SkillEditor
+							bind:this={bodyRef}
+							ariaLabel="Skill instructions"
+							initialMarkdown={note.plainText}
+							onchange={markDirty}
+						/>
+					</div>
 				</section>
 			</div>
 		{/key}

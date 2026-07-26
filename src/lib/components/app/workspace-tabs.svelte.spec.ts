@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup } from 'vitest-browser-svelte';
+import { page } from '$app/state';
 import type { NoteId, NoteSummary, ProjectId, ShellContext } from '$lib/models';
 import { NOTE_DRAG_MIME } from '$lib/client/note-drag';
 
@@ -31,7 +32,7 @@ const workbenchState = {
 	pinnedTabs: [] as NoteId[],
 	recentlyUsed: [] as NoteId[],
 	stripHidden: false,
-	isPinned: () => false,
+	isPinned: (() => false) as (noteId: NoteId) => boolean,
 	focusTab: vi.fn(),
 	closeTab: vi.fn(),
 	openTabInBackground: vi.fn(),
@@ -89,7 +90,18 @@ afterEach(() => {
 	workbenchState.stripHidden = false;
 	workbenchState.isPinned = () => false;
 	workbenchState.openTabInBackground.mockClear();
+	// Default route is non-note (Today); tests asserting the active highlight
+	// navigate onto `/notes/<id>` explicitly via `setPath`.
+	page.url = asPageUrl('http://localhost/today');
 });
+
+// SvelteKit's generated route union narrows `page.url.pathname`; the mock
+// accepts any path, so cast back to the declared type.
+const asPageUrl = (href: string): typeof page.url => new URL(href) as typeof page.url;
+
+const setPath = (path: string): void => {
+	page.url = asPageUrl(`http://localhost${path}`);
+};
 
 const useTabs = (tabs: NoteId[], focused?: NoteId): void => {
 	workbenchState.openTabs = tabs;
@@ -125,6 +137,7 @@ describe('WorkspaceTabs', () => {
 
 	it('marks the focused tab as selected with a teal top accent', async () => {
 		useTabs([id(1), id(2), id(3)], id(2));
+		setPath(`/notes/${id(2)}`);
 		workbenchState.pinnedTabs = [id(1)];
 		const screen = await render(WorkspaceTabs, { shell });
 		const activeTab = screen.getByRole('tab', { selected: true });
@@ -134,6 +147,21 @@ describe('WorkspaceTabs', () => {
 		const accent = activeTab.element().querySelector('.bg-primary');
 		expect(accent).toBeTruthy();
 		expect(accent!.className).toContain('rounded-b-sm');
+	});
+
+	it('colours no tab when the focused note survives on a non-note route', async () => {
+		// Navigating to Today/Todos leaves `focusedNoteId` in place so the
+		// working set survives, but the strip must not claim the user is still
+		// on that note: no `aria-selected`, no accent bar.
+		useTabs([id(1), id(2), id(3)], id(2));
+		setPath('/today');
+		const screen = await render(WorkspaceTabs, { shell });
+		const tabs = screen.container.querySelectorAll('[role="tab"]');
+		expect(tabs.length).toBe(3);
+		for (const tab of tabs) {
+			expect(tab.getAttribute('aria-selected')).toBe('false');
+			expect(tab.querySelector('.bg-primary')).toBeNull();
+		}
 	});
 
 	it('renders a thin vertical divider between adjacent tabs in the same project group', async () => {
@@ -243,7 +271,9 @@ describe('WorkspaceTabs', () => {
 		workbenchState.pinnedTabs = [id(1)];
 		workbenchState.isPinned = (noteId: NoteId) => noteId === id(1);
 		const screen = await render(WorkspaceTabs, { shell });
-		const pins = screen.container.querySelectorAll('svg.lucide-pin');
+		// FtPin is a custom glyph (no `lucide-pin` class); the pin is the only
+		// svg inside a tab carrying `text-muted-foreground`.
+		const pins = screen.container.querySelectorAll('svg.text-muted-foreground');
 		expect(pins.length).toBeGreaterThan(0);
 	});
 

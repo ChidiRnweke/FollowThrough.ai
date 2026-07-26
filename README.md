@@ -15,10 +15,7 @@ said "31 July"; the project did.
 
 ## Why I built it
 
-I was running Claude, Codex, and opencode in terminals inside VS Code, having them write markdown,
-then rendering that markdown somewhere else to actually read it. Every session started by
-re-explaining the same project. The context lived in my head, the notes lived in files, the tasks
-lived nowhere, and the agent knew none of it.
+I was running Claude, Codex, and opencode in terminals inside VS Code, having them write markdown, then rendering that markdown somewhere else to actually read it. Every session started by re-explaining the same project. The context lived in my head, the notes lived in files, the tasks lived nowhere, and the agent knew none of it.
 
 FollowThrough is the editor those agents should have been running inside.
 

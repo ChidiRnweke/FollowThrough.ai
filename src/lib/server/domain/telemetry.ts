@@ -8,7 +8,14 @@ import {
 	type Context,
 	type Span
 } from '@opentelemetry/api';
-import { setMetadata, setSession, setTags, setUser } from '@arizeai/openinference-core';
+import {
+	getInputAttributes,
+	getOutputAttributes,
+	setMetadata,
+	setSession,
+	setTags,
+	setUser
+} from '@arizeai/openinference-core';
 import {
 	MimeType,
 	OpenInferenceSpanKind,
@@ -21,12 +28,15 @@ const WORKFLOW_CONTEXT_KEY = createContextKey('followthrough.workflow');
 export interface WorkflowTraceContext {
 	readonly input?: string;
 	readonly inputMimeType?: MimeType;
+	readonly outputMimeType?: MimeType;
 	readonly kind?: OpenInferenceSpanKind;
 	readonly sessionId?: string;
 	readonly userId?: string;
 	readonly metadata?: Readonly<Record<string, unknown>>;
 	readonly tags?: readonly string[];
 	readonly attributes?: Attributes;
+	/** Do not emit an independent root when this operation is background work. */
+	readonly onlyWithinWorkflow?: boolean;
 }
 
 const errorMessage = (error: unknown): string =>
@@ -49,12 +59,11 @@ const recordError = (span: Span, error: unknown): void => {
 
 const spanAttributes = (params: WorkflowTraceContext): Attributes => ({
 	[SemanticConventions.OPENINFERENCE_SPAN_KIND]: params.kind ?? OpenInferenceSpanKind.CHAIN,
-	...(params.input === undefined
-		? {}
-		: {
-				[SemanticConventions.INPUT_VALUE]: params.input,
-				[SemanticConventions.INPUT_MIME_TYPE]: params.inputMimeType ?? MimeType.TEXT
-			}),
+	...getInputAttributes(
+		params.input === undefined
+			? undefined
+			: { value: params.input, mimeType: params.inputMimeType ?? MimeType.TEXT }
+	),
 	...(params.sessionId ? { [SemanticConventions.SESSION_ID]: params.sessionId } : {}),
 	...(params.userId ? { [SemanticConventions.USER_ID]: params.userId } : {}),
 	...(params.metadata ? { [SemanticConventions.METADATA]: JSON.stringify(params.metadata) } : {}),
@@ -89,8 +98,12 @@ export async function traceWorkflow<T>(
 		const result = await context.with(workflowContext(span, params), body);
 		const output = describeOutput?.(result);
 		if (output !== undefined) {
-			span.setAttribute(SemanticConventions.OUTPUT_VALUE, output);
-			span.setAttribute(SemanticConventions.OUTPUT_MIME_TYPE, MimeType.TEXT);
+			span.setAttributes(
+				getOutputAttributes({
+					value: output,
+					mimeType: params.outputMimeType ?? MimeType.TEXT
+				})
+			);
 		}
 		span.setStatus({ code: SpanStatusCode.OK });
 		return result;
@@ -110,9 +123,13 @@ export async function traceOperation<T>(
 	name: string,
 	params: WorkflowTraceContext,
 	body: () => Promise<T>,
-	describeOutput?: (result: T) => string
+	describeOutput?: (result: T) => string,
+	describeAttributes?: (result: T) => Attributes
 ): Promise<T> {
-	const parent = context.active().getValue(WORKFLOW_CONTEXT_KEY) ? context.active() : ROOT_CONTEXT;
+	const activeContext = context.active();
+	const isWithinWorkflow = Boolean(activeContext.getValue(WORKFLOW_CONTEXT_KEY));
+	if (!isWithinWorkflow && params.onlyWithinWorkflow) return body();
+	const parent = isWithinWorkflow ? activeContext : ROOT_CONTEXT;
 	const span = trace
 		.getTracer(TRACER_NAME)
 		.startSpan(name, { attributes: spanAttributes(params) }, parent);
@@ -121,9 +138,15 @@ export async function traceOperation<T>(
 		const result = await context.with(operationContext, body);
 		const output = describeOutput?.(result);
 		if (output !== undefined) {
-			span.setAttribute(SemanticConventions.OUTPUT_VALUE, output);
-			span.setAttribute(SemanticConventions.OUTPUT_MIME_TYPE, MimeType.TEXT);
+			span.setAttributes(
+				getOutputAttributes({
+					value: output,
+					mimeType: params.outputMimeType ?? MimeType.TEXT
+				})
+			);
 		}
+		const attributes = describeAttributes?.(result);
+		if (attributes) span.setAttributes(attributes);
 		span.setStatus({ code: SpanStatusCode.OK });
 		return result;
 	} catch (error) {

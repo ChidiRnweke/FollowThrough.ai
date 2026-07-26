@@ -204,6 +204,9 @@
 	border-radius: var(--radius-sm);
 }
 
+/* Keep the surface theme-owned: `.prose pre` would otherwise paint it
+   `--tw-prose-pre-bg` (grey) whenever typography happens to load later. */
+.prose .tiptap pre,
 .tiptap pre {
 	display: flex;
 	height: fit-content;
@@ -213,10 +216,12 @@
 	background-color: transparent;
 }
 
+/* No `color` here: the base text color belongs to the hljs theme in
+   onedark.css, which this file imports. Setting `inherit` used to override
+   it, leaving sparsely-tokenized languages (bash, markdown) washed out. */
 .tiptap pre code {
 	flex: 1;
 	padding: 0;
-	color: inherit;
 	background-color: transparent;
 	border-radius: 0 !important;
 }

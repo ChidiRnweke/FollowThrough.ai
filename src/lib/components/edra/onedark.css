@@ -4,11 +4,11 @@
 	color: #383a42;
 }
 
-/* Comment */
+/* Comment — darkened from One Light's #a0a1a7, which is ~2:1 on this surface. */
 .hljs-comment,
 .hljs-quote {
 	font-style: italic;
-	color: #a0a1a7;
+	color: #7a7c82;
 }
 
 /* Red */

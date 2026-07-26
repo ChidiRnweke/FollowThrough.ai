@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import type { NoteId, ProjectId, ShellContext } from '$lib/models';
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -72,6 +73,10 @@
 	}
 
 	const hasTabs = $derived(workbench.openTabs.length > 0);
+	// The focused tab persists when the user navigates to a non-note route
+	// (Today, Todos, …) so the working set survives; the "you are here"
+	// highlight must not — only colour a tab while actually on its route.
+	const onNoteRoute = $derived(page.url.pathname.startsWith('/notes/'));
 	let noteDragOver = $state(false);
 
 	function onDragOver(event: DragEvent): void {
@@ -185,7 +190,7 @@
 					</div>
 					{#each group.tabs as noteId, tabIndex (noteId)}
 						{@const tabVisible = showTab(group.projectId, noteId)}
-						{@const active = workbench.focusedNoteId === noteId}
+						{@const active = onNoteRoute && workbench.focusedNoteId === noteId}
 						<div
 							class="flex shrink-0 overflow-hidden"
 							data-project-tab={noteId}

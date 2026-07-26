@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { createClient } from '@arizeai/phoenix-client';
 import { getSpans } from '@arizeai/phoenix-client/spans';
+import { MimeType, SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 
 const argument = (name) => {
 	const index = process.argv.indexOf(name);
@@ -47,6 +48,20 @@ const roots = spans.filter((span) => !span.parent_id);
 const providerNames = new Set(['OpenAI Embeddings', 'OpenAI Chat Completions', 'OpenAI Responses']);
 const providerRoots = roots.filter((span) => providerNames.has(span.name));
 const genericProviderSpans = spans.filter((span) => providerNames.has(span.name));
+const malformedRerankerSpans = spans.filter((span) => {
+	if (span.span_kind !== 'RERANKER') return false;
+	const attributes = span.attributes ?? {};
+	const keys = Object.keys(attributes);
+	return (
+		attributes[SemanticConventions.INPUT_MIME_TYPE] !== MimeType.JSON ||
+		attributes[SemanticConventions.OUTPUT_MIME_TYPE] !== MimeType.JSON ||
+		typeof attributes[SemanticConventions.RERANKER_QUERY] !== 'string' ||
+		typeof attributes[SemanticConventions.RERANKER_MODEL_NAME] !== 'string' ||
+		typeof attributes[SemanticConventions.RERANKER_TOP_K] !== 'number' ||
+		!keys.some((key) => key.startsWith(`${SemanticConventions.RERANKER_INPUT_DOCUMENTS}.`)) ||
+		!keys.some((key) => key.startsWith(`${SemanticConventions.RERANKER_OUTPUT_DOCUMENTS}.`))
+	);
+});
 const standaloneEmbeddingRoots = roots.filter((span) => span.name === 'embedding.batch');
 const splitInlineRoots = roots.filter(
 	(span) => span.name === 'inline.context' || span.name === 'inline.complete'
@@ -88,6 +103,7 @@ const report = {
 	violations: {
 		providerRoots: providerRoots.map((span) => span.context.trace_id),
 		genericProviderSpans: genericProviderSpans.map((span) => span.context.span_id),
+		malformedRerankerSpans: malformedRerankerSpans.map((span) => span.context.span_id),
 		standaloneEmbeddingRoots: standaloneEmbeddingRoots.map((span) => span.context.trace_id),
 		splitInlineRoots: splitInlineRoots.map((span) => span.context.trace_id),
 		inlineSessionRoots: inlineSessionRoots.map((span) => span.context.trace_id),

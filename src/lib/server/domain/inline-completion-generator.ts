@@ -3,6 +3,12 @@ import {
 	DEFAULT_GENERATION_MODEL,
 	type OpenRouterClientOptions
 } from './openrouter-client';
+import { getLLMAttributes } from '@arizeai/openinference-core';
+import {
+	OpenInferenceSpanKind,
+	SemanticConventions
+} from '@arizeai/openinference-semantic-conventions';
+import type { Attributes } from '@opentelemetry/api';
 import type { InlineCompletionContext, InlineSuggestionRequest } from '$lib/models';
 import type { InlineCompletionGenerator } from '$lib/services';
 import { traceOperation } from './telemetry';
@@ -33,6 +39,50 @@ Rules:
 - Never restate, rephrase, or echo the text before the caret.
 - No preamble, no commentary, no quotation marks, no markdown fences, no bullet syntax.
 - Match the note's voice and use only facts supplied in the workspace context. Never invent names, dates, or decisions.`;
+
+interface InlineCompletionTraceResult {
+	readonly text: string;
+	readonly raw: string;
+	readonly model: string;
+	readonly finishReason: string;
+	readonly refused: boolean;
+	readonly usage?: {
+		readonly prompt_tokens?: number;
+		readonly completion_tokens?: number;
+		readonly total_tokens?: number;
+	};
+}
+
+export const inlineCompletionTraceAttributes = (
+	prompt: string,
+	result: InlineCompletionTraceResult
+): Attributes => ({
+	...getLLMAttributes({
+		provider: 'openrouter',
+		system: 'openai',
+		modelName: result.model,
+		invocationParameters: {
+			max_tokens: MAX_COMPLETION_TOKENS,
+			reasoning: { enabled: false },
+			temperature: 0.2
+		},
+		inputMessages: [
+			{ role: 'system', content: SYSTEM_PROMPT },
+			{ role: 'user', content: prompt }
+		],
+		outputMessages: [{ role: 'assistant', content: result.raw }],
+		...(result.usage
+			? {
+					tokenCount: {
+						prompt: result.usage.prompt_tokens,
+						completion: result.usage.completion_tokens,
+						total: result.usage.total_tokens
+					}
+				}
+			: {})
+	}),
+	[SemanticConventions.LLM_FINISH_REASON]: result.finishReason
+});
 
 const contextSection = (context: InlineCompletionContext): string => {
 	const userMemory = context.userMemory.length
@@ -144,7 +194,9 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 			'inline.generate',
 			{
 				input: prompt,
-				metadata: { model: this.model }
+				kind: OpenInferenceSpanKind.LLM,
+				metadata: { model: this.model },
+				tags: ['inline', 'generation']
 			},
 			async () => {
 				const completion = await this.client.chat.completions.create(
@@ -164,13 +216,15 @@ export class FlashInlineCompletionGenerator implements InlineCompletionGenerator
 				const raw = choice?.message.content ?? '';
 				return {
 					text: sanitizeCompletion(request.prefix, raw),
-					rawLength: raw.length,
+					raw,
+					model: completion.model || this.model,
 					finishReason: choice?.finish_reason ?? 'missing',
-					refused: Boolean(choice?.message.refusal)
+					refused: Boolean(choice?.message.refusal),
+					usage: completion.usage
 				};
 			},
-			(output) =>
-				`text:${output.text.length};raw:${output.rawLength};finish:${output.finishReason};refused:${output.refused}`
+			(output) => output.text,
+			(output) => inlineCompletionTraceAttributes(prompt, output)
 		);
 		return result.text;
 	}

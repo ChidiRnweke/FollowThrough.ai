@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { InlineCompletionContext, InlineSuggestionRequest, NoteId } from '$lib/models';
-import { inlineCompletionPrompt, sanitizeCompletion } from './inline-completion-generator';
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
+import {
+	inlineCompletionPrompt,
+	inlineCompletionTraceAttributes,
+	sanitizeCompletion
+} from './inline-completion-generator';
 
 const request: InlineSuggestionRequest = {
 	requestId: '00000000-0000-4000-8000-000000000001',
@@ -110,5 +115,36 @@ describe('inline completion grounding', () => {
 
 	it('includes user memory in the completion prompt', () => {
 		expect(inlineCompletionPrompt(request, context)).toContain('The user prefers concise prose.');
+	});
+});
+
+describe('inline completion telemetry', () => {
+	const attributes = inlineCompletionTraceAttributes('Continue this', {
+		text: ' thought.',
+		raw: ' thought.',
+		model: 'deepseek/deepseek-v4-flash',
+		finishReason: 'stop',
+		refused: false,
+		usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 }
+	});
+
+	it('records the model', () => {
+		expect(attributes[SemanticConventions.LLM_MODEL_NAME]).toBe('deepseek/deepseek-v4-flash');
+	});
+
+	it('records prompt tokens', () => {
+		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_PROMPT]).toBe(20);
+	});
+
+	it('records completion tokens', () => {
+		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_COMPLETION]).toBe(3);
+	});
+
+	it('records total tokens', () => {
+		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_TOTAL]).toBe(23);
+	});
+
+	it('records the finish reason', () => {
+		expect(attributes[SemanticConventions.LLM_FINISH_REASON]).toBe('stop');
 	});
 });

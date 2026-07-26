@@ -91,6 +91,10 @@
 
 	const activeNoteId = $derived(workbench.focusedNoteId ?? urlActiveNoteId());
 	const activeProjectId = $derived(workbench.activeProjectId ?? urlActiveProjectId());
+	// The sidebar tree highlight tracks where the user *is*: off note routes the
+	// stale focused tab must not light up a note (RightPanel keeps the real
+	// activeNoteId so chat note-context survives navigating away).
+	const highlightedNoteId = $derived(isNoteWorkbench ? activeNoteId : undefined);
 
 	function urlActiveNoteId(): NoteId | undefined {
 		if (!page.url.pathname.startsWith('/notes/')) return undefined;
@@ -127,7 +131,7 @@
 	<AppSidebar
 		shell={data.shell}
 		activePath={page.url.pathname}
-		{activeNoteId}
+		activeNoteId={highlightedNoteId}
 		loading={isNavigating}
 	/>
 	<Sidebar.Inset

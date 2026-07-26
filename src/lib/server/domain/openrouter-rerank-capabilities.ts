@@ -1,7 +1,13 @@
 import { ExternalServiceError } from '$lib/models';
 import type { SearchMatch } from '$lib/models';
 import type { Reranker } from '$lib/services';
-import { OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+import { getDocumentAttributes } from '@arizeai/openinference-core';
+import {
+	MimeType,
+	OpenInferenceSpanKind,
+	SemanticConventions
+} from '@arizeai/openinference-semantic-conventions';
+import type { Attributes } from '@opentelemetry/api';
 import { DEFAULT_OPENROUTER_BASE_URL, type OpenRouterClientOptions } from './openrouter-client';
 import { traceOperation } from './telemetry';
 
@@ -31,6 +37,45 @@ export const rerankDocumentText = (match: SearchMatch): string =>
 		.filter(Boolean)
 		.join('\n');
 
+const documentAttributes = (
+	matches: readonly SearchMatch[],
+	prefix: string,
+	includeScore: boolean
+): Attributes =>
+	matches.reduce<Attributes>(
+		(attributes, match, index) => ({
+			...attributes,
+			...getDocumentAttributes(
+				{
+					id: match.document.id,
+					content: rerankDocumentText(match),
+					...(includeScore ? { score: match.score } : {})
+				},
+				index,
+				prefix
+			)
+		}),
+		{}
+	);
+
+export const rerankerInputTraceAttributes = (
+	query: string,
+	matches: readonly SearchMatch[],
+	model: string,
+	topN: number
+): Attributes => ({
+	[SemanticConventions.RERANKER_QUERY]: query,
+	[SemanticConventions.RERANKER_MODEL_NAME]: model,
+	[SemanticConventions.RERANKER_TOP_K]: Math.min(topN, matches.length),
+	// Forty candidates already consume 80 attributes at id + content. Omitting
+	// their pre-rerank scores leaves room for all scored output documents under
+	// OpenTelemetry's common 128-attribute span limit.
+	...documentAttributes(matches, SemanticConventions.RERANKER_INPUT_DOCUMENTS, false)
+});
+
+export const rerankerOutputTraceAttributes = (results: readonly SearchMatch[]): Attributes =>
+	documentAttributes(results, SemanticConventions.RERANKER_OUTPUT_DOCUMENTS, true);
+
 export class OpenRouterReranker implements Reranker {
 	private readonly endpoint: string;
 	private readonly appURL: string;
@@ -58,10 +103,17 @@ export class OpenRouterReranker implements Reranker {
 				{
 					input: JSON.stringify({
 						query,
-						documents: matches.map(rerankDocumentText)
+						documents: matches.map((match) => ({
+							id: match.document.id,
+							content: rerankDocumentText(match),
+							score: match.score
+						}))
 					}),
+					inputMimeType: MimeType.JSON,
+					outputMimeType: MimeType.JSON,
 					kind: OpenInferenceSpanKind.RERANKER,
-					metadata: { model: this.model, topN }
+					metadata: { model: this.model, topN },
+					attributes: rerankerInputTraceAttributes(query, matches, this.model, topN)
 				},
 				async () => {
 					const response = await fetch(this.endpoint, {
@@ -95,12 +147,13 @@ export class OpenRouterReranker implements Reranker {
 						.filter((match): match is SearchMatch => match !== undefined);
 				},
 				(results) =>
-					JSON.stringify(
-						results.map((result) => ({
+					JSON.stringify({
+						results: results.map((result) => ({
 							documentId: result.document.id,
 							score: result.score
 						}))
-					)
+					}),
+				rerankerOutputTraceAttributes
 			);
 		} catch (error) {
 			if (signal?.aborted) throw error;

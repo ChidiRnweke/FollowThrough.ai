@@ -1,4 +1,6 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
+import { getEmbeddingAttributes } from '@arizeai/openinference-core';
+import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import type { EmbeddingBatch, EmbeddingClient } from '$lib/services';
 import { createOpenRouterClient, type OpenRouterClientOptions } from './openrouter-client';
 import { traceOperation } from './telemetry';
@@ -32,8 +34,13 @@ export class OpenAIEmbeddingClient implements EmbeddingClient {
 				'embedding.batch',
 				{
 					input: JSON.stringify(contents),
+					inputMimeType: MimeType.JSON,
+					outputMimeType: MimeType.JSON,
+					kind: OpenInferenceSpanKind.EMBEDDING,
 					metadata: { model: this.model, inputCount: contents.length },
-					tags: ['embedding']
+					tags: ['embedding'],
+					attributes: getEmbeddingAttributes({ modelName: this.model }),
+					onlyWithinWorkflow: true
 				},
 				async () => {
 					const response = await this.client.embeddings.create(

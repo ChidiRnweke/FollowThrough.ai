@@ -21,6 +21,7 @@
 		"test:evals": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"trace:audit": "bun scripts/phoenix-trace-audit.js",
 		"trace:smoke": "bun scripts/phoenix-smoke-test.js",
+		"trace:validate": "bun scripts/phoenix-trace-validation.js",
 		"test": "pnpm test:unit",
 		"db:start": "docker compose up",
 		"db:push": "drizzle-kit push",
@@ -78,7 +79,6 @@
 	},
 	"dependencies": {
 		"@arizeai/openinference-core": "^2.4.0",
-		"@arizeai/openinference-instrumentation-openai": "^4.1.5",
 		"@arizeai/openinference-instrumentation-openai-agents": "^0.2.2",
 		"@arizeai/openinference-semantic-conventions": "^2.5.0",
 		"@arizeai/phoenix-otel": "^1.2.0",
