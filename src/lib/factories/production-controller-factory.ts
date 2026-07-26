@@ -1,6 +1,7 @@
 import {
 	DefaultAgentController,
 	DefaultAgentSettingsController,
+	DefaultApiTokensController,
 	DefaultAttachmentsController,
 	DefaultDeliverablesController,
 	DefaultDiagramsController,
@@ -18,6 +19,7 @@ import {
 	DefaultWorkspaceController,
 	type AgentDependencies,
 	type AgentSettingsDependencies,
+	type ApiTokensDependencies,
 	type AttachmentsDependencies,
 	type DeliverablesDependencies,
 	type DiagramsDependencies,
@@ -48,6 +50,7 @@ export interface ProductionControllerDependencies {
 	skills: SkillsDependencies;
 	agent: AgentDependencies;
 	agentSettings: AgentSettingsDependencies;
+	apiTokens: ApiTokensDependencies;
 	attachments: AttachmentsDependencies;
 	deliverables: DeliverablesDependencies;
 	trustPolicies: TrustPoliciesDependencies;
@@ -90,6 +93,9 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	agentSettings() {
 		return new DefaultAgentSettingsController(this.dependencies.agentSettings);
+	}
+	apiTokens() {
+		return new DefaultApiTokensController(this.dependencies.apiTokens);
 	}
 	attachments() {
 		return new DefaultAttachmentsController(this.dependencies.attachments);

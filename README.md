@@ -1,18 +1,21 @@
 <div align="center">
   <img src="static/icons/followthrough-192.png" alt="FollowThrough" width="72" height="72" />
   <h1>followthrough.ai</h1>
-  <p><strong>An AI-native note editor you never have to brief — with project-scoped agent memory, a lightweight deadline board, and contextual skills that turn notes into actions, artifacts, and finished deliverables.</strong></p>
+  <p><strong>An agent-native note editor you never have to brief.</strong></p>
 </div>
 
----
+![A note open in the editor while the agent works beside it — creating notes, listing every tool call](static/product-screenshots/in-editor-chat.jpg)
 
-**FollowThrough's agent already knows what you're working on.** An AI-native note editor you
-never have to brief. The agent carries the whole project — the decisions, the constraints, the
-people you're waiting on. You never brief it again.
+The usual way of working with AI is a tax: your notes live in one place, your tasks in another,
+the project context lives in your head, and every new AI session starts with re-explaining all
+of it. FollowThrough collapses that into one workspace. The editor is where you think; the
+agent lives inside it and already carries the project — the decisions saved to memory, the
+todos, the people you're waiting on. And the loop closes: the agent doesn't just talk about the
+work, it does the work — extracting commitments from your notes, keeping the board honest,
+producing artifacts — always proposing, never committing anything important silently.
 
-Paste a standup transcript into a note and you get back a cleaned note, two todos with the right
-owner and the right deadline, and an entry proposed for the project's memory. Nothing in the paste
-said "31 July"; the project did.
+> **Write notes → the agent extracts commitments and context → you triage on Today →
+> the agent acts (with your approval) → work becomes artifacts and deliverables.**
 
 ## Why I built it
 
@@ -22,27 +25,28 @@ To be fair: a VS Code agent can grep your repo. The friction is everything aroun
 
 FollowThrough is the editor those agents should have been running inside.
 
-<!-- SCREENSHOT: hero.png — the Today page at 1440x900, dark mode, with overdue and due-today
-     populated. Full window, no browser chrome. -->
-
-> **I want to see this there** — a hero shot of the Today page.
-
 ## What it looks like
 
-Six screenshots belong here. The capture brief for each — route, viewport, theme, and what has to
-be on screen — is in [`docs/screenshots/CAPTURE_PLAN.md`](docs/screenshots/CAPTURE_PLAN.md).
+Real screens, both themes, in [`static/product-screenshots/`](static/product-screenshots/). The
+feature-by-feature tour — what each screen is and why it matters — is in
+[`product-walkthrough.md`](product-walkthrough.md).
 
-|                                                                                                                                   |                                                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| <!-- SCREENSHOT: today-triage.png --> **I want to see this there** — Today: overdue, due today, waiting on, pinned.               | <!-- SCREENSHOT: note-split.png --> **I want to see this there** — the editor with two notes side by side.                          |
-| <!-- SCREENSHOT: board.png --> **I want to see this there** — the board, with a card mid-drag.                                    | <!-- SCREENSHOT: transcript-to-todos.png --> **I want to see this there** — extracting todos from a transcript, suggestions inline. |
-| <!-- SCREENSHOT: agent-approval.png --> **I want to see this there** — an agent run paused on a tool-approval card, diff visible. | <!-- SCREENSHOT: artifacts.png --> **I want to see this there** — the artifacts list with a generated PDF.                          |
+**The centerpiece: the editor with AI inside it.** Select a passage and the AI toolbar is right
+there — ask about it, extract its promises, find related notes, turn it into a diagram. Open
+the agent panel and it reports what it already knows, offers to remember what matters, and then
+acts: creating notes and updating boards with every tool call — successes and failures — on the
+record.
 
-A short screen recording of `paste transcript → accept suggestions → open the board` would carry
-more than all six stills. **I want to see that there too.**
-
-The public landing page at `/` shows the same transformations rebuilt in HTML, so it works before
-any of these are captured.
+|                                                                                                         |                                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| ![The AI toolbar above a selected passage](static/product-screenshots/in-editor-ai-light.jpg)           | ![The agent working alongside the note](static/product-screenshots/in-editor-chat-light.jpg)                 |
+| **One selection away** — ask, extract promises, find related, reference, diagram.                       | **The agent in the editor** — it reads the workspace first, then acts, showing its work.                     |
+| ![The Today screen](static/product-screenshots/today-screen-light.jpg)                                  | ![The commitments board](static/product-screenshots/todo-board-light.jpg)                                    |
+| **Today** — overdue, due today, and who *you* are waiting on.                                           | **The board** — the agent opens cards from notes and keeps them moving.                                      |
+| ![A project's context](static/product-screenshots/project-context-light.jpg)                            | ![A skill definition](static/product-screenshots/skill-support-light.jpg)                                    |
+| **The context layer** — what was produced here vs. what the agent works from: memory, attachments.      | **Skills** — teach it your workflow once; it runs it on cue.                                                 |
+| ![The Mermaid diagram editor](static/product-screenshots/diagram-render-light.jpg)                      | ![Agent settings with an open model picker](static/product-screenshots/open-model-access-light.jpg)          |
+| **First-class diagrams** — Mermaid source, live render, Revise with AI.                                 | **Your editor, your model, your choice** — any provider; approval or auto-accept per pipeline.               |
 
 ## The five moves
 
@@ -126,8 +130,6 @@ UI conventions — tokens, type scale, the interaction contract — are in
 
 Agent runs are instrumented with OpenTelemetry and exported to Arize Phoenix, so every model call,
 tool call, and retrieval is inspectable after the fact.
-
-<!-- SCREENSHOT: llm-traces.png and llm-spans.png already exist in docs/screenshots/ -->
 
 ![Agent run traces in Phoenix](docs/screenshots/llm-traces.png)
 

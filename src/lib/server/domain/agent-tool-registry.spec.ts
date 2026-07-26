@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { ControllerFactory } from '$lib/factories';
 import { InMemoryToolRetriever } from '$lib/testing/fakes/in-memory-agent';
-import { testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
+import { noteBuilder, testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
 import {
 	AgentToolRegistry,
 	agentToolCoverage,
@@ -134,13 +134,27 @@ describe('Agent tool coverage invariants', () => {
 		retriever.names = ['create_note'];
 		const selected = indirectToolFor('auto_accept', 'search_tools', { retriever });
 		const result = await selected.invoke({} as never, JSON.stringify({ query: 'create a note' }));
-		expect(result).toMatchObject([
-			{
-				name: 'create_note',
-				classification: 'mutation',
-				input_schema: { type: 'object' }
-			}
+		expect(Object.keys((result as Record<string, unknown>[])[0]).sort()).toEqual([
+			'classification',
+			'description',
+			'input_schema',
+			'name'
 		]);
+	});
+
+	it('advertises only noteId and markdown for save_note', () => {
+		const saveNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'save_note');
+		expect(Object.keys(saveNote?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
+	});
+
+	it('keeps save_note searchable instead of registering it directly', () => {
+		const available = registry('auto_accept');
+		expect([
+			available.agentTools().some((candidate) => candidate.name === 'save_note'),
+			available.catalog().some((candidate) => candidate.name === 'save_note')
+		]).toEqual([false, true]);
 	});
 
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
@@ -210,8 +224,8 @@ describe('Agent tool coverage invariants', () => {
 			JSON.stringify({ name: 'creat_note', payload: { title: 'Decision log' } })
 		);
 		expect(result).toMatchObject({
-			error: expect.stringContaining('Did you mean:'),
-			suggestions: expect.arrayContaining(['create_note'])
+			failure: expect.stringContaining('Did you mean'),
+			suggestions: expect.arrayContaining([{ name: 'create_note', invokeVia: 'use_tool' }])
 		});
 	});
 
@@ -221,7 +235,12 @@ describe('Agent tool coverage invariants', () => {
 			{} as never,
 			JSON.stringify({ name: 'list_artifact', payload: {} })
 		);
-		expect(result).toMatchObject({ suggestions: ['list_artifacts', 'get_artifact'] });
+		expect(result).toMatchObject({
+			suggestions: [
+				{ name: 'list_artifacts', invokeVia: 'use_tool' },
+				{ name: 'get_artifact', invokeVia: 'use_tool' }
+			]
+		});
 	});
 
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
@@ -230,7 +249,105 @@ describe('Agent tool coverage invariants', () => {
 			{} as never,
 			JSON.stringify({ name: 'create_note', payload: {} })
 		);
-		expect(result).toMatchObject({ error: expect.stringContaining('Invalid payload') });
+		expect(result).toMatchObject({
+			failure: 'Invalid payload for "create_note".',
+			input_schema: { type: 'object' }
+		});
+	});
+
+	it('guides a double-serialized arguments envelope without throwing', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				arguments: JSON.stringify({
+					name: 'create_note',
+					payload: { title: 'Decision log' }
+				})
+			})
+		);
+		expect(result).toMatchObject({
+			failure: 'Invalid use_tool input.',
+			recovery: expect.stringContaining('Do not nest the object under "arguments"')
+		});
+	});
+
+	it('guides syntactically invalid use_tool JSON without throwing', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke({} as never, '{"name":"create_note",');
+		expect(JSON.parse(result as string)).toMatchObject({
+			failure: 'Invalid use_tool input.',
+			recovery: expect.stringContaining('do not JSON-stringify the payload')
+		});
+	});
+
+	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
+		const current = noteBuilder({ id: crypto.randomUUID() as never, title: 'About me' });
+		const factory = {
+			notes: () => ({
+				get: async () => ({ note: current }),
+				save: async (_actor: unknown, input: { note: typeof current }) => ({
+					note: { ...input.note, currentRevision: 2 },
+					etag: 'note:unused:r2',
+					repairedAnchorIds: []
+				})
+			})
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'save_note',
+				payload: { noteId: current.id, markdown: '# Profile\n\n- Engineer' }
+			})
+		);
+		expect(result).toEqual({
+			noteId: current.id,
+			title: 'About me',
+			currentRevision: 2
+		});
+	});
+
+	it('preserves server-owned note fields while replacing Markdown content', async () => {
+		const current = noteBuilder({
+			id: crypto.randomUUID() as never,
+			title: 'About me',
+			position: 7,
+			kind: 'skill'
+		});
+		let saved: typeof current | undefined;
+		const factory = {
+			notes: () => ({
+				get: async () => ({ note: current }),
+				save: async (_actor: unknown, input: { note: typeof current }) => {
+					saved = input.note;
+					return { note: input.note, etag: 'note:unused:r1', repairedAnchorIds: [] };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'save_note',
+				payload: { noteId: current.id, markdown: 'New **body**' }
+			})
+		);
+		expect({
+			id: saved?.id,
+			projectId: saved?.projectId,
+			kind: saved?.kind,
+			position: saved?.position,
+			title: saved?.title,
+			plainText: saved?.plainText
+		}).toEqual({
+			id: current.id,
+			projectId: current.projectId,
+			kind: 'skill',
+			position: 7,
+			title: 'About me',
+			plainText: 'New body'
+		});
 	});
 
 	it('does not expose the agent controller recursively', () => {

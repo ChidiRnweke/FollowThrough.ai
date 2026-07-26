@@ -104,8 +104,8 @@ const preferencesWith = (inlineSuggestionsEnabled: boolean): AgentPreferencesSto
 	}),
 	update: async (_actor, input) => ({
 		userId: actor.userId,
-		executionMode: input.executionMode,
-		inlineSuggestionsEnabled: input.inlineSuggestionsEnabled,
+		executionMode: input.executionMode ?? 'approval_required',
+		inlineSuggestionsEnabled: input.inlineSuggestionsEnabled ?? inlineSuggestionsEnabled,
 		createdAt: testNow,
 		updatedAt: testNow
 	})

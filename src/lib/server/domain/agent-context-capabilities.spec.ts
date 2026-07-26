@@ -25,6 +25,9 @@ const skill = (project = testProjectId()): Skill => ({
 	isEnabled: true
 });
 
+const catalog = (context: Readonly<Record<string, unknown>>) =>
+	context.skills as { items: { name: string; description: string }[]; truncated?: true };
+
 const setup = async (skillProject = testProjectId()) => {
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder()];
@@ -33,9 +36,7 @@ const setup = async (skillProject = testProjectId()) => {
 	const builder = new EnrichedAgentContextBuilder(
 		new BasicAgent(undefined, undefined, notes),
 		skills,
-		notes,
-		undefined,
-		undefined
+		notes
 	);
 	return { builder, skills, notes };
 };
@@ -58,7 +59,7 @@ describe('Agent grounding invariants', () => {
 			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.skills as { instructions?: string }[])[0]?.instructions).toBeUndefined();
+		expect(catalog(context).items[0]).not.toHaveProperty('instructions');
 	});
 
 	it('makes enabled skill summaries discoverable across projects', async () => {
@@ -68,12 +69,10 @@ describe('Agent grounding invariants', () => {
 			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
-			'Decision records'
-		]);
+		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
 	});
 
-	it('includes an explicitly requested skill without a keyword match', async () => {
+	it('includes an explicitly requested skill', async () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
@@ -84,9 +83,7 @@ describe('Agent grounding invariants', () => {
 			},
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
-			'Decision records'
-		]);
+		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
 	});
 
 	it('includes an explicitly requested skill from another project', async () => {
@@ -100,12 +97,10 @@ describe('Agent grounding invariants', () => {
 			},
 			{ provenanceId: testProvenanceId() }
 		);
-		expect((context.skills as { name: string }[]).map((item) => item.name)).toEqual([
-			'Decision records'
-		]);
+		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
 	});
 
-	it('does not duplicate a requested skill that also matches by keyword', async () => {
+	it('does not duplicate a skill that is also explicitly requested', async () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
@@ -116,7 +111,84 @@ describe('Agent grounding invariants', () => {
 			},
 			{ provenanceId: testProvenanceId() }
 		);
-		expect(context.skills).toHaveLength(1);
+		expect(catalog(context).items).toHaveLength(1);
+	});
+
+	it('advertises a skill whose wording shares nothing with the prompt', async () => {
+		const { builder } = await setup();
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Why does it keep asking me to approve things?' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
+	});
+
+	it('withholds a skill that opted out of implicit invocation', async () => {
+		const { builder, skills } = await setup();
+		skills.skills = [{ ...skill(), allowImplicitInvocation: false }];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(catalog(context).items).toEqual([]);
+	});
+
+	it('advertises an opted-out skill when it is explicitly requested', async () => {
+		const { builder, skills } = await setup();
+		skills.skills = [{ ...skill(), allowImplicitInvocation: false }];
+		const context = await builder.build(
+			testActor(),
+			{
+				noteId: testNoteId(),
+				prompt: 'Summarize this text',
+				requestedSkillNames: ['Decision records']
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
+	});
+
+	it('keeps pinned skills when the catalogue overflows its budget', async () => {
+		const { builder, skills } = await setup();
+		const pinned = {
+			...skill(),
+			note: noteBuilder({ id: testNoteId(4), kind: 'skill' }),
+			name: 'Zzz pinned'
+		};
+		skills.skills = [
+			pinned,
+			...Array.from({ length: 200 }, (_, index) => ({
+				...skill(),
+				note: noteBuilder({ id: testNoteId(100 + index), kind: 'skill' }),
+				name: `Filler ${index}`,
+				description: 'x'.repeat(400)
+			}))
+		];
+		skills.pinnedNoteIds = [pinned.note.id];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(catalog(context).items[0]?.name).toBe('Zzz pinned');
+	});
+
+	it('flags an overflowing catalogue as truncated', async () => {
+		const { builder, skills } = await setup();
+		skills.skills = Array.from({ length: 200 }, (_, index) => ({
+			...skill(),
+			note: noteBuilder({ id: testNoteId(100 + index), kind: 'skill' }),
+			name: `Filler ${index}`,
+			description: 'x'.repeat(400)
+		}));
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(catalog(context).truncated).toBe(true);
 	});
 
 	it('includes explicitly attached context notes with their content', async () => {

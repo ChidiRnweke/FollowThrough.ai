@@ -2,6 +2,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { tick } from 'svelte';
 	import { fade, slide } from 'svelte/transition';
+	import { Pause, Play } from '@lucide/svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { FtCheck as Check, FtLoader as Loader } from '$lib/components/icons';
 	import Surface from './surface.svelte';
@@ -51,16 +52,23 @@
 	];
 
 	// SSR renders the final beat so no-JS readers see everything. A hydrated,
-	// motion-allowed client starts at the paste and morphs once, when the card
-	// scrolls into view — the same trade-off reveal.svelte makes.
+	// motion-allowed client starts at the paste and morphs when the card is
+	// fully in view; the pills under the card jump to any beat.
 	const FINAL = 3;
 	let stage = $state(typeof window === 'undefined' ? FINAL : 0);
 	let resolved = $state(0);
 	let playing = $state(false);
+	let paused = $state(false);
 
+	// Every scheduled beat lives in `timers` so one clear stops the sequence —
+	// that is what pause, and jumping with the pills, both rely on.
 	let timers: ReturnType<typeof setTimeout>[] = [];
 	const later = (fn: () => void, ms: number) => {
 		timers.push(setTimeout(fn, ms));
+	};
+	const clearTimers = () => {
+		timers.forEach(clearTimeout);
+		timers = [];
 	};
 
 	let bodyEl: HTMLDivElement | undefined = $state();
@@ -82,7 +90,8 @@
 		height = `${from}px`;
 		requestAnimationFrame(() => {
 			height = `${to}px`;
-			later(() => (height = ''), 550);
+			// Not via `later` — this cosmetic reset must survive a pause.
+			setTimeout(() => (height = ''), 550);
 		});
 	}
 
@@ -92,14 +101,17 @@
 			resolved = steps.length;
 			return;
 		}
+		// Only start once the whole card is on screen — the morph is the story,
+		// and a half-seen start reads as a glitch. Cards taller than the viewport
+		// (small screens) can never hit 100%, so they start at 75% instead.
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) {
 					observer.disconnect();
-					later(() => morphTo(1), 700);
+					later(() => morphTo(1), 1400);
 				}
 			},
-			{ rootMargin: '0px 0px -40% 0px' }
+			{ threshold: node.offsetHeight < window.innerHeight ? 1 : 0.75 }
 		);
 		observer.observe(node);
 		return () => {
@@ -108,25 +120,68 @@
 		};
 	};
 
+	// Jump to a beat and keep playing from there: the paste re-arms the first
+	// morph, the checklist re-arms itself through the stage-1 effect, and the
+	// note keeps its automatic slide into the todos. Beat 3 just stays.
+	function goTo(next: number) {
+		clearTimers();
+		paused = false;
+		resolved = next <= 1 ? 0 : steps.length;
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			stage = next;
+			return;
+		}
+		// Landing on the checklist re-arms it: via the stage-1 effect when the
+		// stage actually changes, by hand when the pill points at the beat
+		// already showing (the effect does not refire for a no-op stage set).
+		const sameStage = stage === next;
+		morphTo(next);
+		if (next === 0) later(() => morphTo(1), 1400);
+		if (next === 1 && sameStage) scheduleChecklist(0);
+		if (next === 2) later(() => morphTo(3), 3200);
+	}
+
+	// The checklist rows from `from` onward, one per second; the last row arms
+	// the two closing morphs. All through `later`, so pause clears everything.
+	function scheduleChecklist(from: number) {
+		playing = true;
+		steps.slice(from).forEach((_, offset) => {
+			const index = from + offset;
+			later(
+				() => {
+					resolved = index + 1;
+					if (index === steps.length - 1) {
+						playing = false;
+						later(() => morphTo(2), 1400);
+						later(() => morphTo(3), 3200);
+					}
+				},
+				1000 * (offset + 1)
+			);
+		});
+	}
+
+	// Freeze mid-beat, or pick up exactly where it froze.
+	function togglePlay() {
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		if (paused) {
+			paused = false;
+			if (stage === 0) later(() => morphTo(1), 1400);
+			else if (stage === 1) scheduleChecklist(resolved);
+			else if (stage === 2) later(() => morphTo(3), 3200);
+		} else {
+			paused = true;
+			playing = false;
+			clearTimers();
+		}
+	}
+
 	// The checklist plays once the card has morphed to it; the result beats
 	// follow when the last row resolves.
 	$effect(() => {
 		if (stage !== 1) return;
-		playing = true;
-		const stepTimers = steps.map((_, index) =>
-			setTimeout(
-				() => {
-					resolved = index + 1;
-					if (index === steps.length - 1) {
-						later(() => morphTo(2), 300);
-						later(() => morphTo(3), 900);
-					}
-				},
-				400 * (index + 1)
-			)
-		);
+		scheduleChecklist(0);
 		return () => {
-			stepTimers.forEach(clearTimeout);
 			playing = false;
 		};
 	});
@@ -254,6 +309,32 @@
 			{/if}
 		</div>
 	</Surface>
+	<div class="flex items-center justify-center gap-2 pt-3">
+		<button
+			type="button"
+			class="flex size-4 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:text-foreground"
+			aria-label={paused ? 'Play the demo' : 'Pause the demo'}
+			onclick={togglePlay}
+		>
+			{#if paused}
+				<Play class="size-3" />
+			{:else}
+				<Pause class="size-3" />
+			{/if}
+		</button>
+		{#each labels as label, index (label)}
+			<button
+				type="button"
+				class="h-1 rounded-full transition-all duration-(--duration-panel) ease-(--ease-standard) {index ===
+				stage
+					? 'w-4 bg-brand'
+					: 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/60'}"
+				aria-label={label}
+				aria-current={index === stage ? 'true' : undefined}
+				onclick={() => goTo(index)}
+			></button>
+		{/each}
+	</div>
 </div>
 
 <style>

@@ -54,8 +54,8 @@
 	{#if policy.autoAcceptEnabled && policy.minimumConfidence !== undefined}
 		<Card.Content class="px-4">
 			<p class="text-xs text-muted-foreground">
-				Auto-accepts above {Math.round(policy.minimumConfidence * 100)}% confidence. Auto-accepted
-				items stay visibly AI-made and are one click to revert.
+				Auto-accepts above {policy.minimumConfidence}% confidence. Auto-accepted items stay visibly
+				AI-made and are one click to revert.
 			</p>
 		</Card.Content>
 	{/if}

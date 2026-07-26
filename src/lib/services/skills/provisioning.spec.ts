@@ -5,6 +5,7 @@ import { InMemoryNoteRepository } from '$lib/testing/fakes/in-memory-note-reposi
 import { InMemorySkillRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
 import { noteBuilder, projectBuilder, testActor } from '$lib/testing/fixtures/domain-builders';
 import { DefaultBuiltInSkillProvisioner } from './provisioning';
+import { RETIRED_BUILT_INS } from './built-in-definitions';
 
 const legacyInstructions = `Use FollowThrough as an action-oriented workbench.
 
@@ -65,14 +66,18 @@ describe('Built-in skill provisioning invariants', () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure(testActor());
 		await provisioner.ensure(testActor());
-		expect(skills.skills.map((skill) => skill.name)).toEqual(['FollowThrough', 'Diagramming']);
+		expect(skills.skills.map((skill) => skill.name)).toEqual([
+			'FollowThrough',
+			'Settings',
+			'Diagramming'
+		]);
 	});
 
 	it('provisions the current FollowThrough guide version for new users', async () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure(testActor());
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
-		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('2');
+		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('3');
 	});
 
 	it('provisions detailed product guidance for new users', async () => {
@@ -89,7 +94,7 @@ describe('Built-in skill provisioning invariants', () => {
 		expect({
 			version: followThrough?.metadata?.['followthrough.built-in-version'],
 			revision: followThrough?.note.currentRevision
-		}).toEqual({ version: '2', revision: 2 });
+		}).toEqual({ version: '3', revision: 2 });
 	});
 
 	it('records one immutable revision for a stock guide upgrade', async () => {
@@ -123,6 +128,7 @@ describe('Built-in skill provisioning invariants', () => {
 		await provisioner.ensure(testActor());
 		expect(notes.notes.map((note) => note.title)).toEqual([
 			'My workbench instructions',
+			'Settings',
 			'Diagramming'
 		]);
 	});
@@ -169,7 +175,40 @@ describe('Built-in skill provisioning invariants', () => {
 	it('records the initial skill revision', async () => {
 		const { provisioner, notes } = setup();
 		await provisioner.ensure(testActor());
-		expect(notes.revisions.map((revision) => revision.revision)).toEqual([1, 1]);
+		expect(notes.revisions.map((revision) => revision.revision)).toEqual([1, 1, 1]);
+	});
+
+	it('upgrades an untouched previous-version guide to the current one', async () => {
+		const { provisioner, notes, skills } = setup();
+		await provisioner.ensure(testActor());
+		const stale = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
+		const staleNote = { ...stale.note, plainText: RETIRED_BUILT_INS[1]!.instructions };
+		notes.notes = notes.notes.map((note) => (note.id === staleNote.id ? staleNote : note));
+		skills.skills = skills.skills.map((skill) =>
+			skill.note.id === staleNote.id
+				? {
+						...skill,
+						note: staleNote,
+						description: RETIRED_BUILT_INS[1]!.description,
+						triggerHints: RETIRED_BUILT_INS[1]!.triggerHints,
+						metadata: {
+							'followthrough.built-in': 'true',
+							'followthrough.built-in-key': 'followthrough',
+							'followthrough.built-in-version': '2'
+						}
+					}
+				: skill
+		);
+		await provisioner.ensure(testActor());
+		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
+		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('3');
+	});
+
+	it('provisions a settings guide that names the settings tools', async () => {
+		const { provisioner, skills } = setup();
+		await provisioner.ensure(testActor());
+		const settings = skills.skills.find((skill) => skill.note.builtInKey === 'settings');
+		expect(settings?.note.plainText).toContain('update_agent_preferences');
 	});
 
 	it('fails with guidance when the Diagramming skill is disabled', async () => {

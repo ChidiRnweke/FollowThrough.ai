@@ -2,6 +2,7 @@ import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import type {
 	AgentSettingsController,
+	ApiTokensController,
 	AttachmentsController,
 	DeliverablesController,
 	DiagramsController,
@@ -26,9 +27,14 @@ import type {
 	ProvenanceId,
 	RunAgentInput
 } from '$lib/models';
-import { findProseMirrorDocumentIssue } from '$lib/models';
 import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/services';
-import { suggestToolNames } from './tool-name-matcher';
+import { noteContentFromMarkdown } from './note-markdown';
+import {
+	invalidUseToolEnvelope,
+	invalidUseToolPayload,
+	unknownUseToolName,
+	useToolEnvelopeSchema
+} from './tool-recovery';
 import {
 	projectMemory,
 	projectNoteSummary,
@@ -71,6 +77,7 @@ export interface AgentToolCoverage {
 	readonly skills: Coverage<SkillsController>;
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
 	readonly agentSettings: Coverage<AgentSettingsController>;
+	readonly apiTokens: Coverage<ApiTokensController>;
 	readonly attachments: Coverage<AttachmentsController>;
 	readonly deliverables: Coverage<DeliverablesController>;
 	readonly memory: Coverage<MemoryController>;
@@ -155,12 +162,9 @@ export const agentToolCoverage = {
 		createFromSelection: { kind: 'mutation' },
 		listVersions: { kind: 'read' },
 		restoreVersion: { kind: 'mutation' },
-		update: { kind: 'excluded', reason: 'Skill bundle editing is a deliberate user action.' },
+		update: { kind: 'mutation' },
 		serialize: { kind: 'excluded', reason: 'The full skill is available through load_skill.' },
-		setPinned: {
-			kind: 'excluded',
-			reason: 'Project skill pinning is a deliberate user preference.'
-		}
+		setPinned: { kind: 'mutation' }
 	},
 	attachments: {
 		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
@@ -226,6 +230,7 @@ export const agentToolCoverage = {
 		updatePreferences: { kind: 'mutation' },
 		listModels: { kind: 'read' }
 	},
+	apiTokens: { list: { kind: 'read' }, revoke: { kind: 'mutation' } },
 	retrieval: {
 		search: { kind: 'read' }
 	}
@@ -240,23 +245,6 @@ const selection = z.object({
 	to: z.number().int().nonnegative(),
 	text: z.string()
 });
-const document = z
-	.object({
-		type: z.literal('doc'),
-		content: z.array(z.record(z.string(), z.unknown())).optional()
-	})
-	.superRefine((value, context) => {
-		const issue = findProseMirrorDocumentIssue(value);
-		if (issue)
-			context.addIssue({
-				code: 'custom',
-				message: `Invalid ProseMirror document at ${issue.path}: ${issue.message}`
-			});
-	})
-	.describe(
-		'Tiptap/ProseMirror JSON. Inline formatting belongs in text-node marks; for example bold text is { type: "text", text: "...", marks: [{ type: "bold" }] }. Never use strong or other formatting names as nodes.'
-	);
-
 interface RegistryContext {
 	readonly provenanceId: ProvenanceId;
 	readonly input: RunAgentInput;
@@ -277,6 +265,11 @@ export interface AgentToolDefinition {
 }
 
 type Definition = AgentToolDefinition;
+
+const isInvalidToolInput = (
+	error: unknown
+): error is { readonly toolInvocation: Readonly<Record<string, unknown>> } =>
+	typeof error === 'object' && error !== null && 'toolInvocation' in error;
 
 export class AgentToolRegistry {
 	constructor(
@@ -351,36 +344,34 @@ export class AgentToolRegistry {
 		const useTool = tool({
 			name: 'use_tool',
 			description:
-				"Execute a FollowThrough tool by name. name must be an exact tool name from search_tools; payload must match that tool's input schema.",
-			parameters: z.toJSONSchema(
-				z.object({
-					name: z.string().min(1),
-					payload: z.record(z.string(), z.unknown()).optional()
-				})
-			) as never,
+				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools. Pass {"name":"exact_name","payload":{...}} directly; never nest or stringify that object under arguments.',
+			parameters: z.toJSONSchema(useToolEnvelopeSchema) as never,
 			strict: false,
 			needsApproval: async (_context, input) => {
-				const target = byName.get((input as { name?: string }).name ?? '');
+				const envelope = useToolEnvelopeSchema.safeParse(input);
+				if (!envelope.success) return false;
+				const target = byName.get(envelope.data.name);
 				return target?.classification === 'mutation' && this.mode === 'approval_required';
 			},
 			errorFunction: (_context, error) =>
-				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+				JSON.stringify(
+					isInvalidToolInput(error)
+						? invalidUseToolEnvelope()
+						: { failure: error instanceof Error ? error.message : String(error) }
+				),
 			execute: async (input, _runContext, details) => {
-				const { name, payload } = input as { name: string; payload?: Record<string, unknown> };
+				const envelope = useToolEnvelopeSchema.safeParse(input);
+				if (!envelope.success) return invalidUseToolEnvelope(envelope.error);
+				const { name, payload } = envelope.data;
 				const target = byName.get(name);
-				if (!target) {
-					const suggestions = suggestToolNames(name, names).map((suggestion) => suggestion.name);
-					if (suggestions.length === 0) return { error: `No tool named "${name}".` };
-					return {
-						error: `No tool named "${name}". Did you mean: ${suggestions
-							.map((suggestion) => `"${suggestion}"`)
-							.join(', ')}?`,
-						suggestions
-					};
-				}
+				if (!target) return unknownUseToolName(name, names);
 				const validation = target.parameters.safeParse(payload ?? {});
 				if (!validation.success)
-					return { error: `Invalid payload for "${target.name}": ${validation.error.message}` };
+					return invalidUseToolPayload(
+						target.name,
+						validation.error,
+						z.toJSONSchema(target.parameters)
+					);
 				const parsed = validation.data as Record<string, unknown>;
 				if (!this.toolExecutor) return target.execute(parsed);
 				return this.toolExecutor.execute(
@@ -550,27 +541,24 @@ export class AgentToolRegistry {
 			),
 			define(
 				'save_note',
-				'Save a complete current note revision using valid Tiptap/ProseMirror JSON.',
+				'Replace a note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title.',
 				'mutation',
 				z.object({
-					note: z.object({
-						id,
-						userId: id,
-						projectId: id,
-						parentId: id.optional(),
-						kind: z.enum(['folder', 'note', 'skill']),
-						position: z.number().int(),
-						title: z.string(),
-						document,
-						plainText: z.string(),
-						currentRevision: z.number().int(),
-						isPinned: z.boolean(),
-						archivedAt: z.string().optional(),
-						createdAt: z.string(),
-						updatedAt: z.string()
-					})
+					noteId: id,
+					markdown: z.string()
 				}),
-				(input) => factory.notes().save(actor, input as never)
+				async (input) => {
+					const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+					const content = noteContentFromMarkdown(input.markdown);
+					const saved = await factory.notes().save(actor, {
+						note: { ...current.note, ...content }
+					});
+					return {
+						noteId: saved.note.id,
+						title: saved.note.title,
+						currentRevision: saved.note.currentRevision
+					};
+				}
 			),
 			define(
 				'rename_note',
@@ -782,6 +770,40 @@ export class AgentToolRegistry {
 				(input) => factory.skills().restoreVersion(actor, input as never)
 			),
 			define(
+				'update_skill',
+				"Change a skill's summary or enable and disable it. Send only the fields to change. Instruction text is edited through the skill note itself.",
+				'mutation',
+				z.object({
+					noteId: id,
+					displayName: z.string().min(1).optional(),
+					description: z.string().optional(),
+					triggerHints: z.array(z.string()).optional(),
+					isEnabled: z.boolean().optional()
+				}),
+				(input) => factory.skills().update(actor, input as never)
+			),
+			define(
+				'set_skill_pinned',
+				'Pin or unpin a skill for a project. Pinned skills lead the advertised catalogue.',
+				'mutation',
+				z.object({ noteId: id, projectId: id, pinned: z.boolean() }),
+				(input) => factory.skills().setPinned(actor, input as never)
+			),
+			define(
+				'list_api_tokens',
+				'List the MCP access tokens for this workspace. Plaintext is never retrievable; only names, scopes, and timestamps.',
+				'read',
+				none,
+				() => factory.apiTokens().list(actor)
+			),
+			define(
+				'revoke_api_token',
+				'Revoke an MCP access token. Any client still using it stops working immediately. New tokens are created only in Settings.',
+				'mutation',
+				z.object({ tokenId: id }),
+				(input) => factory.apiTokens().revoke(actor, input.tokenId as never)
+			),
+			define(
 				'list_attachments',
 				'List the immutable resources attached to a note or skill bundle.',
 				'read',
@@ -867,12 +889,12 @@ export class AgentToolRegistry {
 			),
 			define(
 				'update_agent_preferences',
-				'Change default chat model, execution mode, or inline suggestion preference.',
+				'Change default chat model, execution mode, or inline suggestion preference. Send only the fields to change; omitted fields keep their stored value and a null defaultModel clears it.',
 				'mutation',
 				z.object({
 					defaultModel: z.string().nullable().optional(),
-					executionMode: z.enum(['approval_required', 'auto_accept']),
-					inlineSuggestionsEnabled: z.boolean()
+					executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
+					inlineSuggestionsEnabled: z.boolean().optional()
 				}),
 				(input) => factory.agentSettings().updatePreferences(actor, input)
 			),

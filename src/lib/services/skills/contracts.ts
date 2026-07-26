@@ -56,13 +56,6 @@ export interface SkillEditor {
 		pinned: boolean
 	): Promise<void>;
 }
-export interface RelevantSkillSelector {
-	select(
-		actor: ActorContext,
-		prompt: string,
-		skills: readonly SkillSummary[]
-	): Promise<readonly SkillSummary[]>;
-}
 export interface SkillUsageRecorder {
 	record(
 		actor: ActorContext,

@@ -20,6 +20,7 @@
 		"test:capability": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project server src/lib/services src/lib/server/domain",
 		"test:evals": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"trace:audit": "bun scripts/phoenix-trace-audit.js",
+		"trace:query": "bun scripts/phoenix-query.js",
 		"trace:smoke": "bun scripts/phoenix-smoke-test.js",
 		"trace:validate": "bun scripts/phoenix-trace-validation.js",
 		"test": "pnpm test:unit",

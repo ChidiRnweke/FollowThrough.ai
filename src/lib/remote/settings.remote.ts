@@ -37,7 +37,8 @@ export const updateTrustPolicy = command(
 	z.object({
 		pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
 		autoAcceptEnabled: z.boolean(),
-		minimumConfidence: z.number().min(0).max(1).optional()
+		// Whole percent, matching the stored column and the confidence carried on suggestions.
+		minimumConfidence: z.number().int().min(0).max(100).optional()
 	}),
 	async (input) =>
 		AppFactory.controllerFactory()
@@ -46,7 +47,7 @@ export const updateTrustPolicy = command(
 );
 
 export const listApiTokens = query(async () =>
-	AppFactory.getApiTokenService().list(requestActor())
+	AppFactory.controllerFactory().apiTokens().list(requestActor())
 );
 
 /**
@@ -63,6 +64,8 @@ export const createApiToken = command(
 );
 
 export const revokeApiToken = command(z.string().uuid(), async (id) => {
-	await AppFactory.getApiTokenService().revoke(requestActor(), id as ApiTokenId);
+	await AppFactory.controllerFactory()
+		.apiTokens()
+		.revoke(requestActor(), id as ApiTokenId);
 	await listApiTokens().refresh();
 });

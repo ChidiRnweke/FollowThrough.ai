@@ -328,10 +328,11 @@ export interface DecideAgentRunInput {
 	readonly message?: string;
 }
 
+/** A partial edit: omitted fields keep their stored value, `defaultModel: null` clears it. */
 export interface UpdateAgentPreferencesInput {
 	readonly defaultModel?: string | null;
-	readonly executionMode: import('./domain').AgentExecutionMode;
-	readonly inlineSuggestionsEnabled: boolean;
+	readonly executionMode?: import('./domain').AgentExecutionMode;
+	readonly inlineSuggestionsEnabled?: boolean;
 }
 
 export interface RestoreSkillVersionInput {

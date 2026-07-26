@@ -122,6 +122,18 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('tells the model not to double-serialize use_tool arguments', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'Never put that object under an arguments field and never JSON-stringify payload'
+		);
+	});
+
+	it('limits retries after recoverable tool failures', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'follow its recovery guidance and retry one corrected call'
+		);
+	});
+
 	it('fails clearly when no API key is configured', async () => {
 		const runner = new OpenAIAgentRunner(() => ({}) as never, sessions, '');
 		const updates = runner.execute({

@@ -8,7 +8,11 @@ import {
 	FIRST_CLASS_TOOL_NAMES,
 	type AgentToolDefinition
 } from '../domain/agent-tool-registry';
-import { suggestToolNames } from '../domain/tool-name-matcher';
+import {
+	invalidUseToolPayload,
+	unknownUseToolName,
+	type RecoverableUseToolFailure
+} from '../domain/tool-recovery';
 
 export interface McpToolSurfaceOptions {
 	readonly controllers: ControllerFactory;
@@ -23,9 +27,14 @@ const ok = (result: unknown) => ({
 	content: [{ type: 'text' as const, text: JSON.stringify(result ?? null) }]
 });
 
-const failed = (message: string) => ({
+const failed = (failure: string | RecoverableUseToolFailure) => ({
 	isError: true,
-	content: [{ type: 'text' as const, text: JSON.stringify({ failure: message }) }]
+	content: [
+		{
+			type: 'text' as const,
+			text: JSON.stringify(typeof failure === 'string' ? { failure } : failure)
+		}
+	]
 });
 
 /**
@@ -92,7 +101,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 			instructions:
 				'FollowThrough is a connected workspace of notes, projects, todos and references. ' +
 				'Ground yourself with `search` or `get_workspace_context` before acting. ' +
-				'Tools beyond the ones listed here are available: find them with `search_tools`, then run them with `use_tool`.'
+				'Tools beyond the ones listed here are available: find them with `search_tools`, inspect the returned `input_schema`, then call `use_tool` as {"name":"exact_name","payload":{...}} without nesting or stringifying it.'
 		}
 	);
 
@@ -149,7 +158,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		'use_tool',
 		{
 			description:
-				"Execute a FollowThrough tool by name. name must be an exact tool name from search_tools; payload must match that tool's input schema.",
+				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools. Pass {"name":"exact_name","payload":{...}} directly; never nest or stringify that object under arguments.',
 			inputSchema: {
 				name: z.string().min(1),
 				payload: z.record(z.string(), z.unknown()).optional()
@@ -159,21 +168,12 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		},
 		async (input) => {
 			const target = byName.get(input.name);
-			if (!target) {
-				const suggestions = suggestToolNames(input.name, names).map(
-					(suggestion) => suggestion.name
-				);
-				return failed(
-					suggestions.length === 0
-						? `No tool named "${input.name}".`
-						: `No tool named "${input.name}". Did you mean: ${suggestions
-								.map((suggestion) => `"${suggestion}"`)
-								.join(', ')}?`
-				);
-			}
+			if (!target) return failed(unknownUseToolName(input.name, names));
 			const validation = target.parameters.safeParse(input.payload ?? {});
 			if (!validation.success)
-				return failed(`Invalid payload for "${target.name}": ${validation.error.message}`);
+				return failed(
+					invalidUseToolPayload(target.name, validation.error, z.toJSONSchema(target.parameters))
+				);
 			return attempt(() => target.execute(validation.data as Record<string, unknown>));
 		}
 	);

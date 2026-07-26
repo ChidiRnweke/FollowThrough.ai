@@ -11,123 +11,8 @@ import type {
 import { DEFAULT_PROJECT_NAME, NotFoundError, ValidationError } from '$lib/models';
 import type { NoteRepository, ProjectRepository, SkillRepository } from '$lib/repositories';
 import type { BuiltInSkillProvisioner, SkillFinder } from './contracts';
-
-interface BuiltInSkillDefinition {
-	readonly key: string;
-	readonly name: string;
-	readonly description: string;
-	readonly instructions: string;
-	readonly triggerHints: readonly string[];
-	readonly allowImplicitInvocation: boolean;
-	readonly version?: string;
-}
-
-const FOLLOWTHROUGH_V1: BuiltInSkillDefinition = {
-	key: 'followthrough',
-	name: 'FollowThrough',
-	description: 'Discover and use FollowThrough actions safely.',
-	instructions: `Use FollowThrough as an action-oriented workbench.
-
-Discover the available action tools before answering. Prefer read tools to inspect current state, proposal tools for AI-generated suggestions, and mutation tools only when the requested execution mode permits them. Load other skills lazily when their summaries or trigger hints match the request. Keep AI-generated proposals reviewable and preserve provenance.`,
-	triggerHints: ['create', 'update', 'organize', 'plan', 'follow through'],
-	allowImplicitInvocation: true
-};
-
-const FOLLOWTHROUGH_V2: BuiltInSkillDefinition = {
-	key: 'followthrough',
-	name: 'FollowThrough',
-	description:
-		'Guide to FollowThrough features, terminology, navigation, workflows, and agent actions.',
-	instructions: `# FollowThrough guide
-
-Use this guide to explain the product, interpret FollowThrough terminology, navigate the workspace, and help the user choose or carry out the right workflow. For general product questions, answer from this guide. For questions about the user's actual workspace, inspect current data before answering.
-
-## Product model
-
-FollowThrough is a connected workbench for turning source material into durable knowledge, commitments, and deliverables.
-
-- **Projects** organize notes, folders, todos, memory, attachments, and generated artifacts around an outcome.
-- **Notes** are the authored source of truth. They contain rich text and can connect to todos, references, relationships, diagrams, and AI suggestions.
-- **Todos** are explicit commitments. They can belong to the user or be marked as waiting on someone, carry dates and status, and link back to their source note.
-- **Memory** is durable context shared with the agent. Profile memory describes the user across projects; project memory records project-specific facts, decisions, constraints, terminology, and preferences. Memory changes are proposed for review rather than silently rewritten.
-- **Suggestions** are reviewable AI-produced changes. Depending on the workflow and trust policy, they can be accepted, rejected, reverted, or sometimes auto-accepted while remaining visibly AI-originated.
-- **Provenance** records where AI-produced work came from, including its source selection, run, model, and pipeline.
-- **Skills** are reusable methods and instructions. Their summaries are advertised first; full instructions load only when relevant. Skills can be enabled, disabled, versioned, and pinned to projects.
-- **Attachments** are uploaded project or note resources. Parsed content can be searched, while the original file remains downloadable.
-- **Diagrams** can start as Mermaid and, after review, become editable draw.io diagrams.
-- **Artifacts** are generated deliverables such as PDF or DOCX files. They can be downloaded, regenerated, or removed without changing their source notes.
-- **Execution mode** controls whether agent mutations require approval or can run immediately. **Trust policies** separately control auto-acceptance for specific proposal pipelines.
-
-## Where work happens
-
-- **Today** at "/today" is the daily triage view for overdue work, work due today, waiting-on items, pinned notes, and recent notes.
-- **Projects** are opened from the sidebar at "/projects/{projectId}". A project hub contains its note tree and links to project Todos, Memory, Attachments, and Artifacts.
-- **Notes** live at "/notes/{noteId}". Use the editor for source material and the selection actions to extract promises, find relationships or references, create diagrams, or turn a method into a skill. Note changes autosave; publishing records a durable revision.
-- **Todos** at "/todos" show commitments across projects. Project-specific todos live at "/projects/{projectId}/todos". Use them to review status, due dates, responsibility, waiting-on parties, and source notes.
-- **Profile** at "/profile" manages cross-project user memory. Project memory lives at "/projects/{projectId}/memory".
-- **Attachments** live at "/projects/{projectId}/attachments". Upload source files there when they should be searchable without becoming authored notes.
-- **Artifacts** live at "/artifacts", optionally filtered by project. Use them for generated deliverables and their downloads.
-- **Skills** at "/skills" list reusable methods; "/skills/{noteId}" shows a skill's instructions, resources, versions, settings, and usage history.
-- **Chats** at "/chats", "/chats/new", and "/chats/{conversationId}" provide durable conversations. A chat can originate from a project or note and can carry additional context.
-- **Settings** at "/settings" controls agent defaults, execution mode, and pipeline-specific trust policies.
-
-## Agent operating workflow
-
-1. Use get_workspace_context to discover projects, note IDs, enabled skills, and pending work when the relevant identity or location is unknown.
-2. Use get_note when a known note's authoritative content and related items matter.
-3. Use list_todos, user or project memory, and semantic search when those sources could ground the answer. Prefer parallel independent reads and focused follow-up searches.
-4. Load an advertised skill when its method applies.
-5. For any capability not already available, call search_tools with the concrete goal. Read the returned schema and call use_tool with the exact name and a matching payload. Never guess tool names or inputs.
-6. Inspect before changing. Keep proposals reviewable, respect approval requirements for mutations, and explain failures or rejected actions.
-
-When advising the user, name both the place in the interface and what the agent can help do. Distinguish existing workspace facts from general product guidance. Do not claim that a feature, route, or action exists unless this guide or the available tools support it.
-
-## Common workflows
-
-- **Set up a project:** create or open the project, organize source notes and folders, add attachments, record durable constraints in project memory, and track commitments as todos.
-- **Turn notes into action:** read or select the relevant passage, extract proposed promises, review them, and manage accepted work from the global or project todo view.
-- **Recover prior knowledge:** inspect the workspace, search semantically, read the strongest source notes, and combine those findings with applicable memory.
-- **Reuse a method:** capture stable instructions as a skill, add resources when needed, and pin it to projects where it should be preferred.
-- **Produce a deliverable:** select the source notes, generate a PDF or DOCX artifact, then manage the resulting file from Artifacts.`,
-	triggerHints: [
-		'FollowThrough',
-		'how to',
-		'where',
-		'help',
-		'workflow',
-		'project',
-		'note',
-		'todo',
-		'memory',
-		'suggestion',
-		'provenance',
-		'skill',
-		'chat',
-		'attachment',
-		'artifact',
-		'export'
-	],
-	allowImplicitInvocation: true,
-	version: '2'
-};
-
-const BUILT_INS: readonly BuiltInSkillDefinition[] = [
-	FOLLOWTHROUGH_V2,
-	{
-		key: 'diagramming',
-		name: 'Diagramming',
-		description: 'Turn source material into clear, valid Mermaid diagrams.',
-		instructions: `Create or revise Mermaid diagrams from the supplied material.
-
-Infer the relationships that matter before choosing a diagram family. Use flowcharts for processes and dependency maps, sequence diagrams for ordered interactions, state diagrams for lifecycle transitions, class diagrams for stable structures, and other Mermaid families only when they communicate the material more clearly.
-
-Preserve uncertainty and do not invent systems, people, steps, or dependencies that the source does not support. Prefer a small coherent diagram over an exhaustive one. Use concise, readable labels and stable identifiers. When revising, preserve correct information and change only what the instruction requires.
-
-Inspect relevant project notes, memories, profile context, or attachments when they are available and useful. Finish by calling submit_mermaid_diagram exactly once with valid Mermaid source and an optional concise title. Do not wrap the source in Markdown fences and do not use click handlers, links, initialization directives, or HTML labels.`,
-		triggerHints: ['diagram', 'mermaid', 'visualize', 'flowchart', 'sequence', 'architecture'],
-		allowImplicitInvocation: false
-	}
-];
+import type { BuiltInSkillDefinition } from './built-in-definitions';
+import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -223,26 +108,35 @@ export class DefaultBuiltInSkillProvisioner implements BuiltInSkillProvisioner {
 			});
 			return;
 		}
-		if (definition.key === 'followthrough' && this.isUntouchedFollowThroughV1(note, existing))
-			await this.upgradeFollowThrough(actor, note, existing, definition);
+		if (
+			RETIRED_BUILT_INS.some(
+				(retired) => retired.key === definition.key && this.isUntouched(note, existing, retired)
+			)
+		)
+			await this.upgradeBuiltIn(actor, note, existing, definition);
 	}
 
-	private isUntouchedFollowThroughV1(note: Note, skill: Skill): boolean {
+	/**
+	 * True when the stored skill is still byte-for-byte a released version and was
+	 * never published, so replacing it cannot lose the user's work. Revision
+	 * numbers are deliberately not compared: an install already carried forward by
+	 * an earlier upgrade is still untouched.
+	 */
+	private isUntouched(note: Note, skill: Skill, released: BuiltInSkillDefinition): boolean {
 		const metadata = skill.metadata ?? {};
+		const expected = this.metadata(released);
 		return (
-			note.title === FOLLOWTHROUGH_V1.name &&
-			note.plainText === FOLLOWTHROUGH_V1.instructions &&
-			note.currentRevision === 1 &&
+			note.title === released.name &&
+			note.plainText === released.instructions &&
 			note.publishedRevision === 0 &&
 			note.publishedAt === undefined &&
-			skill.name === FOLLOWTHROUGH_V1.name &&
-			skill.slug === FOLLOWTHROUGH_V1.key &&
-			skill.description === FOLLOWTHROUGH_V1.description &&
-			skill.allowImplicitInvocation === FOLLOWTHROUGH_V1.allowImplicitInvocation &&
-			this.sameStrings(skill.triggerHints, FOLLOWTHROUGH_V1.triggerHints) &&
-			Object.keys(metadata).length === 2 &&
-			metadata['followthrough.built-in'] === 'true' &&
-			metadata['followthrough.built-in-key'] === FOLLOWTHROUGH_V1.key
+			skill.name === released.name &&
+			skill.slug === released.key &&
+			skill.description === released.description &&
+			skill.allowImplicitInvocation === released.allowImplicitInvocation &&
+			this.sameStrings(skill.triggerHints, released.triggerHints) &&
+			Object.keys(metadata).length === Object.keys(expected).length &&
+			Object.entries(expected).every(([key, value]) => metadata[key] === value)
 		);
 	}
 
@@ -250,7 +144,7 @@ export class DefaultBuiltInSkillProvisioner implements BuiltInSkillProvisioner {
 		return left.length === right.length && left.every((value, index) => value === right[index]);
 	}
 
-	private async upgradeFollowThrough(
+	private async upgradeBuiltIn(
 		actor: ActorContext,
 		note: Note,
 		skill: Skill,

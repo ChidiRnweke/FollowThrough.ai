@@ -131,7 +131,11 @@ const CASES: readonly InvocationCase[] = [
 		name: 'edits a note when asked to update its content',
 		prompt:
 			'Edit my Background note: add a paragraph at the end mentioning my new Kubernetes certification.',
-		tool: 'save_note'
+		tool: 'save_note',
+		payload: (args) =>
+			typeof args.noteId === 'string' && typeof args.markdown === 'string'
+				? undefined
+				: 'save_note requires a noteId and Markdown body'
 	},
 	{
 		id: 'invoke-rename-project',

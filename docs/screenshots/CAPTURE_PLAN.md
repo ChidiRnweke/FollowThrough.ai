@@ -1,5 +1,9 @@
 # Screenshot capture plan
 
+> **Status:** the product shots referenced below now exist in `static/product-screenshots/`
+> (JPEG, both themes) and are embedded in the README and the landing page. This plan remains as
+> the brief for future purpose-built shots (e.g. the `note-split` and `walkthrough` video).
+
 Every wanted screenshot in this repo, in one list. Each row is a complete brief: a capture pass
 should need nothing beyond it.
 

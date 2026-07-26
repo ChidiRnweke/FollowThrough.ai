@@ -85,7 +85,6 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'save_note');
-			// save_note receives a full note object with an `id` field
 			const targetedId =
 				(call?.arguments as Record<string, unknown>)?.noteId ??
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;

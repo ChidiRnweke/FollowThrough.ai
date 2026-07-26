@@ -70,6 +70,24 @@ describe('MCP tool surface', () => {
 		expect(result.isError).toBe(true);
 	});
 
+	it('refuses to revoke an access token on a read-scoped token', async () => {
+		const client = await connect('read');
+		const result = await client.callTool({
+			name: 'use_tool',
+			arguments: { name: 'revoke_api_token', payload: { tokenId: crypto.randomUUID() } }
+		});
+		expect(result.isError).toBe(true);
+	});
+
+	it('offers no tool that creates an access token', async () => {
+		const client = await connect('full');
+		const result = await client.callTool({
+			name: 'use_tool',
+			arguments: { name: 'create_api_token', payload: { name: 'Mine', scope: 'full' } }
+		});
+		expect(result.isError).toBe(true);
+	});
+
 	it('suggests a near miss when use_tool is given an unknown name', async () => {
 		const client = await connect('full');
 		const result = await client.callTool({
@@ -96,7 +114,25 @@ describe('MCP tool surface', () => {
 			name: 'search_tools',
 			arguments: { query: 'add a task' }
 		});
-		expect(JSON.stringify(result.content)).toContain('input_schema');
+		const matches = JSON.parse((result.content as { text: string }[])[0].text);
+		expect(Object.keys(matches[0]).sort()).toEqual([
+			'classification',
+			'description',
+			'input_schema',
+			'name'
+		]);
+	});
+
+	it('publishes the compact save_note schema through tool search', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['save_note'];
+		const client = await connect('full', { retriever });
+		const result = await client.callTool({
+			name: 'search_tools',
+			arguments: { query: 'replace note content' }
+		});
+		const matches = JSON.parse((result.content as { text: string }[])[0].text);
+		expect(matches[0].input_schema.required.sort()).toEqual(['markdown', 'noteId']);
 	});
 
 	it('never offers a mutation to search_tools on a read-scoped token', async () => {

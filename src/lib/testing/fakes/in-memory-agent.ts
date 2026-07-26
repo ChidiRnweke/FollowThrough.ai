@@ -75,19 +75,25 @@ export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
 
 export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 	skills: Skill[] = [];
+	pinnedNoteIds: NoteId[] = [];
 	usages: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }[] = [];
+
+	private summarize(skill: Skill): SkillSummary {
+		return {
+			noteId: skill.note.id,
+			name: skill.name,
+			slug: skill.slug,
+			description: skill.description,
+			triggerHints: skill.triggerHints,
+			allowImplicitInvocation: skill.allowImplicitInvocation,
+			isEnabled: skill.isEnabled,
+			isPinned: this.pinnedNoteIds.includes(skill.note.id)
+		};
+	}
 
 	async listEnabled(_actor: ActorContext): Promise<readonly SkillSummary[]> {
 		void _actor;
-		return this.skills
-			.filter((skill) => skill.isEnabled)
-			.map((skill) => ({
-				noteId: skill.note.id,
-				name: skill.name,
-				description: skill.description,
-				triggerHints: skill.triggerHints,
-				isEnabled: skill.isEnabled
-			}));
+		return this.skills.filter((skill) => skill.isEnabled).map((skill) => this.summarize(skill));
 	}
 	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
 		const enabled = await this.listEnabled(actor);
@@ -96,13 +102,7 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 			...enabled,
 			...this.skills
 				.filter((skill) => !enabledIds.has(skill.note.id))
-				.map((skill) => ({
-					noteId: skill.note.id,
-					name: skill.name,
-					description: skill.description,
-					triggerHints: skill.triggerHints,
-					isEnabled: skill.isEnabled
-				}))
+				.map((skill) => this.summarize(skill))
 		];
 	}
 

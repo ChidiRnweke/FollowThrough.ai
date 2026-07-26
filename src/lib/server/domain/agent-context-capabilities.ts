@@ -5,21 +5,36 @@ import type {
 	ProjectId,
 	ProvenanceId,
 	ResolvedAppContextV1,
-	RunAgentInput
+	RunAgentInput,
+	SkillSummary
 } from '$lib/models';
 import type {
 	AgentContextBuilder,
 	NoteReader,
 	SkillFinder,
-	RelevantSkillSelector,
 	SkillUsageRecorder,
 	ConversationJournal,
 	ProjectReader,
 	MemoryEntryLister
 } from '$lib/services';
-import { KeywordRelevantSkillSelector } from '$lib/services';
 
 const CONTEXT_NOTE_CONTENT_LIMIT = 4000;
+
+/**
+ * Every enabled skill's summary is advertised; the model is the classifier that
+ * decides which instructions to load. This budget is a safety valve for
+ * workspaces with hundreds of skills, not a relevance filter — anything cut is
+ * still reachable through list_skills.
+ */
+const SKILL_CATALOG_BUDGET = 16000;
+
+interface AdvertisedSkill {
+	readonly noteId: string;
+	readonly name: string;
+	readonly slug?: string;
+	readonly description: string;
+	readonly triggerHints: readonly string[];
+}
 
 /**
  * Assembles the per-run agent context. Project knowledge is NOT front-loaded
@@ -32,7 +47,6 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		private readonly base: AgentContextBuilder,
 		private readonly skillFinder: SkillFinder,
 		private readonly noteReader: NoteReader,
-		private readonly skillSelector: RelevantSkillSelector = new KeywordRelevantSkillSelector(),
 		private readonly skillUsageRecorder?: SkillUsageRecorder,
 		private readonly conversations?: ConversationJournal,
 		private readonly projects?: ProjectReader,
@@ -56,14 +70,6 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 		const userMemories = allMemories.filter((m) => m.shareWithAgents);
 		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
 		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
-		const selected = await this.skillSelector.select(actor, input.prompt, availableSkills);
-		const exposed = availableSkills.filter(
-			(skill) =>
-				selected.some((candidate) => candidate.noteId === skill.noteId) ||
-				requestedNoteIds.has(skill.noteId) ||
-				requested.has(skill.name.toLowerCase()) ||
-				requested.has((skill.slug ?? '').toLowerCase())
-		);
 		return {
 			...base,
 			...(await this.resolveAppContext(actor, input, run.conversationId)),
@@ -75,14 +81,61 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 				title: note.title,
 				content: note.plainText.slice(0, CONTEXT_NOTE_CONTENT_LIMIT)
 			})),
-			skills: exposed.map((summary) => ({
-				noteId: summary.noteId,
-				name: summary.name,
-				slug: summary.slug,
-				description: summary.description,
-				triggerHints: summary.triggerHints
-			}))
+			skills: this.buildCatalog(availableSkills, (skill) =>
+				this.isRequested(skill, requested, requestedNoteIds)
+			)
 		};
+	}
+
+	private isRequested(
+		skill: SkillSummary,
+		requestedNames: ReadonlySet<string>,
+		requestedNoteIds: ReadonlySet<string>
+	): boolean {
+		return (
+			requestedNoteIds.has(skill.noteId) ||
+			requestedNames.has(skill.name.toLowerCase()) ||
+			requestedNames.has((skill.slug ?? '').toLowerCase())
+		);
+	}
+
+	/**
+	 * Explicitly requested and pinned skills lead and are never dropped by the
+	 * budget; the rest follow alphabetically so the catalogue is stable between
+	 * runs.
+	 */
+	private buildCatalog(
+		available: readonly SkillSummary[],
+		isRequested: (skill: SkillSummary) => boolean
+	): { items: readonly AdvertisedSkill[]; truncated?: true } {
+		const eligible = available.filter(
+			(skill) => skill.isEnabled && (skill.allowImplicitInvocation !== false || isRequested(skill))
+		);
+		const priority = (skill: SkillSummary): number =>
+			isRequested(skill) ? 0 : skill.isPinned ? 1 : 2;
+		const ordered = [...eligible].sort(
+			(left, right) => priority(left) - priority(right) || left.name.localeCompare(right.name)
+		);
+		const items: AdvertisedSkill[] = [];
+		let budget = 0;
+		let truncated = false;
+		for (const skill of ordered) {
+			const advertised: AdvertisedSkill = {
+				noteId: skill.noteId,
+				name: skill.name,
+				slug: skill.slug,
+				description: skill.description,
+				triggerHints: skill.triggerHints
+			};
+			const size = JSON.stringify(advertised).length;
+			if (priority(skill) === 2 && budget + size > SKILL_CATALOG_BUDGET) {
+				truncated = true;
+				continue;
+			}
+			budget += size;
+			items.push(advertised);
+		}
+		return truncated ? { items, truncated: true } : { items };
 	}
 
 	private async resolveAppContext(

@@ -57,6 +57,8 @@ import { ConversationCondenser } from './domain/conversation-condenser';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
 import { PostgresConversationRepository } from './repositories/postgres-conversations';
 import { EnrichedAgentContextBuilder } from './domain/agent-context-capabilities';
+import { ApiTokenService } from '$lib/services/auth/apiTokenService';
+import { PostgresApiTokenRepository } from './repositories/postgres-api-tokens';
 import {
 	AttachmentParserRegistry,
 	S3AttachmentStorage,
@@ -181,6 +183,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const preferences = new PersistentAgentPreferencesStore(
 		new PostgresAgentPreferencesRepository(db)
 	);
+	const apiTokenService = new ApiTokenService(new PostgresApiTokenRepository(db));
 	const runRepository = new PostgresAgentRunRepository(db);
 	const runStore = new PersistentAgentRunStore(runRepository);
 	const runEvents = new PostgresAgentRunEventRepository(db);
@@ -332,7 +335,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		fallbackAgent,
 		provisionedSkills,
 		notes,
-		undefined,
 		skills,
 		conversationJournal,
 		projects,
@@ -449,6 +451,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			executor: undefined as unknown as AgentRunExecutor // set below after cyclic wiring
 		},
 		agentSettings: { preferences, models: modelCatalog },
+		apiTokens: { tokens: apiTokenService },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
 			templateUploader: templates,

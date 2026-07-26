@@ -1,6 +1,7 @@
 import type {
 	AgentController,
 	AgentSettingsController,
+	ApiTokensController,
 	AttachmentsController,
 	DeliverablesController,
 	DiagramsController,
@@ -30,6 +31,7 @@ export interface ControllerFactory {
 	skills(): SkillsController;
 	agent(): AgentController;
 	agentSettings(): AgentSettingsController;
+	apiTokens(): ApiTokensController;
 	attachments(): AttachmentsController;
 	deliverables(): DeliverablesController;
 	trustPolicies(): TrustPoliciesController;

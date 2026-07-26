@@ -53,8 +53,10 @@ export class PersistentAgentPreferencesStore implements AgentPreferencesStore {
 				: input.defaultModel
 					? { defaultModel: input.defaultModel }
 					: {}),
-			executionMode: input.executionMode,
-			inlineSuggestionsEnabled: input.inlineSuggestionsEnabled,
+			...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
+			...(input.inlineSuggestionsEnabled !== undefined
+				? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
+				: {}),
 			updatedAt: now()
 		});
 	}

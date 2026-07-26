@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug Observability"
+  short_description: "Debug Phoenix traces and observability failures"
+  default_prompt: "Use $debugging-observability to investigate this trace and produce an evidence-backed fix."
