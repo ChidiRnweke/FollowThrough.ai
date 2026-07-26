@@ -104,6 +104,12 @@
 	let note = $state(untrack(() => ({ ...view.note })));
 
 	const hasUnpublishedChanges = $derived(note.currentRevision > note.publishedRevision);
+	// Any state where the device copy has not reached the server.  These must win
+	// over the "unpublished changes" hint in the header, otherwise the retry and
+	// "Review conflict" controls stay hidden for exactly the notes that need them.
+	const unsynced = $derived(
+		noteSync.status === 'pending' || noteSync.status === 'conflict' || noteSync.status === 'error'
+	);
 
 	onMount(() => {
 		let cancelled = false;
@@ -222,7 +228,14 @@
 	$effect(() => () => clearTimeout(autosaveTimer));
 
 	function save(options: { auto?: boolean } = {}): Promise<void> {
-		if (!editorRef || !dirty) return Promise.resolve();
+		if (!editorRef) return Promise.resolve();
+		if (!dirty) {
+			// Content already staged on the device but not on the server: there is
+			// nothing to mark dirty, so a manual save has to mean "flush what is
+			// stuck" rather than silently doing nothing.
+			if (!options.auto && unsynced) return retrySync();
+			return Promise.resolve();
+		}
 		if (!note.title.trim()) {
 			if (!options.auto) toast.error('Give the note a title first.');
 			return Promise.resolve();
@@ -525,10 +538,20 @@
 
 	async function retrySync(): Promise<void> {
 		const record = await noteSync.retry();
-		if (!record) return;
+		if (!record) {
+			toast.error(
+				noteSync.lastError ?? 'Could not reach the note on this device. Reload the page.'
+			);
+			return;
+		}
 		note = { ...record.local };
 		conflictOpen = record.state === 'conflict';
-		if (record.state === 'synced') await invalidateAll();
+		if (record.state === 'synced') {
+			await invalidateAll();
+			return;
+		}
+		if (record.state === 'pending')
+			toast.error(noteSync.lastError ?? 'Still could not sync. Check your connection.');
 	}
 
 	async function useRemoteVersion(): Promise<void> {
@@ -598,6 +621,18 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
+{#snippet syncStatus()}
+	<div class="min-w-0 flex-1 sm:flex-none">
+		<NoteSyncStatus
+			status={noteSync.status}
+			updatedAt={note.updatedAt}
+			reason={noteSync.lastError}
+			onRetry={() => void retrySync()}
+			onReview={() => (conflictOpen = true)}
+		/>
+	</div>
+{/snippet}
+
 <div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
 	<div
 		class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
@@ -644,9 +679,21 @@
 					>Add a title to save</span
 				>
 			{:else if saveFailed}
-				<span class="min-w-0 flex-1 text-xs text-destructive sm:flex-none" aria-live="polite">
-					Couldn’t save · press Ctrl+S to retry
-				</span>
+				<Tip text={noteSync.lastError ?? 'The note could not be saved. Your text is still here.'}>
+					{#snippet children({ props })}
+						<span
+							{...props}
+							class="min-w-0 flex-1 text-xs text-destructive sm:flex-none"
+							aria-live="polite"
+						>
+							Couldn’t save · press Ctrl+S to retry
+						</span>
+					{/snippet}
+				</Tip>
+				<!-- A stuck sync outranks both hints below it: those are only ever
+				     informational, while this is the note's one route back to saved. -->
+			{:else if unsynced || noteSync.status === 'saving'}
+				{@render syncStatus()}
 			{:else if dirty}
 				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
 					>Unsaved changes</span
@@ -656,14 +703,7 @@
 					>Unpublished changes</span
 				>
 			{:else}
-				<div class="min-w-0 flex-1 sm:flex-none">
-					<NoteSyncStatus
-						status={noteSync.status}
-						updatedAt={note.updatedAt}
-						onRetry={() => void retrySync()}
-						onReview={() => (conflictOpen = true)}
-					/>
-				</div>
+				{@render syncStatus()}
 			{/if}
 			<!--
 				Labelled from `lg` up, and folded into the overflow menu below it — the

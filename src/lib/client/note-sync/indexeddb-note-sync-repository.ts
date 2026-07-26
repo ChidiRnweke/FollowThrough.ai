@@ -10,6 +10,16 @@ interface StoredRecord {
 
 const recordKey = (userId: UserId, noteId: NoteId): string => `${userId}:${noteId}`;
 
+/**
+ * `IDBObjectStore.put` structured-clones its argument, which throws
+ * `DataCloneError` on a Svelte `$state` proxy.  Callers are expected to snapshot
+ * before they get here, but a single missed snapshot used to break note saving
+ * for good, so normalise defensively.  A JSON round-trip is faithful for this
+ * record: it holds only ProseMirror documents, ISO strings, numbers and booleans.
+ */
+const clonable = (record: NoteSyncRecord): NoteSyncRecord =>
+	JSON.parse(JSON.stringify(record)) as NoteSyncRecord;
+
 const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
 	new Promise((resolve, reject) => {
 		request.onsuccess = () => resolve(request.result);
@@ -45,7 +55,7 @@ export class IndexedDbNoteSyncRepository implements NoteSyncRepository {
 		const transaction = database.transaction(STORE_NAME, 'readwrite');
 		transaction.objectStore(STORE_NAME).put({
 			key: recordKey(record.userId, record.noteId),
-			record
+			record: clonable(record)
 		} satisfies StoredRecord);
 		await transactionDone(transaction);
 	}

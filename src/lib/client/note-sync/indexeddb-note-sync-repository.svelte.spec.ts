@@ -47,6 +47,20 @@ describe('IndexedDB note synchronization storage', () => {
 		expect(stored).toEqual(pending);
 	});
 
+	// A record reaching this store from a component arrives wrapped in Svelte's
+	// reactive proxy, and `IDBObjectStore.put` structured-clones what it is given
+	// — which throws `DataCloneError` on a proxy and used to break note saving
+	// until the page was closed.
+	it('round-trips a record that arrives as reactive state', async () => {
+		const { repository } = setup();
+		const pending = record();
+		const reactive = $state(pending);
+		await repository.put(reactive);
+		const stored = await repository.get(pending.userId, pending.noteId);
+		repository.close();
+		expect(stored?.base.note.document).toEqual(pending.base.note.document);
+	});
+
 	it('partitions records by user identity', async () => {
 		const { repository } = setup();
 		const pending = record();
