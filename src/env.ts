@@ -82,7 +82,7 @@ export const variables = defineEnvVars({
 	EVAL_GATE: { description: 'Enable eval acceptance gating.', schema: optionalString },
 	OTEL_EXPORTER_OTLP_ENDPOINT: {
 		description:
-			'OTLP/gRPC collector endpoint for Phoenix traces. Telemetry is disabled when unset.',
+			'OTLP/HTTP collector endpoint for traces (port 4318 on the collector). Telemetry is disabled when unset.',
 		schema: optionalString
 	},
 	PHOENIX_PROJECT_NAME: {
