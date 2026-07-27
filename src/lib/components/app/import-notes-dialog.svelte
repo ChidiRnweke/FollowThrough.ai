@@ -2,9 +2,11 @@
 	import type { ImportMarkdownArchiveOutput, NoteId, ProjectId } from '$lib/models';
 	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import FileDropzone from './file-dropzone.svelte';
+
+	/** Mirrors DEFAULT_ARCHIVE_LIMITS server-side, so the reject happens before the upload. */
+	const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 
 	let {
 		open = $bindable(false),
@@ -20,12 +22,10 @@
 		destination: string;
 	} = $props();
 
-	let files = $state<FileList | undefined>(undefined);
+	let archive = $state<File | undefined>(undefined);
 	let busy = $state(false);
 	let error = $state('');
 	let report = $state<ImportMarkdownArchiveOutput | undefined>(undefined);
-
-	const archive = $derived(files?.[0]);
 
 	async function run(): Promise<void> {
 		if (!archive) return;
@@ -52,7 +52,7 @@
 	}
 
 	function reset(): void {
-		files = undefined;
+		archive = undefined;
 		report = undefined;
 		error = '';
 	}
@@ -125,11 +125,15 @@
 			</Dialog.Footer>
 		{:else}
 			<div class="flex flex-col gap-2">
-				<Label for="import-archive" class="text-xs text-muted-foreground">Archive</Label>
-				<Input id="import-archive" type="file" accept=".zip,application/zip" bind:files />
-				<p class="text-xs text-muted-foreground">
-					Up to 25 MB. Each note takes its name from its file name.
-				</p>
+				<FileDropzone
+					bind:file={archive}
+					accept=".zip,application/zip"
+					extensions={['.zip']}
+					maxBytes={MAX_ARCHIVE_BYTES}
+					disabled={busy}
+					label="Drop a .zip here, or choose one"
+					hint="Up to 25 MB. Each note takes its name from its file name."
+				/>
 				{#if error}<p class="text-xs text-destructive">{error}</p>{/if}
 			</div>
 			<Dialog.Footer>
