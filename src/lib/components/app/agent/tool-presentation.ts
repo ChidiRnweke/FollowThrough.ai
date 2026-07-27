@@ -1,7 +1,11 @@
 import type { ChatToolActivity } from '$lib/stores/chat-tools';
 
+/** Tools that write the note body, and so speak about the note rather than themselves. */
+const noteBodyTools = new Set(['save_note', 'edit_note']);
+
 const labels: Readonly<Record<string, string>> = {
 	save_note: 'Save note',
+	edit_note: 'Edit note',
 	publish_note: 'Publish note',
 	discard_note_draft: 'Discard note draft',
 	create_note: 'Create note',
@@ -37,15 +41,16 @@ export const friendlyToolLabel = (name: string): string =>
 export function toolStatusLabel(tool: ChatToolActivity): string {
 	if (tool.status === 'running') return `${friendlyToolLabel(tool.name)}…`;
 	if (tool.status === 'rejected')
-		return tool.name === 'save_note'
+		return noteBodyTools.has(tool.name)
 			? 'Note change rejected'
 			: `${friendlyToolLabel(tool.name)} rejected`;
 	if (tool.status === 'failed')
-		return tool.name === 'save_note'
+		return noteBodyTools.has(tool.name)
 			? 'Note was not saved'
 			: `${friendlyToolLabel(tool.name)} failed`;
 	if (tool.status === 'succeeded') {
 		if (tool.name === 'save_note') return 'Saved note';
+		if (tool.name === 'edit_note') return 'Edited note';
 		if (tool.name === 'publish_note') return 'Published note';
 		if (tool.name === 'discard_note_draft') return 'Discarded note draft';
 		return completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`;
@@ -56,6 +61,7 @@ export function toolStatusLabel(tool: ChatToolActivity): string {
 /** Tools that change something the user owns, as opposed to just reading it. */
 const writeTools = new Set([
 	'save_note',
+	'edit_note',
 	'publish_note',
 	'discard_note_draft',
 	'create_note',

@@ -69,7 +69,17 @@ const GOALS: readonly RetrievalGoal[] = [
 
 	// Notes
 	{ id: 'notes-create', goal: 'start a new note to write this down', expected: 'create_note' },
-	{ id: 'notes-save', goal: 'write this content into the note document', expected: 'save_note' },
+	{ id: 'notes-save', goal: 'rewrite this whole note from scratch', expected: 'save_note' },
+	{
+		id: 'notes-edit-sentence',
+		goal: 'change one sentence in this note and leave the rest alone',
+		expected: 'edit_note'
+	},
+	{
+		id: 'notes-edit-typo',
+		goal: 'fix the typo in the second paragraph of my note',
+		expected: 'edit_note'
+	},
 	{ id: 'notes-rename', goal: 'give this note a better title', expected: 'rename_note' },
 	{ id: 'notes-archive', goal: 'remove a note I do not need any more', expected: 'archive_note' },
 	{

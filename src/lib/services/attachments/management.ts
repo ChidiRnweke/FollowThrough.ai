@@ -14,11 +14,12 @@ import type {
 import { NotFoundError, ValidationError } from '$lib/models';
 import type { AttachmentRepository, NoteRepository } from '$lib/repositories';
 import type {
+	AttachmentParser,
 	AttachmentParserRegistry,
 	AttachmentStorage
 } from '$lib/server/domain/attachment-storage';
 import { validateAttachmentPath } from '$lib/services/skills/manifest';
-import type { AttachmentManager } from './contracts';
+import type { AttachmentManager, DocumentOcr, ImageDescriber, PdfSplitter } from './contracts';
 import type { RetrievalIndexRepository } from '$lib/repositories';
 import type { ContentChunker, EmbeddingClient } from '$lib/services/retrieval/contracts';
 import { EmbeddedAttachmentIndexer } from '$lib/services/retrieval/indexing';
@@ -29,6 +30,15 @@ const maxAttachmentBytes = (): number =>
 	Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
 const maxParseBytes = (): number =>
 	Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? maxAttachmentBytes());
+const ocrModel = (): string =>
+	process.env.OPENROUTER_OCR_MODEL ??
+	process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
+	'google/gemini-2.5-flash-lite';
+const ocrEnabled = (): boolean => {
+	const raw = process.env.ATTACHMENT_OCR_ENABLED;
+	return raw === undefined ? true : raw !== 'false' && raw !== '0';
+};
+const ocrMaxPages = (): number => Number(process.env.ATTACHMENT_OCR_MAX_PAGES ?? 100);
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -40,7 +50,10 @@ export class AttachmentManagementService implements AttachmentManager {
 		private readonly parsers: AttachmentParserRegistry,
 		private readonly retrieval?: RetrievalIndexRepository,
 		private readonly embeddingClient?: EmbeddingClient,
-		private readonly chunker?: ContentChunker
+		private readonly chunker?: ContentChunker,
+		private readonly documentOcr?: DocumentOcr,
+		private readonly imageDescriber?: ImageDescriber,
+		private readonly pdfSplitter?: PdfSplitter
 	) {}
 
 	async initiate(
@@ -261,7 +274,8 @@ export class AttachmentManagementService implements AttachmentManager {
 				return;
 			}
 			const bytes = await this.storage.read(view.version.objectKey, parseLimit);
-			const extractedText = (await parser.parse(bytes)).slice(0, parseLimit);
+			const extraction = await this.extractText(view, parser, bytes, parseLimit);
+			const extractedText = extraction.text;
 			let status: AttachmentVersion['processingStatus'] = 'ready';
 			if (this.retrieval && this.embeddingClient) {
 				const result = await new EmbeddedAttachmentIndexer(
@@ -273,7 +287,7 @@ export class AttachmentManagementService implements AttachmentManager {
 			}
 			await this.attachments.updateVersion(actor, {
 				...view.version,
-				parserKind: parser.kind,
+				parserKind: extraction.parserKind,
 				extractedText,
 				processingStatus: status,
 				processedAt: now()
@@ -288,37 +302,42 @@ export class AttachmentManagementService implements AttachmentManager {
 		}
 	}
 
+	/**
+	 * PDFs go through OCR when it is enabled and the document is under the page
+	 * cap, so embedded images and tables are captured. A disabled or over-cap
+	 * OCR path — or any OCR failure — falls back to the plain text parser.
+	 */
+	private async extractText(
+		view: AttachmentView,
+		parser: AttachmentParser,
+		bytes: Uint8Array,
+		parseLimit: number
+	): Promise<{ text: string; parserKind: string }> {
+		const fallback = async () => ({
+			text: (await parser.parse(bytes)).slice(0, parseLimit),
+			parserKind: parser.kind
+		});
+		if (
+			view.version.mediaType !== 'application/pdf' ||
+			!this.documentOcr ||
+			!this.pdfSplitter ||
+			!ocrEnabled()
+		)
+			return fallback();
+		try {
+			if ((await this.pdfSplitter.pageCount(bytes)) > ocrMaxPages()) return fallback();
+			return {
+				text: await this.documentOcr.parse(bytes, view.attachment.path, ocrModel()),
+				parserKind: 'ocr'
+			};
+		} catch {
+			return fallback();
+		}
+	}
+
 	private async describeImage(view: AttachmentView): Promise<string> {
-		const key = process.env.OPENROUTER_API_KEY;
-		if (!key) throw new Error('OPENROUTER_API_KEY is required for image processing');
+		if (!this.imageDescriber) throw new Error('Image description is not configured');
 		const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
-		const response = await fetch(
-			`${process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
-			{
-				method: 'POST',
-				signal: AbortSignal.timeout(60_000),
-				headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					model: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
-					messages: [
-						{
-							role: 'user',
-							content: [
-								{
-									type: 'text',
-									text: 'Describe this image factually for search. Include visible text, charts, diagrams, objects, and layout. Do not make unsupported inferences.'
-								},
-								{ type: 'image_url', image_url: { url: imageUrl } }
-							]
-						}
-					]
-				})
-			}
-		);
-		if (!response.ok) throw new Error(`Vision description failed (${response.status})`);
-		const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-		const description = payload.choices?.[0]?.message?.content?.trim();
-		if (!description) throw new Error('Vision model returned no description');
-		return description;
+		return this.imageDescriber.describe({ imageDataUrl: imageUrl, model: ocrModel() });
 	}
 }

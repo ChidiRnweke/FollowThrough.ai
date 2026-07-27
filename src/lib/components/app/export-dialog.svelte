@@ -8,7 +8,11 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { initializeMermaid, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
+	import {
+		initializeMermaid,
+		sanitizeMermaidSvg,
+		diagramKeepsOwnColours
+	} from '$lib/components/edra/mermaid-rendering';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import {
 		generateDocument,
@@ -78,6 +82,16 @@
 		for (const child of record.content ?? []) collectMermaidSources(child, sources);
 	}
 
+	// Colour controls only earn their space when there is a diagram to colour, and the
+	// palette caveat only when a diagram ignores the palette.
+	const mermaidSources = $derived.by(() => {
+		const sources: string[] = [];
+		for (const entry of documents) collectMermaidSources(entry.document, sources);
+		return sources;
+	});
+	const hasDiagrams = $derived(mermaidSources.length > 0);
+	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
+
 	async function sha256hex(value: string): Promise<string> {
 		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
 		return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -137,12 +151,16 @@
 
 	/** Render every mermaid block to plain SVG so the server can embed diagrams. */
 	async function renderDiagramSvgs(): Promise<Record<string, string>> {
-		const sources: string[] = [];
-		for (const entry of documents) collectMermaidSources(entry.document, sources);
+		const sources = mermaidSources;
 		if (sources.length === 0) return {};
 		const svgs: Record<string, string> = {};
-		// Documents render on white regardless of the app theme.
-		initializeMermaid(false);
+		// Diagrams follow the export's own palette, never the reader's colour mode: the
+		// document lands somewhere we do not control, and a dark-mode render is unusable
+		// on paper. Defaults to light for the same reason.
+		initializeMermaid({
+			base: settings.diagramTheme?.base ?? 'light',
+			...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
+		});
 		try {
 			for (const source of sources) {
 				try {
@@ -249,7 +267,7 @@
 					Advanced layout
 				</Collapsible.Trigger>
 				<Collapsible.Content class="pt-3">
-					<ExportSettingsFields bind:settings />
+					<ExportSettingsFields bind:settings {hasDiagrams} {hasSelfStyledDiagrams} />
 					<p class="pt-2 text-xs text-muted-foreground">
 						Applies to this export. Set project defaults from the project menu.
 					</p>

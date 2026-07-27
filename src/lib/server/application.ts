@@ -30,11 +30,16 @@ import {
 	ProjectScopedLinkFinder,
 	ProvisioningSkillFinder,
 	AttachmentManagementService,
+	DocumentOcrService,
 	EmbeddedToolRetriever,
 	normalizeOpenRouterModelId,
 	type AgentModelCatalog,
 	type Condenser,
+	type DocumentOcr,
 	type EmbeddingClient,
+	type ImageDescriber,
+	type OcrEngineClient,
+	type PdfSplitter,
 	type ProvenanceRecorder,
 	type ReferenceFinder,
 	type Reranker,
@@ -54,6 +59,9 @@ import { FlashInlineCompletionGenerator } from './domain/inline-completion-gener
 import { RetrievalInlineCompletionContextBuilder } from './domain/inline-completion-context';
 import { MemoryInlineSuggestionThrottle } from './domain/inline-suggestion-throttle';
 import { OpenRouterReranker } from './domain/openrouter-rerank-capabilities';
+import { OpenRouterOcrClient } from './domain/openrouter-ocr-capabilities';
+import { OpenRouterImageDescriber } from './domain/openrouter-vision-capabilities';
+import { PdfLibSplitter } from './domain/pdf-parts';
 import { ConversationCondenser } from './domain/conversation-condenser';
 import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
 import { PostgresConversationRepository } from './repositories/postgres-conversations';
@@ -122,6 +130,10 @@ export interface ApplicationOverrides {
 	readonly attachmentStorage?: AttachmentStorage;
 	readonly referenceFinder?: ReferenceFinder;
 	readonly modelCatalog?: AgentModelCatalog;
+	readonly ocrEngine?: OcrEngineClient;
+	readonly imageDescriber?: ImageDescriber;
+	readonly pdfSplitter?: PdfSplitter;
+	readonly documentOcr?: DocumentOcr;
 }
 
 export interface ApplicationConfig {
@@ -257,6 +269,15 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
 	const attachmentRepository = new PostgresAttachmentRepository(db);
 	const retrievalChunker = retrievalChunkerFromEnv();
+	const ocrEngine =
+		overrides.ocrEngine ??
+		new OpenRouterOcrClient(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
+	const imageDescriber =
+		overrides.imageDescriber ??
+		new OpenRouterImageDescriber(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
+	const pdfSplitter = overrides.pdfSplitter ?? new PdfLibSplitter();
+	const documentOcr =
+		overrides.documentOcr ?? new DocumentOcrService(ocrEngine, imageDescriber, pdfSplitter);
 	const attachments = new AttachmentManagementService(
 		attachmentRepository,
 		noteRepository,
@@ -264,7 +285,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		new AttachmentParserRegistry(),
 		searchRepository,
 		embeddingClient,
-		retrievalChunker
+		retrievalChunker,
+		documentOcr,
+		imageDescriber,
+		pdfSplitter
 	);
 	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient, retrievalChunker);
 	const diagramIndexer = new EmbeddedDiagramIndexer(
@@ -503,6 +527,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteCreator: notes,
 			relationshipFinder: relationships,
 			backlinkViewAssembler: relationships,
+			noteLinkReconciler: relationships,
 			referenceLister: references,
 			referenceViewAssembler: references,
 			diagramLister: diagrams,

@@ -3,7 +3,12 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { EditorState, Transaction } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { caretContextOf, caretWindowOf, shouldTrigger } from './inline-suggestion-trigger';
+import {
+	caretContextOf,
+	caretWindowOf,
+	joinedSuggestion,
+	shouldTrigger
+} from './inline-suggestion-trigger';
 
 /**
  * Proactive ghost text at the caret, in the shape editors have taught people to
@@ -150,7 +155,11 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 		const accept = (view: EditorView): boolean => {
 			const suggestion = inlineSuggestionKey.getState(view.state);
 			if (!suggestion) return false;
-			const text = suggestion.text;
+			const characterBefore = view.state.doc.textBetween(
+				Math.max(0, suggestion.from - 1),
+				suggestion.from
+			);
+			const text = joinedSuggestion(characterBefore, suggestion.text);
 			cancel();
 			requiresEdit = true;
 			view.dispatch(

@@ -217,6 +217,32 @@ export interface GetProjectOutput {
 	readonly tree: readonly ProjectTreeNode[];
 }
 
+export interface ImportMarkdownArchiveInput {
+	readonly projectId: ProjectId;
+	/** Import under an existing folder rather than at the project root. */
+	readonly parentId?: NoteId;
+	readonly archive: Uint8Array;
+	readonly fileName: string;
+}
+
+/**
+ * What an import actually did.
+ *
+ * Import is not all-or-nothing, so the report is not optional polish: without it a
+ * partial import is invisible, and a file that was skipped looks identical to one that
+ * was never in the archive.
+ */
+export interface ImportMarkdownArchiveOutput {
+	readonly importedNoteIds: readonly NoteId[];
+	readonly createdFolderIds: readonly NoteId[];
+	/** Present in the archive, deliberately not imported. */
+	readonly skipped: readonly { readonly path: string; readonly reason: string }[];
+	/** Meant to be imported, but could not be. */
+	readonly failed: readonly { readonly path: string; readonly message: string }[];
+	/** Frontmatter the importer had nowhere to put, so it is named rather than dropped. */
+	readonly unmappedFrontmatterKeys: readonly string[];
+}
+
 export interface CreateFolderInput {
 	readonly projectId: ProjectId;
 	readonly name: string;
@@ -317,6 +343,19 @@ export interface ListArtifactsParams {
 
 export type ExportFontFamily = 'helvetica' | 'times' | 'courier';
 
+/**
+ * Palette for diagrams embedded in an exported document.
+ *
+ * Hex values only: mermaid's colour library cannot parse `oklch()`, so the app's tokens
+ * reach it as the hex equivalents in `mermaid-rendering.ts`. Absent keys fall back to
+ * `base`, and `base` itself defaults to light — a document is read on paper more often
+ * than on a dark screen.
+ */
+export interface ExportDiagramTheme {
+	readonly base: 'light' | 'dark';
+	readonly colors?: Readonly<Record<string, string>>;
+}
+
 export interface ExportSettings {
 	readonly fontFamily: ExportFontFamily;
 	/** Body font size in points. */
@@ -325,13 +364,16 @@ export interface ExportSettings {
 	readonly lineHeight: number;
 	/** Page margin in points, applied to all sides. */
 	readonly margin: number;
+	/** How embedded diagrams are coloured. Omitted means the light preset. */
+	readonly diagramTheme?: ExportDiagramTheme;
 }
 
 export const defaultExportSettings: ExportSettings = {
 	fontFamily: 'helvetica',
 	fontSize: 11,
 	lineHeight: 1.35,
-	margin: 72
+	margin: 72,
+	diagramTheme: { base: 'light' }
 };
 
 export interface GenerateDocumentInput {

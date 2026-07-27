@@ -12,6 +12,10 @@ import mermaid from 'mermaid';
  * carrying its own `classDef`, `style`, or `linkStyle` declarations overrides
  * all of them, and no amount of theming here can defend against that.
  */
+/** True when the source carries its own colour directives and so ignores the chosen palette. */
+export const diagramKeepsOwnColours = (source: string): boolean =>
+	/^\s*(?:classDef|style)\s/m.test(source);
+
 interface MermaidTokens {
 	/** `--background` */
 	readonly background: string;
@@ -88,19 +92,73 @@ const createThemeVariables = (tokens: MermaidTokens, dark: boolean) => ({
 	activationBorderColor: tokens.brand
 });
 
-export const createMermaidConfig = (dark: boolean) => ({
-	startOnLoad: false,
-	theme: 'base' as const,
-	themeVariables: createThemeVariables(dark ? darkTokens : lightTokens, dark),
-	securityLevel: 'strict' as const,
-	htmlLabels: false,
-	fontFamily: "'Inter Variable', sans-serif"
+/**
+ * Which palette a diagram renders with.
+ *
+ * `'light'`/`'dark'` are the app's own token sets; `'auto'` follows the reader's colour
+ * mode, which is the right default in the editor and the wrong one for an export.
+ * A custom palette overrides individual tokens on top of a base.
+ *
+ * Note the limit, which no amount of configuration here removes: theme variables are the
+ * weakest source of colour in mermaid, so a diagram carrying its own `classDef`, `style`
+ * or `linkStyle` keeps its own colours regardless of what is chosen.
+ */
+export type MermaidPalette = Partial<MermaidTokens>;
+
+export interface MermaidTheme {
+	readonly base: 'light' | 'dark';
+	readonly palette?: MermaidPalette;
+	/** Omit the background fill so the diagram sits on whatever it is placed on. */
+	readonly transparent?: boolean;
+}
+
+export const MERMAID_PALETTE_KEYS = [
+	'background',
+	'foreground',
+	'brand',
+	'muted',
+	'mutedForeground',
+	'border',
+	'surface'
+] as const satisfies readonly (keyof MermaidTokens)[];
+
+/** Human labels for the palette editor, so the UI does not invent its own wording. */
+export const MERMAID_PALETTE_LABELS: Readonly<Record<keyof MermaidTokens, string>> = {
+	background: 'Background',
+	foreground: 'Text',
+	brand: 'Accent',
+	muted: 'Node fill',
+	mutedForeground: 'Lines',
+	border: 'Borders',
+	surface: 'Groups'
+};
+
+export const mermaidTokensFor = (theme: MermaidTheme): MermaidTokens => ({
+	...(theme.base === 'dark' ? darkTokens : lightTokens),
+	...theme.palette
 });
 
-/** (Re)configure mermaid for the given mode. Cheap — safe to call per render. */
-export const initializeMermaid = (dark: boolean): void => {
-	mermaid.initialize(createMermaidConfig(dark));
+export const createMermaidConfig = (theme: MermaidTheme | boolean) => {
+	const resolved: MermaidTheme =
+		typeof theme === 'boolean' ? { base: theme ? 'dark' : 'light' } : theme;
+	return {
+		startOnLoad: false,
+		theme: 'base' as const,
+		themeVariables: createThemeVariables(mermaidTokensFor(resolved), resolved.base === 'dark'),
+		securityLevel: 'strict' as const,
+		htmlLabels: false,
+		fontFamily: "'Inter Variable', sans-serif"
+	};
 };
+
+/** (Re)configure mermaid for the given theme. Cheap — safe to call per render. */
+export const initializeMermaid = (theme: MermaidTheme | boolean): void => {
+	mermaid.initialize(createMermaidConfig(theme));
+};
+
+/** The background a raster export should paint behind the diagram, if any. */
+export const mermaidExportBackground = (theme: MermaidTheme): string | undefined =>
+	theme.transparent ? undefined : mermaidTokensFor(theme).background;
 
 export const sanitizeMermaidSvg = (svg: string): string =>
 	DOMPurify.sanitize(svg, {

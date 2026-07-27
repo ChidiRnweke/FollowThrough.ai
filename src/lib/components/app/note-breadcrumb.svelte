@@ -84,7 +84,12 @@
 			{#if editing}
 				<NoteTitleInlineInput initialValue={draft} onsubmit={commit} oncancel={close} {onadvance} />
 			{:else}
-				<Breadcrumb.Page class="max-w-48 truncate">{note.title}</Breadcrumb.Page>
+				<!-- The crumb truncates at 12rem, so a long title is only readable on hover. -->
+				<Tip text={note.title} side="bottom" delayDuration={700}>
+					{#snippet children({ props })}
+						<Breadcrumb.Page {...props} class="max-w-48 truncate">{note.title}</Breadcrumb.Page>
+					{/snippet}
+				</Tip>
 				<Tip text="Rename note">
 					{#snippet children({ props })}
 						<Button

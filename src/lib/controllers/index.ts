@@ -17,3 +17,4 @@ export * from './attachments/controller';
 export * from './deliverables/controller';
 export * from './retrieval/controller';
 export * from './inline-suggestions/controller';
+export * from './imports/controller';

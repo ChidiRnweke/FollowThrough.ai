@@ -21,6 +21,7 @@ import type {
 	ListNoteSyncInventoryOutput
 } from '$lib/models';
 import {
+	collectNoteLinkTargets,
 	noteEtag,
 	noteMatchesEtag,
 	noteSyncContentEquals,
@@ -33,6 +34,7 @@ import type {
 	BacklinkViewAssembler,
 	DiagramLister,
 	NoteCreator,
+	NoteLinkReconciler,
 	NoteReader,
 	NoteTreeReader,
 	ReferenceLister,
@@ -81,6 +83,7 @@ export interface NotesDependencies {
 	suggestionLister: SuggestionLister;
 	suggestionViewAssembler: SuggestionViewAssembler;
 	noteEditor: NoteEditor;
+	noteLinkReconciler: NoteLinkReconciler;
 	noteArchiver: NoteArchiver;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
@@ -123,6 +126,14 @@ export class DefaultNotesController implements NotesController {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteEditor.save(actor, input.note);
 			const anchors = await this.dependencies.anchorRepairer.repairForNote(actor, note);
+			// In the same transaction as the save, beside anchor repair: the note's links are
+			// derived from the document that just landed, so a committed body with stale
+			// `mentions` rows would show backlinks the note no longer has.
+			await this.dependencies.noteLinkReconciler.reconcile(
+				actor,
+				note,
+				collectNoteLinkTargets(note.document)
+			);
 			await this.dependencies.noteIndexer.index(actor, note);
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});

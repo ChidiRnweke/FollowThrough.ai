@@ -2,7 +2,10 @@ import OpenAI from 'openai';
 import type { ActorContext, ReferenceCandidate, TextSelection, Url } from '$lib/models';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/models';
 import type { ReferenceFinder, ReferenceSearchOptions, WebReferenceClient } from '$lib/services';
-import { openRouterWebSearchTool } from './openrouter-server-tools';
+import {
+	openRouterWebSearchTool,
+	webSearchOptionsFromEnvironment
+} from './openrouter-server-tools';
 import { createOpenRouterClient, DEFAULT_GENERATION_MODEL } from './openrouter-client';
 import { traceOperation } from './telemetry';
 
@@ -136,7 +139,7 @@ export class OpenRouterWebReferenceClient implements WebReferenceClient {
 			async () => {
 				const response = await this.client.responses.create({
 					model,
-					tools: [openRouterWebSearchTool() as never],
+					tools: [openRouterWebSearchTool(webSearchOptionsFromEnvironment(process.env)) as never],
 					input: [
 						{ role: 'system', content: REFERENCE_PROMPT },
 						{ role: 'user', content: selectionText }

@@ -2,6 +2,7 @@ import {
 	AlignmentType,
 	BorderStyle,
 	Document,
+	ExternalHyperlink,
 	Footer,
 	Header,
 	HeadingLevel,
@@ -55,11 +56,20 @@ function headingFont(
 	};
 }
 
+/**
+ * One inline run. A `link` mark produces a real hyperlink rather than bare text.
+ *
+ * Only `bold`, `italic` and `code` used to be read here, so a link's anchor text survived
+ * an export while its URL was silently discarded — the destination simply vanished from
+ * every .docx. PDF export has always handled the mark, which made the loss easy to miss.
+ */
+type InlineRun = TextRun | ExternalHyperlink;
+
 function textRunFromNode(
 	node: Record<string, unknown>,
 	styles: ExtractedTemplateStyles,
 	isCode: boolean = false
-): TextRun {
+): InlineRun {
 	const text = (node.text as string) ?? '';
 	const marks =
 		(node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
@@ -67,6 +77,7 @@ function textRunFromNode(
 	let italics = false;
 	let fontName = isCode ? 'Courier New' : (styles.fonts.body.name ?? 'Calibri');
 	let fontSize = isCode ? 18 : (styles.fonts.body.size ?? 11) * 2;
+	let href: string | undefined;
 
 	for (const mark of marks) {
 		if (mark.type === 'bold') bold = true;
@@ -75,7 +86,18 @@ function textRunFromNode(
 			fontName = 'Courier New';
 			fontSize = 18;
 		}
+		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') href = mark.attrs.href;
 	}
+
+	if (href)
+		return new ExternalHyperlink({
+			link: href,
+			// Word's built-in character style, so the link looks like a link in whatever
+			// template the document was generated from.
+			children: [
+				new TextRun({ text, bold, italics, font: fontName, size: fontSize, style: 'Hyperlink' })
+			]
+		});
 
 	return new TextRun({ text, bold, italics, font: fontName, size: fontSize });
 }
@@ -121,7 +143,7 @@ async function convertNode(
 			break;
 		}
 		case 'paragraph': {
-			const children: TextRun[] = [];
+			const children: InlineRun[] = [];
 			for (const child of content) {
 				if (child.type === 'text') {
 					children.push(textRunFromNode(child, styles));
@@ -136,7 +158,7 @@ async function convertNode(
 			for (const item of content) {
 				if (item.type === 'listItem') {
 					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
-					const paraTexts: TextRun[] = [];
+					const paraTexts: InlineRun[] = [];
 					for (const child of itemContent) {
 						if (child.type === 'paragraph') {
 							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];
@@ -160,7 +182,7 @@ async function convertNode(
 			for (const item of content) {
 				if (item.type === 'listItem') {
 					const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
-					const paraTexts: TextRun[] = [];
+					const paraTexts: InlineRun[] = [];
 					for (const child of itemContent) {
 						if (child.type === 'paragraph') {
 							const subContent = (child.content as Array<Record<string, unknown>>) ?? [];

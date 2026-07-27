@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { openRouterWebSearchTool, withOpenRouterWebSearch } from './openrouter-server-tools';
+import {
+	openRouterWebSearchTool,
+	webSearchOptionsFromEnvironment,
+	withOpenRouterWebSearch
+} from './openrouter-server-tools';
 
 class RecordingFetch {
 	body: unknown;
@@ -23,7 +27,7 @@ describe('OpenRouter web search transport', () => {
 				{ type: 'function', function: { name: 'get_project' } },
 				{
 					type: 'openrouter:web_search',
-					parameters: { engine: 'auto', max_results: 3, max_total_results: 6 }
+					parameters: { engine: 'exa', max_results: 8, max_total_results: 16 }
 				}
 			]
 		});
@@ -48,5 +52,42 @@ describe('OpenRouter web search transport', () => {
 			body: JSON.stringify({ request: 'unchanged' })
 		});
 		expect(recorder.body).toEqual({ request: 'unchanged' });
+	});
+});
+
+describe('Reading web search settings from the environment', () => {
+	it('retrieves page content by default rather than the model’s own snippets', () => {
+		expect(openRouterWebSearchTool().parameters.engine).toBe('exa');
+	});
+
+	it('honours a configured engine', () => {
+		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_ENGINE: 'perplexity' })).toEqual(
+			{ engine: 'perplexity' }
+		);
+	});
+
+	/** A typo in one setting must not take web search offline. */
+	it('ignores an engine it does not recognise', () => {
+		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_ENGINE: 'gogle' })).toEqual({});
+	});
+
+	it('honours a configured result cap', () => {
+		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: '12' })).toEqual({
+			maxResults: 12
+		});
+	});
+
+	it('ignores a non-numeric result cap', () => {
+		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: 'lots' })).toEqual(
+			{}
+		);
+	});
+
+	it('ignores a zero result cap rather than disabling search', () => {
+		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: '0' })).toEqual({});
+	});
+
+	it('falls back to the defaults when nothing is configured', () => {
+		expect(webSearchOptionsFromEnvironment({})).toEqual({});
 	});
 });

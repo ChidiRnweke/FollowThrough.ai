@@ -3,7 +3,6 @@ export { TableCell } from './table-cell.js';
 export { TableHeader } from './table-header.js';
 export { TableRow } from './table-row.js';
 export * from './utils.js';
-export * from './Callout.js';
 export * from './BuiltinExtensions.js';
 export * from './ColorHighlighter.js';
 export * from './CoreEditor.js';

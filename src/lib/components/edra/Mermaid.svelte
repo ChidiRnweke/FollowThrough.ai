@@ -23,9 +23,9 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import { NodeViewWrapper } from './index.js';
 	import { initializeMermaid, sanitizeMermaidSvg } from './mermaid-rendering.js';
+	import MermaidExportMenu from './MermaidExportMenu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
 	import Tooltip from './Tooltip.svelte';
-	import { Download } from '@lucide/svelte';
 	import DrawioReviewDialog from '$lib/components/app/drawio-review-dialog.svelte';
 	import type { DrawioExport } from '$lib/client/drawio/embed-adapter';
 	import {
@@ -427,54 +427,6 @@
 		setTimeout(() => (copied = false), 2000);
 	}
 
-	function downloadImage() {
-		const svgEl = container?.querySelector('svg');
-		if (!svgEl) return;
-
-		const svgString = new XMLSerializer().serializeToString(svgEl);
-		const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-		const DOMURL = window.URL || window.webkitURL || window;
-		const url = DOMURL.createObjectURL(svgBlob);
-
-		const rect = svgEl.getBoundingClientRect();
-		const viewBoxWidth = svgEl.viewBox?.baseVal?.width;
-		const viewBoxHeight = svgEl.viewBox?.baseVal?.height;
-
-		const width = viewBoxWidth && viewBoxWidth > 0 ? viewBoxWidth : rect.width || 800;
-		const height = viewBoxHeight && viewBoxHeight > 0 ? viewBoxHeight : rect.height || 600;
-
-		const dpr = window.devicePixelRatio || 1;
-		const image = new Image();
-
-		image.onload = () => {
-			const canvas = document.createElement('canvas');
-			canvas.width = width * dpr;
-			canvas.height = height * dpr;
-			const context = canvas.getContext('2d');
-			if (!context) return;
-
-			context.scale(dpr, dpr);
-
-			const pageBackground = getComputedStyle(document.body).backgroundColor;
-			context.fillStyle =
-				pageBackground === 'rgba(0, 0, 0, 0)' ? '#ffffff' : pageBackground || '#ffffff';
-			context.fillRect(0, 0, width, height);
-
-			context.drawImage(image, 0, 0, width, height);
-
-			const pngUrl = canvas.toDataURL('image/png');
-			const downloadLink = document.createElement('a');
-			downloadLink.href = pngUrl;
-			downloadLink.download = 'mermaid-diagram.png';
-			document.body.appendChild(downloadLink);
-			downloadLink.click();
-			document.body.removeChild(downloadLink);
-			DOMURL.revokeObjectURL(url);
-		};
-
-		image.src = url;
-	}
-
 	const lineCount = $derived((isEditing ? editCode : code)?.split('\n').length ?? 0);
 </script>
 
@@ -802,16 +754,7 @@
 								</Button>
 							</Tooltip>
 						{/if}
-						<Tooltip tooltip="Download Image">
-							<Button
-								size="icon-sm"
-								variant="ghost"
-								onclick={downloadImage}
-								aria-label="Download image"
-							>
-								<Download class="text-muted-foreground" />
-							</Button>
-						</Tooltip>
+						<MermaidExportMenu source={code} />
 						<Tooltip tooltip="Copy Code">
 							<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
 								{#if copied}

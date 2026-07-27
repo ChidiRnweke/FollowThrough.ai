@@ -3,32 +3,21 @@ import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import type { Component } from 'svelte';
 import type { NodeViewProps } from '@tiptap/core';
 
-export const VideoExtended = (component: Component<NodeViewProps>) =>
-	Video.extend({
-		addAttributes() {
-			return {
-				src: {
-					default: null
-				},
-				alt: {
-					default: null
-				},
-				title: {
-					default: null
-				},
-				width: {
-					default: '100%'
-				},
-				height: {
-					default: null
-				},
-				align: {
-					default: 'left'
-				}
-			};
-		},
+/** Schema and Markdown behaviour, shared with the server serializer. See `nodes.ts`. */
+export const VideoNode = Video.extend({
+	addAttributes() {
+		return {
+			src: { default: null },
+			alt: { default: null },
+			title: { default: null },
+			width: { default: '100%' },
+			height: { default: null },
+			align: { default: 'left' }
+		};
+	}
+});
 
-		addNodeView: () => {
-			return SvelteNodeViewRenderer(component);
-		}
+export const VideoExtended = (component: Component<NodeViewProps>) =>
+	VideoNode.extend({
+		addNodeView: () => SvelteNodeViewRenderer(component)
 	});

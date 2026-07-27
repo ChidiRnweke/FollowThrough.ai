@@ -32,7 +32,6 @@
 	import { editorSelectionRegistry } from '$lib/stores/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/registries/suggestion-tray-registry.svelte';
 	import { workbench } from '$lib/stores/workbench.svelte';
-	import { noteActions } from '$lib/stores/note-actions.svelte';
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
@@ -373,16 +372,6 @@
 		}
 	}
 
-	async function handleApplyDiff(diffText: string): Promise<void> {
-		if (!activeNoteId) {
-			toast.error('Open a note first to apply edits.');
-			return;
-		}
-		const result = await noteActions.applyDiffEdit(activeNoteId, diffText);
-		if (result) toast.success('Applied edit to note.');
-		else if (noteActions.lastError) toast.error(noteActions.lastError);
-	}
-
 	async function requestRetry(entry: ChatEntry): Promise<void> {
 		try {
 			await chat.retry(entry);
@@ -506,7 +495,7 @@
 						{#if part.kind === 'text'}
 							<!-- While the editor is open it stands in for the prose it replaces. -->
 							{#if part.text && editingId !== entry.id}
-								<ChatMarkdown content={part.text} onapplydiff={handleApplyDiff} />
+								<ChatMarkdown content={part.text} />
 							{/if}
 						{:else}
 							{@const tool = part.tool}

@@ -6,6 +6,7 @@
 		DiagramSuggestion,
 		DrawioDiagram,
 		NoteId,
+		NoteLinkTarget,
 		ProseMirrorDocument,
 		ReferenceView,
 		SkillSummary,
@@ -13,6 +14,7 @@
 		TextSelection
 	} from '$lib/models';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
+	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
@@ -81,6 +83,8 @@
 		document,
 		references = [],
 		skills = [],
+		linkableNotes = [],
+		onOpenNote,
 		perNote,
 		onchange,
 		onaction,
@@ -98,6 +102,10 @@
 		document: ProseMirrorDocument;
 		references?: readonly ReferenceView[];
 		skills?: readonly SkillSummary[];
+		/** Notes offered when the author types `@`. */
+		linkableNotes?: readonly NoteLinkTarget[];
+		/** Follow a note link, so the target lands in the workbench rather than reloading. */
+		onOpenNote?: (noteId: NoteId, options: { readonly background: boolean }) => void;
 		perNote?: PerNoteEditorSlot;
 		onchange?: () => void;
 		onaction?: (action: NoteAiAction, selection?: TextSelection, insertAt?: number) => void;
@@ -200,6 +208,14 @@
 			},
 			getNoteId: () => noteId,
 			getInlineSuggestion: requestInlineSuggestion,
+			findLinkableNotes: (query) => rankNoteLinkTargets(linkableNotes, query),
+			// Read through the prop inside the closure: `createEditor` runs once, so
+			// capturing it here would pin whatever the first render happened to pass.
+			onOpenNoteLink: (id: string, options: { background: boolean }) => {
+				if (!onOpenNote) return false;
+				onOpenNote(id as NoteId, options);
+				return true;
+			},
 			onUpdate: () => {
 				closeActiveLink();
 				if (initialized) onchange?.();

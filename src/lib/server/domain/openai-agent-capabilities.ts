@@ -15,7 +15,11 @@ import type { ControllerFactory } from '$lib/factories';
 import type { AgentSessionRepository } from '$lib/repositories';
 import type { AgentRunner, ToolRetriever } from '$lib/services';
 import { AgentToolRegistry, type ToolAccessPolicy } from './agent-tool-registry';
-import { withOpenRouterWebSearch } from './openrouter-server-tools';
+import {
+	openRouterWebSearchTool,
+	webSearchOptionsFromEnvironment,
+	withOpenRouterWebSearch
+} from './openrouter-server-tools';
 import { BufferedAgentSession } from './buffered-agent-session';
 import { traceAgentTurn } from './telemetry';
 import { suggestToolNames } from './tool-name-matcher';
@@ -367,7 +371,10 @@ export class OpenAIAgentRunner implements AgentRunner {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,
-			fetch: withOpenRouterWebSearch(),
+			fetch: withOpenRouterWebSearch(
+				undefined,
+				openRouterWebSearchTool(webSearchOptionsFromEnvironment(process.env))
+			),
 			defaultHeaders: {
 				'HTTP-Referer': this.appURL,
 				'X-OpenRouter-Title': 'FollowThrough'

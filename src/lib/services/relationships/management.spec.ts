@@ -111,3 +111,77 @@ describe('Relationship management invariants', () => {
 		expect(relationship.sourceAnchorId).toBe(anchorBuilder().id);
 	});
 });
+
+/**
+ * Reconciliation keeps the `mentions` rows equal to the links in the document, which is
+ * what makes a backlink appear — and disappear when the link is edited away.
+ */
+describe('Reconciling a note’s links', () => {
+	const source = () => noteBuilder();
+	const listMentions = async (relationships: InMemoryRelationshipRepository) =>
+		(await relationships.listForNote(testActor(), testNoteId())).filter(
+			(row) => row.kind === 'mentions'
+		);
+
+	it('creates a row for a new link', async () => {
+		const { service, relationships } = setup();
+		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		expect((await listMentions(relationships)).map((row) => row.targetNoteId)).toEqual([
+			testNoteId(2)
+		]);
+	});
+
+	it('creates nothing twice for the same link', async () => {
+		const { service, relationships } = setup();
+		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		expect(await listMentions(relationships)).toHaveLength(1);
+	});
+
+	/** Editing a link out of the document must stop it producing a backlink. */
+	it('removes a row for a link deleted from the document', async () => {
+		const { service, relationships } = setup();
+		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconcile(testActor(), source(), []);
+		expect(await listMentions(relationships)).toHaveLength(0);
+	});
+
+	/**
+	 * These come from the AI suggestion pipeline and have no representation in the
+	 * document, so an absent link must never be read as a reason to delete them.
+	 */
+	it('leaves an AI-inferred relationship untouched', async () => {
+		const { service, relationships } = setup();
+		await service.create(testActor(), {
+			sourceNoteId: testNoteId(),
+			targetNoteId: testNoteId(2),
+			kind: 'elaborates'
+		});
+		await service.reconcile(testActor(), source(), []);
+		const remaining = await relationships.listForNote(testActor(), testNoteId());
+		expect(remaining.map((row) => row.kind)).toEqual(['elaborates']);
+	});
+
+	it('never links a note to itself', async () => {
+		const { service, relationships } = setup();
+		await service.reconcile(testActor(), source(), [testNoteId()]);
+		expect(await listMentions(relationships)).toHaveLength(0);
+	});
+
+	/** The picker scopes to the project, so this means the target moved after the fact. */
+	it('skips a target in another project rather than failing the save', async () => {
+		const { service, relationships, notes } = setup();
+		notes.notes = [
+			noteBuilder(),
+			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) as never })
+		];
+		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		expect(await listMentions(relationships)).toHaveLength(0);
+	});
+
+	it('skips a target that no longer exists', async () => {
+		const { service, relationships } = setup();
+		await service.reconcile(testActor(), source(), [testNoteId(9)]);
+		expect(await listMentions(relationships)).toHaveLength(0);
+	});
+});

@@ -8,25 +8,21 @@
 	let { data } = $props();
 </script>
 
-<PageShell>
-	{#snippet header()}
-		<div class="flex flex-col gap-1">
-			<Breadcrumb.Root>
-				<Breadcrumb.List>
-					<Breadcrumb.Item
-						><Breadcrumb.Link href="/projects/{data.project.id}"
-							>{data.project.name}</Breadcrumb.Link
-						></Breadcrumb.Item
-					>
-					<Breadcrumb.Separator />
-					<Breadcrumb.Item><Breadcrumb.Page>Memory</Breadcrumb.Page></Breadcrumb.Item>
-				</Breadcrumb.List>
-			</Breadcrumb.Root>
-			<h1 class="page-title">Memory</h1>
-			<p class="text-sm text-muted-foreground">
-				Durable facts, decisions, constraints, and preferences for {data.project.name}.
-			</p>
-		</div>
+<PageShell
+	title="Memory"
+	description="Durable facts, decisions, constraints, and preferences for {data.project.name}."
+>
+	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
+	{#snippet breadcrumb()}
+		<Breadcrumb.Root>
+			<Breadcrumb.List>
+				<Breadcrumb.Item>
+					<Breadcrumb.Link href="/projects/{data.project.id}">
+						{data.project.name}
+					</Breadcrumb.Link>
+				</Breadcrumb.Item>
+			</Breadcrumb.List>
+		</Breadcrumb.Root>
 	{/snippet}
 	{#snippet actions()}
 		<AgentAction action={agentActions.projectDistil} context={{ projectId: data.project.id }} />
@@ -34,6 +30,7 @@
 	<MemoryEntryList
 		projectId={data.project.id}
 		placeholder="A fact, decision, constraint, or preference worth remembering…"
-		emptyText="Nothing remembered yet. Add durable project facts here, or accept memory suggestions from the agent."
+		emptyText="Nothing remembered here yet."
+		emptyHint="Add a durable project fact, or accept a memory suggestion from the agent."
 	/>
 </PageShell>

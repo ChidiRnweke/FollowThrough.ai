@@ -2,16 +2,32 @@
 	import type { ExportSettings } from '$lib/models';
 	import { defaultExportSettings } from '$lib/models';
 	import * as Select from '$lib/components/ui/select';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group';
+	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import ExportSlider from './export-slider.svelte';
+	import {
+		MERMAID_PALETTE_KEYS,
+		MERMAID_PALETTE_LABELS,
+		mermaidTokensFor
+	} from '$lib/components/edra/mermaid-rendering';
 
 	let {
 		settings = $bindable(),
-		disabled = false
+		disabled = false,
+		hasDiagrams = false,
+		hasSelfStyledDiagrams = false
 	}: {
 		settings: ExportSettings;
 		disabled?: boolean;
+		/** Colour controls are noise on an export with no diagram in it. */
+		hasDiagrams?: boolean;
+		/** The palette caveat is only worth stating when a diagram ignores the palette. */
+		hasSelfStyledDiagrams?: boolean;
 	} = $props();
+
+	const diagramBase = $derived(settings.diagramTheme?.base ?? 'light');
+	const diagramPreset = $derived(mermaidTokensFor({ base: diagramBase }));
 
 	const fontFamilyLabels: Record<ExportSettings['fontFamily'], string> = {
 		helvetica: 'Helvetica',
@@ -115,4 +131,71 @@
 		{disabled}
 		onchange={(margin) => (settings = { ...settings, margin })}
 	/>
+
+	<!-- Diagrams follow the document, not the reader's colour mode: an exported file is
+	     read somewhere we do not control, and dark strokes on a dark fill are unreadable
+	     on paper. Only rendered when the export actually contains a diagram. -->
+	{#if hasDiagrams}
+		<div class="flex flex-col gap-2">
+			<Label class="text-xs text-muted-foreground">Diagram colours</Label>
+			<ToggleGroup.Root
+				type="single"
+				value={diagramBase}
+				{disabled}
+				onValueChange={(next) => {
+					if (next)
+						settings = {
+							...settings,
+							diagramTheme: { ...settings.diagramTheme, base: next as 'light' | 'dark' }
+						};
+				}}
+				class="max-w-48"
+			>
+				<ToggleGroup.Item value="light" class="flex-1">Light</ToggleGroup.Item>
+				<ToggleGroup.Item value="dark" class="flex-1">Dark</ToggleGroup.Item>
+			</ToggleGroup.Root>
+			<div class="grid max-w-md grid-cols-2 gap-x-2 gap-y-1.5">
+				{#each MERMAID_PALETTE_KEYS as key (key)}
+					<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+						<input
+							type="color"
+							class="size-5 shrink-0 cursor-pointer rounded-sm border border-border bg-transparent"
+							value={settings.diagramTheme?.colors?.[key] ?? diagramPreset[key]}
+							aria-label={MERMAID_PALETTE_LABELS[key]}
+							{disabled}
+							oninput={(event) => {
+								settings = {
+									...settings,
+									diagramTheme: {
+										base: diagramBase,
+										colors: {
+											...settings.diagramTheme?.colors,
+											[key]: event.currentTarget.value
+										}
+									}
+								};
+							}}
+						/>
+						{MERMAID_PALETTE_LABELS[key]}
+					</Label>
+				{/each}
+			</div>
+			{#if hasSelfStyledDiagrams}
+				<p class="text-xs text-muted-foreground">
+					A diagram with its own <code>style</code> or <code>classDef</code> keeps those colours.
+				</p>
+			{/if}
+			{#if settings.diagramTheme?.colors}
+				<Button
+					variant="ghost"
+					size="sm"
+					class="self-start"
+					{disabled}
+					onclick={() => (settings = { ...settings, diagramTheme: { base: diagramBase } })}
+				>
+					Reset to {diagramBase}
+				</Button>
+			{/if}
+		</div>
+	{/if}
 </div>

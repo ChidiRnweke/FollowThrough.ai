@@ -5,6 +5,7 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
+	import { sidebarToggle } from '$lib/stores/sidebar-toggle.svelte';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { cn } from '$lib/utils';
 	import {
@@ -59,6 +60,10 @@
 	// keeps it muted on displays wide enough for a comfortable split.
 	const sidebar = useSidebar();
 	const spaceTight = $derived(workbench.splitActive && sidebar.state === 'expanded');
+
+	// The toggle lives in a context the command registry cannot read, so hand it over
+	// while this shell is mounted.
+	$effect(() => sidebarToggle.register(sidebar.toggle));
 </script>
 
 <Sidebar.Root collapsible="icon" variant="inset">

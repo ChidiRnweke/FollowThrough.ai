@@ -3,6 +3,8 @@ import type {
 	BacklinkView,
 	CreateRelationshipInput,
 	DateTime,
+	Note,
+	NoteId,
 	NoteRelationship,
 	RelationshipId
 } from '$lib/models';
@@ -15,6 +17,7 @@ import type {
 } from '$lib/repositories';
 import type {
 	BacklinkViewAssembler,
+	NoteLinkReconciler,
 	RelationshipCreator,
 	RelationshipDeleter,
 	RelationshipFinder
@@ -23,7 +26,12 @@ import type {
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class RelationshipManagementService
-	implements RelationshipCreator, RelationshipDeleter, RelationshipFinder, BacklinkViewAssembler
+	implements
+		RelationshipCreator,
+		RelationshipDeleter,
+		RelationshipFinder,
+		BacklinkViewAssembler,
+		NoteLinkReconciler
 {
 	constructor(
 		private readonly relationships: NoteRelationshipRepository,
@@ -59,6 +67,46 @@ export class RelationshipManagementService
 	}
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void> {
 		return this.relationships.delete(actor, relationshipId);
+	}
+
+	/**
+	 * Make the note's `mentions` rows match the links in its document.
+	 *
+	 * Only `mentions` is touched. `prior_decision`, `contradicts` and `elaborates` come from
+	 * the AI suggestion pipeline and have no representation in the document, so treating an
+	 * absent link as a reason to delete them would quietly wipe inferred relationships on
+	 * the next save.
+	 *
+	 * A target outside the note's project is skipped rather than thrown: the picker already
+	 * scopes to the project, so reaching this means the document outlived a note that moved,
+	 * and losing one link is better than making the note unsaveable.
+	 */
+	async reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void> {
+		const existing = (await this.relationships.listForNote(actor, note.id)).filter(
+			(relationship) => relationship.kind === 'mentions' && relationship.sourceNoteId === note.id
+		);
+		const wanted = new Set(targets.filter((target) => target !== note.id));
+		const current = new Set(existing.map((relationship) => relationship.targetNoteId));
+
+		for (const relationship of existing)
+			if (!wanted.has(relationship.targetNoteId))
+				await this.relationships.delete(actor, relationship.id);
+
+		for (const target of wanted) {
+			if (current.has(target)) continue;
+			const targetNote = await this.notes.findById(actor, target);
+			if (!targetNote || targetNote.projectId !== note.projectId) continue;
+			const timestamp = now();
+			await this.relationships.insert(actor, {
+				id: crypto.randomUUID() as RelationshipId,
+				userId: actor.userId,
+				sourceNoteId: note.id,
+				targetNoteId: target,
+				kind: 'mentions',
+				createdAt: timestamp,
+				updatedAt: timestamp
+			});
+		}
 	}
 	async findForNote(
 		actor: ActorContext,

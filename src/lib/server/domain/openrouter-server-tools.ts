@@ -15,14 +15,53 @@ export interface OpenRouterWebSearchTool {
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+const ENGINES = ['auto', 'native', 'exa', 'firecrawl', 'parallel', 'perplexity'] as const;
+
+type Engine = NonNullable<OpenRouterWebSearchToolOptions['engine']>;
+
+const engineFrom = (value: string | undefined): Engine | undefined =>
+	ENGINES.includes(value as Engine) ? (value as Engine) : undefined;
+
+const positiveIntegerFrom = (value: string | undefined): number | undefined => {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+/**
+ * Read the search configuration from the environment.
+ *
+ * Deliberately tolerant: an unset or nonsense value falls back to the default rather than
+ * failing the request, because a typo in one setting should not take web search offline.
+ */
+export const webSearchOptionsFromEnvironment = (
+	environment: Readonly<Record<string, string | undefined>>
+): OpenRouterWebSearchToolOptions => ({
+	...(engineFrom(environment.OPENROUTER_WEB_SEARCH_ENGINE)
+		? { engine: engineFrom(environment.OPENROUTER_WEB_SEARCH_ENGINE) as Engine }
+		: {}),
+	...(positiveIntegerFrom(environment.OPENROUTER_WEB_SEARCH_MAX_RESULTS)
+		? { maxResults: positiveIntegerFrom(environment.OPENROUTER_WEB_SEARCH_MAX_RESULTS) as number }
+		: {}),
+	...(positiveIntegerFrom(environment.OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS)
+		? {
+				maxTotalResults: positiveIntegerFrom(
+					environment.OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS
+				) as number
+			}
+		: {})
+});
+
 export const openRouterWebSearchTool = (
 	options: OpenRouterWebSearchToolOptions = {}
 ): OpenRouterWebSearchTool => ({
 	type: 'openrouter:web_search',
 	parameters: {
-		engine: options.engine ?? 'auto',
-		max_results: options.maxResults ?? 3,
-		max_total_results: options.maxTotalResults ?? 6
+		// Exa retrieves page content where 'auto' falls back to the model's own native
+		// search and its snippet-sized results; the caps are raised to match, since three
+		// results is too thin a base for anything research-shaped.
+		engine: options.engine ?? 'exa',
+		max_results: options.maxResults ?? 8,
+		max_total_results: options.maxTotalResults ?? 16
 	}
 });
 

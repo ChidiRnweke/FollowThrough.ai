@@ -3,6 +3,7 @@ import type { Component } from 'svelte';
 import {
 	FtDocumentPlus as FilePlus,
 	FtChat as MessageSquare,
+	FtPanelLeft as PanelLeft,
 	FtSettings as Settings,
 	FtTheme as Sun
 } from '$lib/components/icons';
@@ -10,6 +11,7 @@ import ListTodo from '@lucide/svelte/icons/list-todo';
 import { toggleMode } from 'mode-watcher';
 import { palette } from '$lib/stores/palette.svelte';
 import { rightPanel } from '$lib/stores/right-panel.svelte';
+import { sidebarToggle } from '$lib/stores/sidebar-toggle.svelte';
 import { createNote } from '$lib/remote/projects.remote';
 
 export interface AppCommand {
@@ -96,6 +98,16 @@ export const commandRegistry: readonly AppCommand[] = [
 		shortcut: '⌘,',
 		icon: Settings,
 		run: () => void goto('/settings')
+	},
+	{
+		id: 'toggle-sidebar',
+		label: 'Toggle sidebar',
+		shortcut: '⌘\\',
+		icon: PanelLeft,
+		run: () => {
+			palette.close();
+			sidebarToggle.toggle();
+		}
 	},
 	{
 		id: 'theme',

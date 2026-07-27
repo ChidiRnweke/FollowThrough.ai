@@ -102,27 +102,23 @@
 	}
 </script>
 
-<PageShell>
-	{#snippet header()}
-		<div class="flex flex-col gap-1">
-			{#if data.project}
-				<Breadcrumb.Root
-					><Breadcrumb.List
-						><Breadcrumb.Item
-							><Breadcrumb.Link href="/projects/{data.project.id}"
-								>{data.project.name}</Breadcrumb.Link
-							></Breadcrumb.Item
-						><Breadcrumb.Separator /><Breadcrumb.Item
-							><Breadcrumb.Page>Artifacts</Breadcrumb.Page></Breadcrumb.Item
-						></Breadcrumb.List
-					></Breadcrumb.Root
-				>
-			{/if}
-			<h1 class="page-title">Artifacts</h1>
-			<p class="text-sm text-muted-foreground">
-				Documents and exports generated from your notes and project context.
-			</p>
-		</div>
+<PageShell
+	title="Artifacts"
+	description="Documents and exports generated from your notes and project context."
+>
+	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
+	{#snippet breadcrumb()}
+		{#if data.project}
+			<Breadcrumb.Root>
+				<Breadcrumb.List>
+					<Breadcrumb.Item>
+						<Breadcrumb.Link href="/projects/{data.project.id}">
+							{data.project.name}
+						</Breadcrumb.Link>
+					</Breadcrumb.Item>
+				</Breadcrumb.List>
+			</Breadcrumb.Root>
+		{/if}
 	{/snippet}
 	{#snippet actions()}
 		{#if data.selectedProjectId}

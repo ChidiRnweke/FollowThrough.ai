@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shouldTrigger, type CaretContext } from './inline-suggestion-trigger';
+import { joinedSuggestion, shouldTrigger, type CaretContext } from './inline-suggestion-trigger';
 
 const caret = (overrides: Partial<CaretContext> = {}): CaretContext => ({
 	emptySelection: true,
@@ -60,5 +60,36 @@ describe('shouldTrigger', () => {
 
 	it('suggests at the end of a word at the end of the text', () => {
 		expect(shouldTrigger(caret({ characterBefore: 'd', characterAfter: '' }))).toBe(true);
+	});
+});
+
+describe('Joining an accepted suggestion to the text before it', () => {
+	it('adds the missing space between two words', () => {
+		expect(joinedSuggestion('d', 'and then')).toBe(' and then');
+	});
+
+	it('leaves a suggestion that brings its own space alone', () => {
+		expect(joinedSuggestion('d', ' and then')).toBe(' and then');
+	});
+
+	it('does not add a space after whitespace', () => {
+		expect(joinedSuggestion(' ', 'and then')).toBe('and then');
+	});
+
+	it('does not add a space after an opening quote', () => {
+		expect(joinedSuggestion('"', 'quoted')).toBe('quoted');
+	});
+
+	/** Otherwise the accepted text would read "the cache ." */
+	it('does not push punctuation away from the word it follows', () => {
+		expect(joinedSuggestion('e', ', which caches')).toBe(', which caches');
+	});
+
+	it('adds a space before a number continuing a word', () => {
+		expect(joinedSuggestion('e', '2024 figures')).toBe(' 2024 figures');
+	});
+
+	it('leaves an empty suggestion empty', () => {
+		expect(joinedSuggestion('d', '')).toBe('');
 	});
 });

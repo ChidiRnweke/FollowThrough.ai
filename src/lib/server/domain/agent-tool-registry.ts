@@ -29,7 +29,8 @@ import type {
 	RunAgentInput
 } from '$lib/models';
 import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/services';
-import { noteContentFromMarkdown } from './note-markdown';
+import { noteContentFromMarkdown, noteMarkdownFromContent } from './note-markdown';
+import { applyNotePatch, describeNotePatchFailure } from '$lib/models';
 import {
 	invalidUseToolEnvelope,
 	invalidUseToolPayload,
@@ -574,10 +575,17 @@ export class AgentToolRegistry {
 			),
 			define(
 				'get_note',
-				'Read a note with backlinks, references, diagrams, todos, and proposals.',
+				'Read a note with backlinks, references, diagrams, todos, and proposals. Pass format "markdown" to also get the note body as Markdown, which is the text edit_note anchors against.',
 				'read',
-				z.object({ noteId: id }),
-				(input) => factory.notes().get(actor, input as never)
+				z.object({ noteId: id, format: z.enum(['default', 'markdown']).optional() }),
+				async (input) => {
+					const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+					if (input.format !== 'markdown') return view;
+					// Anchors have to match the serializer's output exactly, including its
+					// escaping, so hand back the same string edit_note will patch rather than
+					// leaving the model to reconstruct it from plain text.
+					return { ...view, markdown: noteMarkdownFromContent(view.note.document) };
+				}
 			),
 			define(
 				'create_note',
@@ -588,7 +596,7 @@ export class AgentToolRegistry {
 			),
 			define(
 				'save_note',
-				'Replace a note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title.',
+				'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Prefer edit_note unless you are genuinely rewriting the note end to end — this tool discards anything you leave out.',
 				'mutation',
 				z.object({
 					noteId: id,
@@ -604,6 +612,48 @@ export class AgentToolRegistry {
 						noteId: saved.note.id,
 						title: saved.note.title,
 						currentRevision: saved.note.currentRevision
+					};
+				}
+			),
+			define(
+				'edit_note',
+				'Make targeted replacements inside a note without rewriting it. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite; read the note with get_note using format "markdown" first so oldText matches verbatim.',
+				'mutation',
+				z.object({
+					noteId: id,
+					edits: z
+						.array(
+							z.object({
+								oldText: z.string().min(1),
+								newText: z.string(),
+								replaceAll: z.boolean().optional()
+							})
+						)
+						.min(1)
+						.max(20)
+				}),
+				async (input) => {
+					const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+					const before = noteMarkdownFromContent(current.note.document);
+					const patched = applyNotePatch(before, input.edits);
+					// A failure is returned rather than thrown: thrown errors are stringified
+					// into a bare message, which would strip the occurrence counts and nearest
+					// matches the model needs to correct itself on the next turn.
+					if (!patched.ok)
+						return {
+							failure: 'No edits were applied.',
+							problems: patched.failures.map(describeNotePatchFailure),
+							failures: patched.failures
+						};
+					const content = noteContentFromMarkdown(patched.markdown);
+					const saved = await factory.notes().save(actor, {
+						note: { ...current.note, ...content }
+					});
+					return {
+						noteId: saved.note.id,
+						title: saved.note.title,
+						currentRevision: saved.note.currentRevision,
+						appliedEdits: patched.appliedEdits
 					};
 				}
 			),

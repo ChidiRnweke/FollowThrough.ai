@@ -15,6 +15,7 @@
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '$lib/components/app/name-dialog.svelte';
 	import ExportSettingsDialog from '$lib/components/app/export-settings-dialog.svelte';
+	import ImportNotesDialog from '$lib/components/app/import-notes-dialog.svelte';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
 
@@ -25,6 +26,7 @@
 	let newFolderOpen = $state(false);
 	let renameOpen = $state(false);
 	let exportDefaultsOpen = $state(false);
+	let importOpen = $state(false);
 
 	async function createNote(title: string): Promise<void> {
 		const output = await projectActions.createNote(title, project.id);
@@ -91,6 +93,9 @@
 					<DropdownMenu.Item onclick={() => (exportDefaultsOpen = true)}>
 						Export defaults…
 					</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => (importOpen = true)}>
+						Import an existing project…
+					</DropdownMenu.Item>
 					<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
 						Archive project
 					</DropdownMenu.Item>
@@ -104,6 +109,7 @@
 			tipSeed={data.tipSeed}
 			renderedAt={data.renderedAt}
 			oncreatenote={() => (newNoteOpen = true)}
+			onimport={() => (importOpen = true)}
 		/>
 	</PageShell>
 {/key}
@@ -133,3 +139,4 @@
 	onsubmit={rename}
 />
 <ExportSettingsDialog bind:open={exportDefaultsOpen} projectId={project.id} />
+<ImportNotesDialog bind:open={importOpen} projectId={project.id} destination={project.name} />

@@ -45,7 +45,6 @@ export type AgentActionKey =
 	| 'todosFromNotes'
 	| 'todoSource'
 	| 'projectConnect'
-	| 'projectEmpty'
 	| 'projectDistil'
 	| 'projectAttachments'
 	| 'artifactsExport'
@@ -87,11 +86,6 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 		label: 'Connect these notes',
 		prompt: 'Find notes here that relate and propose backlinks',
 		icon: FtLink
-	},
-	projectEmpty: {
-		label: 'Write the first note',
-		prompt: "Interview me and write this project's first note",
-		icon: FtDocument
 	},
 	projectDistil: {
 		label: 'Distil memory',

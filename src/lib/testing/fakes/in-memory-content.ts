@@ -16,6 +16,7 @@ import {
 import type {
 	NoteEditor,
 	NoteIndexer,
+	NoteLinkReconciler,
 	NotePublisher,
 	NoteReader,
 	NoteTreeReader,
@@ -45,8 +46,16 @@ export class InMemoryNoteContent
 		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
+		NoteLinkReconciler,
 		SnapshotParticipant
 {
+	/** Targets recorded per note, so a spec can assert what a save reconciled to. */
+	noteLinkTargets = new Map<NoteId, readonly NoteId[]>();
+
+	async reconcile(_actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void> {
+		this.noteLinkTargets.set(note.id, targets);
+	}
+
 	notes: Note[] = [];
 	revisions: Note[] = [];
 	anchors: SourceAnchor[] = [];

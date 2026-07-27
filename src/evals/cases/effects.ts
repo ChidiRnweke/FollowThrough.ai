@@ -306,5 +306,57 @@ export const effectCases: readonly EvalCase[] = [
 			expect(result.status).toBe('completed');
 			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
+	},
+	{
+		id: 'effect-note-edit-is-surgical',
+		name: 'a targeted edit changes only what was asked for',
+		splits: [ARCHETYPES.effect, ARCHETYPES.toolDiscovery],
+		input: {
+			prompt: 'In my Background note, change the word "Kubernetes" to "K8s". Change nothing else.'
+		},
+		expected: { surroundingContentUnchanged: true },
+		metadata: {
+			layer: 'end-state',
+			note: 'The failure this guards is a whole-body rewrite that quietly drops the rest of the note.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const noteId = workspace.noteIds.get('Background');
+			if (!noteId) throw new Error('Background note was not seeded');
+
+			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const beforeLines = before.note.plainText
+				.split('\n')
+				.map((line) => line.trim())
+				.filter((line) => line && !line.toLowerCase().includes('kubernetes'));
+
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				noteId
+			});
+
+			const after = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const afterText = after.note.plainText;
+			// Every line the edit did not target must survive verbatim. A full rewrite
+			// tends to paraphrase or drop them, which is exactly what this catches.
+			const dropped = beforeLines.filter((line) => !afterText.includes(line));
+
+			const verdict = {
+				passed: dropped.length === 0 && afterText.length > 0,
+				explanation:
+					dropped.length === 0
+						? 'every untargeted line survived the edit'
+						: `the edit dropped ${dropped.length} untargeted line(s), e.g. "${dropped[0]?.slice(0, 60)}"`
+			};
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
+			expect(result.status).toBe('completed');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
 	}
 ];

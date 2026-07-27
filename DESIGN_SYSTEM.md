@@ -47,6 +47,17 @@
   eyebrows and provenance captions.
 - **Type scale:** app code uses the named utilities in `layout.css` instead of raw heading size classes — `page-title` (one per page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group of items), and `provenance-caption` (per-item metadata). The ladder is eyebrow/caption → body → section-title → page-title. Form labels (shadcn `Label`) are small and muted so values lead; `Field.Title` stays at body size above its muted description.
 - Spacing follows the existing Tailwind scale. Corners use the shared shadcn radius family and elevation stays flat.
+- **Spacing is the hierarchy.** In a Swiss layout with flat surfaces and one accent, the gap
+  between two things is the primary statement about whether they belong together — so gaps
+  step rather than repeat. The page ladder: 4px binds a label to its value or a title to its
+  description (they read as one unit); 8px separates items inside a group; 24px separates
+  groups; a further step, or a change of row density, introduces content of a different
+  kind. Navigation sits one step away from identity, and identity one step from content.
+  `PageShell` already encodes the header end of this ladder, which is why overriding its
+  `header` snippet with a flat `gap-1` stack is a regression rather than a shortcut, and
+  `src/lib/components/app/pages/project-overview.svelte` is the reference implementation for
+  the content end. A screen whose every gap is equal has no hierarchy no matter how well its
+  content is grouped, and the fix is never a divider.
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
   stable variants, but a wrapper that fights a shadcn base class is the wrong tool: the document
   title once applied a display-size utility to a shadcn `Input` whose own `md:text-sm` won, and it
@@ -202,10 +213,16 @@ and at most one action. Kanban columns keep their drop zone and center the voice
 - Do not introduce arbitrary colors, widths, typography values, or raw form controls.
 - Do not hand-roll `cursor-pointer`, a hover lift, or a hover shadow on a control. The contract is
   global (see "Interaction states"); a local copy is how it drifted the first time.
-- Do not pin diagram colors that the diagram source can override anyway. Mermaid theme variables
-  lose to a diagram's own `classDef`, `style`, and `linkStyle`, so adding more of them in response
-  to an unreadable diagram fixes nothing and leaves a parallel palette to maintain. Keep the theme
-  to the tokens that describe our surfaces.
+- Do not add Mermaid theme variables in response to an unreadable diagram. They lose to the
+  diagram's own `classDef`, `style`, and `linkStyle`, so a diagram that colors itself keeps
+  its colors regardless, and each one added is a parallel palette to maintain. The rendered
+  theme stays limited to the tokens that describe our surfaces.
+  - **Diagram export is the exception**, and only at export time. A diagram leaving the app
+    lands in a document whose background we do not control, so the reader picks the palette
+    and whether to paint a background at all — the app's light and dark token sets are the
+    presets, and a custom palette overrides individual tokens on top of one. This is a
+    property of the export, not new theming: nothing here changes how a diagram renders in
+    the editor, and the `classDef` caveat above still applies to whatever is chosen.
 - Do not render a chip, badge, or control for a value that is not set. An empty field shows nothing
   on a card and an em dash in the property panel; a column of "No due date / No priority / No
   source" is noise that reads as content.

@@ -104,6 +104,23 @@
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
 
+	/**
+	 * Notes offerable as `@` link targets. Scoped to this note's project because a
+	 * relationship across projects is rejected by the service, and excluding this note
+	 * keeps a note from linking to itself.
+	 */
+	const linkableNotes = $derived(
+		shell.noteTree
+			.filter(
+				(entry) =>
+					entry.projectId === note.projectId &&
+					entry.kind !== 'folder' &&
+					!entry.archivedAt &&
+					entry.id !== note.id
+			)
+			.map((entry) => ({ id: entry.id, title: entry.title }))
+	);
+
 	const hasUnpublishedChanges = $derived(note.currentRevision > note.publishedRevision);
 	// Any state where the device copy has not reached the server.  These must win
 	// over the "unpublished changes" hint in the header, otherwise the retry and
@@ -635,8 +652,16 @@
 {/snippet}
 
 <div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
+	<!-- Sticks to the top of the pane's own scroller so save status and note actions stay
+	     reachable in a long note. Kept quiet per the document pattern: an opaque pane
+	     background and one hairline, no shadow — the flat-surface rule still holds. Each
+	     pane scrolls independently, so in a split the two headers stick independently too.
+
+	     No vertical margin or top padding: the pane layer's own `padding-block` sits outside
+	     the scroll viewport, so `top-0` already lands where the row used to. Only `pb-2` is
+	     added, to keep the hairline off the first line of the document. -->
 	<div
-		class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
+		class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 sm:min-h-8 sm:flex-row sm:items-center"
 		data-testid="note-utility-header"
 	>
 		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
@@ -865,6 +890,9 @@
 			references={view.references}
 			diagrams={view.diagrams}
 			skills={shell.skills}
+			{linkableNotes}
+			onOpenNote={(noteId, options) =>
+				options.background ? workbench.openTabInBackground(noteId) : void workbench.openTab(noteId)}
 			{perNote}
 			onchange={markDirty}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}

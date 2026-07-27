@@ -5,8 +5,12 @@
 	import { noteSyncRegistry } from '$lib/stores/registries/note-sync-registry.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { FtExternal as Expand } from '$lib/components/icons';
 	import NoteVersionDiff from '../note-version-diff.svelte';
-	import { friendlyToolLabel, scalarSummaries } from './tool-presentation';
+	import ChatMarkdown from './chat-markdown.svelte';
+	import { friendlyToolLabel } from './tool-presentation';
+	import { approvalPreview, isNoteBodyTool, targetNoteId } from './tool-approval-preview';
 
 	let {
 		tool,
@@ -18,24 +22,21 @@
 		onreject: () => void;
 	} = $props();
 
-	const candidate = $derived(
-		tool.name === 'save_note' && tool.arguments.note
-			? (tool.arguments.note as unknown as Note)
-			: undefined
-	);
+	const noteId = $derived(targetNoteId(tool.name, tool.arguments));
 	let baseline = $state<Note | undefined>(undefined);
 	let baselineError = $state(false);
+	let expanded = $state(false);
 
 	$effect(() => {
-		const note = candidate;
-		if (!note) return;
-		const mounted = noteSyncRegistry.peek(note.id as NoteId)?.record?.local;
+		const id = noteId;
+		if (!id) return;
+		const mounted = noteSyncRegistry.peek(id as NoteId)?.record?.local;
 		if (mounted) {
 			baseline = mounted;
 			return;
 		}
 		let cancelled = false;
-		void getNote(note.id)
+		void getNote(id)
 			.then((loaded) => {
 				if (!cancelled) baseline = loaded;
 			})
@@ -47,66 +48,85 @@
 		};
 	});
 
-	const titleChanged = $derived(
-		Boolean(candidate && baseline && candidate.title !== baseline.title)
-	);
-	const bodyChanged = $derived(
-		Boolean(candidate && baseline && candidate.plainText !== baseline.plainText)
-	);
-	const formattingChanged = $derived(
-		Boolean(
-			candidate &&
-			baseline &&
-			candidate.plainText === baseline.plainText &&
-			JSON.stringify(candidate.document) !== JSON.stringify(baseline.document)
-		)
-	);
-	const pinChanged = $derived(
-		Boolean(candidate && baseline && candidate.isPinned !== baseline.isPinned)
+	const preview = $derived(approvalPreview(tool.name, tool.arguments, baseline));
+	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
+
+	/**
+	 * Long string payloads are prose the model wrote, so they read as prose. The raw
+	 * JSON stays one disclosure away rather than being the only representation.
+	 */
+	const proseFields = $derived(
+		isNoteBodyTool(tool.name)
+			? []
+			: Object.entries(tool.arguments)
+					.filter(([, value]) => typeof value === 'string' && value.length > 120)
+					.map(([key, value]) => ({ key: friendlyToolLabel(key), text: value as string }))
 	);
 </script>
+
+{#snippet changeBody(compact: boolean)}
+	{#if preview.kind === 'note'}
+		<p class="truncate text-sm font-medium">{preview.change.title}</p>
+		{#if preview.change.titleChange}
+			<p class="text-xs">
+				<span class="text-muted-foreground">Title:</span>
+				{preview.change.titleChange.from} → {preview.change.titleChange.to}
+			</p>
+		{/if}
+		{#each preview.change.problems as problem (problem)}
+			<p class="text-xs text-destructive">{problem}</p>
+		{/each}
+		{#if preview.change.body}
+			<NoteVersionDiff
+				base={preview.change.body.base}
+				candidate={preview.change.body.candidate}
+				label="Proposed note changes"
+				{compact}
+			/>
+		{/if}
+		{#each preview.change.notices as notice (notice)}
+			<p class="text-xs text-muted-foreground">{notice}</p>
+		{/each}
+		{#if !preview.change.body && preview.change.problems.length === 0 && preview.change.notices.length === 0}
+			<p class="text-xs text-muted-foreground">No visible note changes.</p>
+		{/if}
+	{:else}
+		{#each preview.summaries as summary (summary)}
+			<p class="text-xs">{summary}</p>
+		{/each}
+		{#each proseFields as field (field.key)}
+			<div class="text-xs">
+				<span class="text-muted-foreground">{field.key}</span>
+				<ChatMarkdown content={field.text} />
+			</div>
+		{/each}
+	{/if}
+{/snippet}
 
 <Card.Root>
 	<Card.Header>
 		<Card.Title class="text-sm">Approve {friendlyToolLabel(tool.name)}?</Card.Title>
 		<Card.Description>This action changes saved workspace data.</Card.Description>
+		<Card.Action>
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				aria-label="Review in full"
+				onclick={() => (expanded = true)}
+			>
+				<Expand class="size-3.5" />
+			</Button>
+		</Card.Action>
 	</Card.Header>
 	<Card.Content class="flex flex-col gap-3">
-		{#if candidate}
-			<p class="truncate text-sm font-medium">{candidate.title || 'Untitled'}</p>
-			{#if baseline}
-				{#if titleChanged}
-					<p class="text-xs">
-						<span class="text-muted-foreground">Title:</span>
-						{baseline.title} → {candidate.title}
-					</p>
-				{/if}
-				{#if bodyChanged}
-					<NoteVersionDiff
-						base={baseline.plainText}
-						candidate={candidate.plainText}
-						label="Proposed note changes"
-						compact
-					/>
-				{/if}
-				{#if formattingChanged}<p class="text-xs">Formatting will change.</p>{/if}
-				{#if pinChanged}<p class="text-xs">
-						The note will be {candidate.isPinned ? 'pinned' : 'unpinned'}.
-					</p>{/if}
-				{#if !titleChanged && !bodyChanged && !formattingChanged && !pinChanged}
-					<p class="text-xs text-muted-foreground">No visible note changes.</p>
-				{/if}
-			{:else if baselineError}
-				<p class="text-xs text-muted-foreground">
-					The current note could not be loaded for comparison.
-				</p>
-			{:else}
-				<p class="text-xs text-muted-foreground">Loading the current note…</p>
-			{/if}
+		{#if loadingNote}
+			<p class="text-xs text-muted-foreground">Loading the current note…</p>
+		{:else if baselineError}
+			<p class="text-xs text-muted-foreground">
+				The current note could not be loaded for comparison.
+			</p>
 		{:else}
-			{#each scalarSummaries(tool.arguments) as summary (summary)}
-				<p class="text-xs">{summary}</p>
-			{/each}
+			{@render changeBody(true)}
 		{/if}
 		<details class="text-xs text-muted-foreground">
 			<summary class="cursor-pointer select-none">Technical details</summary>
@@ -123,3 +143,32 @@
 		<Button size="sm" variant="outline" onclick={onreject}>Reject</Button>
 	</Card.Footer>
 </Card.Root>
+
+<Dialog.Root bind:open={expanded}>
+	<Dialog.Content class="flex max-h-dvh flex-col sm:max-w-4xl">
+		<Dialog.Header>
+			<Dialog.Title>{friendlyToolLabel(tool.name)}</Dialog.Title>
+			<Dialog.Description>Review the change before approving it.</Dialog.Description>
+		</Dialog.Header>
+		<div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+			{@render changeBody(false)}
+		</div>
+		<Dialog.Footer>
+			<Button
+				size="sm"
+				onclick={() => {
+					expanded = false;
+					onapprove();
+				}}>Approve</Button
+			>
+			<Button
+				size="sm"
+				variant="outline"
+				onclick={() => {
+					expanded = false;
+					onreject();
+				}}>Reject</Button
+			>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

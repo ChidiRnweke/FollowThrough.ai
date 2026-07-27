@@ -22,13 +22,23 @@ import VideoExtendedComp from '../VideoExtended.svelte';
 import IFrameComp from '../IFrame.svelte';
 import MermaidComp from '../Mermaid.svelte';
 import DrawioComp from '../Drawio.svelte';
-import type { DiagramId, DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
+import type {
+	DiagramId,
+	DiagramSuggestion,
+	DrawioDiagram,
+	NoteLinkTarget,
+	SuggestionId
+} from '$lib/models';
 import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
 import { setTocItems } from '../toc.svelte';
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
+import { armLiteralPaste, handleMarkdownPaste, isLiteralPasteShortcut } from './paste.js';
+import { NoteLinkMark } from './nodes.js';
+import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
+import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 
 const lowlight = createLowlight(all);
 
@@ -63,6 +73,14 @@ export interface EdraEditorProps {
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
 	) => Promise<{ readonly text: string }>;
+	/**
+	 * Notes offered when the author types `@`. Injected, like every other capability
+	 * here, so the editor never reaches for a store or a transport of its own. Omitting
+	 * it disables note linking.
+	 */
+	findLinkableNotes?: (query: string) => readonly NoteLinkTarget[];
+	/** Follow a note link. Omitting it leaves links inert rather than navigating badly. */
+	onOpenNoteLink?: (noteId: string, options: { readonly background: boolean }) => boolean;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
@@ -97,6 +115,14 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			DiagramDeletion,
 			SlashCommand(SlashCommandComp),
 			Callout(CalloutComp),
+			// Registered on both sides of the wire. The server can already parse and serialize
+			// a note link, so an editor that did not know the mark would drop it from the
+			// document the moment such a note was opened.
+			NoteLinkMark.configure({ onOpen: props?.onOpenNoteLink }),
+			NoteLinkSuggestion.configure({
+				...(props?.findLinkableNotes ? { findNotes: props.findLinkableNotes } : {}),
+				renderer: createNoteLinkRenderer
+			}),
 			InlineSuggestion.configure({
 				...(props?.getInlineSuggestion ? { fetchSuggestion: props.getInlineSuggestion } : {}),
 				idleDelayMs: 400
@@ -116,7 +142,14 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				role: 'textbox',
 				'aria-label': props?.ariaLabel ?? 'Rich text editor',
 				'aria-multiline': 'true'
-			}
+			},
+			handleKeyDown: (_view, event) => {
+				// Arm rather than paste: the clipboard is only readable from the paste event
+				// that follows this keystroke.
+				if (isLiteralPasteShortcut(event)) armLiteralPaste();
+				return false;
+			},
+			handlePaste: handleMarkdownPaste
 		},
 		onUpdate: props?.onUpdate || (() => {})
 	});

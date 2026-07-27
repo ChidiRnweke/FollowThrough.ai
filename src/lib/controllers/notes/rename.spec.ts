@@ -9,6 +9,7 @@ const setup = () => {
 	const controller = new DefaultNotesController({
 		noteReader: content,
 		noteEditor: content,
+		noteLinkReconciler: content,
 		revisionRecorder: content,
 		noteIndexer: content,
 		transactionRunner: new InMemoryTransactionRunner([content])

@@ -5,6 +5,7 @@ import type {
 	AttachmentsController,
 	DeliverablesController,
 	DiagramsController,
+	ImportsController,
 	InlineSuggestionsController,
 	MemoryController,
 	NotesController,
@@ -40,4 +41,5 @@ export interface ControllerFactory {
 	memory(): MemoryController;
 	retrieval(): RetrievalController;
 	inlineSuggestions(): InlineSuggestionsController;
+	imports(): ImportsController;
 }

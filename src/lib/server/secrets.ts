@@ -26,6 +26,13 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	OPENROUTER_RECOMMENDED_MODELS: 'openai/gpt-5.6,anthropic/claude-sonnet-4.5',
 	OPENROUTER_INLINE_MODEL: 'deepseek/deepseek-v4-flash',
 	OPENROUTER_ATTACHMENT_VISION_MODEL: 'google/gemini-2.5-flash-lite',
+	/* Exa rather than 'auto': auto resolves to the model's own native search, which
+	   returns snippets from a handful of results. Exa retrieves page content, which is
+	   what makes the difference between citing a headline and answering from the page.
+	   Accepts auto | native | exa | firecrawl | parallel | perplexity. */
+	OPENROUTER_WEB_SEARCH_ENGINE: 'exa',
+	OPENROUTER_WEB_SEARCH_MAX_RESULTS: '8',
+	OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS: '16',
 	RETRIEVAL_CHUNK_TOKENS: '2400',
 	RETRIEVAL_CHUNK_OVERLAP_TOKENS: '480',
 	ATTACHMENT_MAX_BYTES: '52428800',

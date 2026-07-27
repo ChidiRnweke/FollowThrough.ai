@@ -111,7 +111,7 @@ describe('Web reference client boundary', () => {
 				tools: [
 					{
 						type: 'openrouter:web_search',
-						parameters: { engine: 'auto', max_results: 3, max_total_results: 6 }
+						parameters: { engine: 'exa', max_results: 8, max_total_results: 16 }
 					}
 				]
 			},

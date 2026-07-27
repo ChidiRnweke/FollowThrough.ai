@@ -5,6 +5,7 @@ import {
 	DefaultAttachmentsController,
 	DefaultDeliverablesController,
 	DefaultDiagramsController,
+	DefaultImportsController,
 	DefaultInlineSuggestionsController,
 	DefaultMemoryController,
 	DefaultNotesController,
@@ -120,5 +121,11 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	inlineSuggestions() {
 		return new DefaultInlineSuggestionsController(this.dependencies.inlineSuggestions);
+	}
+	// Composes the notes and projects controllers rather than taking repositories of its
+	// own: an import is a batch of ordinary creates, and going through the controllers
+	// keeps indexing and anchor repair on the same path a hand-made note takes.
+	imports() {
+		return new DefaultImportsController({ notes: this.notes(), projects: this.projects() });
 	}
 }

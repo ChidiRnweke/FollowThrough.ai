@@ -5,5 +5,7 @@ export * from './errors';
 export * from './views';
 export * from './prosemirror';
 export * from './note-sync';
+export * from './note-patch';
 export * from './agent-runs';
 export * from './app-context';
+export * from './note-links';

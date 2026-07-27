@@ -13,25 +13,21 @@
 	const attachmentCount = $derived(reportedCount ?? data.attachments.length);
 </script>
 
-<PageShell>
-	{#snippet header()}
-		<div class="flex flex-col gap-1">
-			<Breadcrumb.Root>
-				<Breadcrumb.List>
-					<Breadcrumb.Item
-						><Breadcrumb.Link href="/projects/{data.project.id}"
-							>{data.project.name}</Breadcrumb.Link
-						></Breadcrumb.Item
-					>
-					<Breadcrumb.Separator />
-					<Breadcrumb.Item><Breadcrumb.Page>Attachments</Breadcrumb.Page></Breadcrumb.Item>
-				</Breadcrumb.List>
-			</Breadcrumb.Root>
-			<h1 class="page-title">Attachments</h1>
-			<p class="text-sm text-muted-foreground">
-				Files and images available to {data.project.name} and its agents.
-			</p>
-		</div>
+<PageShell
+	title="Attachments"
+	description="Files and images available to {data.project.name} and its agents."
+>
+	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
+	{#snippet breadcrumb()}
+		<Breadcrumb.Root>
+			<Breadcrumb.List>
+				<Breadcrumb.Item>
+					<Breadcrumb.Link href="/projects/{data.project.id}">
+						{data.project.name}
+					</Breadcrumb.Link>
+				</Breadcrumb.Item>
+			</Breadcrumb.List>
+		</Breadcrumb.Root>
 	{/snippet}
 	{#snippet actions()}
 		{#if attachmentCount > 0}

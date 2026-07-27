@@ -4,13 +4,7 @@
 	import { marked } from 'marked';
 	import DiffViewer from './diff-viewer.svelte';
 
-	let {
-		content,
-		onapplydiff
-	}: {
-		content: string;
-		onapplydiff?: (diffText: string) => void;
-	} = $props();
+	let { content }: { content: string } = $props();
 	let mounted = $state(false);
 
 	onMount(() => {
@@ -48,7 +42,7 @@
 >
 	{#each segments as segment, index (index)}
 		{#if segment.type === 'diff'}
-			<DiffViewer diffText={segment.content} onapply={onapplydiff} />
+			<DiffViewer diffText={segment.content} />
 		{:else}
 			{@const html = renderMarkdown(segment.content)}
 			{#if html}

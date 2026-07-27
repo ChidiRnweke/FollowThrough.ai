@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { FtCheck as Check, FtCopy as Copy, FtFileEdit as FilePen } from '$lib/components/icons';
+	import { FtCheck as Check, FtCopy as Copy } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 
-	let {
-		diffText,
-		onapply
-	}: {
-		diffText: string;
-		onapply?: (diffText: string) => void;
-	} = $props();
+	/**
+	 * Read-only. The "Apply to note" action that used to live here kept only the `+`
+	 * lines and replaced the whole body with them, so any diff carrying context
+	 * truncated the note — and it bypassed the approval gate besides. Targeted edits go
+	 * through the agent's `edit_note` tool now.
+	 */
+	let { diffText }: { diffText: string } = $props();
 
 	let copied = $state(false);
 
@@ -46,12 +46,6 @@
 	<div class="flex items-center justify-between px-3 py-1.5 bg-muted/80 border-b border-border">
 		<span class="text-xs font-medium text-muted-foreground">Proposed changes</span>
 		<div class="flex items-center gap-1">
-			{#if onapply}
-				<Button variant="ghost" size="sm" class="h-7 text-xs" onclick={() => onapply(diffText)}>
-					<FilePen class="size-3.5 mr-1" />
-					Apply to note
-				</Button>
-			{/if}
 			<Button variant="ghost" size="icon-xs" aria-label="Copy diff" onclick={copyToClipboard}>
 				{#if copied}
 					<Check class="size-3.5" />

@@ -74,6 +74,19 @@ export const variables = defineEnvVars({
 		description: 'OpenRouter model used to describe uploaded images.',
 		schema: optionalString
 	},
+	OPENROUTER_OCR_MODEL: {
+		description:
+			'OpenRouter model used for PDF OCR and image description (defaults to google/gemini-2.5-flash-lite).',
+		schema: optionalString
+	},
+	ATTACHMENT_OCR_MAX_PAGES: {
+		description: 'Maximum PDF page count processed via OCR (defaults to 100).',
+		schema: optionalString
+	},
+	ATTACHMENT_OCR_ENABLED: {
+		description: 'Enable OCR extraction for PDF attachments (defaults to true).',
+		schema: optionalString
+	},
 	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString },
 	EVAL_RECORD: { description: 'Record live eval cache responses.', schema: optionalString },
 	EVAL_STRICT_CACHE: { description: 'Fail evals on cache misses.', schema: optionalString },

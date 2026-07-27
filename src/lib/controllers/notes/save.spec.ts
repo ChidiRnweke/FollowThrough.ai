@@ -17,6 +17,7 @@ const setup = () => {
 		noteReader: content,
 		noteTreeReader: content,
 		noteEditor: content,
+		noteLinkReconciler: content,
 		notePublisher: content,
 		revisionRecorder: content,
 		revisionReader: content,
@@ -250,5 +251,47 @@ describe('Note discard draft invariants', () => {
 		await expect(controller.discardDraft(testActor(), { noteId: note.id })).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
+	});
+});
+
+describe('Note link invariants', () => {
+	/**
+	 * Reconciliation runs inside the save transaction, so a committed body can never sit
+	 * beside `mentions` rows describing the previous one.
+	 */
+	it('reconciles the links in the document it just saved', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await controller.save(testActor(), {
+			note: {
+				...note,
+				plainText: 'see the decision',
+				document: {
+					type: 'doc',
+					content: [
+						{
+							type: 'paragraph',
+							content: [
+								{
+									type: 'text',
+									marks: [{ type: 'noteLink', attrs: { noteId: testNoteId(2) } }],
+									text: 'the decision'
+								}
+							]
+						}
+					]
+				} as never
+			}
+		});
+		expect(content.noteLinkTargets.get(note.id)).toEqual([testNoteId(2)]);
+	});
+
+	it('reconciles to no links when the document has none', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await controller.save(testActor(), { note: { ...note, plainText: 'Plain prose.' } });
+		expect(content.noteLinkTargets.get(note.id)).toEqual([]);
 	});
 });

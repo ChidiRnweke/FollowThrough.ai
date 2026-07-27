@@ -1,51 +1,22 @@
-import {
-	Extension,
-	Mark,
-	mergeAttributes,
-	Node,
-	type Editor,
-	type NodeViewProps
-} from '@tiptap/core';
+import { Extension, type Editor, type NodeViewProps } from '@tiptap/core';
 import type { Component } from 'svelte';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
-import type { DiagramId, DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
+import { CalloutNode, DrawioNode, IFrameNode, MermaidNode, TodoNodeBase } from './nodes.js';
 
-declare module '@tiptap/core' {
-	interface Commands<ReturnType> {
-		aiHighlight: {
-			setAIHighlight: (attributes?: { color?: string }) => ReturnType;
-			unsetAIHighlight: () => ReturnType;
-		};
-		iframe: { setIframe: (attributes: { src: string }) => ReturnType };
-		mermaid: { setMermaid: (source: string) => ReturnType };
-		drawio: { setDrawio: (diagramId: DiagramId) => ReturnType };
-	}
-}
+/**
+ * Editor-side wiring for the nodes declared in `nodes.ts`.
+ *
+ * Each factory only attaches a Svelte node view; the schema, attributes, commands and
+ * Markdown handlers live in `nodes.ts` so the server can serialize a note through the
+ * same definitions. Redeclaring a node here would reintroduce the drift that silently
+ * dropped diagrams from serialized notes.
+ */
 
-export const AIHighlight = Mark.create({
-	name: 'ai-highlight',
-	addAttributes() {
-		return { color: { default: 'var(--color-muted)' } };
-	},
-	parseHTML() {
-		return [{ tag: 'span[data-ai-highlight]' }];
-	},
-	renderHTML({ HTMLAttributes }) {
-		return ['span', mergeAttributes(HTMLAttributes, { 'data-ai-highlight': '' }), 0];
-	},
-	addCommands() {
-		return {
-			setAIHighlight:
-				(attributes = {}) =>
-				({ commands }) =>
-					commands.setMark(this.name, attributes),
-			unsetAIHighlight:
-				() =>
-				({ commands }) =>
-					commands.unsetMark(this.name)
-		};
-	}
-});
+export {
+	AIHighlightNode as AIHighlight,
+	type MermaidOptions,
+	type DrawioOptions
+} from './nodes.js';
 
 export function addAIHighlight(editor: Editor): void {
 	editor.chain().focus().setAIHighlight({ color: 'var(--color-muted)' }).run();
@@ -55,137 +26,24 @@ export function removeAIHighlight(editor: Editor): void {
 	editor.chain().unsetAIHighlight().run();
 }
 
-export const IFrameExtended = (component: Component<NodeViewProps>) =>
-	Node.create({
-		name: 'iframe',
-		group: 'block',
-		atom: true,
-		draggable: true,
-		addAttributes() {
-			return { src: { default: '' }, width: { default: '100%' }, height: { default: 360 } };
-		},
-		parseHTML() {
-			return [{ tag: 'iframe' }];
-		},
-		renderHTML({ HTMLAttributes }) {
-			return ['iframe', HTMLAttributes];
-		},
-		addCommands() {
-			return {
-				setIframe:
-					(attributes) =>
-					({ commands }) =>
-						commands.insertContent({ type: this.name, attrs: attributes })
-			};
-		},
-		addNodeView: () => SvelteNodeViewRenderer(component)
-	});
+const withNodeView = <T extends { extend: (config: object) => T }>(
+	node: T,
+	component: Component<NodeViewProps>
+): T => node.extend({ addNodeView: () => SvelteNodeViewRenderer(component) });
 
-export interface MermaidOptions {
-	onRevise?: (
-		source: string,
-		instruction: string
-	) => Promise<{ readonly source: string; readonly title?: string }>;
-	onConvert?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
-	getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
-	onAcceptDrawio?: (
-		suggestionId: SuggestionId,
-		source: string,
-		renderedSvg: string
-	) => Promise<DrawioDiagram>;
-	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
-}
+export const IFrameExtended = (component: Component<NodeViewProps>) =>
+	withNodeView(IFrameNode, component);
 
 export const Mermaid = (component: Component<NodeViewProps>) =>
-	Node.create<MermaidOptions>({
-		name: 'mermaid',
-		group: 'block',
-		atom: true,
-		content: 'text*',
-		code: true,
-		defining: true,
-		addOptions() {
-			return {
-				onRevise: undefined,
-				onConvert: undefined,
-				getDrawioSuggestion: undefined,
-				onAcceptDrawio: undefined,
-				onRejectDrawio: undefined
-			};
-		},
-		addAttributes() {
-			return {
-				width: {
-					default: '100%',
-					parseHTML: (element) => element.getAttribute('data-width') ?? '100%',
-					renderHTML: (attributes) => ({ 'data-width': attributes.width as string })
-				},
-				pendingDrawioSuggestionId: {
-					default: null,
-					parseHTML: (element) => element.getAttribute('data-pending-drawio-suggestion-id'),
-					renderHTML: (attributes) =>
-						attributes.pendingDrawioSuggestionId
-							? {
-									'data-pending-drawio-suggestion-id':
-										attributes.pendingDrawioSuggestionId as string
-								}
-							: {}
-				}
-			};
-		},
-		parseHTML() {
-			return [{ tag: 'div[data-type="mermaid"]' }];
-		},
-		renderHTML({ HTMLAttributes }) {
-			return ['div', mergeAttributes(HTMLAttributes, { 'data-type': this.name }), 0];
-		},
-		addCommands() {
-			return {
-				setMermaid:
-					(source) =>
-					({ commands }) =>
-						commands.insertContent({
-							type: this.name,
-							content: source ? [{ type: 'text', text: source }] : []
-						})
-			};
-		},
-		addNodeView: () => SvelteNodeViewRenderer(component)
-	});
+	withNodeView(MermaidNode, component);
 
-export interface DrawioOptions {
-	getDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
-	getNoteId?: () => string;
-}
+export const Drawio = (component: Component<NodeViewProps>) => withNodeView(DrawioNode, component);
 
-export const Drawio = (component: Component<NodeViewProps>) =>
-	Node.create<DrawioOptions>({
-		name: 'drawio',
-		group: 'block',
-		atom: true,
-		draggable: true,
-		addOptions() {
-			return { getDiagram: undefined, getNoteId: undefined };
-		},
-		addAttributes() {
-			return { diagramId: { default: null } };
-		},
-		parseHTML() {
-			return [{ tag: 'div[data-type="drawio"]' }];
-		},
-		renderHTML({ HTMLAttributes }) {
-			return ['div', mergeAttributes(HTMLAttributes, { 'data-type': this.name })];
-		},
-		addCommands() {
-			return {
-				setDrawio:
-					(diagramId) =>
-					({ commands }) =>
-						commands.insertContent({ type: this.name, attrs: { diagramId } })
-			};
-		},
-		addNodeView: () => SvelteNodeViewRenderer(component)
-	});
+export const Callout = (component: Component<NodeViewProps>) =>
+	withNodeView(CalloutNode, component);
+
+export const TodoNode = (component: Component<NodeViewProps>) =>
+	withNodeView(TodoNodeBase, component);
 
 export const SlashCommand = (component: Component<never>) => {
 	void component;

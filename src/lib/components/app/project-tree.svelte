@@ -491,60 +491,78 @@
 				</Tip>
 				<ContextMenu.Root>
 					<ContextMenu.Trigger>
+						<!-- Tree rows truncate at the rail's width, so the tooltip is the only way to
+						     read a long title. `Sidebar.MenuSubButton` takes no `tooltipContent` the
+						     way `MenuButton` does, hence wrapping rather than passing a prop. -->
 						{#if isFolder}
-							<Sidebar.MenuSubButton class="w-full">
-								{#snippet child({ props })}
-									<button
-										type="button"
-										{...props}
-										onclick={() => toggle(entry.id)}
-										aria-expanded={isOpen}
-									>
-										<ChevronRight
-											class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
-												? 'rotate-90'
-												: ''}"
-										/>
-										{#if isOpen}
-											<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
-										{:else}
-											<Folder class="size-4 shrink-0 text-muted-foreground" />
-										{/if}
-										<span class="truncate">{entry.title}</span>
-									</button>
+							<Tip text={entry.title} side="right" delayDuration={700}>
+								{#snippet children({ props: tip })}
+									<Sidebar.MenuSubButton class="w-full">
+										{#snippet child({ props })}
+											<button
+												type="button"
+												{...props}
+												{...tip}
+												onclick={() => toggle(entry.id)}
+												aria-expanded={isOpen}
+											>
+												<ChevronRight
+													class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
+														? 'rotate-90'
+														: ''}"
+												/>
+												{#if isOpen}
+													<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+												{:else}
+													<Folder class="size-4 shrink-0 text-muted-foreground" />
+												{/if}
+												<span class="truncate">{entry.title}</span>
+											</button>
+										{/snippet}
+									</Sidebar.MenuSubButton>
 								{/snippet}
-							</Sidebar.MenuSubButton>
+							</Tip>
 						{:else}
-							<Sidebar.MenuSubButton isActive={entry.id === activeNoteId}>
-								{#snippet child({ props })}
-									<a
-										href="/notes/{entry.id}"
-										{...props}
-										draggable={entry.kind === 'note'}
-										ondragstart={(event) => {
-											if (entry.kind !== 'note' || !event.dataTransfer) return;
-											event.stopPropagation();
-											writeNoteDrag(event.dataTransfer, entry.id);
-										}}
-										onclick={(event) => {
-											if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
-												return;
-											event.preventDefault();
-											void workbench.openTab(entry.id);
-										}}
-									>
-										{#if entry.kind === 'skill'}
-											<Wrench class="size-4 shrink-0 text-muted-foreground" />
-										{:else}
-											<FileText class="size-4 shrink-0 text-muted-foreground" />
-										{/if}
-										<span class="truncate">{entry.title}</span>
-										{#if entry.isPinned}
-											<Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
-										{/if}
-									</a>
+							<Tip text={entry.title} side="right" delayDuration={700}>
+								{#snippet children({ props: tip })}
+									<Sidebar.MenuSubButton isActive={entry.id === activeNoteId}>
+										{#snippet child({ props })}
+											<a
+												href="/notes/{entry.id}"
+												{...props}
+												{...tip}
+												draggable={entry.kind === 'note'}
+												ondragstart={(event) => {
+													if (entry.kind !== 'note' || !event.dataTransfer) return;
+													event.stopPropagation();
+													writeNoteDrag(event.dataTransfer, entry.id);
+												}}
+												onclick={(event) => {
+													if (
+														event.metaKey ||
+														event.ctrlKey ||
+														event.shiftKey ||
+														event.button !== 0
+													)
+														return;
+													event.preventDefault();
+													void workbench.openTab(entry.id);
+												}}
+											>
+												{#if entry.kind === 'skill'}
+													<Wrench class="size-4 shrink-0 text-muted-foreground" />
+												{:else}
+													<FileText class="size-4 shrink-0 text-muted-foreground" />
+												{/if}
+												<span class="truncate">{entry.title}</span>
+												{#if entry.isPinned}
+													<Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
+												{/if}
+											</a>
+										{/snippet}
+									</Sidebar.MenuSubButton>
 								{/snippet}
-							</Sidebar.MenuSubButton>
+							</Tip>
 						{/if}
 					</ContextMenu.Trigger>
 					<ContextMenu.Content>

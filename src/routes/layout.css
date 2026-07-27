@@ -220,12 +220,32 @@
 		@apply bg-primary/20 text-foreground;
 	}
 
+	/* Declared in CSS, not only by mode-watcher on hydration. Until the script runs the
+	   document has no colour scheme while the light palette is already painted, so a UA
+	   defaulting to dark styles form controls light-on-light and the caret disappears. */
+	:root {
+		color-scheme: light;
+	}
+
+	.dark {
+		color-scheme: dark;
+	}
+
 	html {
 		@apply font-sans antialiased;
 	}
 
 	body {
 		@apply min-h-dvh bg-background text-sm text-foreground;
+	}
+
+	/* The editor pins its caret to the foreground token; nothing did the same for the
+	   plain form controls, so their caret was `currentColor` and quietly followed any
+	   ancestor `text-*` class into invisibility. */
+	input,
+	textarea,
+	[contenteditable] {
+		caret-color: var(--foreground);
 	}
 
 	:focus-visible {

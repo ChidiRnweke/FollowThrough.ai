@@ -65,8 +65,10 @@ describe('Agent tool coverage invariants', () => {
 		const coveredActions = classifications.filter(
 			(classification) => classification.kind !== 'excluded'
 		).length;
-		// memory.list is deliberately exposed twice: list_project_memory and list_user_memory.
-		const scopedAliases = 1;
+		// Two controller actions are deliberately exposed twice:
+		// memory.list as list_project_memory and list_user_memory, and notes.save as
+		// save_note (whole-body replace) and edit_note (targeted replacements).
+		const scopedAliases = 2;
 		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
 	});
 
@@ -157,6 +159,28 @@ describe('Agent tool coverage invariants', () => {
 			available.agentTools().some((candidate) => candidate.name === 'save_note'),
 			available.catalog().some((candidate) => candidate.name === 'save_note')
 		]).toEqual([false, true]);
+	});
+
+	it('advertises only noteId and edits for edit_note', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		expect(Object.keys(editNote?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
+	});
+
+	it('keeps edit_note searchable instead of registering it directly', () => {
+		const available = registry('auto_accept');
+		expect([
+			available.agentTools().some((candidate) => candidate.name === 'edit_note'),
+			available.catalog().some((candidate) => candidate.name === 'edit_note')
+		]).toEqual([false, true]);
+	});
+
+	it('classifies edit_note as a mutation', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		expect(editNote?.classification).toBe('mutation');
 	});
 
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
@@ -350,6 +374,85 @@ describe('Agent tool coverage invariants', () => {
 			title: 'About me',
 			plainText: 'New body'
 		});
+	});
+
+	/**
+	 * A note holds diagrams and callouts Markdown has no native syntax for, so the
+	 * behaviour worth pinning is not "the edit applied" but "nothing else moved".
+	 */
+	const editNoteFixture = () => {
+		const current = noteBuilder({
+			id: crypto.randomUUID() as never,
+			title: 'Design',
+			document: {
+				type: 'doc',
+				content: [
+					{ type: 'paragraph', content: [{ type: 'text', text: 'The cache is write-through.' }] },
+					{
+						type: 'mermaid',
+						attrs: { width: '100%' },
+						content: [{ type: 'text', text: 'graph TD\nA-->B' }]
+					},
+					{ type: 'paragraph', content: [{ type: 'text', text: 'Revisit in Q3.' }] }
+				]
+			} as never
+		});
+		let saved: typeof current | undefined;
+		const factory = {
+			notes: () => ({
+				get: async () => ({ note: current }),
+				save: async (_actor: unknown, input: { note: typeof current }) => {
+					saved = input.note;
+					return {
+						note: { ...input.note, currentRevision: 2 },
+						etag: 'note:x:r2',
+						repairedAnchorIds: []
+					};
+				}
+			})
+		} as unknown as ControllerFactory;
+		const invoke = (edits: unknown) =>
+			indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+				{} as never,
+				JSON.stringify({ name: 'edit_note', payload: { noteId: current.id, edits } })
+			);
+		return { current, invoke, saved: () => saved };
+	};
+
+	it('applies a targeted edit to the anchored text', async () => {
+		const fixture = editNoteFixture();
+		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
+		expect(fixture.saved()?.plainText).toContain('The cache is write-behind.');
+	});
+
+	it('leaves untouched prose intact when editing a note', async () => {
+		const fixture = editNoteFixture();
+		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
+		expect(fixture.saved()?.plainText).toContain('Revisit in Q3.');
+	});
+
+	it('keeps a diagram the edit never mentioned', async () => {
+		const fixture = editNoteFixture();
+		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
+		expect(JSON.stringify(fixture.saved()?.document)).toContain('graph TD');
+	});
+
+	it('reports how many edits applied', async () => {
+		const fixture = editNoteFixture();
+		const result = await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
+		expect(result).toMatchObject({ appliedEdits: 1 });
+	});
+
+	it('saves nothing when an anchor does not match', async () => {
+		const fixture = editNoteFixture();
+		await fixture.invoke([{ oldText: 'read-through', newText: 'write-behind' }]);
+		expect(fixture.saved()).toBeUndefined();
+	});
+
+	it('explains a failed edit instead of throwing, so the model can correct it', async () => {
+		const fixture = editNoteFixture();
+		const result = await fixture.invoke([{ oldText: 'read-through', newText: 'x' }]);
+		expect(result).toMatchObject({ failure: 'No edits were applied.' });
 	});
 
 	it('does not expose the agent controller recursively', () => {

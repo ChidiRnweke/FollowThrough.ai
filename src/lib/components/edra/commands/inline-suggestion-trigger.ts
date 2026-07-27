@@ -78,6 +78,22 @@ export const caretContextOf = (state: EditorState, suppressed: boolean): CaretCo
 	};
 };
 
+/**
+ * The text to insert when a suggestion is accepted, with the word seam repaired.
+ *
+ * `shouldTrigger` never fires mid-word, so a suggestion always begins at the end of a
+ * complete word or after punctuation. That makes the seam unambiguous: a word character
+ * on both sides of the join can only be two words run together, never a word being
+ * completed. The server prompt asks the model to own its own leading space, and
+ * `sanitizeCompletion` strips a stray one — this covers the opposite slip, which nothing
+ * else did.
+ */
+export const joinedSuggestion = (characterBefore: string, suggestion: string): string => {
+	if (!suggestion) return suggestion;
+	if (!WORD_CHARACTER.test(characterBefore)) return suggestion;
+	return WORD_CHARACTER.test(suggestion[0]) ? ` ${suggestion}` : suggestion;
+};
+
 /** The plain-text window the completion sees around the caret. */
 export interface CaretWindow {
 	readonly prefix: string;

@@ -2,6 +2,7 @@
 	import type { GetProjectOutput, NoteId, NoteSummary, ProjectTreeNode } from '$lib/models';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
+	import { Separator } from '$lib/components/ui/separator';
 	import { toast } from 'svelte-sonner';
 	import {
 		FtMemory as Brain,
@@ -20,9 +21,6 @@
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
-	import EmptyState from '../empty-state.svelte';
-	import AgentAction from '../agent/agent-action.svelte';
-	import { agentActions } from '../agent/agent-actions';
 	import { pickTip } from '../resource-tips';
 	import { formatRelativeTime } from '../labels';
 
@@ -39,7 +37,8 @@
 		overdueTodoCount = 0,
 		tipSeed = 0,
 		renderedAt,
-		oncreatenote
+		oncreatenote,
+		onimport
 	}: {
 		view: GetProjectOutput;
 		counts: ProjectCounts;
@@ -50,6 +49,7 @@
 		// two first renders agree.
 		renderedAt: string;
 		oncreatenote?: () => void;
+		onimport?: () => void;
 	} = $props();
 
 	const now = $derived(Date.parse(renderedAt));
@@ -262,31 +262,45 @@
 
 <!-- Documents -->
 {#if view.tree.length === 0}
-	<EmptyState
-		icon={FileText}
-		title="Nothing here yet."
-		hint="Notes you write in this project show up here."
-		class="py-16"
-	>
-		{#snippet action()}
-			<div class="flex w-full max-w-xs flex-col items-stretch gap-2">
-				<Button size="sm" onclick={oncreatenote}>
-					<FilePlus class="size-4" />
-					Create the first note
-				</Button>
-				<!--
-					An empty project is where the agent is most useful and least known, so
-					here it gets the row treatment rather than the header's ghost button.
-					Still second: writing the first note yourself stays the primary path.
-				-->
-				<AgentAction
-					variant="row"
-					action={agentActions.projectEmpty}
-					context={{ projectId: project.id }}
-				/>
+	<!--
+		The hero empty state. An empty project is the product's first impression, so it
+		gets real hierarchy — a quiet icon tile, a statement in foreground, one piece of
+		supporting copy, then the ways in — rather than the slot-sized shared EmptyState,
+		whose all-muted whisper is built for inline gaps, not a whole page.
+	-->
+	<section class="flex flex-col items-center py-16 text-center" aria-label="Documents">
+		<div class="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+			<FileText class="size-5" />
+		</div>
+		<h2 class="pt-4 text-base font-medium">Nothing here yet.</h2>
+		<p class="max-w-sm pt-1.5 text-sm text-muted-foreground">
+			Notes you write in this project show up here.
+		</p>
+		<!--
+			The two ways in are an either/or, so they stack with a quiet divider between
+			them rather than competing side by side: start fresh, or bring what you have.
+		-->
+		<div class="flex w-full max-w-xs flex-col items-stretch gap-3 pt-6">
+			<Button size="sm" class="w-full" onclick={oncreatenote}>
+				<FilePlus class="size-4" />
+				Create the first note
+			</Button>
+			<div class="flex items-center gap-3">
+				<Separator class="flex-1" />
+				<span class="text-xs text-muted-foreground/70">or</span>
+				<Separator class="flex-1" />
 			</div>
-		{/snippet}
-	</EmptyState>
+			<div class="flex flex-col items-center gap-1.5">
+				<Button variant="outline" size="sm" class="w-full" onclick={onimport}>
+					Import an existing project…
+				</Button>
+				<p class="text-xs text-muted-foreground/70">
+					Already keep notes in Markdown somewhere? Zip the folder and bring them in — structure and
+					all.
+				</p>
+			</div>
+		</div>
+	</section>
 {:else}
 	<!--
 		A borderless divided list, not a card: the rows are homogeneous and

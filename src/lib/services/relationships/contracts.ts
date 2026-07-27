@@ -3,6 +3,7 @@ import type {
 	BacklinkView,
 	CreateRelationshipInput,
 	LinkCandidate,
+	Note,
 	NoteId,
 	NoteRelationship,
 	RelationshipId,
@@ -32,6 +33,17 @@ export interface RelationshipDeleter {
 }
 export interface RelationshipFinder {
 	findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]>;
+}
+/**
+ * Keeps the `mentions` rows for a note equal to the links in its document.
+ *
+ * The document owns where a link is; these rows are the index that makes backlinks
+ * queryable. Reconciling on save rather than on insert means a link deleted by editing —
+ * or by an agent's `edit_note` — stops producing a backlink, which a create-only path
+ * could never manage.
+ */
+export interface NoteLinkReconciler {
+	reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void>;
 }
 export interface BacklinkViewAssembler {
 	assemble(
