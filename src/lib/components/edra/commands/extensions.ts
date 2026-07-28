@@ -13,8 +13,70 @@ import { Table, TableCell, TableHeader, TableRow } from './index.js';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Markdown } from '@tiptap/markdown';
 import { Marked } from 'marked';
-import Mathematics from '@tiptap/extension-mathematics';
+import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
+import type { KatexOptions } from 'katex';
 import Audio from '@tiptap/extension-audio';
+
+/** Options for the KaTeX renderer. See here: https://katex.org/docs/options.html */
+const katexOptions: KatexOptions = {
+	// Show invalid LaTeX as red source text rather than throwing inside a node view.
+	throwOnError: false,
+	// Unicode inside a formula (an en-dash, an accented letter) is something the author
+	// can see on the page; it does not need a console warning on every load.
+	strict: 'ignore',
+	macros: {
+		'\\R': '\\mathbb{R}', // add a macro for the real numbers
+		'\\N': '\\mathbb{N}' // add a macro for the natural numbers
+	}
+};
+
+/**
+ * Inline math is delimited `$$…$$`, not `$…$`.
+ *
+ * The upstream Markdown tokenizer matches a single `$…$`, which turns ordinary currency
+ * — "$4–13 vs $30 per 1,000 pages" — into a math node and deletes the text from both the
+ * document and its plain-text index. The extension's own typing input rule already
+ * requires `$$`, so this only brings the Markdown path in line with the editor path.
+ * `renderMarkdown` moves with it, or the round trip would stop being lossless.
+ */
+const StrictInlineMath = InlineMath.extend({
+	markdownTokenizer: {
+		name: 'inlineMath',
+		level: 'inline',
+		start: (src) => src.indexOf('$$'),
+		tokenize: (src) => {
+			const match = /^\$\$([^$\n]+?)\$\$(?!\$)/.exec(src);
+			if (!match) return undefined;
+			return { type: 'inlineMath', raw: match[0], latex: match[1].trim() };
+		}
+	},
+	renderMarkdown: (node) => `$$${node.attrs?.latex ?? ''}$$`
+});
+
+/**
+ * Block math starts a line, or it is inline math.
+ *
+ * Marked truncates the enclosing paragraph wherever a block tokenizer's `start` points,
+ * so the upstream `indexOf('$$')` tore "so $$x^2$$ then" into three blocks and claimed
+ * the formula for `blockMath` before {@link StrictInlineMath} could see it. Only
+ * `tokenize` decides what a block is; `start` just has to stop pointing mid-sentence.
+ */
+const StrictBlockMath = BlockMath.extend({
+	markdownTokenizer: {
+		name: 'blockMath',
+		level: 'block',
+		start: (src) => {
+			const match = /(?:^|\n)\$\$/.exec(src);
+			if (!match) return -1;
+			return match.index === 0 ? 0 : match.index + 1;
+		},
+		tokenize: (src) => {
+			const match = /^\$\$([^$]+)\$\$/.exec(src);
+			if (!match) return undefined;
+			return { type: 'blockMath', raw: match[0], latex: match[1].trim() };
+		}
+	}
+});
 
 /**
  * Contains all the default extensions the editor uses.
@@ -99,14 +161,8 @@ export default [
 	// bridges Tiptap's `typeof marked` option type — the instance has everything
 	// MarkdownManager actually uses (use/setOptions/lexer/Lexer).
 	Markdown.configure({ marked: new Marked() as unknown as (typeof import('marked'))['marked'] }),
-	Mathematics.configure({
-		// Options for the KaTeX renderer. See here: https://katex.org/docs/options.html
-		katexOptions: {
-			throwOnError: true, // don't throw an error if the LaTeX code is invalid
-			macros: {
-				'\\R': '\\mathbb{R}', // add a macro for the real numbers
-				'\\N': '\\mathbb{N}' // add a macro for the natural numbers
-			}
-		}
-	})
+	// Listed as the two halves rather than the `Mathematics` bundle, which is only a
+	// wrapper around `[BlockMath, InlineMath]` and leaves no way to harden the inline one.
+	StrictBlockMath.configure({ katexOptions }),
+	StrictInlineMath.configure({ katexOptions })
 ] as Extensions;

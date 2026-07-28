@@ -372,7 +372,10 @@ export const CalloutNode = Node.create({
 	markdownTokenizer: {
 		name: 'callout',
 		level: 'block',
-		start: (src: string) => src.indexOf('$'),
+		// The whole delimiter, not just its first character: marked cuts the block at
+		// whatever `start` reports, so a bare `$` split every paragraph containing a price
+		// into fragments and handed mid-sentence `$$…$$` to the block math tokenizer.
+		start: (src: string) => src.indexOf('$callout'),
 		tokenize: (
 			src: string,
 			_tokens: MarkdownToken[],

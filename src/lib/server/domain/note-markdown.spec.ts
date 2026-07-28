@@ -26,6 +26,40 @@ describe('Agent note Markdown', () => {
 });
 
 /**
+ * Dollar signs are far more often money than mathematics.
+ *
+ * The Markdown extension ships a tokenizer that reads a single `$…$` as inline math, so
+ * "$4–13 vs $30 per 1,000 pages" parsed into a math node holding "4–13 vs" — the text
+ * vanished from the note and from the plain text the search index is built on, and KaTeX
+ * only ever complained about the en-dash. Inline math now needs `$$…$$`, which is what
+ * the editor's own typing rule has always required.
+ */
+describe('Dollar signs in Markdown', () => {
+	const priced = noteContentFromMarkdown('Costs $4–13 vs $30 per 1,000 pages');
+
+	it('keeps a pair of prices as text rather than a formula', () => {
+		expect(JSON.stringify(priced.document)).not.toContain('inlineMath');
+	});
+
+	it('keeps the priced text searchable', () => {
+		expect(priced.plainText).toBe('Costs $4–13 vs $30 per 1,000 pages');
+	});
+
+	it('still reads double-delimited inline math as math', () => {
+		expect(noteContentFromMarkdown('so $$x^2$$ then').document.content?.[0]).toMatchObject({
+			type: 'paragraph',
+			content: [{ type: 'text' }, { type: 'inlineMath', attrs: { latex: 'x^2' } }, { type: 'text' }]
+		});
+	});
+
+	it('still reads a formula on its own line as block math', () => {
+		expect(
+			noteContentFromMarkdown('before\n\n$$x^2$$\n\nafter').document.content?.[1]
+		).toMatchObject({ type: 'blockMath', attrs: { latex: 'x^2' } });
+	});
+});
+
+/**
  * A note is stored as ProseMirror JSON, so every Markdown round trip is a chance to
  * lose a node the syntax has no native form for. Serializing through StarterKit alone
  * turned a diagram into an empty paragraph, which would have made every targeted edit
@@ -153,6 +187,19 @@ describe('Note Markdown round trip', () => {
 	])('inserts no blank paragraph around %s', (_label, block) => {
 		const document = docOf(paragraph('before'), block, paragraph('after'));
 		expect(roundTrip(document).content).toHaveLength(3);
+	});
+
+	it('keeps inline math delimited the way it was written', () => {
+		const document = docOf({
+			type: 'paragraph',
+			content: [
+				{ type: 'text', text: 'so ' },
+				{ type: 'inlineMath', attrs: { latex: 'x^2' } }
+			]
+		});
+		expect(roundTrip(document).content?.[0]).toMatchObject({
+			content: [{ type: 'text' }, { type: 'inlineMath', attrs: { latex: 'x^2' } }]
+		});
 	});
 
 	it('drops the transient AI highlight without losing its text', () => {

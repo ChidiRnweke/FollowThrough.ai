@@ -311,6 +311,23 @@
 		)
 	]);
 
+	// The two plugins below live on the Tiptap editor, which outlives this component's
+	// deriveds: `editor.destroy()` runs from a teardown effect, and a transaction landing
+	// during that teardown would read a derived whose owning effect is already gone
+	// (`derived_inert`, and a stale value). Mirroring into plain values the plugin
+	// closures read instead is correct in every case — a torn-down editor's decorations
+	// are discarded anyway. Seeded eagerly because each plugin's `state.init` reads its
+	// getter the moment it is registered, before this effect first runs.
+	let anchoredSnapshot = untrack(() => anchored);
+	let linkedReferencesSnapshot = untrack(() => linkedReferences);
+	let revisionSnapshot = untrack(() => revision);
+
+	$effect(() => {
+		anchoredSnapshot = anchored;
+		linkedReferencesSnapshot = linkedReferences;
+		revisionSnapshot = revision;
+	});
+
 	onMount(() => {
 		if (!editor) return;
 
@@ -319,7 +336,7 @@
 		initialized = true;
 		editor.registerPlugin(
 			createSuggestionAnchorPlugin({
-				getAnchored: () => anchored,
+				getAnchored: () => anchoredSnapshot,
 				renderWidget: (suggestionId) => {
 					const target = window.document.createElement('div');
 					target.className = 'suggestion-inline-widget-host';
@@ -334,8 +351,8 @@
 		);
 		editor.registerPlugin(
 			createReferenceLinkPlugin({
-				getReferences: () => linkedReferences,
-				getRevision: () => revision,
+				getReferences: () => linkedReferencesSnapshot,
+				getRevision: () => revisionSnapshot,
 				onActivate: (group, anchor) => {
 					retainActiveLink();
 					activeLink = { group, anchor };

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isLiteralPasteShortcut, looksLikeMarkdown } from './paste';
+import { getSchema } from '@tiptap/core';
+import { isLiteralPasteShortcut, looksLikeMarkdown, markdownSlice } from './paste';
+import { noteMarkdownExtensions } from './markdown-extensions';
 
 describe('Deciding whether pasted text has structure', () => {
 	it.each([
@@ -26,6 +28,25 @@ describe('Deciding whether pasted text has structure', () => {
 		['arithmetic', '3 * 4 * 5']
 	])('leaves %s alone', (_label, text) => {
 		expect(looksLikeMarkdown(text)).toBe(false);
+	});
+});
+
+/**
+ * Pricing pasted out of a spreadsheet or a chat used to lose its first figure: the
+ * Markdown extension read `$4–13 vs $` as inline math and dropped the text.
+ */
+describe('Pasting text that contains prices', () => {
+	const schema = getSchema(noteMarkdownExtensions);
+	const pasted = markdownSlice(schema, 'Costs $4–13 vs $30 per 1,000 pages.\n\nStill worth it.');
+
+	it('keeps every price', () => {
+		expect(pasted?.content.textBetween(0, pasted.content.size, '\n')).toContain(
+			'$4–13 vs $30 per 1,000 pages.'
+		);
+	});
+
+	it('creates no math node', () => {
+		expect(JSON.stringify(pasted?.content.toJSON())).not.toContain('inlineMath');
 	});
 });
 
