@@ -76,7 +76,7 @@
      `max-w-5xl` shell guaranteed a scrollbar no matter how much room was free. -->
 <div class="relative hidden max-w-full overflow-x-auto md:block" data-todo-table-scroll>
 	<Table.Root class="min-w-2xl">
-		<Table.Header class="sticky top-0 z-10 bg-background">
+		<Table.Header class="sticky top-0 z-10 bg-background dark:bg-card">
 			<Table.Row>
 				<Table.Head class="eyebrow">Todo</Table.Head>
 				{#if projectNames}
@@ -93,7 +93,7 @@
 			{#each todos as view (view.todo.id)}
 				{@const done = view.todo.status === 'done' || view.todo.status === 'cancelled'}
 				<Table.Row>
-					<Table.Cell class="sticky left-0 z-10 bg-background font-medium">
+					<Table.Cell class="sticky left-0 z-10 bg-background font-medium dark:bg-card">
 						{#if onopen}
 							<Button
 								variant="link"

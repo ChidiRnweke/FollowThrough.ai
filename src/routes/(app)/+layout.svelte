@@ -143,7 +143,7 @@
 		data-note-workbench={isNoteWorkbench ? '' : undefined}
 	>
 		<header
-			class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden"
+			class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden dark:bg-card"
 		>
 			<Sidebar.Trigger class="size-11" />
 			<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>

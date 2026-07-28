@@ -122,7 +122,7 @@
 </script>
 
 <div
-	class="sticky top-0 z-30 shrink-0 overflow-hidden border-b border-border bg-background transition-[height] duration-(--duration-panel) ease-(--ease-standard) {hidden
+	class="sticky top-0 z-30 shrink-0 overflow-hidden border-b border-border bg-background transition-[height] duration-(--duration-panel) ease-(--ease-standard) dark:bg-card {hidden
 		? 'h-6'
 		: 'h-10'}"
 	role="tablist"

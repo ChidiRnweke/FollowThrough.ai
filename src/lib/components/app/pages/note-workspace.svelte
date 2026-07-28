@@ -661,7 +661,7 @@
 	     the scroll viewport, so `top-0` already lands where the row used to. Only `pb-2` is
 	     added, to keep the hairline off the first line of the document. -->
 	<div
-		class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 sm:min-h-8 sm:flex-row sm:items-center"
+		class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 sm:min-h-8 sm:flex-row sm:items-center dark:bg-card"
 		data-testid="note-utility-header"
 	>
 		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
