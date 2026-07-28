@@ -11,8 +11,10 @@ import {
 	NoteLinkMark,
 	TodoNodeBase
 } from './nodes.js';
-import { ImageNode } from './ImageExtended.js';
-import { VideoNode } from './VideoExtended.js';
+// Imported from the schema-only modules, not the `*Extended` ones: those attach
+// Svelte node views, and this module is loaded by the server and the worker.
+import { ImageNode } from './image-node.js';
+import { VideoNode } from './video-node.js';
 
 /**
  * The note schema, headless.

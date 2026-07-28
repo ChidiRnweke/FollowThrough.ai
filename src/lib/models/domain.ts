@@ -474,6 +474,12 @@ export interface SearchDocument {
 	readonly chunkIndex: number;
 	readonly embedding?: readonly number[];
 	readonly embeddingModel?: string;
+	/**
+	 * Present while a newer revision of this source is staged but not yet embedded.
+	 * Superseded chunks are excluded from lexical search (their text is out of date)
+	 * but still answer semantic search until their replacements carry vectors.
+	 */
+	readonly supersededAt?: DateTime;
 }
 
 export interface SearchMatch {

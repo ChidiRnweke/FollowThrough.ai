@@ -19,6 +19,7 @@ import {
 } from '$lib/testing/fixtures/domain-builders';
 import { BasicAgent } from './basic-agent';
 import {
+	AgentReasoningEventMapper,
 	AgentToolEventMapper,
 	buildAgentInstructions,
 	createToolRecoveryConfig,
@@ -293,6 +294,106 @@ describe('Agent tool event invariants', () => {
 			item: { toJSON: () => ({ rawItem: { callId: 'call-4', name: 'use_tool' } }) }
 		});
 		expect(event).toEqual({ type: 'tool_completed', callId: 'call-4', name: 'save_note' });
+	});
+});
+
+describe('Agent reasoning event invariants', () => {
+	it('maps reasoning on a raw provider chunk to a delta event', () => {
+		const event = new AgentReasoningEventMapper().map({
+			type: 'raw_model_stream_event',
+			data: {
+				type: 'model',
+				event: { choices: [{ delta: { reasoning: 'Let me check the workspace first.' } }] }
+			}
+		});
+		expect(event).toEqual({
+			type: 'reasoning_delta',
+			text: 'Let me check the workspace first.'
+		});
+	});
+
+	it('ignores raw chunks without reasoning', () => {
+		const event = new AgentReasoningEventMapper().map({
+			type: 'raw_model_stream_event',
+			data: { type: 'model', event: { choices: [{ delta: { content: 'visible text' } }] } }
+		});
+		expect(event).toBeUndefined();
+	});
+
+	it('dedupes the completed reasoning item after streamed deltas', () => {
+		const mapper = new AgentReasoningEventMapper();
+		mapper.map({
+			type: 'raw_model_stream_event',
+			data: { type: 'model', event: { choices: [{ delta: { reasoning: 'Thinking…' } }] } }
+		});
+		const event = mapper.map({
+			type: 'run_item_stream_event',
+			name: 'reasoning_item_created',
+			item: {
+				toJSON: () => ({
+					rawItem: {
+						type: 'reasoning',
+						rawContent: [{ type: 'reasoning_text', text: 'Thinking…' }]
+					}
+				})
+			}
+		});
+		expect(event).toBeUndefined();
+	});
+
+	it('emits the completed reasoning item when no deltas were streamed', () => {
+		const event = new AgentReasoningEventMapper().map({
+			type: 'run_item_stream_event',
+			name: 'reasoning_item_created',
+			item: {
+				toJSON: () => ({
+					rawItem: {
+						type: 'reasoning',
+						rawContent: [{ type: 'reasoning_text', text: 'The user wants a note.' }]
+					}
+				})
+			}
+		});
+		expect(event).toEqual({ type: 'reasoning_delta', text: 'The user wants a note.' });
+	});
+
+	it('emits nothing for a reasoning item without text', () => {
+		const event = new AgentReasoningEventMapper().map({
+			type: 'run_item_stream_event',
+			name: 'reasoning_item_created',
+			item: { toJSON: () => ({ rawItem: { type: 'reasoning', content: [] } }) }
+		});
+		expect(event).toBeUndefined();
+	});
+
+	it('resumes emitting items after a deduped generation', () => {
+		const mapper = new AgentReasoningEventMapper();
+		mapper.map({
+			type: 'raw_model_stream_event',
+			data: { type: 'model', event: { choices: [{ delta: { reasoning: 'Step one.' } }] } }
+		});
+		mapper.map({
+			type: 'run_item_stream_event',
+			name: 'reasoning_item_created',
+			item: {
+				toJSON: () => ({
+					rawItem: {
+						type: 'reasoning',
+						rawContent: [{ type: 'reasoning_text', text: 'Step one.' }]
+					}
+				})
+			}
+		});
+		const event = mapper.map({
+			type: 'run_item_stream_event',
+			name: 'reasoning_item_created',
+			item: {
+				toJSON: () => ({
+					rawItem: { type: 'reasoning', summary: [{ type: 'summary_text', text: 'Step two.' }] }
+				})
+			}
+		});
+		expect(event).toEqual({ type: 'reasoning_delta', text: 'Step two.' });
 	});
 });
 

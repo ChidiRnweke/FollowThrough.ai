@@ -116,6 +116,21 @@ import {
 	DrawioXmlValidator,
 	DrawioDiagramTextExtractor
 } from './domain/drawio-content';
+import type { ScheduledTask } from './workers/scheduler';
+import { EmbeddingBackfillTask } from './workers/embedding-backfill';
+import { ExpiredUploadSweepTask } from './workers/expired-upload-sweep';
+
+const numberFromEnv = (name: string): number | undefined => {
+	const raw = process.env[name];
+	if (raw === undefined) return undefined;
+	const value = Number(raw);
+	if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
+	return value;
+};
+
+/** Omits the key entirely when unset, so the task's own default stands. */
+const optional = <K extends string, V>(key: K, value: V | undefined) =>
+	(value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -146,12 +161,24 @@ export interface ApplicationConfig {
 	readonly recommendedModels?: readonly string[];
 	readonly s3?: S3AttachmentStorageConfig;
 	readonly overrides?: ApplicationOverrides;
+	/**
+	 * Stage chunks without vectors and let the background worker embed them,
+	 * instead of paying for an embedding round-trip inside the write transaction.
+	 * Defaults off, so runners without a worker (evals, tests) stay consistent
+	 * the moment a write returns.
+	 */
+	readonly deferEmbedding?: boolean;
 }
 
 export interface ProductionApplication {
 	readonly controllers: ProductionControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
+	/**
+	 * Periodic work for the worker sidecar to run. The web process builds these
+	 * like everything else and simply never starts them.
+	 */
+	readonly backgroundTasks: readonly ScheduledTask[];
 	/**
 	 * Not reachable through `ControllerFactory`, but the MCP server needs to
 	 * mint a provenance row per session so tool writes are attributable.
@@ -175,6 +202,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const openRouterBaseURL = config.openRouterBaseURL ?? DEFAULT_OPENROUTER_BASE_URL;
 	const appURL = config.appURL ?? 'http://localhost:5173';
 	const defaultAgentModel = config.defaultAgentModel ?? DEFAULT_GENERATION_MODEL;
+	// Attachment indexing is deliberately left inline: it already runs off the
+	// request path, and deferring it would report an attachment "ready" before it
+	// was actually retrievable.
+	const deferEmbedding = config.deferEmbedding ?? false;
 
 	const projectRepository = new PostgresProjectRepository(db);
 	const userReader = new UserManagementService(new PostgresUserRepository(db));
@@ -290,12 +321,18 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		imageDescriber,
 		pdfSplitter
 	);
-	const noteIndexer = new EmbeddedNoteIndexer(searchRepository, embeddingClient, retrievalChunker);
+	const noteIndexer = new EmbeddedNoteIndexer(
+		searchRepository,
+		embeddingClient,
+		retrievalChunker,
+		deferEmbedding
+	);
 	const diagramIndexer = new EmbeddedDiagramIndexer(
 		searchRepository,
 		embeddingClient,
 		notes,
-		retrievalChunker
+		retrievalChunker,
+		deferEmbedding
 	);
 	const embeddedKnowledgeSearcher = new EmbeddedKnowledgeSearcher(
 		searchRepository,
@@ -353,7 +390,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const memoryIndexer = new EmbeddedMemoryIndexer(
 		searchRepository,
 		embeddingClient,
-		retrievalChunker
+		retrievalChunker,
+		deferEmbedding
 	);
 	const memory = new MemoryManagementService(
 		new PostgresMemoryEntryRepository(db),
@@ -608,6 +646,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		recoverInterruptedRuns: async () =>
 			(await runRepository.recoverInterrupted('Process restarted')) +
 			(await attachmentRepository.failInterrupted()),
+		backgroundTasks: [
+			new EmbeddingBackfillTask(searchRepository, embeddingClient, transactionRunner, {
+				...optional('intervalMs', numberFromEnv('EMBEDDING_SWEEP_INTERVAL_MS')),
+				...optional('maxSourcesPerTick', numberFromEnv('EMBEDDING_SWEEP_MAX_SOURCES'))
+			}),
+			new ExpiredUploadSweepTask(attachmentRepository, attachmentStorage, {
+				...optional('intervalMs', numberFromEnv('UPLOAD_SWEEP_INTERVAL_MS')),
+				...optional('maxPerTick', numberFromEnv('UPLOAD_SWEEP_MAX_PER_TICK'))
+			})
+		],
 		eventBus,
 		provenance,
 		toolRetriever

@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, lt, sql } from 'drizzle-orm';
 import type {
 	ActorContext,
 	Attachment,
@@ -7,10 +7,11 @@ import type {
 	AttachmentView,
 	DateTime,
 	NoteId,
-	ProjectId
+	ProjectId,
+	UserId
 } from '$lib/models';
 import { NotFoundError } from '$lib/models';
-import type { AttachmentRepository } from '$lib/repositories';
+import type { AttachmentRepository, OwnedAttachmentUpload } from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 
@@ -104,6 +105,20 @@ export class PostgresAttachmentRepository implements AttachmentRepository {
 			.where(
 				and(eq(schema.attachmentUploads.id, id), eq(schema.attachmentUploads.userId, actor.userId))
 			);
+	}
+
+	async listExpiredUploads(
+		before: Date,
+		limit: number
+	): Promise<readonly OwnedAttachmentUpload[]> {
+		return (
+			await this.database
+				.select()
+				.from(schema.attachmentUploads)
+				.where(lt(schema.attachmentUploads.expiresAt, before))
+				.orderBy(asc(schema.attachmentUploads.expiresAt))
+				.limit(limit)
+		).map((row) => ({ userId: row.userId as UserId, upload: toUpload(row) }));
 	}
 
 	async list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {

@@ -9,7 +9,7 @@ import type {
 	SearchDocumentId
 } from '$lib/models';
 import { InvalidGeneratedContentError } from '$lib/models';
-import type { RetrievalIndexRepository } from '$lib/repositories';
+import type { IndexSource, RetrievalIndexRepository } from '$lib/repositories';
 import type { ContentChunker, EmbeddingClient } from './contracts';
 import type { DiagramIndexer } from '$lib/services/diagrams/contracts';
 import type { MemoryIndexer } from '$lib/services/memory/contracts';
@@ -20,6 +20,9 @@ import { countRetrievalTokens, retrievalEncoding } from './tokenizer';
 const DEFAULT_TARGET_TOKENS = 2400;
 const DEFAULT_OVERLAP_TOKENS = 480;
 const EMBEDDING_BATCH_TOKENS = 30_000;
+/** Long documents are indexed head-first rather than in full; the rest is reported as truncated. */
+const ATTACHMENT_CHUNK_LIMIT = 50;
+const MEMORY_SOURCE_TITLE = 'Project memory';
 
 export class TokenAwareChunker implements ContentChunker {
 	private readonly encoding: Tiktoken;
@@ -154,7 +157,7 @@ export const retrievalContentHash = async (
 		.join('') as ContentHash;
 };
 
-const embedInStableBatches = async (
+export const embedInStableBatches = async (
 	client: EmbeddingClient,
 	contents: readonly string[]
 ): Promise<readonly (readonly number[])[]> => {
@@ -180,59 +183,146 @@ const embedInStableBatches = async (
 	return vectors;
 };
 
+/** Everything a chunk inherits from its source, before its own text is filled in. */
+type DocumentBase = Omit<
+	SearchDocument,
+	'id' | 'content' | 'contentHash' | 'chunkIndex' | 'embedding' | 'embeddingModel' | 'supersededAt'
+>;
+
+interface IndexRequest {
+	readonly source: IndexSource;
+	readonly contents: readonly string[];
+	readonly metadata: { readonly sourceTitle?: string; readonly sectionPath?: string };
+	/** Prepended to each chunk before embedding so the vector carries its context. */
+	readonly embedPrefix: string;
+	readonly base: DocumentBase;
+}
+
+const listFor = (
+	repository: RetrievalIndexRepository,
+	actor: ActorContext,
+	source: IndexSource
+): Promise<readonly SearchDocument[]> => {
+	switch (source.kind) {
+		case 'note':
+			return repository.listForNote(actor, source.noteId);
+		case 'diagram':
+			return repository.listForDiagram(actor, source.diagramId);
+		case 'memory':
+			return repository.listForMemoryEntry(actor, source.memoryEntryId);
+		case 'attachment':
+			return repository.listForAttachment(actor, source.attachmentId);
+	}
+};
+
+const deleteFor = (
+	repository: RetrievalIndexRepository,
+	actor: ActorContext,
+	source: IndexSource
+): Promise<void> => {
+	switch (source.kind) {
+		case 'note':
+			return repository.deleteForNote(actor, source.noteId);
+		case 'diagram':
+			return repository.deleteForDiagram(actor, source.diagramId);
+		case 'memory':
+			return repository.deleteForMemoryEntry(actor, source.memoryEntryId);
+		case 'attachment':
+			return repository.deleteForAttachment(actor, source.attachmentId);
+	}
+};
+
+/**
+ * The one indexing algorithm, shared by every source type.
+ *
+ * Chunks are keyed by content hash, so an edit only pays for the chunks it
+ * actually changed. When `defer` is set the new chunks are staged without
+ * vectors and the backfill worker fills them in later; the previously embedded
+ * rows are held back by `stage` so semantic search never goes blind on the
+ * source in the meantime. Removal is never deferred — an emptied or archived
+ * source drops out of the index immediately.
+ */
+const applyIndex = async (
+	repository: RetrievalIndexRepository,
+	embeddingClient: EmbeddingClient,
+	defer: boolean,
+	actor: ActorContext,
+	request: IndexRequest
+): Promise<void> => {
+	const { source, contents, metadata, embedPrefix, base } = request;
+	if (!contents.length) {
+		await deleteFor(repository, actor, source);
+		return;
+	}
+
+	const hashes = await Promise.all(
+		contents.map((content) => retrievalContentHash(content, metadata))
+	);
+	const existing = await listFor(repository, actor, source);
+	const reusable = new Map(
+		existing
+			.filter((document) => document.embeddingModel === embeddingClient.model)
+			.map((document) => [document.contentHash, document])
+	);
+	const missingIndexes = hashes
+		.map((hash, index) => ({ hash, index }))
+		.filter(({ hash }) => !reusable.get(hash)?.embedding);
+
+	const embedded =
+		!defer && missingIndexes.length
+			? await embedInStableBatches(
+					embeddingClient,
+					missingIndexes.map(({ index }) => `${embedPrefix}\n${contents[index]!}`)
+				)
+			: undefined;
+	const generated = new Map(
+		embedded ? missingIndexes.map(({ hash }, index) => [hash, embedded[index]!]) : []
+	);
+
+	const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
+		const hash = hashes[chunkIndex]!;
+		const prior = reusable.get(hash);
+		const vector = prior?.embedding ?? generated.get(hash);
+		const model = prior?.embedding
+			? prior.embeddingModel
+			: vector
+				? embeddingClient.model
+				: undefined;
+		return {
+			...base,
+			id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+			content,
+			contentHash: hash,
+			chunkIndex,
+			...(vector ? { embedding: vector } : {}),
+			...(model ? { embeddingModel: model } : {})
+		};
+	});
+
+	await repository.stage(actor, source, documents);
+};
+
 export class EmbeddedNoteIndexer implements NoteIndexer {
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingClient: EmbeddingClient,
-		private readonly chunker: ContentChunker = new TokenAwareChunker()
+		private readonly chunker: ContentChunker = new TokenAwareChunker(),
+		private readonly defer = false
 	) {}
 
 	async index(actor: ActorContext, note: Note): Promise<void> {
-		const contents = note.archivedAt ? [] : this.chunker.chunk(note.plainText);
-		if (!contents.length) {
-			await this.repository.deleteForNote(actor, note.id);
-			return;
-		}
-		const hashes = await Promise.all(
-			contents.map((content) => retrievalContentHash(content, { sourceTitle: note.title }))
-		);
-		const existing = await this.repository.listForNote(actor, note.id);
-		const reusable = new Map(
-			existing
-				.filter((document) => document.embeddingModel === this.embeddingClient.model)
-				.map((document) => [document.contentHash, document])
-		);
-		const missingIndexes = hashes
-			.map((hash, index) => ({ hash, index }))
-			.filter(({ hash }) => !reusable.get(hash)?.embedding);
-		const embedded = missingIndexes.length
-			? await embedInStableBatches(
-					this.embeddingClient,
-					missingIndexes.map(({ index }) => `${note.title}\n${contents[index]!}`)
-				)
-			: undefined;
-		const generated = new Map(missingIndexes.map(({ hash }, index) => [hash, embedded![index]!]));
-		const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
-			const hash = hashes[chunkIndex]!;
-			const prior = reusable.get(hash);
-			return {
-				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
+			source: { kind: 'note', noteId: note.id },
+			contents: note.archivedAt ? [] : this.chunker.chunk(note.plainText),
+			metadata: { sourceTitle: note.title },
+			embedPrefix: note.title,
+			base: {
 				projectId: note.projectId,
 				noteId: note.id,
 				sourceTitle: note.title,
-				content,
-				contentHash: hash,
-				sourceRevision: note.currentRevision,
-				chunkIndex,
-				...((prior?.embedding ?? generated.get(hash))
-					? { embedding: prior?.embedding ?? generated.get(hash)! }
-					: {}),
-				...((prior?.embeddingModel ?? (embedded ? this.embeddingClient.model : undefined))
-					? { embeddingModel: prior?.embeddingModel ?? this.embeddingClient.model }
-					: {})
-			};
+				sourceRevision: note.currentRevision
+			}
 		});
-		await this.repository.replaceForNote(actor, note.id, documents);
 	}
 }
 
@@ -240,7 +330,8 @@ export class EmbeddedAttachmentIndexer {
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingClient: EmbeddingClient,
-		private readonly chunker: ContentChunker = new TokenAwareChunker()
+		private readonly chunker: ContentChunker = new TokenAwareChunker(),
+		private readonly defer = false
 	) {}
 
 	async index(
@@ -249,58 +340,22 @@ export class EmbeddedAttachmentIndexer {
 		text: string
 	): Promise<{ truncated: boolean }> {
 		const all = this.chunker.chunk(text);
-		const contents = all.slice(0, 50);
-		if (!contents.length) {
-			await this.repository.deleteForAttachment(actor, attachment.id);
-			return { truncated: false };
-		}
-		const hashes = await Promise.all(
-			contents.map((content) =>
-				retrievalContentHash(content, {
-					sourceTitle: attachment.path.split('/').at(-1) ?? attachment.path,
-					sectionPath: attachment.path
-				})
-			)
-		);
-		const existing = await this.repository.listForAttachment(actor, attachment.id);
-		const reusable = new Map(
-			existing
-				.filter((item) => item.embeddingModel === this.embeddingClient.model)
-				.map((item) => [item.contentHash, item])
-		);
-		const missing = hashes
-			.map((hash, index) => ({ hash, index }))
-			.filter(({ hash }) => !reusable.get(hash)?.embedding);
-		const embedded = missing.length
-			? await embedInStableBatches(
-					this.embeddingClient,
-					missing.map(({ index }) => `${attachment.path}\n${contents[index]!}`)
-				)
-			: undefined;
-		const generated = new Map(missing.map(({ hash }, index) => [hash, embedded![index]!]));
-		const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
-			const hash = hashes[chunkIndex]!;
-			const prior = reusable.get(hash);
-			return {
-				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+		const contents = all.slice(0, ATTACHMENT_CHUNK_LIMIT);
+		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
+		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
+			source: { kind: 'attachment', attachmentId: attachment.id },
+			contents,
+			metadata: { sourceTitle, sectionPath: attachment.path },
+			embedPrefix: attachment.path,
+			base: {
 				projectId: attachment.projectId,
 				attachmentId: attachment.id,
 				attachmentPath: attachment.path,
-				sourceTitle: attachment.path.split('/').at(-1) ?? attachment.path,
+				sourceTitle,
 				sectionPath: attachment.path,
-				content,
-				contentHash: hash,
-				sourceRevision: 1,
-				chunkIndex,
-				...((prior?.embedding ?? generated.get(hash))
-					? { embedding: prior?.embedding ?? generated.get(hash)! }
-					: {}),
-				...((prior?.embeddingModel ?? (embedded ? this.embeddingClient.model : undefined))
-					? { embeddingModel: prior?.embeddingModel ?? this.embeddingClient.model }
-					: {})
-			};
+				sourceRevision: 1
+			}
 		});
-		await this.repository.replaceForAttachment(actor, attachment.id, documents);
 		return { truncated: all.length > contents.length };
 	}
 }
@@ -309,7 +364,8 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingClient: EmbeddingClient,
-		private readonly chunker: ContentChunker = new TokenAwareChunker()
+		private readonly chunker: ContentChunker = new TokenAwareChunker(),
+		private readonly defer = false
 	) {}
 
 	async index(actor: ActorContext, entry: MemoryEntry): Promise<void> {
@@ -324,46 +380,18 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 			await this.repository.deleteForMemoryEntry(actor, entry.id);
 			return;
 		}
-		const hashes = await Promise.all(
-			contents.map((content) => retrievalContentHash(content, { sourceTitle: 'Project memory' }))
-		);
-		const existing = await this.repository.listForMemoryEntry(actor, entry.id);
-		const reusable = new Map(
-			existing
-				.filter((document) => document.embeddingModel === this.embeddingClient.model)
-				.map((document) => [document.contentHash, document])
-		);
-		const missingIndexes = hashes
-			.map((hash, index) => ({ hash, index }))
-			.filter(({ hash }) => !reusable.get(hash)?.embedding);
-		const embedded = missingIndexes.length
-			? await embedInStableBatches(
-					this.embeddingClient,
-					missingIndexes.map(({ index }) => `Project memory\n${contents[index]!}`)
-				)
-			: undefined;
-		const generated = new Map(missingIndexes.map(({ hash }, index) => [hash, embedded![index]!]));
-		const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
-			const hash = hashes[chunkIndex]!;
-			const prior = reusable.get(hash);
-			return {
-				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
+			source: { kind: 'memory', memoryEntryId: entry.id },
+			contents,
+			metadata: { sourceTitle: MEMORY_SOURCE_TITLE },
+			embedPrefix: MEMORY_SOURCE_TITLE,
+			base: {
 				projectId,
 				memoryEntryId: entry.id,
-				sourceTitle: 'Project memory',
-				content,
-				contentHash: hash,
-				sourceRevision: 1,
-				chunkIndex,
-				...((prior?.embedding ?? generated.get(hash))
-					? { embedding: prior?.embedding ?? generated.get(hash)! }
-					: {}),
-				...((prior?.embeddingModel ?? (embedded ? this.embeddingClient.model : undefined))
-					? { embeddingModel: prior?.embeddingModel ?? this.embeddingClient.model }
-					: {})
-			};
+				sourceTitle: MEMORY_SOURCE_TITLE,
+				sourceRevision: 1
+			}
 		});
-		await this.repository.replaceForMemoryEntry(actor, entry.id, documents);
 	}
 }
 
@@ -372,7 +400,8 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingClient: EmbeddingClient,
 		private readonly noteReader: import('$lib/services/notes/contracts').NoteReader,
-		private readonly chunker: ContentChunker = new TokenAwareChunker()
+		private readonly chunker: ContentChunker = new TokenAwareChunker(),
+		private readonly defer = false
 	) {}
 
 	async index(actor: ActorContext, diagram: Diagram): Promise<void> {
@@ -382,52 +411,20 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 			return;
 		}
 		const note = await this.noteReader.get(actor, diagram.noteId);
-		const hashes = await Promise.all(
-			contents.map((content) =>
-				retrievalContentHash(content, {
-					sourceTitle: `Diagram in ${note.title}`,
-					sectionPath: note.title
-				})
-			)
-		);
-		const existing = await this.repository.listForDiagram(actor, diagram.id);
-		const reusable = new Map(
-			existing
-				.filter((document) => document.embeddingModel === this.embeddingClient.model)
-				.map((document) => [document.contentHash, document])
-		);
-		const missingIndexes = hashes
-			.map((hash, index) => ({ hash, index }))
-			.filter(({ hash }) => !reusable.get(hash)?.embedding);
-		const embedded = missingIndexes.length
-			? await embedInStableBatches(
-					this.embeddingClient,
-					missingIndexes.map(({ index }) => `Diagram in ${note.title}\n${contents[index]!}`)
-				)
-			: undefined;
-		const generated = new Map(missingIndexes.map(({ hash }, index) => [hash, embedded![index]!]));
-		const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
-			const hash = hashes[chunkIndex]!;
-			const prior = reusable.get(hash);
-			return {
-				id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+		const sourceTitle = `Diagram in ${note.title}`;
+		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
+			source: { kind: 'diagram', diagramId: diagram.id },
+			contents,
+			metadata: { sourceTitle, sectionPath: note.title },
+			embedPrefix: sourceTitle,
+			base: {
 				projectId: note.projectId,
 				noteId: diagram.noteId,
 				diagramId: diagram.id,
-				sourceTitle: `Diagram in ${note.title}`,
+				sourceTitle,
 				sectionPath: note.title,
-				content,
-				contentHash: hash,
-				sourceRevision: 0,
-				chunkIndex,
-				...((prior?.embedding ?? generated.get(hash))
-					? { embedding: prior?.embedding ?? generated.get(hash)! }
-					: {}),
-				...((prior?.embeddingModel ?? (embedded ? this.embeddingClient.model : undefined))
-					? { embeddingModel: prior?.embeddingModel ?? this.embeddingClient.model }
-					: {})
-			};
+				sourceRevision: 0
+			}
 		});
-		await this.repository.replaceForDiagram(actor, diagram.id, documents);
 	}
 }

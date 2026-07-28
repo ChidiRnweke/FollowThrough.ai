@@ -9,7 +9,13 @@ import Subscript from '@tiptap/extension-subscript';
 import TextAlign from '@tiptap/extension-text-align';
 import SuperScript from '@tiptap/extension-superscript';
 import ColorHighlighter from './ColorHighlighter.js';
-import { Table, TableCell, TableHeader, TableRow } from './index.js';
+// Imported directly rather than through `./index.js`: that barrel also re-exports
+// the editor's Svelte-bearing modules, and this extension set is shared with the
+// headless Markdown schema the server and worker load.
+import { Table } from './table.js';
+import { TableCell } from './table-cell.js';
+import { TableHeader } from './table-header.js';
+import { TableRow } from './table-row.js';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Markdown } from '@tiptap/markdown';
 import { Marked } from 'marked';

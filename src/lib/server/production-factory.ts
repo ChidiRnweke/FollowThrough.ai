@@ -22,6 +22,10 @@ export function createProductionFactory(): ProductionApplication {
 		db,
 		transactionRunner: postgresTransactionRunner,
 		openRouterApiKey,
+		// The worker sidecar owns embedding in production, so writes never wait on
+		// OpenRouter. Set DEFER_EMBEDDING=false to fall back to inline embedding if
+		// the worker is not deployed.
+		deferEmbedding: process.env.DEFER_EMBEDDING !== 'false',
 		openRouterBaseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL,
 		appURL: process.env.ORIGIN ?? 'http://localhost:5173',
 		defaultAgentModel: process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL,

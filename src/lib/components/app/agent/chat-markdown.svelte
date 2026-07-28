@@ -1,13 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import DOMPurify from 'dompurify';
-	import { Marked } from 'marked';
+	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import DiffViewer from './diff-viewer.svelte';
-
-	// Dedicated instance: Tiptap's Markdown extension registers tokenizer-only
-	// extensions (e.g. inlineMath) on the global marked singleton, which would
-	// make marked.parse throw on chat messages containing "$...$" pairs.
-	const md = new Marked({ breaks: true, gfm: true });
+	import { renderChatMarkdown } from './chat-markdown';
 
 	let { content }: { content: string } = $props();
 	let mounted = $state(false);
@@ -34,26 +29,34 @@
 		}
 		return parts.length > 0 ? parts : [{ type: 'markdown', content }];
 	});
-
-	function renderMarkdown(text: string): string {
-		if (!mounted || !text.trim()) return '';
-		const rendered = md.parse(text, { async: false });
-		return DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } });
-	}
 </script>
 
 <div
 	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto"
 >
 	{#each segments as segment, index (index)}
-		{#if segment.type === 'diff'}
-			<DiffViewer diffText={segment.content} />
-		{:else}
-			{@const html = renderMarkdown(segment.content)}
-			{#if html}
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify above. -->
-				{@html html}
+		<!--
+			The boundary is per segment, not per message: one unrenderable segment
+			must not cost the reader the rest of the turn. It catches what the
+			try/catch in `renderChatMarkdown` cannot — a malformed diff, or the
+			`{@html}` insertion itself.
+		-->
+		<ErrorBoundary label="part of this message" source={segment.content}>
+			{#if segment.type === 'diff'}
+				<DiffViewer diffText={segment.content} />
+			{:else}
+				{@const rendered = renderChatMarkdown(segment.content)}
+				{#if rendered.ok}
+					{#if rendered.html}
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify above. -->
+						{@html rendered.html}
+					{/if}
+				{:else}
+					<!-- No retry offered: nothing has changed to retry against, and the
+					     next streamed chunk re-runs the parse on its own. -->
+					<pre class="whitespace-pre-wrap">{rendered.raw}</pre>
+				{/if}
 			{/if}
-		{/if}
+		</ErrorBoundary>
 	{/each}
 </div>

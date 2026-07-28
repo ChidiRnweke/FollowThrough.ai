@@ -22,6 +22,36 @@ services:
       - rustfs-network
       - telemetry-network
 
+  # Single instance by design: the tasks discover their work from the database on
+  # every tick, so a second replica would only duplicate embedding calls.
+  worker:
+    image: ghcr.io/chidirnweke/followthrough.ai:latest
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "--import",
+        "./scripts/otel-instrumentation.js",
+        "build-worker/worker.js",
+      ]
+    deploy:
+      replicas: 1
+    environment:
+      CONFIG_SOURCE: ${CONFIG_SOURCE:-infisical}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT}
+      INFISICAL_URL: ${INFISICAL_URL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel_collector:4317}
+      OTEL_SERVICE_NAME: ${OTEL_WORKER_SERVICE_NAME:-followthrough-worker}
+      PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-followthrough}
+      PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
+    networks:
+      - postgres-network
+      - rustfs-network
+      - telemetry-network
+
   migrate:
     image: ghcr.io/chidirnweke/followthrough.ai:latest
     command:

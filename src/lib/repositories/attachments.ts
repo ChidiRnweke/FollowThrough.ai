@@ -5,8 +5,15 @@ import type {
 	AttachmentVersion,
 	AttachmentView,
 	NoteId,
-	ProjectId
+	ProjectId,
+	UserId
 } from '$lib/models';
+
+/** An upload reservation together with the owner needed to scope its removal. */
+export interface OwnedAttachmentUpload {
+	readonly userId: UserId;
+	readonly upload: AttachmentUpload;
+}
 
 export interface AttachmentRepository {
 	createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload>;
@@ -32,4 +39,10 @@ export interface AttachmentRepository {
 	removeById(actor: ActorContext, id: Attachment['id']): Promise<void>;
 	updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView>;
 	failInterrupted(): Promise<number>;
+	/**
+	 * Upload reservations that expired before `before` and were never finalized.
+	 * Their staged objects are still sitting in the bucket; the sweep worker uses
+	 * this to reclaim both.
+	 */
+	listExpiredUploads(before: Date, limit: number): Promise<readonly OwnedAttachmentUpload[]>;
 }

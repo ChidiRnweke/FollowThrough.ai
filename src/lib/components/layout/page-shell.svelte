@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { cn } from '$lib/utils';
+	import ErrorBoundary from './error-boundary.svelte';
 
 	let {
 		title,
@@ -62,5 +63,12 @@
 			{/if}
 		</header>
 	{/if}
-	{@render children()}
+	<!--
+		The header is outside the boundary on purpose: when a page body fails, the
+		title and breadcrumb are what tell you where you still are, and the app
+		sidebar, tabs and right panel keep working around it.
+	-->
+	<ErrorBoundary label="this page">
+		{@render children()}
+	</ErrorBoundary>
 </div>

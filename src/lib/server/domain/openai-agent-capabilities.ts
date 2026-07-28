@@ -83,6 +83,42 @@ const failureFromOutput = (output: unknown): string | undefined => {
 	}
 };
 
+/**
+ * Reasoning reaches the runner over two channels: token-level deltas ride the raw
+ * provider chunk (forwarded as a `model` raw model event), and the SDK emits one
+ * completed reasoning item per generation. The item repeats whatever the deltas
+ * already carried, so it only serves as a fallback for providers that stream none.
+ */
+type ReasoningStreamEvent = ToolStreamEvent & {
+	readonly data?: { readonly type?: string; readonly event?: unknown };
+};
+
+const reasoningDeltaFromChunk = (event: ReasoningStreamEvent): string => {
+	if (event.type !== 'raw_model_stream_event' || event.data?.type !== 'model') return '';
+	const chunk = event.data.event as
+		| {
+				readonly choices?: ReadonlyArray<{
+					readonly delta?: { readonly reasoning?: unknown };
+				}>;
+		  }
+		| undefined;
+	const reasoning = chunk?.choices?.[0]?.delta?.reasoning;
+	return typeof reasoning === 'string' ? reasoning : '';
+};
+
+const reasoningTextFromItem = (item: ToolStreamEvent['item']): string => {
+	const serialized = item?.toJSON() as { rawItem?: Record<string, unknown> } | undefined;
+	const raw = item?.rawItem ?? serialized?.rawItem ?? {};
+	const parts = (raw.rawContent ?? raw.content ?? raw.summary) as unknown;
+	if (!Array.isArray(parts)) return '';
+	return parts
+		.map((part) =>
+			typeof part === 'object' && part !== null && 'text' in part ? part.text : undefined
+		)
+		.filter((text): text is string => typeof text === 'string' && text.length > 0)
+		.join('\n');
+};
+
 type ToolInvocation = 'direct' | 'use_tool';
 
 interface RecoverableToolSuggestion {
@@ -168,6 +204,29 @@ export class AgentToolEventMapper {
 	}
 }
 
+export class AgentReasoningEventMapper {
+	private streamed = false;
+
+	map(event: ReasoningStreamEvent): AgentEvent | undefined {
+		const delta = reasoningDeltaFromChunk(event);
+		if (delta) {
+			this.streamed = true;
+			return { type: 'reasoning_delta', text: delta };
+		}
+		if (event.type === 'run_item_stream_event' && event.name === 'reasoning_item_created') {
+			// The completed item repeats text the deltas already carried; it only
+			// matters when the provider streamed no reasoning deltas at all.
+			if (this.streamed) {
+				this.streamed = false;
+				return undefined;
+			}
+			const text = reasoningTextFromItem(event.item);
+			return text ? { type: 'reasoning_delta', text } : undefined;
+		}
+		return undefined;
+	}
+}
+
 export class OpenAIAgentRunner implements AgentRunner {
 	constructor(
 		private readonly controllers: () => ControllerFactory,
@@ -232,9 +291,12 @@ export class OpenAIAgentRunner implements AgentRunner {
 					...toolRecovery
 				});
 				const mapper = new AgentToolEventMapper();
+				const reasoningMapper = new AgentReasoningEventMapper();
 				for await (const event of stream) {
 					const toolEvent = mapper.map(event);
 					if (toolEvent) yield { type: 'event', event: toolEvent };
+					const reasoningEvent = reasoningMapper.map(event);
+					if (reasoningEvent) yield { type: 'event', event: reasoningEvent };
 					if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta') {
 						outputText += event.data.delta;
 						yield { type: 'event', event: { type: 'text_delta', text: event.data.delta } };

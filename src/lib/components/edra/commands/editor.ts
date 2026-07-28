@@ -36,6 +36,7 @@ import { setTocItems } from '../toc.svelte';
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
 import { armLiteralPaste, handleMarkdownPaste, isLiteralPasteShortcut } from './paste.js';
+import { stripPastedStyling } from './clipboard-styles.js';
 import { NoteLinkMark } from './nodes.js';
 import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
@@ -149,7 +150,9 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				if (isLiteralPasteShortcut(event)) armLiteralPaste();
 				return false;
 			},
-			handlePaste: handleMarkdownPaste
+			handlePaste: handleMarkdownPaste,
+			// Colours from the source document, not from this note: see clipboard-styles.
+			transformPastedHTML: (html) => stripPastedStyling(html)
 		},
 		onUpdate: props?.onUpdate || (() => {})
 	});

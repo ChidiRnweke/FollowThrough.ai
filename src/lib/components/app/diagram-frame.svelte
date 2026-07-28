@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtEllipsisV as EllipsisVertical } from '$lib/components/icons';
 	import SafeSvgPreview from './safe-svg-preview.svelte';
+	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 
 	let {
 		diagram,
@@ -61,13 +62,17 @@
 	</Card.Header>
 	<Card.Content class="px-4">
 		{#if diagram.renderedSvg}
-			<div class="flex min-h-24 items-center justify-center overflow-x-auto">
-				<SafeSvgPreview
-					svg={diagram.renderedSvg}
-					alt={diagram.title ? `Preview of ${diagram.title}` : 'Diagram preview'}
-					class="max-h-80 max-w-full"
-				/>
-			</div>
+			<!-- Generated SVG. If it will not display, the source is still worth reading,
+			     which is the same treatment the not-yet-rendered branch below gives. -->
+			<ErrorBoundary label="this diagram" source={diagram.source}>
+				<div class="flex min-h-24 items-center justify-center overflow-x-auto">
+					<SafeSvgPreview
+						svg={diagram.renderedSvg}
+						alt={diagram.title ? `Preview of ${diagram.title}` : 'Diagram preview'}
+						class="max-h-80 max-w-full"
+					/>
+				</div>
+			</ErrorBoundary>
 		{:else}
 			<div class="space-y-2 rounded-md bg-muted/50 p-3">
 				<p class="text-sm text-muted-foreground">This diagram has not rendered.</p>

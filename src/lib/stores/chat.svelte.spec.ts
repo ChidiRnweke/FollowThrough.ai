@@ -12,7 +12,7 @@ import type {
 	AgentRunTransport,
 	StoredAgentRunClientState
 } from '$lib/client/agent-runs/contracts';
-import { ChatStore } from './chat.svelte';
+import { ChatStore, entryText } from './chat.svelte';
 
 const runId = '10000000-0000-4000-8000-000000000001' as AgentRunId;
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
@@ -136,5 +136,28 @@ describe('chat event projection', () => {
 			{ type: 'text_delta', text: 'New' }
 		]);
 		expect(reply.parts).toEqual([{ kind: 'text', text: 'New' }]);
+	});
+
+	it('keeps reasoning inline in the order it streams', async () => {
+		const { reply } = await sendWith([
+			{ type: 'reasoning_delta', text: 'Let me search. ' },
+			{ type: 'reasoning_delta', text: 'Broadly first.' },
+			{ type: 'tool_started', callId: 'call-1', name: 'search', arguments: { query: '*' } },
+			{ type: 'tool_completed', callId: 'call-1', name: 'search', output: { count: 1 } },
+			{ type: 'text_delta', text: 'Found one.' }
+		]);
+		expect(reply.parts.map((part) => part.kind)).toEqual(['reasoning', 'tool', 'text']);
+		expect(reply.parts.at(0)).toEqual({
+			kind: 'reasoning',
+			text: 'Let me search. Broadly first.'
+		});
+	});
+
+	it('keeps reasoning out of the turn prose', async () => {
+		const { reply } = await sendWith([
+			{ type: 'reasoning_delta', text: 'Thinking.' },
+			{ type: 'text_delta', text: 'The answer.' }
+		]);
+		expect(entryText(reply)).toBe('The answer.');
 	});
 });

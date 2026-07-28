@@ -7,7 +7,11 @@ import type {
 	AttachmentVersionId,
 	AttachmentView
 } from '$lib/models';
-import type { AttachmentRepository, NoteRepository } from '$lib/repositories';
+import type {
+	AttachmentRepository,
+	NoteRepository,
+	OwnedAttachmentUpload
+} from '$lib/repositories';
 import {
 	AttachmentParserRegistry,
 	type AttachmentParser,
@@ -56,6 +60,9 @@ class StubAttachmentRepository implements AttachmentRepository {
 		throw new Error('not used');
 	}
 	deleteUpload(): Promise<void> {
+		throw new Error('not used');
+	}
+	listExpiredUploads(): Promise<readonly OwnedAttachmentUpload[]> {
 		throw new Error('not used');
 	}
 	list(): Promise<readonly AttachmentView[]> {

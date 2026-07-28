@@ -6,9 +6,11 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "vite build && pnpm build:worker",
+		"build:worker": "vite build --config vite.config.worker.ts",
 		"preview": "vite preview",
 		"start": "node --import ./scripts/otel-instrumentation.js build",
+		"worker": "node --import ./scripts/otel-instrumentation.js build-worker/worker.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "NODE_OPTIONS='--max-old-space-size=1024' svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "NODE_OPTIONS='--max-old-space-size=1024' svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

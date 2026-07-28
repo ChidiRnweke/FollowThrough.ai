@@ -35,6 +35,8 @@
 	import { toast } from 'svelte-sonner';
 	import SuggestionCard from '../suggestion-card.svelte';
 	import ChatMarkdown from '$lib/components/app/agent/chat-markdown.svelte';
+	import ChatReasoning from '$lib/components/app/agent/chat-reasoning.svelte';
+	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
 	import ChatStarters from '$lib/components/app/agent/chat-starters.svelte';
@@ -468,171 +470,185 @@
 				{/if}
 			{/if}
 			{#each chat.entries as entry (entry.id)}
-				<div class="group/turn flex flex-col gap-1.5">
-					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
-					{#if editingId === entry.id}
-						<!-- Editing happens where the question is, not in the composer: the
+				<!--
+					One turn per boundary. A turn carries model output through several
+					renderers (markdown, diffs, tool cards), and the panel has to survive
+					any of them failing: the other turns stay readable and the composer
+					below stays usable.
+				-->
+				<ErrorBoundary label="this turn" class="my-0">
+					<div class="group/turn flex flex-col gap-1.5">
+						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
+						{#if editingId === entry.id}
+							<!-- Editing happens where the question is, not in the composer: the
 						     turn being replaced has to stay in view while it is rewritten. -->
-						<div class="flex flex-col gap-1.5">
-							<Textarea
-								bind:value={editDraft}
-								rows={2}
-								class="min-h-16 resize-none"
-								aria-label="Edit question"
-								onkeydown={(event) => handleEditKeydown(event, entry)}
-								{@attach focusAtEnd}
-							/>
-							<div class="flex items-center gap-1.5">
-								<Button size="xs" onclick={() => void resubmit(entry, editDraft)}>Resubmit</Button>
-								<Button variant="ghost" size="xs" onclick={cancelEditing}>Cancel</Button>
-								<span class="text-xs text-muted-foreground">
-									Replaces everything below this question.
-								</span>
-							</div>
-						</div>
-					{/if}
-					{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
-						{#if part.kind === 'text'}
-							<!-- While the editor is open it stands in for the prose it replaces. -->
-							{#if part.text && editingId !== entry.id}
-								<ChatMarkdown content={part.text} />
-							{/if}
-						{:else}
-							{@const tool = part.tool}
-							{#if tool.status === 'approval_required'}
-								<ToolApprovalCard
-									{tool}
-									onapprove={() => void chat.decide(entry, tool, 'approve')}
-									onreject={() => void chat.decide(entry, tool, 'reject')}
+							<div class="flex flex-col gap-1.5">
+								<Textarea
+									bind:value={editDraft}
+									rows={2}
+									class="min-h-16 resize-none"
+									aria-label="Edit question"
+									onkeydown={(event) => handleEditKeydown(event, entry)}
+									{@attach focusAtEnd}
 								/>
-							{:else}
-								<Collapsible.Root>
-									<Collapsible.Trigger>
-										{#snippet child({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="sm"
-												class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
-													tool.name
-												)
-													? 'text-foreground'
-													: 'text-muted-foreground'}"
-											>
-												<ChevronRight
-													class="size-3.5 transition-transform duration-(--duration-micro)"
-												/>
-												{#if tool.status === 'running'}
-													<LoaderCircle class="size-3.5 animate-spin" />
-												{/if}
-												{toolStatusLabel(tool)}
-											</Button>
-										{/snippet}
-									</Collapsible.Trigger>
-									<Collapsible.Content>
-										<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
-											{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
-												<li class="break-words">{line}</li>
-											{/each}
-										</ul>
-									</Collapsible.Content>
-								</Collapsible.Root>
-							{/if}
+								<div class="flex items-center gap-1.5">
+									<Button size="xs" onclick={() => void resubmit(entry, editDraft)}>Resubmit</Button
+									>
+									<Button variant="ghost" size="xs" onclick={cancelEditing}>Cancel</Button>
+									<span class="text-xs text-muted-foreground">
+										Replaces everything below this question.
+									</span>
+								</div>
+							</div>
 						{/if}
-					{/each}
-					{#if entry.role === 'assistant' && entry.status === 'queued'}
-						<ChatActivity label={entry.error ?? 'Queued'} />
-					{:else if entry.role === 'assistant' && entry.status === 'waiting'}
-						<ChatActivity />
-					{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
-						<ChatActivity
-							label="Agent is working"
-							toolActive={entry.parts.some((part) => part.kind === 'tool')}
-						/>
-					{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
-						<ChatActivity label="Cancellation requested" />
-					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
-						<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
-							<span
-								>{entry.error ??
-									(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
-							>
-							{#if entry.status === 'failed' && entry.retryable && entry.runId}
-								<Button variant="outline" size="xs" onclick={() => void requestRetry(entry)}>
-									<RotateCcw data-icon="inline-start" /> Retry
-								</Button>
+						{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
+							{#if part.kind === 'text'}
+								<!-- While the editor is open it stands in for the prose it replaces. -->
+								{#if part.text && editingId !== entry.id}
+									<ChatMarkdown content={part.text} />
+								{/if}
+							{:else if part.kind === 'reasoning'}
+								{#if part.text}
+									<ChatReasoning text={part.text} streaming={entry.status === 'streaming'} />
+								{/if}
+							{:else}
+								{@const tool = part.tool}
+								{#if tool.status === 'approval_required'}
+									<ToolApprovalCard
+										{tool}
+										{shell}
+										onapprove={() => void chat.decide(entry, tool, 'approve')}
+										onreject={() => void chat.decide(entry, tool, 'reject')}
+									/>
+								{:else}
+									<Collapsible.Root>
+										<Collapsible.Trigger>
+											{#snippet child({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="sm"
+													class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
+														tool.name
+													)
+														? 'text-foreground'
+														: 'text-muted-foreground'}"
+												>
+													<ChevronRight
+														class="size-3.5 transition-transform duration-(--duration-micro)"
+													/>
+													{#if tool.status === 'running'}
+														<LoaderCircle class="size-3.5 animate-spin" />
+													{/if}
+													{toolStatusLabel(tool)}
+												</Button>
+											{/snippet}
+										</Collapsible.Trigger>
+										<Collapsible.Content>
+											<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
+												{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
+													<li class="break-words">{line}</li>
+												{/each}
+											</ul>
+										</Collapsible.Content>
+									</Collapsible.Root>
+								{/if}
 							{/if}
-						</div>
-					{/if}
-					<!--
+						{/each}
+						{#if entry.role === 'assistant' && entry.status === 'queued'}
+							<ChatActivity label={entry.error ?? 'Queued'} />
+						{:else if entry.role === 'assistant' && entry.status === 'waiting'}
+							<ChatActivity />
+						{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
+							<ChatActivity
+								label="Agent is working"
+								toolActive={entry.parts.some((part) => part.kind === 'tool')}
+							/>
+						{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
+							<ChatActivity label="Cancellation requested" />
+						{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
+							<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
+								<span
+									>{entry.error ??
+										(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
+								>
+								{#if entry.status === 'failed' && entry.retryable && entry.runId}
+									<Button variant="outline" size="xs" onclick={() => void requestRetry(entry)}>
+										<RotateCcw data-icon="inline-start" /> Retry
+									</Button>
+								{/if}
+							</div>
+						{/if}
+						<!--
 						Actions belong under the thing they act on, aligned with it, and stay
 						hidden until the turn is hovered or tabbed into so a long thread is
 						not a wall of buttons. Tooltips point up, over the message the
 						buttons came from rather than over the turn below.
 					-->
-					{#if editingId !== entry.id && entryText(entry)}
-						<div
-							class="flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
-						>
-							<Tip text="Copy">
-								{#snippet children({ props })}
-									<Button
-										{...props}
-										variant="ghost"
-										size="icon-xs"
-										aria-label="Copy message"
-										onclick={() => void copyMessage(entry)}
-									>
-										<Copy />
-									</Button>
-								{/snippet}
-							</Tip>
-							{#if entry.role === 'user'}
-								<Tip text="Edit and resubmit">
+						{#if editingId !== entry.id && entryText(entry)}
+							<div
+								class="flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
+							>
+								<Tip text="Copy">
 									{#snippet children({ props })}
 										<Button
 											{...props}
 											variant="ghost"
 											size="icon-xs"
-											aria-label="Edit and resubmit question"
-											disabled={chat.isStreaming}
-											onclick={() => startEditing(entry)}
+											aria-label="Copy message"
+											onclick={() => void copyMessage(entry)}
 										>
-											<Pencil />
+											<Copy />
 										</Button>
 									{/snippet}
 								</Tip>
-							{:else if entry.status === 'completed'}
-								<Tip text="Ask again">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon-xs"
-											aria-label="Ask again"
-											disabled={chat.isStreaming}
-											onclick={() => askAgain(entry)}
-										>
-											<RotateCcw />
-										</Button>
-									{/snippet}
-								</Tip>
-							{/if}
-						</div>
-					{/if}
-					{#each entry.suggestions as view (view.suggestion.id)}
-						<SuggestionCard
-							{view}
-							busy={(workbench.focusedNoteId &&
-								suggestionTrayRegistry
-									.peek(workbench.focusedNoteId)
-									?.busyIds.includes(view.suggestion.id)) ??
-								false}
-							onaccept={(id) => decide(id, 'accept')}
-							onreject={(id) => decide(id, 'reject')}
-						/>
-					{/each}
-				</div>
+								{#if entry.role === 'user'}
+									<Tip text="Edit and resubmit">
+										{#snippet children({ props })}
+											<Button
+												{...props}
+												variant="ghost"
+												size="icon-xs"
+												aria-label="Edit and resubmit question"
+												disabled={chat.isStreaming}
+												onclick={() => startEditing(entry)}
+											>
+												<Pencil />
+											</Button>
+										{/snippet}
+									</Tip>
+								{:else if entry.status === 'completed'}
+									<Tip text="Ask again">
+										{#snippet children({ props })}
+											<Button
+												{...props}
+												variant="ghost"
+												size="icon-xs"
+												aria-label="Ask again"
+												disabled={chat.isStreaming}
+												onclick={() => askAgain(entry)}
+											>
+												<RotateCcw />
+											</Button>
+										{/snippet}
+									</Tip>
+								{/if}
+							</div>
+						{/if}
+						{#each entry.suggestions as view (view.suggestion.id)}
+							<SuggestionCard
+								{view}
+								busy={(workbench.focusedNoteId &&
+									suggestionTrayRegistry
+										.peek(workbench.focusedNoteId)
+										?.busyIds.includes(view.suggestion.id)) ??
+									false}
+								onaccept={(id) => decide(id, 'accept')}
+								onreject={(id) => decide(id, 'reject')}
+							/>
+						{/each}
+					</div>
+				</ErrorBoundary>
 			{/each}
 		</div>
 	</ScrollArea>

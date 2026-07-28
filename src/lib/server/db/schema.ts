@@ -852,6 +852,11 @@ export const searchChunks = pgTable(
 		contentHash: text('content_hash').notNull(),
 		sourceRevision: integer('source_revision').notNull().default(1),
 		chunkIndex: integer('chunk_index').notNull().default(0),
+		// Set when a newer revision of the source has been staged but not yet embedded.
+		// Superseded rows stay searchable by embedding (stale content beats no content)
+		// and are dropped once their replacements carry vectors. See the worker at
+		// `$lib/server/workers/embedding-backfill`.
+		supersededAt: timestamp('superseded_at', { withTimezone: true }),
 		...timestamps
 	},
 	(table) => [
@@ -860,6 +865,11 @@ export const searchChunks = pgTable(
 		index('search_chunks_attachment_idx').on(table.attachmentId),
 		index('search_chunks_user_idx').on(table.userId),
 		index('search_chunks_project_idx').on(table.projectId),
+		// The backfill worker's queue is the data itself: every tick scans for chunks
+		// awaiting a vector, so keep that scan proportional to the backlog, not the table.
+		index('search_chunks_pending_idx')
+			.on(table.userId)
+			.where(sql`embedding is null`),
 		check(
 			'search_chunks_single_source',
 			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}) = 1`

@@ -32,6 +32,8 @@ WORKDIR /app
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/build ./build
+# The worker sidecar runs from this same image with a different command.
+COPY --from=builder /app/build-worker ./build-worker
 COPY --from=builder /app/package.json ./package.json
 
 COPY --from=builder /app/drizzle ./drizzle

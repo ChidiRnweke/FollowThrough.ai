@@ -22,6 +22,7 @@
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import BubbleMenu from '$lib/components/edra/BubbleMenu.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -422,147 +423,173 @@
 	}
 </script>
 
+{#snippet fallback(error: App.Error, reset: () => void)}
+	<div
+		class="flex min-h-96 flex-1 flex-col justify-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm"
+		role="alert"
+	>
+		<p class="font-medium text-destructive">The editor stopped rendering this note.</p>
+		<p class="text-muted-foreground">
+			Your saved note is untouched — nothing was written while it was down. Try again, or reload the
+			page if it keeps failing.
+		</p>
+		<p class="font-mono text-xs text-muted-foreground">{error.message}</p>
+		<div class="flex items-center gap-2">
+			<Button variant="outline" size="sm" onclick={reset}>Try again</Button>
+			<Button variant="ghost" size="sm" onclick={() => location.reload()}>Reload the page</Button>
+		</div>
+	</div>
+{/snippet}
+
 {#if hydrated && editor}
 	<!-- No `cursor-text` here: this wrapper is wider and taller than the editable
 	     surface, so the I-beam extended into dead margin where clicking places no
 	     caret. `.tiptap` declares it for the surface that actually takes text. -->
 	<div class="flex min-h-96 flex-1 flex-col">
-		<Tiptap {editor}>
-			<BubbleMenu
-				{editor}
-				class="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
-			>
-				{#if onask}
-					<!--
+		<!--
+			The editor is the one surface where degrading quietly would be wrong: a
+			node view that throws must not read as "the note is empty". State what
+			happened and say the saved note is intact, because that is the question
+			this failure raises.
+		-->
+		<ErrorBoundary label="the editor" {fallback}>
+			<Tiptap {editor}>
+				<BubbleMenu
+					{editor}
+					class="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+				>
+					{#if onask}
+						<!--
 						The open-ended one, so it leads: the four beside it each do a single
 						fixed thing, and this is the one that says the agent will take any
 						instruction about the selection. Styled exactly like its neighbours —
 						the bubble is already an AI cluster, so the tinted mark the agent
 						carries elsewhere would only break the row's own consistency here.
 					-->
-					<Tip text="Open the chat with the selection attached">
+						<Tip text="Open the chat with the selection attached">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="sm"
+									onmousedown={preserveEditorSelection}
+									onclick={() => onask(agentActions.selection.prompt)}
+								>
+									<Suggestion class="size-4" />
+									Ask about this
+								</Button>
+							{/snippet}
+						</Tip>
+						<Separator orientation="vertical" class="h-5" />
+					{/if}
+					<Tip text="Turn commitments in the selection into todos">
 						{#snippet children({ props })}
 							<Button
 								{...props}
 								variant="ghost"
 								size="sm"
 								onmousedown={preserveEditorSelection}
-								onclick={() => onask(agentActions.selection.prompt)}
+								onclick={() => runSelectionAction('promises')}
 							>
-								<Suggestion class="size-4" />
-								Ask about this
+								<ClipboardCheck class="size-4" />
+								Extract promises
+							</Button>
+						{/snippet}
+					</Tip>
+					<Tip text="Find related notes and propose backlinks">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="sm"
+								onmousedown={preserveEditorSelection}
+								onclick={() => runSelectionAction('relate')}
+							>
+								<Waypoints class="size-4" />
+								Find related
+							</Button>
+						{/snippet}
+					</Tip>
+					<Tip text="Find supporting external references">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="sm"
+								onmousedown={preserveEditorSelection}
+								onclick={() => runSelectionAction('reference')}
+							>
+								<BookOpen class="size-4" />
+								Reference
 							</Button>
 						{/snippet}
 					</Tip>
 					<Separator orientation="vertical" class="h-5" />
-				{/if}
-				<Tip text="Turn commitments in the selection into todos">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="sm"
-							onmousedown={preserveEditorSelection}
-							onclick={() => runSelectionAction('promises')}
-						>
-							<ClipboardCheck class="size-4" />
-							Extract promises
-						</Button>
-					{/snippet}
-				</Tip>
-				<Tip text="Find related notes and propose backlinks">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="sm"
-							onmousedown={preserveEditorSelection}
-							onclick={() => runSelectionAction('relate')}
-						>
-							<Waypoints class="size-4" />
-							Find related
-						</Button>
-					{/snippet}
-				</Tip>
-				<Tip text="Find supporting external references">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="sm"
-							onmousedown={preserveEditorSelection}
-							onclick={() => runSelectionAction('reference')}
-						>
-							<BookOpen class="size-4" />
-							Reference
-						</Button>
-					{/snippet}
-				</Tip>
-				<Separator orientation="vertical" class="h-5" />
-				<Tip text="Generate a mermaid diagram from the selection and insert it">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="sm"
-							onmousedown={preserveEditorSelection}
-							onclick={() => runSelectionAction('diagram')}
-						>
-							<Workflow class="size-4" />
-							Diagram
-						</Button>
-					{/snippet}
-				</Tip>
-				{#if skills.length > 0 && onskill}
-					<Separator orientation="vertical" class="h-5" />
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props: menuProps })}
-								<Tip text="Run one of your skills on the selection">
-									{#snippet children({ props: tipProps })}
-										<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
-											<Wrench class="size-4" />
-											Skills
-											<ChevronDown class="size-3" />
-										</Button>
-									{/snippet}
-								</Tip>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="start">
-							{#each skills as skill (skill.noteId)}
-								<DropdownMenu.Item onclick={() => onskill(skill.name)}>
-									<Tip text={skill.description} side="right">
-										{#snippet children({ props })}
-											<span {...props}>{skill.name}</span>
+					<Tip text="Generate a mermaid diagram from the selection and insert it">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="sm"
+								onmousedown={preserveEditorSelection}
+								onclick={() => runSelectionAction('diagram')}
+							>
+								<Workflow class="size-4" />
+								Diagram
+							</Button>
+						{/snippet}
+					</Tip>
+					{#if skills.length > 0 && onskill}
+						<Separator orientation="vertical" class="h-5" />
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props: menuProps })}
+									<Tip text="Run one of your skills on the selection">
+										{#snippet children({ props: tipProps })}
+											<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
+												<Wrench class="size-4" />
+												Skills
+												<ChevronDown class="size-3" />
+											</Button>
 										{/snippet}
 									</Tip>
-								</DropdownMenu.Item>
-							{/each}
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
-				{/if}
-			</BubbleMenu>
-			<EdraEditor
-				class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
-			/>
-		</Tiptap>
-		{#if activeLink}
-			<ReferenceLinkPreview
-				group={activeLink.group}
-				anchor={activeLink.anchor}
-				onretain={retainActiveLink}
-				onurlchange={(url) => (activeLinkUrl = url)}
-				onclose={scheduleActiveLinkClose}
-			/>
-			<div
-				class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
-				role="status"
-				aria-label={`Link destination: ${activeLinkUrl}`}
-			>
-				{activeLinkUrl}
-			</div>
-		{/if}
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="start">
+								{#each skills as skill (skill.noteId)}
+									<DropdownMenu.Item onclick={() => onskill(skill.name)}>
+										<Tip text={skill.description} side="right">
+											{#snippet children({ props })}
+												<span {...props}>{skill.name}</span>
+											{/snippet}
+										</Tip>
+									</DropdownMenu.Item>
+								{/each}
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+					{/if}
+				</BubbleMenu>
+				<EdraEditor
+					class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
+				/>
+			</Tiptap>
+			{#if activeLink}
+				<ReferenceLinkPreview
+					group={activeLink.group}
+					anchor={activeLink.anchor}
+					onretain={retainActiveLink}
+					onurlchange={(url) => (activeLinkUrl = url)}
+					onclose={scheduleActiveLinkClose}
+				/>
+				<div
+					class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
+					role="status"
+					aria-label={`Link destination: ${activeLinkUrl}`}
+				>
+					{activeLinkUrl}
+				</div>
+			{/if}
+		</ErrorBoundary>
 	</div>
 {:else}
 	<div class="space-y-3">

@@ -1,0 +1,2 @@
+ALTER TABLE "search_chunks" ADD COLUMN "superseded_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "search_chunks_pending_idx" ON "search_chunks" USING btree ("user_id") WHERE embedding is null;

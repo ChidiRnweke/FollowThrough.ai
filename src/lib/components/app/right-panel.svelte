@@ -16,6 +16,7 @@
 	import AgentSettingsPopover from './agent/agent-settings-popover.svelte';
 	import { chat } from '$lib/stores/chat.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
+	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { rightPanel } from '$lib/stores/right-panel.svelte';
 	import ChatPanel from './panels/chat-panel.svelte';
 	import MemoryPanel from './panels/memory-panel.svelte';
@@ -119,26 +120,32 @@
 			</header>
 			<Separator />
 			<div class="min-h-0 flex-1 p-4">
-				{#if renderedMode === 'chat'}
-					<ChatPanel
-						{shell}
-						{sessions}
-						{activeNoteId}
-						{activeProjectId}
-						{agentPreferences}
-						{agentAvailable}
-					/>
-				{:else if renderedMode === 'todo-detail'}
-					<ScrollArea class="h-full">
-						<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
-					</ScrollArea>
-				{:else if renderedMode === 'project-memory'}
-					<MemoryPanel />
-				{:else if renderedMode === 'suggestions'}
-					<ScrollArea class="h-full">
-						<SuggestionsPanel />
-					</ScrollArea>
-				{/if}
+				<!--
+					The boundary starts here, below the header: a panel that fails must
+					still be closable, so the close button above stays outside it.
+				-->
+				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
+					{#if renderedMode === 'chat'}
+						<ChatPanel
+							{shell}
+							{sessions}
+							{activeNoteId}
+							{activeProjectId}
+							{agentPreferences}
+							{agentAvailable}
+						/>
+					{:else if renderedMode === 'todo-detail'}
+						<ScrollArea class="h-full">
+							<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
+						</ScrollArea>
+					{:else if renderedMode === 'project-memory'}
+						<MemoryPanel />
+					{:else if renderedMode === 'suggestions'}
+						<ScrollArea class="h-full">
+							<SuggestionsPanel />
+						</ScrollArea>
+					{/if}
+				</ErrorBoundary>
 			</div>
 		</div>
 	</aside>
@@ -174,20 +181,22 @@
 					? 'overflow-hidden pb-[max(1rem,env(safe-area-inset-bottom))]'
 					: 'overflow-y-auto'}"
 			>
-				{#if renderedMode === 'chat'}
-					<ChatPanel
-						{shell}
-						{sessions}
-						{activeNoteId}
-						{activeProjectId}
-						{agentPreferences}
-						{agentAvailable}
-					/>
-				{:else if renderedMode === 'project-memory'}
-					<MemoryPanel />
-				{:else if renderedMode === 'suggestions'}
-					<SuggestionsPanel />
-				{/if}
+				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
+					{#if renderedMode === 'chat'}
+						<ChatPanel
+							{shell}
+							{sessions}
+							{activeNoteId}
+							{activeProjectId}
+							{agentPreferences}
+							{agentAvailable}
+						/>
+					{:else if renderedMode === 'project-memory'}
+						<MemoryPanel />
+					{:else if renderedMode === 'suggestions'}
+						<SuggestionsPanel />
+					{/if}
+				</ErrorBoundary>
 			</div>
 		</Sheet.Content>
 	</Sheet.Root>

@@ -1,11 +1,27 @@
 @import 'katex/dist/katex.min.css';
 @import './onedark.css';
 
+/* The system I-beam is a 1px line with no contrast guarantee: over the paper
+   surface it antialiases into the background (and on some Windows/Chrome
+   setups renders outright white), so the pointer goes missing exactly where
+   people point most. Ship a native-shaped beam in the theme's own foreground
+   colour at 2px — indistinguishable from the system cursor, but always
+   visible. `text` is the fallback where url() cursors are rejected. */
+:root {
+	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%230c0c09' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
+		12 12;
+}
+
+.dark {
+	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%23fbfbf9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
+		12 12;
+}
+
 .tiptap {
 	flex: 1;
 	min-height: 100%;
 	caret-color: var(--foreground);
-	cursor: text;
+	cursor: var(--cursor-ibeam), text;
 	outline: none;
 }
 
@@ -57,7 +73,7 @@
 /* …but an editable island nested inside a non-editable node view still takes
    text, so the I-beam returns exactly where typing works. */
 .tiptap [contenteditable='true'] {
-	cursor: text;
+	cursor: var(--cursor-ibeam), text;
 }
 
 /* The Mermaid edit-mode canvas. A fixed box that scrolls in both axes, so a

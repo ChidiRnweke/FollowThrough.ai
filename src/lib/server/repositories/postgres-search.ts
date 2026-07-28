@@ -1,17 +1,60 @@
-import { and, asc, cosineDistance, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, cosineDistance, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type {
 	ActorContext,
 	AttachmentId,
+	DateTime,
 	DiagramId,
 	MemoryEntryId,
 	NoteId,
 	ProjectId,
 	SearchDocument,
-	SearchMatch
+	SearchMatch,
+	UserId
 } from '$lib/models';
-import type { RetrievalIndexRepository } from '$lib/repositories';
+import type {
+	EmbeddedChunk,
+	IndexSource,
+	PendingIndexSource,
+	RetrievalIndexRepository
+} from '$lib/repositories';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
+
+/**
+ * Narrows a query to exactly the chunks belonging to one source. Note chunks
+ * exclude diagram chunks, which carry a note id of their own.
+ */
+const scopeOf = (actor: ActorContext, source: IndexSource) => {
+	const owned = eq(schema.searchChunks.userId, actor.userId);
+	switch (source.kind) {
+		case 'note':
+			return and(
+				owned,
+				eq(schema.searchChunks.noteId, source.noteId),
+				isNull(schema.searchChunks.diagramId)
+			);
+		case 'diagram':
+			return and(owned, eq(schema.searchChunks.diagramId, source.diagramId));
+		case 'memory':
+			return and(owned, eq(schema.searchChunks.memoryEntryId, source.memoryEntryId));
+		case 'attachment':
+			return and(owned, eq(schema.searchChunks.attachmentId, source.attachmentId));
+	}
+};
+
+/** The source columns a staged document must inherit, given the source it belongs to. */
+const ownershipOf = (source: IndexSource) => {
+	switch (source.kind) {
+		case 'note':
+			return { noteId: source.noteId };
+		case 'diagram':
+			return { diagramId: source.diagramId };
+		case 'memory':
+			return { memoryEntryId: source.memoryEntryId };
+		case 'attachment':
+			return { attachmentId: source.attachmentId };
+	}
+};
 
 const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocument => ({
 	id: row.id as SearchDocument['id'],
@@ -31,7 +74,8 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 		? { sourceAnchorId: row.sourceAnchorId as SearchDocument['sourceAnchorId'] }
 		: {}),
 	...(row.embedding ? { embedding: row.embedding } : {}),
-	...(row.embeddingModel ? { embeddingModel: row.embeddingModel } : {})
+	...(row.embeddingModel ? { embeddingModel: row.embeddingModel } : {}),
+	...(row.supersededAt ? { supersededAt: row.supersededAt.toISOString() as DateTime } : {})
 });
 
 export class PostgresRetrievalIndexRepository implements RetrievalIndexRepository {
@@ -190,7 +234,8 @@ export class PostgresRetrievalIndexRepository implements RetrievalIndexRepositor
 			sourceRevision: document.sourceRevision,
 			chunkIndex: document.chunkIndex,
 			embedding: document.embedding ? [...document.embedding] : undefined,
-			embeddingModel: document.embeddingModel
+			embeddingModel: document.embeddingModel,
+			supersededAt: document.supersededAt ? new Date(document.supersededAt) : null
 		});
 	}
 
@@ -200,8 +245,11 @@ export class PostgresRetrievalIndexRepository implements RetrievalIndexRepositor
 		limit: number,
 		projectId?: ProjectId
 	): Promise<readonly SearchMatch[]> {
+		// Superseded chunks hold text the user has already edited away: correct to keep
+		// for semantic recall, wrong to surface as a literal match.
 		const conditions = [
 			eq(schema.searchChunks.userId, actor.userId),
+			isNull(schema.searchChunks.supersededAt),
 			sql`${schema.searchChunks.content} ilike ${`%${query}%`}`
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
@@ -222,7 +270,12 @@ export class PostgresRetrievalIndexRepository implements RetrievalIndexRepositor
 		projectId?: ProjectId
 	): Promise<readonly SearchMatch[]> {
 		const distance = cosineDistance(schema.searchChunks.embedding, [...embedding]);
-		const conditions = [eq(schema.searchChunks.userId, actor.userId)];
+		// Pending chunks have no vector, and a NULL distance sorts ahead of every real
+		// one — without this they would crowd out the matches they are meant to replace.
+		const conditions = [
+			eq(schema.searchChunks.userId, actor.userId),
+			isNotNull(schema.searchChunks.embedding)
+		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
 		const rows = await this.database
 			.select({ chunk: schema.searchChunks, distance })
@@ -268,5 +321,124 @@ export class PostgresRetrievalIndexRepository implements RetrievalIndexRepositor
 					eq(schema.searchChunks.memoryEntryId, memoryEntryId)
 				)
 			);
+	}
+
+	async stage(
+		actor: ActorContext,
+		source: IndexSource,
+		documents: readonly SearchDocument[]
+	): Promise<void> {
+		const scope = scopeOf(actor, source);
+		const ownership = ownershipOf(source);
+		const existing = await this.database
+			.select({
+				id: schema.searchChunks.id,
+				embedded: isNotNull(schema.searchChunks.embedding)
+			})
+			.from(schema.searchChunks)
+			.where(scope);
+
+		const known = new Map(existing.map((row) => [row.id, row.embedded]));
+		const desired = new Set(documents.map((document) => document.id as string));
+		const toRow = this.toRow(actor);
+
+		for (const document of documents) {
+			const row = { ...toRow(document), ...ownership };
+			if (known.has(document.id))
+				await this.database
+					.update(schema.searchChunks)
+					.set({ ...row, supersededAt: null, updatedAt: new Date() })
+					.where(eq(schema.searchChunks.id, document.id));
+			else await this.database.insert(schema.searchChunks).values(row);
+		}
+
+		// Rows the new revision dropped. Hold the embedded ones back only while some
+		// incoming chunk is still waiting for a vector — that is the whole point of
+		// superseding. If the caller embedded inline, nothing is pending and the old
+		// rows go immediately.
+		const awaitingVectors = documents.some((document) => !document.embedding);
+		const retired = existing.filter((row) => !desired.has(row.id));
+		const supersede = awaitingVectors
+			? retired.filter((row) => row.embedded).map((row) => row.id)
+			: [];
+		const held = new Set(supersede);
+		const discard = retired.filter((row) => !held.has(row.id)).map((row) => row.id);
+		if (supersede.length)
+			await this.database
+				.update(schema.searchChunks)
+				.set({ supersededAt: new Date() })
+				.where(inArray(schema.searchChunks.id, supersede));
+		if (discard.length)
+			await this.database
+				.delete(schema.searchChunks)
+				.where(inArray(schema.searchChunks.id, discard));
+	}
+
+	async listPendingSources(limit: number): Promise<readonly PendingIndexSource[]> {
+		const rows = await this.database
+			.selectDistinct({
+				userId: schema.searchChunks.userId,
+				noteId: schema.searchChunks.noteId,
+				diagramId: schema.searchChunks.diagramId,
+				memoryEntryId: schema.searchChunks.memoryEntryId,
+				attachmentId: schema.searchChunks.attachmentId
+			})
+			.from(schema.searchChunks)
+			.where(isNull(schema.searchChunks.embedding))
+			.limit(limit);
+
+		return rows.map((row) => ({
+			userId: row.userId as UserId,
+			source: (row.diagramId
+				? { kind: 'diagram', diagramId: row.diagramId as DiagramId }
+				: row.noteId
+					? { kind: 'note', noteId: row.noteId as NoteId }
+					: row.memoryEntryId
+						? { kind: 'memory', memoryEntryId: row.memoryEntryId as MemoryEntryId }
+						: {
+								kind: 'attachment',
+								attachmentId: row.attachmentId as AttachmentId
+							}) satisfies IndexSource
+		}));
+	}
+
+	async listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]> {
+		return (
+			await this.database
+				.select()
+				.from(schema.searchChunks)
+				.where(and(scopeOf(actor, source), isNull(schema.searchChunks.embedding)))
+				.orderBy(asc(schema.searchChunks.chunkIndex))
+		).map(toDocument);
+	}
+
+	async completePending(
+		actor: ActorContext,
+		source: IndexSource,
+		embedded: readonly EmbeddedChunk[],
+		embeddingModel: string
+	): Promise<void> {
+		const scope = scopeOf(actor, source);
+		for (const chunk of embedded)
+			await this.database
+				.update(schema.searchChunks)
+				.set({ embedding: [...chunk.embedding], embeddingModel, updatedAt: new Date() })
+				// Scoped as well as keyed: a chunk that was re-staged out from under us
+				// no longer belongs to this source and must not be resurrected.
+				.where(and(scope, eq(schema.searchChunks.id, chunk.id)));
+
+		// Only retire the superseded rows once nothing is pending. If the source was
+		// edited again mid-tick, the rows we just superseded are the only embedded
+		// ones left — dropping them here would blind semantic search until the next tick.
+		const [stillPending] = await this.database
+			.select({ id: schema.searchChunks.id })
+			.from(schema.searchChunks)
+			.where(and(scope, isNull(schema.searchChunks.embedding)))
+			.limit(1);
+		if (stillPending) return;
+
+		await this.database
+			.delete(schema.searchChunks)
+			.where(and(scope, isNotNull(schema.searchChunks.supersededAt)));
 	}
 }

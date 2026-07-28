@@ -284,6 +284,7 @@ export type AgentEvent =
 	  }
 	| { readonly type: 'run_started'; readonly runId: AgentRunId; readonly attempt: number }
 	| { readonly type: 'text_delta'; readonly text: string }
+	| { readonly type: 'reasoning_delta'; readonly text: string }
 	| {
 			readonly type: 'tool_started';
 			readonly callId: string;

@@ -54,7 +54,10 @@ export interface ContextChip {
 	readonly name: string;
 }
 
-export type ChatPart = { kind: 'text'; text: string } | { kind: 'tool'; tool: ChatToolActivity };
+export type ChatPart =
+	| { kind: 'text'; text: string }
+	| { kind: 'reasoning'; text: string }
+	| { kind: 'tool'; tool: ChatToolActivity };
 
 export interface ChatEntry {
 	readonly id: string;
@@ -95,6 +98,12 @@ const appendText = (entry: ChatEntry, text: string): void => {
 	const last = entry.parts.at(-1);
 	if (last?.kind === 'text') last.text += text;
 	else entry.parts.push({ kind: 'text', text });
+};
+
+const appendReasoning = (entry: ChatEntry, text: string): void => {
+	const last = entry.parts.at(-1);
+	if (last?.kind === 'reasoning') last.text += text;
+	else entry.parts.push({ kind: 'reasoning', text });
 };
 
 export class ChatStore {
@@ -525,6 +534,9 @@ export class ChatStore {
 		} else if (event.type === 'text_delta') {
 			reply.status = 'streaming';
 			appendText(reply, event.text);
+		} else if (event.type === 'reasoning_delta') {
+			reply.status = 'streaming';
+			appendReasoning(reply, event.text);
 		} else if (event.type === 'tool_started') {
 			reply.status = 'streaming';
 			applyToolActivity(reply, {

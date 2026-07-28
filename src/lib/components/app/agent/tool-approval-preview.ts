@@ -1,6 +1,5 @@
 import type { Note, NoteEdit, NoteId } from '$lib/models';
 import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-patch-preview';
-import { scalarSummaries } from './tool-presentation';
 
 /**
  * What an approval card should show for a pending tool call.
@@ -16,7 +15,8 @@ const NOTE_BODY_TOOLS = new Set(['save_note', 'edit_note']);
 
 export type ApprovalPreview =
 	| { readonly kind: 'note'; readonly change: NoteChange }
-	| { readonly kind: 'arguments'; readonly summaries: readonly string[] };
+	/** Nothing note-shaped to diff — the card describes the arguments instead. */
+	| { readonly kind: 'arguments' };
 
 export interface NoteChange {
 	readonly title: string;
@@ -60,8 +60,7 @@ export const approvalPreview = (
 	args: Readonly<Record<string, unknown>>,
 	baseline: Note | undefined
 ): ApprovalPreview => {
-	if (!NOTE_BODY_TOOLS.has(name) || !baseline)
-		return { kind: 'arguments', summaries: scalarSummaries(args) };
+	if (!NOTE_BODY_TOOLS.has(name) || !baseline) return { kind: 'arguments' };
 
 	const result = candidateBody(name, args, baseline);
 	if ('problems' in result)
