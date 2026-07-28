@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Skill } from '$lib/models';
 import { InMemorySkills } from '$lib/testing/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
+import { InMemoryProjects } from '$lib/testing/fakes/in-memory-projects';
 import {
+	appContextBuilder,
 	noteBuilder,
+	projectBuilder,
 	testActor,
 	testNoteId,
 	testProjectId,
@@ -225,5 +228,44 @@ describe('Agent grounding invariants', () => {
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(skills.usages).toEqual([]);
+	});
+});
+
+describe('Scope staged before the user moved screens', () => {
+	/** The staged note lives in a project the user has since navigated away from. */
+	const resolved = async () => {
+		const notes = new InMemoryNoteContent();
+		notes.notes = [noteBuilder({ id: testNoteId(2), title: 'Migration plan' })];
+		const projects = new InMemoryProjects();
+		projects.projects = [projectBuilder({ id: testProjectId(2), name: 'Project Beta' })];
+		const builder = new EnrichedAgentContextBuilder(
+			new BasicAgent(),
+			new InMemorySkills(),
+			notes,
+			undefined,
+			undefined,
+			projects
+		);
+		const context = await builder.build(
+			testActor(),
+			{
+				prompt: 'Summarise this',
+				appContext: appContextBuilder(),
+				requestedScope: { projectId: testProjectId(2), noteId: testNoteId(2) }
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		return (context.appContext as { requestedScope?: { note: string; noteTitle?: string } })
+			.requestedScope;
+	};
+
+	it('names both sides of the divergence for the agent', async () => {
+		expect(await resolved()).toMatchObject({
+			note: expect.stringContaining('Project Beta') as unknown as string
+		});
+	});
+
+	it('resolves the staged note title rather than leaving a bare id', async () => {
+		expect((await resolved())?.noteTitle).toBe('Migration plan');
 	});
 });

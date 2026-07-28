@@ -79,4 +79,16 @@ export interface ResolvedAppContextV1 extends AppContextSnapshotV1 {
 		readonly noteId?: NoteId;
 	};
 	readonly projectTransition: ProjectTransition;
+	/**
+	 * Present only when the user moved screens between staging the request and
+	 * sending it. The snapshot above is the active scope; `note` states the
+	 * divergence in the terms the agent should reason about.
+	 */
+	readonly requestedScope?: {
+		readonly projectId?: ProjectId;
+		readonly projectName?: string;
+		readonly noteId?: NoteId;
+		readonly noteTitle?: string;
+		readonly note: string;
+	};
 }

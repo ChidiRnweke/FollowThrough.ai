@@ -168,7 +168,45 @@ export class EnrichedAgentContextBuilder implements AgentContextBuilder {
 					...(originProject ? { projectName: originProject.name } : {}),
 					...(conversation?.contextNoteId ? { noteId: conversation.contextNoteId } : {})
 				},
-				projectTransition
+				projectTransition,
+				...(await this.resolveRequestedScope(actor, input))
+			}
+		};
+	}
+
+	/**
+	 * The staged scope only survives here when the live snapshot overrode it, so
+	 * its presence already means "the user has moved on". Names are resolved so
+	 * the agent can name both sides to the user instead of echoing ids.
+	 */
+	private async resolveRequestedScope(
+		actor: ActorContext,
+		input: RunAgentInput
+	): Promise<Pick<ResolvedAppContextV1, 'requestedScope'>> {
+		const requested = input.requestedScope;
+		if (!requested) return {};
+		const [project, note] = await Promise.all([
+			requested.projectId
+				? this.projects?.get(actor, requested.projectId).catch(() => undefined)
+				: undefined,
+			requested.noteId
+				? this.noteReader.get(actor, requested.noteId).catch(() => undefined)
+				: undefined
+		]);
+		const staged = [
+			note ? `note "${note.title}"` : requested.noteId ? 'another note' : undefined,
+			project ? `project "${project.name}"` : requested.projectId ? 'another project' : undefined
+		].filter((part): part is string => part !== undefined);
+		const current = input.appContext?.currentProject?.name
+			? `project "${input.appContext.currentProject.name}"`
+			: `the ${input.appContext?.surface.kind ?? 'unknown'} screen`;
+		return {
+			requestedScope: {
+				...(requested.projectId ? { projectId: requested.projectId } : {}),
+				...(project ? { projectName: project.name } : {}),
+				...(requested.noteId ? { noteId: requested.noteId } : {}),
+				...(note ? { noteTitle: note.title } : {}),
+				note: `The user is now on ${current}, but staged this request from ${staged.join(' in ')}. The current screen is the active scope; act on the staged target only if the request plainly refers to it, and say which one you used when it is ambiguous.`
 			}
 		};
 	}

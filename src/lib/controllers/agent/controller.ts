@@ -321,6 +321,12 @@ export class DefaultAgentController implements AgentController {
 			(input.appContext?.activeResource?.kind === 'note'
 				? (input.appContext.activeResource.id as import('$lib/models').NoteId)
 				: undefined);
+		const overriddenProjectId =
+			input.projectId && contextProjectId && input.projectId !== contextProjectId
+				? input.projectId
+				: undefined;
+		const overriddenNoteId =
+			input.noteId && contextNoteId && input.noteId !== contextNoteId ? input.noteId : undefined;
 		return {
 			requestId: input.requestId,
 			prompt: input.input,
@@ -336,6 +342,14 @@ export class DefaultAgentController implements AgentController {
 				? { requestedSkillNoteIds: input.requestedSkillNoteIds }
 				: {}),
 			...(input.appContext ? { appContext: structuredClone(input.appContext) } : {}),
+			...(overriddenProjectId || overriddenNoteId
+				? {
+						requestedScope: {
+							...(overriddenProjectId ? { projectId: overriddenProjectId } : {}),
+							...(overriddenNoteId ? { noteId: overriddenNoteId } : {})
+						}
+					}
+				: {}),
 			...(input.model !== undefined ? { modelOverride: input.model } : {}),
 			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {})
 		};

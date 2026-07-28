@@ -33,6 +33,23 @@ const activeStatuses: readonly AgentRunStatus[] = [
 	'cancelling'
 ];
 
+/**
+ * A rejected submission is only worth a reconnect prompt when it might still
+ * have landed. A 4xx is a decided answer: retrying reproduces it, so report
+ * what the server said instead of blaming the connection.
+ */
+function rejectionMessage(error: unknown): string | undefined {
+	if (typeof error !== 'object' || error === null) return undefined;
+	const { status, body, message } = error as {
+		status?: unknown;
+		body?: { message?: unknown };
+		message?: unknown;
+	};
+	if (typeof status !== 'number' || status < 400 || status >= 500) return undefined;
+	const text = typeof body?.message === 'string' ? body.message : message;
+	return typeof text === 'string' && text.length > 0 ? text : 'That request was rejected.';
+}
+
 interface PersistedConversationChoices {
 	conversationId?: ConversationId;
 	modelOverride?: string | null;
@@ -323,9 +340,10 @@ export class ChatStore {
 			this.runStatus = receipt.status;
 			this.persistConversationChoices();
 			this.attach(reply, receipt.runId, receipt.latestCursor, 0);
-		} catch {
-			reply.error = 'Submission could not be confirmed. Reconnect to check its status.';
-			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
+		} catch (error) {
+			const rejected = rejectionMessage(error);
+			reply.error = rejected ?? 'Submission could not be confirmed. Reconnect to check its status.';
+			if (!rejected) this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 			this.runStatus = undefined;
 		}
 	}

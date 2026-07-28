@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRunId, DateTime } from '$lib/models';
+import type { AgentRunId, DateTime, RunAgentInput } from '$lib/models';
 import { PersistentConversationJournal } from '$lib/services';
 import { InMemoryAgentRunPersistence } from '$lib/testing/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/fakes/in-memory-agent-sessions';
 import { InMemoryConversationRepository } from '$lib/testing/fakes/in-memory-conversations';
 import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { testActor } from '$lib/testing/fixtures/domain-builders';
+import {
+	appContextBuilder,
+	testActor,
+	testNoteId,
+	testProjectId
+} from '$lib/testing/fixtures/domain-builders';
 import { DefaultAgentController } from './controller';
 import type { AgentRunExecutor } from '$lib/server/domain/agent-run-executor';
 
@@ -102,6 +107,42 @@ describe('durable agent submission', () => {
 				input: 'Second'
 			})
 		).rejects.toThrow('active agent run');
+	});
+});
+
+describe('scope staged before the user moved screens', () => {
+	/** Staged on project 2; by send time the user is looking at project 1. */
+	const moved = async () => {
+		const context = setup();
+		await context.controller.submit(testActor(), {
+			requestId: '30000000-0000-4000-8000-000000000001',
+			input: 'Summarise this',
+			projectId: testProjectId(2),
+			noteId: testNoteId(2),
+			appContext: appContextBuilder({
+				currentProject: { id: testProjectId(), name: 'Project Alpha' }
+			})
+		});
+		return context.runs.runs.at(-1)?.inputSnapshot as RunAgentInput | undefined;
+	};
+
+	it('scopes the run to the screen the user is actually on', async () => {
+		expect((await moved())?.projectId).toBe(testProjectId());
+	});
+
+	it('carries the staged project through for the agent to reconcile', async () => {
+		expect((await moved())?.requestedScope?.projectId).toBe(testProjectId(2));
+	});
+
+	it('leaves the staged scope out when nothing was overridden', async () => {
+		const { controller, runs } = setup();
+		await controller.submit(testActor(), {
+			requestId: '30000000-0000-4000-8000-000000000002',
+			input: 'Summarise this',
+			projectId: testProjectId(),
+			appContext: appContextBuilder()
+		});
+		expect(runs.runs.at(-1)?.inputSnapshot).not.toHaveProperty('requestedScope');
 	});
 });
 

@@ -1,5 +1,6 @@
 import type {
 	ActorContext,
+	AppContextSnapshotV1,
 	DateTime,
 	MemoryEntry,
 	MemoryEntryId,
@@ -126,5 +127,17 @@ export const anchorBuilder = (overrides: Partial<SourceAnchor> = {}): SourceAnch
 	quote: 'Send',
 	revision: 1,
 	createdAt: testNow,
+	...overrides
+});
+
+export const appContextBuilder = (
+	overrides: Partial<AppContextSnapshotV1> = {}
+): AppContextSnapshotV1 => ({
+	version: 1,
+	capturedAt: testNow,
+	client: { locale: 'en-GB', timeZone: 'Europe/Brussels', localDate: '2026-07-11', layout: 'wide' },
+	surface: { kind: 'project', presentation: 'full_page' },
+	currentProject: { id: testProjectId(), name: 'Project Alpha' },
+	recentInteractions: [],
 	...overrides
 });

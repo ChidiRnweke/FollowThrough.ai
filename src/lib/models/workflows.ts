@@ -203,6 +203,15 @@ export interface RunAgentInput {
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;
 	readonly appContext?: import('./app-context').AppContextSnapshotV1;
+	/**
+	 * Scope the request was staged with, kept only when the live snapshot
+	 * overrode it. The snapshot still wins; this is carried so the agent can be
+	 * told what the user was pointing at when they asked.
+	 */
+	readonly requestedScope?: {
+		readonly projectId?: ProjectId;
+		readonly noteId?: NoteId;
+	};
 }
 /**
  * One request for proactive ghost text at the caret. The window around the
