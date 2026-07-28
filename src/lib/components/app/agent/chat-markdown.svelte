@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DOMPurify from 'dompurify';
-	import { marked } from 'marked';
+	import { Marked } from 'marked';
 	import DiffViewer from './diff-viewer.svelte';
+
+	// Dedicated instance: Tiptap's Markdown extension registers tokenizer-only
+	// extensions (e.g. inlineMath) on the global marked singleton, which would
+	// make marked.parse throw on chat messages containing "$...$" pairs.
+	const md = new Marked({ breaks: true, gfm: true });
 
 	let { content }: { content: string } = $props();
 	let mounted = $state(false);
@@ -32,7 +37,7 @@
 
 	function renderMarkdown(text: string): string {
 		if (!mounted || !text.trim()) return '';
-		const rendered = marked.parse(text, { async: false, breaks: true, gfm: true });
+		const rendered = md.parse(text, { async: false });
 		return DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } });
 	}
 </script>

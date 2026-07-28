@@ -12,6 +12,7 @@ import ColorHighlighter from './ColorHighlighter.js';
 import { Table, TableCell, TableHeader, TableRow } from './index.js';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Markdown } from '@tiptap/markdown';
+import { Marked } from 'marked';
 import Mathematics from '@tiptap/extension-mathematics';
 import Audio from '@tiptap/extension-audio';
 
@@ -92,7 +93,12 @@ export default [
 	TableHeader,
 	TableRow,
 	TableCell,
-	Markdown,
+	// Dedicated marked instance: without it, the MarkdownManager registers its
+	// tokenizer-only extensions (inlineMath/blockMath) on the global marked
+	// singleton, breaking every other marked.parse caller in the app. The cast
+	// bridges Tiptap's `typeof marked` option type — the instance has everything
+	// MarkdownManager actually uses (use/setOptions/lexer/Lexer).
+	Markdown.configure({ marked: new Marked() as unknown as (typeof import('marked'))['marked'] }),
 	Mathematics.configure({
 		// Options for the KaTeX renderer. See here: https://katex.org/docs/options.html
 		katexOptions: {

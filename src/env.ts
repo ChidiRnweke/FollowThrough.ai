@@ -95,7 +95,10 @@ export const variables = defineEnvVars({
 	EVAL_GATE: { description: 'Enable eval acceptance gating.', schema: optionalString },
 	OTEL_EXPORTER_OTLP_ENDPOINT: {
 		description:
-			'OTLP/HTTP collector endpoint for traces (port 4318 on the collector). Telemetry is disabled when unset.',
+			'OTLP/gRPC collector endpoint, port 4317 — used as-is for both traces and logs. ' +
+			'Telemetry is disabled when unset. Deployment-supplied only: OTEL_* and PHOENIX_* are platform ' +
+			'keys, which `isPlatformKey` in server/secrets.ts excludes from hydration, so a value set in the ' +
+			'secrets backend is never read. Set it in docker-compose.prod.yml (prod) or .env (dev).',
 		schema: optionalString
 	},
 	PHOENIX_PROJECT_NAME: {

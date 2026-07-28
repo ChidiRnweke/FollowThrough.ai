@@ -1,8 +1,10 @@
 # Local-dev OpenTelemetry collector: receives OTLP from the app, keeps only
 # OpenInference (LLM/tool/agent) spans, and forwards them to the self-hosted
 # Phoenix. The Tempo/Loki/Prometheus fan-out from the production collector is
-# dropped here — local dev only needs the Phoenix path. The collector holds the
-# Phoenix ingest key, so the app doesn't send auth.
+# dropped here — local dev has no Tempo or Loki to ship to, so the non-Phoenix
+# signals go to the debug exporter instead, which is enough to confirm the app
+# is emitting them. The collector holds the Phoenix ingest key, so the app
+# doesn't send auth.
 receivers:
   otlp:
     protocols:
@@ -26,10 +28,26 @@ exporters:
     endpoint: https://phoenix.chidinweke.be
     headers:
       Authorization: 'Bearer ${env:PHOENIX_API_KEY}'
+  # Stands in for Tempo and Loki locally: prints a per-signal summary so a dev
+  # run can prove the app is exporting without a full observability stack.
+  debug:
+    verbosity: normal
 
 service:
   pipelines:
+    # Everything the app emits, unfiltered — the production equivalent of the
+    # Tempo branch.
     traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    # Filter must run before batch; only LLM/tool/agent spans reach Phoenix.
+    traces/phoenix:
       receivers: [otlp]
       processors: [filter/openinference, batch]
       exporters: [otlphttp/phoenix]
+    # Prod ships these to Loki; locally, proving they arrive is enough.
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
