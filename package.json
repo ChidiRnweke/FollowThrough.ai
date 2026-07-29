@@ -26,6 +26,7 @@
 		"test:capability": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project node-fast src/lib/services src/lib/server/domain",
 		"test:evals": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"test:quality": "node --experimental-strip-types scripts/audit-tests.ts",
+		"test:architecture": "pnpm test:quality",
 		"test:e2e": "playwright test --project=app",
 		"test:pwa": "playwright test --project=pwa",
 		"trace:audit": "bun scripts/phoenix-trace-audit.js",

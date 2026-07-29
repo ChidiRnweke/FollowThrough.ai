@@ -48,9 +48,11 @@ describe('parseWorkbenchUrl', () => {
 	});
 
 	it('returns undefined for non-workbench paths', () => {
-		expect(parse('/today')).toBeUndefined();
-		expect(parse('/projects/abc')).toBeUndefined();
-		expect(parse('/')).toBeUndefined();
+		expect([parse('/today'), parse('/projects/abc'), parse('/')]).toEqual([
+			undefined,
+			undefined,
+			undefined
+		]);
 	});
 
 	it('injects the focused id into the tab list when missing', () => {

@@ -5,10 +5,17 @@
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
 </script>
 
-<PageShell
-	title="Profile"
-	description="What the agent knows about you across every project, and what it may propose remembering next."
->
+<PageShell>
+	<!-- Custom header, the Today-page pattern: a voice line under the title gives
+	     the page the identity the stock header lacked. -->
+	{#snippet header()}
+		<div class="flex flex-col gap-1">
+			<h1 class="page-title">Profile</h1>
+			<p class="text-sm text-muted-foreground">
+				What the agent knows about you, and what it may propose remembering next.
+			</p>
+		</div>
+	{/snippet}
 	{#snippet actions()}
 		<AgentAction action={agentActions.profile} />
 	{/snippet}

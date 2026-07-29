@@ -123,7 +123,11 @@ export default [
 	// Default Enter only exits a heading when the caret is at the very end; a
 	// mid-heading split keeps the tail a heading. Force every Enter inside a
 	// heading to land in a paragraph (Notion-style): an empty heading converts in
-	// place, otherwise split and convert the new block.
+	// place, otherwise split and convert the new block. At the end of a heading
+	// `splitBlock` already creates a paragraph, so `setParagraph` is a no-op that
+	// fails the chain — which is why the shortcut must not relay the chain's
+	// return value: a false here would let the core Enter binding run as well
+	// and insert a second block.
 	Heading.extend({
 		addKeyboardShortcuts() {
 			return {
@@ -132,9 +136,10 @@ export default [
 					if (!editor.isActive('heading')) return false;
 					const { $head, empty } = editor.state.selection;
 					if (empty && $head.parent.content.size === 0) {
-						return editor.chain().setParagraph().focus().run();
+						return editor.chain().setParagraph().run();
 					}
-					return editor.chain().splitBlock().setParagraph().focus().run();
+					editor.chain().splitBlock().setParagraph().run();
+					return true;
 				}
 			};
 		}

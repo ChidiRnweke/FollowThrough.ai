@@ -291,165 +291,169 @@
 	</div>
 {/snippet}
 
-<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4 px-4 pt-6 pb-6 md:px-8">
-	<div
-		class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
-		data-testid="note-utility-header"
-	>
-		<div class="group/title flex min-w-0 items-center gap-1 sm:flex-1">
-			<div class="flex min-w-0 flex-1 items-center">
-				{#if editingTitle}
-					<NoteTitleInlineInput
-						initialValue={note.title}
-						onsubmit={commitTitle}
-						oncancel={() => (editingTitle = false)}
-						onadvance={() => describeRef?.focus()}
-					/>
-				{:else}
-					<h1 class="page-title truncate">{note.title}</h1>
-					<Tip text="Rename skill">
+<div class="flex w-full min-w-0 flex-1 flex-col px-4 pt-6 pb-6 md:px-8">
+	<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
+		<div
+			class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
+			data-testid="note-utility-header"
+		>
+			<div class="group/title flex min-w-0 items-center gap-1 sm:flex-1">
+				<div class="flex min-w-0 flex-1 items-center">
+					{#if editingTitle}
+						<NoteTitleInlineInput
+							initialValue={note.title}
+							onsubmit={commitTitle}
+							oncancel={() => (editingTitle = false)}
+							onadvance={() => describeRef?.focus()}
+						/>
+					{:else}
+						<h1 class="page-title truncate">{note.title}</h1>
+						<Tip text="Rename skill">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon-xs"
+									class="size-11 shrink-0 transition-opacity sm:size-6 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/title:opacity-100"
+									aria-label="Rename skill"
+									onclick={() => (editingTitle = true)}
+								>
+									<Pencil />
+								</Button>
+							{/snippet}
+						</Tip>
+					{/if}
+				</div>
+			</div>
+			<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
+				{#if saveFailed}
+					<Tip
+						text={noteSync.lastError ?? 'The skill could not be saved. Your text is still here.'}
+					>
 						{#snippet children({ props })}
-							<Button
+							<span
 								{...props}
-								variant="ghost"
-								size="icon-xs"
-								class="size-11 shrink-0 transition-opacity sm:size-6 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/title:opacity-100"
-								aria-label="Rename skill"
-								onclick={() => (editingTitle = true)}
+								class="min-w-0 flex-1 text-xs text-destructive sm:flex-none"
+								aria-live="polite"
 							>
-								<Pencil />
-							</Button>
+								Couldn’t save · press Ctrl+S to retry
+							</span>
 						{/snippet}
 					</Tip>
+					<!-- A stuck sync outranks the hint below it: it is the skill's one route
+				     back to saved. -->
+				{:else if unsynced || noteSync.status === 'saving'}
+					{@render syncStatus()}
+				{:else if dirty}
+					<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
+						>Unsaved changes</span
+					>
+				{:else}
+					{@render syncStatus()}
 				{/if}
-			</div>
-		</div>
-		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
-			{#if saveFailed}
-				<Tip text={noteSync.lastError ?? 'The skill could not be saved. Your text is still here.'}>
+				<AgentAction
+					action={agentActions.skillDetail}
+					context={{ noteId: note.id }}
+					class="hidden lg:inline-flex"
+				/>
+				<Tip text="Import SKILL.md">
 					{#snippet children({ props })}
-						<span
+						<Button
 							{...props}
-							class="min-w-0 flex-1 text-xs text-destructive sm:flex-none"
-							aria-live="polite"
+							variant="ghost"
+							size="icon-sm"
+							disabled={importing}
+							aria-label="Import SKILL.md"
+							onclick={() => fileInput?.click()}
 						>
-							Couldn’t save · press Ctrl+S to retry
-						</span>
+							{#if importing}
+								<LoaderCircle class="size-4 animate-spin" />
+							{:else}
+								<Download class="size-4" />
+							{/if}
+						</Button>
 					{/snippet}
 				</Tip>
-				<!-- A stuck sync outranks the hint below it: it is the skill's one route
-				     back to saved. -->
-			{:else if unsynced || noteSync.status === 'saving'}
-				{@render syncStatus()}
-			{:else if dirty}
-				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
-					>Unsaved changes</span
-				>
-			{:else}
-				{@render syncStatus()}
-			{/if}
-			<AgentAction
-				action={agentActions.skillDetail}
-				context={{ noteId: note.id }}
-				class="hidden lg:inline-flex"
-			/>
-			<Tip text="Import SKILL.md">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						disabled={importing}
-						aria-label="Import SKILL.md"
-						onclick={() => fileInput?.click()}
-					>
-						{#if importing}
-							<LoaderCircle class="size-4 animate-spin" />
-						{:else}
-							<Download class="size-4" />
-						{/if}
-					</Button>
-				{/snippet}
-			</Tip>
-			<Tip text="Export as SKILL.md">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						disabled={exporting}
-						aria-label="Export as SKILL.md"
-						onclick={() => void exportSkill()}
-					>
-						{#if exporting}
-							<LoaderCircle class="size-4 animate-spin" />
-						{:else}
-							<FileOutput class="size-4" />
-						{/if}
-					</Button>
-				{/snippet}
-			</Tip>
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept=".md,text/markdown"
-				class="sr-only"
-				onchange={(event) => {
-					const file = event.currentTarget.files?.[0];
-					if (file) void importSkill(file);
-					event.currentTarget.value = '';
-				}}
-			/>
-		</div>
-	</div>
-
-	{#if syncReady}
-		{#key `${noteId}:${editorEpoch}`}
-			<div class="flex flex-1 flex-col rounded-lg border border-border">
-				<section class="flex flex-col p-4 md:p-6">
-					<div class="flex flex-col gap-1">
-						<h2 class="section-title">Describe your skill</h2>
-						<p class="text-sm text-muted-foreground">
-							When should your agent trigger it? This is what the agent reads to decide when to load
-							this skill.
-						</p>
-					</div>
-					<div class="mt-6 flex flex-col">
-						<SkillEditor
-							bind:this={describeRef}
-							compact
-							ariaLabel="Skill description"
-							initialMarkdown={savedDescription}
-							onchange={markDirty}
-						/>
-					</div>
-				</section>
-				<Separator />
-				<section class="flex flex-1 flex-col p-4 md:p-6">
-					<div class="flex flex-col gap-1">
-						<h2 class="section-title">What should the agent do?</h2>
-						<p class="text-sm text-muted-foreground">
-							Markdown instructions the agent follows when this skill loads.
-						</p>
-					</div>
-					<div class="mt-6 flex flex-1 flex-col">
-						<SkillEditor
-							bind:this={bodyRef}
-							ariaLabel="Skill instructions"
-							initialMarkdown={note.plainText}
-							onchange={markDirty}
-						/>
-					</div>
-				</section>
+				<Tip text="Export as SKILL.md">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							disabled={exporting}
+							aria-label="Export as SKILL.md"
+							onclick={() => void exportSkill()}
+						>
+							{#if exporting}
+								<LoaderCircle class="size-4 animate-spin" />
+							{:else}
+								<FileOutput class="size-4" />
+							{/if}
+						</Button>
+					{/snippet}
+				</Tip>
+				<input
+					bind:this={fileInput}
+					type="file"
+					accept=".md,text/markdown"
+					class="sr-only"
+					onchange={(event) => {
+						const file = event.currentTarget.files?.[0];
+						if (file) void importSkill(file);
+						event.currentTarget.value = '';
+					}}
+				/>
 			</div>
-		{/key}
-	{:else}
-		<div class="space-y-3 rounded-lg border border-border p-4 md:p-6">
-			<Skeleton class="h-5 w-3/4" />
-			<Skeleton class="h-5 w-full" />
-			<Skeleton class="h-5 w-2/3" />
 		</div>
-	{/if}
+
+		{#if syncReady}
+			{#key `${noteId}:${editorEpoch}`}
+				<div class="flex flex-1 flex-col">
+					<section class="flex flex-col p-4 md:p-6">
+						<div class="flex flex-col gap-1">
+							<h2 class="section-title">Describe your skill</h2>
+							<p class="text-sm text-muted-foreground">
+								When should your agent trigger it? This is what the agent reads to decide when to
+								load this skill.
+							</p>
+						</div>
+						<div class="mt-6 flex flex-col">
+							<SkillEditor
+								bind:this={describeRef}
+								compact
+								ariaLabel="Skill description"
+								initialMarkdown={savedDescription}
+								onchange={markDirty}
+							/>
+						</div>
+					</section>
+					<Separator />
+					<section class="flex flex-1 flex-col p-4 md:p-6">
+						<div class="flex flex-col gap-1">
+							<h2 class="section-title">What should the agent do?</h2>
+							<p class="text-sm text-muted-foreground">
+								Markdown instructions the agent follows when this skill loads.
+							</p>
+						</div>
+						<div class="mt-6 flex flex-1 flex-col">
+							<SkillEditor
+								bind:this={bodyRef}
+								ariaLabel="Skill instructions"
+								initialMarkdown={note.plainText}
+								onchange={markDirty}
+							/>
+						</div>
+					</section>
+				</div>
+			{/key}
+		{:else}
+			<div class="space-y-3 p-4 md:p-6">
+				<Skeleton class="h-5 w-3/4" />
+				<Skeleton class="h-5 w-full" />
+				<Skeleton class="h-5 w-2/3" />
+			</div>
+		{/if}
+	</div>
 </div>
 
 {#if noteSync.record}

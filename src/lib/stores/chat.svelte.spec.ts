@@ -45,14 +45,17 @@ class FakeAgentRunTransport implements AgentRunTransport {
 		throw new Error('Unexpected cancellation');
 	}
 	async retry(
-		_runId: AgentRunId,
-		_requestId: string
+		runId: AgentRunId,
+		requestId: string
 	): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
+		void runId;
+		void requestId;
 		throw new Error('Unexpected retry');
 	}
 	async getSession(
-		_conversationId: ConversationId
+		conversationId: ConversationId
 	): Promise<Awaited<ReturnType<AgentRunTransport['getSession']>>> {
+		void conversationId;
 		throw new Error('Unexpected hydration');
 	}
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {
@@ -146,10 +149,15 @@ describe('chat event projection', () => {
 			{ type: 'tool_completed', callId: 'call-1', name: 'search', output: { count: 1 } },
 			{ type: 'text_delta', text: 'Found one.' }
 		]);
-		expect(reply.parts.map((part) => part.kind)).toEqual(['reasoning', 'tool', 'text']);
-		expect(reply.parts.at(0)).toEqual({
-			kind: 'reasoning',
-			text: 'Let me search. Broadly first.'
+		expect({
+			kinds: reply.parts.map((part) => part.kind),
+			reasoning: reply.parts.at(0)
+		}).toEqual({
+			kinds: ['reasoning', 'tool', 'text'],
+			reasoning: {
+				kind: 'reasoning',
+				text: 'Let me search. Broadly first.'
+			}
 		});
 	});
 

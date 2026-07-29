@@ -1,9 +1,13 @@
 <script lang="ts">
 	import type { AttachmentView } from '$lib/models';
-	import { Button } from '$lib/components/ui/button';
-	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import EmptyState from './empty-state.svelte';
 	import { attachmentStatusStyle, formatBytes } from './labels';
 	import { toast } from 'svelte-sonner';
+	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
 		listAttachments,
@@ -29,6 +33,8 @@
 	} = $props();
 
 	let busy = $state(false);
+	let removeTarget = $state<string | undefined>(undefined);
+	let removeOpen = $state(false);
 
 	const owner = $derived<{ projectId?: string; noteId?: string }>(
 		projectId ? { projectId } : { noteId }
@@ -94,6 +100,17 @@
 		}
 	}
 
+	function askRemove(attachmentId: string): void {
+		removeTarget = attachmentId;
+		removeOpen = true;
+	}
+
+	async function confirmRemove(): Promise<void> {
+		if (removeTarget) await remove(removeTarget);
+		removeOpen = false;
+		removeTarget = undefined;
+	}
+
 	async function remove(attachmentId: string): Promise<void> {
 		try {
 			await removeAttachment({ attachmentId }).updates(listAttachments(owner));
@@ -103,75 +120,132 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3">
-	<div class="flex flex-wrap items-center gap-2">
-		<label
-			class="tactile inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-accent"
+{#snippet uploadButton()}
+	<!-- The one primary action on the screen, so it wears the primary colour. It
+	     stays a label wrapping the file input — a real button cannot open the picker. -->
+	<label class={buttonVariants({ size: 'sm' })}>
+		{busy ? 'Uploading…' : 'Add attachment'}
+		<input
+			class="sr-only"
+			type="file"
+			disabled={busy}
+			onchange={(event) => {
+				const file = event.currentTarget.files?.[0];
+				if (file) void upload(file);
+				event.currentTarget.value = '';
+			}}
+		/>
+	</label>
+{/snippet}
+
+<!-- The spacing ladder: a 24px step separates adding files from the files
+     themselves, and 8px binds the list's heading to its rows. -->
+<div class="flex flex-col gap-6">
+	{#if items.length === 0}
+		<!-- An empty region is an invitation, not dead text: the one action the
+		     space exists for sits inside the empty state. -->
+		<EmptyState
+			icon={Paperclip}
+			title="No attachments yet."
+			hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
 		>
-			{busy ? 'Uploading…' : 'Add attachment'}
-			<input
-				class="sr-only"
-				type="file"
-				disabled={busy}
-				onchange={(event) => {
-					const file = event.currentTarget.files?.[0];
-					if (file) void upload(file);
-					event.currentTarget.value = '';
-				}}
-			/>
-		</label>
-		<Button variant="ghost" size="sm" onclick={() => void query.refresh()}>Refresh</Button>
-	</div>
-	<div class="divide-y rounded-md border">
-		{#each items as item (item.attachment.id)}
-			{@const status = attachmentStatusStyle(item.version.processingStatus)}
-			<div class="flex items-center gap-3 p-3">
-				{#if item.version.mediaType.startsWith('image/')}
-					<img
-						class="size-12 rounded-md border object-cover"
-						src="/api/attachments/{item.attachment.id}/content"
-						alt={item.version.extractedText || item.attachment.path}
-					/>
-				{/if}
-				<div class="min-w-0 flex-1">
-					<p class="truncate text-sm font-medium">{item.attachment.path}</p>
-					<p class="text-xs text-muted-foreground">
-						{item.version.mediaType} · {formatBytes(item.version.byteSize)}
-					</p>
-					{#if item.version.processingFailure}<p class="text-xs text-destructive">
-							{item.version.processingFailure}
-						</p>{/if}
-				</div>
-				<span
-					class={[
-						'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
-						status.badgeClass
-					]}
-				>
-					<span class={['size-1.5 rounded-full', status.dotClass]}></span>
-					{item.version.processingStatus}
-				</span>
-				<div class="flex gap-1">
-					<Button variant="ghost" size="sm" onclick={() => void download(item.attachment.id)}>
-						Download
-					</Button>
-					{#if item.version.processingStatus === 'failed'}<Button
-							variant="ghost"
-							size="sm"
-							onclick={() => void retry(item.attachment.id)}>Retry</Button
-						>{/if}
-					<ConfirmDelete
-						title="Remove this attachment?"
-						description="It will no longer be available to this project or its agents."
-						confirmLabel="Remove"
-						onconfirm={() => remove(item.attachment.id)}
-					>
-						{#snippet trigger(props)}
-							<Button {...props} variant="ghost" size="sm">Remove</Button>
-						{/snippet}
-					</ConfirmDelete>
-				</div>
-			</div>
-		{:else}<p class="p-4 text-sm text-muted-foreground">No attachments yet.</p>{/each}
-	</div>
+			{#snippet action()}
+				{@render uploadButton()}
+			{/snippet}
+		</EmptyState>
+	{:else}
+		<div class="flex flex-wrap items-center gap-2">
+			{@render uploadButton()}
+			<Button variant="ghost" size="sm" onclick={() => void query.refresh()}>Refresh</Button>
+		</div>
+		<section class="flex flex-col gap-2">
+			<h2 class="eyebrow">Files · {items.length}</h2>
+			<!-- Homogeneous rows, so a borderless divided list — never a bordered box
+			     wrapping same-weight rectangles. Bled 12px past the measure so filenames
+			     align with the page text while hover washes and hairlines stay continuous. -->
+			<ul class="-mx-3 divide-y divide-border border-t border-border">
+				{#each items as item (item.attachment.id)}
+					{@render row(item)}
+				{/each}
+			</ul>
+		</section>
+	{/if}
 </div>
+
+{#snippet row(item: AttachmentView)}
+	{@const status = attachmentStatusStyle(item.version.processingStatus)}
+	<li class="group row-interactive flex items-center gap-3 px-3 py-2.5">
+		{#if item.version.mediaType.startsWith('image/')}
+			<img
+				class="size-12 rounded-md border object-cover"
+				src="/api/attachments/{item.attachment.id}/content"
+				alt={item.version.extractedText || item.attachment.path}
+			/>
+		{/if}
+		<div class="min-w-0 flex-1">
+			<p class="truncate text-sm font-medium">{item.attachment.path}</p>
+			<p class="text-xs text-muted-foreground">
+				{item.version.mediaType} · {formatBytes(item.version.byteSize)}
+			</p>
+			{#if item.version.processingFailure}<p class="text-xs text-destructive">
+					{item.version.processingFailure}
+				</p>{/if}
+		</div>
+		<Badge variant="secondary" class="shrink-0 gap-1.5">
+			<span class={['size-1.5 rounded-full', status.dotClass]}></span>
+			{item.version.processingStatus}
+		</Badge>
+		<!-- Row actions surface on hover, the documents-list pattern: the row stays
+		     quiet and scannable instead of carrying three permanent buttons. The slot
+		     keeps its space so nothing shifts when it appears. -->
+		<div
+			class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 has-data-[state=open]:opacity-100"
+		>
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="size-7"
+							aria-label="Actions for {item.attachment.path}"
+						>
+							<Ellipsis class="size-4" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end">
+					<DropdownMenu.Item onclick={() => void download(item.attachment.id)}>
+						Download
+					</DropdownMenu.Item>
+					{#if item.version.processingStatus === 'failed'}
+						<DropdownMenu.Item onclick={() => void retry(item.attachment.id)}>
+							Retry
+						</DropdownMenu.Item>
+					{/if}
+					<DropdownMenu.Item variant="destructive" onclick={() => askRemove(item.attachment.id)}>
+						Remove
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</div>
+	</li>
+{/snippet}
+
+<AlertDialog.Root bind:open={removeOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Remove this attachment?</AlertDialog.Title>
+			<AlertDialog.Description>
+				It will no longer be available to this project or its agents.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={() => void confirmRemove()}>
+				Remove
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

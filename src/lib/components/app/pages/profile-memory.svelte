@@ -11,4 +11,5 @@
 	emptyHint="Add what the agent should always know, or tell it about yourself in chat."
 	hideShare
 	scopeLabel="Applies across every project"
+	heroEmpty
 />

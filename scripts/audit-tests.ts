@@ -17,8 +17,14 @@ collect(resolve(root, 'tests'));
 const banned = /\b(?:vi|jest)\.(?:mock|fn|spyOn)\s*\(/g;
 const failures: string[] = [];
 const assertionExceptions: string[] = [];
+const dependencyCastExceptions: string[] = [];
+const interactionAssertionExceptions: string[] = [];
+const untypedFakeExceptions: string[] = [];
 let testCount = 0;
-const legacyAssertionLimit = 30;
+const legacyAssertionLimit = 25;
+const legacyDependencyCastLimit = 15;
+const legacyInteractionAssertionLimit = 18;
+const legacyUntypedFakeLimit = 7;
 
 const callName = (expression: ts.Expression): string | undefined => {
 	if (ts.isIdentifier(expression)) return expression.text;
@@ -35,8 +41,27 @@ for (const file of files) {
 		const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
 		failures.push(`${file}:${line} uses a mocking API; inject a hand-written fake`);
 	}
+	if (file.startsWith('src/lib/controllers/') || file.startsWith('src/lib/services/')) {
+		for (const match of sourceText.matchAll(/as unknown as [A-Za-z]+Dependencies/g)) {
+			const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
+			dependencyCastExceptions.push(`${file}:${line}`);
+		}
+		for (const match of sourceText.matchAll(/toHaveBeenCalled[A-Za-z]*|\.calls\b/g)) {
+			const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
+			interactionAssertionExceptions.push(`${file}:${line}`);
+		}
+	}
 
 	const visit = (node: ts.Node): void => {
+		if (
+			ts.isClassDeclaration(node) &&
+			node.name &&
+			/^(?:Fake|Stub|InMemory)/.test(node.name.text) &&
+			!node.heritageClauses?.some((clause) => clause.token === ts.SyntaxKind.ImplementsKeyword)
+		) {
+			const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+			untypedFakeExceptions.push(`${file}:${line} ${node.name.text}`);
+		}
 		if (ts.isCallExpression(node)) {
 			const name = callName(node.expression);
 			if (name && /^(?:test|it)(?:\.each)?\.skip$/.test(name)) {
@@ -85,12 +110,25 @@ if (assertionExceptions.length > legacyAssertionLimit)
 	failures.push(
 		`multi-assertion cases increased from the ${legacyAssertionLimit}-case migration baseline to ${assertionExceptions.length}`
 	);
+if (dependencyCastExceptions.length > legacyDependencyCastLimit)
+	failures.push(
+		`unsafe controller dependency casts increased from ${legacyDependencyCastLimit} to ${dependencyCastExceptions.length}`
+	);
+if (interactionAssertionExceptions.length > legacyInteractionAssertionLimit)
+	failures.push(
+		`interaction assertions increased from ${legacyInteractionAssertionLimit} to ${interactionAssertionExceptions.length}`
+	);
+if (untypedFakeExceptions.length > legacyUntypedFakeLimit)
+	failures.push(
+		`manual fakes without an explicit interface increased from ${legacyUntypedFakeLimit} to ${untypedFakeExceptions.length}`
+	);
 
 if (failures.length > 0) {
 	process.stderr.write(`${failures.join('\n')}\n`);
 	process.exitCode = 1;
 } else {
 	process.stdout.write(
-		`Test quality audit passed for ${files.length} files and ${testCount} declarations; no mocks or unexplained skips.\n`
+		`Test quality audit passed for ${files.length} files and ${testCount} declarations; no mocks or unexplained skips.\n` +
+			`Migration baselines: ${dependencyCastExceptions.length} dependency casts, ${interactionAssertionExceptions.length} interaction assertions, ${untypedFakeExceptions.length} untyped manual fakes.\n`
 	);
 }

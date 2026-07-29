@@ -20,7 +20,8 @@ export class TemplateManagementService
 	constructor(
 		private readonly storage: AttachmentStorage,
 		private readonly templateRepo: TemplateRepository,
-		private readonly transactionRunner: TransactionRunner
+		private readonly transactionRunner: TransactionRunner,
+		private readonly styleExtractor: typeof extractTemplateStyles = extractTemplateStyles
 	) {}
 
 	async initiateUpload(
@@ -95,7 +96,7 @@ export class TemplateManagementService
 		await this.storage.promote(template.objectKey, destinationKey);
 
 		const buffer = await this.storage.read(destinationKey, 50 * 1024 * 1024);
-		const styles = await extractTemplateStyles(Buffer.from(buffer));
+		const styles = await this.styleExtractor(Buffer.from(buffer));
 
 		const updated = await this.templateRepo.update(actor, {
 			...template,
@@ -125,6 +126,6 @@ export class TemplateManagementService
 		if (template.extractedStyles)
 			return template.extractedStyles as unknown as import('$lib/models').ExtractedTemplateStyles;
 		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
-		return extractTemplateStyles(Buffer.from(buffer));
+		return this.styleExtractor(Buffer.from(buffer));
 	}
 }

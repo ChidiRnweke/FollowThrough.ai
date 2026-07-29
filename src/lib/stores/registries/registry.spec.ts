@@ -6,17 +6,21 @@ describe('Registry', () => {
 		const registry = new Registry<string, { id: string }>((id) => ({ id }));
 		const a = registry.for('a');
 		const b = registry.for('a');
-		expect(a).toBe(b);
-		expect(registry.isHeld('a')).toBe(true);
+		expect({ same: a === b, held: registry.isHeld('a') }).toEqual({
+			same: true,
+			held: true
+		});
 	});
 
 	it('creates separate instances for different keys', () => {
 		const registry = new Registry<string, { id: string }>((id) => ({ id }));
 		const a = registry.for('a');
 		const b = registry.for('b');
-		expect(a).not.toBe(b);
-		expect(a.id).toBe('a');
-		expect(b.id).toBe('b');
+		expect({ separate: a !== b, first: a.id, second: b.id }).toEqual({
+			separate: true,
+			first: 'a',
+			second: 'b'
+		});
 	});
 
 	it('destroys an instance when its last reference is released', () => {
@@ -27,9 +31,11 @@ describe('Registry', () => {
 		);
 		registry.for('a');
 		registry.release('a');
-		expect(destroyed).toEqual(['a']);
-		expect(registry.has('a')).toBe(false);
-		expect(registry.isHeld('a')).toBe(false);
+		expect({
+			destroyed,
+			present: registry.has('a'),
+			held: registry.isHeld('a')
+		}).toEqual({ destroyed: ['a'], present: false, held: false });
 	});
 
 	it('keeps the instance alive until every reference is released', () => {
@@ -41,10 +47,15 @@ describe('Registry', () => {
 		registry.for('a');
 		registry.for('a');
 		registry.release('a');
-		expect(destroyed).toEqual([]);
-		expect(registry.refcount('a')).toBe(1);
+		const afterFirstRelease = {
+			destroyed: [...destroyed],
+			references: registry.refcount('a')
+		};
 		registry.release('a');
-		expect(destroyed).toEqual(['a']);
+		expect({ afterFirstRelease, afterLastRelease: destroyed }).toEqual({
+			afterFirstRelease: { destroyed: [], references: 1 },
+			afterLastRelease: ['a']
+		});
 	});
 
 	it('rebuilds an instance after destruction', () => {
@@ -59,8 +70,10 @@ describe('Registry', () => {
 		const first = registry.for('a');
 		registry.release('a');
 		const second = registry.for('a');
-		expect(first).not.toBe(second);
-		expect(created).toEqual(['a', 'a']);
+		expect({ rebuilt: first !== second, created }).toEqual({
+			rebuilt: true,
+			created: ['a', 'a']
+		});
 	});
 
 	it('does not destroy instances that are still held', () => {
@@ -72,9 +85,11 @@ describe('Registry', () => {
 		registry.for('a');
 		registry.for('b');
 		registry.release('b');
-		expect(destroyed).toEqual(['b']);
-		expect(registry.isHeld('a')).toBe(true);
-		expect(registry.has('a')).toBe(true);
+		expect({
+			destroyed,
+			firstHeld: registry.isHeld('a'),
+			firstPresent: registry.has('a')
+		}).toEqual({ destroyed: ['b'], firstHeld: true, firstPresent: true });
 	});
 
 	it('ignores releases for keys that were never observed', () => {
@@ -103,9 +118,10 @@ describe('Registry', () => {
 		const registry = new Registry<string, { id: string }>((id) => ({ id }));
 		registry.for('a');
 		const peeked = registry.peek('a');
-		expect(peeked).toBeDefined();
-		expect(peeked?.id).toBe('a');
-		expect(registry.refcount('a')).toBe(1);
+		expect({ value: peeked?.id, references: registry.refcount('a') }).toEqual({
+			value: 'a',
+			references: 1
+		});
 	});
 
 	it('peek returns undefined for keys not currently held', () => {
@@ -114,10 +130,13 @@ describe('Registry', () => {
 			(id) => ({ id }),
 			(id) => destroyed.push(id)
 		);
-		expect(registry.peek('never-opened')).toBeUndefined();
+		const beforeObservation = registry.peek('never-opened');
 		registry.for('a');
 		registry.release('a');
-		expect(registry.peek('a')).toBeUndefined();
+		expect({ beforeObservation, afterRelease: registry.peek('a') }).toEqual({
+			beforeObservation: undefined,
+			afterRelease: undefined
+		});
 	});
 
 	it('peek does not resurrect a destroyed instance', () => {
