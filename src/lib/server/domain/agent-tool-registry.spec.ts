@@ -65,10 +65,11 @@ describe('Agent tool coverage invariants', () => {
 		const coveredActions = classifications.filter(
 			(classification) => classification.kind !== 'excluded'
 		).length;
-		// Two controller actions are deliberately exposed twice:
-		// memory.list as list_project_memory and list_user_memory, and notes.save as
-		// save_note (whole-body replace) and edit_note (targeted replacements).
-		const scopedAliases = 2;
+		// Three controller actions are deliberately exposed more than once:
+		// memory.list as list_project_memory and list_user_memory, notes.save as
+		// save_note (whole-body replace) and edit_note (targeted replacements), and
+		// todos.create as create_todo (single) and create_todos (batch).
+		const scopedAliases = 3;
 		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
 	});
 
@@ -241,6 +242,80 @@ describe('Agent tool coverage invariants', () => {
 			JSON.stringify({ name: 'list_projects', payload: {} })
 		);
 		expect(result).toEqual({ projects: [{ id: 'project-1', name: 'General' }] });
+	});
+
+	it('creates every todo in a single create_todos dispatch', async () => {
+		const projectId = crypto.randomUUID();
+		const calls: { projectId: string; title: string }[] = [];
+		const factory = {
+			todos: () => ({
+				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
+					calls.push(input);
+					return { todo: { id: `todo-${calls.length}`, ...input } };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'create_todos',
+				payload: {
+					projectId,
+					todos: [
+						{ title: 'Renew TLS certificates', responsibility: 'mine' },
+						{ title: 'Book offsite flights', responsibility: 'mine' },
+						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+					]
+				}
+			})
+		);
+		expect(calls).toHaveLength(3);
+		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
+		expect(result).toEqual({
+			todos: [
+				{
+					todo: { id: 'todo-1', projectId, title: 'Renew TLS certificates', responsibility: 'mine' }
+				},
+				{
+					todo: { id: 'todo-2', projectId, title: 'Book offsite flights', responsibility: 'mine' }
+				},
+				{
+					todo: {
+						id: 'todo-3',
+						projectId,
+						title: 'Review incident postmortem',
+						responsibility: 'waiting_on',
+						waitingOn: 'Sam'
+					}
+				}
+			]
+		});
+	});
+
+	it('rejects invalid create_todos payloads with a model-readable error', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const projectId = crypto.randomUUID();
+		for (const payload of [
+			{ projectId, todos: [] },
+			{ projectId, todos: [{ responsibility: 'mine' }] },
+			{ projectId }
+		]) {
+			const result = await selected.invoke(
+				{} as never,
+				JSON.stringify({ name: 'create_todos', payload })
+			);
+			expect(result).toMatchObject({
+				failure: 'Invalid payload for "create_todos".',
+				input_schema: { type: 'object' }
+			});
+		}
+	});
+
+	it('keeps create_todos in the long-tail catalog, not the first-class tools', () => {
+		const instance = registry('auto_accept');
+		expect(instance.catalog().some((tool) => tool.name === 'create_todos')).toBe(true);
+		expect(instance.agentTools().some((tool) => tool.name === 'create_todos')).toBe(false);
 	});
 
 	it('does not execute a guessed long-tail tool name', async () => {

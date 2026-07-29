@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { PostgresTestContext } from './testcontainer';
-import { startPostgresTestcontainer } from './testcontainer';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import type { PostgresDatabaseContext } from './testcontainer';
+import { connectPostgresTestDatabase } from './testcontainer';
 
-let context: PostgresTestContext;
+let context: PostgresDatabaseContext;
 
-beforeAll(async () => {
-	context = await startPostgresTestcontainer();
-}, 120_000);
+beforeAll(() => {
+	context = connectPostgresTestDatabase(inject('postgresUrl'));
+});
 afterAll(async () => {
-	await context?.stop();
+	await context?.close();
 });
 
 describe('Postgres schema contracts', () => {

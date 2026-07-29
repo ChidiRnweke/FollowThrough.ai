@@ -1,28 +1,129 @@
 import { createHash } from 'node:crypto';
+import { resolve, sep } from 'node:path';
+import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
 import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
 import { defaultExportSettings } from '$lib/models';
 
-const STANDARD_FONTS = new Set([
-	'Helvetica',
-	'Helvetica-Bold',
-	'Helvetica-Oblique',
-	'Helvetica-BoldOblique',
-	'Courier',
-	'Courier-Bold',
-	'Courier-Oblique',
-	'Courier-BoldOblique',
-	'Times-Roman',
-	'Times-Bold',
-	'Times-Italic',
-	'Times-BoldItalic'
-]);
+// Embedded Noto fonts ship in the repo (assets/fonts, OFL-licensed): PDFKit's
+// standard-14 fonts are WinAnsi-only, so emoji and most non-Latin-1 text need
+// real TTFs. Color emoji fonts (CBDT/COLR) cannot be embedded by PDFKit, hence
+// the monochrome Noto Emoji. Paths resolve from the app root, which is the
+// working directory in dev, tests, and the Docker runtime image.
+const FONTS_DIR = resolve(process.cwd(), 'assets/fonts');
+
+const FONT_FILES: Record<string, Record<string, string>> = {
+	NotoSans: {
+		normal: 'NotoSans-Regular.ttf',
+		bold: 'NotoSans-Bold.ttf',
+		italics: 'NotoSans-Italic.ttf',
+		bolditalics: 'NotoSans-BoldItalic.ttf'
+	},
+	NotoSerif: {
+		normal: 'NotoSerif-Regular.ttf',
+		bold: 'NotoSerif-Bold.ttf',
+		italics: 'NotoSerif-Italic.ttf',
+		bolditalics: 'NotoSerif-BoldItalic.ttf'
+	},
+	// Mono has no italic cuts; alias them to the upright styles.
+	NotoSansMono: {
+		normal: 'NotoSansMono-Regular.ttf',
+		bold: 'NotoSansMono-Bold.ttf',
+		italics: 'NotoSansMono-Regular.ttf',
+		bolditalics: 'NotoSansMono-Bold.ttf'
+	},
+	// Fallback-only families, single cut each.
+	NotoEmoji: {
+		normal: 'NotoEmoji.ttf',
+		bold: 'NotoEmoji.ttf',
+		italics: 'NotoEmoji.ttf',
+		bolditalics: 'NotoEmoji.ttf'
+	},
+	NotoSansSymbols2: {
+		normal: 'NotoSansSymbols2-Regular.ttf',
+		bold: 'NotoSansSymbols2-Regular.ttf',
+		italics: 'NotoSansSymbols2-Regular.ttf',
+		bolditalics: 'NotoSansSymbols2-Regular.ttf'
+	},
+	NotoSansMath: {
+		normal: 'NotoSansMath-Regular.ttf',
+		bold: 'NotoSansMath-Regular.ttf',
+		italics: 'NotoSansMath-Regular.ttf',
+		bolditalics: 'NotoSansMath-Regular.ttf'
+	}
+};
 
 const FONT_FAMILIES: Record<ExportSettings['fontFamily'], string> = {
-	helvetica: 'Helvetica',
-	times: 'Times',
-	courier: 'Courier'
+	helvetica: 'NotoSans',
+	times: 'NotoSerif',
+	courier: 'NotoSansMono'
 };
+
+const MONO_FONT = 'NotoSansMono';
+
+// Fallback order when a run's own font cannot draw a character: emoji first so
+// pictographs keep their emoji design, then symbols (arrows, shapes, dingbats),
+// then math (operators). Base Noto Sans/Serif/Mono cover the common scripts.
+const FALLBACK_FONTS = ['NotoEmoji', 'NotoSansSymbols2', 'NotoSansMath'];
+
+// Joiners and variation selectors need no glyph of their own.
+const JOINER_CODEPOINTS = new Set([0x200d, 0xfe0e, 0xfe0f]);
+
+interface FontHandle {
+	hasGlyphForCodePoint(codepoint: number): boolean;
+}
+
+const fontCoverage = new Map<string, FontHandle>();
+
+function covers(family: string, codepoint: number): boolean {
+	const cached = fontCoverage.get(family);
+	if (cached) return cached.hasGlyphForCodePoint(codepoint);
+	// All shipped fonts are single-face TTFs, never collections.
+	const handle = openFontSync(resolve(FONTS_DIR, FONT_FILES[family]!.normal!)) as FontHandle;
+	fontCoverage.set(family, handle);
+	return handle.hasGlyphForCodePoint(codepoint);
+}
+
+/** First font in the fallback chain that can draw every codepoint of the cluster. */
+function fallbackForCluster(cluster: string, baseFont: string): string | undefined {
+	const codepoints = [...cluster]
+		.map((char) => char.codePointAt(0)!)
+		.filter((codepoint) => !JOINER_CODEPOINTS.has(codepoint));
+	if (codepoints.every((codepoint) => covers(baseFont, codepoint))) return undefined;
+	return FALLBACK_FONTS.find((family) =>
+		codepoints.every((codepoint) => covers(family, codepoint))
+	);
+}
+
+const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+/**
+ * Split a text run into per-font runs. pdfmake has no font fallback, so
+ * characters a run's font cannot draw (emoji, arrows, math operators) would
+ * render as missing glyphs. Grapheme-level segmentation keeps ZWJ sequences,
+ * keycaps, and variation selectors inside a single run.
+ */
+function withFontRuns<T extends { text: string; font?: string }>(run: T, bodyFont: string): T[] {
+	const baseFont = run.font ?? bodyFont;
+	let chunk = '';
+	let chunkFont: string | undefined;
+	let sawFallback = false;
+	const runs: T[] = [];
+	const flush = () => {
+		if (!chunk) return;
+		runs.push({ ...run, text: chunk, ...(chunkFont ? { font: chunkFont } : {}) });
+		chunk = '';
+	};
+	for (const { segment } of graphemeSegmenter.segment(run.text)) {
+		const font = fallbackForCluster(segment, baseFont);
+		if (font) sawFallback = true;
+		if (chunk && font !== chunkFont) flush();
+		chunkFont = font;
+		chunk += segment;
+	}
+	flush();
+	return sawFallback ? runs : [run];
+}
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
@@ -68,6 +169,7 @@ interface InlineRun {
 	link?: string;
 	color?: string;
 	decoration?: string;
+	font?: string;
 }
 
 function textRunFromNode(node: Record<string, unknown>): InlineRun {
@@ -94,6 +196,8 @@ interface ConversionContext {
 	readonly landscapeHeight: number;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagramSvgs: Readonly<Record<string, string>>;
+	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
+	readonly bodyFont: string;
 }
 
 function imageBlock(attrs: Record<string, unknown>, context: ConversionContext): unknown {
@@ -131,17 +235,8 @@ const CODE_PANEL_LINE = '#e5e7eb';
  * pdfmake idiom for a filled box with inner padding; `preserveLeadingSpaces`
  * keeps the source indentation that plain text nodes would lose.
  */
-function codePanel(text: string, language?: string): unknown {
-	const runs: unknown[] = [];
-	if (language) {
-		runs.push({
-			text: language.toUpperCase(),
-			fontSize: 7.5,
-			color: '#6b7280',
-			lineHeight: 1.6
-		});
-	}
-	runs.push({ text, color: '#1f2328' });
+function codePanel(text: string): unknown {
+	const runs: unknown[] = [...withFontRuns({ text, color: '#1f2328' }, MONO_FONT)];
 	return {
 		table: {
 			widths: ['*'],
@@ -149,7 +244,7 @@ function codePanel(text: string, language?: string): unknown {
 				[
 					{
 						text: runs,
-						font: 'Courier',
+						font: MONO_FONT,
 						fontSize: 9,
 						lineHeight: 1.25,
 						preserveLeadingSpaces: true
@@ -269,15 +364,19 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 	switch (type) {
 		case 'heading': {
 			const level = Math.min((attrs.level as number) ?? 1, 6);
-			const text = collectText(node);
 			const sizes = [18, 16, 14, 13, 12, 11];
-			return { text, fontSize: sizes[level - 1], bold: true, margin: [0, 10, 0, 5] };
+			return {
+				text: withFontRuns({ text: collectText(node) }, context.bodyFont),
+				fontSize: sizes[level - 1],
+				bold: true,
+				margin: [0, 10, 0, 5]
+			};
 		}
 		case 'paragraph': {
 			const children: unknown[] = [];
 			for (const child of content) {
 				if (child.type === 'text') {
-					children.push(textRunFromNode(child));
+					children.push(...withFontRuns(textRunFromNode(child), context.bodyFont));
 				} else if (child.type === 'hardBreak') {
 					if (children.length > 0) children.push('\n');
 				}
@@ -312,9 +411,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 			});
 		}
 		case 'codeBlock': {
-			const language =
-				typeof attrs.language === 'string' && attrs.language ? attrs.language : undefined;
-			return codePanel(collectText(node), language);
+			return codePanel(collectText(node));
 		}
 		case 'mermaid': {
 			const source = collectText(node);
@@ -351,7 +448,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 				return { svg, fit: [context.contentWidth, context.usableHeight], margin: [0, 8, 0, 8] };
 			}
 			// Without a browser-rendered SVG the diagram source is still worth keeping.
-			return codePanel(source, 'mermaid');
+			return codePanel(source);
 		}
 		case 'horizontalRule': {
 			return {
@@ -446,42 +543,33 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 	const { notes } = input;
 	const settings = input.settings ?? defaultExportSettings;
 	const printer = pdfmake;
-	// Map to PDFKit's built-in standard fonts so no font files ship with the app.
-	printer.addFonts({
-		Helvetica: {
-			normal: 'Helvetica',
-			bold: 'Helvetica-Bold',
-			italics: 'Helvetica-Oblique',
-			bolditalics: 'Helvetica-BoldOblique'
-		},
-		Times: {
-			normal: 'Times-Roman',
-			bold: 'Times-Bold',
-			italics: 'Times-Italic',
-			bolditalics: 'Times-BoldItalic'
-		},
-		Courier: {
-			normal: 'Courier',
-			bold: 'Courier-Bold',
-			italics: 'Courier-Oblique',
-			bolditalics: 'Courier-BoldOblique'
-		}
-	});
-	// pdfmake validates font references through the local-access policy; permit only
-	// PDFKit's built-in font names, never real filesystem paths.
-	printer.setLocalAccessPolicy((path) => STANDARD_FONTS.has(path));
+	// Embed the repo-shipped Noto fonts; the local-access policy permits only
+	// files inside assets/fonts, never arbitrary filesystem paths.
+	printer.addFonts(
+		Object.fromEntries(
+			Object.entries(FONT_FILES).map(([family, styles]) => [
+				family,
+				Object.fromEntries(
+					Object.entries(styles).map(([style, file]) => [style, resolve(FONTS_DIR, file)])
+				)
+			])
+		)
+	);
+	printer.setLocalAccessPolicy((path) => resolve(path).startsWith(FONTS_DIR + sep));
 
 	const margin = Math.min(Math.max(settings.margin, 18), 144);
 	const contentWidth = A4_WIDTH - margin * 2;
 	const usableHeight = A4_HEIGHT - margin * 2 - 16;
 	const images = await fetchImages(notes.flatMap((note) => collectImageSources(note.document)));
+	const bodyFont = FONT_FAMILIES[settings.fontFamily];
 	const context: ConversionContext = {
 		contentWidth,
 		usableHeight,
 		landscapeWidth: A4_HEIGHT - margin * 2,
 		landscapeHeight: A4_WIDTH - margin * 2 - 16,
 		images,
-		diagramSvgs: input.diagramSvgs ?? {}
+		diagramSvgs: input.diagramSvgs ?? {},
+		bodyFont
 	};
 
 	const content: unknown[] = [];
@@ -489,7 +577,7 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 	// The export title is the file name; it only lands on the page when asked for.
 	if (settings.includeTitle) {
 		content.push({
-			text: input.title,
+			text: withFontRuns({ text: input.title }, bodyFont),
 			fontSize: 24,
 			bold: true,
 			alignment: 'center',
@@ -499,7 +587,12 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 
 	for (const note of notes) {
 		if (note.title && note.title !== input.title) {
-			content.push({ text: note.title, fontSize: 16, bold: true, margin: [0, 12, 0, 8] });
+			content.push({
+				text: withFontRuns({ text: note.title }, bodyFont),
+				fontSize: 16,
+				bold: true,
+				margin: [0, 12, 0, 8]
+			});
 		}
 
 		content.push(...convertDoc(note.document, context));

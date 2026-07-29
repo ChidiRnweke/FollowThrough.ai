@@ -17,6 +17,26 @@ export function openChatSurface(trigger?: HTMLElement): void {
 	rightPanel.openChat(trigger);
 }
 
+export interface AskAgentDependencies {
+	readonly panelFits: () => boolean;
+	readonly openChat: (trigger?: HTMLElement) => void;
+	readonly stage: (request: ChatHandoff) => void;
+	readonly handoff: (request: ChatHandoff) => void;
+	readonly navigate: (href: string) => void;
+}
+
+export const createAskAgent =
+	(dependencies: AskAgentDependencies) =>
+	(request: ChatHandoff, trigger?: HTMLElement): void => {
+		if (dependencies.panelFits()) {
+			dependencies.openChat(trigger);
+			dependencies.stage(request);
+			return;
+		}
+		dependencies.handoff(request);
+		dependencies.navigate('/chats/new');
+	};
+
 /**
  * Open the chat with a prompt already written, from anywhere in the app.
  *
@@ -29,12 +49,10 @@ export function openChatSurface(trigger?: HTMLElement): void {
  * breakpoint the chat is a whole page away, so the prompt rides sessionStorage
  * across the navigation instead.
  */
-export function askAgent(request: ChatHandoff, trigger?: HTMLElement): void {
-	if (dockedPanelFits()) {
-		rightPanel.openChat(trigger);
-		chat.stage(request);
-		return;
-	}
-	stageChatHandoff(request);
-	void goto('/chats/new');
-}
+export const askAgent = createAskAgent({
+	panelFits: dockedPanelFits,
+	openChat: (trigger) => rightPanel.openChat(trigger),
+	stage: (request) => chat.stage(request),
+	handoff: stageChatHandoff,
+	navigate: (href) => void goto(href)
+});

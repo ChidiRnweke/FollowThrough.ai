@@ -37,24 +37,58 @@ const generate = (overrides: Partial<Parameters<typeof generatePdf>[0]> = {}) =>
 	generatePdf({ notes: [{ title: 'Note', document }], title: 'Export', ...overrides });
 
 /**
- * Page content streams are flate-compressed and glyph runs are hex-encoded
- * inside TJ arrays; inflate and decode them to inspect the rendered text.
+ * Embedded TTFs are subsetted: page content streams hold font-local glyph IDs,
+ * and each font's ToUnicode CMap (a flate-compressed stream of bfrange arrays)
+ * maps them back to Unicode. Decode every glyph run through every CMap and
+ * keep the union — the right CMap always yields the real text.
  */
+function utf16be(hex: string): string {
+	const bytes = Buffer.from(hex.replaceAll(' ', ''), 'hex');
+	for (let i = 0; i + 1 < bytes.length; i += 2) {
+		const swap = bytes[i]!;
+		bytes[i] = bytes[i + 1]!;
+		bytes[i + 1] = swap;
+	}
+	return bytes.toString('utf16le');
+}
+
+function parseCMap(stream: string): Map<number, string> {
+	const map = new Map<number, string>();
+	for (const range of stream.matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g)) {
+		const start = Number.parseInt(range[1]!, 16);
+		const values = [...range[3]!.matchAll(/<([0-9a-fA-F ]+)>/g)].map((value) => utf16be(value[1]!));
+		values.forEach((value, index) => map.set(start + index, value));
+	}
+	return map;
+}
+
 function pdfText(buffer: Buffer): string {
 	const latin1 = buffer.toString('latin1');
-	const streams = [...latin1.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)];
-	const inflated = streams
-		.map((match) => {
-			try {
-				return inflateSync(Buffer.from(match[1]!, 'latin1')).toString('latin1');
-			} catch {
-				return '';
-			}
-		})
-		.join('');
-	return [...inflated.matchAll(/<([0-9a-fA-F]+)>/g)]
-		.map((match) => Buffer.from(match[1]!, 'hex').toString('latin1'))
-		.join('');
+	const streams = [...latin1.matchAll(/stream(?:\r\n|\n|\r)([\s\S]*?)endstream/g)].map((match) => {
+		try {
+			return inflateSync(Buffer.from(match[1]!.replace(/(?:\r\n|\n|\r)$/, ''), 'latin1')).toString(
+				'latin1'
+			);
+		} catch {
+			return '';
+		}
+	});
+	const cmaps = streams.filter((stream) => stream.includes('begincmap')).map(parseCMap);
+	const content = streams.filter((stream) => stream && !stream.includes('begincmap')).join('');
+	const glyphRuns = [...content.matchAll(/<([0-9a-fA-F]+)>/g)].map((match) => match[1]!);
+	return cmaps
+		.map((cmap) =>
+			glyphRuns
+				.map((run) => {
+					let text = '';
+					for (let i = 0; i + 4 <= run.length; i += 4) {
+						text += cmap.get(Number.parseInt(run.slice(i, i + 4), 16)) ?? '';
+					}
+					return text;
+				})
+				.join('')
+		)
+		.join('\n');
 }
 
 describe('Pdf generation invariants', () => {
@@ -94,7 +128,33 @@ describe('Pdf generation invariants', () => {
 		const buffer = await generate({
 			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
 		});
-		expect(buffer.toString('latin1')).toContain('Times-Roman');
+		expect(buffer.toString('latin1')).toContain('NotoSerif');
+	});
+
+	it('renders emoji and symbols through fallback fonts', async () => {
+		const withEmoji: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'heading',
+					attrs: { level: 1 },
+					content: [{ type: 'text', text: 'Launch 🚀 update' }]
+				},
+				{
+					type: 'paragraph',
+					content: [{ type: 'text', text: 'Family 👨‍👩‍👧 done ✅ naïve → and ≠' }]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withEmoji }],
+			title: 'Export'
+		});
+		expect(buffer.toString('latin1')).toContain('NotoEmoji');
+		const text = pdfText(buffer);
+		for (const expected of ['Launch', '🚀', '👨', '👩', '👧', '✅', 'naïve', '→', '≠']) {
+			expect(text).toContain(expected);
+		}
 	});
 
 	it('renders tables as a grid, keeping cell text and spans', async () => {
@@ -141,7 +201,7 @@ describe('Pdf generation invariants', () => {
 		}
 	});
 
-	it('renders code blocks in a panel, keeping indentation and the language label', async () => {
+	it('renders code blocks in a panel, keeping indentation and dropping the language', async () => {
 		const withCode: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -162,7 +222,8 @@ describe('Pdf generation invariants', () => {
 			title: 'Export'
 		});
 		const text = pdfText(buffer);
-		expect(text).toContain('TS');
+		// The codeBlock's language attribute is editor metadata, not document content.
+		expect(text).not.toContain('TS');
 		expect(text).toContain('  const answer = 42;');
 		expect(text).toContain('  return answer;');
 	});

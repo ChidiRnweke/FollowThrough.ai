@@ -58,7 +58,8 @@ const infisicalBackend = (
 		'prod',
 		ttl,
 		() => client.auth().universalAuth.login(),
-		now
+		now,
+		async () => undefined
 	);
 
 const applicationSecrets = () => ({

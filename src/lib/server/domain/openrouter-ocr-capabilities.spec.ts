@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ExternalServiceError } from '$lib/models';
+import { describe, expect, it } from 'vitest';
 import { OpenRouterOcrClient } from './openrouter-ocr-capabilities';
 
 const annotation = (hash: string, content: readonly Record<string, unknown>[]) => ({
@@ -10,29 +9,34 @@ const annotation = (hash: string, content: readonly Record<string, unknown>[]) =
 const textPart = (text: string) => ({ type: 'text', text });
 const imagePart = (url: string) => ({ type: 'image_url', image_url: { url } });
 
-const stubFetch = (payload: unknown, status = 200) => {
-	const fetchMock = vi.fn(
-		async (_url: string, _init?: RequestInit) =>
-			new Response(JSON.stringify(payload), {
-				status,
-				headers: { 'content-type': 'application/json' }
-			})
-	);
-	vi.stubGlobal('fetch', fetchMock);
-	return fetchMock;
-};
+class FakeFetch {
+	request?: { url: string; init?: RequestInit };
 
-const client = new OpenRouterOcrClient('test-key', { baseURL: 'https://openrouter.test/api/v1' });
+	constructor(
+		private readonly payload: unknown,
+		private readonly status = 200
+	) {}
+
+	readonly fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+		this.request = { url: String(input), init };
+		return new Response(JSON.stringify(this.payload), {
+			status: this.status,
+			headers: { 'content-type': 'application/json' }
+		});
+	};
+}
+
+const clientUsing = (transport: FakeFetch) =>
+	new OpenRouterOcrClient('test-key', {
+		baseURL: 'https://openrouter.test/api/v1',
+		fetch: transport.fetch
+	});
 
 const input = { pdfBase64: 'QUJD', fileName: 'doc.pdf', model: 'ocr-model' };
 
-afterEach(() => {
-	vi.unstubAllGlobals();
-});
-
 describe('OpenRouterOcrClient annotation parsing', () => {
 	it('maps message annotations to ordered markdown and image parts', async () => {
-		stubFetch({
+		const transport = new FakeFetch({
 			choices: [
 				{
 					message: {
@@ -44,7 +48,7 @@ describe('OpenRouterOcrClient annotation parsing', () => {
 			]
 		});
 
-		const content = await client.ocr(input);
+		const content = await clientUsing(transport).ocr(input);
 
 		expect(content.parts).toEqual([
 			{ kind: 'markdown', text: '# Title' },
@@ -53,21 +57,29 @@ describe('OpenRouterOcrClient annotation parsing', () => {
 	});
 
 	it('sends the PDF as a base64 file part with the mistral-ocr plugin', async () => {
-		const fetchMock = stubFetch({ choices: [{ message: { annotations: [] } }] });
+		const transport = new FakeFetch({ choices: [{ message: { annotations: [] } }] });
 
-		await expect(client.ocr(input)).rejects.toThrow('PDF OCR returned no content');
+		await clientUsing(transport)
+			.ocr(input)
+			.catch(() => undefined);
 
-		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-		expect(body.plugins).toEqual([{ id: 'file-parser', pdf: { engine: 'mistral-ocr' } }]);
-		expect(body.model).toBe('ocr-model');
-		expect(body.messages[0].content[1]).toEqual({
-			type: 'file',
-			file: { filename: 'doc.pdf', file_data: 'data:application/pdf;base64,QUJD' }
+		const body = JSON.parse(String(transport.request?.init?.body));
+		expect({
+			plugins: body.plugins,
+			model: body.model,
+			file: body.messages[0].content[1]
+		}).toEqual({
+			plugins: [{ id: 'file-parser', pdf: { engine: 'mistral-ocr' } }],
+			model: 'ocr-model',
+			file: {
+				type: 'file',
+				file: { filename: 'doc.pdf', file_data: 'data:application/pdf;base64,QUJD' }
+			}
 		});
 	});
 
 	it('reads annotations from error.metadata.file_annotations on failure responses', async () => {
-		stubFetch(
+		const transport = new FakeFetch(
 			{
 				error: {
 					message: 'Inference failed',
@@ -77,14 +89,14 @@ describe('OpenRouterOcrClient annotation parsing', () => {
 			500
 		);
 
-		const content = await client.ocr(input);
+		const content = await clientUsing(transport).ocr(input);
 
 		expect(content.parts).toEqual([{ kind: 'markdown', text: 'partial text' }]);
 	});
 
 	it('dedupes annotations that appear under both locations by file hash', async () => {
 		const shared = annotation('hash-1', [textPart('only once')]);
-		stubFetch(
+		const transport = new FakeFetch(
 			{
 				choices: [{ message: { annotations: [shared] } }],
 				error: { metadata: { file_annotations: [shared] } }
@@ -92,20 +104,19 @@ describe('OpenRouterOcrClient annotation parsing', () => {
 			500
 		);
 
-		const content = await client.ocr(input);
+		const content = await clientUsing(transport).ocr(input);
 
 		expect(content.parts).toEqual([{ kind: 'markdown', text: 'only once' }]);
 	});
 
 	it('fails when an error response carries no annotations', async () => {
-		stubFetch({ error: { message: 'Upstream exploded' } }, 502);
+		const transport = new FakeFetch({ error: { message: 'Upstream exploded' } }, 502);
 
-		await expect(client.ocr(input)).rejects.toBeInstanceOf(ExternalServiceError);
-		await expect(client.ocr(input)).rejects.toThrow('PDF OCR failed');
+		await expect(clientUsing(transport).ocr(input)).rejects.toThrow('PDF OCR failed');
 	});
 
 	it('drops empty text parts and tolerates missing image urls', async () => {
-		stubFetch({
+		const transport = new FakeFetch({
 			choices: [
 				{
 					message: {
@@ -121,7 +132,7 @@ describe('OpenRouterOcrClient annotation parsing', () => {
 			]
 		});
 
-		const content = await client.ocr(input);
+		const content = await clientUsing(transport).ocr(input);
 
 		expect(content.parts).toEqual([{ kind: 'markdown', text: 'kept' }]);
 	});

@@ -95,6 +95,11 @@ const GOALS: readonly RetrievalGoal[] = [
 
 	// Todos
 	{ id: 'todos-create', goal: 'remind me to do this task', expected: 'create_todo' },
+	{
+		id: 'todos-create-bulk',
+		goal: 'add these five tasks to my list in one go',
+		expected: 'create_todos'
+	},
 	{ id: 'todos-update', goal: 'mark that task as done', expected: 'update_todo' },
 	{
 		id: 'todos-extract',

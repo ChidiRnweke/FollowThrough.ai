@@ -104,12 +104,12 @@ pnpm lint           # prettier + eslint
 pnpm format         # prettier --write
 
 pnpm test           # unit: client + server projects
-pnpm test:repository  # contracts, against PGlite
+pnpm test:repository  # contracts, against one shared PostgreSQL Testcontainer
 pnpm test:evals       # model evals, reported to Phoenix
 npx playwright test   # end-to-end
 ```
 
-Vitest is split into four projects — `client`, `server`, `contracts`, and `evals` — so a change to
+Vitest is split into focused Node, browser, contract, and evaluation projects, so a change to
 a repository can be checked against a real schema without booting the app.
 
 ## Architecture

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Registry } from './registry';
 
 describe('Registry', () => {
@@ -88,11 +88,15 @@ describe('Registry', () => {
 	});
 
 	it('invokes the factory lazily', () => {
-		const factory = vi.fn((id: string) => ({ id }));
+		let creations = 0;
+		const factory = (id: string) => {
+			creations += 1;
+			return { id };
+		};
 		const registry = new Registry(factory);
 		registry.for('a');
 		registry.for('a');
-		expect(factory).toHaveBeenCalledTimes(1);
+		expect(creations).toBe(1);
 	});
 
 	it('peek returns the held instance without bumping the refcount', () => {
@@ -117,11 +121,17 @@ describe('Registry', () => {
 	});
 
 	it('peek does not resurrect a destroyed instance', () => {
-		const factory = vi.fn((id: string) => ({ id }));
+		let creations = 0;
+		const factory = (id: string) => {
+			creations += 1;
+			return { id };
+		};
 		const registry = new Registry(factory);
 		registry.for('a');
 		registry.release('a');
-		expect(registry.peek('a')).toBeUndefined();
-		expect(factory).toHaveBeenCalledTimes(1);
+		expect({ value: registry.peek('a'), creations }).toEqual({
+			value: undefined,
+			creations: 1
+		});
 	});
 });

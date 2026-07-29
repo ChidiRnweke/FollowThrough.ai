@@ -16,6 +16,7 @@ const labels: Readonly<Record<string, string>> = {
 	rename_project: 'Rename project',
 	archive_project: 'Archive project',
 	create_todo: 'Create todo',
+	create_todos: 'Create todos',
 	update_todo: 'Update todo',
 	get_note: 'Read note'
 };
@@ -28,6 +29,7 @@ const completedLabels: Readonly<Record<string, string>> = {
 	rename_project: 'Renamed project',
 	archive_project: 'Archived project',
 	create_todo: 'Created todo',
+	create_todos: 'Created todos',
 	update_todo: 'Updated todo',
 	get_note: 'Read note'
 };
@@ -72,6 +74,7 @@ const writeTools = new Set([
 	'rename_project',
 	'archive_project',
 	'create_todo',
+	'create_todos',
 	'update_todo',
 	'generate_document',
 	'delete_artifact',

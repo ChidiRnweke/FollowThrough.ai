@@ -36,6 +36,10 @@ interface OcrResponse {
 	};
 }
 
+export interface OpenRouterOcrClientOptions extends OpenRouterClientOptions {
+	readonly fetch?: typeof globalThis.fetch;
+}
+
 const asAnnotations = (value: unknown): OcrFileAnnotation[] =>
 	Array.isArray(value) ? (value as OcrFileAnnotation[]) : [];
 
@@ -74,13 +78,15 @@ export const annotationParts = (annotations: readonly OcrFileAnnotation[]): OcrC
 export class OpenRouterOcrClient implements OcrEngineClient {
 	private readonly endpoint: string;
 	private readonly appURL: string;
+	private readonly fetch: typeof globalThis.fetch;
 
 	constructor(
 		private readonly apiKey: string,
-		options: OpenRouterClientOptions = {}
+		options: OpenRouterOcrClientOptions = {}
 	) {
 		this.endpoint = `${options.baseURL ?? DEFAULT_OPENROUTER_BASE_URL}/chat/completions`;
 		this.appURL = options.appURL ?? 'http://localhost:5173';
+		this.fetch = options.fetch ?? globalThis.fetch;
 	}
 
 	async ocr(input: {
@@ -99,7 +105,7 @@ export class OpenRouterOcrClient implements OcrEngineClient {
 				metadata: { model: input.model, engine: 'mistral-ocr' }
 			},
 			async () => {
-				const response = await fetch(this.endpoint, {
+				const response = await this.fetch(this.endpoint, {
 					method: 'POST',
 					signal: input.signal ?? AbortSignal.timeout(120_000),
 					headers: {

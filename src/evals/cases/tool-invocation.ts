@@ -49,6 +49,27 @@ const CASES: readonly InvocationCase[] = [
 		payload: (args) => (usableString(args.title) ? undefined : 'title was missing or empty')
 	},
 	{
+		id: 'invoke-create-todos',
+		name: 'creates several todos in one call when asked for a batch',
+		prompt:
+			'Add three todos to my Profile project: renew the TLS certificates, book flights for the offsite, and review the incident postmortem.',
+		tool: 'create_todos',
+		payload: (args) => {
+			if (typeof args.projectId !== 'string') return 'projectId was missing';
+			const todos = args.todos;
+			if (!Array.isArray(todos) || todos.length < 3)
+				return `expected at least 3 todos: ${JSON.stringify(todos)}`;
+			return todos.every(
+				(todo) =>
+					typeof todo === 'object' &&
+					todo !== null &&
+					usableString((todo as Record<string, unknown>).title)
+			)
+				? undefined
+				: 'some todos were missing a usable title';
+		}
+	},
+	{
 		id: 'invoke-create-project',
 		name: 'creates a project with the requested name',
 		prompt: 'Create a project called "Platform Migration" please.',

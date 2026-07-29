@@ -5,13 +5,29 @@ import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainer
 import * as schema from './schema';
 import { fileURLToPath } from 'node:url';
 
-export interface PostgresTestContext {
-	readonly container: StartedTestContainer;
+export interface PostgresDatabaseContext {
 	/** Connection string, for handing the same database to another process. */
 	readonly url: string;
 	readonly client: ReturnType<typeof postgres>;
 	readonly db: ReturnType<typeof drizzle<typeof schema>>;
+	close(): Promise<void>;
+}
+
+export interface PostgresTestContext extends PostgresDatabaseContext {
+	readonly container: StartedTestContainer;
 	stop(): Promise<void>;
+}
+
+export function connectPostgresTestDatabase(url: string): PostgresDatabaseContext {
+	const client = postgres(url, { max: 1 });
+	return {
+		url,
+		client,
+		db: drizzle(client, { schema }),
+		async close() {
+			await client.end();
+		}
+	};
 }
 
 export async function startPostgresTestcontainer(): Promise<PostgresTestContext> {
@@ -27,8 +43,8 @@ export async function startPostgresTestcontainer(): Promise<PostgresTestContext>
 		.withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
 		.start();
 	const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/followthrough_test`;
-	const client = postgres(url, { max: 1 });
-	const db = drizzle(client, { schema });
+	const connection = connectPostgresTestDatabase(url);
+	const { client, db } = connection;
 	await migrate(db, {
 		migrationsFolder: fileURLToPath(new URL('../../../../drizzle', import.meta.url))
 	});
@@ -37,8 +53,9 @@ export async function startPostgresTestcontainer(): Promise<PostgresTestContext>
 		url,
 		client,
 		db,
+		close: connection.close,
 		async stop() {
-			await client.end();
+			await connection.close();
 			await container.stop();
 		}
 	};

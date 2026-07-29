@@ -1,68 +1,149 @@
 import { playwright } from '@vitest/browser-playwright';
-import { defineConfig, mergeConfig } from 'vitest/config';
-import viteConfig from './vite.config';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vitest/config';
 
-export default mergeConfig(
-	viteConfig,
-	defineConfig({
-		test: {
-			expect: {
-				requireAssertions: true
-			},
+const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
+const common = {
+	expect: { requireAssertions: true },
+	pool: 'forks' as const
+};
+const svelteCompiler = {
+	runes: ({ filename }: { filename: string }) =>
+		filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
+	experimental: { async: true }
+};
 
-			maxWorkers: 4,
-
-			projects: [
-				{
-					extends: true,
-					test: {
-						name: 'client',
-						browser: {
-							enabled: true,
-							provider: playwright(),
-							instances: [
-								{
-									browser: 'chromium',
-									headless: true
-								}
-							]
-						},
-						include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-						exclude: ['src/lib/server/**']
-					}
-				},
-				{
-					extends: true,
-					test: {
-						name: 'server',
-						environment: 'node',
-						include: ['src/**/*.{test,spec}.{js,ts}'],
-						exclude: ['src/**/*.svelte.{test,spec}.{js,ts}', 'src/**/*.contract.spec.ts']
-					}
-				},
-				{
-					extends: true,
-					test: {
-						name: 'contracts',
-						environment: 'node',
-						include: ['src/lib/server/**/*.contract.spec.ts'],
-						fileParallelism: false
-					}
-				},
-				{
-					extends: true,
-					test: {
-						name: 'evals',
-						environment: 'node',
-						include: ['src/evals/**/*.eval.ts'],
-						globalSetup: ['./src/evals/lab/global-setup.ts'],
-						fileParallelism: false,
-						testTimeout: 180_000,
-						hookTimeout: 180_000,
-						retry: 0
-					}
-				}
-			]
+export default defineConfig({
+	resolve: {
+		alias: {
+			$lib: lib
 		}
-	})
-);
+	},
+	test: {
+		projects: [
+			{
+				plugins: [
+					sveltekit({
+						compilerOptions: svelteCompiler,
+						experimental: { remoteFunctions: true, handleRenderingErrors: true }
+					})
+				],
+				resolve: { alias: { $lib: lib } },
+				test: {
+					...common,
+					name: 'node-fast',
+					environment: 'node',
+					include: ['src/**/*.{test,spec}.{js,ts}'],
+					exclude: [
+						'src/**/*.svelte.{test,spec}.{js,ts}',
+						'src/**/*.isolated.spec.{js,ts}',
+						'src/**/*.contract.spec.ts'
+					],
+					isolate: false,
+					maxWorkers: 1,
+					sequence: { groupOrder: 0 }
+				}
+			},
+			{
+				plugins: [
+					sveltekit({
+						compilerOptions: svelteCompiler,
+						experimental: { remoteFunctions: true, handleRenderingErrors: true }
+					})
+				],
+				resolve: { alias: { $lib: lib } },
+				test: {
+					...common,
+					name: 'node-isolated',
+					environment: 'node',
+					include: ['src/**/*.isolated.spec.{js,ts}'],
+					isolate: true,
+					maxWorkers: 1,
+					sequence: { groupOrder: 1 }
+				}
+			},
+			{
+				plugins: [
+					sveltekit({
+						compilerOptions: svelteCompiler,
+						experimental: {
+							remoteFunctions: true,
+							handleRenderingErrors: true
+						}
+					})
+				],
+				test: {
+					...common,
+					name: 'browser-focused',
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: [
+						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
+						'src/lib/components/app/drawio-embed.svelte.spec.ts',
+						'src/lib/components/app/note-conflict-dialog.svelte.spec.ts',
+						'src/lib/components/app/safe-svg-preview.svelte.spec.ts',
+						'src/lib/components/layout/error-boundary.svelte.spec.ts',
+						'src/lib/client/note-sync/indexeddb-note-sync-repository.svelte.spec.ts'
+					],
+					isolate: true,
+					maxWorkers: 1,
+					sequence: { groupOrder: 2 }
+				}
+			},
+			{
+				plugins: [
+					sveltekit({
+						compilerOptions: svelteCompiler,
+						experimental: {
+							remoteFunctions: true,
+							handleRenderingErrors: true
+						}
+					})
+				],
+				test: {
+					...common,
+					name: 'browser-full',
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					exclude: ['src/lib/server/**'],
+					isolate: true,
+					maxWorkers: 1
+				}
+			},
+			{
+				resolve: { alias: { $lib: lib } },
+				test: {
+					...common,
+					name: 'contracts',
+					environment: 'node',
+					include: ['src/lib/server/**/*.contract.spec.ts'],
+					globalSetup: ['./src/lib/server/db/contract-global-setup.ts'],
+					fileParallelism: false,
+					maxWorkers: 1
+				}
+			},
+			{
+				resolve: { alias: { $lib: lib } },
+				test: {
+					...common,
+					name: 'evals',
+					environment: 'node',
+					include: ['src/evals/**/*.eval.ts'],
+					fileParallelism: false,
+					maxWorkers: 1,
+					testTimeout: 180_000,
+					hookTimeout: 180_000,
+					retry: 0
+				}
+			}
+		]
+	}
+});

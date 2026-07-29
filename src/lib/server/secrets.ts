@@ -174,7 +174,8 @@ export class InfisicalSecretsBackend implements SecretsBackend {
 		private readonly environment: string,
 		private readonly ttl: number = DEFAULT_SECRET_TTL_SECONDS,
 		private readonly login: () => Promise<unknown> = async () => undefined,
-		private readonly now: () => number = () => Date.now() / 1000
+		private readonly now: () => number = () => Date.now() / 1000,
+		private readonly wait: (seconds: number) => Promise<void> = sleep
 	) {}
 
 	async readSecret(secretName: string): Promise<string> {
@@ -223,7 +224,7 @@ export class InfisicalSecretsBackend implements SecretsBackend {
 				lastError = error;
 				if (attempt === INFISICAL_FETCH_RETRIES - 1) break;
 				console.warn(`[secrets] Infisical fetch failed (attempt ${attempt + 1}), retrying`);
-				await sleep(INFISICAL_FETCH_BACKOFF_SECONDS[attempt]);
+				await this.wait(INFISICAL_FETCH_BACKOFF_SECONDS[attempt]);
 				// The access token may simply have expired — re-authenticate before retrying.
 				await this.login().catch(() => undefined);
 			}

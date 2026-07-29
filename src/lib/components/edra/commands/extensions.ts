@@ -1,5 +1,7 @@
 import type { Extensions } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { Link } from '@tiptap/extension-link';
+import { Heading } from '@tiptap/extension-heading';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import strings from './strings.js';
 import Highlight from '@tiptap/extension-highlight';
@@ -99,19 +101,45 @@ export default [
 				class: 'list-disc'
 			}
 		},
-		heading: {
-			levels: [1, 2, 3, 4]
-		},
-		link: {
-			openOnClick: false,
-			autolink: true,
-			linkOnPaste: true,
-			HTMLAttributes: {
-				target: '_blank',
-				rel: 'noopener noreferrer nofollow'
-			}
-		},
+		// Link and Heading are supplied as extended copies below — StarterKit options
+		// can configure neither the link mark's `inclusive` spec nor keyboard shortcuts.
+		link: false,
+		heading: false,
 		codeBlock: false
+	}),
+	// Tiptap v3 made the link mark's `inclusive()` return `options.autolink`; with
+	// autolink on, typing after an autolinked URL — spaces included — extends the
+	// link forever. v2 hardcoded `inclusive: false`; this restores that while
+	// keeping autolink itself.
+	Link.extend({ inclusive: false }).configure({
+		openOnClick: false,
+		autolink: true,
+		linkOnPaste: true,
+		HTMLAttributes: {
+			target: '_blank',
+			rel: 'noopener noreferrer nofollow'
+		}
+	}),
+	// Default Enter only exits a heading when the caret is at the very end; a
+	// mid-heading split keeps the tail a heading. Force every Enter inside a
+	// heading to land in a paragraph (Notion-style): an empty heading converts in
+	// place, otherwise split and convert the new block.
+	Heading.extend({
+		addKeyboardShortcuts() {
+			return {
+				...this.parent?.(),
+				Enter: ({ editor }) => {
+					if (!editor.isActive('heading')) return false;
+					const { $head, empty } = editor.state.selection;
+					if (empty && $head.parent.content.size === 0) {
+						return editor.chain().setParagraph().focus().run();
+					}
+					return editor.chain().splitBlock().setParagraph().focus().run();
+				}
+			};
+		}
+	}).configure({
+		levels: [1, 2, 3, 4]
 	}),
 	Audio.configure({
 		inline: true,

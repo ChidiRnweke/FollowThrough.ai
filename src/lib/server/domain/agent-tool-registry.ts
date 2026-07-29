@@ -713,6 +713,35 @@ export class AgentToolRegistry {
 				(input) => factory.todos().create(actor, input as never)
 			),
 			define(
+				'create_todos',
+				'Create multiple todos in one call. Prefer this over repeated create_todo calls when adding several todos.',
+				'mutation',
+				z.object({
+					projectId: id,
+					todos: z
+						.array(
+							z.object({
+								title: z.string().min(1),
+								description: z.string().optional(),
+								responsibility: z.enum(['mine', 'waiting_on']),
+								waitingOn: z.string().optional(),
+								dueDate: z.string().optional()
+							})
+						)
+						.min(1)
+						.max(20)
+				}),
+				async (input) => {
+					const created = [];
+					for (const todo of input.todos) {
+						created.push(
+							await factory.todos().create(actor, { projectId: input.projectId, ...todo } as never)
+						);
+					}
+					return { todos: created };
+				}
+			),
+			define(
 				'update_todo',
 				'Edit a todo or change its status.',
 				'mutation',

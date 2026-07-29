@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type {
 	Conversation,
@@ -31,8 +31,8 @@ import type {
 	UserId
 } from '$lib/models';
 import { ConflictError } from '$lib/models';
-import type { PostgresTestContext } from '$lib/server/db/testcontainer';
-import { startPostgresTestcontainer } from '$lib/server/db/testcontainer';
+import type { PostgresDatabaseContext } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
 import { PostgresConversationRepository } from './postgres-conversations';
@@ -60,7 +60,7 @@ import {
 	PostgresAgentRunEventRepository
 } from './postgres-agent-runs';
 
-let context: PostgresTestContext;
+let context: PostgresDatabaseContext;
 const actor = (suffix: string) => ({
 	userId: `10000000-0000-4000-8000-${suffix.padStart(12, '0')}` as UserId
 });
@@ -125,12 +125,12 @@ const seedArtifact = async (
 	return artifact;
 };
 
-beforeAll(async () => {
-	context = await startPostgresTestcontainer();
-}, 120_000);
+beforeAll(() => {
+	context = connectPostgresTestDatabase(inject('postgresUrl'));
+});
 
 afterAll(async () => {
-	await context?.stop();
+	await context?.close();
 });
 
 describe('Postgres project repository invariants', () => {
@@ -1066,7 +1066,11 @@ describe('Postgres export-settings repository invariants', () => {
 		const repository = new PostgresExportSettingsRepository(context.db);
 		const settings = { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 } as const;
 		await repository.upsert(owner, project.id, settings);
-		expect(await repository.find(owner, project.id)).toEqual(settings);
+		expect(await repository.find(owner, project.id)).toEqual({
+			...settings,
+			diagramTheme: { base: 'light' },
+			includeTitle: false
+		});
 	});
 
 	it('replaces settings on repeated upsert', async () => {
