@@ -148,8 +148,11 @@ export class OpenRouterOcrClient implements OcrEngineClient {
 			},
 			(content) =>
 				JSON.stringify({
-					markdownParts: content.parts.filter((part) => part.kind === 'markdown').length,
-					imageParts: content.parts.filter((part) => part.kind === 'image').length
+					parts: content.parts.map((part) =>
+						part.kind === 'markdown'
+							? { kind: 'markdown', text: part.text }
+							: { kind: 'image', bytes: part.dataUrl.length }
+					)
 				})
 		);
 	}

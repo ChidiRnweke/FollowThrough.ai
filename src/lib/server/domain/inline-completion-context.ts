@@ -15,7 +15,7 @@ import type {
 	Reranker
 } from '$lib/services';
 import { countRetrievalTokens } from '$lib/services/retrieval/tokenizer';
-import { OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import { traceOperation } from './telemetry';
 
 const USER_MEMORY_THRESHOLD = 20;
@@ -84,6 +84,29 @@ const memoryAsMatch = (entry: MemoryEntry, note: Note): SearchMatch => ({
 	score: 0
 });
 
+/**
+ * Phoenix must show what the completer actually grounded on, not how many
+ * items there were — counts are useless for improving retrieval.
+ */
+export const inlineContextTraceOutput = (context: InlineCompletionContext): string =>
+	JSON.stringify({
+		noteTitle: context.noteTitle,
+		userMemory: context.userMemory,
+		projectPassages: context.projectPassages
+	});
+
+export const vectorSearchTraceOutput = (results: readonly SearchMatch[]): string =>
+	JSON.stringify(
+		results.map((match) => ({
+			id: match.document.id,
+			sourceTitle: match.document.sourceTitle,
+			noteId: match.document.noteId,
+			sectionPath: match.document.sectionPath,
+			score: match.score,
+			content: match.document.content
+		}))
+	);
+
 export class RetrievalInlineCompletionContextBuilder implements InlineCompletionContextBuilder {
 	constructor(private readonly dependencies: RetrievalInlineCompletionContextDependencies) {}
 
@@ -96,7 +119,7 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 		const query = retrievalQuery(request);
 		return traceOperation(
 			'inline.context',
-			{ input: query },
+			{ input: query, outputMimeType: MimeType.JSON },
 			async () => {
 				signal.throwIfAborted();
 				const [projectPassages, userEntries] = await Promise.all([
@@ -121,8 +144,7 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 					projectPassages
 				};
 			},
-			(context) =>
-				`${context.userMemory.length} user memories, ${context.projectPassages.length} project passages`
+			inlineContextTraceOutput
 		);
 	}
 
@@ -134,7 +156,11 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 	): Promise<readonly InlineCompletionPassage[]> {
 		const matches = await traceOperation(
 			'retrieval.vector-search',
-			{ input: query, kind: OpenInferenceSpanKind.RETRIEVER },
+			{
+				input: query,
+				outputMimeType: MimeType.JSON,
+				kind: OpenInferenceSpanKind.RETRIEVER
+			},
 			async () => {
 				return this.dependencies.searcher.search(
 					actor,
@@ -144,7 +170,7 @@ export class RetrievalInlineCompletionContextBuilder implements InlineCompletion
 					signal
 				);
 			},
-			(results) => JSON.stringify({ matchCount: results.length })
+			vectorSearchTraceOutput
 		);
 		const candidates = matches.filter((match) => match.document.noteId !== request.noteId);
 		if (candidates.length <= PROJECT_PASSAGE_LIMIT) return candidates.map(passageOf);

@@ -150,7 +150,9 @@ export class OpenRouterReranker implements Reranker {
 					JSON.stringify({
 						results: results.map((result) => ({
 							documentId: result.document.id,
-							score: result.score
+							sourceTitle: result.document.sourceTitle,
+							score: result.score,
+							content: result.document.content
 						}))
 					}),
 				rerankerOutputTraceAttributes

@@ -16,7 +16,11 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/fixtures/domain-builders';
-import { RetrievalInlineCompletionContextBuilder } from './inline-completion-context';
+import {
+	inlineContextTraceOutput,
+	RetrievalInlineCompletionContextBuilder,
+	vectorSearchTraceOutput
+} from './inline-completion-context';
 
 const actor = testActor();
 const note = noteBuilder({
@@ -193,5 +197,31 @@ describe('inline completion context', () => {
 		const memories = Array.from({ length: 21 }, (_, index) => userMemory(index));
 		const context = await build([], memories, new FailingReranker());
 		expect(context.userMemory).toEqual(memories.slice(0, 8).map((entry) => entry.content));
+	});
+});
+
+describe('trace output payloads', () => {
+	it('serializes the actual memories and passages, never counts', async () => {
+		const context = await build([match('Greek epic content')], [userMemory(0)]);
+		expect(JSON.parse(inlineContextTraceOutput(context))).toEqual({
+			noteTitle: 'Architecture',
+			userMemory: ['memory 0'],
+			projectPassages: [
+				{ sourceTitle: 'The Odyssey', sourceType: 'note', content: 'Greek epic content' }
+			]
+		});
+	});
+
+	it('serializes actual vector-search matches with scores and content', () => {
+		const results = [match('Greek epic content')];
+		expect(JSON.parse(vectorSearchTraceOutput(results))).toEqual([
+			{
+				id: results[0].document.id,
+				sourceTitle: 'The Odyssey',
+				noteId: results[0].document.noteId,
+				score: 0.9,
+				content: 'Greek epic content'
+			}
+		]);
 	});
 });
