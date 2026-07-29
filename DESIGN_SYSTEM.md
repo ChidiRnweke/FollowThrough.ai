@@ -120,7 +120,12 @@ The product celebrates the absence of work rather than apologizing for empty scr
 
 Empty regions are invitations to act, never dead blank space. Use
 `src/lib/components/app/empty-state.svelte`: a quiet icon, one voice line, an optional hint,
-and at most one action. Kanban columns keep their drop zone and center the voice line inside it.
+and at most one action. It comes in two sizes: the default slot size (bare muted icon, all-muted
+copy) fills inline gaps — a grid cell, a side panel; `size="large"` is the hero treatment for a
+region that carries a page or a whole section — a brand-wash icon tile (`size-16 rounded-lg
+bg-brand/10 text-brand dark:bg-brand/15`, the project-overview resource-chip recipe), a
+statement in foreground, one supporting line, then the action. Kanban columns keep their drop
+zone and center the voice line inside it.
 
 ## UX patterns
 

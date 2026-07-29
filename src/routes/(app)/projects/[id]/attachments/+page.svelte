@@ -41,5 +41,6 @@
 		projectId={data.project.id}
 		initial={data.attachments}
 		oncount={(count) => (reportedCount = count)}
+		heroEmpty
 	/>
 </PageShell>

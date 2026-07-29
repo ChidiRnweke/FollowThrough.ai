@@ -11,7 +11,7 @@
 - teal=interactive/primary + identity accents (active nav, selected segment, provenance chips, product mark). red=destructive-only. all else gray.
 - brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always in sidebar header.
 - project identity=brand teal, NEVER per-project hues. sidebar project icon, Badge variant="brand", breadcrumb links, chat origin line, artifact format badges, project-overview resource icon chips. canonical wash recipe=badge brand variant (text-brand + bg-brand/10, dark:bg-brand/15) — no separate wash tokens.
-- voice: calm/dry/second-person, one sentence w/ period, no exclamations, celebrates absence of work. empty states=empty-state.svelte (icon+voice line+≤1 action), never blank space.
+- voice: calm/dry/second-person, one sentence w/ period, no exclamations, celebrates absence of work. empty states=empty-state.svelte (icon+voice line+≤1 action), never blank space. two sizes: default slot (bare muted icon, inline gaps/panels) vs size="large" hero (brand-wash icon tile size-16 bg-brand/10 text-brand, foreground statement, pages/whole sections).
 
 ## tokens.color (semantic only — never raw oklch/hex/tailwind palette)
 

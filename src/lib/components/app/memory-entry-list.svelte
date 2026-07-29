@@ -53,8 +53,8 @@
 		hideShare?: boolean;
 		/** Optional caption clarifying where these memories apply. */
 		scopeLabel?: string;
-		/** Whole-page contexts (the profile page) get the hero empty state; slots and
-		 *  panels keep the quiet shared one. */
+		/** Whole-page contexts (the profile and project memory pages) get the
+		 *  hero-sized empty state; slots and panels keep the quiet one. */
 		heroEmpty?: boolean;
 	} = $props();
 
@@ -220,31 +220,19 @@
 	{#if loading && isEmpty}
 		<p class="text-sm text-muted-foreground">Loading memory…</p>
 	{:else if isEmpty}
-		{#if heroEmpty}
-			<!-- Whole pages get the hero treatment (project-overview's documents hero is
-			     the model): an icon tile, a statement in foreground, one supporting line.
-			     The slot-sized shared EmptyState is built for inline gaps, not a page. -->
-			<section class="flex flex-col items-center py-16 text-center" aria-label="Empty memory">
-				<div
-					class="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-				>
-					<Brain class="size-5" />
-				</div>
-				<h2 class="pt-4 text-base font-medium">{emptyText}</h2>
-				{#if emptyHint}
-					<p class="max-w-sm pt-1.5 text-sm text-muted-foreground">{emptyHint}</p>
-				{/if}
-				<div class="pt-6">
-					{@render addButton()}
-				</div>
-			</section>
-		{:else}
-			<EmptyState icon={Brain} title={emptyText} hint={emptyHint}>
-				{#snippet action()}
-					{@render addButton()}
-				{/snippet}
-			</EmptyState>
-		{/if}
+		<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
+		     EmptyState; the side panel keeps the slot size. -->
+		<EmptyState
+			icon={Brain}
+			title={emptyText}
+			hint={emptyHint}
+			size={heroEmpty ? 'large' : 'default'}
+			label={heroEmpty ? 'Empty memory' : undefined}
+		>
+			{#snippet action()}
+				{@render addButton()}
+			{/snippet}
+		</EmptyState>
 	{:else}
 		<div class="flex justify-end">
 			{@render addButton()}

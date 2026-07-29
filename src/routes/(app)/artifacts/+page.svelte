@@ -26,7 +26,7 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Pagination from '$lib/components/ui/pagination';
-	import * as Empty from '$lib/components/ui/empty';
+	import EmptyState from '$lib/components/app/empty-state.svelte';
 	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
 	import { agentActions } from '$lib/components/app/agent/agent-actions';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -129,79 +129,70 @@
 		{/if}
 	{/snippet}
 	{#if !data.selectedProjectId}
-		<div class="flex flex-col items-center justify-center gap-3 py-20 text-center">
-			<PackageOpen class="h-12 w-12 text-muted-foreground" />
-			<p class="text-sm text-muted-foreground">
-				Select a project from the sidebar to view its artifacts.
-			</p>
-		</div>
+		<EmptyState
+			icon={PackageOpen}
+			title="Select a project to see its artifacts."
+			size="large"
+			label="Artifacts"
+		/>
 	{:else}
-		<form
-			class="mb-4 max-w-xl"
-			onsubmit={(event) => {
-				event.preventDefault();
-				void submitSearch();
-			}}
-		>
-			<label class="sr-only" for="artifact-search">Search artifacts</label>
-			<InputGroup.Root>
-				<InputGroup.Input
-					id="artifact-search"
-					bind:value={searchValue}
-					placeholder="Search title, format, or template"
-				/>
-				<InputGroup.Addon align="inline-end">
-					{#if data.query}
-						<InputGroup.Button aria-label="Clear search" onclick={clearSearch}
-							><X /> Clear</InputGroup.Button
-						>
-					{/if}
-					<InputGroup.Button type="submit" variant="default"><Search /> Search</InputGroup.Button>
-				</InputGroup.Addon>
-			</InputGroup.Root>
-		</form>
+		<!-- Nothing to search until there is something to find: the bar only appears
+		     with artifacts on the page or a query already narrowing them. -->
+		{#if artifacts.length > 0 || data.query}
+			<form
+				class="mb-4 max-w-xl"
+				onsubmit={(event) => {
+					event.preventDefault();
+					void submitSearch();
+				}}
+			>
+				<label class="sr-only" for="artifact-search">Search artifacts</label>
+				<InputGroup.Root>
+					<InputGroup.Input
+						id="artifact-search"
+						bind:value={searchValue}
+						placeholder="Search title, format, or template"
+					/>
+					<InputGroup.Addon align="inline-end">
+						{#if data.query}
+							<InputGroup.Button aria-label="Clear search" onclick={clearSearch}
+								><X /> Clear</InputGroup.Button
+							>
+						{/if}
+						<InputGroup.Button type="submit" variant="default"><Search /> Search</InputGroup.Button>
+					</InputGroup.Addon>
+				</InputGroup.Root>
+			</form>
+		{/if}
 		{#if artifacts.length === 0 && data.query}
-			<Empty.Root>
-				<Empty.Header
-					><Empty.Media variant="icon"><Search /></Empty.Media><Empty.Title
-						>No matching artifacts</Empty.Title
-					><Empty.Description>No artifacts match “{data.query}”.</Empty.Description></Empty.Header
-				>
-				<Empty.Content
-					><Button variant="outline" onclick={clearSearch}>Clear search</Button></Empty.Content
-				>
-			</Empty.Root>
+			<EmptyState icon={Search} title="No artifacts match “{data.query}”." size="large">
+				{#snippet action()}
+					<Button variant="outline" onclick={clearSearch}>Clear search</Button>
+				{/snippet}
+			</EmptyState>
 		{:else if artifacts.length === 0}
-			<Empty.Root>
-				<Empty.Header
-					><Empty.Media variant="icon"><FileOutput /></Empty.Media><Empty.Title
-						>No artifacts yet</Empty.Title
-					><Empty.Description
-						>Export a document from a note or project to get started.</Empty.Description
-					></Empty.Header
-				>
-				<Empty.Content>
-					<div class="w-full max-w-xs">
-						<AgentAction
-							variant="row"
-							action={agentActions.artifactsExport}
-							context={{ projectId: data.selectedProjectId }}
-						/>
-					</div>
-				</Empty.Content>
-			</Empty.Root>
+			<EmptyState
+				icon={FileOutput}
+				title="No artifacts yet."
+				hint="Exports of your notes and project documents show up here."
+				size="large"
+				label="Artifacts"
+			/>
 		{:else}
-			<div class="divide-y rounded-lg border">
+			<!-- Homogeneous rows, so a borderless divided list — never a bordered box
+			     wrapping same-weight rectangles. Bled 12px past the measure so titles
+			     align with the page text while hover washes and hairlines stay continuous. -->
+			<ul class="-mx-3 divide-y divide-border border-t border-border">
 				{#each artifacts as artifact (artifact.id)}
-					<div class="flex items-center justify-between gap-3 px-4 py-3">
-						<div class="flex items-center gap-3">
+					<li class="row-interactive flex items-center justify-between gap-3 px-3 py-2.5">
+						<div class="flex min-w-0 items-center gap-3">
 							{#if artifact.format === 'docx'}
-								<FileText />
+								<FileText class="shrink-0" />
 							{:else}
-								<FileOutput />
+								<FileOutput class="shrink-0" />
 							{/if}
-							<div class="flex flex-col gap-0.5">
-								<span class="text-sm font-medium">{artifact.title}</span>
+							<div class="flex min-w-0 flex-col gap-0.5">
+								<span class="truncate text-sm font-medium">{artifact.title}</span>
 								<span class="text-xs text-muted-foreground">
 									{artifact.sourceNoteIds.length} note{artifact.sourceNoteIds.length !== 1
 										? 's'
@@ -215,7 +206,7 @@
 								</span>
 							</div>
 						</div>
-						<div class="flex items-center gap-2">
+						<div class="flex shrink-0 items-center gap-2">
 							{#if artifact.stale}
 								<Tip text="A source note changed after this was generated — regenerate to refresh">
 									{#snippet children({ props })}
@@ -276,9 +267,9 @@
 								{/snippet}
 							</ConfirmDelete>
 						</div>
-					</div>
+					</li>
 				{/each}
-			</div>
+			</ul>
 			{#if data.total > data.pageSize}
 				<div class="mt-4 flex flex-col items-center gap-2">
 					<p class="text-sm text-muted-foreground">

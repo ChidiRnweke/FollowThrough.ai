@@ -32,5 +32,6 @@
 		placeholder="A fact, decision, constraint, or preference worth remembering…"
 		emptyText="Nothing remembered here yet."
 		emptyHint="Add a durable project fact, or accept a memory suggestion from the agent."
+		heroEmpty
 	/>
 </PageShell>

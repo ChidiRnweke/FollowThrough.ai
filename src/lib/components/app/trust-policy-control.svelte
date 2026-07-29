@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models';
-	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
+	import * as Field from '$lib/components/ui/field';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { pipelineLabels } from './labels';
 
 	let {
@@ -21,42 +21,39 @@
 		reference: 'External references for a selection',
 		agent: 'Changes proposed in chat'
 	};
+
+	function changed(next: string | string[]): void {
+		if (next !== 'review' && next !== 'auto') return;
+		onchange?.({
+			pipeline: policy.pipeline,
+			autoAcceptEnabled: next === 'auto',
+			...(policy.minimumConfidence !== undefined
+				? { minimumConfidence: policy.minimumConfidence }
+				: {})
+		});
+	}
 </script>
 
-<Card.Root class="gap-2 py-3">
-	<Card.Header class="px-4">
-		<Card.Title class="text-sm font-medium">{pipelineLabels[policy.pipeline]}</Card.Title>
-		<Card.Description>{descriptions[policy.pipeline]}</Card.Description>
-		<Card.Action>
-			<Select.Root
-				type="single"
-				{value}
-				{disabled}
-				onValueChange={(selected) =>
-					onchange?.({
-						pipeline: policy.pipeline,
-						autoAcceptEnabled: selected === 'auto',
-						...(policy.minimumConfidence !== undefined
-							? { minimumConfidence: policy.minimumConfidence }
-							: {})
-					})}
-			>
-				<Select.Trigger size="sm" aria-label="Trust policy for {pipelineLabels[policy.pipeline]}">
-					{value === 'auto' ? 'Auto-accept' : 'Review first'}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="review" label="Review first" />
-					<Select.Item value="auto" label="Auto-accept" />
-				</Select.Content>
-			</Select.Root>
-		</Card.Action>
-	</Card.Header>
-	{#if policy.autoAcceptEnabled && policy.minimumConfidence !== undefined}
-		<Card.Content class="px-4">
-			<p class="text-xs text-muted-foreground">
+<Field.Field orientation="responsive">
+	<Field.Content>
+		<Field.Title>{pipelineLabels[policy.pipeline]}</Field.Title>
+		<Field.Description>{descriptions[policy.pipeline]}</Field.Description>
+		{#if policy.autoAcceptEnabled && policy.minimumConfidence !== undefined}
+			<p class="provenance-caption pt-1">
 				Auto-accepts above {policy.minimumConfidence}% confidence. Auto-accepted items stay visibly
 				AI-made and are one click to revert.
 			</p>
-		</Card.Content>
-	{/if}
-</Card.Root>
+		{/if}
+	</Field.Content>
+	<ToggleGroup.Root
+		type="single"
+		variant="outline"
+		{value}
+		{disabled}
+		onValueChange={changed}
+		aria-label="Trust policy for {pipelineLabels[policy.pipeline]}"
+	>
+		<ToggleGroup.Item value="review">Review first</ToggleGroup.Item>
+		<ToggleGroup.Item value="auto">Auto-accept</ToggleGroup.Item>
+	</ToggleGroup.Root>
+</Field.Field>

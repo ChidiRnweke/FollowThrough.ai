@@ -199,10 +199,11 @@
 	</div>
 
 	<!-- The filter bar governs the list, but a control bar and the data under it
-	     are different in kind, so it takes the full between-group step. The gaps
-	     double at each level — 6px heading to its rows, 12px between kinds, 24px
-	     to the bar above — so no two levels read as peers. -->
-	<div class="flex flex-col gap-6">
+	     are different in kind, so it takes a further step — 32px, the same as the
+	     preamble to the controls above. The gaps double at each level — 6px heading
+	     to its rows, 12px between kinds, 32px to the bar above — so no two levels
+	     read as peers. -->
+	<div class="flex flex-col gap-8">
 		<div class="flex flex-wrap items-center gap-2">
 			<Input
 				class="min-w-56 flex-1"

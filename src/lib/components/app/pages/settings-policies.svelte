@@ -4,6 +4,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { updateTrustPolicy } from '$lib/remote/settings.remote';
 	import TrustPolicyControl from '../trust-policy-control.svelte';
+	import * as Field from '$lib/components/ui/field';
 
 	let { policies }: { policies: readonly TrustPolicy[] } = $props();
 	let busy = $state(false);
@@ -23,18 +24,22 @@
 	}
 </script>
 
-<section class="space-y-3">
-	<p class="text-sm text-muted-foreground">
+<section class="flex max-w-3xl flex-col gap-6">
+	<!-- The pb-2 steps the preamble out to 32px so it does not read as a caption of the fields. -->
+	<p class="pb-2 text-sm text-muted-foreground">
 		Decide per pipeline whether accepted work needs your review first. Trust is earned one pipeline
 		at a time.
 	</p>
 	{#if policies.length === 0}
 		<p class="text-sm text-muted-foreground">No policies configured yet.</p>
 	{:else}
-		<div class="grid gap-3 lg:grid-cols-2">
-			{#each policies as policy (policy.pipeline)}
+		<Field.Group>
+			{#each policies as policy, index (policy.pipeline)}
+				{#if index > 0}
+					<Field.Separator />
+				{/if}
 				<TrustPolicyControl {policy} disabled={busy} onchange={(input) => void change(input)} />
 			{/each}
-		</div>
+		</Field.Group>
 	{/if}
 </section>

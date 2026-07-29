@@ -22,7 +22,8 @@
 		projectId,
 		noteId,
 		initial,
-		oncount
+		oncount,
+		heroEmpty = false
 	}: {
 		projectId?: string;
 		noteId?: string;
@@ -30,6 +31,8 @@
 		initial?: readonly AttachmentView[];
 		/** Reports how many attachments there are, for chrome that only makes sense with files. */
 		oncount?: (count: number) => void;
+		/** The attachments page gets the hero-sized empty state; the dialog keeps the slot size. */
+		heroEmpty?: boolean;
 	} = $props();
 
 	let busy = $state(false);
@@ -148,6 +151,8 @@
 			icon={Paperclip}
 			title="No attachments yet."
 			hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
+			size={heroEmpty ? 'large' : 'default'}
+			label={heroEmpty ? 'Attachments' : undefined}
 		>
 			{#snippet action()}
 				{@render uploadButton()}
