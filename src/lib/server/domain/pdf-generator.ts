@@ -121,6 +121,146 @@ function imageBlock(attrs: Record<string, unknown>, context: ConversionContext):
 	};
 }
 
+const TABLE_LINE_COLOR = '#d1d5db';
+const TABLE_HEADER_FILL = '#f3f4f6';
+const CODE_PANEL_FILL = '#f6f8fa';
+const CODE_PANEL_LINE = '#e5e7eb';
+
+/**
+ * Render code as a padded, hairline-boxed panel. A single-cell table is the
+ * pdfmake idiom for a filled box with inner padding; `preserveLeadingSpaces`
+ * keeps the source indentation that plain text nodes would lose.
+ */
+function codePanel(text: string, language?: string): unknown {
+	const runs: unknown[] = [];
+	if (language) {
+		runs.push({
+			text: language.toUpperCase(),
+			fontSize: 7.5,
+			color: '#6b7280',
+			lineHeight: 1.6
+		});
+	}
+	runs.push({ text, color: '#1f2328' });
+	return {
+		table: {
+			widths: ['*'],
+			body: [
+				[
+					{
+						text: runs,
+						font: 'Courier',
+						fontSize: 9,
+						lineHeight: 1.25,
+						preserveLeadingSpaces: true
+					}
+				]
+			]
+		},
+		layout: {
+			fillColor: CODE_PANEL_FILL,
+			hLineWidth: () => 0.75,
+			vLineWidth: () => 0.75,
+			hLineColor: CODE_PANEL_LINE,
+			vLineColor: CODE_PANEL_LINE,
+			paddingLeft: () => 10,
+			paddingRight: () => 10,
+			paddingTop: () => 8,
+			paddingBottom: () => 8
+		},
+		margin: [0, 6, 0, 10]
+	};
+}
+
+/** Convert a Tiptap table node into a pdfmake table element. */
+function tableBlock(node: Record<string, unknown>, context: ConversionContext): unknown {
+	const rows = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
+	// Slots covered by a rowspan from an earlier row, per row index.
+	const covered: Array<Set<number>> = rows.map(() => new Set<number>());
+	const body: unknown[][] = [];
+	let columnCount = 0;
+
+	rows.forEach((row, rowIndex) => {
+		const cells = (row.content as Array<Record<string, unknown>> | undefined) ?? [];
+		const bodyRow: unknown[] = [];
+		let column = 0;
+		for (const cell of cells) {
+			while (covered[rowIndex]!.has(column)) {
+				bodyRow.push({});
+				column += 1;
+			}
+			const cellAttrs = (cell.attrs as Record<string, unknown> | undefined) ?? {};
+			const colSpan = Math.max((cellAttrs.colspan as number) ?? 1, 1);
+			const rowSpan = Math.max((cellAttrs.rowspan as number) ?? 1, 1);
+			const cellContent = (cell.content as Array<Record<string, unknown>> | undefined) ?? [];
+			const converted = cellContent.map((c) => convertNode(c, context)).flat();
+			const entry: Record<string, unknown> = {
+				...(converted.length > 0 ? { text: converted } : { text: '' }),
+				...(colSpan > 1 ? { colSpan } : {}),
+				...(rowSpan > 1 ? { rowSpan } : {})
+			};
+			if (cell.type === 'tableHeader') {
+				entry.bold = true;
+				entry.fillColor = TABLE_HEADER_FILL;
+			}
+			bodyRow.push(entry);
+			for (let offset = 1; offset < colSpan; offset += 1) {
+				bodyRow.push({});
+				if (rowSpan > 1) {
+					for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
+						covered[r]!.add(column + offset);
+					}
+				}
+			}
+			if (rowSpan > 1) {
+				for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
+					covered[r]!.add(column);
+				}
+			}
+			column += colSpan;
+		}
+		while (covered[rowIndex]!.has(column)) {
+			bodyRow.push({});
+			column += 1;
+		}
+		columnCount = Math.max(columnCount, column);
+		body.push(bodyRow);
+	});
+
+	if (body.length === 0 || columnCount === 0) return [];
+
+	// Honour the editor's column widths when the first row records them; scale
+	// the pixel widths to fit the printable area. Otherwise distribute evenly.
+	const firstRowCells = (rows[0]?.content as Array<Record<string, unknown>> | undefined) ?? [];
+	const colwidths = firstRowCells
+		.map((cell) => (cell.attrs as Record<string, unknown> | undefined)?.colwidth)
+		.map((value) => (Array.isArray(value) ? Number(value[0]) : undefined));
+	const totalWidth =
+		colwidths.every((w): w is number => typeof w === 'number' && Number.isFinite(w) && w > 0) &&
+		colwidths.length === columnCount
+			? colwidths.reduce((sum, w) => sum + w, 0)
+			: undefined;
+	const widths = totalWidth
+		? colwidths.map((w) => ((w as number) / totalWidth) * context.contentWidth)
+		: Array.from({ length: columnCount }, () => '*');
+
+	const hasHeaderRow =
+		firstRowCells.length > 0 && firstRowCells.every((cell) => cell.type === 'tableHeader');
+
+	return {
+		table: {
+			...(hasHeaderRow ? { headerRows: 1 } : {}),
+			widths,
+			body
+		},
+		layout: {
+			hLineColor: TABLE_LINE_COLOR,
+			vLineColor: TABLE_LINE_COLOR
+		},
+		margin: [0, 4, 0, 8]
+	};
+}
+
 function convertNode(node: Record<string, unknown>, context: ConversionContext): unknown {
 	const type = node.type as string;
 	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
@@ -172,8 +312,9 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 			});
 		}
 		case 'codeBlock': {
-			const text = collectText(node);
-			return { text, font: 'Courier', fontSize: 9, background: '#f5f5f5', margin: [0, 6, 0, 6] };
+			const language =
+				typeof attrs.language === 'string' && attrs.language ? attrs.language : undefined;
+			return codePanel(collectText(node), language);
 		}
 		case 'mermaid': {
 			const source = collectText(node);
@@ -210,13 +351,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 				return { svg, fit: [context.contentWidth, context.usableHeight], margin: [0, 8, 0, 8] };
 			}
 			// Without a browser-rendered SVG the diagram source is still worth keeping.
-			return {
-				text: source,
-				font: 'Courier',
-				fontSize: 9,
-				background: '#f5f5f5',
-				margin: [0, 6, 0, 6]
-			};
+			return codePanel(source, 'mermaid');
 		}
 		case 'horizontalRule': {
 			return {
@@ -236,6 +371,9 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 		}
 		case 'image': {
 			return imageBlock(attrs, context);
+		}
+		case 'table': {
+			return tableBlock(node, context);
 		}
 		case 'text': {
 			return textRunFromNode(node);
@@ -348,13 +486,16 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 
 	const content: unknown[] = [];
 
-	content.push({
-		text: input.title,
-		fontSize: 24,
-		bold: true,
-		alignment: 'center',
-		margin: [0, 0, 0, 16]
-	});
+	// The export title is the file name; it only lands on the page when asked for.
+	if (settings.includeTitle) {
+		content.push({
+			text: input.title,
+			fontSize: 24,
+			bold: true,
+			alignment: 'center',
+			margin: [0, 0, 0, 16]
+		});
+	}
 
 	for (const note of notes) {
 		if (note.title && note.title !== input.title) {

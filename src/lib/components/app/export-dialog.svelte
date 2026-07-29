@@ -8,6 +8,8 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Label } from '$lib/components/ui/label';
 	import {
 		initializeMermaid,
 		sanitizeMermaidSvg,
@@ -239,6 +241,17 @@
 
 		<form class="flex flex-col gap-4" onsubmit={submit}>
 			<Input bind:value={title} placeholder="Document title" aria-label="Title" disabled={busy} />
+
+			<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+				<Checkbox
+					checked={settings.includeTitle ?? false}
+					onCheckedChange={(includeTitle) =>
+						(settings = { ...settings, includeTitle: includeTitle === true })}
+					disabled={busy}
+					aria-label="Include file name as title"
+				/>
+				Include file name as title
+			</Label>
 
 			<div class="flex items-center gap-2">
 				<Button

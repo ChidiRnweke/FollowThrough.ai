@@ -121,7 +121,7 @@
 					<div class="flex flex-col gap-1">
 						<Input
 							id={status === 'open' ? 'quick-todo-input' : undefined}
-							autofocus={status === 'open' && page.url.searchParams.has('quickTodo')}
+							autofocus
 							placeholder="Todo title…"
 							bind:value={newTitle}
 							onkeydown={(e) => {
@@ -130,7 +130,12 @@
 							}}
 						/>
 						<div class="flex gap-1">
-							<Button type="submit" size="sm" variant="default" class="flex-1">Add</Button>
+							<Button
+								size="sm"
+								variant="default"
+								class="flex-1"
+								onclick={() => void addTodo(status)}>Add</Button
+							>
 							<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
 						</div>
 					</div>

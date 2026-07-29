@@ -1074,14 +1074,16 @@ export class AgentToolRegistry {
 					fontFamily: z.enum(['helvetica', 'times', 'courier']),
 					fontSize: z.number().min(8).max(18),
 					lineHeight: z.number().min(1).max(2.2),
-					margin: z.number().min(18).max(144)
+					margin: z.number().min(18).max(144),
+					includeTitle: z.boolean().optional()
 				}),
 				(input) =>
 					factory.deliverables().updateExportSettings(actor, input.projectId as never, {
 						fontFamily: input.fontFamily,
 						fontSize: input.fontSize,
 						lineHeight: input.lineHeight,
-						margin: input.margin
+						margin: input.margin,
+						includeTitle: input.includeTitle
 					})
 			),
 			define(

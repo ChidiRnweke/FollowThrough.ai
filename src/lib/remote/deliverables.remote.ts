@@ -45,7 +45,8 @@ const exportSettingsSchema = z.object({
 	fontFamily: z.enum(['helvetica', 'times', 'courier']),
 	fontSize: z.number().min(8).max(18),
 	lineHeight: z.number().min(1).max(2.2),
-	margin: z.number().min(18).max(144)
+	margin: z.number().min(18).max(144),
+	includeTitle: z.boolean().optional()
 });
 
 export const generateDocument = command(

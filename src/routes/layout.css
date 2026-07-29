@@ -220,6 +220,44 @@
 		@apply bg-primary/20 text-foreground;
 	}
 
+	/* Native scrollbars styled to match the bits-ui ScrollArea used by the notes
+	   workspace, chat panel and right panel: a thin rounded thumb in the border
+	   token with no track background. Without this, natively scrolling surfaces
+	   (the todos table's horizontal scroller, the Mermaid canvas, long dropdowns)
+	   show the chunky OS default with a visible track, which clashes next to the
+	   ScrollArea panes. Token colours adapt to dark mode on their own. */
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: var(--border);
+		border-radius: 9999px;
+		/* The transparent border insets the thumb from the scrollbar edge,
+		   mimicking the ScrollArea's `p-px` padding. */
+		border: 2px solid transparent;
+		background-clip: padding-box;
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--ring);
+		background-clip: padding-box;
+	}
+
+	::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
+	}
+
 	/* Declared in CSS, not only by mode-watcher on hydration. Until the script runs the
 	   document has no colour scheme while the light palette is already painted, so a UA
 	   defaulting to dark styles form controls light-on-light and the caret disappears. */

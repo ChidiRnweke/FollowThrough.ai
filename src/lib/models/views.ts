@@ -364,6 +364,8 @@ export interface ExportSettings {
 	readonly lineHeight: number;
 	/** Page margin in points, applied to all sides. */
 	readonly margin: number;
+	/** Render the file name as a heading on the first page. Omitted means off. */
+	readonly includeTitle?: boolean;
 	/** How embedded diagrams are coloured. Omitted means the light preset. */
 	readonly diagramTheme?: ExportDiagramTheme;
 }
@@ -373,6 +375,7 @@ export const defaultExportSettings: ExportSettings = {
 	fontSize: 11,
 	lineHeight: 1.35,
 	margin: 72,
+	includeTitle: false,
 	diagramTheme: { base: 'light' }
 };
 
