@@ -3,6 +3,7 @@ import type { NoteId } from '$lib/models';
 import {
 	addTabInBackgroundInState,
 	closeTabInState,
+	closeTabsInState,
 	focusTabInState,
 	moveTabInState,
 	openTabInState,
@@ -232,6 +233,57 @@ describe('closeTabInState', () => {
 		const s = state(id(1), id(1), id(2), id(3));
 		const result = closeTabInState(s, id(2));
 		expect(result?.openTabs).toEqual([id(1), id(3)]);
+	});
+});
+
+describe('closeTabsInState', () => {
+	it('returns undefined when every tab is closed', () => {
+		const s = state(id(1), id(1), id(2));
+		expect(closeTabsInState(s, [id(1), id(2)])).toBeUndefined();
+	});
+
+	it('no-ops when none of the ids are open', () => {
+		const s = state(id(1), id(1), id(2));
+		expect(closeTabsInState(s, [id(3), id(4)])).toBe(s);
+	});
+
+	it('keeps focus when the focused tab survives', () => {
+		const s = state(id(1), id(1), id(2), id(3));
+		expect(closeTabsInState(s, [id(2), id(3)])).toEqual(state(id(1), id(1)));
+	});
+
+	it('focuses the right neighbour of the closed run when the focused tab is closed', () => {
+		const s = state(id(2), id(1), id(2), id(3), id(4));
+		expect(closeTabsInState(s, [id(2), id(3)])).toEqual(state(id(4), id(1), id(4)));
+	});
+
+	it('skips over closed tabs before the focused one when picking the neighbour', () => {
+		const s = state(id(3), id(1), id(2), id(3), id(4));
+		expect(closeTabsInState(s, [id(1), id(3)])).toEqual(state(id(4), id(2), id(4)));
+	});
+
+	it('focuses the last tab when the closed run reaches the right edge', () => {
+		const s = state(id(3), id(1), id(2), id(3));
+		expect(closeTabsInState(s, [id(2), id(3)])).toEqual(state(id(1), id(1)));
+	});
+
+	it('prefers the most-recently-used survivor when supplied', () => {
+		const s = state(id(2), id(1), id(2), id(3), id(4));
+		const result = closeTabsInState(s, [id(2), id(3)], {
+			recentlyUsed: [id(2), id(1), id(4)]
+		});
+		expect(result?.focusedNoteId).toBe(id(1));
+	});
+
+	it('drops the split when the split tab is closed', () => {
+		const s = splitState(id(1), id(3), id(1), id(2), id(3));
+		expect(closeTabsInState(s, [id(3)])).toEqual(state(id(1), id(1), id(2)));
+	});
+
+	it('keeps the split when it survives and does not collide with focus', () => {
+		const s = splitState(id(1), id(3), id(1), id(2), id(3));
+		const result = closeTabsInState(s, [id(2)]);
+		expect(result).toEqual(splitState(id(1), id(3), id(1), id(3)));
 	});
 });
 

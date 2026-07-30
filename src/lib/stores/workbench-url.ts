@@ -209,6 +209,58 @@ export function closeTabInState(
 }
 
 /**
+ * Returns the next URL state when the user closes several tabs at once (e.g.
+ * "close all tabs of this project" / "close all tabs").  Focus and split
+ * resolution mirror `closeTabInState`: a removed focus falls back to the
+ * most-recently-used survivor, then the right neighbour, then the last
+ * remaining tab.  Returns `undefined` when every tab is closed — the caller
+ * should redirect away from `/notes/*`.
+ */
+export function closeTabsInState(
+	state: WorkbenchUrlState,
+	noteIds: readonly NoteId[],
+	options: { recentlyUsed?: readonly NoteId[] } = {}
+): WorkbenchUrlState | undefined {
+	const closing = new Set<NoteId>(noteIds);
+	const remaining = state.openTabs.filter((id) => !closing.has(id));
+	if (remaining.length === state.openTabs.length) return state;
+	if (remaining.length === 0) return undefined;
+
+	let nextFocused = state.focusedNoteId;
+	if (closing.has(nextFocused)) {
+		// Index of the right neighbour in `remaining`: the focused tab's index
+		// minus the closed tabs that sat before it.
+		const focusedIndex = state.openTabs.indexOf(state.focusedNoteId);
+		const removedBefore = state.openTabs
+			.slice(0, focusedIndex)
+			.filter((id) => closing.has(id)).length;
+		nextFocused = remaining[focusedIndex - removedBefore] ?? remaining[remaining.length - 1];
+
+		if (options.recentlyUsed) {
+			for (let i = 0; i < options.recentlyUsed.length; i += 1) {
+				const candidate = options.recentlyUsed[i];
+				if (closing.has(candidate)) continue;
+				if (remaining.includes(candidate)) {
+					nextFocused = candidate;
+					break;
+				}
+			}
+		}
+	}
+	// Drop the split if its tab was closed, or if it would collide with the
+	// new focused pane (invariant: split ≠ focused).
+	const nextSplit: NoteId | undefined =
+		state.splitNoteId && !closing.has(state.splitNoteId) && nextFocused !== state.splitNoteId
+			? state.splitNoteId
+			: undefined;
+	return {
+		focusedNoteId: nextFocused,
+		openTabs: remaining,
+		...(nextSplit ? { splitNoteId: nextSplit } : {})
+	};
+}
+
+/**
  * Returns the next URL state when the user reorders tabs.  No-ops if either
  * id is unknown.
  */

@@ -8,6 +8,7 @@ import {
 import {
 	addTabInBackgroundInState,
 	closeTabInState,
+	closeTabsInState,
 	focusTabInState,
 	moveTabInState,
 	openTabInState,
@@ -342,6 +343,39 @@ class WorkbenchStore {
 		if (!next) {
 			// Closing the last tab navigates to Today.  Remove from open list,
 			// clear focus and split, and let the URL change drive the layout swap.
+			this.applyingFromUrl = true;
+			this.openTabs = [];
+			this.focusedNoteId = undefined;
+			this.splitNoteId = undefined;
+			this.applyingFromUrl = false;
+			await goto('/today', { replaceState: false });
+			await this.persist({
+				openTabs: [],
+				focusedNoteId: null,
+				pinnedTabs: this.pinnedTabs,
+				recentlyUsed: this.recentlyUsed
+			});
+			return;
+		}
+		await this.navigate(next, { replace: false, invalidate: false });
+	}
+
+	/**
+	 * Close several tabs at once (e.g. every tab of one project, or the whole
+	 * strip).  Pinned tabs are closed too — a closed tab must not stay pinned.
+	 * Pushes a new history entry; if every tab is closed, redirects away from
+	 * `/notes/*`.
+	 */
+	async closeTabs(noteIds: readonly NoteId[]): Promise<void> {
+		const current = this.toUrlState();
+		if (!current) return;
+		const closing = new Set<NoteId>(noteIds);
+		const next = closeTabsInState(current, noteIds, { recentlyUsed: this.recentlyUsed });
+		if (next === current) return;
+		this.pinnedTabs = this.pinnedTabs.filter((id) => !closing.has(id));
+		if (!next) {
+			// Every tab closed: clear focus and split, and let the URL change
+			// drive the layout swap (same as closeTab's last-tab branch).
 			this.applyingFromUrl = true;
 			this.openTabs = [];
 			this.focusedNoteId = undefined;

@@ -153,7 +153,7 @@
 			</Tip>
 		</div>
 	{:else}
-		<div class="flex h-10 items-stretch gap-0 overflow-x-auto px-2">
+		<div class="flex h-10 items-stretch gap-0 overflow-x-auto overflow-y-hidden px-2">
 			{#if noteDragOver}
 				<div
 					class="absolute inset-0 z-40 flex items-center justify-center border border-primary bg-background text-xs font-medium text-foreground"
@@ -166,7 +166,7 @@
 					{#if groupIndex > 0}
 						<div class="h-4 w-px shrink-0 self-center" aria-hidden="true"></div>
 					{/if}
-					<div class="flex shrink-0 items-center gap-1 pl-1 pr-1">
+					<div class="group/project flex shrink-0 items-center gap-1 pl-1 pr-1">
 						<Button
 							variant="ghost"
 							type="button"
@@ -188,6 +188,22 @@
 							<span class="eyebrow max-w-40 cursor-default truncate">
 								{group.projectName}
 							</span>
+							<!-- Close every tab of this project. Hover-revealed like the
+							     per-tab close button so the strip stays quiet at rest. -->
+							<Tip text={`Close all ${group.projectName} tabs`} side="bottom">
+								{#snippet children({ props })}
+									<Button
+										variant="ghost"
+										{...props}
+										type="button"
+										aria-label={`Close all ${group.projectName} tabs`}
+										class="tactile hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover/project:flex"
+										onclick={() => void workbench.closeTabs(group.tabs)}
+									>
+										<X class="size-3" />
+									</Button>
+								{/snippet}
+							</Tip>
 						</div>
 					</div>
 					{#each group.tabs as noteId, tabIndex (noteId)}
@@ -304,6 +320,25 @@
 				</Tip>
 				<!-- Divider between the `+` action and the strip-hide chevron so the
 			     chevron reads as a strip control, not as a second action. -->
+				<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
+			{/if}
+			<!-- Close every open tab across all projects. Sits next to the strip
+			     controls so bulk cleanup is one click from any strip state. -->
+			{#if hasTabs}
+				<Tip text="Close all tabs" side="bottom">
+					{#snippet children({ props })}
+						<Button
+							variant="ghost"
+							{...props}
+							type="button"
+							class="tactile flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+							aria-label="Close all tabs"
+							onclick={() => void workbench.closeTabs(workbench.openTabs)}
+						>
+							<X class="size-3.5" />
+						</Button>
+					{/snippet}
+				</Tip>
 				<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
 			{/if}
 			<!-- Edge chevron: always at the very right end of the strip so the

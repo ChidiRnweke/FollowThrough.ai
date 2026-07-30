@@ -2,7 +2,7 @@
 	import type { ProjectId, TodoId, TodoStatus, TodoView } from '$lib/models';
 	import { dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
-	import { FtPlus as Plus } from '$lib/components/icons';
+	import { FtPlus as Plus, FtCheck as Check, FtClose as Close } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
@@ -118,26 +118,36 @@
 			     sit shorter than its peers and leave the board bottom ragged. -->
 			<div class="min-h-10 px-2 pb-2">
 				{#if addingTo === status}
-					<div class="flex flex-col gap-1">
+					<div class="flex items-stretch">
 						<Input
 							id={status === 'open' ? 'quick-todo-input' : undefined}
 							autofocus
 							placeholder="Todo title…"
 							bind:value={newTitle}
+							class="min-w-0 flex-1 rounded-r-none border-r-0"
 							onkeydown={(e) => {
 								if (e.key === 'Escape') addingTo = null;
 								if (e.key === 'Enter') void addTodo(status);
 							}}
 						/>
-						<div class="flex gap-1">
-							<Button
-								size="sm"
-								variant="default"
-								class="flex-1"
-								onclick={() => void addTodo(status)}>Add</Button
-							>
-							<Button size="sm" variant="ghost" onclick={() => (addingTo = null)}>Cancel</Button>
-						</div>
+						<Button
+							variant="outline"
+							size="icon"
+							class="rounded-none border-r-0"
+							aria-label="Add todo"
+							onclick={() => void addTodo(status)}
+						>
+							<Check />
+						</Button>
+						<Button
+							variant="outline"
+							size="icon"
+							class="rounded-l-none"
+							aria-label="Cancel"
+							onclick={() => (addingTo = null)}
+						>
+							<Close />
+						</Button>
 					</div>
 				{:else if status !== 'done'}
 					<Button
