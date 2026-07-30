@@ -26,6 +26,7 @@ import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 import { OpenAIAgentsInstrumentation } from '@arizeai/openinference-instrumentation-openai-agents';
 import * as agents from '@openai/agents';
+import { formatBody, recordAttributes } from './log-record.js';
 
 /** The collector routes on this resource attribute; without it nothing reaches Phoenix. */
 const OPENINFERENCE_PROJECT_NAME = 'openinference.project.name';
@@ -56,8 +57,12 @@ const SEVERITY = {
  * logs pipeline, while still writing to stdout/stderr so `docker logs` keeps
  * working. emit() picks up the active context, so records carry the trace and
  * span ids of the request that produced them.
+ *
+ * Call sites stay plain `console.*`: everything that makes a record queryable —
+ * flattened cause chains, stack traces, domain codes and details — is derived
+ * here from whatever arguments they passed.
  */
-function bridgeConsoleLogs() {
+export function bridgeConsoleLogs() {
 	if (consoleBridged) return;
 
 	// NodeSDK registered this global provider during start().
@@ -73,9 +78,8 @@ function bridgeConsoleLogs() {
 				logger.emit({
 					severityNumber,
 					severityText: method.toUpperCase(),
-					body: args
-						.map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
-						.join(' ')
+					body: formatBody(args),
+					attributes: recordAttributes(args)
 				});
 			} catch {
 				// Telemetry must never break the caller.

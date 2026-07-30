@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
+import { ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '$lib/errors';
 import type { DomainErrorCode } from '$lib/errors';
 import { DOMAIN_ERROR_STATUS, domainErrorStatus } from './errors';
 import { describeError } from './utils';
@@ -36,6 +36,32 @@ describe('domainErrorStatus', () => {
 
 	it('assigns a client or server status to every domain code', () => {
 		expect(ALL_CODES.filter((code) => !(DOMAIN_ERROR_STATUS[code] >= 400))).toEqual([]);
+	});
+});
+
+describe('DomainError', () => {
+	it('forwards a captured cause to the native cause chain', () => {
+		expect(
+			new ExternalServiceError('Document could not be stored', { cause: 'NoSuchBucket' }).cause
+		).toBe('NoSuchBucket');
+	});
+
+	it('keeps the captured cause available under details', () => {
+		expect(
+			new ExternalServiceError('Document could not be stored', { cause: 'NoSuchBucket' }).details
+		).toEqual({ cause: 'NoSuchBucket' });
+	});
+
+	it('leaves cause undefined when the throw site captured none', () => {
+		expect(new NotFoundError('Project was not found').cause).toBeUndefined();
+	});
+
+	it('describes the underlying reason once the cause is forwarded', () => {
+		expect(
+			describeError(
+				new ExternalServiceError('Document could not be stored', { cause: 'NoSuchBucket' })
+			)
+		).toBe('ExternalServiceError: Document could not be stored (EXTERNAL_SERVICE) <- NoSuchBucket');
 	});
 });
 

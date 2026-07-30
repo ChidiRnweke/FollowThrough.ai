@@ -4,7 +4,7 @@ import { hydrateEnvironment } from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
-import { describeError, getSessionCookie } from '$lib/utils';
+import { getSessionCookie } from '$lib/utils';
 
 // Prerendering during `vite build` and unit tests both run without a secrets
 // backend, and must not pull configuration (which would, among other things,
@@ -25,11 +25,14 @@ export const init: ServerInit = async () => {
 // Kit reads `status` off the object returned here for both page renders and
 // remote-function responses.
 export const handleError: HandleServerError = ({ error, message }) => {
+	// The error object goes along as a second argument: the console bridge in
+	// scripts/otel-instrumentation.js lifts its stack, cause chain, code and
+	// details into log-record attributes. Interpolating alone would drop them.
 	if (error instanceof DomainError) {
-		console.warn(`[domain] ${error.code} ${error.message}`);
+		console.warn(`[domain] ${error.code}`, error);
 		return { message: error.message, code: error.code, status: DOMAIN_ERROR_STATUS[error.code] };
 	}
-	console.error(`[unhandled] ${describeError(error)}`);
+	console.error('[unhandled]', error);
 	return { message };
 };
 

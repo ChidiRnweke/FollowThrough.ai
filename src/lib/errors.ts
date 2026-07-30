@@ -16,7 +16,11 @@ export class DomainError extends Error {
 		message: string,
 		readonly details: Readonly<Record<string, unknown>> = {}
 	) {
-		super(message);
+		// Call sites conventionally put the underlying failure under `details.cause`.
+		// Forwarding it to the native `cause` is what lets `describeError`, the OTel
+		// console bridge and `span.recordException` walk the chain — without this the
+		// original reason is captured but never reaches a log line.
+		super(message, 'cause' in details ? { cause: details.cause } : undefined);
 		this.name = new.target.name;
 	}
 }
