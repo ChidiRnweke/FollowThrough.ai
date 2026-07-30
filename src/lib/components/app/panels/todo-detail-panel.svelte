@@ -46,6 +46,7 @@
 			<Field.Field>
 				<Field.FieldLabel for="todo-title">Title</Field.FieldLabel>
 				{#key `${view.todo.id}-title-${view.todo.updatedAt}`}<TodoTextField
+						id="todo-title"
 						todoId={view.todo.id}
 						value={view.todo.title}
 						field="title"
@@ -53,8 +54,9 @@
 					/>{/key}
 			</Field.Field>
 			<Field.Field>
-				<Field.FieldLabel>Description</Field.FieldLabel>
+				<Field.FieldLabel for="todo-description">Description</Field.FieldLabel>
 				{#key `${view.todo.id}-description-${view.todo.updatedAt}`}<TodoTextField
+						id="todo-description"
 						todoId={view.todo.id}
 						value={view.todo.description}
 						field="description"

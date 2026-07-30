@@ -44,13 +44,18 @@ export class NoteRecords implements NoteRepository {
 		const conditions = [eq(schema.notes.userId, actor.userId), isNull(schema.notes.archivedAt)];
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
 		return (
-			await this.database
-				.select({ note: schema.notes })
-				.from(schema.notes)
-				.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
-				.where(and(...conditions, isNull(schema.projects.archivedAt)))
-				.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt))
-		).map((row) => toNote(row.note));
+			(
+				await this.database
+					.select({ note: schema.notes })
+					.from(schema.notes)
+					.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+					.where(and(...conditions, isNull(schema.projects.archivedAt)))
+					// `id` breaks the remaining tie: notes created in one batch share a
+					// position and a timestamp, and without it the tree comes back in a
+					// different order on each load.
+					.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt), asc(schema.notes.id))
+			).map((row) => toNote(row.note))
+		);
 	}
 
 	async countSiblings(

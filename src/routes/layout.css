@@ -63,6 +63,16 @@
 	   Same teal as --primary in light mode; dark mode lifts it for AA contrast
 	   on washes, mirroring --sidebar-primary. */
 	--brand: oklch(0.511 0.096 186.391);
+	/* The system I-beam is a 1px line with no contrast guarantee: over the paper
+	   surface it antialiases into the background (and on some Windows/Chrome
+	   setups renders outright white), so the pointer goes missing exactly where
+	   people point most. Ship a native-shaped beam in the theme's own foreground
+	   colour at 2px — indistinguishable from the system cursor, but always
+	   visible. `text` is the fallback where url() cursors are rejected. Defined
+	   here rather than in the editor's stylesheet because plain inputs use it too
+	   and they render on routes that never load the editor bundle. */
+	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%230c0c09' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
+		12 12;
 	--duration-micro: 125ms;
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -158,6 +168,8 @@
 	--sidebar-border: oklch(1 0 0 / 14%);
 	--sidebar-ring: oklch(0.58 0.031 107.3);
 	--brand: oklch(0.704 0.14 182.503);
+	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%23fbfbf9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
+		12 12;
 }
 
 @theme inline {
@@ -284,6 +296,19 @@
 	textarea,
 	[contenteditable] {
 		caret-color: var(--foreground);
+	}
+
+	/* Same story for the mouse pointer: the editor pinned its I-beam to a visible
+	   2px beam, while the plain controls kept the system one that washes out over
+	   the paper background. Excluded by `:not()` rather than matched by an
+	   allow-list because Input renders with no `type` attribute at all when the
+	   prop is omitted. Being in @layer base, `disabled:cursor-not-allowed` on the
+	   primitives still wins for disabled fields. */
+	input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not(
+			[type='reset']
+		):not([type='file']):not([type='range']):not([type='color']),
+	textarea {
+		cursor: var(--cursor-ibeam), text;
 	}
 
 	:focus-visible {

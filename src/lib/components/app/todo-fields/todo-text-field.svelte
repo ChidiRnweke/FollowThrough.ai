@@ -10,13 +10,15 @@
 		value = '',
 		field,
 		multiline = false,
-		label
+		label,
+		id
 	}: {
 		todoId: TodoId;
 		value?: string;
 		field: 'title' | 'description' | 'waitingOn';
 		multiline?: boolean;
 		label: string;
+		id?: string;
 	} = $props();
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());
@@ -44,12 +46,14 @@
 </script>
 
 {#if multiline}<Textarea
+		{id}
 		aria-label={label}
 		bind:value={draft}
 		onblur={() => void commit()}
 		onkeydown={keydown}
 		disabled={todoUpdates.isPending(todoId)}
 	/>{:else}<Input
+		{id}
 		aria-label={label}
 		bind:value={draft}
 		onblur={() => void commit()}

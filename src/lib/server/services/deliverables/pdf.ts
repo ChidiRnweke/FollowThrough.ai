@@ -1,9 +1,12 @@
-import { createHash } from 'node:crypto';
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
 import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
 import { defaultExportSettings } from '$lib/models';
+import { collectImageSources, fetchImages, mermaidSourceHash, svgDimensions } from './export-images';
+
+// pdf.spec.ts imports the hash from here; keep the re-export.
+export { mermaidSourceHash };
 
 // Embedded Noto fonts ship in the repo (assets/fonts, OFL-licensed): PDFKit's
 // standard-14 fonts are WinAnsi-only, so emoji and most non-Latin-1 text need
@@ -128,19 +131,7 @@ function withFontRuns<T extends { text: string; font?: string }>(run: T, bodyFon
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
 const DIAGRAM_MAX_UPSCALE = 1.5;
-
-/** Natural size of an SVG, from its viewBox. */
-function svgDimensions(svg: string): { width: number; height: number } | undefined {
-	const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
-	if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) {
-		return { width: viewBox[2]!, height: viewBox[3]! };
-	}
-	return undefined;
-}
 const LINK_COLOR = '#1d4ed8';
-const IMAGE_FETCH_TIMEOUT_MS = 8000;
-const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
-const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
 
 export interface GeneratePdfInput {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
@@ -150,9 +141,6 @@ export interface GeneratePdfInput {
 	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 hex of the diagram source. */
 	readonly diagramSvgs?: Record<string, string>;
 }
-
-export const mermaidSourceHash = (source: string): string =>
-	createHash('sha256').update(source, 'utf8').digest('hex');
 
 function collectText(node: Record<string, unknown>): string {
 	if (node.type === 'text') return (node.text as string) ?? '';
@@ -499,44 +487,6 @@ function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): unkno
 		}
 	}
 	return result;
-}
-
-function collectImageSources(doc: ProseMirrorDocument): string[] {
-	const sources: string[] = [];
-	const walk = (node: Record<string, unknown>): void => {
-		if (node.type === 'image') {
-			const src = (node.attrs as Record<string, unknown> | undefined)?.src;
-			if (typeof src === 'string' && /^https?:\/\//.test(src)) sources.push(src);
-		}
-		for (const child of (node.content as Array<Record<string, unknown>> | undefined) ?? [])
-			walk(child);
-	};
-	walk(doc as unknown as Record<string, unknown>);
-	return sources;
-}
-
-/** Fetch remote images and inline them as data URLs; failures are skipped, never fatal. */
-async function fetchImages(sources: readonly string[]): Promise<Map<string, string>> {
-	const images = new Map<string, string>();
-	await Promise.all(
-		[...new Set(sources)].map(async (src) => {
-			try {
-				const response = await fetch(src, {
-					signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
-					redirect: 'follow'
-				});
-				if (!response.ok) return;
-				const mediaType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
-				if (!EMBEDDABLE_IMAGE_TYPES.has(mediaType)) return;
-				const bytes = Buffer.from(await response.arrayBuffer());
-				if (bytes.byteLength > IMAGE_MAX_BYTES) return;
-				images.set(src, `data:${mediaType};base64,${bytes.toString('base64')}`);
-			} catch {
-				// Unreachable images degrade to a placeholder in the document.
-			}
-		})
-	);
-	return images;
 }
 
 export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {

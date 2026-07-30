@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import type { NoteId, ProjectId, ShellContext } from '$lib/models';
 	import { workbench } from '$lib/stores/workbench.svelte';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { cubicOut } from 'svelte/easing';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -37,11 +37,15 @@
 	const titleOf = (noteId: NoteId): string =>
 		shell.noteTree.find((entry) => entry.id === noteId)?.title ?? 'Untitled';
 
+	// Plain Maps: reactivity comes from `shell` and `workbench.openTabs`, and a
+	// SvelteMap here would be read and written inside its own derivation.
 	const groups = $derived.by(() => {
-		const projectName = new SvelteMap<ProjectId, string>();
+		/* eslint-disable svelte/prefer-svelte-reactivity -- rebuilt per derivation; see above */
+		const projectName = new Map<ProjectId, string>();
 		for (const project of shell.projects) projectName.set(project.id, project.name);
 		const order: ProjectId[] = [];
-		const buckets = new SvelteMap<ProjectId, NoteId[]>();
+		const buckets = new Map<ProjectId, NoteId[]>();
+		/* eslint-enable svelte/prefer-svelte-reactivity */
 		for (const id of workbench.openTabs) {
 			const projectId = projectOf(id);
 			if (!projectId) continue;

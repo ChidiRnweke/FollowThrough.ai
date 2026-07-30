@@ -25,7 +25,7 @@
 		FtGrip as GripVertical
 	} from '$lib/components/icons';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import { onMount, untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/project-actions.svelte';
 	import { workbench } from '$lib/stores/workbench.svelte';
@@ -53,8 +53,11 @@
 
 	const active = $derived(noteTree.filter((note) => !note.archivedAt));
 	const byId = $derived(new Map(active.map((note) => [note.id, note])));
+	// A plain Map: reactivity comes from the `noteTree` prop, and a SvelteMap
+	// built here would be read and written inside its own derivation.
 	const childrenOf = $derived.by(() => {
-		const map = new SvelteMap<string, NoteSummary[]>();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per derivation; see above
+		const map = new Map<string, NoteSummary[]>();
 		for (const note of active) {
 			const key = `${note.projectId}:${note.parentId ?? 'root'}`;
 			const siblings = map.get(key) ?? [];
@@ -157,13 +160,11 @@
 
 	// --- Drag and drop (within a project only; the zone type enforces it) ---
 
+	// Overrides are written only from the dnd event handlers and dropped once the
+	// server round-trip that follows a move has landed.  Deliberately not driven
+	// by an `$effect` on `childrenOf`: that made an effect write state the
+	// template reads back, and it fired on every unrelated `invalidateAll`.
 	const dndOverrides = new SvelteMap<string, NoteSummary[]>();
-
-	// Server truth arrived (invalidateAll after a move): drop local overrides.
-	$effect(() => {
-		void childrenOf;
-		if (untrack(() => dndOverrides.size) > 0) untrack(() => dndOverrides.clear());
-	});
 
 	function zoneItems(projectId: ProjectId, parentId?: NoteId): NoteSummary[] {
 		return dndOverrides.get(zoneKey(projectId, parentId)) ?? entriesUnder(projectId, parentId);
@@ -182,15 +183,25 @@
 		parentId: NoteId | undefined,
 		event: CustomEvent<DndEvent<NoteSummary>>
 	): void {
-		dndOverrides.set(zoneKey(projectId, parentId), event.detail.items);
+		const key = zoneKey(projectId, parentId);
+		dndOverrides.set(key, event.detail.items);
 		const draggedId = event.detail.info.id as NoteId;
 		const index = event.detail.items.findIndex((item) => item.id === draggedId);
-		if (index < 0) return;
-		const original = byId.get(draggedId);
-		if (!original) return;
-		if ((original.parentId ?? undefined) === parentId && original.position === index) return;
+		const original = index < 0 ? undefined : byId.get(draggedId);
+		const moved =
+			original !== undefined &&
+			((original.parentId ?? undefined) !== parentId || original.position !== index);
+		if (!moved) {
+			// Nothing to ask the server for, so nothing will arrive to supersede the
+			// override — release it now (it already matches the rendered order).
+			dndOverrides.delete(key);
+			return;
+		}
 		void projectActions.moveEntry(projectId, draggedId, parentId, index).then((output) => {
 			if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+			// Server truth has landed (moveEntry invalidates); on failure the tree
+			// should snap back to it rather than keep showing the dropped order.
+			dndOverrides.delete(key);
 		});
 	}
 

@@ -80,11 +80,12 @@
 	});
 
 	// Drop tabs whose notes have been archived or deleted since the last sync.
+	// Every live tree entry counts as known, not just `kind === 'note'`: a tab on
+	// a folder would otherwise never be prunable-and-done, so each pass would
+	// prune it again and fire another navigation.
 	async function pruneClosedTabs(): Promise<void> {
 		const known = new Set<NoteId>(
-			data.shell.noteTree
-				.filter((entry) => entry.kind === 'note' && !entry.archivedAt)
-				.map((entry) => entry.id)
+			data.shell.noteTree.filter((entry) => !entry.archivedAt).map((entry) => entry.id)
 		);
 		await workbench.pruneClosedNotes(known);
 	}

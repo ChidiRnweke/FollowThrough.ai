@@ -33,7 +33,9 @@
 		</Command.Group>
 		<Command.Group heading="Notes">
 			{#each shell.noteTree as note (note.id)}
-				<Command.Item value={note.title} onSelect={() => openNote(note)}>
+				<!-- The id keeps the value unique: bits-ui keys its item registry by
+			     `value`, and two same-titled notes would delete each other's entry. -->
+				<Command.Item value={`${note.title} ${note.id}`} onSelect={() => openNote(note)}>
 					<FileText class="size-4" />
 					{note.title}
 				</Command.Item>

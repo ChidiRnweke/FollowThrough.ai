@@ -108,6 +108,14 @@ export class WorkbenchStore {
 	private applyingFromUrl = false;
 	/** Suppresses persistence while we're restoring from IndexedDB on first load. */
 	private restoring = false;
+	/**
+	 * Suppresses re-entrant pruning.  The layout fires `pruneClosedNotes` as a
+	 * fire-and-forget call from its `$effect`, so without this a prune that
+	 * navigates (and therefore re-runs the effect) starts a second prune before
+	 * the first has settled — and if the navigation's load fails, every effect
+	 * run retries it.  That's what turned one stale tab into a request storm.
+	 */
+	private pruning = false;
 
 	private static readonly STRIP_HIDDEN_KEY = 'followthrough.workbench.stripHidden';
 	private static readonly SPLIT_RATIO_KEY = 'followthrough.workbench.splitRatio';
@@ -321,10 +329,14 @@ export class WorkbenchStore {
 			this.interactionFocusedNoteId !== urlState.splitNoteId
 		)
 			this.interactionFocusedNoteId = urlState.focusedNoteId;
-		this.recentlyUsed = [
-			urlState.focusedNoteId,
-			...this.recentlyUsed.filter((id) => id !== urlState.focusedNoteId)
-		].slice(0, 16);
+		// Only rebuild the MRU list when the focused tab isn't already at its head:
+		// the layout's `$effect` reads `recentlyUsed` (via `pruneClosedNotes`) and
+		// writes it here, so an unconditional new array is an effect feeding itself.
+		if (this.recentlyUsed[0] !== urlState.focusedNoteId)
+			this.recentlyUsed = [
+				urlState.focusedNoteId,
+				...this.recentlyUsed.filter((id) => id !== urlState.focusedNoteId)
+			].slice(0, 16);
 		this.applyingFromUrl = false;
 		void this.persist();
 	}
@@ -457,40 +469,77 @@ export class WorkbenchStore {
 	/**
 	 * Drop tabs whose note ids no longer exist in the shell's note tree
 	 * (e.g. after a note is archived).  Replaces the URL if anything changed.
+	 *
+	 * Only navigates when the workbench is actually on screen.  Off `/notes/*`
+	 * `syncFromUrl` stops applying the URL, so the in-memory tabs are the last
+	 * workbench session's — real state worth pruning, but not something the URL
+	 * represents.  Navigating from there would take the user somewhere they never
+	 * asked to go (archiving from the sidebar on `/today` used to land them in the
+	 * workbench) and, because the layout re-runs this on every navigation, the
+	 * `goto` + `invalidateAll` would feed itself.
 	 */
 	async pruneClosedNotes(known: ReadonlySet<NoteId>): Promise<void> {
+		if (this.pruning) return;
 		const current = this.toUrlState();
 		if (!current) return;
 		const remaining = current.openTabs.filter((id) => known.has(id));
 		if (remaining.length === current.openTabs.length) return;
-		if (remaining.length === 0) {
-			await this.clearToOverview({
-				pinnedTabs: this.pinnedTabs.filter((id) => known.has(id)),
-				recentlyUsed: this.recentlyUsed.filter((id) => known.has(id))
-			});
-			return;
+		this.pruning = true;
+		try {
+			if (!this.isWorkbenchPath) {
+				await this.pruneInMemory(known, remaining);
+				return;
+			}
+			if (remaining.length === 0) {
+				await this.clearToOverview({
+					pinnedTabs: this.pinnedTabs.filter((id) => known.has(id)),
+					recentlyUsed: this.recentlyUsed.filter((id) => known.has(id))
+				});
+				return;
+			}
+			const focused =
+				current.focusedNoteId && known.has(current.focusedNoteId)
+					? current.focusedNoteId
+					: (this.recentlyUsed.find((id) => known.has(id)) ?? remaining[0]);
+			// Drop the split if its note was pruned, or if it would collide with
+			// the new focused pane (invariant: split ≠ focused).
+			const split =
+				current.splitNoteId &&
+				known.has(current.splitNoteId) &&
+				current.splitNoteId !== focused &&
+				remaining.includes(current.splitNoteId)
+					? current.splitNoteId
+					: undefined;
+			await this.navigate(
+				{
+					focusedNoteId: focused,
+					openTabs: remaining,
+					...(split ? { splitNoteId: split } : {})
+				},
+				{ replace: true, invalidate: true }
+			);
+		} finally {
+			this.pruning = false;
 		}
-		const focused =
-			current.focusedNoteId && known.has(current.focusedNoteId)
-				? current.focusedNoteId
-				: (this.recentlyUsed.find((id) => known.has(id)) ?? remaining[0]);
-		// Drop the split if its note was pruned, or if it would collide with
-		// the new focused pane (invariant: split ≠ focused).
-		const split =
-			current.splitNoteId &&
-			known.has(current.splitNoteId) &&
-			current.splitNoteId !== focused &&
-			remaining.includes(current.splitNoteId)
-				? current.splitNoteId
-				: undefined;
-		await this.navigate(
-			{
-				focusedNoteId: focused,
-				openTabs: remaining,
-				...(split ? { splitNoteId: split } : {})
-			},
-			{ replace: true, invalidate: true }
-		);
+	}
+
+	/**
+	 * Prune without touching the URL, for when the strip isn't rendered.  The
+	 * next `/notes/*` navigation serialises whatever survives here.
+	 */
+	private async pruneInMemory(
+		known: ReadonlySet<NoteId>,
+		remaining: readonly NoteId[]
+	): Promise<void> {
+		this.openTabs = remaining;
+		this.pinnedTabs = this.pinnedTabs.filter((id) => known.has(id));
+		this.recentlyUsed = this.recentlyUsed.filter((id) => known.has(id));
+		if (this.splitNoteId && !known.has(this.splitNoteId)) this.splitNoteId = undefined;
+		if (this.interactionFocusedNoteId && !known.has(this.interactionFocusedNoteId))
+			this.interactionFocusedNoteId = undefined;
+		if (!this.focusedNoteId || !known.has(this.focusedNoteId))
+			this.focusedNoteId = this.recentlyUsed[0] ?? remaining[0];
+		await this.persist();
 	}
 
 	/**
