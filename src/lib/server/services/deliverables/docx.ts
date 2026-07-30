@@ -179,10 +179,7 @@ function collectText(node: Record<string, unknown>): string {
 }
 
 /** Runs for one paragraph's inline content, honouring blockquote/table-header context. */
-function inlineRuns(
-	content: readonly Record<string, unknown>[],
-	ctx: DocxContext
-): InlineRun[] {
+function inlineRuns(content: readonly Record<string, unknown>[], ctx: DocxContext): InlineRun[] {
 	const children: InlineRun[] = [];
 	for (const child of content) {
 		if (child.type === 'text') {
@@ -222,7 +219,13 @@ function rasterDimensions(buffer: Buffer): { width: number; height: number } | u
 		while (offset + 9 < buffer.length) {
 			if (buffer[offset] !== 0xff) break;
 			const marker = buffer[offset + 1]!;
-			if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+			if (
+				marker >= 0xc0 &&
+				marker <= 0xcf &&
+				marker !== 0xc4 &&
+				marker !== 0xc8 &&
+				marker !== 0xcc
+			) {
 				return { width: buffer.readUInt16BE(offset + 7), height: buffer.readUInt16BE(offset + 5) };
 			}
 			offset += 2 + buffer.readUInt16BE(offset + 2);
@@ -236,11 +239,7 @@ function rasterDimensions(buffer: Buffer): { width: number; height: number } | u
  * (percent of the printable width, or pixels), otherwise the natural size, always
  * capped to the printable width with the aspect ratio preserved.
  */
-function bodyImageRun(
-	dataUrl: string,
-	widthAttr: unknown,
-	ctx: DocxContext
-): ImageRun | null {
+function bodyImageRun(dataUrl: string, widthAttr: unknown, ctx: DocxContext): ImageRun | null {
 	const parsed = parseDataUrl(dataUrl);
 	if (!parsed) return null;
 	const type = RUN_IMAGE_TYPES[parsed.mediaType];
@@ -302,8 +301,7 @@ function tableBlock(node: Record<string, unknown>, ctx: DocxContext): Table | nu
 			const cellContent = (cell.content as Array<Record<string, unknown>> | undefined) ?? [];
 			// The docx library inserts the vertical-merge continuation cells a rowSpan
 			// implies into the following rows itself, so covered slots need no padding here.
-			const cellCtx: DocxContext =
-				cell.type === 'tableHeader' ? { ...ctx, forceBold: true } : ctx;
+			const cellCtx: DocxContext = cell.type === 'tableHeader' ? { ...ctx, forceBold: true } : ctx;
 			const children = cellContent.flatMap((c) => convertNode(c, cellCtx));
 			tableCells.push(
 				new TableCell({
@@ -538,8 +536,7 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 		diagramSvgs: input.diagramSvgs ?? {},
 		diagramPngs: input.diagramPngs ?? {},
 		contentWidthPx:
-			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) /
-				TWIPS_PER_INCH) *
+			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,
 		blockquoteDepth: 0,
 		forceBold: false

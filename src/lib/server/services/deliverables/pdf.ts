@@ -3,7 +3,12 @@ import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
 import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
 import { defaultExportSettings } from '$lib/models';
-import { collectImageSources, fetchImages, mermaidSourceHash, svgDimensions } from './export-images';
+import {
+	collectImageSources,
+	fetchImages,
+	mermaidSourceHash,
+	svgDimensions
+} from './export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };

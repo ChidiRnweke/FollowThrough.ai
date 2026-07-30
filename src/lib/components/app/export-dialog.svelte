@@ -152,11 +152,57 @@
 		}
 	}
 
-	/** Render every mermaid block to plain SVG so the server can embed diagrams. */
-	async function renderDiagramSvgs(): Promise<Record<string, string>> {
+	/**
+	 * Rasterize an SVG to a PNG data URL. DOCX embeds rasters (the docx library only
+	 * takes SVG with a mandatory raster fallback), so diagrams ship in both forms:
+	 * SVG for the PDF, PNG for the DOCX.
+	 */
+	async function rasterizeSvg(svgMarkup: string, scale = 2): Promise<string | null> {
+		try {
+			const url = URL.createObjectURL(new Blob([svgMarkup], { type: 'image/svg+xml' }));
+			try {
+				const image = new Image();
+				await new Promise<void>((resolve, reject) => {
+					image.onload = () => resolve();
+					image.onerror = () => reject(new Error('SVG rasterization failed'));
+					image.src = url;
+				});
+				// Mermaid SVGs size themselves through max-width, not width/height, so the
+				// viewBox is the only reliable natural size.
+				const viewBox = /viewBox="([\d.\s-]+)"/
+					.exec(svgMarkup)?.[1]
+					?.trim()
+					.split(/\s+/)
+					.map(Number);
+				const baseWidth = viewBox?.[2] || image.naturalWidth || 800;
+				const baseHeight = viewBox?.[3] || image.naturalHeight || 600;
+				const canvas = document.createElement('canvas');
+				canvas.width = Math.round(baseWidth * scale);
+				canvas.height = Math.round(baseHeight * scale);
+				const context2d = canvas.getContext('2d');
+				if (!context2d) return null;
+				// Transparent pixels print as black boxes in some Word viewers.
+				context2d.fillStyle = '#ffffff';
+				context2d.fillRect(0, 0, canvas.width, canvas.height);
+				context2d.drawImage(image, 0, 0, canvas.width, canvas.height);
+				return canvas.toDataURL('image/png');
+			} finally {
+				URL.revokeObjectURL(url);
+			}
+		} catch {
+			return null;
+		}
+	}
+
+	/** Render every mermaid block so the server can embed diagrams (SVG + PNG raster). */
+	async function renderDiagrams(): Promise<{
+		svgs: Record<string, string>;
+		pngs: Record<string, string>;
+	}> {
 		const sources = mermaidSources;
-		if (sources.length === 0) return {};
+		if (sources.length === 0) return { svgs: {}, pngs: {} };
 		const svgs: Record<string, string> = {};
+		const pngs: Record<string, string> = {};
 		// Diagrams follow the export's own palette, never the reader's colour mode: the
 		// document lands somewhere we do not control, and a dark-mode render is unusable
 		// on paper. Defaults to light for the same reason.
@@ -170,7 +216,11 @@
 					const { svg } = await mermaid.render(`export-diagram-${crypto.randomUUID()}`, source);
 					// Inline before sanitizing: the sanitizer strips the <style> block the
 					// computed styles are read from.
-					svgs[await sha256hex(source)] = sanitizeMermaidSvg(inlineSvgStyles(svg));
+					const markup = sanitizeMermaidSvg(inlineSvgStyles(svg));
+					const hash = await sha256hex(source);
+					svgs[hash] = markup;
+					const png = await rasterizeSvg(markup);
+					if (png) pngs[hash] = png;
 				} catch {
 					// A diagram that fails to render falls back to its source in the document.
 				}
@@ -178,7 +228,7 @@
 		} finally {
 			initializeMermaid(mode.current === 'dark');
 		}
-		return svgs;
+		return { svgs, pngs };
 	}
 
 	async function preview(): Promise<void> {
@@ -187,7 +237,7 @@
 		busy = true;
 		error = '';
 		try {
-			const diagramSvgs = await renderDiagramSvgs();
+			const { svgs: diagramSvgs } = await renderDiagrams();
 			const output = await previewDocument({
 				projectId,
 				noteIds: defaultNoteIds,
@@ -213,14 +263,15 @@
 		busy = true;
 		error = '';
 		try {
-			const diagramSvgs = await renderDiagramSvgs();
+			const { svgs: diagramSvgs, pngs: diagramPngs } = await renderDiagrams();
 			const output = await generateDocument({
 				projectId,
 				noteIds: defaultNoteIds,
 				title: trimmed,
 				format,
 				settings,
-				diagramSvgs
+				diagramSvgs,
+				diagramPngs
 			});
 			result = { url: output.downloadUrl, artifactId: output.artifact.id };
 		} catch (e) {
