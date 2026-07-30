@@ -44,8 +44,11 @@ interface NoteReader {
 }
 interface GenerateDocxInput {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly styles: ExtractedTemplateStyles;
 	readonly title: string;
+	readonly styles?: ExtractedTemplateStyles;
+	readonly settings?: ExportSettings;
+	readonly diagramSvgs?: Record<string, string>;
+	readonly diagramPngs?: Record<string, string>;
 }
 interface GeneratePdfInput {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
@@ -60,7 +63,9 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
 const downloadFilename = (artifact: Artifact): string =>
 	`${artifact.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'document'}.${artifact.format}`;
 
-const validateSettings = (settings: ExportSettings): ExportSettings => {
+const validateSettings: (settings: ExportSettings) => ExportSettings = (
+	settings: ExportSettings
+): ExportSettings => {
 	if (!['helvetica', 'times', 'courier'].includes(settings.fontFamily))
 		throw new ValidationError('Unknown export font family');
 	const within = (value: number, minimum: number, maximum: number): boolean =>
@@ -152,15 +157,11 @@ export class ArtifactLibrary {
 		if (input.format === 'docx') {
 			buffer = await this.docxGenerator({
 				notes,
-				styles: extractedStyles ?? {
-					fonts: {
-						heading: {},
-						body: { name: 'Calibri', size: 11 }
-					},
-					pageMargins: { top: 1440, bottom: 1440, left: 1440, right: 1440 },
-					themeColors: {}
-				},
-				title: input.title
+				...(extractedStyles ? { styles: extractedStyles } : {}),
+				title: input.title,
+				settings,
+				...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
+				...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
 			});
 		} else {
 			buffer = await this.pdfGenerator({

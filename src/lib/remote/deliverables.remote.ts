@@ -57,7 +57,8 @@ export const generateDocument = command(
 		format: z.enum(['docx', 'pdf']),
 		templateId: z.string().uuid().optional(),
 		settings: exportSettingsSchema.optional(),
-		diagramSvgs: z.record(z.string(), z.string()).optional()
+		diagramSvgs: z.record(z.string(), z.string()).optional(),
+		diagramPngs: z.record(z.string(), z.string()).optional()
 	}),
 	async (input) =>
 		AppFactory.controllers()

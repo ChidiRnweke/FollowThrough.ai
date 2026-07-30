@@ -1452,6 +1452,8 @@ export interface GenerateDocumentInput {
 	readonly settings?: ExportSettings;
 	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 of the diagram source. */
 	readonly diagramSvgs?: Record<string, string>;
+	/** PNG rasters of the same diagrams, keyed identically; DOCX embeds the raster. */
+	readonly diagramPngs?: Record<string, string>;
 }
 
 export interface PreviewDocumentInput {
@@ -1460,6 +1462,7 @@ export interface PreviewDocumentInput {
 	readonly title: string;
 	readonly settings?: ExportSettings;
 	readonly diagramSvgs?: Record<string, string>;
+	readonly diagramPngs?: Record<string, string>;
 }
 
 export interface PreviewDocumentOutput {
