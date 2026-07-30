@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -44,7 +45,7 @@
 			<Dialog.Title>Send feedback</Dialog.Title>
 			<Dialog.Description>Bug, suggestion, or anything else.</Dialog.Description>
 		</Dialog.Header>
-		<form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-4" onsubmit={submit}>
 			<Textarea
 				bind:value={body}
 				placeholder="What's on your mind?"
@@ -56,6 +57,6 @@
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 				<Button type="submit" disabled={busy || !body.trim()}>Send</Button>
 			</Dialog.Footer>
-		</form>
+		</Form>
 	</Dialog.Content>
 </Dialog.Root>

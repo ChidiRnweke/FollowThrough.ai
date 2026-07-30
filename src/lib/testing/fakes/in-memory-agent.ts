@@ -8,7 +8,7 @@ import type {
 	SkillSummary,
 	TextSelection
 } from '$lib/models';
-import { NotFoundError } from '$lib/models';
+import { NotFoundError } from '$lib/errors';
 import type {
 	AgentRunner,
 	AgentWorkflowToolbox,
@@ -16,7 +16,7 @@ import type {
 	SkillUsageRecorder,
 	ToolDescriptor,
 	ToolRetriever
-} from '$lib/services';
+} from '$lib/server/services';
 
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];

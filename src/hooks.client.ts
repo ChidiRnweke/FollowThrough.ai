@@ -1,5 +1,5 @@
 import type { HandleClientError } from '@sveltejs/kit';
-import { DomainError } from '$lib/models';
+import { DomainError } from '$lib/errors';
 import { describeClientError, reportClientError } from '$lib/client/report-error';
 
 /**

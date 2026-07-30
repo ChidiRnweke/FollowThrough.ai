@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		FtArtifacts as Archive,
@@ -91,7 +93,7 @@
 		<!-- A label rather than a button so the native input stays the thing being clicked:
 		     that keeps keyboard and screen-reader behaviour the platform's, and the base
 		     layer already gives a file-input label its pointer. -->
-		<label
+		<Label
 			class="tactile flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-6 text-center {dragging
 				? 'border-brand bg-brand/5'
 				: 'border-border hover:border-muted-foreground/40'} {disabled
@@ -108,15 +110,15 @@
 			<Archive class="size-5 text-muted-foreground/60" />
 			<span class="text-sm">{label}</span>
 			{#if hint}<span class="text-xs text-muted-foreground">{hint}</span>{/if}
-			<input
-				bind:this={input}
+			<Input
+				bind:ref={input}
 				type="file"
 				class="sr-only"
 				{accept}
 				{disabled}
 				onchange={(event) => take(event.currentTarget.files?.[0])}
 			/>
-		</label>
+		</Label>
 	{/if}
 	{#if rejection}<p class="text-xs text-destructive">{rejection}</p>{/if}
 </div>

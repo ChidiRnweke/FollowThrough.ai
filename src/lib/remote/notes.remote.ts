@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { redirect } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type {
 	ExtractPromisesInput,
 	ConvertInlineMermaidInput,
@@ -51,20 +51,20 @@ const textSelection = z
 const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
 
 export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.notes()
 		.save(requestActor(), input as never);
 });
 
 export const getNote = query(z.string().uuid(), async (noteId) => {
-	const view = await AppFactory.controllerFactory()
+	const view = await AppFactory.controllers()
 		.notes()
 		.get(requestActor(), { noteId: noteId as NoteId });
 	return view.note;
 });
 
 export const getNoteView = query(z.string().uuid(), async (noteId) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.notes()
 		.get(requestActor(), { noteId: noteId as NoteId });
 });
@@ -76,7 +76,7 @@ export const syncNote = command(
 		operationId: z.string().uuid()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.sync(requestActor(), input as SyncNoteInput);
 	}
@@ -88,7 +88,7 @@ export const publishNote = command(
 		baseEtag: noteEtag
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.publish(requestActor(), input as PublishNoteInput);
 	}
@@ -99,7 +99,7 @@ export const discardNoteDraft = command(
 		noteId: z.string().uuid()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
 	}
@@ -108,26 +108,26 @@ export const discardNoteDraft = command(
 export const listNoteSyncInventory = query(
 	z.object({ projectId: z.string().uuid().optional() }),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.listSyncInventory(requestActor(), input as ListNoteSyncInventoryInput);
 	}
 );
 
 export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.todos()
 		.extractPromises(requestActor(), input as ExtractPromisesInput);
 });
 
 export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.relationships()
 		.suggestFromSelection(requestActor(), input as RelateSelectionInput);
 });
 
 export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.references()
 		.suggestFromSelection(requestActor(), input as never);
 });
@@ -135,7 +135,7 @@ export const findReferences = command(z.object({ selection: textSelection }), as
 export const generateDiagram = command(
 	z.object({ selection: textSelection, instruction: z.string().optional() }),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.diagrams()
 			.generateMermaid(requestActor(), input as GenerateMermaidDiagramInput);
 	}
@@ -149,7 +149,7 @@ export const reviseDiagram = command(
 	}),
 	async (input) => {
 		try {
-			return await AppFactory.controllerFactory()
+			return await AppFactory.controllers()
 				.diagrams()
 				.reviseInlineMermaid(requestActor(), input as ReviseInlineMermaidInput);
 		} catch (e) {
@@ -165,7 +165,7 @@ export const convertDiagram = command(
 		instruction: z.string().trim().max(2_000).optional()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.diagrams()
 			.convertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
 	}
@@ -174,7 +174,7 @@ export const convertDiagram = command(
 export const captureNote = form(
 	z.object({ title: z.string().trim().min(1, 'Give the note a title first.') }),
 	async ({ title }) => {
-		const { note } = await AppFactory.controllerFactory().notes().create(requestActor(), { title });
+		const { note } = await AppFactory.controllers().notes().create(requestActor(), { title });
 		redirect(303, `/notes/${note.id}`);
 	}
 );

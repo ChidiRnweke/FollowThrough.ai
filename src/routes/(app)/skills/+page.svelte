@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -135,7 +137,7 @@
 					skill.
 				</Dialog.Description>
 			</Dialog.Header>
-			<form
+			<Form
 				class="flex flex-col gap-4"
 				onsubmit={(event) => {
 					event.preventDefault();
@@ -147,16 +149,17 @@
 					placeholder="e.g. Reviewing pull requests"
 					aria-label="Skill name"
 				/>
-				<textarea
+				<Textarea
 					bind:value={draftDescription}
 					class="min-h-24 rounded-md border bg-background p-3 text-sm"
 					placeholder="Use this skill when reviewing code changes, checking for bugs, style issues, and missed edge cases…"
-					aria-label="When should your agent trigger this skill?"></textarea>
+					aria-label="When should your agent trigger this skill?"
+				/>
 				<Dialog.Footer>
 					<Button type="button" variant="ghost" onclick={() => (createOpen = false)}>Cancel</Button>
 					<Button type="submit" disabled={!draftName.trim()}>Next</Button>
 				</Dialog.Footer>
-			</form>
+			</Form>
 		{:else}
 			<Dialog.Header>
 				<Dialog.Title>What should the agent do?</Dialog.Title>
@@ -165,26 +168,27 @@
 					the canvas afterwards.
 				</Dialog.Description>
 			</Dialog.Header>
-			<form
+			<Form
 				class="flex flex-col gap-4"
 				onsubmit={(event) => {
 					event.preventDefault();
 					void submitCreate();
 				}}
 			>
-				<textarea
+				<Textarea
 					bind:value={draftInstructions}
 					class="min-h-40 rounded-md border bg-background p-3 font-mono text-xs"
 					placeholder="## Steps&#10;1. Read the diff…&#10;2. Check for…"
 					aria-label="Skill instructions"
-					disabled={creating}></textarea>
+					disabled={creating}
+				/>
 				<Dialog.Footer>
 					<Button type="button" variant="ghost" onclick={() => (step = 1)} disabled={creating}>
 						Back
 					</Button>
 					<Button type="submit" disabled={creating}>Create skill</Button>
 				</Dialog.Footer>
-			</form>
+			</Form>
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>

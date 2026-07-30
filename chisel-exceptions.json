@@ -1,0 +1,21 @@
+{
+	"exceptions": [
+		{
+			"files": ["src/lib/components/edra/*"],
+			"rules": [
+				"colour:palette-class-banned",
+				"colour:dynamic-class-banned",
+				"typography:arbitrary-value-banned",
+				"spacing:arbitrary-value-banned",
+				"structural:inline-style-banned",
+				"structural:style-block-banned"
+			],
+			"reason": "Vendored Edra editor components; local style changes are overwritten by upstream updates."
+		},
+		{
+			"files": [".env"],
+			"rules": ["project-structure:backend-env-in-frontend"],
+			"reason": "Standalone SvelteKit deployment: server-only infrastructure and frontend share one deployment root."
+		}
+	]
+}

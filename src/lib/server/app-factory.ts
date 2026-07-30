@@ -1,37 +1,32 @@
-import type { ActorContext, UserId } from '$lib/models';
-import type { ControllerFactory } from '$lib/factories';
-import type { AgentEventBus } from './domain/agent-event-bus';
-import { z } from 'zod';
+import type { ActorContext } from '$lib/models';
+import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { AgentEventBus } from './services/agent-runs/events';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
-import { AuthService, type IAuthService } from '$lib/services/auth/authService';
-import { ApiTokenService, type IApiTokenService } from '$lib/services/auth/apiTokenService';
-import type { ProvenanceRecorder, ToolRetriever } from '$lib/services';
-import { PostgresApiTokenRepository } from './repositories/postgres-api-tokens';
-import { AuthentikOAuthService } from '$lib/services/auth/authenthikAuthService';
-import type { IOAuthService } from '$lib/services/auth/interfaces';
-import { PostgresSessionRepository } from './repositories/postgres-sessions';
-import { PostgresUserRepository } from './repositories/postgres-users';
+import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
+import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
+import type { ProvenanceRecorder, ToolRetriever } from '$lib/server/services';
+import { ApiTokenRecords } from './repositories/postgres/api-tokens';
+import { SignIn } from '$lib/server/services/identity/sign-in';
+import type { IOSessionRegistry } from '$lib/server/services/identity/sign-in';
+import { SessionRecords } from './repositories/postgres/sessions';
+import { UserRecords } from './repositories/postgres/users';
 import { db } from './db';
+import { DeferredValue } from '$lib/utils';
+import { authenticationEnabled, authentikConfiguration, requestActor } from './config';
 
-// Read lazily: secrets are hydrated into the environment per request, so a
-// module-load-time read would freeze whatever was set before the first hydration.
-const localUserId = (): UserId =>
-	z
-		.string()
-		.uuid()
-		.parse(process.env.LOCAL_USER_ID ?? '00000000-0000-4000-8000-000000000001') as UserId;
+const application = new DeferredValue(createProductionFactory);
+const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
+const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
+const signIn = new DeferredValue(
+	() => new SignIn(new UserRecords(db), new SessionRecords(db), authentikConfiguration())
+);
 
 export class AppFactory {
-	private static applicationInstance: ProductionApplication | undefined;
-	private static authServiceInstance: IAuthService | undefined;
-	private static apiTokenServiceInstance: IApiTokenService | undefined;
-	private static oauthServiceInstance: IOAuthService | undefined;
-
 	private static application(): ProductionApplication {
-		return (this.applicationInstance ??= createProductionFactory());
+		return application.get();
 	}
 
-	static controllerFactory(): ControllerFactory {
+	static controllers(): ControllerFactory {
 		return this.application().controllers;
 	}
 
@@ -52,52 +47,22 @@ export class AppFactory {
 	}
 
 	static actor(locals?: App.Locals): ActorContext {
-		if (this.isAuthEnabled() && locals?.user) {
-			return { userId: locals.user.id };
-		}
-		return { userId: localUserId() };
+		return requestActor(locals?.user);
 	}
 
-	static getAuthService(): IAuthService {
-		if (!this.authServiceInstance) {
-			const sessionRepo = new PostgresSessionRepository(db);
-			this.authServiceInstance = new AuthService(sessionRepo);
-		}
-		return this.authServiceInstance;
+	static sessions(): ISessionRegistry {
+		return sessions.get();
 	}
 
-	static getApiTokenService(): IApiTokenService {
-		return (this.apiTokenServiceInstance ??= new ApiTokenService(
-			new PostgresApiTokenRepository(db)
-		));
+	static accessTokens(): IAccessTokens {
+		return accessTokens.get();
 	}
 
-	static getOAuthService(): IOAuthService {
-		if (!this.oauthServiceInstance) {
-			const domain = process.env.AUTHENTIK_DOMAIN;
-			const clientId = process.env.AUTHENTIK_CLIENT_ID;
-			const clientSecret = process.env.AUTHENTIK_CLIENT_SECRET;
-			const callbackUrl = process.env.AUTHENTIK_CALLBACK_URL;
-
-			if (!domain || !clientId || !clientSecret || !callbackUrl) {
-				throw new Error(
-					'Authentik OAuth not configured. Set AUTHENTIK_DOMAIN, AUTHENTIK_CLIENT_ID, AUTHENTIK_CLIENT_SECRET, AUTHENTIK_CALLBACK_URL.'
-				);
-			}
-
-			const userRepo = new PostgresUserRepository(db);
-			const sessionRepo = new PostgresSessionRepository(db);
-			this.oauthServiceInstance = new AuthentikOAuthService(userRepo, sessionRepo, {
-				domain,
-				clientId,
-				clientSecret,
-				callbackUrl
-			});
-		}
-		return this.oauthServiceInstance;
+	static signIn(): IOSessionRegistry {
+		return signIn.get();
 	}
 
 	static isAuthEnabled(): boolean {
-		return Boolean(process.env.AUTHENTIK_CLIENT_ID?.trim());
+		return authenticationEnabled();
 	}
 }

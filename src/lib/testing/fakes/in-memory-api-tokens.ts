@@ -1,5 +1,5 @@
 import type { ActorContext, ApiToken, ApiTokenId, DateTime, User, UserId } from '$lib/models';
-import type { ApiTokenRepository, CreateApiTokenData } from '$lib/repositories';
+import type { ApiTokenRepository, CreateApiTokenData } from '$lib/server/repositories';
 
 const instant = (value: Date): DateTime => value.toISOString() as DateTime;
 

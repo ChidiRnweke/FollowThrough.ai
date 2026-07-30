@@ -10,7 +10,6 @@
 	let {
 		todoId,
 		projectId,
-		value,
 		sourceTitle,
 		hasOrigin,
 		notes = [],

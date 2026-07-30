@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
-import type { AcceptSuggestionInput, Diagram, RejectSuggestionInput } from '$lib/models';
-import type { DiagramId, NoteId } from '$lib/models';
-import { postgresTransactionRunner } from '$lib/server/db';
+import { requestActor } from '$lib/server/request-actor-factory';
+import type { RejectSuggestionInput } from '$lib/models';
 
 export const acceptSuggestion = command(
 	z.object({
@@ -18,33 +16,16 @@ export const acceptSuggestion = command(
 			.optional()
 	}),
 	async (input) => {
-		return postgresTransactionRunner.run(async () => {
-			const accepted = await AppFactory.controllerFactory()
-				.suggestions()
-				.accept(requestActor(), input as AcceptSuggestionInput);
-			if (!input.drawioReview) return accepted;
-			if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
-				throw new Error('The suggestion did not create the expected draw.io diagram.');
-			const artifact = accepted.artifact as Diagram;
-			if (artifact.noteId !== input.drawioReview.noteId)
-				throw new Error('The suggestion did not create the expected draw.io diagram.');
-			const saved = await AppFactory.controllerFactory()
-				.diagrams()
-				.saveDrawio(requestActor(), {
-					noteId: input.drawioReview.noteId as NoteId,
-					diagramId: artifact.id as DiagramId,
-					source: input.drawioReview.source,
-					renderedSvg: input.drawioReview.renderedSvg
-				});
-			return { ...accepted, artifact: saved.diagram };
-		});
+		return AppFactory.controllers()
+			.suggestions()
+			.acceptReviewed(requestActor(), input as never);
 	}
 );
 
 export const rejectSuggestion = command(
 	z.object({ suggestionId: z.string().uuid() }),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.suggestions()
 			.reject(requestActor(), input as RejectSuggestionInput);
 	}

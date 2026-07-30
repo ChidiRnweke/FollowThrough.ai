@@ -33,7 +33,7 @@
 <div
 	class={cn(
 		'mx-auto flex w-full flex-col px-4 pt-6 pb-6 md:px-8',
-		wide ? 'max-w-[100rem] gap-8' : 'max-w-5xl gap-6',
+		wide ? 'max-w-7xl gap-8' : 'max-w-5xl gap-6',
 		fill && 'flex-1',
 		className
 	)}

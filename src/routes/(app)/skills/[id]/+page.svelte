@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
@@ -392,8 +393,8 @@
 						</Button>
 					{/snippet}
 				</Tip>
-				<input
-					bind:this={fileInput}
+				<Input
+					bind:ref={fileInput}
 					type="file"
 					accept=".md,text/markdown"
 					class="sr-only"

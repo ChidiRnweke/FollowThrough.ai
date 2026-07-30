@@ -1,5 +1,5 @@
 import type { ActorContext, ProjectId, UserId } from '$lib/models';
-import type { StoredToolPreference, ToolPreferenceRepository } from '$lib/repositories';
+import type { StoredToolPreference, ToolPreferenceRepository } from '$lib/server/repositories';
 
 interface Row extends StoredToolPreference {
 	userId: UserId;

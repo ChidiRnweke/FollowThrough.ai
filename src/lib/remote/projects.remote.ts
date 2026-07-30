@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type {
 	CreateProjectInput,
 	RenameProjectInput,
@@ -15,7 +15,7 @@ import type {
 } from '$lib/models';
 
 export const createProject = command(z.object({ name: z.string().min(1) }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.projects()
 		.create(requestActor(), input as CreateProjectInput);
 });
@@ -23,14 +23,14 @@ export const createProject = command(z.object({ name: z.string().min(1) }), asyn
 export const renameProject = command(
 	z.object({ projectId: z.string().uuid(), name: z.string().min(1) }),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.projects()
 			.rename(requestActor(), input as RenameProjectInput);
 	}
 );
 
 export const archiveProject = command(z.object({ projectId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.projects()
 		.archive(requestActor(), input as ArchiveProjectInput);
 });
@@ -42,7 +42,7 @@ export const createFolder = command(
 		parentId: z.string().uuid().optional()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.projects()
 			.createFolder(requestActor(), input as CreateFolderInput);
 	}
@@ -56,7 +56,7 @@ export const moveEntry = command(
 		position: z.number().int().nonnegative()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.projects()
 			.move(requestActor(), input as MoveProjectEntryInput);
 	}
@@ -69,7 +69,7 @@ export const createNote = command(
 		parentId: z.string().uuid().optional()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.create(requestActor(), input as CreateNoteInput);
 	}
@@ -78,14 +78,14 @@ export const createNote = command(
 export const renameNote = command(
 	z.object({ noteId: z.string().uuid(), title: z.string().min(1) }),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.notes()
 			.rename(requestActor(), input as RenameNoteInput);
 	}
 );
 
 export const archiveNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllerFactory()
+	return AppFactory.controllers()
 		.notes()
 		.archive(requestActor(), input as ArchiveNoteInput);
 });
@@ -98,7 +98,7 @@ export const createSkill = command(
 		parentId: z.string().uuid().optional()
 	}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.skills()
 			.create(requestActor(), input as CreateSkillInput);
 	}

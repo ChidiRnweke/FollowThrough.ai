@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button } from '$lib/components/ui/button';
 	import type { Attachment } from 'svelte/attachments';
 	import { tick } from 'svelte';
 	import { fade, slide } from 'svelte/transition';
@@ -189,6 +190,7 @@
 
 <div {@attach sequence} class="flex w-full max-w-3xl flex-col items-stretch">
 	<Surface label={labels[stage]}>
+		<!-- chisel-ignore structural:inline-style-banned -- Morph height follows measured animated content. -->
 		<div class="morph" bind:this={bodyEl} style:height={height === '' ? null : height}>
 			{#if stage === 0}
 				<div
@@ -310,7 +312,8 @@
 		</div>
 	</Surface>
 	<div class="flex items-center justify-center gap-2 pt-3">
-		<button
+		<Button
+			variant="ghost"
 			type="button"
 			class="flex size-4 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:text-foreground"
 			aria-label={paused ? 'Play the demo' : 'Pause the demo'}
@@ -321,9 +324,10 @@
 			{:else}
 				<Pause class="size-3" />
 			{/if}
-		</button>
+		</Button>
 		{#each labels as label, index (label)}
-			<button
+			<Button
+				variant="ghost"
 				type="button"
 				class="h-1 rounded-full transition-all duration-(--duration-panel) ease-(--ease-standard) {index ===
 				stage
@@ -332,45 +336,7 @@
 				aria-label={label}
 				aria-current={index === stage ? 'true' : undefined}
 				onclick={() => goTo(index)}
-			></button>
+			></Button>
 		{/each}
 	</div>
 </div>
-
-<style>
-	.morph {
-		display: grid;
-		overflow: hidden;
-		transition: height 500ms var(--ease-standard);
-	}
-
-	.morph > :global(*) {
-		grid-area: 1 / 1;
-	}
-
-	/* The carried marks land a beat after their beat does: the highlight and
-	   the dotted underline fade in, so the eye watches "Friday" arrive as a
-	   date instead of being told what dotted means. */
-	.entered :global(mark),
-	.entered .mark-chip {
-		animation: mark-in 700ms var(--ease-standard) 450ms backwards;
-	}
-
-	@keyframes mark-in {
-		from {
-			background-color: transparent;
-			text-decoration-color: transparent;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.morph {
-			transition: none;
-		}
-
-		.entered :global(mark),
-		.entered .mark-chip {
-			animation: none;
-		}
-	}
-</style>

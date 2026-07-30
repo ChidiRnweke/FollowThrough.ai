@@ -15,7 +15,7 @@
 	import { appContext } from '$lib/stores/app-context.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { palette } from '$lib/stores/palette.svelte';
-	import { openChatSurface } from '$lib/navigation/responsive-surfaces';
+	import { openChatSurface } from '$lib/client/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
 	import MemoryNotificationMenu from '$lib/components/app/memory-notification-menu.svelte';
 

@@ -1,11 +1,10 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import { hydrateEnvironment } from '$lib/server/secrets';
+import { hydrateEnvironment } from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
-import { getSessionCookie } from '$lib/services/auth/authService';
-import { DomainError } from '$lib/models';
-import { DOMAIN_ERROR_STATUS, describeError } from '$lib/server/http-errors';
+import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
+import { describeError, getSessionCookie } from '$lib/utils';
 
 // Prerendering during `vite build` and unit tests both run without a secrets
 // backend, and must not pull configuration (which would, among other things,
@@ -49,11 +48,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// If auth is enabled, validate sessions
 	if (AppFactory.isAuthEnabled()) {
 		if (sessionId) {
-			const authService = AppFactory.getAuthService();
+			const authService = AppFactory.sessions();
 			const result = await authService.validateSession(sessionId);
 			if (result) {
 				event.locals.user = result.user;
-				event.locals.session = result.session;
 			}
 		}
 

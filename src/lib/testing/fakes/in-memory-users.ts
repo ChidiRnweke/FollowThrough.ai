@@ -1,5 +1,5 @@
 import type { ActorContext, User, UserId } from '$lib/models';
-import type { CreateUserData, UserRepository } from '$lib/repositories';
+import type { CreateUserData, UserRepository } from '$lib/server/repositories';
 import { testNow } from '$lib/testing/fixtures/domain-builders';
 
 export class InMemoryUserRepository implements UserRepository {

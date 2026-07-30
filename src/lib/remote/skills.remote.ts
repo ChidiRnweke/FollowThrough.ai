@@ -2,13 +2,13 @@ import { z } from 'zod';
 import { command, form } from '$app/server';
 import { invalid } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { NoteId, ProjectId } from '$lib/models';
 
 const noteId = z.string().uuid();
 
 export const toggleSkill = command(z.object({ noteId, enabled: z.boolean() }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.skills()
 		.update(requestActor(), {
 			noteId: input.noteId as NoteId,
@@ -21,7 +21,7 @@ export const toggleSkill = command(z.object({ noteId, enabled: z.boolean() }), a
 const booleanText = z.enum(['true', 'false']).transform((value) => value === 'true');
 
 export const setSkillEnabled = form(z.object({ noteId, enabled: booleanText }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.skills()
 		.update(requestActor(), { noteId: input.noteId as NoteId, isEnabled: input.enabled });
 	return { enabled: input.enabled };
@@ -30,7 +30,7 @@ export const setSkillEnabled = form(z.object({ noteId, enabled: booleanText }), 
 export const setSkillPinned = form(
 	z.object({ noteId, projectId: z.string().uuid(), pinned: booleanText }),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.skills()
 			.setPinned(requestActor(), {
 				noteId: input.noteId as NoteId,
@@ -61,7 +61,7 @@ const jsonStringMap = z.string().transform((raw, ctx) => {
 	return parsed as Record<string, string>;
 });
 
-/** Mirrors the portable-name fallback in SkillManagementService. */
+/** Mirrors the portable-name fallback in SkillLibrary. */
 const fallbackSlug = (value: string): string =>
 	value
 		.toLowerCase()
@@ -72,7 +72,7 @@ const fallbackSlug = (value: string): string =>
 export const saveSkillDraft = command(
 	z.object({ noteId, description: z.string(), instructions: z.string() }),
 	async (input) => {
-		const factory = AppFactory.controllerFactory();
+		const factory = AppFactory.controllers();
 		const actor = requestActor();
 		const { skill } = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
 		await factory.skills().update(actor, {
@@ -94,7 +94,7 @@ export const saveSkillDraft = command(
 export const saveSkillDescription = command(
 	z.object({ noteId, description: z.string() }),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.skills()
 			.update(requestActor(), { noteId: input.noteId as NoteId, description: input.description });
 		return { saved: true };
@@ -102,14 +102,14 @@ export const saveSkillDescription = command(
 );
 
 export const renameSkill = command(z.object({ noteId, name: z.string().min(1) }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.skills()
 		.update(requestActor(), { noteId: input.noteId as NoteId, displayName: input.name });
 	return { saved: true };
 });
 
 export const importSkillMarkdown = command(z.object({ noteId, raw: z.string() }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.skills()
 		.update(requestActor(), { noteId: input.noteId as NoteId, raw: input.raw });
 	return { saved: true };
@@ -130,7 +130,7 @@ export const saveSkillBundle = form(
 	}),
 	async (input, issue) => {
 		try {
-			await AppFactory.controllerFactory()
+			await AppFactory.controllers()
 				.skills()
 				.update(requestActor(), {
 					noteId: input.noteId as NoteId,
@@ -160,7 +160,7 @@ export const saveSkillRaw = form(
 	z.object({ noteId, displayName: z.string(), raw: z.string() }),
 	async (input, issue) => {
 		try {
-			await AppFactory.controllerFactory()
+			await AppFactory.controllers()
 				.skills()
 				.update(requestActor(), {
 					noteId: input.noteId as NoteId,
@@ -177,7 +177,7 @@ export const saveSkillRaw = form(
 export const restoreSkillVersion = form(
 	z.object({ noteId, revision: z.number().int().positive() }),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.skills()
 			.restoreVersion(requestActor(), {
 				noteId: input.noteId as NoteId,

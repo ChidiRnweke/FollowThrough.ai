@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createOpenRouterClient } from '$lib/server/domain/openrouter-client';
+import { createLanguageModelClient } from '$lib/server/config';
 import { judgeModel, openRouterBaseUrl } from '../lab/phoenix';
 
 /**
@@ -43,7 +43,7 @@ export async function judgeAgainstRubric(input: JudgeRubricInput): Promise<Rubri
 	if (!apiKey) throw new Error('OPENROUTER_API_KEY is required to run the rubric judge.');
 
 	const model = judgeModel();
-	const client = createOpenRouterClient(apiKey, { baseURL: openRouterBaseUrl() });
+	const client = createLanguageModelClient(apiKey, { baseURL: openRouterBaseUrl() });
 
 	const criteria = input.criteria.map((item, index) => `${index + 1}. ${item}`).join('\n');
 	const completion = await client.chat.completions.create({

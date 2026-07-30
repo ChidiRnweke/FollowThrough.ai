@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import type { AttachmentView } from '$lib/models';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -126,9 +128,9 @@
 {#snippet uploadButton()}
 	<!-- The one primary action on the screen, so it wears the primary colour. It
 	     stays a label wrapping the file input — a real button cannot open the picker. -->
-	<label class={buttonVariants({ size: 'sm' })}>
+	<Label class={buttonVariants({ size: 'sm' })}>
 		{busy ? 'Uploading…' : 'Add attachment'}
-		<input
+		<Input
 			class="sr-only"
 			type="file"
 			disabled={busy}
@@ -138,7 +140,7 @@
 				event.currentTarget.value = '';
 			}}
 		/>
-	</label>
+	</Label>
 {/snippet}
 
 <!-- The spacing ladder: a 24px step separates adding files from the files

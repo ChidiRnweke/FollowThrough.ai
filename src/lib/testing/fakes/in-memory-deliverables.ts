@@ -8,8 +8,11 @@ import type {
 	ProjectTemplate,
 	TemplateId
 } from '$lib/models';
-import type { ArtifactRepository, TemplateRepository } from '$lib/repositories';
-import type { AttachmentStorage, StoredObjectInfo } from '$lib/server/domain/attachment-storage';
+import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories';
+import type {
+	IAttachmentStorage,
+	StoredObjectInfo
+} from '$lib/server/services/attachments/storage';
 import type { SnapshotParticipant } from './in-memory-transaction';
 
 export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotParticipant {
@@ -106,7 +109,7 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 	}
 }
 
-export class InMemoryAttachmentStorage implements AttachmentStorage, SnapshotParticipant {
+export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotParticipant {
 	objects = new Map<string, { data: Uint8Array; mediaType: string; checksumSha256?: string }>();
 
 	async createUploadUrl(input: {

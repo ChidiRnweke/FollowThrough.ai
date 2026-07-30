@@ -1,5 +1,5 @@
 import type { ActorContext, Provenance, ProvenanceId } from '$lib/models';
-import type { ProvenanceRepository } from '$lib/repositories/provenance';
+import type { ProvenanceRepository } from '$lib/server/repositories/provenance';
 
 export class InMemoryProvenanceRepository implements ProvenanceRepository {
 	provenance: Provenance[] = [];

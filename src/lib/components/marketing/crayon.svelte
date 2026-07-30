@@ -11,7 +11,7 @@
 <span class="relative inline-block">
 	{@render children()}
 	<svg
-		class="absolute -bottom-[0.14em] left-0 h-[0.24em] w-full overflow-visible"
+		class="absolute bottom-0 left-0 h-1 w-full translate-y-1 overflow-visible"
 		viewBox="0 0 100 10"
 		preserveAspectRatio="none"
 		aria-hidden="true"

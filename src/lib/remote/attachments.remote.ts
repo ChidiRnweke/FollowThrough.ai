@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, form, query, requested } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { AttachmentId, AttachmentUploadId, NoteId, ProjectId } from '$lib/models';
 
 const id = z.string().uuid();
@@ -16,7 +16,7 @@ const ownerSchema = z
 	.refine(exactlyOneOwner, 'Provide exactly one owner');
 
 export const listAttachments = query(ownerSchema, async (owner) => {
-	const controller = AppFactory.controllerFactory().attachments();
+	const controller = AppFactory.controllers().attachments();
 	return owner.projectId
 		? controller.listForProject(requestActor(), owner.projectId as ProjectId)
 		: controller.list(requestActor(), owner.noteId as NoteId);
@@ -34,7 +34,7 @@ export const initiateAttachmentUpload = command(
 		})
 		.refine(exactlyOneOwner, 'Provide exactly one owner'),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.attachments()
 			.initiate(requestActor(), {
 				path: input.path,
@@ -53,7 +53,7 @@ const refreshRequestedLists = async (): Promise<void> => {
 };
 
 export const completeAttachmentUpload = command(z.object({ uploadId: id }), async (input) => {
-	const view = await AppFactory.controllerFactory()
+	const view = await AppFactory.controllers()
 		.attachments()
 		.complete(requestActor(), input.uploadId as AttachmentUploadId);
 	await refreshRequestedLists();
@@ -61,7 +61,7 @@ export const completeAttachmentUpload = command(z.object({ uploadId: id }), asyn
 });
 
 export const retryAttachment = command(z.object({ attachmentId: id }), async (input) => {
-	const view = await AppFactory.controllerFactory()
+	const view = await AppFactory.controllers()
 		.attachments()
 		.retry(requestActor(), input.attachmentId as AttachmentId);
 	await refreshRequestedLists();
@@ -71,19 +71,19 @@ export const retryAttachment = command(z.object({ attachmentId: id }), async (in
 // Downloads are commands rather than queries: each call mints a presigned URL,
 // which expires, so it must never be served from a query cache.
 export const downloadAttachment = command(z.object({ attachmentId: id }), async (input) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.attachments()
 		.downloadById(requestActor(), input.attachmentId as AttachmentId)
 );
 
 export const downloadAttachmentByPath = command(z.object({ noteId: id, path }), async (input) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.attachments()
 		.download(requestActor(), input.noteId as NoteId, input.path)
 );
 
 export const removeAttachment = command(z.object({ attachmentId: id }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.attachments()
 		.removeById(requestActor(), input.attachmentId as AttachmentId);
 	await refreshRequestedLists();
@@ -91,7 +91,7 @@ export const removeAttachment = command(z.object({ attachmentId: id }), async (i
 
 /** A form rather than a command: it is one submit button per resource row. */
 export const removeAttachmentByPath = form(z.object({ noteId: id, path }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.attachments()
 		.remove(requestActor(), input.noteId as NoteId, input.path);
 	return { removed: input.path };

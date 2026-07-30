@@ -21,12 +21,12 @@ export const load: PageServerLoad = async ({ params, url, parent, locals }) => {
 		// id — fall back to the path param so the pane still has something to
 		// hydrate from.
 		const fallbackId = params.id as NoteId;
-		const view = await AppFactory.controllerFactory()
+		const view = await AppFactory.controllers()
 			.notes()
 			.get(AppFactory.actor(locals), { noteId: fallbackId });
 		return { shell, focusedNoteView: view };
 	}
-	const view = await AppFactory.controllerFactory()
+	const view = await AppFactory.controllers()
 		.notes()
 		.get(AppFactory.actor(locals), { noteId: workbenchState.focusedNoteId as NoteId });
 	return { shell, focusedNoteView: view };

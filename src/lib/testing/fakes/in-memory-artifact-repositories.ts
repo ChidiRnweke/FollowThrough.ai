@@ -17,7 +17,7 @@ import type {
 	NoteRelationshipRepository,
 	ReferenceRepository,
 	SkillRepository
-} from '$lib/repositories';
+} from '$lib/server/repositories';
 
 export class InMemoryRelationshipRepository implements NoteRelationshipRepository {
 	relationships: NoteRelationship[] = [];

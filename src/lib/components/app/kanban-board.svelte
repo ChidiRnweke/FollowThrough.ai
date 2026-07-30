@@ -75,7 +75,7 @@
 >
 	{#each columns as status (status)}
 		<section
-			class="flex min-h-40 w-[min(82vw,22rem)] shrink-0 snap-start flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:w-80 xl:w-auto xl:min-w-0"
+			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 xl:w-auto xl:min-w-0"
 		>
 			<div class={['h-0.5 w-full', todoStatusStyle[status].accentClass]}></div>
 			<h3 class="eyebrow flex items-center justify-between px-3 pt-1">

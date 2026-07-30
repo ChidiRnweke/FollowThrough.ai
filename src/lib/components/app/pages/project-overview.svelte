@@ -25,6 +25,9 @@
 	import { pickTip } from '../resource-tips';
 	import { formatRelativeTime } from '../labels';
 
+	const depthIndent = (depth: number): string =>
+		['pl-3', 'pl-8', 'pl-13', 'pl-18', 'pl-23', 'pl-28', 'pl-33', 'pl-38'][depth] ?? 'pl-38';
+
 	export interface ProjectCounts {
 		todos: number;
 		memory: number;
@@ -136,7 +139,7 @@
 	deliberately absent here — the documents list uses them, so withholding them
 	is what stops four spaces from reading as five more documents.
 -->
-<nav class="flex flex-col gap-6" aria-label="Project spaces">
+<div class="flex flex-col gap-6" role="navigation" aria-label="Project spaces">
 	<section class="flex flex-col gap-2">
 		<h2 class="eyebrow">Produced here</h2>
 		<ul class="-mx-3 flex flex-col">
@@ -175,7 +178,7 @@
 			/>
 		</ul>
 	</section>
-</nav>
+</div>
 
 <!--
 	One row per entry, emitted flat into the divided list so the separators stay
@@ -186,10 +189,12 @@
 	{@const isOpen = expanded.has(node.entry.id)}
 	<li class="group relative">
 		{#if isFolder}
-			<button
+			<Button
+				variant="ghost"
 				type="button"
-				class="row-interactive flex w-full items-center gap-2 py-3 pr-10 text-left text-sm"
-				style="padding-left: {12 + depth * 20}px"
+				class="row-interactive {depthIndent(
+					depth
+				)} flex w-full items-center gap-2 py-3 pr-10 text-left text-sm"
 				aria-expanded={isOpen}
 				onclick={() => toggleFolder(node.entry.id)}
 			>
@@ -208,11 +213,10 @@
 					{node.children.length}
 					{node.children.length === 1 ? 'item' : 'items'}
 				</span>
-			</button>
+			</Button>
 		{:else}
 			<a
-				class="row-interactive flex items-center gap-2 py-3 pr-10 text-sm"
-				style="padding-left: {12 + depth * 20}px"
+				class="row-interactive {depthIndent(depth)} flex items-center gap-2 py-3 pr-10 text-sm"
 				href="/notes/{node.entry.id}"
 			>
 				{#if node.entry.kind === 'skill'}

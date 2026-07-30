@@ -5,6 +5,7 @@
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
+	import { Input } from '$lib/components/ui/input';
 	import ExportSlider from './export-slider.svelte';
 	import {
 		MERMAID_PALETTE_KEYS,
@@ -157,7 +158,7 @@
 			<div class="grid max-w-md grid-cols-2 gap-x-2 gap-y-1.5">
 				{#each MERMAID_PALETTE_KEYS as key (key)}
 					<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
-						<input
+						<Input
 							type="color"
 							class="size-5 shrink-0 cursor-pointer rounded-sm border border-border bg-transparent"
 							value={settings.diagramTheme?.colors?.[key] ?? diagramPreset[key]}

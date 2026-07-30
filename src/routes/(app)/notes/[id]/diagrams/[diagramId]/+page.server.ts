@@ -3,7 +3,7 @@ import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const diagram = await AppFactory.controllerFactory()
+	const diagram = await AppFactory.controllers()
 		.diagrams()
 		.getDrawio(AppFactory.actor(locals), {
 			noteId: params.id as NoteId,

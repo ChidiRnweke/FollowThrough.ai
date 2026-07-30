@@ -1,12 +1,12 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import { deleteSessionCookie, getSessionCookie } from '$lib/services/auth/authService';
+import { deleteSessionCookie, getSessionCookie } from '$lib/utils';
 
 export const POST: RequestHandler = async ({ cookies }) => {
 	const sessionId = getSessionCookie(cookies);
 
 	if (sessionId) {
-		const authService = AppFactory.getAuthService();
+		const authService = AppFactory.sessions();
 		await authService.logout(sessionId);
 	}
 

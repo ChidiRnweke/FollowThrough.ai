@@ -456,7 +456,7 @@
 			<Tiptap {editor}>
 				<BubbleMenu
 					{editor}
-					class="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+					class="flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 				>
 					{#if onask}
 						<!--

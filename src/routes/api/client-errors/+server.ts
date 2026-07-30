@@ -1,3 +1,4 @@
+// chisel-ignore-file error-flow:raw-http-status -- A one-way browser telemetry beacon succeeds with an intentionally empty 204 response.
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 

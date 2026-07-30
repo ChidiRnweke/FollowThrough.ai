@@ -6,6 +6,8 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
 	import { toast } from 'svelte-sonner';
@@ -230,10 +232,6 @@
 		if (!inlineCreateSubmitted && !projectActions.busy) inlineEdit = null;
 	}
 
-	function autofocus(node: HTMLInputElement): void {
-		node.focus();
-	}
-
 	function isCreatingIn(projectId: ProjectId, parentId?: NoteId): boolean {
 		return (
 			inlineEdit?.mode === 'create' &&
@@ -430,13 +428,13 @@
 			class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 transition-colors focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring"
 		>
 			<Plus class="size-3.5 shrink-0 text-muted-foreground" />
-			<input
+			<Input
 				class="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
 				{placeholder}
 				aria-label={placeholder}
 				disabled={projectActions.busy}
 				bind:value={inlineCreateValue}
-				use:autofocus
+				autofocus
 				onkeydown={handleInlineCreateKeydown}
 				onblur={handleInlineCreateBlur}
 			/>
@@ -478,15 +476,17 @@
 			<div class="group/entry relative">
 				<Tip text="Reorder {entry.title}" side="right">
 					{#snippet children({ props })}
-						<button
-							{...props}
-							type="button"
-							use:dragHandle
-							class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
-							aria-label="Reorder {entry.title}"
-						>
-							<GripVertical class="size-3" />
-						</button>
+						<span use:dragHandle>
+							<Button
+								variant="ghost"
+								{...props}
+								type="button"
+								class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
+								aria-label="Reorder {entry.title}"
+							>
+								<GripVertical class="size-3" />
+							</Button>
+						</span>
 					{/snippet}
 				</Tip>
 				<ContextMenu.Root>
@@ -499,7 +499,8 @@
 								{#snippet children({ props: tip })}
 									<Sidebar.MenuSubButton class="w-full">
 										{#snippet child({ props })}
-											<button
+											<Button
+												variant="ghost"
 												type="button"
 												{...props}
 												{...tip}
@@ -517,7 +518,7 @@
 													<Folder class="size-4 shrink-0 text-muted-foreground" />
 												{/if}
 												<span class="truncate">{entry.title}</span>
-											</button>
+											</Button>
 										{/snippet}
 									</Sidebar.MenuSubButton>
 								{/snippet}
@@ -575,13 +576,14 @@
 							{#snippet child({ props: menuProps })}
 								<Tip text="Create in {entry.title}">
 									{#snippet children({ props: tipProps })}
-										<button
+										<Button
+											variant="ghost"
 											{...mergeProps(menuProps, tipProps)}
 											class="tactile absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 											aria-label="Create in {entry.title}"
 										>
 											<Plus class="size-3.5" />
-										</button>
+										</Button>
 									{/snippet}
 								</Tip>
 							{/snippet}
@@ -596,13 +598,14 @@
 						{#snippet child({ props: menuProps })}
 							<Tip text="Actions for {entry.title}">
 								{#snippet children({ props: tipProps })}
-									<button
+									<Button
+										variant="ghost"
 										{...mergeProps(menuProps, tipProps)}
 										class="tactile absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 										aria-label="Actions for {entry.title}"
 									>
 										<Ellipsis class="size-3.5" />
-									</button>
+									</Button>
 								{/snippet}
 							</Tip>
 						{/snippet}
@@ -614,13 +617,7 @@
 			</div>
 		{/if}
 		{#if isFolder && depth < MAX_DEPTH}
-			<div
-				class="tree-collapse"
-				data-open={isOpen}
-				style={transitionsReady
-					? undefined
-					: `display:grid;grid-template-rows:${isOpen ? '1fr' : '0fr'};transition:none`}
-			>
+			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<ul
 						class="ml-3.5 flex min-h-1.5 min-w-0 flex-col gap-1 border-l border-sidebar-border py-0.5 pl-2.5"
@@ -646,14 +643,15 @@
 					     as an empty state, where there is nothing else to aim at. -->
 					{#if !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
 						<div class="ml-3.5 pl-2.5">
-							<button
+							<Button
+								variant="ghost"
 								type="button"
 								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
 								Create your first note
-							</button>
+							</Button>
 						</div>
 					{/if}
 				</div>
@@ -710,9 +708,9 @@
 							{#snippet child({ props: menuProps })}
 								<Tip text="Actions for {project.name}">
 									{#snippet children({ props: tipProps })}
-										<button {...mergeProps(actionProps, menuProps, tipProps)}>
+										<Button variant="ghost" {...mergeProps(actionProps, menuProps, tipProps)}>
 											<Ellipsis class="size-3.5" />
-										</button>
+										</Button>
 									{/snippet}
 								</Tip>
 							{/snippet}
@@ -730,9 +728,9 @@
 							{#snippet child({ props: menuProps })}
 								<Tip text="Create in {project.name}">
 									{#snippet children({ props: tipProps })}
-										<button {...mergeProps(actionProps, menuProps, tipProps)}>
+										<Button variant="ghost" {...mergeProps(actionProps, menuProps, tipProps)}>
 											<Plus class="size-3.5" />
-										</button>
+										</Button>
 									{/snippet}
 								</Tip>
 							{/snippet}
@@ -754,13 +752,7 @@
 						: ''} {isOpen ? 'rotate-90' : ''}"
 				/>
 			</Sidebar.MenuAction>
-			<div
-				class="tree-collapse"
-				data-open={isOpen}
-				style={transitionsReady
-					? undefined
-					: `display:grid;grid-template-rows:${isOpen ? '1fr' : '0fr'};transition:none`}
-			>
+			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<div
 						class="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden"
@@ -796,14 +788,15 @@
 							{@render inlineCreateRow(inlineEdit, 'inline')}
 						{/if}
 						{#if !isCreatingIn(project.id, undefined) && entries.length === 0}
-							<button
+							<Button
+								variant="ghost"
 								type="button"
 								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 								onclick={() => startCreate('note', project.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
 								Create your first note
-							</button>
+							</Button>
 						{/if}
 					</div>
 				</div>

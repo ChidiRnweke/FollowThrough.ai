@@ -1,5 +1,5 @@
 import type { SearchMatch } from '$lib/models';
-import type { Condenser, EmbeddingBatch, EmbeddingClient, Reranker } from '$lib/services';
+import type { Condenser, EmbeddingBatch, EmbeddingClient, Reranker } from '$lib/server/services';
 import { DiskCache, decodeVector, encodeVector } from './disk-cache';
 
 /**

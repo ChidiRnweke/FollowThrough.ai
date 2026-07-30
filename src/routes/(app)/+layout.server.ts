@@ -9,7 +9,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 	}
 	const actor = AppFactory.actor(locals);
 
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const [shell, agentPreferences, sessions] = await Promise.all([
 		factory.workspace().getShellContext(actor),
 		factory.agentSettings().getPreferences(actor),

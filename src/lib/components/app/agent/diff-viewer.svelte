@@ -59,11 +59,11 @@
 			{#each lines as line, index (index)}
 				{@const cls =
 					line.type === 'add'
-						? 'bg-green-950/40 text-green-300'
+						? 'bg-success/15 text-success'
 						: line.type === 'remove'
-							? 'bg-red-950/40 text-red-300'
+							? 'bg-destructive/15 text-destructive'
 							: line.type === 'header'
-								? 'text-blue-300'
+								? 'text-primary'
 								: 'text-muted-foreground'}
 				<span class="block px-2 {cls}">{line.content || ' '}</span
 				>

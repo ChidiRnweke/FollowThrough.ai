@@ -1,38 +1,42 @@
-import { ProductionControllerFactory, type ProductionControllerDependencies } from '$lib/factories';
+import {
+	ProductionControllerFactory,
+	type ProductionControllerDependencies
+} from '$lib/server/production-controller-factory';
 import { OpenRouter } from '@openrouter/sdk';
 import {
 	EmbeddedKnowledgeSearcher,
 	RerankingKnowledgeSearcher,
+	EmbeddedAttachmentIndexer,
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
 	retrievalChunkerFromEnv,
-	MemoryManagementService,
-	DiagramManagementService,
-	DiagramTransformationService,
-	DefaultBuiltInSkillProvisioner,
+	MemoryLibrary,
+	DiagramLibrary,
+	DiagramContent,
+	BuiltInSkills,
 	ExpiringSuggestionLister,
-	OpenRouterModelCatalog,
-	PersistentAgentPreferencesStore,
-	PersistentToolPreferenceStore,
-	PersistentAgentRunStore,
-	PersistentConversationJournal,
-	ProjectManagementService,
-	ReferenceManagementService,
-	RelationshipManagementService,
-	NoteManagementService,
-	ProvenanceManagementService,
-	SuggestionManagementService,
-	SkillManagementService,
-	TodoManagementService,
-	TrustPolicyManagementService,
-	UserManagementService,
+	AgentModels,
+	AgentPreferenceCatalog,
+	ToolAccess,
+	AgentRunLedger,
+	ConversationArchive,
+	ProjectCatalog,
+	ReferenceLibrary,
+	RelationshipGraph,
+	NoteCatalog,
+	NoteProvenance,
+	SuggestionInbox,
+	SkillLibrary,
+	TodoCatalog,
+	ToolTrust,
+	UserDirectory,
 	ProjectScopedLinkFinder,
-	ProvisioningSkillFinder,
-	AttachmentManagementService,
-	DocumentOcrService,
+	BuiltInSkillLibrary,
+	AttachmentLibrary,
+	AttachmentContent,
 	EmbeddedToolRetriever,
-	normalizeOpenRouterModelId,
+	normalizeLanguageModelId,
 	type AgentModelCatalog,
 	type Condenser,
 	type DocumentOcr,
@@ -44,93 +48,98 @@ import {
 	type ReferenceFinder,
 	type Reranker,
 	type ToolRetriever
-} from '$lib/services';
-import type { TransactionRunner } from '$lib/repositories';
+} from '$lib/server/services';
+import type { TransactionRunner } from '$lib/server/repositories';
 import type { Database } from './db';
-import { BasicAgent } from './domain/basic-agent';
-import { PersistentSuggestionArtifactApplier } from './domain/suggestion-artifact-applier';
-import { OpenAIPromiseExtractor } from './domain/openai-capabilities';
-import { WebSearchReferenceFinder } from './domain/openai-reference-capabilities';
-import { OpenAIAgentRunner } from './domain/openai-agent-capabilities';
-import { OpenAIDiagramAgent } from './domain/openai-diagram-agent';
-import { OpenAIEmbeddingClient } from './domain/openai-embedding-capabilities';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
-import { FlashInlineCompletionGenerator } from './domain/inline-completion-generator';
-import { RetrievalInlineCompletionContextBuilder } from './domain/inline-completion-context';
-import { MemoryInlineSuggestionThrottle } from './domain/inline-suggestion-throttle';
-import { OpenRouterReranker } from './domain/openrouter-rerank-capabilities';
-import { OpenRouterOcrClient } from './domain/openrouter-ocr-capabilities';
-import { OpenRouterImageDescriber } from './domain/openrouter-vision-capabilities';
-import { PdfLibSplitter } from './domain/pdf-parts';
-import { ConversationCondenser } from './domain/conversation-condenser';
-import { PostgresRetrievalIndexRepository } from './repositories/postgres-search';
-import { PostgresConversationRepository } from './repositories/postgres-conversations';
-import { EnrichedAgentContextBuilder } from './domain/agent-context-capabilities';
-import { ApiTokenService } from '$lib/services/auth/apiTokenService';
-import { PostgresApiTokenRepository } from './repositories/postgres-api-tokens';
+import { BaseAgentContext } from './services/agent-runs/base-context';
+import { SuggestionApplication } from './services/suggestions/application';
+import { PromiseDiscovery } from './services/todos/promise-discovery';
+import { DeterministicPromiseExtractor } from './services/todos/promise-rules';
+import { ReferenceDiscovery } from './services/references/discovery';
+import { AgentReasoning, AgentToolEventMapper } from './services/agent-runs/reasoning';
+import { resolveAgentModel } from './services/agent-runs/preferences';
+import { agentToolRegistry } from './agent-tool-factory';
+import { BUILT_INS, RETIRED_BUILT_INS } from './services/skills/built-in-definitions';
+import { SkillManifestCodec } from './services/skills/manifest';
+import { extractTemplateStyles } from './services/deliverables/template-styles';
+import { DiagramAuthoring } from './services/diagrams/authoring';
+import { DrawioReview } from './services/diagrams/review';
+import { Embeddings } from './services/retrieval/embeddings';
+import {
+	DEFAULT_GENERATION_MODEL,
+	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	optionalProperty,
+	positiveNumberFromEnvironment
+} from './config';
+import { InlineSuggestionCompletion } from './services/suggestions/inline-completion';
+import { InlineSuggestionContext } from './services/suggestions/inline-context';
+import { InlineSuggestionAdmission } from './services/suggestions/inline-admission';
+import { SearchRanking } from './services/retrieval/ranking';
+import { TextRecognition } from './services/attachments/text-recognition';
+import { ImageDescription } from './services/attachments/image-description';
+import { PdfContent } from './services/attachments/pdf-content';
+import { ConversationSummary } from './services/conversations/summary';
+import { KnowledgeIndexRecords } from './repositories/postgres/search';
+import { ConversationRecords } from './repositories/postgres/conversations';
+import { AgentContext } from './services/agent-runs/context';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { ApiTokenRecords } from './repositories/postgres/api-tokens';
 import {
 	AttachmentParserRegistry,
-	S3AttachmentStorage,
-	type AttachmentStorage,
-	type S3AttachmentStorageConfig
-} from './domain/attachment-storage';
-import { OpenAIRelationshipClassifier } from './domain/openai-relationship-capabilities';
-import { PostgresProjectRepository } from './repositories/postgres-projects';
-import { PostgresUserRepository } from './repositories/postgres-users';
+	AttachmentStorage,
+	type IAttachmentStorage,
+	type ObjectStorageConfig
+} from './services/attachments/storage';
+import { RelationshipDiscovery } from './services/relationships/discovery';
+import { ProjectRecords } from './repositories/postgres/projects';
+import { UserRecords } from './repositories/postgres/users';
+import { NoteRecords, SourceAnchorRecords } from './repositories/postgres/notes';
+import { ProvenanceRecords } from './repositories/postgres/provenance';
+import { TodoRecords } from './repositories/postgres/todos';
+import { SuggestionRecords } from './repositories/postgres/suggestions';
+import { TrustPolicyRecords } from './repositories/postgres/trust-policies';
+import { MemoryRecords } from './repositories/postgres/memory-entries';
+import { ExportSettingsRecords } from './repositories/postgres/export-settings';
+import { RelationshipRecords } from './repositories/postgres/relationships';
+import { ReferenceRecords } from './repositories/postgres/references';
+import { DiagramRecords } from './repositories/postgres/diagrams';
+import { SkillRecords } from './repositories/postgres/skills';
+import { AttachmentRecords } from './repositories/postgres/attachments';
+import { TemplateRecords } from './repositories/postgres/templates';
+import { ArtifactRecords } from './repositories/postgres/artifacts';
+import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
+import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
+import { agentToolCatalog } from './agent-tool-catalog-factory';
+import { generateDocx } from './services/deliverables/docx';
+import { generatePdf } from './services/deliverables/pdf';
 import {
-	PostgresNoteRepository,
-	PostgresSourceAnchorRepository
-} from './repositories/postgres-notes';
-import { PostgresProvenanceRepository } from './repositories/postgres-provenance';
-import { PostgresTodoRepository } from './repositories/postgres-todos';
-import { PostgresSuggestionRepository } from './repositories/postgres-suggestions';
-import { PostgresTrustPolicyRepository } from './repositories/postgres-trust-policies';
-import { PostgresMemoryEntryRepository } from './repositories/postgres-memory-entries';
-import { PostgresExportSettingsRepository } from './repositories/postgres-export-settings';
-import { PostgresRelationshipRepository } from './repositories/postgres-relationships';
-import { PostgresReferenceRepository } from './repositories/postgres-references';
-import { PostgresDiagramRepository } from './repositories/postgres-diagrams';
-import { PostgresSkillRepository } from './repositories/postgres-skills';
-import { PostgresAttachmentRepository } from './repositories/postgres-attachments';
-import { PostgresTemplateRepository } from './repositories/postgres-templates';
-import { PostgresArtifactRepository } from './repositories/postgres-artifacts';
-import { TemplateManagementService } from '$lib/services/templates/management';
-import { ArtifactManagementService } from '$lib/services/artifacts/management';
-import { agentToolCatalog } from './domain/agent-tool-catalog';
-import { generateDocx } from './domain/docx-generator';
-import { generatePdf } from './domain/pdf-generator';
+	AgentPreferenceRecords,
+	AgentRunRecords,
+	AgentSessionRecords
+} from './repositories/postgres/agent-settings';
+import { ToolPreferenceRecords } from './repositories/postgres/tool-preferences';
+import { AgentRunDecisionRecords, AgentRunEventRecords } from './repositories/postgres/agent-runs';
+import { AgentRunLifecycle } from './services/agent-runs/lifecycle';
+import { AgentEvents, type AgentEventBus } from './services/agent-runs/events';
 import {
-	PostgresAgentPreferencesRepository,
-	PostgresAgentRunRepository,
-	PostgresAgentSessionRepository
-} from './repositories/postgres-agent-settings';
-import { PostgresToolPreferenceRepository } from './repositories/postgres-tool-preferences';
-import {
-	PostgresAgentRunDecisionRepository,
-	PostgresAgentRunEventRepository
-} from './repositories/postgres-agent-runs';
-import { AgentRunExecutor } from './domain/agent-run-executor';
-import { InProcessAgentEventBus, type AgentEventBus } from './domain/agent-event-bus';
-import {
+	DrawioLabelExtractor,
 	DrawioSvgSanitizer,
 	DrawioXmlValidator,
 	DrawioDiagramTextExtractor
-} from './domain/drawio-content';
-import type { ScheduledTask } from './workers/scheduler';
-import { EmbeddingBackfillTask } from './workers/embedding-backfill';
-import { ExpiredUploadSweepTask } from './workers/expired-upload-sweep';
-
-const numberFromEnv = (name: string): number | undefined => {
-	const raw = process.env[name];
-	if (raw === undefined) return undefined;
-	const value = Number(raw);
-	if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
-	return value;
-};
-
-/** Omits the key entirely when unset, so the task's own default stands. */
-const optional = <K extends string, V>(key: K, value: V | undefined) =>
-	(value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
+} from './services/diagrams/drawio';
+import type { ScheduledTask } from './services/scheduler';
+import { KnowledgeIndexMaintenance } from './services/retrieval/index-maintenance';
+import { UploadRetention } from './services/attachments/retention';
+import { FeedbackRecords } from './repositories/postgres/feedback';
+import { operationObserver, traceAgentTurn, traceWorkflow } from './services/telemetry';
+import {
+	openRouterWebSearchTool,
+	webSearchOptionsFromEnvironment,
+	withWebResearch
+} from './services/agent-runs/web-research';
+import { ConversationBuffer } from './services/conversations/buffer';
+import { ConversationSession } from './services/conversations/session';
+import { LateValue } from '$lib/utils';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -142,7 +151,7 @@ export interface ApplicationOverrides {
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
 	readonly condenser?: Condenser;
-	readonly attachmentStorage?: AttachmentStorage;
+	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceFinder?: ReferenceFinder;
 	readonly modelCatalog?: AgentModelCatalog;
 	readonly ocrEngine?: OcrEngineClient;
@@ -159,7 +168,7 @@ export interface ApplicationConfig {
 	readonly appURL?: string;
 	readonly defaultAgentModel?: string;
 	readonly recommendedModels?: readonly string[];
-	readonly s3?: S3AttachmentStorageConfig;
+	readonly s3?: ObjectStorageConfig;
 	readonly overrides?: ApplicationOverrides;
 	/**
 	 * Stage chunks without vectors and let the background worker embed them,
@@ -199,7 +208,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const transactionRunner = config.transactionRunner;
 	const overrides = config.overrides ?? {};
 	const openRouterApiKey = config.openRouterApiKey;
-	const openRouterBaseURL = config.openRouterBaseURL ?? DEFAULT_OPENROUTER_BASE_URL;
+	const openRouterBaseURL = config.openRouterBaseURL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 	const appURL = config.appURL ?? 'http://localhost:5173';
 	const defaultAgentModel = config.defaultAgentModel ?? DEFAULT_GENERATION_MODEL;
 	// Attachment indexing is deliberately left inline: it already runs off the
@@ -207,41 +216,34 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 
-	const projectRepository = new PostgresProjectRepository(db);
-	const userReader = new UserManagementService(new PostgresUserRepository(db));
-	const projects = new ProjectManagementService(projectRepository, projectRepository);
-	const noteRepository = new PostgresNoteRepository(db);
-	const anchorRepository = new PostgresSourceAnchorRepository(db);
-	const provenanceRepository = new PostgresProvenanceRepository(db);
-	const notes = new NoteManagementService(noteRepository, anchorRepository, projectRepository);
-	const provenance = new ProvenanceManagementService(provenanceRepository, anchorRepository);
-	const todos = new TodoManagementService(
-		new PostgresTodoRepository(db),
+	const projectRepository = new ProjectRecords(db);
+	const userReader = new UserDirectory(new UserRecords(db));
+	const projects = new ProjectCatalog(projectRepository, projectRepository);
+	const noteRepository = new NoteRecords(db);
+	const anchorRepository = new SourceAnchorRecords(db);
+	const provenanceRepository = new ProvenanceRecords(db);
+	const notes = new NoteCatalog(noteRepository, anchorRepository, projectRepository);
+	const provenance = new NoteProvenance(provenanceRepository, anchorRepository);
+	const todos = new TodoCatalog(
+		new TodoRecords(db),
 		projectRepository,
 		anchorRepository,
 		noteRepository,
 		provenanceRepository
 	);
-	const searchRepository = new PostgresRetrievalIndexRepository(db);
-	const conversationJournal = new PersistentConversationJournal(
-		new PostgresConversationRepository(db)
-	);
-	const preferences = new PersistentAgentPreferencesStore(
-		new PostgresAgentPreferencesRepository(db)
-	);
-	const apiTokenService = new ApiTokenService(new PostgresApiTokenRepository(db));
-	const toolPreferences = new PersistentToolPreferenceStore(
-		new PostgresToolPreferenceRepository(db),
-		agentToolCatalog
-	);
-	const runRepository = new PostgresAgentRunRepository(db);
-	const runStore = new PersistentAgentRunStore(runRepository);
-	const runEvents = new PostgresAgentRunEventRepository(db);
-	const runDecisions = new PostgresAgentRunDecisionRepository(db);
-	const agentSessions = new PostgresAgentSessionRepository(db);
+	const searchRepository = new KnowledgeIndexRecords(db);
+	const conversationJournal = new ConversationArchive(new ConversationRecords(db));
+	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(db));
+	const apiTokenService = new AccessTokens(new ApiTokenRecords(db));
+	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(db), agentToolCatalog);
+	const runRepository = new AgentRunRecords(db);
+	const runStore = new AgentRunLedger(runRepository);
+	const runEvents = new AgentRunEventRecords(db);
+	const runDecisions = new AgentRunDecisionRecords(db);
+	const agentSessions = new AgentSessionRecords(db);
 	const attachmentStorage =
 		overrides.attachmentStorage ??
-		new S3AttachmentStorage(
+		new AttachmentStorage(
 			config.s3 ?? {
 				endpoint: 'http://localhost:9000',
 				region: 'us-east-1',
@@ -251,14 +253,15 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 				forcePathStyle: true
 			}
 		);
-	const templateRepository = new PostgresTemplateRepository(db);
-	const artifactRepository = new PostgresArtifactRepository(db);
-	const templates = new TemplateManagementService(
+	const templateRepository = new TemplateRecords(db);
+	const artifactRepository = new ArtifactRecords(db);
+	const templates = new DocumentTemplates(
 		attachmentStorage,
 		templateRepository,
-		transactionRunner
+		transactionRunner,
+		extractTemplateStyles
 	);
-	const artifacts = new ArtifactManagementService(
+	const artifacts = new ArtifactLibrary(
 		artifactRepository,
 		attachmentStorage,
 		generateDocx,
@@ -267,56 +270,62 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		notes,
 		templateRepository,
 		transactionRunner,
-		new PostgresExportSettingsRepository(db)
+		new ExportSettingsRecords(db)
 	);
 	const modelCatalog =
 		overrides.modelCatalog ??
-		new OpenRouterModelCatalog(
+		new AgentModels(
 			new OpenRouter({
 				apiKey: openRouterApiKey,
 				httpReferer: appURL,
 				xTitle: 'FollowThrough'
 			}),
-			new Set((config.recommendedModels ?? []).map(normalizeOpenRouterModelId))
+			new Set((config.recommendedModels ?? []).map(normalizeLanguageModelId))
 		);
 	const embeddingClient =
 		overrides.embeddingClient ??
-		new OpenAIEmbeddingClient(openRouterApiKey, {
+		new Embeddings(openRouterApiKey, {
 			baseURL: openRouterBaseURL,
-			appURL
+			appURL,
+			observer: operationObserver
 		});
 	const reranker =
 		overrides.reranker ??
-		new OpenRouterReranker(openRouterApiKey, {
+		new SearchRanking(openRouterApiKey, {
 			baseURL: openRouterBaseURL,
-			appURL
+			appURL,
+			observer: operationObserver
 		});
 	const condenser =
 		overrides.condenser ??
-		new ConversationCondenser(openRouterApiKey, {
+		new ConversationSummary(openRouterApiKey, {
 			baseURL: openRouterBaseURL,
-			appURL
+			appURL,
+			observer: operationObserver
 		});
 	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
-	const attachmentRepository = new PostgresAttachmentRepository(db);
+	const attachmentRepository = new AttachmentRecords(db);
 	const retrievalChunker = retrievalChunkerFromEnv();
 	const ocrEngine =
 		overrides.ocrEngine ??
-		new OpenRouterOcrClient(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
+		new TextRecognition(openRouterApiKey, {
+			baseURL: openRouterBaseURL,
+			appURL,
+			observer: operationObserver
+		});
 	const imageDescriber =
 		overrides.imageDescriber ??
-		new OpenRouterImageDescriber(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
-	const pdfSplitter = overrides.pdfSplitter ?? new PdfLibSplitter();
+		new ImageDescription(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
+	const pdfSplitter = overrides.pdfSplitter ?? new PdfContent();
 	const documentOcr =
-		overrides.documentOcr ?? new DocumentOcrService(ocrEngine, imageDescriber, pdfSplitter);
-	const attachments = new AttachmentManagementService(
+		overrides.documentOcr ?? new AttachmentContent(ocrEngine, imageDescriber, pdfSplitter);
+	const attachments = new AttachmentLibrary(
 		attachmentRepository,
 		noteRepository,
 		attachmentStorage,
 		new AttachmentParserRegistry(),
 		searchRepository,
-		embeddingClient,
-		retrievalChunker,
+		new EmbeddedAttachmentIndexer(searchRepository, embeddingClient, retrievalChunker),
 		documentOcr,
 		imageDescriber,
 		pdfSplitter
@@ -342,77 +351,80 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const linkFinder = new ProjectScopedLinkFinder(
 		notes,
 		knowledgeSearcher,
-		new OpenAIRelationshipClassifier()
+		new RelationshipDiscovery({ observer: operationObserver })
 	);
-	const relationships = new RelationshipManagementService(
-		new PostgresRelationshipRepository(db),
+	const relationships = new RelationshipGraph(
+		new RelationshipRecords(db),
 		noteRepository,
 		anchorRepository,
 		provenanceRepository
 	);
-	const references = new ReferenceManagementService(
-		new PostgresReferenceRepository(db),
+	const references = new ReferenceLibrary(
+		new ReferenceRecords(db),
 		noteRepository,
 		anchorRepository,
 		provenanceRepository
 	);
 	const referenceFinder =
 		overrides.referenceFinder ??
-		new WebSearchReferenceFinder({
+		new ReferenceDiscovery({
 			apiKey: openRouterApiKey,
 			baseURL: openRouterBaseURL,
 			appURL,
-			defaultModel: normalizeOpenRouterModelId(defaultAgentModel)
+			defaultModel: normalizeLanguageModelId(defaultAgentModel),
+			observer: operationObserver
 		});
-	const suggestions = new SuggestionManagementService(
-		new PostgresSuggestionRepository(db),
+	const suggestions = new SuggestionInbox(
+		new SuggestionRecords(db),
 		noteRepository,
 		provenanceRepository,
 		anchorRepository
 	);
 	const suggestionLister = new ExpiringSuggestionLister(suggestions, suggestions);
-	const trust = new TrustPolicyManagementService(new PostgresTrustPolicyRepository(db));
-	const diagrams = new DiagramManagementService(
-		new PostgresDiagramRepository(db),
+	const trust = new ToolTrust(new TrustPolicyRecords(db));
+	const diagrams = new DiagramLibrary(
+		new DiagramRecords(db),
 		noteRepository,
 		anchorRepository,
 		provenanceRepository
 	);
-	const diagramTransforms = new DiagramTransformationService();
-	const skillRepository = new PostgresSkillRepository(db);
-	const skills = new SkillManagementService(skillRepository, noteRepository, provenanceRepository);
-	const builtInSkills = new DefaultBuiltInSkillProvisioner(
-		projectRepository,
+	const diagramTransforms = new DiagramContent();
+	const skillRepository = new SkillRecords(db);
+	const skills = new SkillLibrary(
+		skillRepository,
 		noteRepository,
-		skillRepository
+		provenanceRepository,
+		new SkillManifestCodec()
 	);
-	const provisionedSkills = new ProvisioningSkillFinder(builtInSkills, skills);
+	const builtInSkills = new BuiltInSkills(projectRepository, noteRepository, skillRepository, {
+		active: BUILT_INS,
+		retired: RETIRED_BUILT_INS
+	});
+	const provisionedSkills = new BuiltInSkillLibrary(builtInSkills, skills);
 	const memoryIndexer = new EmbeddedMemoryIndexer(
 		searchRepository,
 		embeddingClient,
 		retrievalChunker,
 		deferEmbedding
 	);
-	const memory = new MemoryManagementService(
-		new PostgresMemoryEntryRepository(db),
+	const memory = new MemoryLibrary(
+		new MemoryRecords(db),
 		projectRepository,
 		provenanceRepository,
 		memoryIndexer
 	);
-	const fallbackAgent = new BasicAgent(suggestions, provenance, notes);
-	const agentContext = new EnrichedAgentContextBuilder(
+	const fallbackAgent = new BaseAgentContext(notes);
+	const agentContext = new AgentContext(
 		fallbackAgent,
 		provisionedSkills,
 		notes,
-		skills,
 		conversationJournal,
 		projects,
 		memory
 	);
-	// eslint-disable-next-line prefer-const -- assigned after the cyclic agent/controller wiring is assembled.
-	let controllerFactory: ProductionControllerFactory | undefined;
-	const eventBus = new InProcessAgentEventBus();
-	const diagramAgent = new OpenAIDiagramAgent({
+	const controllerFactory = new LateValue<ProductionControllerFactory>();
+	const eventBus = new AgentEvents();
+	const diagramAgent = new DiagramAuthoring({
 		contextBuilder: agentContext,
 		conversations: conversationJournal,
 		preferences,
@@ -420,20 +432,29 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		sessions: agentSessions,
 		provenance,
 		builtInSkills,
-		defaultModel: defaultAgentModel
+		defaultModel: defaultAgentModel,
+		resolveModel: resolveAgentModel,
+		createSession: (repository, actor, conversationId) =>
+			new ConversationSession(repository, actor, conversationId),
+		createToolEventMapper: () => new AgentToolEventMapper(),
+		observeWorkflow: traceWorkflow,
+		drawioValidator: new DrawioXmlValidator()
 	});
-	const agent = new OpenAIAgentRunner(
-		() => {
-			if (!controllerFactory) throw new Error('Controller factory is not initialized');
-			return controllerFactory;
-		},
+	const agent = new AgentReasoning(
+		agentToolRegistry(() => controllerFactory.get(), toolRetriever),
 		agentSessions,
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
-		toolRetriever
+		withWebResearch(
+			undefined,
+			openRouterWebSearchTool(webSearchOptionsFromEnvironment(process.env))
+		),
+		(repository, actor, conversationId) =>
+			new ConversationBuffer(repository, actor, conversationId),
+		traceAgentTurn
 	);
-	const artifactApplier = new PersistentSuggestionArtifactApplier(
+	const artifactApplier = new SuggestionApplication(
 		todos,
 		relationships,
 		references,
@@ -442,7 +463,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		relationships,
 		references,
 		diagrams,
-		memory
+		memory,
+		new DrawioXmlValidator(),
+		new DrawioLabelExtractor()
+	);
+	const drawioReview = new DrawioReview(
+		diagrams,
+		new DrawioXmlValidator(),
+		new DrawioSvgSanitizer(),
+		new DrawioDiagramTextExtractor(),
+		diagramIndexer
 	);
 
 	const dependencies: ProductionControllerDependencies = {
@@ -454,7 +484,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoDeleter: todos,
 			todoStatusChanger: todos,
 			anchorCreator: notes,
-			promiseExtractor: new OpenAIPromiseExtractor(),
+			promiseExtractor: new PromiseDiscovery({
+				fallback: new DeterministicPromiseExtractor(),
+				observer: operationObserver
+			}),
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			trustPolicyEvaluator: trust,
@@ -503,6 +536,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
 			artifactApplier,
+			drawioReviewSaver: drawioReview,
 			transactionRunner,
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions
@@ -517,7 +551,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			sessions: agentSessions,
 			transactionRunner,
 			defaultModel: defaultAgentModel,
-			executor: undefined as unknown as AgentRunExecutor // set below after cyclic wiring
+			executor: undefined as unknown as AgentRunLifecycle // set below after cyclic wiring
 		},
 		agentSettings: { preferences, models: modelCatalog },
 		apiTokens: { tokens: apiTokenService },
@@ -613,22 +647,25 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		inlineSuggestions: {
 			noteReader: notes,
 			preferences,
-			inlineCompletionGenerator: new FlashInlineCompletionGenerator(openRouterApiKey, {
+			inlineCompletionGenerator: new InlineSuggestionCompletion(openRouterApiKey, {
 				baseURL: openRouterBaseURL,
-				appURL
+				appURL,
+				observer: operationObserver
 			}),
-			inlineCompletionContextBuilder: new RetrievalInlineCompletionContextBuilder({
+			inlineCompletionContextBuilder: new InlineSuggestionContext({
 				searcher: embeddedKnowledgeSearcher,
 				memory,
-				reranker
+				reranker,
+				observer: operationObserver
 			}),
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
-			inlineSuggestionThrottle: new MemoryInlineSuggestionThrottle()
-		}
+			inlineSuggestionThrottle: new InlineSuggestionAdmission()
+		},
+		feedback: { reports: new FeedbackRecords(db) }
 	};
-	controllerFactory = new ProductionControllerFactory(dependencies);
-	const executor = new AgentRunExecutor({
+	controllerFactory.set(new ProductionControllerFactory(dependencies));
+	const executor = new AgentRunLifecycle({
 		runs: runRepository,
 		events: runEvents,
 		decisions: runDecisions,
@@ -640,20 +677,32 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		runner: agent,
 		eventBus
 	});
-	(dependencies.agent as { executor: AgentRunExecutor }).executor = executor;
+	(dependencies.agent as { executor: AgentRunLifecycle }).executor = executor;
 	return {
-		controllers: controllerFactory,
+		controllers: controllerFactory.get(),
 		recoverInterruptedRuns: async () =>
 			(await runRepository.recoverInterrupted('Process restarted')) +
 			(await attachmentRepository.failInterrupted()),
 		backgroundTasks: [
-			new EmbeddingBackfillTask(searchRepository, embeddingClient, transactionRunner, {
-				...optional('intervalMs', numberFromEnv('EMBEDDING_SWEEP_INTERVAL_MS')),
-				...optional('maxSourcesPerTick', numberFromEnv('EMBEDDING_SWEEP_MAX_SOURCES'))
+			new KnowledgeIndexMaintenance(searchRepository, embeddingClient, transactionRunner, {
+				...optionalProperty(
+					'intervalMs',
+					positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')
+				),
+				...optionalProperty(
+					'maxSourcesPerTick',
+					positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
+				)
 			}),
-			new ExpiredUploadSweepTask(attachmentRepository, attachmentStorage, {
-				...optional('intervalMs', numberFromEnv('UPLOAD_SWEEP_INTERVAL_MS')),
-				...optional('maxPerTick', numberFromEnv('UPLOAD_SWEEP_MAX_PER_TICK'))
+			new UploadRetention(attachmentRepository, attachmentStorage, {
+				...optionalProperty(
+					'intervalMs',
+					positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')
+				),
+				...optionalProperty(
+					'maxPerTick',
+					positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK')
+				)
 			})
 		],
 		eventBus,

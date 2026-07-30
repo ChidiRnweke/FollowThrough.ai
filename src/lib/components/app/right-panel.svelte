@@ -178,7 +178,7 @@
 			</Sheet.Header>
 			<div
 				class="min-h-0 flex-1 p-4 {renderedMode === 'chat'
-					? 'overflow-hidden pb-[max(1rem,env(safe-area-inset-bottom))]'
+					? 'safe-panel-bottom overflow-hidden'
 					: 'overflow-y-auto'}"
 			>
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">

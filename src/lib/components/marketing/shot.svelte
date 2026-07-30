@@ -23,11 +23,11 @@
 				<img {src} {alt} class="w-full" loading="lazy" decoding="async" />
 			</Dialog.Trigger>
 			<Dialog.Content
-				class="max-h-[95vh] w-full max-w-[calc(100vw-1rem)] gap-0 overflow-auto border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-[90rem]"
+				class="max-h-dvh w-full max-w-full gap-0 overflow-auto border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-7xl"
 			>
 				<Dialog.Title class="sr-only">{label}</Dialog.Title>
 				<Dialog.Description class="sr-only">{alt}</Dialog.Description>
-				<img {src} {alt} class="max-h-[92vh] w-full object-contain" />
+				<img {src} {alt} class="max-h-dvh w-full object-contain" />
 			</Dialog.Content>
 		</Dialog.Root>
 	{/if}

@@ -10,7 +10,7 @@ import type {
 	ProjectTreeNode,
 	RenameProjectInput
 } from '$lib/models';
-import { ConflictError, NotFoundError, ValidationError } from '$lib/models';
+import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	FolderCreator,
 	ProjectCreator,
@@ -19,7 +19,7 @@ import type {
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
-} from '$lib/services';
+} from '$lib/server/services';
 import {
 	noteBuilder,
 	projectBuilder,

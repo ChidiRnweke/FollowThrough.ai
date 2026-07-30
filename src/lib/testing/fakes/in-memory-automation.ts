@@ -10,7 +10,7 @@ import {
 	ExternalServiceError,
 	InvalidTransitionError,
 	NotFoundError
-} from '$lib/models';
+} from '$lib/errors';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator,
@@ -20,7 +20,7 @@ import type {
 	SuggestionRejecter,
 	SuggestionReverter,
 	SuggestionViewAssembler
-} from '$lib/services';
+} from '$lib/server/services';
 import type { SnapshotParticipant } from './in-memory-transaction';
 import { testNow, testSuggestionId } from '../fixtures/domain-builders';
 

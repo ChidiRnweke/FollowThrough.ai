@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models';
 	import { defaultExportSettings } from '$lib/models';
 	import mermaid from 'mermaid';
@@ -239,7 +240,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-4" onsubmit={submit}>
 			<Input bind:value={title} placeholder="Document title" aria-label="Title" disabled={busy} />
 
 			<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
@@ -324,12 +325,12 @@
 					</Button>
 				{/if}
 			</Dialog.Footer>
-		</form>
+		</Form>
 	</Dialog.Content>
 </Dialog.Root>
 
 <Dialog.Root bind:open={previewOpen}>
-	<Dialog.Content class="flex h-[85vh] flex-col sm:max-w-4xl">
+	<Dialog.Content class="flex h-5/6 flex-col sm:max-w-4xl">
 		<Dialog.Header>
 			<Dialog.Title>PDF Preview</Dialog.Title>
 			<Dialog.Description>How the export will look with the current settings.</Dialog.Description>

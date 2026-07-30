@@ -96,7 +96,8 @@
 				{/snippet}
 			</Tip>
 		</div>
-		<button
+		<Button
+			variant="outline"
 			type="button"
 			class="tactile flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground group-data-[collapsible=icon]:hidden"
 			aria-label="Search notes, todos and commands"
@@ -105,7 +106,7 @@
 			<Search class="size-4 shrink-0" />
 			<span class="truncate">Search…</span>
 			<Kbd class="ml-auto">⌘K</Kbd>
-		</button>
+		</Button>
 		<Button
 			variant="ghost"
 			size="icon-sm"

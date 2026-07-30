@@ -1,12 +1,13 @@
 <script lang="ts">
 	import * as InputGroup from '$lib/components/ui/input-group';
+	import { Form } from '$lib/components/ui/form';
 	import { captureNote } from '$lib/remote/notes.remote';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
 	let { target = 'Inbox' }: { target?: string } = $props();
 </script>
 
-<form {...captureNote}>
+<Form {...captureNote}>
 	<InputGroup.Root>
 		<InputGroup.Addon align="inline-start">
 			<InputGroup.Text class="text-muted-foreground">{target}</InputGroup.Text>
@@ -24,4 +25,4 @@
 			</InputGroup.Button>
 		</InputGroup.Addon>
 	</InputGroup.Root>
-</form>
+</Form>

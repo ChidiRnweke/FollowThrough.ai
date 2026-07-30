@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		...(responsibility !== null ? { responsibility } : {}),
 		...(projectId !== null ? { projectId } : {})
 	};
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const output = await factory.todos().list(AppFactory.actor(locals), filter);
 	return { todos: output.todos, view: url.searchParams.get('view') ?? 'board' };
 };

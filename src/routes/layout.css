@@ -364,6 +364,65 @@
 	&[data-open='true'] {
 		grid-template-rows: 1fr;
 	}
+	&[data-transitions-ready='false'] {
+		transition: none;
+	}
+}
+
+@utility safe-panel-bottom {
+	padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.reveal {
+	transition:
+		opacity 600ms var(--ease-standard) var(--reveal-delay),
+		transform 600ms var(--ease-standard) var(--reveal-delay);
+}
+
+.reveal[data-armed='true'][data-shown='false'] {
+	opacity: 0;
+	transform: translateY(0.5rem);
+}
+
+.morph {
+	display: grid;
+	overflow: hidden;
+	transition: height 500ms var(--ease-standard);
+}
+
+.morph > * {
+	grid-area: 1 / 1;
+}
+
+.entered mark,
+.entered .mark-chip {
+	animation: mark-in 700ms var(--ease-standard) 450ms backwards;
+}
+
+@keyframes mark-in {
+	from {
+		background-color: transparent;
+		text-decoration-color: transparent;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		transition: opacity 200ms linear;
+	}
+
+	.reveal[data-armed='true'][data-shown='false'] {
+		transform: none;
+	}
+
+	.morph {
+		transition: none;
+	}
+
+	.entered mark,
+	.entered .mark-chip {
+		animation: none;
+	}
 }
 
 /* Uniform interactive-row states for list rows outside the sidebar primitives. */

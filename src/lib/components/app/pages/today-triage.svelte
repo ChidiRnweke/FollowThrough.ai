@@ -4,7 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { FtPin as Pin, FtDocument as FileText } from '$lib/components/icons';
 	import EmptyState from '../empty-state.svelte';
-	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
+	import { openTodoSurface } from '$lib/client/responsive-surfaces';
 	import { page } from '$app/state';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from '../todo-card.svelte';

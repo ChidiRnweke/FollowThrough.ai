@@ -58,7 +58,7 @@ export interface SeededWorkspace {
  */
 export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promise<SeededWorkspace> {
 	const actor: ActorContext = { userId: randomUUID() as UserId };
-	// Materializes the user row via UserManagementService.ensureLocal.
+	// Materializes the user row via UserDirectory.ensureLocal.
 	await lab.controllers.workspace().getShellContext(actor);
 
 	const projectIds = new Map<string, ProjectId>();

@@ -1,4 +1,4 @@
-import type { TransactionRunner } from '$lib/repositories';
+import type { TransactionRunner } from '$lib/server/repositories';
 
 export interface SnapshotParticipant {
 	snapshot(): unknown;

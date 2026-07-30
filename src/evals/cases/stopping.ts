@@ -4,7 +4,6 @@ import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { retrievalCorpusWorkspace } from '../fixtures/workspaces/engineering';
-import { scoreToolCalling } from '../assertions/tool-calls';
 import { scoreStoppingBehavior } from '../assertions/stopping';
 import { ARCHETYPES, type EvalCase } from './types';
 

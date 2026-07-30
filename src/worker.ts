@@ -7,8 +7,8 @@
  * container on the same image; see `docker-compose.prod.yml`.
  */
 import { createProductionFactory } from '$lib/server/production-factory';
-import { hydrateEnvironment } from '$lib/server/secrets';
-import { startScheduler } from '$lib/server/workers/scheduler';
+import { hydrateEnvironment } from '$lib/server/config';
+import { startScheduler } from '$lib/server/services/scheduler';
 
 const shutdownTimeoutMs = Number(process.env.WORKER_SHUTDOWN_TIMEOUT_MS ?? 30_000);
 const telemetryFlushMs = Number(process.env.WORKER_TELEMETRY_FLUSH_MS ?? 2_000);

@@ -3,7 +3,7 @@ import { todayLocalDate } from '$lib/components/app/labels';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const view = await factory.workspace().getTodayView(AppFactory.actor(locals), {
 		today: todayLocalDate()
 	});

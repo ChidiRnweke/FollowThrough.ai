@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
 	import { Button } from '$lib/components/ui/button';
 
 	let { data } = $props();
@@ -11,8 +12,8 @@
 			Hi {data.user.displayName}, your account has been created but is awaiting administrator
 			approval. You'll be able to access the app once your account is approved.
 		</p>
-		<form method="POST" action="/auth/logout">
+		<Form method="POST" action="/auth/logout">
 			<Button type="submit">Sign Out</Button>
-		</form>
+		</Form>
 	</div>
 </div>

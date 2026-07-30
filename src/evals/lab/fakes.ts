@@ -1,6 +1,9 @@
 import type { AgentModel } from '$lib/models';
-import type { AgentModelCatalog } from '$lib/services';
-import type { AttachmentStorage, StoredObjectInfo } from '$lib/server/domain/attachment-storage';
+import type { AgentModelCatalog } from '$lib/server/services';
+import type {
+	IAttachmentStorage,
+	StoredObjectInfo
+} from '$lib/server/services/attachments/storage';
 
 /**
  * The real catalog lists every OpenRouter model over the network on submit.
@@ -15,7 +18,7 @@ export class StubModelCatalog implements AgentModelCatalog {
 }
 
 /** Keeps attachment bytes in the process so the lab needs no S3/MinIO. */
-export class InMemoryAttachmentStorage implements AttachmentStorage {
+export class InMemoryAttachmentStorage implements IAttachmentStorage {
 	private readonly objects = new Map<string, { data: Uint8Array; mediaType: string }>();
 
 	async createUploadUrl(input: { objectKey: string }): Promise<string> {

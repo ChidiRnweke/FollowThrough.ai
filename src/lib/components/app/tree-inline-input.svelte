@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
 	import { untrack, type Component } from 'svelte';
 
 	let {
@@ -41,11 +42,6 @@
 	function onblur(): void {
 		if (!submitted && !busy) oncancel();
 	}
-
-	function autofocus(node: HTMLInputElement): void {
-		node.focus();
-		node.select();
-	}
 </script>
 
 <div
@@ -54,13 +50,14 @@
 	{#if Icon}
 		<Icon class="size-4 shrink-0 text-muted-foreground" />
 	{/if}
-	<input
+	<Input
 		class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
 		{placeholder}
 		aria-label={placeholder}
 		disabled={busy}
 		bind:value
-		use:autofocus
+		autofocus
+		onfocus={(event) => event.currentTarget.select()}
 		{onkeydown}
 		{onblur}
 	/>

@@ -1,4 +1,6 @@
+<!-- chisel-ignore-file structural:inline-style-banned -- Slider markers are positioned from caller-provided runtime ranges. -->
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
 	let {
 		label,
 		value,
@@ -39,7 +41,7 @@
 		</span>
 	</div>
 	<div class="relative pt-1">
-		<input
+		<Input
 			type="range"
 			{min}
 			{max}
@@ -51,13 +53,15 @@
 			oninput={(event) => onchange(Number(event.currentTarget.value))}
 		/>
 		<!-- Default marker sits above the axis labels. -->
+		<!-- chisel-ignore structural:inline-style-banned -- Slider marker position is computed from its runtime range. -->
 		<div
 			class="pointer-events-none absolute top-0 h-1.5 w-px bg-foreground/50"
 			style="left: {position(defaultValue)}%"
 		></div>
 	</div>
-	<div class="relative h-4 text-[10px] leading-4 text-muted-foreground">
+	<div class="relative h-4 text-xs leading-4 text-muted-foreground">
 		{#each anchors as anchor (anchor.value)}
+			<!-- chisel-ignore structural:inline-style-banned -- Slider label position is computed from its runtime range. -->
 			<span
 				class="absolute -translate-x-1/2 whitespace-nowrap {anchor.value === defaultValue
 					? 'font-medium text-foreground/80'

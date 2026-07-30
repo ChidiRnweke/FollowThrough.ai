@@ -675,7 +675,8 @@
 				aria-label="Mention a note or skill"
 			>
 				{#each mentionCandidates as candidate, index (candidate.kind + candidate.id)}
-					<button
+					<Button
+						variant="ghost"
 						type="button"
 						role="option"
 						aria-selected={index === highlighted}
@@ -695,7 +696,7 @@
 						<span class="ml-auto text-xs text-muted-foreground">
 							{candidate.kind === 'skill' ? 'Skill' : 'Note'}
 						</span>
-					</button>
+					</Button>
 				{/each}
 			</div>
 		{/if}

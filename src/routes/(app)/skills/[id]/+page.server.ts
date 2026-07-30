@@ -1,10 +1,9 @@
-import type { NoteId } from '$lib/models';
-import { noteEtag } from '$lib/models/note-sync';
+import { noteEtag, type NoteId } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const noteId = params.id as NoteId;
 	const [view, raw] = await Promise.all([
 		factory.skills().get(AppFactory.actor(locals), { noteId }),

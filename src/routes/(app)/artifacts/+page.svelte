@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
+	import { Label } from '$lib/components/ui/label';
 	import type { ArtifactId, ArtifactView } from '$lib/models';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import {
@@ -139,14 +141,14 @@
 		<!-- Nothing to search until there is something to find: the bar only appears
 		     with artifacts on the page or a query already narrowing them. -->
 		{#if artifacts.length > 0 || data.query}
-			<form
+			<Form
 				class="mb-4 max-w-xl"
 				onsubmit={(event) => {
 					event.preventDefault();
 					void submitSearch();
 				}}
 			>
-				<label class="sr-only" for="artifact-search">Search artifacts</label>
+				<Label class="sr-only" for="artifact-search">Search artifacts</Label>
 				<InputGroup.Root>
 					<InputGroup.Input
 						id="artifact-search"
@@ -162,7 +164,7 @@
 						<InputGroup.Button type="submit" variant="default"><Search /> Search</InputGroup.Button>
 					</InputGroup.Addon>
 				</InputGroup.Root>
-			</form>
+			</Form>
 		{/if}
 		{#if artifacts.length === 0 && data.query}
 			<EmptyState icon={Search} title="No artifacts match “{data.query}”." size="large">

@@ -855,7 +855,7 @@ export const searchChunks = pgTable(
 		// Set when a newer revision of the source has been staged but not yet embedded.
 		// Superseded rows stay searchable by embedding (stale content beats no content)
 		// and are dropped once their replacements carry vectors. See the worker at
-		// `$lib/server/workers/embedding-backfill`.
+		// `$lib/server/services/retrieval/index-maintenance`.
 		supersededAt: timestamp('superseded_at', { withTimezone: true }),
 		...timestamps
 	},

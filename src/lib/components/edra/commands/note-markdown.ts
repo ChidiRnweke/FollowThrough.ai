@@ -1,7 +1,8 @@
 import { generateText } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
 import type { ProseMirrorDocument } from '$lib/models';
-import { findProseMirrorDocumentIssue, ValidationError } from '$lib/models';
+import { findProseMirrorDocumentIssue } from '$lib/models';
+import { ValidationError } from '$lib/errors';
 import { noteMarkdownExtensions } from './markdown-extensions.js';
 
 /**

@@ -14,8 +14,8 @@ import type {
 	IndexSource,
 	PendingIndexSource,
 	RetrievalIndexRepository
-} from '$lib/repositories';
-import type { EmbeddingBatch, EmbeddingClient } from '$lib/services';
+} from '$lib/server/repositories';
+import type { EmbeddingBatch, EmbeddingClient } from '$lib/server/services';
 
 interface OwnedSearchDocument {
 	userId: UserId;
@@ -243,7 +243,8 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 				document: { ...item.document, supersededAt: SUPERSEDED_AT }
 			})),
 			...documents.map((document) => {
-				const { supersededAt: _dropped, ...live } = document;
+				const { supersededAt, ...live } = document;
+				void supersededAt;
 				return { userId: actor.userId, document: live };
 			})
 		];

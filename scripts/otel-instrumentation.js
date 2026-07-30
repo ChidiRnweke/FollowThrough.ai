@@ -8,7 +8,7 @@
  * to the same collector and on to Loki.
  *
  * OTEL_EXPORTER_OTLP_ENDPOINT is a *platform* key: `isPlatformKey` in
- * src/lib/server/secrets.ts excludes the OTEL_ and PHOENIX_ prefixes from
+ * src/lib/server/config.ts excludes the OTEL_ and PHOENIX_ prefixes from
  * hydration, so a value set in the secrets backend is never read. It comes from
  * docker-compose.prod.yml in prod and from .env (via mergePlatformEnvironment in
  * vite.config.ts) in dev.

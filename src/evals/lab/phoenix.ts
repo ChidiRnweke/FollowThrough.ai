@@ -1,9 +1,6 @@
 import { config as loadDotenv } from 'dotenv';
 import type { AcceptanceCriterion, SuiteConfig } from '@arizeai/phoenix-client/vitest';
-import {
-	DEFAULT_GENERATION_MODEL,
-	DEFAULT_OPENROUTER_BASE_URL
-} from '$lib/server/domain/openrouter-client';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 
 loadDotenv({ quiet: true });
 
@@ -39,7 +36,7 @@ export const evalModel = (): string =>
 export const judgeModel = (): string => process.env.EVAL_JUDGE_MODEL ?? 'deepseek/deepseek-v4-pro';
 
 export const openRouterBaseUrl = (): string =>
-	process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL;
+	process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 
 /** Phoenix tracking is skipped unless an endpoint is actually configured. */
 export const phoenixConfigured = (): boolean => Boolean(process.env.PHOENIX_HOST);

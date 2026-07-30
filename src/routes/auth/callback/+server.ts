@@ -1,10 +1,6 @@
 import { redirect, error, type RequestHandler } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import {
-	getPKCECookie,
-	deletePKCECookie,
-	setSessionCookie
-} from '$lib/services/auth/authenthikAuthService';
+import { deletePkceCookie, getPkceCookie, setSessionCookie } from '$lib/utils';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
@@ -22,7 +18,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Retrieve PKCE data from cookie
-	const pkceData = getPKCECookie(cookies, state);
+	const pkceData = getPkceCookie(cookies, state);
 	if (!pkceData) {
 		throw error(400, 'Invalid or expired session. Please try logging in again.');
 	}
@@ -33,15 +29,15 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Clean up PKCE cookie
-	deletePKCECookie(cookies, state);
+	deletePkceCookie(cookies, state);
 
 	try {
 		// Complete the OAuth flow
-		const oauthService = AppFactory.getOAuthService();
+		const oauthService = AppFactory.signIn();
 		const { session } = await oauthService.completeOAuthFlow(code, pkceData.codeVerifier);
 
 		// Set session cookie
-		setSessionCookie(cookies, session.id);
+		setSessionCookie(cookies, session.id, process.env.NODE_ENV === 'production');
 	} catch (err) {
 		console.error('OAuth callback error:', err);
 		throw error(500, 'Failed to complete authentication. Please try again.');

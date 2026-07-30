@@ -1,9 +1,12 @@
+// chisel-ignore-file route-style:prefer-remote-function -- Multipart archive uploads require File handling and request-size checks before decoding.
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
-import { ValidationError, type NoteId, type ProjectId } from '$lib/models';
+import type { NoteId, ProjectId } from '$lib/models';
+import { ValidationError } from '$lib/errors';
 import { AppFactory } from '$lib/server/app-factory';
-import { DEFAULT_ARCHIVE_LIMITS } from '$lib/server/domain/markdown-archive';
 import type { RequestHandler } from './$types';
+
+const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 
 /**
  * Bulk note import.
@@ -23,10 +26,10 @@ const fieldsSchema = z.object({ projectId: id, parentId: id.optional() });
 export const POST: RequestHandler = async ({ request, locals }) => {
 	// Checked before buffering: the point of a limit is not to read the body first.
 	const declaredLength = Number(request.headers.get('content-length'));
-	if (Number.isFinite(declaredLength) && declaredLength > DEFAULT_ARCHIVE_LIMITS.maxTotalBytes)
+	if (Number.isFinite(declaredLength) && declaredLength > MAX_ARCHIVE_BYTES)
 		return json(
 			{
-				message: `That archive is larger than the ${Math.round(DEFAULT_ARCHIVE_LIMITS.maxTotalBytes / 1024 / 1024)} MB limit.`
+				message: `That archive is larger than the ${Math.round(MAX_ARCHIVE_BYTES / 1024 / 1024)} MB limit.`
 			},
 			{ status: 413 }
 		);
@@ -43,7 +46,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ message: 'Choose a project to import into.' }, { status: 400 });
 
 	try {
-		const report = await AppFactory.controllerFactory()
+		const report = await AppFactory.controllers()
 			.imports()
 			.importMarkdownArchive(AppFactory.actor(locals), {
 				projectId: fields.data.projectId as ProjectId,

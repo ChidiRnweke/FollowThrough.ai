@@ -1,4 +1,8 @@
-import type { NoteId, ProseMirrorDocument } from './shared';
+type NoteId = string & { readonly __brand: 'NoteId' };
+interface ProseMirrorDocument {
+	readonly type: 'doc';
+	readonly content?: readonly Readonly<Record<string, unknown>>[];
+}
 
 /**
  * Links from one note to another, as they exist in a document.

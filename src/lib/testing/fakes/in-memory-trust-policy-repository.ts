@@ -1,5 +1,5 @@
 import type { ActorContext, PipelineKind, TrustPolicy } from '$lib/models';
-import type { TrustPolicyRepository } from '$lib/repositories/trust-policies';
+import type { TrustPolicyRepository } from '$lib/server/repositories/trust-policies';
 
 export class InMemoryTrustPolicyRepository implements TrustPolicyRepository {
 	policies: TrustPolicy[] = [];

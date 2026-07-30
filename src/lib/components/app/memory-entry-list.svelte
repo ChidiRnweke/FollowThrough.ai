@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Form } from '$lib/components/ui/form';
 	import { invalidateAll } from '$app/navigation';
 	import type {
 		MemoryEntry,
@@ -399,7 +400,7 @@
 				<Dialog.Description>{scopeLabel}</Dialog.Description>
 			{/if}
 		</Dialog.Header>
-		<form class="flex flex-col gap-4" onsubmit={submitAdd}>
+		<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
 			<Textarea bind:value={draft} {placeholder} rows={3} aria-label="New memory entry" autofocus />
 			<div class="flex items-center justify-between gap-2">
 				<Select.Root
@@ -424,6 +425,6 @@
 					<Button type="submit" disabled={!draft.trim()}>Add memory</Button>
 				</div>
 			</div>
-		</form>
+		</Form>
 	</Dialog.Content>
 </Dialog.Root>

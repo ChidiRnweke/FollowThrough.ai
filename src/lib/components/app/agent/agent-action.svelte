@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
-	import { askAgent } from '$lib/navigation/responsive-surfaces';
+	import { askAgent } from '$lib/client/responsive-surfaces';
 	import type { AgentActionSpec } from './agent-actions';
 
 	let {
@@ -75,7 +75,8 @@
 			same contract `Button` carries — so this variant and `inline` below feel
 			identical under the hand without either restating it.
 		-->
-		<button
+		<Button
+			variant="ghost"
 			type="button"
 			class={[
 				'row-interactive flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm',
@@ -94,7 +95,7 @@
 			<ArrowRight
 				class="size-3.5 shrink-0 text-muted-foreground opacity-60 transition-[color,opacity] duration-(--duration-micro) group-hover:text-brand group-hover:opacity-100 group-focus-within:opacity-100"
 			/>
-		</button>
+		</Button>
 	</div>
 {:else}
 	<Tip text={compact ? action.label : ''}>

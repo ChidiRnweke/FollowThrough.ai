@@ -9,7 +9,7 @@ import type {
 	Skill,
 	TextSelection
 } from '$lib/models';
-import { ExternalServiceError, NotFoundError } from '$lib/models';
+import { ExternalServiceError, NotFoundError } from '$lib/errors';
 import type {
 	DiagramFinder,
 	DiagramIndexer,
@@ -22,7 +22,7 @@ import type {
 	MermaidDiagramRenderer,
 	MermaidDiagramReviser,
 	SkillCreator
-} from '$lib/services';
+} from '$lib/server/services';
 import { noteBuilder, testActor, testNoteId, testNow } from '$lib/testing/fixtures/domain-builders';
 import type { SnapshotParticipant } from './in-memory-transaction';
 

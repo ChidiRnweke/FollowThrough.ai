@@ -1,16 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
-import { OpenAIEmbeddingClient } from '$lib/server/domain/openai-embedding-capabilities';
-import { OpenRouterReranker } from '$lib/server/domain/openrouter-rerank-capabilities';
-import { ConversationCondenser } from '$lib/server/domain/conversation-condenser';
-import {
-	DEFAULT_GENERATION_MODEL,
-	DEFAULT_OPENROUTER_BASE_URL
-} from '$lib/server/domain/openrouter-client';
+import { Embeddings } from '$lib/server/services/retrieval/embeddings';
+import { SearchRanking } from '$lib/server/services/retrieval/ranking';
+import { ConversationSummary } from '$lib/server/services/conversations/summary';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
-import type { EmbeddingClient } from '$lib/services';
+import type { EmbeddingClient } from '$lib/server/services';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 
@@ -53,7 +50,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		process.env.EVAL_MODEL ??
 		process.env.OPENROUTER_DEFAULT_MODEL ??
 		DEFAULT_GENERATION_MODEL;
-	const baseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL;
+	const baseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 	const appURL = 'http://localhost:5173';
 
 	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
@@ -61,7 +58,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const cache = new DiskCache(CACHE_PATH);
 	const clientOptions = { baseURL, appURL };
 	const embeddingClient = new CachedEmbeddingClient(
-		new OpenAIEmbeddingClient(openRouterApiKey, clientOptions),
+		new Embeddings(openRouterApiKey, clientOptions),
 		cache
 	);
 
@@ -74,9 +71,9 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		defaultAgentModel: model,
 		overrides: {
 			embeddingClient,
-			reranker: new CachedReranker(new OpenRouterReranker(openRouterApiKey, clientOptions), cache),
+			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
 			condenser: new CachedCondenser(
-				new ConversationCondenser(openRouterApiKey, clientOptions),
+				new ConversationSummary(openRouterApiKey, clientOptions),
 				cache
 			),
 			attachmentStorage: new InMemoryAttachmentStorage(),

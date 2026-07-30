@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, form, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { ApiTokenId, ProjectId, UpdateTrustPolicyInput } from '$lib/models';
 
 /**
@@ -18,7 +18,7 @@ export const saveAgentPreferences = form(
 		inlineSuggestionsEnabled: booleanText
 	}),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.agentSettings()
 			.updatePreferences(requestActor(), {
 				defaultModel: input.defaultModel.trim() || null,
@@ -41,13 +41,13 @@ export const updateTrustPolicy = command(
 		minimumConfidence: z.number().int().min(0).max(100).optional()
 	}),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.trustPolicies()
 			.update(requestActor(), input as UpdateTrustPolicyInput)
 );
 
 export const listApiTokens = query(async () =>
-	AppFactory.controllerFactory().apiTokens().list(requestActor())
+	AppFactory.controllers().apiTokens().list(requestActor())
 );
 
 /**
@@ -57,14 +57,14 @@ export const listApiTokens = query(async () =>
 export const createApiToken = command(
 	z.object({ name: z.string().min(1).max(80), scope: z.enum(['read', 'full']) }),
 	async (input) => {
-		const minted = await AppFactory.getApiTokenService().mint(requestActor().userId, input);
+		const minted = await AppFactory.accessTokens().mint(requestActor().userId, input);
 		await listApiTokens().refresh();
 		return { token: minted.token, plaintext: minted.plaintext };
 	}
 );
 
 export const revokeApiToken = command(z.string().uuid(), async (id) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.apiTokens()
 		.revoke(requestActor(), id as ApiTokenId);
 	await listApiTokens().refresh();
@@ -79,7 +79,7 @@ export const revokeApiToken = command(z.string().uuid(), async (id) => {
 const toolScope = z.object({ projectId: z.string().uuid().optional() });
 
 export const listToolPreferences = query(toolScope, async (input) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.toolPreferences()
 		.list(requestActor(), input.projectId ? { projectId: input.projectId as ProjectId } : {})
 );
@@ -87,7 +87,7 @@ export const listToolPreferences = query(toolScope, async (input) =>
 export const setToolEnabled = command(
 	toolScope.extend({ toolName: z.string().min(1), enabled: z.boolean() }),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.toolPreferences()
 			.setEnabled(requestActor(), {
 				toolName: input.toolName,
@@ -101,7 +101,7 @@ export const setToolEnabled = command(
 export const resetToolOverride = command(
 	z.object({ toolName: z.string().min(1), projectId: z.string().uuid() }),
 	async (input) => {
-		await AppFactory.controllerFactory()
+		await AppFactory.controllers()
 			.toolPreferences()
 			.clearOverride(requestActor(), {
 				toolName: input.toolName,

@@ -8,8 +8,8 @@ import type {
 	ProjectId,
 	RenameProjectInput
 } from '$lib/models';
-import { ConflictError } from '$lib/models';
-import type { ProjectRepository, ProjectTreeRepository } from '$lib/repositories';
+import { ConflictError } from '$lib/errors';
+import type { ProjectRepository, ProjectTreeRepository } from '$lib/server/repositories';
 import {
 	noteBuilder,
 	projectBuilder,

@@ -14,7 +14,7 @@ const tabFrom = (value: string | null): SettingsTab =>
 	SETTINGS_TABS.includes(value as SettingsTab) ? (value as SettingsTab) : 'agent';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 	const tab = tabFrom(url.searchParams.get('tab'));
 	const output = await factory.trustPolicies().list(actor);

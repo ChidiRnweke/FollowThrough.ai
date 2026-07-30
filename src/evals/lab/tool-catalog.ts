@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ActorContext, ProvenanceId, RunAgentInput } from '$lib/models';
-import { EmbeddedToolRetriever, type ToolDescriptor } from '$lib/services';
-import { AgentToolRegistry } from '$lib/server/domain/agent-tool-registry';
+import { EmbeddedToolRetriever, type ToolDescriptor } from '$lib/server/services';
+import { AgentTools } from '$lib/server/agent-tool-factory';
 import type { Lab } from './application';
 
 /**
@@ -12,9 +12,9 @@ import type { Lab } from './application';
  * so it can be asserted directly. One agent turn costs ~30s; ranking every tool
  * in the catalog costs a cached embedding lookup each.
  */
-export function toolRegistry(lab: Lab, actor: ActorContext): AgentToolRegistry {
+export function toolRegistry(lab: Lab, actor: ActorContext): AgentTools {
 	const input: RunAgentInput = { prompt: '' };
-	return new AgentToolRegistry(
+	return new AgentTools(
 		lab.controllers,
 		actor,
 		'auto_accept',

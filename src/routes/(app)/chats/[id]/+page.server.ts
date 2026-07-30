@@ -1,11 +1,12 @@
 import { error } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import { NotFoundError, type ConversationId } from '$lib/models';
+import type { ConversationId } from '$lib/models';
+import { NotFoundError } from '$lib/errors';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	try {
-		return await AppFactory.controllerFactory()
+		return await AppFactory.controllers()
 			.agent()
 			.getSession(AppFactory.actor(locals), params.id as ConversationId);
 	} catch (cause) {

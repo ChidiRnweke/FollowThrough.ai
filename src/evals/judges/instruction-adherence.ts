@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createOpenRouterClient } from '$lib/server/domain/openrouter-client';
+import { createLanguageModelClient } from '$lib/server/config';
 import { judgeModel, openRouterBaseUrl } from '../lab/phoenix';
 
 /**
@@ -48,7 +48,7 @@ export async function judgeInstructionAdherence(
 	if (!apiKey) throw new Error('OPENROUTER_API_KEY is required to run the adherence judge.');
 
 	const model = judgeModel();
-	const client = createOpenRouterClient(apiKey, { baseURL: openRouterBaseUrl() });
+	const client = createLanguageModelClient(apiKey, { baseURL: openRouterBaseUrl() });
 
 	const completion = await client.chat.completions.create({
 		model,

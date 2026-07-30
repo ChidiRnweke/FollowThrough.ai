@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import { hydrateEnvironment, mergePlatformEnvironment } from './src/lib/server/secrets';
+import { hydrateEnvironment, mergePlatformEnvironment } from './src/lib/server/config';
 
 const managedConfiguration = (): Plugin => ({
 	name: 'followthrough-managed-configuration',

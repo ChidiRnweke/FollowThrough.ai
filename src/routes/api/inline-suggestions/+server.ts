@@ -1,6 +1,8 @@
+// chisel-ignore-file route-style:prefer-remote-function -- Inline completion needs request cancellation and Retry-After response headers unavailable to remote functions.
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
-import { ExternalServiceError, type NoteId } from '$lib/models';
+import type { NoteId } from '$lib/models';
+import { ExternalServiceError } from '$lib/errors';
 import { AppFactory } from '$lib/server/app-factory';
 import type { RequestHandler } from './$types';
 
@@ -27,7 +29,7 @@ const requestSchema = z.object({
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const input = requestSchema.parse(await request.json());
-	const controller = AppFactory.controllerFactory().inlineSuggestions();
+	const controller = AppFactory.controllers().inlineSuggestions();
 	const actor = AppFactory.actor(locals);
 	const inlineRequest = {
 		requestId: input.requestId,

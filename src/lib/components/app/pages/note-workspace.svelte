@@ -24,7 +24,7 @@
 		FtPinOff as PinOff
 	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { askAgent } from '$lib/navigation/responsive-surfaces';
+	import { askAgent } from '$lib/client/responsive-surfaces';
 	import { workbench } from '$lib/stores/workbench.svelte';
 	import AgentAction from '../agent/agent-action.svelte';
 	import { agentActions } from '../agent/agent-actions';
@@ -907,7 +907,7 @@
 		<!-- Match the editor's eventual footprint (full viewport height minus the
 		     72px header row above) so IndexedDB init time doesn't cause
 		     vertical reflow between the short-skeleton and the hydrated editor. -->
-		<div class="flex min-h-[60vh] flex-col gap-3" aria-label="Loading note from device">
+		<div class="flex min-h-96 flex-col gap-3" aria-label="Loading note from device">
 			<Skeleton class="h-5 w-full" />
 			<Skeleton class="h-5 w-11/12" />
 			<Skeleton class="h-5 w-4/5" />

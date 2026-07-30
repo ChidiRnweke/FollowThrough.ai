@@ -1,8 +1,9 @@
+// chisel-ignore-file error-flow:raw-http-status -- MCP bearer authentication and JSON-RPC method negotiation require protocol-level 401 and 405 responses.
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
 import type { ActorContext, ApiTokenScope } from '$lib/models';
 import { AppFactory } from '$lib/server/app-factory';
-import { createMcpToolSurface } from '$lib/server/mcp/tool-surface';
+import { createMcpToolSurface } from '$lib/server/mcp-tool-factory';
 
 const unauthorized = (detail: string): Response =>
 	new Response(JSON.stringify({ error: 'unauthorized', detail }), {
@@ -23,9 +24,7 @@ const authenticate = async (
 ): Promise<{ actor: ActorContext; scope: ApiTokenScope } | Response> => {
 	if (!AppFactory.isAuthEnabled()) return { actor: AppFactory.actor(), scope: 'full' };
 
-	const verified = await AppFactory.getApiTokenService().verify(
-		request.headers.get('authorization')
-	);
+	const verified = await AppFactory.accessTokens().verify(request.headers.get('authorization'));
 	if (!verified) return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
 	return { actor: { userId: verified.user.id }, scope: verified.scope };
 };
@@ -45,7 +44,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.
-	const controllers = AppFactory.controllerFactory();
+	const controllers = AppFactory.controllers();
 	const preferences = await controllers.toolPreferences().list(authenticated.actor);
 	const disabled = new Set(
 		preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)

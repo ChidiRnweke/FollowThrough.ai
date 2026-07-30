@@ -4,7 +4,7 @@ import type {
 	AgentSessionItemId,
 	ConversationId
 } from '$lib/models';
-import type { AgentSessionRepository } from '$lib/repositories';
+import type { AgentSessionRepository } from '$lib/server/repositories';
 import type { SnapshotParticipant } from './in-memory-transaction';
 
 const now = () => new Date().toISOString() as AgentSessionItem['createdAt'];

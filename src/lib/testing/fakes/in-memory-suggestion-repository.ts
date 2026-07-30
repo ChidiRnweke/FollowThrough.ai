@@ -5,7 +5,10 @@ import type {
 	SuggestionId,
 	SuggestionStatus
 } from '$lib/models';
-import type { SuggestionRepository, SuggestionTransition } from '$lib/repositories/suggestions';
+import type {
+	SuggestionRepository,
+	SuggestionTransition
+} from '$lib/server/repositories/suggestions';
 
 export class InMemorySuggestionRepository implements SuggestionRepository {
 	suggestions: Suggestion[] = [];

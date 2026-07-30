@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { ArtifactId, GenerateDocumentInput, ProjectId, TemplateId } from '$lib/models';
 
 export const initiateTemplateUpload = command(
@@ -13,7 +13,7 @@ export const initiateTemplateUpload = command(
 		checksumSha256: z.string()
 	}),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.initiateTemplateUpload(requestActor(), {
 				...input,
@@ -24,19 +24,19 @@ export const initiateTemplateUpload = command(
 export const completeTemplateUpload = command(
 	z.object({ templateId: z.string().uuid() }),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.completeTemplateUpload(requestActor(), input.templateId as TemplateId)
 );
 
 export const listTemplates = query(z.string().uuid(), async (projectId) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.deliverables()
 		.listTemplates(requestActor(), projectId as ProjectId)
 );
 
 export const deleteTemplate = command(z.object({ templateId: z.string().uuid() }), async (input) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.deliverables()
 		.deleteTemplate(requestActor(), input.templateId as TemplateId)
 );
@@ -60,7 +60,7 @@ export const generateDocument = command(
 		diagramSvgs: z.record(z.string(), z.string()).optional()
 	}),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.generateDocument(requestActor(), input as GenerateDocumentInput)
 );
@@ -74,13 +74,13 @@ export const previewDocument = command(
 		diagramSvgs: z.record(z.string(), z.string()).optional()
 	}),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.previewDocument(requestActor(), input as import('$lib/models').PreviewDocumentInput)
 );
 
 export const getExportSettings = query(z.string().uuid(), async (projectId) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.deliverables()
 		.getExportSettings(requestActor(), projectId as ProjectId)
 );
@@ -88,13 +88,13 @@ export const getExportSettings = query(z.string().uuid(), async (projectId) =>
 export const updateExportSettings = command(
 	z.object({ projectId: z.string().uuid(), settings: exportSettingsSchema }),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.updateExportSettings(requestActor(), input.projectId as ProjectId, input.settings)
 );
 
 export const listArtifacts = query(z.string().uuid(), async (projectId) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.deliverables()
 		.listArtifacts(requestActor(), projectId as ProjectId)
 );
@@ -102,13 +102,13 @@ export const listArtifacts = query(z.string().uuid(), async (projectId) =>
 export const downloadArtifact = command(
 	z.object({ artifactId: z.string().uuid() }),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.downloadArtifact(requestActor(), input.artifactId as ArtifactId)
 );
 
 export const deleteArtifact = command(z.object({ artifactId: z.string().uuid() }), async (input) =>
-	AppFactory.controllerFactory()
+	AppFactory.controllers()
 		.deliverables()
 		.deleteArtifact(requestActor(), input.artifactId as ArtifactId)
 );
@@ -116,7 +116,7 @@ export const deleteArtifact = command(z.object({ artifactId: z.string().uuid() }
 export const regenerateArtifact = command(
 	z.object({ artifactId: z.string().uuid() }),
 	async (input) =>
-		AppFactory.controllerFactory()
+		AppFactory.controllers()
 			.deliverables()
 			.regenerateArtifact(requestActor(), input.artifactId as ArtifactId)
 );

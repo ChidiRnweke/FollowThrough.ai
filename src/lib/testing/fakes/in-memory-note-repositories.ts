@@ -8,7 +8,7 @@ import type {
 	SourceAnchorId,
 	UserId
 } from '$lib/models';
-import type { NoteRepository, SourceAnchorRepository } from '$lib/repositories';
+import type { NoteRepository, SourceAnchorRepository } from '$lib/server/repositories';
 
 export class InMemoryNoteRepository implements NoteRepository {
 	notes: Note[] = [];

@@ -7,10 +7,7 @@
 
 	// While the model is thinking the block stays open so the stream is visible;
 	// once the turn settles it folds away behind the summary row.
-	let open = $state(false);
-	$effect(() => {
-		open = streaming;
-	});
+	let open = $derived(streaming);
 </script>
 
 <Collapsible.Root bind:open>

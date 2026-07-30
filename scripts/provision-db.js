@@ -5,7 +5,7 @@ import postgres from 'postgres';
 import { InfisicalSDK } from '@infisical/sdk';
 
 // This entrypoint runs under plain `node`, so it cannot import the TypeScript
-// defaults in src/lib/server/secrets.ts. Keep these two in sync with it.
+// defaults in src/lib/server/config.ts. Keep these two in sync with it.
 const DEFAULT_DB_NAME = 'followthrough';
 const DEFAULT_DB_USER = 'followthrough';
 

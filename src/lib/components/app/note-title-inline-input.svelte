@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Input } from '$lib/components/ui/input';
 	import { untrack } from 'svelte';
 
 	let {
@@ -41,20 +42,16 @@
 			cancel();
 		}
 	}
-
-	function autofocus(node: HTMLInputElement): void {
-		node.focus();
-		node.select();
-	}
 </script>
 
 <!-- Borderless and breadcrumb-scale so committing does not change the utility row's height. -->
-<input
+<Input
 	class="min-w-0 flex-1 border-b border-b-primary bg-transparent text-sm text-foreground outline-none sm:w-64"
 	placeholder="Untitled"
 	aria-label="Note title"
 	bind:value
-	use:autofocus
+	autofocus
+	onfocus={(event) => event.currentTarget.select()}
 	{onkeydown}
 	onblur={submit}
 />

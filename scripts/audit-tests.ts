@@ -41,7 +41,10 @@ for (const file of files) {
 		const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
 		failures.push(`${file}:${line} uses a mocking API; inject a hand-written fake`);
 	}
-	if (file.startsWith('src/lib/controllers/') || file.startsWith('src/lib/services/')) {
+	if (
+		file.startsWith('src/lib/server/controllers/') ||
+		file.startsWith('src/lib/server/services/')
+	) {
 		for (const match of sourceText.matchAll(/as unknown as [A-Za-z]+Dependencies/g)) {
 			const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
 			dependencyCastExceptions.push(`${file}:${line}`);

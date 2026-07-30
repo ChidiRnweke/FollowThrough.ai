@@ -6,7 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { openTodoSurface } from '$lib/navigation/responsive-surfaces';
+	import { openTodoSurface } from '$lib/client/responsive-surfaces';
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';

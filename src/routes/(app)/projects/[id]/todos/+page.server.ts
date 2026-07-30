@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		...(status !== null ? { status } : {}),
 		...(responsibility !== null ? { responsibility } : {})
 	};
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 	const [output, projectView] = await Promise.all([
 		factory.todos().list(actor, filter),

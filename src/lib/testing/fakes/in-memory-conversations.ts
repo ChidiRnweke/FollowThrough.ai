@@ -1,6 +1,6 @@
 import type { ActorContext, Conversation, ConversationId, Message } from '$lib/models';
-import { NotFoundError } from '$lib/models';
-import type { ConversationListOptions, ConversationRepository } from '$lib/repositories';
+import { NotFoundError } from '$lib/errors';
+import type { ConversationListOptions, ConversationRepository } from '$lib/server/repositories';
 import type { SnapshotParticipant } from './in-memory-transaction';
 
 export class InMemoryConversationRepository implements ConversationRepository, SnapshotParticipant {

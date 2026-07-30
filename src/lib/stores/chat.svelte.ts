@@ -16,11 +16,12 @@ import type {
 } from '$lib/client/agent-runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent-runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent-runs/session-storage';
-import { refreshStale } from '$lib/remote/resource-queries';
+import { refreshStale } from '$lib/client/resource-queries';
 import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
 import { suggestionToView } from './suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
+import { SvelteSet } from 'svelte/reactivity';
 
 export type { ChatToolActivity } from './chat-tools';
 
@@ -326,8 +327,10 @@ export class ChatStore {
 				...(input.projectId ? { projectId: input.projectId } : {}),
 				...(input.noteId ? { noteId: input.noteId } : {}),
 				...(input.selection ? { selection: input.selection } : {}),
-				contextNoteIds: [...new Set([...(input.contextNoteIds ?? []), ...noteChips])],
-				requestedSkillNames: [...new Set([...(input.requestedSkillNames ?? []), ...skillChips])],
+				contextNoteIds: [...new SvelteSet([...(input.contextNoteIds ?? []), ...noteChips])],
+				requestedSkillNames: [
+					...new SvelteSet([...(input.requestedSkillNames ?? []), ...skillChips])
+				],
 				...(input.requestedSkillNoteIds
 					? { requestedSkillNoteIds: input.requestedSkillNoteIds }
 					: {}),

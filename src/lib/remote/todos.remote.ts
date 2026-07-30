@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { UpdateTodoInput } from '$lib/models';
 
 export const updateTodo = command(
@@ -21,7 +21,7 @@ export const updateTodo = command(
 			message: 'A todo update requires at least one edit'
 		}),
 	async (input) => {
-		return AppFactory.controllerFactory()
+		return AppFactory.controllers()
 			.todos()
 			.update(requestActor(), input as UpdateTodoInput);
 	}
@@ -30,7 +30,7 @@ export const updateTodo = command(
 export const updateTodoStatus = updateTodo;
 
 export const deleteTodo = command(z.object({ todoId: z.string().uuid() }), async (input) => {
-	await AppFactory.controllerFactory()
+	await AppFactory.controllers()
 		.todos()
 		.remove(requestActor(), input.todoId as never);
 });
@@ -42,7 +42,7 @@ export const createTodo = command(
 		status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
 	}),
 	async (input) => {
-		const factory = AppFactory.controllerFactory();
+		const factory = AppFactory.controllers();
 		const actor = requestActor();
 		let projectId = input.projectId;
 		if (!projectId) {

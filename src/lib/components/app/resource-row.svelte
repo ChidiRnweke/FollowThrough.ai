@@ -33,7 +33,7 @@
 		<span
 			class="flex size-9 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand dark:bg-brand/15"
 		>
-			<Icon class="size-[1.125rem]" />
+			<Icon class="size-4.5" />
 		</span>
 		<span class="flex min-w-0 flex-col gap-0.5">
 			<!-- A space outranks a document, so it sits one step up the ladder: base

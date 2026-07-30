@@ -12,7 +12,7 @@ const cursorAfter = (request: Request, url: URL): string => {
 
 export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	const actor = AppFactory.actor(locals);
-	const agent = AppFactory.controllerFactory().agent();
+	const agent = AppFactory.controllers().agent();
 	const eventBus = AppFactory.eventBus();
 	const runId = params.runId as AgentRunId;
 	await agent.getRun(actor, runId);

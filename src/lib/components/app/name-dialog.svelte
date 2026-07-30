@@ -2,6 +2,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Form } from '$lib/components/ui/form';
 
 	let {
 		open = $bindable(false),
@@ -42,12 +43,12 @@
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>
 		</Dialog.Header>
-		<form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-4" onsubmit={submit}>
 			<Input bind:value placeholder={label} aria-label={label} disabled={busy} autofocus />
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 				<Button type="submit" disabled={busy || !value.trim()}>{submitLabel}</Button>
 			</Dialog.Footer>
-		</form>
+		</Form>
 	</Dialog.Content>
 </Dialog.Root>

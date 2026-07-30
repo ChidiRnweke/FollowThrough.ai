@@ -1,5 +1,5 @@
 import type { ActorContext, Todo, TodoId, TodoListFilter } from '$lib/models';
-import type { TodoRepository } from '$lib/repositories/todos';
+import type { TodoRepository } from '$lib/server/repositories/todos';
 
 export class InMemoryTodoRepository implements TodoRepository {
 	todos: Todo[] = [];

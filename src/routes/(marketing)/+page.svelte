@@ -13,7 +13,7 @@
 	>
 		<Reveal class="flex flex-col items-center gap-6">
 			<h1
-				class="font-serif text-4xl leading-[1.08] font-medium tracking-tight text-balance sm:text-6xl"
+				class="font-serif text-4xl leading-tight font-medium tracking-tight text-balance sm:text-6xl"
 			>
 				FollowThrough's agent already <Crayon>knows</Crayon> what you're working on.
 			</h1>

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from './actor';
+import { requestActor } from '$lib/server/request-actor-factory';
 import type { ListMemoryInput, ProjectId } from '$lib/models';
 
 /**
@@ -19,7 +19,7 @@ import type { ListMemoryInput, ProjectId } from '$lib/models';
 export const getCapabilityCounts = query(
 	z.object({ projectId: z.string().uuid().optional() }),
 	async ({ projectId }): Promise<Record<'memory' | 'attachments' | 'todos', number>> => {
-		const factory = AppFactory.controllerFactory();
+		const factory = AppFactory.controllers();
 		const actor = requestActor();
 		const project = projectId as ProjectId | undefined;
 

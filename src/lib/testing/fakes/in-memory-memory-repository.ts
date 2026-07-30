@@ -1,5 +1,5 @@
 import type { ActorContext, MemoryEntry, MemoryEntryId } from '$lib/models';
-import type { MemoryEntryListFilter, MemoryEntryRepository } from '$lib/repositories';
+import type { MemoryEntryListFilter, MemoryEntryRepository } from '$lib/server/repositories';
 import type { SnapshotParticipant } from './in-memory-transaction';
 
 export class InMemoryMemoryEntryRepository implements MemoryEntryRepository, SnapshotParticipant {

@@ -1,3 +1,4 @@
+// chisel-ignore-file import-boundary:framework-leak -- SvelteKit loads this root environment-schema entry point directly.
 import { defineEnvVars } from '@sveltejs/kit/hooks';
 import { z } from 'zod';
 
@@ -97,7 +98,7 @@ export const variables = defineEnvVars({
 		description:
 			'OTLP/gRPC collector endpoint, port 4317 — used as-is for both traces and logs. ' +
 			'Telemetry is disabled when unset. Deployment-supplied only: OTEL_* and PHOENIX_* are platform ' +
-			'keys, which `isPlatformKey` in server/secrets.ts excludes from hydration, so a value set in the ' +
+			'keys, which `isPlatformKey` in server/config.ts excludes from hydration, so a value set in the ' +
 			'secrets backend is never read. Set it in docker-compose.prod.yml (prod) or .env (dev).',
 		schema: optionalString
 	},

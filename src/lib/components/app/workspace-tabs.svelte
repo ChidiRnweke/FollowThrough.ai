@@ -138,7 +138,8 @@
 		<div class="flex h-6 items-center justify-end">
 			<Tip text="Show tab strip" side="bottom">
 				{#snippet children({ props })}
-					<button
+					<Button
+						variant="ghost"
 						{...props}
 						type="button"
 						class="mr-2 mt-1 tactile flex size-7 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
@@ -147,7 +148,7 @@
 						onclick={() => ontoggleHidden?.()}
 					>
 						<ChevronDown class="size-4" />
-					</button>
+					</Button>
 				{/snippet}
 			</Tip>
 		</div>
@@ -163,10 +164,11 @@
 			{#if hasTabs}
 				{#each groups as group, groupIndex (group.projectId)}
 					{#if groupIndex > 0}
-						<div class="w-px shrink-0 self-center" style="height: 1rem;" aria-hidden="true"></div>
+						<div class="h-4 w-px shrink-0 self-center" aria-hidden="true"></div>
 					{/if}
 					<div class="flex shrink-0 items-center gap-1 pl-1 pr-1">
-						<button
+						<Button
+							variant="ghost"
 							type="button"
 							class="tactile flex items-center rounded px-0.5 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 							aria-label={folded.has(group.projectId)
@@ -180,7 +182,7 @@
 							{:else}
 								<ChevronDown class="size-3.5" />
 							{/if}
-						</button>
+						</Button>
 						<div class="flex items-center gap-1 pr-1">
 							<span class="h-4 w-px shrink-0 bg-primary/40" aria-hidden="true"></span>
 							<span class="eyebrow max-w-40 cursor-default truncate">
@@ -203,11 +205,7 @@
 									{#if hasVisiblePredecessor(group.projectId, group.tabs, tabIndex)}
 										<!-- Thin vertical divider between adjacent visible tabs in the same project
 									     group. Keeping it inside the animated region prevents orphan rules. -->
-										<div
-											class="w-px shrink-0 self-center bg-border"
-											style="height: 1rem;"
-											aria-hidden="true"
-										></div>
+										<div class="h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
 									{/if}
 									<!-- Tab labels truncate at 16rem, so the tooltip is the only way to read a
 								     long title. A longer delay than the default keeps it from flashing
@@ -217,13 +215,14 @@
 											<!-- Cursor only, not `tactile`: the tab holds a nested close
 											     button, so hovering that would lift both and double the
 											     travel. A tab is seated in the strip, not a free target. -->
-											<button
+											<Button
+												variant="ghost"
 												{...props}
 												type="button"
 												role="tab"
 												aria-selected={active}
 												draggable="true"
-												class="group relative flex h-full min-w-32 max-w-[16rem] shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
+												class="group relative flex h-full min-w-32 max-w-64 shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
 													? 'bg-background font-medium text-foreground'
 													: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
 												ondragstart={(event) => {
@@ -267,7 +266,7 @@
 												>
 													<X class="size-3" />
 												</span>
-											</button>
+											</Button>
 										{/snippet}
 									</Tip>
 								</div>
@@ -305,11 +304,7 @@
 				</Tip>
 				<!-- Divider between the `+` action and the strip-hide chevron so the
 			     chevron reads as a strip control, not as a second action. -->
-				<div
-					class="mr-1 ml-1 w-px shrink-0 self-center bg-border"
-					style="height: 1rem;"
-					aria-hidden="true"
-				></div>
+				<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
 			{/if}
 			<!-- Edge chevron: always at the very right end of the strip so the
 		     toggle is a stable click target regardless of tab count. `text-foreground`
@@ -317,7 +312,8 @@
 		     into the strip's background. -->
 			<Tip text="Hide tab strip" side="bottom">
 				{#snippet children({ props })}
-					<button
+					<Button
+						variant="ghost"
 						{...props}
 						type="button"
 						class="tactile flex size-5 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
@@ -326,7 +322,7 @@
 						onclick={() => ontoggleHidden?.()}
 					>
 						<ChevronUp class="size-3.5" />
-					</button>
+					</Button>
 				{/snippet}
 			</Tip>
 		</div>

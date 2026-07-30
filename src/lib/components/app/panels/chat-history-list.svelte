@@ -154,7 +154,8 @@
 			<ul class="flex flex-col">
 				{#each sessions.slice(0, limit) as session (session.id)}
 					<li class="group relative">
-						<button
+						<Button
+							variant="ghost"
 							type="button"
 							class="row-interactive flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-sm"
 							onclick={() => onselect(session.id)}
@@ -167,7 +168,7 @@
 							>
 								{formatRelativeTime(session.updatedAt)}
 							</span>
-						</button>
+						</Button>
 						<div
 							class="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity duration-(--duration-micro) group-hover:opacity-100 group-focus-within:opacity-100 has-data-[state=open]:opacity-100"
 						>

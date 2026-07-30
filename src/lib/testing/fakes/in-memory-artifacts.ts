@@ -1,6 +1,6 @@
 import type { AcceptSuggestionOutput, ActorContext, Suggestion, Todo } from '$lib/models';
-import { ExternalServiceError } from '$lib/models';
-import type { SuggestionArtifactApplier } from '$lib/controllers';
+import { ExternalServiceError } from '$lib/errors';
+import type { SuggestionArtifactApplier } from '$lib/server/controllers';
 import { testTodoId, todoBuilder } from '../fixtures/domain-builders';
 import type { SnapshotParticipant } from './in-memory-transaction';
 

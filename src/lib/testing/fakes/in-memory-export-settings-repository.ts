@@ -1,5 +1,5 @@
 import type { ActorContext, ExportSettings, ProjectId, UserId } from '$lib/models';
-import type { ExportSettingsRepository } from '$lib/repositories';
+import type { ExportSettingsRepository } from '$lib/server/repositories';
 
 export class InMemoryExportSettingsRepository implements ExportSettingsRepository {
 	rows: { userId: UserId; projectId: ProjectId; settings: ExportSettings }[] = [];

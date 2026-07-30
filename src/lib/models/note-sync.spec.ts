@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noteEtag, noteMatchesEtag, noteSyncContentEquals } from './note-sync';
+import { noteEtag, noteMatchesEtag, noteSyncContentEquals } from '$lib/models';
 import { noteBuilder } from '$lib/testing/fixtures/domain-builders';
 
 describe('Note synchronization token invariants', () => {

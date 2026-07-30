@@ -7,7 +7,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const query = url.searchParams.get('q')?.trim() ?? '';
 	const requestedPage = Number(url.searchParams.get('page') ?? '1');
 	const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-	const items = await AppFactory.controllerFactory()
+	const items = await AppFactory.controllers()
 		.agent()
 		.listSessions(AppFactory.actor(locals), {
 			query: query || undefined,

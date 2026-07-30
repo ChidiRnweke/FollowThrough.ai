@@ -12,7 +12,7 @@ import {
 	OwnershipError,
 	StaleRevisionError,
 	ValidationError
-} from '$lib/models';
+} from '$lib/errors';
 import type {
 	NoteEditor,
 	NoteIndexer,
@@ -24,7 +24,7 @@ import type {
 	NoteRevisionRecorder,
 	SelectionAnchorCreator,
 	SourceAnchorRepairer
-} from '$lib/services';
+} from '$lib/server/services';
 import type { SnapshotParticipant } from './in-memory-transaction';
 import { anchorBuilder, testAnchorId } from '../fixtures/domain-builders';
 

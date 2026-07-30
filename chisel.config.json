@@ -1,0 +1,12 @@
+{
+	"mode": "sveltekit-standalone",
+	"tsconfig": "tsconfig.json",
+	"ignore": [],
+	"designSystem": {
+		"allowIn": [
+			"src/lib/components/primitives/",
+			"src/lib/components/ui/",
+			"src/lib/components/edra/"
+		]
+	}
+}

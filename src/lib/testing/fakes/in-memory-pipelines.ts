@@ -21,7 +21,7 @@ import type {
 	StructuredRelationshipClient,
 	TrustPolicyEvaluator,
 	WebReferenceClient
-} from '$lib/services';
+} from '$lib/server/services';
 import { testNow, testProvenanceId } from '../fixtures/domain-builders';
 import type { SnapshotParticipant } from './in-memory-transaction';
 

@@ -1,5 +1,9 @@
 import { db, postgresTransactionRunner } from '$lib/server/db';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_OPENROUTER_BASE_URL } from './domain/openrouter-client';
+import {
+	DEFAULT_GENERATION_MODEL,
+	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	requiredEnvironmentValue
+} from './config';
 import { createApplication, type ProductionApplication } from './application';
 
 export type { ProductionApplication } from './application';
@@ -12,21 +16,15 @@ export type { ProductionApplication } from './application';
  * the process launcher has loaded runtime configuration.
  */
 export function createProductionFactory(): ProductionApplication {
-	const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-	if (!openRouterApiKey) {
-		throw new Error(
-			'OPENROUTER_API_KEY is required. Refusing to start with AI features silently disabled.'
-		);
-	}
 	return createApplication({
 		db,
 		transactionRunner: postgresTransactionRunner,
-		openRouterApiKey,
+		openRouterApiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
 		// The worker sidecar owns embedding in production, so writes never wait on
 		// OpenRouter. Set DEFER_EMBEDDING=false to fall back to inline embedding if
 		// the worker is not deployed.
 		deferEmbedding: process.env.DEFER_EMBEDDING !== 'false',
-		openRouterBaseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL,
+		openRouterBaseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
 		appURL: process.env.ORIGIN ?? 'http://localhost:5173',
 		defaultAgentModel: process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL,
 		recommendedModels: (process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')

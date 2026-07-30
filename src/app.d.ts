@@ -1,6 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
-import type { Session, User } from '$lib/models';
+import type { User } from '$lib/models';
 
 declare global {
 	namespace App {
@@ -13,7 +13,6 @@ declare global {
 		}
 		interface Locals {
 			user?: User;
-			session?: Session;
 		}
 		// interface PageData {}
 		// interface PageState {}

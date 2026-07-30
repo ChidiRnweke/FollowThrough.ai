@@ -5,7 +5,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const projectId = params.id as ProjectId;
-	const factory = AppFactory.controllerFactory();
+	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 
 	const [view, todosResult, memoryResult, artifactsResult, attachments] = await Promise.all([

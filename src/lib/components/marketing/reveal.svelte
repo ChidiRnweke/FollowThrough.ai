@@ -32,6 +32,7 @@
 	};
 </script>
 
+<!-- chisel-ignore structural:inline-style-banned -- Reveal timing is a caller-provided animation delay. -->
 <div
 	{@attach revealOnce}
 	{id}
@@ -42,26 +43,3 @@
 >
 	{@render children()}
 </div>
-
-<style>
-	.reveal {
-		transition:
-			opacity 600ms var(--ease-standard) var(--reveal-delay),
-			transform 600ms var(--ease-standard) var(--reveal-delay);
-	}
-
-	.reveal[data-armed='true'][data-shown='false'] {
-		opacity: 0;
-		transform: translateY(0.5rem);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.reveal {
-			transition: opacity 200ms linear;
-		}
-
-		.reveal[data-armed='true'][data-shown='false'] {
-			transform: none;
-		}
-	}
-</style>

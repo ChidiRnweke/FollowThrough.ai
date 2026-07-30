@@ -7,7 +7,7 @@ import type {
 	TodoStatus,
 	TodoView
 } from '$lib/models';
-import { NotFoundError, OwnershipError, ValidationError } from '$lib/models';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type {
 	TodoDeleter,
 	TodoEditor,
@@ -16,7 +16,7 @@ import type {
 	TodoReader,
 	TodoStatusChanger,
 	TodoViewAssembler
-} from '$lib/services';
+} from '$lib/server/services';
 import { testNow, testTodoId, todoBuilder } from '../fixtures/domain-builders';
 import type { SnapshotParticipant } from './in-memory-transaction';
 
