@@ -22,7 +22,8 @@
 		projectName,
 		onstatus,
 		onopen,
-		draggable = false
+		draggable = false,
+		lifted = false
 	}: {
 		view: TodoView;
 		compact?: boolean;
@@ -31,6 +32,8 @@
 		onstatus?: (todoId: TodoId, status: TodoStatus) => void;
 		onopen?: (todoId: TodoId) => void;
 		draggable?: boolean;
+		/** The card currently held by a drag — it gets the selection-teal wash. */
+		lifted?: boolean;
 	} = $props();
 
 	const done = $derived(view.todo.status === 'done');
@@ -44,6 +47,18 @@
 	/* The footer carries provenance and who the todo waits on — the card's
 	   glanceable metadata row. Rendered only when one of them is set. */
 	const hasFooter = $derived(view.provenance !== undefined || waiting);
+	/* Completing plays a short settle (the card shrinks and fades a touch) before
+	   the status change flies it to Done, so the press reads as an action rather
+	   than the card teleporting. Reopening is immediate. */
+	let completing = $state(false);
+	function complete(checked: boolean): void {
+		if (checked) {
+			completing = true;
+			setTimeout(() => onstatus?.(view.todo.id, 'done'), 220);
+		} else {
+			onstatus?.(view.todo.id, 'open');
+		}
+	}
 	function openBody(event: MouseEvent): void {
 		if (
 			(event.target as HTMLElement).closest('button, a, input, [role="button"], [role="combobox"]')
@@ -55,7 +70,11 @@
 
 <Card.Root
 	data-compact={compact || undefined}
-	class="group/card gap-2 rounded-lg py-3.5"
+	class={[
+		'group/card gap-2 rounded-lg py-3.5 transition-[background-color,opacity,scale] duration-200',
+		lifted && 'bg-primary/20',
+		completing && 'scale-95 opacity-50'
+	]}
 	onclick={openBody}
 >
 	<Card.Header class="px-4">
@@ -81,7 +100,7 @@
 			<Checkbox
 				checked={done}
 				aria-label={done ? 'Reopen todo' : 'Complete todo'}
-				onCheckedChange={(checked) => onstatus?.(view.todo.id, checked ? 'done' : 'open')}
+				onCheckedChange={(checked) => complete(checked === true)}
 			/>
 			{#if onopen}
 				<!-- Full wrap, no clamp: a clipped title reads as lost text. A bare

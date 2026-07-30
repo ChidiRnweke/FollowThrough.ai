@@ -7,6 +7,7 @@
 	import { todoUpdates } from '$lib/stores/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
 	import { todoStatusEmptyCopy, todoStatusLabels, todoStatusStyle } from './labels';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { Input } from '$lib/components/ui/input';
 
@@ -31,8 +32,8 @@
 		onopen?: (todoId: TodoId) => void;
 	} = $props();
 
-	let board = $derived.by(() => {
-		const grouped: Record<TodoStatus, BoardItem[]> = {
+	const grouped = $derived.by(() => {
+		const buckets: Record<TodoStatus, BoardItem[]> = {
 			backlog: [],
 			open: [],
 			in_progress: [],
@@ -40,22 +41,51 @@
 			cancelled: []
 		};
 		for (const view of todos) {
-			grouped[view.todo.status].push({ id: view.todo.id, view });
+			buckets[view.todo.status].push({ id: view.todo.id, view });
 		}
-		return grouped;
+		return buckets;
 	});
 
+	/* Optimistic drop: the override keeps the card where it was dropped until
+	   fresh server data lands, so the card never snaps back to its old column.
+	   Two guards around that:
+	   - adopting new data inside the drag-settle window makes Svelte detach the
+	     dragged node mid-animation, and the library's recovery re-appends it
+	     hidden (the "vanishing card") — so new data is adopted only after the
+	     settle ends;
+	   - if no data ever arrives (the move failed), a fallback timer reverts to
+	     server truth rather than parking the card where it was dropped. */
+	let override = $state<Record<TodoStatus, BoardItem[]> | null>(null);
+	const board = $derived(override ?? grouped);
+	let settleTimer: ReturnType<typeof setTimeout> | undefined;
+	let settleEndsAt = 0;
+	let draggingId = $state<TodoId | null>(null);
+
 	function handleConsider(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
-		board = { ...board, [status]: event.detail.items };
+		draggingId = event.detail.info.id as TodoId;
+		override = { ...board, [status]: event.detail.items };
 	}
 
 	function handleFinalize(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
-		board = { ...board, [status]: event.detail.items };
+		override = { ...board, [status]: event.detail.items };
+		draggingId = null;
+		settleEndsAt = Date.now() + 300;
 		const moved = event.detail.items.find((item) => item.id === event.detail.info.id);
 		if (moved && moved.view.todo.status !== status) {
 			onmove?.(moved.id, status);
 		}
+		clearTimeout(settleTimer);
+		settleTimer = setTimeout(() => (override = null), 5000);
 	}
+
+	let lastTodos = untrack(() => todos);
+	$effect(() => {
+		if (todos === lastTodos) return;
+		lastTodos = todos;
+		if (!override) return;
+		clearTimeout(settleTimer);
+		settleTimer = setTimeout(() => (override = null), Math.max(0, settleEndsAt - Date.now()));
+	});
 
 	let addingTo = $state<TodoStatus | null>(page.url.searchParams.has('quickTodo') ? 'open' : null);
 	let newTitle = $state('');
@@ -79,7 +109,7 @@
 		<section
 			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-1 overflow-hidden rounded-xl bg-sidebar p-2 ring-1 ring-foreground/10 xl:w-auto xl:min-w-0"
 		>
-			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 py-1">
+			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
 				{#if status === 'done'}
 					<Check class="size-3 text-success" />
 				{:else}
@@ -113,7 +143,13 @@
 				     stay put, which is what lets the board fill the page height. -->
 				<div
 					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto"
-					use:dragHandleZone={{ items: board[status], flipDurationMs: 150, type: 'todo' }}
+					use:dragHandleZone={{
+						items: board[status],
+						flipDurationMs: 150,
+						type: 'todo',
+						/* The default drop-target outline is library yellow. */
+						dropTargetStyle: { outline: '2px solid var(--color-brand)' }
+					}}
 					onconsider={(event) => handleConsider(status, event)}
 					onfinalize={(event) => handleFinalize(status, event)}
 				>
@@ -122,6 +158,7 @@
 							view={item.view}
 							compact
 							draggable
+							lifted={item.id === draggingId}
 							projectName={projectNames?.get(item.view.todo.projectId)}
 							{onopen}
 							onstatus={onmove}
