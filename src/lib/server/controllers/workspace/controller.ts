@@ -101,7 +101,7 @@ export class Workspace implements WorkspaceController {
 			waitingOn: views.slice(due.length),
 			pendingSuggestionCount,
 			pinnedNotes: notes.filter((note) => note.isPinned),
-			recentNotes: recency.slice(0, 8)
+			recentNotes: recency.slice(0, 5)
 		};
 	}
 }
