@@ -72,7 +72,8 @@
 		return workbench.isPinned(noteId);
 	}
 
-	const hasTabs = $derived(workbench.openTabs.length > 0);
+	const tabCount = $derived(workbench.openTabs.length);
+	const hasTabs = $derived(tabCount > 0);
 	// The focused tab persists when the user navigates to a non-note route
 	// (Today, Todos, …) so the working set survives; the "you are here"
 	// highlight must not — only colour a tab while actually on its route.
@@ -323,19 +324,27 @@
 				<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
 			{/if}
 			<!-- Close every open tab across all projects. Sits next to the strip
-			     controls so bulk cleanup is one click from any strip state. -->
+			     controls so bulk cleanup is one click from any strip state.
+			     Labelled rather than icon-only: a third bare × next to every
+			     tab's own × and the + says nothing about what it closes. Muted
+			     at rest so it stays subordinate to the tabs, red only on hover
+			     (the todo-detail-panel delete idiom), and the count states the
+			     blast radius up front — which is why there's no confirm step. -->
 			{#if hasTabs}
 				<Tip text="Close all tabs" side="bottom">
 					{#snippet children({ props })}
 						<Button
 							variant="ghost"
+							size="xs"
 							{...props}
 							type="button"
-							class="tactile flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-							aria-label="Close all tabs"
+							class="tactile shrink-0 self-center rounded-sm text-muted-foreground/70 hover:bg-destructive/10 hover:text-destructive"
+							aria-label={`Close all ${tabCount} tabs`}
 							onclick={() => void workbench.closeTabs(workbench.openTabs)}
 						>
 							<X class="size-3.5" />
+							<span>Close all</span>
+							<span class="tabular-nums opacity-70" aria-hidden="true">· {tabCount}</span>
 						</Button>
 					{/snippet}
 				</Tip>

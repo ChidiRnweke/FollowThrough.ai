@@ -19,6 +19,30 @@ import {
 } from './workbench-url';
 
 /**
+ * The store's window onto SvelteKit's router.  Injected rather than imported
+ * directly so tests can drive the URL and the timing of a navigation — the
+ * ordering between `goto` resolving and `syncFromUrl` re-running is load-bearing
+ * (see `clearToOverview`) and can't be exercised against the real router.
+ */
+export type WorkbenchRouter = {
+	goto: (url: string, options?: { replaceState?: boolean; noScroll?: boolean }) => Promise<void>;
+	invalidateAll: () => Promise<void>;
+	currentUrl: () => URL;
+};
+
+/** The slice of {@link IndexedDbWorkspaceRepository} this store depends on. */
+export type WorkspaceRepository = {
+	get: () => Promise<WorkspaceRecord | undefined>;
+	put: (record: WorkspaceRecord) => Promise<void>;
+};
+
+const sveltekitRouter: WorkbenchRouter = {
+	goto: (url, options) => goto(url, options),
+	invalidateAll: () => invalidateAll(),
+	currentUrl: () => page.url
+};
+
+/**
  * Reactive workbench shell state.
  *
  * The workbench shell renders inside `(app)/+layout.svelte` whenever the URL
@@ -39,7 +63,7 @@ import {
  *     URL via `goto()`; they do not mutate `openTabs` directly.  The read
  *     effect picks the change up on the next tick.
  */
-class WorkbenchStore {
+export class WorkbenchStore {
 	openTabs = $state<readonly NoteId[]>([]);
 	focusedNoteId = $state<NoteId | undefined>(undefined);
 	/** Pane that most recently received real user interaction; distinct from URL-primary focus. */
@@ -74,7 +98,11 @@ class WorkbenchStore {
 	 */
 	splitRatio = $state(0.5);
 
-	private repository = new IndexedDbWorkspaceRepository();
+	constructor(
+		private readonly router: WorkbenchRouter = sveltekitRouter,
+		private readonly repository: WorkspaceRepository = new IndexedDbWorkspaceRepository()
+	) {}
+
 	private hydrated = $state(false);
 	/** Suppresses the URL→state effect while we're applying a user action this tick. */
 	private applyingFromUrl = false;
@@ -142,7 +170,8 @@ class WorkbenchStore {
 	 * the standard `{@render children()}` outlet.
 	 */
 	get isWorkbenchPath(): boolean {
-		return parseWorkbenchUrl(page.url.pathname, page.url.searchParams) !== undefined;
+		const url = this.router.currentUrl();
+		return parseWorkbenchUrl(url.pathname, url.searchParams) !== undefined;
 	}
 
 	/**
@@ -189,7 +218,8 @@ class WorkbenchStore {
 		// 50% before IndexedDB comes back.
 		this.readStripHiddenFromStorage();
 		this.readSplitRatioFromStorage();
-		const urlState = parseWorkbenchUrl(page.url.pathname, page.url.searchParams);
+		const url = this.router.currentUrl();
+		const urlState = parseWorkbenchUrl(url.pathname, url.searchParams);
 		if (!urlState) {
 			// Not a workbench path on cold start — leave the user on whatever
 			// route they landed on (Today, Todos, …).  The previous working
@@ -243,7 +273,10 @@ class WorkbenchStore {
 						: {})
 				};
 				this.restoring = true;
-				await goto(serializeWorkbenchUrl(restored), { replaceState: true, noScroll: true });
+				await this.router.goto(serializeWorkbenchUrl(restored), {
+					replaceState: true,
+					noScroll: true
+				});
 				this.restoring = false;
 				void this.refreshActiveProjectId(shellProjectOf);
 				return;
@@ -261,7 +294,8 @@ class WorkbenchStore {
 	 */
 	syncFromUrl(): void {
 		if (this.applyingFromUrl) return;
-		const urlState = parseWorkbenchUrl(page.url.pathname, page.url.searchParams);
+		const url = this.router.currentUrl();
+		const urlState = parseWorkbenchUrl(url.pathname, url.searchParams);
 		if (!urlState) {
 			// Navigated away from `/notes/*` — leave the in-memory state alone;
 			// the layout is going to render the standard outlet instead.
@@ -341,17 +375,8 @@ class WorkbenchStore {
 		if (!current) return;
 		const next = closeTabInState(current, noteId, { recentlyUsed: this.recentlyUsed });
 		if (!next) {
-			// Closing the last tab navigates to Today.  Remove from open list,
-			// clear focus and split, and let the URL change drive the layout swap.
-			this.applyingFromUrl = true;
-			this.openTabs = [];
-			this.focusedNoteId = undefined;
-			this.splitNoteId = undefined;
-			this.applyingFromUrl = false;
-			await goto('/today', { replaceState: false });
-			await this.persist({
-				openTabs: [],
-				focusedNoteId: null,
+			// Closing the last tab navigates to Today.
+			await this.clearToOverview({
 				pinnedTabs: this.pinnedTabs,
 				recentlyUsed: this.recentlyUsed
 			});
@@ -369,22 +394,12 @@ class WorkbenchStore {
 	async closeTabs(noteIds: readonly NoteId[]): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
-		const closing = new Set<NoteId>(noteIds);
 		const next = closeTabsInState(current, noteIds, { recentlyUsed: this.recentlyUsed });
 		if (next === current) return;
-		this.pinnedTabs = this.pinnedTabs.filter((id) => !closing.has(id));
+		this.pinnedTabs = this.pinnedTabs.filter((id) => !noteIds.includes(id));
 		if (!next) {
-			// Every tab closed: clear focus and split, and let the URL change
-			// drive the layout swap (same as closeTab's last-tab branch).
-			this.applyingFromUrl = true;
-			this.openTabs = [];
-			this.focusedNoteId = undefined;
-			this.splitNoteId = undefined;
-			this.applyingFromUrl = false;
-			await goto('/today', { replaceState: false });
-			await this.persist({
-				openTabs: [],
-				focusedNoteId: null,
+			// Every tab closed (same as closeTab's last-tab branch).
+			await this.clearToOverview({
 				pinnedTabs: this.pinnedTabs,
 				recentlyUsed: this.recentlyUsed
 			});
@@ -449,15 +464,7 @@ class WorkbenchStore {
 		const remaining = current.openTabs.filter((id) => known.has(id));
 		if (remaining.length === current.openTabs.length) return;
 		if (remaining.length === 0) {
-			this.applyingFromUrl = true;
-			this.openTabs = [];
-			this.focusedNoteId = undefined;
-			this.splitNoteId = undefined;
-			this.applyingFromUrl = false;
-			await goto('/today', { replaceState: false });
-			await this.persist({
-				openTabs: [],
-				focusedNoteId: null,
+			await this.clearToOverview({
 				pinnedTabs: this.pinnedTabs.filter((id) => known.has(id)),
 				recentlyUsed: this.recentlyUsed.filter((id) => known.has(id))
 			});
@@ -486,17 +493,48 @@ class WorkbenchStore {
 		);
 	}
 
+	/**
+	 * Empty the strip and leave `/notes/*` for Today.  An empty strip has no
+	 * URL representation, so this is the one state change that can't be driven
+	 * through `navigate`.
+	 *
+	 * `applyingFromUrl` must stay set for the whole navigation, not just the
+	 * assignments: clearing `focusedNoteId` invalidates the layout's `$effect`,
+	 * which re-runs while `goto` is still in flight — at which point `page.url`
+	 * is still the old `/notes/…?tabs=…`, and an unguarded `syncFromUrl` would
+	 * parse it and put every tab straight back.  That's what made closing all
+	 * tabs take two clicks.  By the time the guard is released the URL is
+	 * `/today`, where `syncFromUrl` early-returns anyway.
+	 *
+	 * Persisting before `goto` keeps the IndexedDB record from being written
+	 * from a half-torn-down state if the navigation is slow.
+	 */
+	private async clearToOverview(
+		persistPatch: Pick<WorkspaceRecord, 'pinnedTabs' | 'recentlyUsed'>
+	): Promise<void> {
+		this.applyingFromUrl = true;
+		this.openTabs = [];
+		this.focusedNoteId = undefined;
+		this.splitNoteId = undefined;
+		try {
+			await this.persist({ openTabs: [], focusedNoteId: null, ...persistPatch });
+			await this.router.goto('/today', { replaceState: false });
+		} finally {
+			this.applyingFromUrl = false;
+		}
+	}
+
 	private async navigate(
 		next: WorkbenchUrlState,
 		options: { replace: boolean; invalidate: boolean }
 	): Promise<void> {
 		const url = serializeWorkbenchUrl(next);
-		await goto(url, { replaceState: options.replace, noScroll: true });
+		await this.router.goto(url, { replaceState: options.replace, noScroll: true });
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
 		// disagrees with the URL (e.g. a reload mid-navigation).
 		await this.persist();
-		if (options.invalidate) await invalidateAll();
+		if (options.invalidate) await this.router.invalidateAll();
 	}
 
 	private async persist(override?: Partial<WorkspaceRecord>): Promise<void> {
