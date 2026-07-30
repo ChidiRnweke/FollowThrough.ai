@@ -13,7 +13,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Input } from '$lib/components/ui/input';
-	import { FtPlus as Plus, FtTodos as ListTodo } from '$lib/components/icons';
+	import { FtPlus as Plus, FtSearch as Search, FtTodos as ListTodo } from '$lib/components/icons';
 	import EmptyState from '../empty-state.svelte';
 	import AgentAction from '../agent/agent-action.svelte';
 	import { agentActions } from '../agent/agent-actions';
@@ -63,6 +63,16 @@
 
 	const responsibility = $derived(page.url.searchParams.get('responsibility') ?? 'all');
 
+	/* Title search is a lens over what is already loaded, so it stays local
+	   state instead of a URL param — the server-side params keep doing the
+	   shareable filtering. */
+	let query = $state('');
+	const visibleTodos = $derived(
+		query.trim() === ''
+			? todos
+			: todos.filter((item) => item.todo.title.toLowerCase().includes(query.trim().toLowerCase()))
+	);
+
 	let addingListTodo = $state(false);
 	let listTitle = $state('');
 
@@ -77,18 +87,26 @@
 </script>
 
 <!-- The controls sit closer to the surface they act on than to the page header,
-     so they read as belonging to the board rather than floating between the two. -->
-<div class="flex flex-col gap-4">
+     so they read as belonging to the board rather than floating between the two.
+     Filters lead on the left; the view switcher and the page's one agent action
+     close the row on the right. -->
+<div class="flex min-h-0 flex-1 flex-col gap-4">
 	<div
 		class="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center"
 	>
-		<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
-			<Tabs.List>
-				<Tabs.Trigger value="board">Board</Tabs.Trigger>
-				<Tabs.Trigger value="list">List</Tabs.Trigger>
-			</Tabs.List>
-		</Tabs.Root>
 		<div class="flex flex-wrap items-center gap-2">
+			<div class="relative">
+				<Search
+					class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+				/>
+				<Input
+					type="search"
+					placeholder="Filter todos…"
+					aria-label="Filter todos by title"
+					bind:value={query}
+					class="h-11 w-full pl-8 sm:h-8 sm:w-44"
+				/>
+			</div>
 			{#if projects && projects.length > 0}
 				<Select.Root
 					type="single"
@@ -110,22 +128,27 @@
 					</Select.Content>
 				</Select.Root>
 			{/if}
-			<!-- Same segmented species as the view switcher; position, not styling,
-			     is what distinguishes filtering from switching surface. -->
+			<!-- Responsibility is a pair of radio pills, not tabs: neither active
+			     means All, and clicking the active pill clears back to it. -->
 			<ToggleGroup.Root
 				type="single"
-				value={responsibility}
-				onValueChange={(value) =>
-					setParam('responsibility', value === '' || value === 'all' ? undefined : value)}
+				value={responsibility === 'all' ? '' : responsibility}
+				onValueChange={(value) => setParam('responsibility', value === '' ? undefined : value)}
 				aria-label="Filter by responsibility"
 			>
-				<ToggleGroup.Item value="all">All</ToggleGroup.Item>
 				<ToggleGroup.Item value="mine">Mine</ToggleGroup.Item>
 				<ToggleGroup.Item value="waiting_on">Waiting on</ToggleGroup.Item>
 			</ToggleGroup.Root>
-			<!-- Last in the row and the only thing in it that is not a filter: reading
-			     the controls left to right ends on what to do about what they show. -->
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
+				<Tabs.List>
+					<Tabs.Trigger value="board">Board</Tabs.Trigger>
+					<Tabs.Trigger value="list">List</Tabs.Trigger>
+				</Tabs.List>
+			</Tabs.Root>
 			<AgentAction
+				variant="outline"
 				action={agentActions.todosFromNotes}
 				context={projectId ? { projectId } : undefined}
 			/>
@@ -156,7 +179,12 @@
 				{/snippet}
 			</EmptyState>
 		{:else}
-			<TodoTable {todos} {notes} projectNames={projects ? projectNames : undefined} onopen={open} />
+			<TodoTable
+				todos={visibleTodos}
+				{notes}
+				projectNames={projects ? projectNames : undefined}
+				onopen={open}
+			/>
 			<div class="mt-1">
 				{#if addingListTodo}
 					<div class="flex items-center gap-1">
@@ -178,7 +206,7 @@
 					<Button
 						variant="ghost"
 						size="sm"
-						class="text-muted-foreground hover:text-foreground"
+						class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 						onclick={() => {
 							addingListTodo = true;
 							listTitle = '';
@@ -192,7 +220,7 @@
 		{/if}
 	{:else}
 		<KanbanBoard
-			{todos}
+			todos={visibleTodos}
 			{projectId}
 			projectNames={projects ? projectNames : undefined}
 			onopen={open}

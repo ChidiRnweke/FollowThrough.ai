@@ -26,7 +26,7 @@
 		<section class="flex flex-col gap-3 rounded-lg border border-border p-4">
 			<Button
 				variant="link"
-				class="h-auto min-h-11 justify-start whitespace-normal p-0 text-left font-medium text-foreground"
+				class="h-auto min-h-11 justify-start whitespace-normal p-0 text-left font-medium text-foreground line-clamp-2"
 				onclick={() => onopen?.(view.todo.id)}
 			>
 				{view.todo.title}

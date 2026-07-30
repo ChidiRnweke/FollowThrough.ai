@@ -109,6 +109,81 @@ describe('Pdf generation invariants', () => {
 		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
 	});
 
+	it('prefers the PNG raster of a diagram over its SVG', async () => {
+		const hash = mermaidSourceHash(DIAGRAM_SOURCE);
+		const buffer = await generate({
+			diagramSvgs: { [hash]: DIAGRAM_SVG },
+			diagramPngs: { [hash]: TINY_PNG }
+		});
+		// The PNG's IDAT bytes land in the PDF; an SVG render would carry path operators
+		// for the diagram's <rect> instead.
+		expect(buffer.toString('latin1')).toContain('/Image');
+	});
+
+	it('renders a diagram nested inside a list item', async () => {
+		// The editor happily nests a mermaid block inside a list item; the list case
+		// used to wrap every converted child into a text run, where pdfmake silently
+		// drops non-text blocks — the diagram vanished from the PDF.
+		const withNestedDiagram: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'bulletList',
+					content: [
+						{
+							type: 'listItem',
+							content: [
+								{ type: 'paragraph', content: [{ type: 'text', text: 'Concepts:' }] },
+								{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }
+							]
+						}
+					]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withNestedDiagram }],
+			title: 'Export',
+			diagramPngs: { [mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG }
+		});
+		const placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
+		expect(placed.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it('renders both large diagrams inline, without landscape pages', async () => {
+		// Two diagrams far wider than the content box: the old export promoted them to
+		// emulated landscape pages, which blanked the pages around them and swallowed
+		// the second diagram.
+		const secondSource = 'flowchart LR\n  C --> D';
+		const wide: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: wide }],
+			title: 'Export',
+			diagramPngs: {
+				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
+				[mermaidSourceHash(secondSource)]: TINY_PNG
+			}
+		});
+		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
+		// when it draws it onto a page.
+		const placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
+		expect(placed.length).toBeGreaterThanOrEqual(2);
+		// A landscape A4 MediaBox would be the portrait box swapped.
+		expect(buffer.toString('latin1')).not.toContain('841.89 595.28');
+		const text = pdfText(buffer);
+		expect(text).toContain('Before the diagrams.');
+		expect(text).toContain('After the diagrams.');
+	});
+
 	it('degrades an unreachable remote image without failing the export', async () => {
 		const withRemoteImage: ProseMirrorDocument = {
 			type: 'doc',

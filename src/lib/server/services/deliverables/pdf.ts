@@ -3,12 +3,7 @@ import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
 import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
 import { defaultExportSettings } from '$lib/models';
-import {
-	collectImageSources,
-	fetchImages,
-	mermaidSourceHash,
-	svgDimensions
-} from './export-images';
+import { collectImageSources, fetchImages, mermaidSourceHash } from './export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };
@@ -135,7 +130,6 @@ function withFontRuns<T extends { text: string; font?: string }>(run: T, bodyFon
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
-const DIAGRAM_MAX_UPSCALE = 1.5;
 const LINK_COLOR = '#1d4ed8';
 
 export interface GeneratePdfInput {
@@ -145,6 +139,8 @@ export interface GeneratePdfInput {
 	readonly settings?: ExportSettings;
 	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 hex of the diagram source. */
 	readonly diagramSvgs?: Record<string, string>;
+	/** PNG rasters of the same diagrams, keyed identically; preferred over the SVGs. */
+	readonly diagramPngs?: Record<string, string>;
 }
 
 function collectText(node: Record<string, unknown>): string {
@@ -185,10 +181,9 @@ function textRunFromNode(node: Record<string, unknown>): InlineRun {
 interface ConversionContext {
 	readonly contentWidth: number;
 	readonly usableHeight: number;
-	readonly landscapeWidth: number;
-	readonly landscapeHeight: number;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagramSvgs: Readonly<Record<string, string>>;
+	readonly diagramPngs: Readonly<Record<string, string>>;
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
 }
@@ -376,21 +371,21 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 			}
 			return { text: children.length > 0 ? children : '', margin: [0, 0, 0, 4] };
 		}
-		case 'bulletList': {
-			return {
-				ul: content.map((item) => {
-					const itemContent = (item.content as Array<Record<string, unknown>> | undefined) ?? [];
-					const texts = itemContent.map((c) => convertNode(c, context)).flat();
-					return { text: texts.length > 0 ? texts : '' };
-				})
-			};
-		}
+		case 'bulletList':
 		case 'orderedList': {
 			return {
-				ol: content.map((item) => {
+				[type === 'bulletList' ? 'ul' : 'ol']: content.map((item) => {
 					const itemContent = (item.content as Array<Record<string, unknown>> | undefined) ?? [];
-					const texts = itemContent.map((c) => convertNode(c, context)).flat();
-					return { text: texts.length > 0 ? texts : '' };
+					const converted = itemContent.map((c) => convertNode(c, context)).flat();
+					if (converted.length === 0) return { text: '' };
+					// An item holding block content (a nested list, diagram, image, code
+					// panel) must stay a stack of blocks: forced into a text run, pdfmake
+					// silently drops everything that is not text.
+					const inlineOnly = itemContent.every(
+						(c) => c.type === 'paragraph' || c.type === 'text' || c.type === 'hardBreak'
+					);
+					if (inlineOnly) return { text: converted };
+					return { stack: converted };
 				})
 			};
 		}
@@ -408,39 +403,29 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 		}
 		case 'mermaid': {
 			const source = collectText(node);
-			const svg = context.diagramSvgs[mermaidSourceHash(source)];
-			if (svg) {
-				// Give diagrams the full content box: wide charts span the page width and
-				// tall charts may take a whole page, so labels stay readable.
-				const dimensions = svgDimensions(svg);
-				if (dimensions) {
-					const portraitScale = Math.min(
-						context.contentWidth / dimensions.width,
-						context.usableHeight / dimensions.height,
-						DIAGRAM_MAX_UPSCALE
-					);
-					const landscapeScale = Math.min(
-						context.landscapeWidth / dimensions.width,
-						context.landscapeHeight / dimensions.height,
-						DIAGRAM_MAX_UPSCALE
-					);
-					// A diagram that would shrink badly gets its own landscape page when
-					// that buys meaningfully larger rendering.
-					if (portraitScale < 0.65 && landscapeScale > portraitScale * 1.15) {
-						return {
-							svg,
-							width: dimensions.width * landscapeScale,
-							margin: [0, 8, 0, 8],
-							pageBreak: 'before',
-							pageOrientation: 'landscape',
-							restorePortraitAfter: true
-						};
-					}
-					return { svg, width: dimensions.width * portraitScale, margin: [0, 8, 0, 8] };
-				}
-				return { svg, fit: [context.contentWidth, context.usableHeight], margin: [0, 8, 0, 8] };
+			const hash = mermaidSourceHash(source);
+			// The browser-rendered PNG raster is the reference rendering (the DOCX export
+			// uses the same one); pdfmake's `fit` downscales to the content box, preserving
+			// aspect, without upscaling — so diagrams always stay inline on the page.
+			const png = context.diagramPngs[hash];
+			if (png) {
+				return {
+					image: png,
+					// Leave the block's own margins out of the fit box: an unbreakable block
+					// reaching the exact page body height sits on a knife's edge.
+					fit: [context.contentWidth, context.usableHeight - 16],
+					margin: [0, 8, 0, 8]
+				};
 			}
-			// Without a browser-rendered SVG the diagram source is still worth keeping.
+			const svg = context.diagramSvgs[hash];
+			if (svg) {
+				return {
+					svg,
+					fit: [context.contentWidth, context.usableHeight - 16],
+					margin: [0, 8, 0, 8]
+				};
+			}
+			// Without a browser render the diagram source is still worth keeping.
 			return codePanel(source);
 		}
 		case 'horizontalRule': {
@@ -520,10 +505,9 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 	const context: ConversionContext = {
 		contentWidth,
 		usableHeight,
-		landscapeWidth: A4_HEIGHT - margin * 2,
-		landscapeHeight: A4_WIDTH - margin * 2 - 16,
 		images,
 		diagramSvgs: input.diagramSvgs ?? {},
+		diagramPngs: input.diagramPngs ?? {},
 		bodyFont
 	};
 
@@ -552,18 +536,6 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 
 		content.push(...convertDoc(note.document, context));
 		content.push({ text: '', margin: [0, 0, 0, 8] });
-	}
-
-	// A landscape diagram page must flip the following content back to portrait.
-	let restorePortrait = false;
-	for (const item of content) {
-		const record = item as Record<string, unknown>;
-		if (restorePortrait && record.pageOrientation === undefined) {
-			record.pageBreak = 'before';
-			record.pageOrientation = 'portrait';
-		}
-		restorePortrait = record.restorePortraitAfter === true;
-		delete record.restorePortraitAfter;
 	}
 
 	const docDefinition: Record<string, unknown> = {

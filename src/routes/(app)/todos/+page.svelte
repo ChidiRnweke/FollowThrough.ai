@@ -5,7 +5,7 @@
 	let { data } = $props();
 </script>
 
-<PageShell width="wide" title="Todos" description="Every commitment across all projects.">
+<PageShell width="wide" fill title="Todos" description="Every commitment across all projects.">
 	<TodosWorkspace
 		todos={data.todos}
 		view={data.view}

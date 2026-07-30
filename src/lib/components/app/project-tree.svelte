@@ -492,7 +492,7 @@
 								variant="ghost"
 								{...props}
 								type="button"
-								class="absolute top-1/2 left-0 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
+								class="absolute top-0 bottom-0 left-0 z-10 my-auto flex size-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
 								aria-label="Reorder {entry.title}"
 							>
 								<GripVertical class="size-3" />
@@ -590,7 +590,7 @@
 										<Button
 											variant="ghost"
 											{...mergeProps(menuProps, tipProps)}
-											class="tactile absolute top-1/2 right-7 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+											class="tactile absolute top-0 right-7 bottom-0 my-auto size-5 rounded-md text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 											aria-label="Create in {entry.title}"
 										>
 											<Plus class="size-3.5" />
@@ -612,7 +612,7 @@
 									<Button
 										variant="ghost"
 										{...mergeProps(menuProps, tipProps)}
-										class="tactile absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+										class="tactile absolute top-0 right-1 bottom-0 my-auto size-5 rounded-md text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 										aria-label="Actions for {entry.title}"
 									>
 										<Ellipsis class="size-3.5" />

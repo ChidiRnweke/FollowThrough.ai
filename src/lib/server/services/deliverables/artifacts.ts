@@ -56,6 +56,7 @@ interface GeneratePdfInput {
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
 	readonly diagramSvgs?: Record<string, string>;
+	readonly diagramPngs?: Record<string, string>;
 }
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
@@ -118,7 +119,8 @@ export class ArtifactLibrary {
 			notes,
 			title: input.title,
 			settings,
-			...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {})
+			...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
+			...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
 		});
 	}
 
@@ -169,7 +171,8 @@ export class ArtifactLibrary {
 				title: input.title,
 				styles: extractedStyles,
 				settings,
-				...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {})
+				...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
+				...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
 			});
 		}
 

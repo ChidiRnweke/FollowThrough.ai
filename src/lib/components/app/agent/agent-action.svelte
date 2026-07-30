@@ -28,8 +28,11 @@
 			projectId?: ProjectId;
 			selection?: TextSelection;
 		};
-		/** `inline` joins an existing action cluster. `row` leads an empty region. */
-		variant?: 'inline' | 'row';
+		/**
+		 * `inline` joins an existing action cluster. `row` leads an empty region.
+		 * `outline` is the one promoted action on a page toolbar.
+		 */
+		variant?: 'inline' | 'row' | 'outline';
 		/** Drop the label for a tooltip, for headers with no room for one more word. */
 		compact?: boolean;
 		/** Overrides the default open-the-chat behaviour. Used by the in-panel starters. */
@@ -97,6 +100,19 @@
 			/>
 		</Button>
 	</div>
+{:else if variant === 'outline'}
+	<!-- The promoted page action: the teal outline marks it as the toolbar's one
+	     call to act, while the icon still names the agent. -->
+	<Button
+		variant="outline"
+		size="sm"
+		type="button"
+		class={['text-brand hover:text-brand', className]}
+		onclick={invoke}
+	>
+		<Icon class="size-3.5" />
+		{action.label}
+	</Button>
 {:else}
 	<Tip text={compact ? action.label : ''}>
 		{#snippet children({ props })}

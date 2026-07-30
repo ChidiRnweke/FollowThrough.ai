@@ -237,13 +237,14 @@
 		busy = true;
 		error = '';
 		try {
-			const { svgs: diagramSvgs } = await renderDiagrams();
+			const { svgs: diagramSvgs, pngs: diagramPngs } = await renderDiagrams();
 			const output = await previewDocument({
 				projectId,
 				noteIds: defaultNoteIds,
 				title: trimmed,
 				settings,
-				diagramSvgs
+				diagramSvgs,
+				diagramPngs
 			});
 			const bytes = Uint8Array.from(atob(output.data), (character) => character.charCodeAt(0));
 			clearPreview();

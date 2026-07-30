@@ -72,7 +72,8 @@ export const previewDocument = command(
 		noteIds: z.array(z.string().uuid()),
 		title: z.string().min(1),
 		settings: exportSettingsSchema.optional(),
-		diagramSvgs: z.record(z.string(), z.string()).optional()
+		diagramSvgs: z.record(z.string(), z.string()).optional(),
+		diagramPngs: z.record(z.string(), z.string()).optional()
 	}),
 	async (input) =>
 		AppFactory.controllers()

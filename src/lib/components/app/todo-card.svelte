@@ -39,8 +39,11 @@
 	const showPriority = $derived(view.todo.priority !== undefined && view.todo.priority !== 'low');
 	/* Only set values earn a badge — an empty field says nothing worth the space. */
 	const hasBadges = $derived(
-		projectName !== undefined || view.todo.dueDate !== undefined || waiting || showPriority
+		projectName !== undefined || view.todo.dueDate !== undefined || showPriority
 	);
+	/* The footer carries provenance and who the todo waits on — the card's
+	   glanceable metadata row. Rendered only when one of them is set. */
+	const hasFooter = $derived(view.provenance !== undefined || waiting);
 	function openBody(event: MouseEvent): void {
 		if (
 			(event.target as HTMLElement).closest('button, a, input, [role="button"], [role="combobox"]')
@@ -50,7 +53,11 @@
 	}
 </script>
 
-<Card.Root data-compact={compact || undefined} class="group/card gap-1.5 py-3" onclick={openBody}>
+<Card.Root
+	data-compact={compact || undefined}
+	class="group/card gap-2 rounded-lg py-3.5"
+	onclick={openBody}
+>
 	<Card.Header class="px-4">
 		<Card.Title class="flex min-w-0 items-start gap-2 text-sm font-medium">
 			{#if draggable}
@@ -77,31 +84,28 @@
 				onCheckedChange={(checked) => onstatus?.(view.todo.id, checked ? 'done' : 'open')}
 			/>
 			{#if onopen}
-				<Button
-					variant="link"
-					class="h-auto min-w-0 justify-start p-0 text-left font-medium break-words whitespace-normal text-foreground {done
-						? 'text-muted-foreground line-through'
-						: ''}"
+				<!-- Two-line cap: block layout + a max-height of exactly two line
+				     boxes (2 × leading-snug = 2.75em). A bare button, not a shadcn
+				     Button — the base `inline-flex` would fight the wrap. -->
+				<button
+					type="button"
+					class={[
+						'tactile min-w-0 flex-1 rounded-sm text-left text-sm leading-snug font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+						done ? 'text-muted-foreground line-through' : 'text-foreground'
+					]}
 					onclick={() => onopen(view.todo.id)}
 				>
-					{view.todo.title}
-				</Button>
+					<span class="block max-h-[2.75em] overflow-hidden break-words">{view.todo.title}</span>
+				</button>
 			{:else}
-				<span class={['min-w-0 break-words', done && 'text-muted-foreground line-through']}
-					>{view.todo.title}</span
+				<span
+					class={[
+						'block min-w-0 flex-1 leading-snug break-words max-h-[2.75em] overflow-hidden',
+						done && 'text-muted-foreground line-through'
+					]}>{view.todo.title}</span
 				>
 			{/if}
 		</Card.Title>
-		{#if view.provenance}
-			<Card.Action>
-				<ProvenanceDot
-					provenance={view.provenance}
-					anchor={view.anchor}
-					sourceTitle={view.sourceNote?.title}
-					href={view.sourceNote ? `/notes/${view.sourceNote.id}` : undefined}
-				/>
-			</Card.Action>
-		{/if}
 		{#if onstatus}
 			<Card.Action>
 				<DropdownMenu.Root>
@@ -152,10 +156,27 @@
 					>{todoPriorityLabels[view.todo.priority]}</Badge
 				>
 			{/if}
+		</Card.Content>
+	{/if}
+	{#if hasFooter}
+		<Card.Content class="flex items-center justify-between gap-2 px-4">
+			<span class="flex min-w-0 items-center gap-1.5">
+				{#if view.provenance}
+					<ProvenanceDot
+						provenance={view.provenance}
+						anchor={view.anchor}
+						sourceTitle={view.sourceNote?.title}
+						href={view.sourceNote ? `/notes/${view.sourceNote.id}` : undefined}
+					/>
+				{/if}
+				{#if view.sourceNote}
+					<span class="provenance-caption max-w-[14ch] truncate">{view.sourceNote.title}</span>
+				{/if}
+			</span>
 			{#if waiting}
-				<Badge variant="ghost" class="bg-warning/15 text-warning-foreground dark:text-warning"
-					>Waiting on {view.todo.waitingOn ?? 'someone'}</Badge
-				>
+				<span class="shrink-0 text-xs text-muted-foreground">
+					Waiting on {view.todo.waitingOn ?? 'someone'}
+				</span>
 			{/if}
 		</Card.Content>
 	{/if}

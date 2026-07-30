@@ -29,3 +29,16 @@ test('board cards omit metadata that is not set', async ({ page }) => {
 	await expect(page.getByText('No due date')).toHaveCount(0);
 	await expect(page.getByText('No source')).toHaveCount(0);
 });
+
+test('toolbar search filters board cards live', async ({ page }) => {
+	await page.setViewportSize(desktop);
+	await page.goto('/todos?view=board');
+	await page.locator('section').filter({ hasText: 'Backlog' }).first().waitFor();
+	const cards = page.locator('[data-slot="card"]');
+	const initial = await cards.count();
+	const search = page.getByLabel('Filter todos by title');
+	await search.fill('definitely-not-a-todo-title');
+	await expect(cards).toHaveCount(0);
+	await search.fill('');
+	await expect(cards).toHaveCount(initial);
+});

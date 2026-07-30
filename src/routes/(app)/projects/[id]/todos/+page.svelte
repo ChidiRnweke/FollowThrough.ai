@@ -8,6 +8,7 @@
 
 <PageShell
 	width="wide"
+	fill
 	title="Todos"
 	description="Commitments and follow-ups in {data.project.name}."
 >
