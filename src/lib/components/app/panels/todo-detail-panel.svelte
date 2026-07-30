@@ -51,6 +51,8 @@
 						value={view.todo.title}
 						field="title"
 						label="Todo title"
+						multiline
+						class="field-sizing-content min-h-9"
 					/>{/key}
 			</Field.Field>
 			<Field.Field>

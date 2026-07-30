@@ -84,23 +84,25 @@
 				onCheckedChange={(checked) => onstatus?.(view.todo.id, checked ? 'done' : 'open')}
 			/>
 			{#if onopen}
-				<!-- Two-line cap: block layout + a max-height of exactly two line
-				     boxes (2 × leading-snug = 2.75em). A bare button, not a shadcn
-				     Button — the base `inline-flex` would fight the wrap. -->
+				<!-- Full wrap, no clamp: a clipped title reads as lost text. A bare
+				     button, not a shadcn Button — the base `inline-flex`/`whitespace-nowrap`
+				     would fight the wrap. Focus shows as an underline, not a ring: Chrome
+				     applies :focus-visible to clicked buttons, and a ring leaves a box
+				     parked around the title of whichever todo is open. -->
 				<button
 					type="button"
 					class={[
-						'tactile min-w-0 flex-1 rounded-sm text-left text-sm leading-snug font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+						'tactile min-w-0 flex-1 rounded-sm text-left text-sm leading-snug font-medium break-words underline-offset-2 outline-none focus-visible:underline',
 						done ? 'text-muted-foreground line-through' : 'text-foreground'
 					]}
 					onclick={() => onopen(view.todo.id)}
 				>
-					<span class="block max-h-[2.75em] overflow-hidden break-words">{view.todo.title}</span>
+					{view.todo.title}
 				</button>
 			{:else}
 				<span
 					class={[
-						'block min-w-0 flex-1 leading-snug break-words max-h-[2.75em] overflow-hidden',
+						'min-w-0 flex-1 leading-snug break-words',
 						done && 'text-muted-foreground line-through'
 					]}>{view.todo.title}</span
 				>

@@ -11,7 +11,8 @@
 		field,
 		multiline = false,
 		label,
-		id
+		id,
+		class: className
 	}: {
 		todoId: TodoId;
 		value?: string;
@@ -19,6 +20,7 @@
 		multiline?: boolean;
 		label: string;
 		id?: string;
+		class?: string;
 	} = $props();
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());
@@ -48,6 +50,7 @@
 {#if multiline}<Textarea
 		{id}
 		aria-label={label}
+		class={className}
 		bind:value={draft}
 		onblur={() => void commit()}
 		onkeydown={keydown}
@@ -55,6 +58,7 @@
 	/>{:else}<Input
 		{id}
 		aria-label={label}
+		class={className}
 		bind:value={draft}
 		onblur={() => void commit()}
 		onkeydown={keydown}
