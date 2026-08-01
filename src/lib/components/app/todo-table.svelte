@@ -9,6 +9,7 @@
 	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
+	import { sortTodoViews, type TodoSortDir, type TodoSortKey } from './todo-sort';
 
 	let {
 		todos,
@@ -24,67 +25,14 @@
 		categories?: readonly string[];
 	} = $props();
 
-	type SortKey =
-		| 'title'
-		| 'project'
-		| 'status'
-		| 'priority'
-		| 'category'
-		| 'due'
-		| 'responsibility'
-		| 'source';
-
 	// Null = keep the server's order (dueDate asc, updatedAt desc). Clicking a header
 	// cycles asc → desc → cleared.
-	let sortKey = $state<SortKey | null>(null);
-	let sortDir = $state<'asc' | 'desc'>('asc');
+	let sortKey = $state<TodoSortKey | null>(null);
+	let sortDir = $state<TodoSortDir>('asc');
 
-	// Workflow order, matching todoStatusLabels; urgency-first for priority.
-	const statusOrder = ['backlog', 'open', 'in_progress', 'done', 'cancelled'] as const;
-	const priorityOrder = ['high', 'medium', 'low'] as const;
-	const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+	const sortedTodos = $derived(sortTodoViews(todos, sortKey, sortDir, projectNames));
 
-	function sortValue(view: TodoView, key: SortKey): string | number | null {
-		switch (key) {
-			case 'title':
-				return view.todo.title;
-			case 'project':
-				return projectNames?.get(view.todo.projectId) ?? null;
-			case 'status':
-				return statusOrder.indexOf(view.todo.status);
-			case 'priority':
-				return view.todo.priority ? priorityOrder.indexOf(view.todo.priority) : null;
-			case 'category':
-				return view.todo.category ?? null;
-			case 'due':
-				return view.todo.dueDate ?? null;
-			case 'responsibility':
-				return view.todo.responsibility;
-			case 'source':
-				return view.sourceNote?.title ?? null;
-		}
-	}
-
-	const sortedTodos = $derived.by(() => {
-		if (!sortKey) return todos;
-		const key = sortKey;
-		const dir = sortDir === 'asc' ? 1 : -1;
-		return todos.toSorted((a, b) => {
-			const va = sortValue(a, key);
-			const vb = sortValue(b, key);
-			// Nulls always sort last, whichever direction.
-			if (va === null && vb === null) return 0;
-			if (va === null) return 1;
-			if (vb === null) return -1;
-			const cmp =
-				typeof va === 'number' && typeof vb === 'number'
-					? va - vb
-					: collator.compare(String(va), String(vb));
-			return cmp * dir;
-		});
-	});
-
-	function toggleSort(key: SortKey): void {
+	function toggleSort(key: TodoSortKey): void {
 		if (sortKey !== key) {
 			sortKey = key;
 			sortDir = 'asc';
@@ -96,7 +44,7 @@
 	}
 </script>
 
-{#snippet sortHead(key: SortKey, label: string)}
+{#snippet sortHead(key: TodoSortKey, label: string)}
 	<Table.Head
 		class="eyebrow"
 		aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
