@@ -35,7 +35,7 @@ import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
 } from '$lib/server/services/notes/markdown';
-import { applyNotePatch, describeNotePatchFailure } from '$lib/models';
+import { applyNotePatch, describeNotePatchFailure, webSearchEngines } from '$lib/models';
 import {
 	invalidUseToolEnvelope,
 	invalidUseToolPayload,
@@ -1105,18 +1105,24 @@ export class AgentTools {
 			),
 			define(
 				'get_agent_preferences',
-				'Read default chat model, execution mode, and inline suggestion preference.',
+				'Read the agent defaults: chat, vision, inline and attachment models, execution mode, inline suggestions, web search settings, and the turn limit.',
 				'read',
 				none,
 				() => factory.agentSettings().getPreferences(actor)
 			),
 			define(
 				'update_agent_preferences',
-				'Change default chat model, execution mode, or inline suggestion preference. Send only the fields to change; omitted fields keep their stored value and a null defaultModel clears it.',
+				'Change any agent default: models, execution mode, inline suggestions, web search engine and result caps, or the per-run turn limit. Send only the fields to change; omitted fields keep their stored value and an explicit null clears one back to the deployment default.',
 				'mutation',
 				z.object({
 					defaultModel: z.string().nullable().optional(),
 					defaultVisionModel: z.string().nullable().optional(),
+					inlineModel: z.string().nullable().optional(),
+					attachmentVisionModel: z.string().nullable().optional(),
+					webSearchEngine: z.enum(webSearchEngines).nullable().optional(),
+					webSearchMaxResults: z.number().int().min(1).max(50).nullable().optional(),
+					webSearchMaxTotalResults: z.number().int().min(1).max(100).nullable().optional(),
+					agentMaxTurns: z.number().int().min(1).max(50).nullable().optional(),
 					executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
 					inlineSuggestionsEnabled: z.boolean().optional()
 				}),

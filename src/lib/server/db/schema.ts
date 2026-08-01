@@ -620,16 +620,50 @@ export const conversations = pgTable(
 	(table) => [index('conversations_user_updated_idx').on(table.userId, table.updatedAt)]
 );
 
-export const agentPreferences = pgTable('agent_preferences', {
-	userId: uuid('user_id')
-		.primaryKey()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	defaultModel: text('default_model'),
-	defaultVisionModel: text('default_vision_model'),
-	executionMode: agentExecutionMode('execution_mode').notNull().default('approval_required'),
-	inlineSuggestionsEnabled: boolean('inline_suggestions_enabled').notNull().default(true),
-	...timestamps
-});
+/**
+ * The user's agent defaults. Every nullable column means "use the deployment
+ * default" rather than "off": clearing a setting hands it back to the
+ * environment instead of pinning whatever value happened to be stored, which is
+ * what makes a redeployed default reach users who never touched the setting.
+ *
+ * The ranges are checked here as well as in the controller because two callers
+ * write this table — the settings form and the agent's own
+ * `update_agent_preferences` — and a limit the agent can talk its way past is
+ * not a limit.
+ */
+export const agentPreferences = pgTable(
+	'agent_preferences',
+	{
+		userId: uuid('user_id')
+			.primaryKey()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		defaultModel: text('default_model'),
+		defaultVisionModel: text('default_vision_model'),
+		inlineModel: text('inline_model'),
+		attachmentVisionModel: text('attachment_vision_model'),
+		webSearchEngine: text('web_search_engine'),
+		webSearchMaxResults: integer('web_search_max_results'),
+		webSearchMaxTotalResults: integer('web_search_max_total_results'),
+		agentMaxTurns: integer('agent_max_turns'),
+		executionMode: agentExecutionMode('execution_mode').notNull().default('approval_required'),
+		inlineSuggestionsEnabled: boolean('inline_suggestions_enabled').notNull().default(true),
+		...timestamps
+	},
+	(table) => [
+		check(
+			'agent_preferences_web_search_max_results_range',
+			sql`${table.webSearchMaxResults} is null or (${table.webSearchMaxResults} >= 1 and ${table.webSearchMaxResults} <= 50)`
+		),
+		check(
+			'agent_preferences_web_search_max_total_results_range',
+			sql`${table.webSearchMaxTotalResults} is null or (${table.webSearchMaxTotalResults} >= 1 and ${table.webSearchMaxTotalResults} <= 100)`
+		),
+		check(
+			'agent_preferences_max_turns_range',
+			sql`${table.agentMaxTurns} is null or (${table.agentMaxTurns} >= 1 and ${table.agentMaxTurns} <= 50)`
+		)
+	]
+);
 
 /**
  * Which agent tools the user has turned off. Rows are sparse: an absent tool is

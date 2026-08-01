@@ -6,6 +6,7 @@ import {
 } from '@arizeai/openinference-semantic-conventions';
 import type { Attributes } from '@opentelemetry/api';
 import type { InlineCompletionContext, InlineSuggestionRequest } from '$lib/models';
+import { normalizeLanguageModelId } from '$lib/server/services/agent-runs/preferences';
 interface OperationObserver {
 	run<T>(
 		name: string,
@@ -222,21 +223,26 @@ export class InlineSuggestionCompletion implements IInlineSuggestionCompletion {
 	async complete(
 		request: InlineSuggestionRequest,
 		context: InlineCompletionContext,
-		signal: AbortSignal
+		signal: AbortSignal,
+		model?: string
 	): Promise<string> {
+		// The caller's per-user model wins; `this.model` is the environment
+		// default and stays the fallback for anyone who has not chosen one.
+		// Normalised here rather than at the call site so both branches get it.
+		const selected = normalizeLanguageModelId(model ?? this.model);
 		const prompt = inlineCompletionPrompt(request, context);
 		const result = await this.observer.run(
 			'inline.generate',
 			{
 				input: prompt,
 				kind: OpenInferenceSpanKind.LLM,
-				metadata: { model: this.model },
+				metadata: { model: selected },
 				tags: ['inline', 'generation']
 			},
 			async () => {
 				const completion = await this.client.chat.completions.create(
 					{
-						model: this.model,
+						model: selected,
 						max_tokens: MAX_COMPLETION_TOKENS,
 						temperature: 0.2,
 						messages: [
@@ -251,7 +257,7 @@ export class InlineSuggestionCompletion implements IInlineSuggestionCompletion {
 				return {
 					text: sanitizeCompletion(request.prefix, raw),
 					raw,
-					model: completion.model || this.model,
+					model: completion.model || selected,
 					finishReason: choice?.finish_reason ?? 'missing',
 					refused: Boolean(choice?.message.refusal),
 					usage: completion.usage

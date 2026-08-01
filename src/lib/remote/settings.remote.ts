@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command, form, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
-import type { ApiTokenId, ProjectId, UpdateTrustPolicyInput } from '$lib/models';
+import type { ApiTokenId, ProjectId, UpdateTrustPolicyInput, WebSearchEngine } from '$lib/models';
 
 /**
  * The settings switches are custom controls backed by hidden inputs, so their
@@ -11,11 +11,26 @@ import type { ApiTokenId, ProjectId, UpdateTrustPolicyInput } from '$lib/models'
  */
 const booleanText = z.enum(['true', 'false']).transform((value) => value === 'true');
 
-export const saveAgentPreferences = form(
+/**
+ * Numeric settings arrive as strings for the same reason the booleans do, and an
+ * empty field means "clear it" rather than zero. The ranges are the controller's
+ * to enforce — repeating them here would only decide which error the user sees
+ * first.
+ */
+const numberText = z
+	.string()
+	.transform((value) => (value.trim() === '' ? null : Number(value)))
+	.refine((value) => value === null || Number.isFinite(value), 'Enter a number');
+
+// The Models and Agents settings tabs save through separate forms, each sending
+// only its own fields; the controller merges partial updates, so neither form has
+// to know about the other's settings.
+export const saveModelPreferences = form(
 	z.object({
 		defaultModel: z.string(),
 		defaultVisionModel: z.string(),
-		executionMode: z.enum(['approval_required', 'auto_accept']),
+		inlineModel: z.string(),
+		attachmentVisionModel: z.string(),
 		inlineSuggestionsEnabled: booleanText
 	}),
 	async (input) => {
@@ -24,8 +39,31 @@ export const saveAgentPreferences = form(
 			.updatePreferences(requestActor(), {
 				defaultModel: input.defaultModel.trim() || null,
 				defaultVisionModel: input.defaultVisionModel.trim() || null,
-				executionMode: input.executionMode,
+				inlineModel: input.inlineModel.trim() || null,
+				attachmentVisionModel: input.attachmentVisionModel.trim() || null,
 				inlineSuggestionsEnabled: input.inlineSuggestionsEnabled
+			});
+		return { saved: true };
+	}
+);
+
+export const saveAgentPreferences = form(
+	z.object({
+		webSearchEngine: z.string(),
+		webSearchMaxResults: numberText,
+		webSearchMaxTotalResults: numberText,
+		agentMaxTurns: numberText,
+		executionMode: z.enum(['approval_required', 'auto_accept'])
+	}),
+	async (input) => {
+		await AppFactory.controllers()
+			.agentSettings()
+			.updatePreferences(requestActor(), {
+				webSearchEngine: (input.webSearchEngine.trim() || null) as WebSearchEngine | null,
+				webSearchMaxResults: input.webSearchMaxResults,
+				webSearchMaxTotalResults: input.webSearchMaxTotalResults,
+				agentMaxTurns: input.agentMaxTurns,
+				executionMode: input.executionMode
 			});
 		return { saved: true };
 	}

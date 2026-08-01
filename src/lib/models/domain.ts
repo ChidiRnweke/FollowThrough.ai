@@ -395,10 +395,40 @@ export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 export type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 
+/**
+ * Which provider fulfils the agent's web searches. Declared here rather than in
+ * the server's web-research module because the settings picker renders the list
+ * and the stored preference is validated against it.
+ */
+export const webSearchEngines = [
+	'auto',
+	'native',
+	'exa',
+	'firecrawl',
+	'parallel',
+	'perplexity'
+] as const;
+
+export type WebSearchEngine = (typeof webSearchEngines)[number];
+
+/**
+ * The user's agent defaults. Every optional field is absent rather than null
+ * when unset, and absent means "use the deployment default" — see the
+ * `agent_preferences` table for why that distinction is load-bearing.
+ */
 export interface AgentPreferences {
 	readonly userId: UserId;
 	readonly defaultModel?: string;
 	readonly defaultVisionModel?: string;
+	/** Model behind inline ghost text. Never calls tools, so it need not support them. */
+	readonly inlineModel?: string;
+	/** Model that reads attachment images and OCRs documents. */
+	readonly attachmentVisionModel?: string;
+	readonly webSearchEngine?: WebSearchEngine;
+	readonly webSearchMaxResults?: number;
+	readonly webSearchMaxTotalResults?: number;
+	/** Tool-calling turns one chat run may take before it is cut off. */
+	readonly agentMaxTurns?: number;
 	readonly executionMode: AgentExecutionMode;
 	readonly inlineSuggestionsEnabled: boolean;
 	readonly createdAt: DateTime;
@@ -904,6 +934,17 @@ export interface RunAgentInput {
 	readonly modelOverride?: string | null;
 	readonly visionModelOverride?: string | null;
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
+	/**
+	 * Limits resolved from the user's preferences when the run was staged, not
+	 * chosen per message. They travel on the request because the services that
+	 * honour them are constructed once for the process and never see an actor.
+	 */
+	readonly maxTurns?: number;
+	readonly webSearch?: {
+		readonly engine?: WebSearchEngine;
+		readonly maxResults?: number;
+		readonly maxTotalResults?: number;
+	};
 	readonly prompt: string;
 	readonly images?: readonly ConversationImageInput[];
 	readonly appContext?: import('./app-context').AppContextSnapshotV1;
@@ -1065,6 +1106,12 @@ export interface DecideAgentRunBatchInput {
 export interface UpdateAgentPreferencesInput {
 	readonly defaultModel?: string | null;
 	readonly defaultVisionModel?: string | null;
+	readonly inlineModel?: string | null;
+	readonly attachmentVisionModel?: string | null;
+	readonly webSearchEngine?: WebSearchEngine | null;
+	readonly webSearchMaxResults?: number | null;
+	readonly webSearchMaxTotalResults?: number | null;
+	readonly agentMaxTurns?: number | null;
 	readonly executionMode?: import('./domain').AgentExecutionMode;
 	readonly inlineSuggestionsEnabled?: boolean;
 }

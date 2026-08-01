@@ -1,6 +1,7 @@
 import type {
 	ActorContext,
 	AgentEvent,
+	AgentPreferences,
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunId,
@@ -24,7 +25,11 @@ import type {
 	AgentPreferencesStore,
 	ConversationJournal
 } from '$lib/server/services';
-import { resolveAgentExecutionMode, resolveAgentModel } from '$lib/server/services';
+import {
+	resolveAgentExecutionMode,
+	resolveAgentModel,
+	resolveVisionModel
+} from '$lib/server/services';
 import type { AgentRunLifecycle } from '$lib/server/services/agent-runs/lifecycle';
 import { rewindToUserItem } from '$lib/server/services/conversations/rewind';
 import type { AtomicOperation as TransactionRunner } from '$lib/utils';
@@ -125,6 +130,7 @@ export interface AgentDependencies {
 	sessions: AgentSessionRepository;
 	transactionRunner: TransactionRunner;
 	defaultModel: string;
+	defaultVisionModel: string;
 	executor: AgentRunLifecycle;
 }
 
@@ -175,25 +181,41 @@ export class Agent implements AgentController {
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
 				const submittedAt = now();
-				const runInput = this.freezeInput(input);
+				// Limits are frozen onto the input alongside the prompt: a run replayed
+				// later should run under the settings it was submitted with, not
+				// whatever they have since become.
+				const preferences = await this.dependencies.preferences.get(actor);
+				const runInput = this.freezeInput(input, preferences);
 				const conversation = await this.dependencies.conversationJournal.getOrCreate(
 					actor,
 					runInput
 				);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
-				const preferences = await this.dependencies.preferences.get(actor);
+				const model = resolveAgentModel(
+					conversation,
+					preferences,
+					this.dependencies.defaultModel
+				);
+				// Settled only now, because it depends on the chat model, which is not
+				// known until the conversation has been resolved.
+				const finalInput = await this.withImageReader(
+					runInput,
+					model,
+					conversation,
+					preferences
+				);
 				const run: AgentRun = {
 					id: crypto.randomUUID() as AgentRunId,
 					userId: actor.userId,
 					conversationId: conversation.id,
-					model: resolveAgentModel(conversation, preferences, this.dependencies.defaultModel),
+					model,
 					executionMode: resolveAgentExecutionMode(conversation, preferences),
 					status: 'queued',
 					requestId: input.requestId,
 					pendingDecisions: [],
 					contextSnapshot: {},
-					inputSnapshot: runInput as unknown as Readonly<Record<string, unknown>>,
+					inputSnapshot: finalInput as unknown as Readonly<Record<string, unknown>>,
 					definitionVersion: 2,
 					createdAt: submittedAt,
 					updatedAt: submittedAt
@@ -384,7 +406,7 @@ export class Agent implements AgentController {
 		if (rewound) await this.dependencies.sessions.replace(conversationId, rewound);
 	}
 
-	private freezeInput(input: SubmitAgentRunInput): RunAgentInput {
+	private freezeInput(input: SubmitAgentRunInput, preferences: AgentPreferences): RunAgentInput {
 		if ((input.images?.length ?? 0) > 4) throw new ValidationError('Attach at most four images.');
 		const imageBytes = (input.images ?? []).reduce((sum, image) => {
 			if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType))
@@ -408,6 +430,17 @@ export class Agent implements AgentController {
 				: undefined;
 		const overriddenNoteId =
 			input.noteId && contextNoteId && input.noteId !== contextNoteId ? input.noteId : undefined;
+		// Only the fields the user actually set travel; an empty object would
+		// otherwise override the deployment defaults with nothing.
+		const webSearch = {
+			...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
+			...(preferences.webSearchMaxResults
+				? { maxResults: preferences.webSearchMaxResults }
+				: {}),
+			...(preferences.webSearchMaxTotalResults
+				? { maxTotalResults: preferences.webSearchMaxTotalResults }
+				: {})
+		};
 		return {
 			requestId: input.requestId,
 			prompt: input.input,
@@ -434,7 +467,45 @@ export class Agent implements AgentController {
 				: {}),
 			...(input.model !== undefined ? { modelOverride: input.model } : {}),
 			...(input.visionModel !== undefined ? { visionModelOverride: input.visionModel } : {}),
-			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {})
+			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {}),
+			...(preferences.agentMaxTurns ? { maxTurns: preferences.agentMaxTurns } : {}),
+			...(Object.keys(webSearch).length > 0 ? { webSearch } : {})
+		};
+	}
+
+	/**
+	 * Decide which model reads this run's images.
+	 *
+	 * When the chat model has native vision it reads them itself and no
+	 * describer is set — a vision model left selected in the composer is not a
+	 * request to caption, since that picker stays populated while disabled and a
+	 * stale selection would downgrade a model that can see the image to a
+	 * second-hand description of it.
+	 *
+	 * Otherwise the user's default (or the deployment's) is attached, which is
+	 * what stops images from being silently dropped by a model that cannot read
+	 * them. A catalogue lookup that fails falls through to describing: a wasted
+	 * caption call is recoverable, a discarded image is not.
+	 */
+	private async withImageReader(
+		runInput: RunAgentInput,
+		chatModel: string,
+		conversation: Conversation,
+		preferences: AgentPreferences
+	): Promise<RunAgentInput> {
+		if (!runInput.images?.length) return runInput;
+		const models = await this.dependencies.models.list().catch(() => []);
+		if (models.find((candidate) => candidate.id === chatModel)?.supportsVision) {
+			const { visionModelOverride: _discarded, ...rest } = runInput;
+			return rest;
+		}
+		return {
+			...runInput,
+			visionModelOverride: resolveVisionModel(
+				conversation,
+				preferences,
+				this.dependencies.defaultVisionModel
+			)
 		};
 	}
 

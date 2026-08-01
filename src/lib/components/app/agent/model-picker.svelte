@@ -13,6 +13,7 @@
 		defaultLabel = 'Use default',
 		compact = false,
 		disabled = false,
+		requireTools = true,
 		onchange
 	}: {
 		models: readonly AgentModel[];
@@ -21,11 +22,26 @@
 		defaultLabel?: string;
 		compact?: boolean;
 		disabled?: boolean;
+		/**
+		 * The chat model must call tools, so a model that cannot is offered but
+		 * unselectable. The inline and attachment pickers make plain completion
+		 * calls and set this false — filtering them to tool-capable models would
+		 * rule out exactly the small, fast models those paths want.
+		 */
+		requireTools?: boolean;
 		onchange?: (value: string | null) => void;
 	} = $props();
 
 	let open = $state(false);
 	const selected = $derived(models.find((model) => model.id === value));
+
+	// Native vision is named in the metadata line because it decides whether a
+	// separate vision model is used at all; a reader choosing a chat model needs
+	// to see it here, before the vision picker greys itself out below.
+	const describe = (model: AgentModel): string =>
+		[...model.capabilities, model.supportsVision ? 'sees images' : undefined]
+			.filter((entry) => entry !== undefined)
+			.join(', ') || 'No tool support';
 
 	function select(next: string | null): void {
 		value = next;
@@ -73,14 +89,16 @@
 					{#each models.filter((model) => model.recommended) as model (model.id)}
 						<Command.Item
 							value={`${model.name} ${model.provider} ${model.id}`}
-							disabled={!model.supportsTools}
+							disabled={requireTools && !model.supportsTools}
 							onSelect={() => select(model.id)}
 						>
 							<Check class={value === model.id ? 'opacity-100' : 'opacity-0'} />
 							<div class="min-w-0 flex-1">
 								<p class="truncate">{model.name}</p>
 								<p class="truncate text-xs text-muted-foreground">
-									{model.provider} · {model.contextLength?.toLocaleString() ?? '—'} tokens
+									{model.provider} · {model.contextLength?.toLocaleString() ?? '—'} tokens{model.supportsVision
+										? ' · sees images'
+										: ''}
 								</p>
 							</div>
 							<Badge variant="secondary">Recommended</Badge>
@@ -92,14 +110,14 @@
 					{#each models as model (model.id)}
 						<Command.Item
 							value={`${model.name} ${model.provider} ${model.id}`}
-							disabled={!model.supportsTools}
+							disabled={requireTools && !model.supportsTools}
 							onSelect={() => select(model.id)}
 						>
 							<Check class={value === model.id ? 'opacity-100' : 'opacity-0'} />
 							<div class="min-w-0 flex-1">
 								<p class="truncate">{model.name}</p>
 								<p class="truncate text-xs text-muted-foreground">
-									{model.provider} · {model.capabilities.join(', ') || 'No tool support'}
+									{model.provider} · {describe(model)}
 								</p>
 							</div>
 						</Command.Item>

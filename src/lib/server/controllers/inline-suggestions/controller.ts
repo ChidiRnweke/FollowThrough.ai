@@ -42,7 +42,10 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		signal: AbortSignal
 	): Promise<InlineSuggestion> {
 		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return INELIGIBLE;
-		const note = await this.authorize(actor, request);
+		// One read serves both the on/off gate and the model choice; ghost text
+		// fires on every typing pause, so a second round trip here is not free.
+		const preferences = await this.dependencies.preferences.get(actor);
+		const note = await this.authorize(actor, request, preferences.inlineSuggestionsEnabled);
 		if (!note) return INELIGIBLE;
 		const admission = this.dependencies.inlineSuggestionThrottle.admit(actor.userId);
 		if (!admission.allowed)
@@ -83,7 +86,8 @@ export class InlineSuggestions implements InlineSuggestionsController {
 						text = await this.dependencies.inlineCompletionGenerator.complete(
 							authoritativeRequest,
 							context,
-							signal
+							signal,
+							preferences.inlineModel
 						);
 					} catch (error) {
 						if (signal.aborted) throw error;
@@ -111,10 +115,10 @@ export class InlineSuggestions implements InlineSuggestionsController {
 
 	private async authorize(
 		actor: ActorContext,
-		request: InlineSuggestionRequest
+		request: InlineSuggestionRequest,
+		enabled: boolean
 	): Promise<Note | undefined> {
-		if (!(await this.dependencies.preferences.get(actor)).inlineSuggestionsEnabled)
-			return undefined;
+		if (!enabled) return undefined;
 		const note = await this.dependencies.noteReader.get(actor, request.noteId);
 		return note.archivedAt ? undefined : note;
 	}

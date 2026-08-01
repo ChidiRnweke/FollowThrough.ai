@@ -59,12 +59,18 @@ export interface InlineCompletionContextBuilder {
 	): Promise<InlineCompletionContext>;
 }
 
-/** One toolless model call that turns assembled context into caret text. */
+/**
+ * One toolless model call that turns assembled context into caret text.
+ *
+ * `model` is the caller's per-user choice; omitting it falls back to the
+ * generator's own environment-derived default.
+ */
 export interface InlineCompletionGenerator {
 	complete(
 		request: InlineSuggestionRequest,
 		context: InlineCompletionContext,
-		signal: AbortSignal
+		signal: AbortSignal,
+		model?: string
 	): Promise<string>;
 }
 

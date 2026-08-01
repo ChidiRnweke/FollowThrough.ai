@@ -46,6 +46,7 @@ const setup = () => {
 		sessions,
 		transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 		defaultModel: 'openai/test-model',
+		defaultVisionModel: 'openai/test-vision-model',
 		executor: noopExecutor
 	});
 	return { controller, conversations, runs, sessions };

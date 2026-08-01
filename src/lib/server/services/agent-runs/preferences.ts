@@ -10,6 +10,7 @@ import type {
 } from '$lib/models';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories';
+import type { WebResearchOptions } from './web-research';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -26,9 +27,30 @@ export interface AgentPreferencesStore {
 
 export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
+	/** Selectable as the chat model: must exist and support tool calling. */
 	assertSelectable(modelId: string): Promise<void>;
 	assertVisionSelectable?(modelId: string): Promise<void>;
+	/**
+	 * Selectable for a toolless call such as inline completion. Existence is the
+	 * only requirement — demanding tool support here would rule out exactly the
+	 * small, fast models this path wants.
+	 */
+	assertGenerationSelectable?(modelId: string): Promise<void>;
 }
+
+/**
+ * One field of a partial edit. The three cases are distinct and all three are
+ * used: `null` clears the setting back to the deployment default, a value sets
+ * it, and `undefined` leaves whatever is stored alone — which is what lets the
+ * agent change one setting without having to send the rest.
+ */
+const edit = <K extends string, V>(
+	key: K,
+	value: V | null | undefined
+): Partial<Record<K, V | undefined>> => {
+	if (value === undefined) return {};
+	return { [key]: value === null ? undefined : value } as Record<K, V | undefined>;
+};
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore {
 	constructor(private readonly repository: AgentPreferencesRepository) {}
@@ -49,16 +71,14 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore {
 		const current = await this.get(actor);
 		return this.repository.upsert(actor, {
 			...current,
-			...(input.defaultModel === null
-				? { defaultModel: undefined }
-				: input.defaultModel
-					? { defaultModel: input.defaultModel }
-					: {}),
-			...(input.defaultVisionModel === null
-				? { defaultVisionModel: undefined }
-				: input.defaultVisionModel
-					? { defaultVisionModel: input.defaultVisionModel }
-					: {}),
+			...edit('defaultModel', input.defaultModel),
+			...edit('defaultVisionModel', input.defaultVisionModel),
+			...edit('inlineModel', input.inlineModel),
+			...edit('attachmentVisionModel', input.attachmentVisionModel),
+			...edit('webSearchEngine', input.webSearchEngine),
+			...edit('webSearchMaxResults', input.webSearchMaxResults),
+			...edit('webSearchMaxTotalResults', input.webSearchMaxTotalResults),
+			...edit('agentMaxTurns', input.agentMaxTurns),
 			...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
 			...(input.inlineSuggestionsEnabled !== undefined
 				? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
@@ -126,6 +146,11 @@ export class AgentModels implements AgentModelCatalog {
 		if (!model?.supportsVision)
 			throw new ValidationError('The selected vision model is unavailable or cannot read images');
 	}
+
+	async assertGenerationSelectable(modelId: string): Promise<void> {
+		const model = (await this.list()).find((candidate) => candidate.id === modelId);
+		if (!model) throw new ValidationError('The selected model is unavailable');
+	}
 }
 
 export function resolveAgentModel(
@@ -146,6 +171,41 @@ export function resolveVisionModel(
 	return normalizeLanguageModelId(
 		conversation.visionModelOverride ?? preferences.defaultVisionModel ?? environmentDefault
 	);
+}
+
+export function resolveAttachmentVisionModel(
+	preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
+	environmentDefault: string
+): string {
+	return normalizeLanguageModelId(preferences.attachmentVisionModel ?? environmentDefault);
+}
+
+export function resolveMaxTurns(
+	preferences: Pick<AgentPreferences, 'agentMaxTurns'>,
+	environmentDefault: number
+): number {
+	return preferences.agentMaxTurns ?? environmentDefault;
+}
+
+/**
+ * Layered over the environment options rather than replacing them, so a user who
+ * has set only a result cap still gets the deployment's engine.
+ */
+export function resolveWebSearchOptions(
+	preferences: Pick<
+		AgentPreferences,
+		'webSearchEngine' | 'webSearchMaxResults' | 'webSearchMaxTotalResults'
+	>,
+	environmentDefaults: WebResearchOptions
+): WebResearchOptions {
+	return {
+		...environmentDefaults,
+		...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
+		...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
+		...(preferences.webSearchMaxTotalResults
+			? { maxTotalResults: preferences.webSearchMaxTotalResults }
+			: {})
+	};
 }
 
 export function resolveAgentExecutionMode(

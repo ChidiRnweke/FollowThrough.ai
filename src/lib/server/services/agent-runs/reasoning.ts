@@ -21,6 +21,18 @@ import { AgentProviderFailure } from '$lib/models';
 import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories';
 import { suggestToolNames } from '$lib/utils';
+import {
+	openRouterWebSearchTool,
+	withWebResearch,
+	type WebResearchOptions
+} from './web-research';
+
+/**
+ * Turns one run may take before the SDK cuts it off. High enough that a
+ * research-shaped request finishes, low enough that a model stuck in a tool loop
+ * stops costing money. Users can raise it in settings.
+ */
+export const DEFAULT_MAX_TURNS = 20;
 
 type ToolStreamEvent = {
 	readonly type: string;
@@ -274,6 +286,11 @@ export class AgentReasoning {
 		private readonly apiKey = process.env.OPENROUTER_API_KEY,
 		private readonly baseURL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
 		private readonly appURL = process.env.ORIGIN ?? 'http://localhost:5173',
+		/**
+		 * The base transport. Web search is layered on per run rather than baked
+		 * in here, because the engine and result caps are a per-user setting and
+		 * this class is constructed once for the process.
+		 */
 		private readonly providerFetch?: typeof globalThis.fetch,
 		private readonly createSession: (
 			repository: AgentSessionRepository,
@@ -282,7 +299,8 @@ export class AgentReasoning {
 		) => BufferedSession = () => {
 			throw new Error('Conversation sessions are not configured');
 		},
-		private readonly observeTurn: AgentTurnObserver = directTurnObserver
+		private readonly observeTurn: AgentTurnObserver = directTurnObserver,
+		private readonly webSearchDefaults: WebResearchOptions = {}
 	) {}
 
 	async *execute(input: {
@@ -301,7 +319,7 @@ export class AgentReasoning {
 				'CONFIGURATION',
 				false
 			);
-		const provider = this.provider();
+		const provider = this.provider({ ...this.webSearchDefaults, ...request.webSearch });
 		const registry = await this.tools({
 			actor,
 			request,
@@ -392,7 +410,7 @@ export class AgentReasoning {
 				const stream = await runner.run(agent, (state ?? initialInput) as never, {
 					stream: true,
 					session,
-					maxTurns: 20,
+					maxTurns: request.maxTurns ?? DEFAULT_MAX_TURNS,
 					signal,
 					...toolRecovery
 				});
@@ -506,11 +524,14 @@ export class AgentReasoning {
 		});
 	}
 
-	private provider(): OpenAIProvider {
+	private provider(webSearch: WebResearchOptions): OpenAIProvider {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,
-			fetch: this.providerFetch,
+			fetch: withWebResearch(
+				this.providerFetch ?? globalThis.fetch,
+				openRouterWebSearchTool(webSearch)
+			),
 			defaultHeaders: {
 				'HTTP-Referer': this.appURL,
 				'X-OpenRouter-Title': 'FollowThrough'

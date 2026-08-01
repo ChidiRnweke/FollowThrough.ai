@@ -4,7 +4,8 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import SettingsPolicies from '$lib/components/app/pages/settings-policies.svelte';
-	import SettingsAgent from '$lib/components/app/pages/settings-agent.svelte';
+	import SettingsModels from '$lib/components/app/pages/settings-models.svelte';
+	import SettingsAgents from '$lib/components/app/pages/settings-agents.svelte';
 	import SettingsMcp from '$lib/components/app/pages/settings-mcp.svelte';
 	import SettingsTools from '$lib/components/app/pages/settings-tools.svelte';
 	import type { ProjectId } from '$lib/models';
@@ -45,7 +46,8 @@
 	{/snippet}
 	<Tabs.Root value={data.tab} onValueChange={selectTab}>
 		<Tabs.List variant="line">
-			<Tabs.Trigger value="agent">Agent</Tabs.Trigger>
+			<Tabs.Trigger value="models">Models</Tabs.Trigger>
+			<Tabs.Trigger value="agents">Agents</Tabs.Trigger>
 			<Tabs.Trigger value="tools">Tools</Tabs.Trigger>
 			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
 			<Tabs.Trigger value="policies">Trust policies</Tabs.Trigger>
@@ -54,9 +56,14 @@
 		     body is gated on the active tab: switching tabs is a `goto` that
 		     re-runs `load` anyway, and this keeps the MCP panel's token query
 		     from firing while you are on another tab. -->
-		<Tabs.Content value="agent" class="pt-6">
-			{#if data.tab === 'agent'}
-				<SettingsAgent preferences={data.preferences} models={data.models} />
+		<Tabs.Content value="models" class="pt-6">
+			{#if data.tab === 'models'}
+				<SettingsModels preferences={data.preferences} models={data.models} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="agents" class="pt-6">
+			{#if data.tab === 'agents'}
+				<SettingsAgents preferences={data.preferences} defaults={data.defaults} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="tools" class="pt-6">

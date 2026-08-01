@@ -22,6 +22,16 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
 	userId: row.userId as AgentPreferences['userId'],
 	...(row.defaultModel ? { defaultModel: row.defaultModel } : {}),
 	...(row.defaultVisionModel ? { defaultVisionModel: row.defaultVisionModel } : {}),
+	...(row.inlineModel ? { inlineModel: row.inlineModel } : {}),
+	...(row.attachmentVisionModel ? { attachmentVisionModel: row.attachmentVisionModel } : {}),
+	...(row.webSearchEngine
+		? { webSearchEngine: row.webSearchEngine as AgentPreferences['webSearchEngine'] }
+		: {}),
+	...(row.webSearchMaxResults !== null ? { webSearchMaxResults: row.webSearchMaxResults } : {}),
+	...(row.webSearchMaxTotalResults !== null
+		? { webSearchMaxTotalResults: row.webSearchMaxTotalResults }
+		: {}),
+	...(row.agentMaxTurns !== null ? { agentMaxTurns: row.agentMaxTurns } : {}),
 	executionMode: row.executionMode,
 	inlineSuggestionsEnabled: row.inlineSuggestionsEnabled,
 	createdAt: row.createdAt.toISOString() as AgentPreferences['createdAt'],
@@ -75,27 +85,26 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 	}
 
 	async upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
+		// The settable columns are named once: an insert and its conflict update
+		// that drift apart would silently drop a new setting on every save after
+		// the first, which is the hardest kind of bug to see from the UI.
+		const columns = {
+			defaultModel: preferences.defaultModel ?? null,
+			defaultVisionModel: preferences.defaultVisionModel ?? null,
+			inlineModel: preferences.inlineModel ?? null,
+			attachmentVisionModel: preferences.attachmentVisionModel ?? null,
+			webSearchEngine: preferences.webSearchEngine ?? null,
+			webSearchMaxResults: preferences.webSearchMaxResults ?? null,
+			webSearchMaxTotalResults: preferences.webSearchMaxTotalResults ?? null,
+			agentMaxTurns: preferences.agentMaxTurns ?? null,
+			executionMode: preferences.executionMode,
+			inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
+			updatedAt: new Date(preferences.updatedAt)
+		};
 		const [row] = await this.database
 			.insert(schema.agentPreferences)
-			.values({
-				userId: actor.userId,
-				defaultModel: preferences.defaultModel,
-				defaultVisionModel: preferences.defaultVisionModel,
-				executionMode: preferences.executionMode,
-				inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
-				createdAt: new Date(preferences.createdAt),
-				updatedAt: new Date(preferences.updatedAt)
-			})
-			.onConflictDoUpdate({
-				target: schema.agentPreferences.userId,
-				set: {
-					defaultModel: preferences.defaultModel,
-					defaultVisionModel: preferences.defaultVisionModel,
-					executionMode: preferences.executionMode,
-					inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
-					updatedAt: new Date(preferences.updatedAt)
-				}
-			})
+			.values({ userId: actor.userId, createdAt: new Date(preferences.createdAt), ...columns })
+			.onConflictDoUpdate({ target: schema.agentPreferences.userId, set: columns })
 			.returning();
 		return toPreferences(row!);
 	}

@@ -1,5 +1,7 @@
+import { webSearchEngines, type WebSearchEngine } from '$lib/models';
+
 export interface WebResearchOptions {
-	readonly engine?: 'auto' | 'native' | 'exa' | 'firecrawl' | 'parallel' | 'perplexity';
+	readonly engine?: WebSearchEngine;
 	readonly maxResults?: number;
 	readonly maxTotalResults?: number;
 }
@@ -33,9 +35,9 @@ export interface WebResearchTool {
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-const ENGINES = ['auto', 'native', 'exa', 'firecrawl', 'parallel', 'perplexity'] as const;
+const ENGINES = webSearchEngines;
 
-type Engine = NonNullable<WebResearchOptions['engine']>;
+type Engine = WebSearchEngine;
 
 const engineFrom = (value: string | undefined): Engine | undefined =>
 	ENGINES.includes(value as Engine) ? (value as Engine) : undefined;

@@ -186,6 +186,110 @@ When advising the user, name both the place in the interface and what the agent 
 	version: '3'
 };
 
+const SETTINGS_V2: BuiltInSkillDefinition = {
+	key: 'settings',
+	name: 'Settings',
+	description:
+		'Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults.',
+	instructions: `# FollowThrough settings
+
+Everything on "/settings" belongs to the signed-in user and applies across projects unless stated otherwise. The page has five tabs, selected by query string: "/settings?tab=models", "?tab=agents", "?tab=tools", "?tab=mcp", "?tab=policies". Read the current value before changing it, and tell the user what changed and where they can see it.
+
+Every setting on the Models and Agents tabs can be left unset, and unset is not off — it means the value follows this deployment's default. Clearing a setting hands it back to that default rather than pinning today's value, so a user who wants to stop managing a setting should clear it rather than retype what it currently shows.
+
+## Models tab
+
+**Models.** Four separate choices, because they are used at different moments:
+
+- **Default chat model.** The model a new conversation uses when it has no override. Only models that support tool calling can be selected; anything else is rejected as unavailable.
+- **Default vision model.** Used *only* when the chat model cannot read images itself. A model with native vision receives chat images directly and this setting is never consulted — the picker greys out to say so. When the chat model has no vision, images are described by this model first and the description is passed to the chat model instead.
+- **Attachment reading model.** Describes uploaded images and runs OCR over scanned documents. Independent of chat: it applies to attachment processing, which happens in the background.
+- **Inline suggestion model.** Runs the ghost text while the user writes. It fires on every typing pause and never calls tools, so a small fast model is the right choice and tool support is not required.
+
+**Inline writing suggestions.** Grounded ghost text while writing notes. On by default. Turning it off also makes the inline model moot.
+
+A single conversation can override the chat model, the vision model, and the execution mode from the agent settings popover in chat without changing these defaults.
+
+## Agents tab
+
+Each numeric setting here is a slider whose marked anchor is the deployment default; resetting the slider hands the setting back to that default rather than pinning the number it happened to show.
+
+**Web search.** The engine is one of "auto", "native", "exa", "firecrawl", "parallel", or "perplexity"; "auto" lets the model choose. "Results per search" is 1–50 and caps a single search. "Total results per run" is 1–100 and caps every search in one reply together.
+
+**Turn limit.** How many tool-calling steps one reply may take before it is cut off, from 1 to 50. Raising it lets a research-shaped request finish; lowering it caps what a run can spend. A reply that stops early against this limit has hit it rather than failed.
+
+**Default execution mode.** "approval_required" pauses every durable agent change for review. "auto_accept" applies agent changes immediately.
+
+## Tools tab
+
+Which tools the agent may use. A tool turned off disappears completely — from chat, from tool search, and from any connected MCP client — rather than failing when called.
+
+Selection resolves in layers: a per-project override wins over the workspace default, which wins over the built-in default of enabled. The scope being edited is chosen with the "Applies to" control, and a project override can be reset back to following the workspace default.
+
+Four tools are locked on and cannot be turned off: "get_workspace_context" and "load_skill", without which the agent loses its grounding and its instructions, and "list_tool_preferences" and "set_tool_enabled", without which it could disable its own way back. A selection that cannot be undone from the agent is a trap, not a setting.
+
+## MCP access tab
+
+FollowThrough exposes an MCP endpoint at "/mcp" for external clients such as Claude Desktop. Clients authenticate with a bearer token that begins with "ftm_" and acts as the user.
+
+- **read** scope exposes only read tools. It cannot change anything, even by name.
+- **full** scope exposes the same tools the in-app agent has.
+
+Tokens are stored hashed. The plaintext is shown once, at creation, and is unrecoverable — a lost token has to be revoked and replaced. Minting is a deliberate action in the interface; the agent lists and revokes tokens but never creates one. Revoking takes effect immediately and breaks any client still using that token, so confirm which token is meant before revoking.
+
+## Trust policies tab
+
+Execution mode and trust policies are different controls and are often confused. Execution mode gates whether the **agent may make a change at all**. A trust policy gates whether a **proposal from one pipeline is accepted without review**.
+
+There are five pipelines: "extract_promises" (commitments found in notes), "relate" (backlinks between notes), "reference" (external references for a selection), "agent" (changes proposed in chat), and "memory" (durable facts). Each is either review-first or auto-accept, with an optional minimum confidence expressed as a whole number from 0 to 100. Below that confidence the suggestion still waits for review.
+
+"reference" never auto-accepts, whatever its policy says. Auto-accepted items stay visibly AI-made and are one action to revert.
+
+## Document export settings
+
+Export defaults are per project rather than per user, and live with the deliverables UI rather than on "/settings": font family ("helvetica", "times", "courier"), font size 8–18, line height 1.0–2.2, and margin 18–144 points. They apply to generated PDF and DOCX artifacts.
+
+## Changing settings from chat
+
+None of these tools are offered up front. Call search_tools with the setting you want, then use_tool with the exact name returned and a matching payload.
+
+- Read agent defaults: get_agent_preferences. Change them: update_agent_preferences, which accepts defaultModel, defaultVisionModel, inlineModel, attachmentVisionModel, webSearchEngine, webSearchMaxResults, webSearchMaxTotalResults, agentMaxTurns, executionMode, and inlineSuggestionsEnabled. Send only the fields you are changing; omitted fields keep their current value and an explicit null clears one back to the deployment default.
+- List selectable models: list_agent_models. Check "supportsTools" before proposing a chat model and "supportsVision" before proposing a vision or attachment model.
+- Read tool selection: list_tool_preferences. Change one: set_tool_enabled, optionally scoped to a project.
+- Read trust policies: list_trust_policies. Change one: update_trust_policy, with minimumConfidence as 0–100.
+- List MCP tokens: list_api_tokens. Revoke one: revoke_api_token. There is no tool that creates one — send the user to "/settings?tab=mcp".
+- Read project export defaults: get_export_settings. Change them: update_export_settings.
+- Turn a skill on or off, or rename its summary: update_skill. Pin or unpin a skill for a project: set_skill_pinned. Pinned skills lead the catalogue the agent sees.
+
+Values out of range are rejected rather than clamped, so report the error rather than retrying with a value the user did not ask for. Every one of these is a mutation, so under "approval_required" the user approves it before it takes effect.`,
+	triggerHints: [
+		'settings',
+		'preferences',
+		'default model',
+		'chat model',
+		'vision model',
+		'inline model',
+		'attachment model',
+		'OCR',
+		'execution mode',
+		'approval',
+		'auto-accept',
+		'trust policy',
+		'inline suggestions',
+		'web search',
+		'search engine',
+		'search results',
+		'turn limit',
+		'max turns',
+		'tool selection',
+		'MCP',
+		'API token',
+		'export defaults'
+	],
+	allowImplicitInvocation: true,
+	version: '2'
+};
+
 const SETTINGS_V1: BuiltInSkillDefinition = {
 	key: 'settings',
 	name: 'Settings',
@@ -269,12 +373,13 @@ Inspect relevant project notes, memories, profile context, or attachments when t
 
 export const BUILT_INS: readonly BuiltInSkillDefinition[] = [
 	FOLLOWTHROUGH_V3,
-	SETTINGS_V1,
+	SETTINGS_V2,
 	DIAGRAMMING
 ];
 
 /** Superseded bodies, matched to detect installs the user never edited. */
 export const RETIRED_BUILT_INS: readonly BuiltInSkillDefinition[] = [
 	FOLLOWTHROUGH_V1,
-	FOLLOWTHROUGH_V2
+	FOLLOWTHROUGH_V2,
+	SETTINGS_V1
 ];
