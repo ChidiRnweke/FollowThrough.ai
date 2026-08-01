@@ -79,8 +79,10 @@ Fixed: free-text `category` (decision: users invent their own — clients, relea
 
 ## Group 4 — Agent Platform & Backend
 
-### 16. Increase web search limit — S
+### 16. Increase web search limit — S — ✅ Done
 Bump `max_results`/`max_total_results` defaults in `src/lib/server/services/agent-runs/web-research.ts` (already env-configurable via `OPENROUTER_WEB_SEARCH_*`).
+
+Done: agent chat now searches up to 20 results per call and 40 per run. Reference discovery keeps its focused 8/16 budget through the same parser and tool factory, and explicit environment overrides still win.
 
 ### 17. Make agent time aware — S
 Client already sends `timeZone`/`localDate` in appContext; inject a time line into the system prompt in `buildAgentInstructions()` (`src/lib/server/services/agent-runs/reasoning.ts:493`), reading from run appContext via `base-context.ts`/`context.ts`.

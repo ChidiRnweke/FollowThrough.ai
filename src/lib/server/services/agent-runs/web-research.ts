@@ -4,6 +4,24 @@ export interface WebResearchOptions {
 	readonly maxTotalResults?: number;
 }
 
+export interface WebResearchDefaults {
+	readonly engine: NonNullable<WebResearchOptions['engine']>;
+	readonly maxResults: number;
+	readonly maxTotalResults: number;
+}
+
+export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+	engine: 'exa',
+	maxResults: 20,
+	maxTotalResults: 40
+};
+
+export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+	engine: 'exa',
+	maxResults: 8,
+	maxTotalResults: 16
+};
+
 export interface WebResearchTool {
 	readonly type: 'openrouter:web_search';
 	readonly parameters: {
@@ -51,15 +69,18 @@ export const webSearchOptionsFromEnvironment = (
 		: {})
 });
 
-export const openRouterWebSearchTool = (options: WebResearchOptions = {}): WebResearchTool => ({
+export const openRouterWebSearchTool = (
+	options: WebResearchOptions = {},
+	defaults: WebResearchDefaults = CHAT_WEB_SEARCH_DEFAULTS
+): WebResearchTool => ({
 	type: 'openrouter:web_search',
 	parameters: {
 		// Exa retrieves page content where 'auto' falls back to the model's own native
 		// search and its snippet-sized results; the caps are raised to match, since three
 		// results is too thin a base for anything research-shaped.
-		engine: options.engine ?? 'exa',
-		max_results: options.maxResults ?? 8,
-		max_total_results: options.maxTotalResults ?? 16
+		engine: options.engine ?? defaults.engine,
+		max_results: options.maxResults ?? defaults.maxResults,
+		max_total_results: options.maxTotalResults ?? defaults.maxTotalResults
 	}
 });
 

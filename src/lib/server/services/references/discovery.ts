@@ -1,6 +1,11 @@
 import OpenAI from 'openai';
 import type { ActorContext, ReferenceCandidate, TextSelection, Url } from '$lib/models';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
+import {
+	openRouterWebSearchTool,
+	REFERENCE_WEB_SEARCH_DEFAULTS,
+	webSearchOptionsFromEnvironment
+} from '$lib/server/services/agent-runs/web-research';
 interface OperationObserver {
 	run<T>(
 		name: string,
@@ -10,19 +15,6 @@ interface OperationObserver {
 	): Promise<T>;
 }
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
-
-const positiveInteger = (value: string | undefined, fallback: number): number => {
-	const parsed = Number(value);
-	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-};
-const webResearchTool = () => ({
-	type: 'openrouter:web_search' as const,
-	parameters: {
-		engine: process.env.OPENROUTER_WEB_SEARCH_ENGINE ?? 'exa',
-		max_results: positiveInteger(process.env.OPENROUTER_WEB_SEARCH_MAX_RESULTS, 8),
-		max_total_results: positiveInteger(process.env.OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS, 16)
-	}
-});
 
 const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
 
@@ -191,7 +183,12 @@ export class ReferenceResearch implements IWebReferenceResearch {
 			async () => {
 				const response = await this.client.responses.create({
 					model,
-					tools: [webResearchTool() as never],
+					tools: [
+						openRouterWebSearchTool(
+							webSearchOptionsFromEnvironment(process.env),
+							REFERENCE_WEB_SEARCH_DEFAULTS
+						) as never
+					],
 					input: [
 						{ role: 'system', content: REFERENCE_PROMPT },
 						{ role: 'user', content: selectionText }

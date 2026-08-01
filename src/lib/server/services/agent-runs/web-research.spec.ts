@@ -27,7 +27,7 @@ describe('OpenRouter web search transport', () => {
 				{ type: 'function', function: { name: 'get_project' } },
 				{
 					type: 'openrouter:web_search',
-					parameters: { engine: 'exa', max_results: 8, max_total_results: 16 }
+					parameters: { engine: 'exa', max_results: 20, max_total_results: 40 }
 				}
 			]
 		});
@@ -58,6 +58,14 @@ describe('OpenRouter web search transport', () => {
 describe('Reading web search settings from the environment', () => {
 	it('retrieves page content by default rather than the model’s own snippets', () => {
 		expect(openRouterWebSearchTool().parameters.engine).toBe('exa');
+	});
+
+	it('uses the larger chat research budget by default', () => {
+		expect(openRouterWebSearchTool().parameters).toEqual({
+			engine: 'exa',
+			max_results: 20,
+			max_total_results: 40
+		});
 	});
 
 	it('honours a configured engine', () => {
