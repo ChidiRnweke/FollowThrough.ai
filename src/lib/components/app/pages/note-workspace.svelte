@@ -91,6 +91,7 @@
 	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
 	let reviewDialogOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
+	let utilityHeaderHeight = $state(0);
 	let syncReady = $state(false);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
@@ -651,7 +652,10 @@
 	</div>
 {/snippet}
 
-<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
+<div
+	class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
+	style:--note-header-h="{utilityHeaderHeight}px"
+>
 	<!-- Sticks to the top of the pane's own scroller so save status and note actions stay
 	     reachable in a long note. Kept quiet per the document pattern: an opaque pane
 	     background and one hairline, no shadow — the flat-surface rule still holds. Each
@@ -659,10 +663,12 @@
 
 	     No vertical margin or top padding: the pane layer's own `padding-block` sits outside
 	     the scroll viewport, so `top-0` already lands where the row used to. Only `pb-2` is
-	     added, to keep the hairline off the first line of the document. -->
+	     added, to keep the hairline off the first line of the document. Its measured height
+	     feeds `--note-header-h`, which sticky table headers in editor.css stick below. -->
 	<div
 		class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 sm:min-h-8 sm:flex-row sm:items-center dark:bg-card"
 		data-testid="note-utility-header"
+		bind:clientHeight={utilityHeaderHeight}
 	>
 		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
 			<div class="min-w-0 flex-1">

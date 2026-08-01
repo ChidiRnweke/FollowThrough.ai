@@ -9,8 +9,10 @@ Complexity: **S** = small/localized, **M** = multi-file feature, **L** = cross-c
 
 Fixed: the grip was a `<button>`, and svelte-dnd-action refuses drags whose mousedown target has a `value` property (nested-input guard) — every `<button>` has one, so the grip was ungrabbable. Replaced with a styled `<span use:dragHandle>` (the pattern `todo-card.svelte` already uses).
 
-### 2. Sticky table header on scroll in note — S
+### 2. Sticky table header on scroll in note — S — ✅ Done
 Pure CSS on the Tiptap table styles (`src/lib/components/edra/editor.css:409-523`, `.tableWrapper thead th { position: sticky }`). Possibly a small tweak in `TableCol.svelte`/`TableRow.svelte` if borders clip.
+
+Done: `.tableWrapper` now uses `overflow-x: clip` (a scrollable wrapper would trap sticky cells); `th` cells are `position: sticky; top: var(--note-header-h)` with `background-clip: padding-box` for the border-collapse quirk. `note-workspace.svelte` measures the utility header into `--note-header-h`.
 
 ### 3. Paste images into a note — M
 Add an image/file branch to the existing paste handler (`src/lib/components/edra/commands/paste.ts`), reusing the attachment upload plumbing (`src/lib/client/attachments/`, `file-dropzone.svelte`) and image node (`commands/image-node.ts`, `ImageExtended.svelte`).
@@ -45,11 +47,15 @@ The kanban add row already has `autofocus` (`kanban-board.svelte:132`); likely a
 
 Fixed: `autofocus` is unreliable for elements created inside an `{#if}` after mount. Replaced with a Svelte 5 attachment `{@attach (node) => node.focus()}` on the add-row `Input` (same pattern as `{@attach focusAtEnd}` in `chat-panel.svelte`).
 
-### 12. Search bars fully green on focus — S
+### 12. Search bars fully green on focus — S — ✅ Done
 Unify focus styling across `model-picker.svelte` (Command.Input), `app-sidebar.svelte`/`command-palette.svelte`, and `todos-workspace.svelte:103` Input; likely a shared class in `ui/input` / `ui/command` primitives.
 
-### 13. Ugly todo card border (missing top/right) — S
+Fixed: strengthened the shared focus recipe in `ui/input/input.svelte` (both branches), `ui/textarea/textarea.svelte`, and `ui/input-group/input-group.svelte` — solid teal border, 3px `ring-primary/30` halo, visible `bg-primary/12` / `dark:bg-brand/20` wash. Also made the resting `bg-input/30` dark-only in `input-group.svelte` and dropped the redundant unconditional `bg-input/30` in `command-input.svelte`, which masked the wash in light mode for `model-picker.svelte` and `command-palette.svelte`. The `todos-workspace.svelte` search inherits the bare Input recipe automatically.
+
+### 13. Ugly todo card border (missing top/right) — S — ✅ Done
 Debug border rendering in `todo-card.svelte` and the `ui/card` primitive — likely a collapsed-border/ring conflict with the dnd `lifted` styling.
+
+Fixed: not a ring conflict — `Card.Root`'s hairline is a `ring-1` box-shadow, and the kanban column scroller (`overflow-y-auto`, zero padding) clips box-shadow pixels at its top/right scrollport edges. Added `p-0.5` to the scroller in `kanban-board.svelte`, which also gives the 2px dnd drop-target outline room to render.
 
 ### 14. Sort controls for todo table — M
 Add sortable column headers to `todo-table.svelte` (client-side sort first); optionally extend `TodoListFilter` (`src/lib/models/domain.ts:1211`) if server-side sorting is wanted.

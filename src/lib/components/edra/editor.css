@@ -420,7 +420,10 @@
 	padding: 1.25rem 1rem;
 	margin: 0;
 	margin: 0.5rem 0;
-	overflow-x: auto;
+	/* `clip`, not `auto`: any scrollable overflow makes the wrapper a scroll
+	   container, which would trap the sticky header cells below. The trade-off
+	   is that over-wide tables are cut off instead of scrolling horizontally. */
+	overflow-x: clip;
 }
 
 .tiptap table {
@@ -461,6 +464,18 @@
 .tiptap table th {
 	font-weight: bold;
 	background-color: var(--color-muted);
+}
+
+/* Header cells stick below the note's utility header when the page scrolls.
+   `--note-header-h` is measured from the utility header in note-workspace.svelte.
+   `background-clip: padding-box` keeps collapsed borders painting on stuck cells
+   (a known Chrome sticky+border-collapse quirk). z-index stays below the utility
+   header's z-20 and the table grips' z-10. */
+.tiptap table th {
+	position: sticky;
+	top: var(--note-header-h, 0px);
+	z-index: 5;
+	background-clip: padding-box;
 }
 
 .tiptap table .column-resize-handle {
