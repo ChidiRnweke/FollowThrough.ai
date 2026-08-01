@@ -215,7 +215,9 @@ export class MermaidSubmissionValidator {
 		if (/^\s*(?:click|href)\s+/im.test(source) || /javascript:/i.test(source))
 			throw new ValidationError('Links and click handlers are not allowed in Mermaid diagrams.');
 		if (/<\/?[a-z][^>]*>/i.test(source))
-			throw new ValidationError('HTML labels are not allowed in Mermaid diagrams.');
+			throw new ValidationError(
+				'HTML labels are not allowed in Mermaid diagrams. Use escaped \\n inside quoted labels instead.'
+			);
 		try {
 			await this.parse(source);
 		} catch (error) {
@@ -444,7 +446,7 @@ export class DiagramAuthoring {
 			description:
 				task.operation === 'convert'
 					? 'Submit a title and final uncompressed draw.io mxfile XML. This is the only tool that completes conversion.'
-					: 'Submit the final Mermaid source. This is the only tool that completes the diagram task.',
+					: 'Submit the final Mermaid source. This is the only tool that completes the diagram task. Labels: for multi-line text use escaped \\n inside quoted labels; never use HTML tags such as <br/>.',
 			parameters: z.toJSONSchema(
 				task.operation === 'convert' ? SubmitDrawio : SubmitDiagram
 			) as never,

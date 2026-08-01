@@ -57,6 +57,12 @@ describe('Diagram submission safety invariants', () => {
 			new MermaidSubmissionValidator().validate('sequenceDiagram\n  Alice->>Bob Hello')
 		).rejects.toThrow('Invalid Mermaid syntax');
 	}, 15_000);
+
+	it('rejects Mermaid HTML labels and names the escaped-newline alternative', async () => {
+		await expect(
+			new MermaidSubmissionValidator().validate('flowchart LR\n  A["Mini app<br/>(JSON render)"]')
+		).rejects.toThrow('Use escaped \\n inside quoted labels');
+	});
 });
 
 describe('Draw.io agent submission invariants', () => {

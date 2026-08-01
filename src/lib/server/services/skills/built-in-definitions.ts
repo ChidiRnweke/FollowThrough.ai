@@ -262,7 +262,7 @@ Infer the relationships that matter before choosing a diagram family. Use flowch
 
 Preserve uncertainty and do not invent systems, people, steps, or dependencies that the source does not support. Prefer a small coherent diagram over an exhaustive one. Use concise, readable labels and stable identifiers. When revising, preserve correct information and change only what the instruction requires.
 
-Inspect relevant project notes, memories, profile context, or attachments when they are available and useful. Finish by calling submit_mermaid_diagram exactly once with valid Mermaid source and an optional concise title. Do not wrap the source in Markdown fences and do not use click handlers, links, initialization directives, or HTML labels.`,
+Inspect relevant project notes, memories, profile context, or attachments when they are available and useful. Finish by calling submit_mermaid_diagram exactly once with valid Mermaid source and an optional concise title. Do not wrap the source in Markdown fences and do not use click handlers, links, initialization directives, or HTML labels. For multi-line node and edge labels, use escaped \\n inside quoted labels instead of HTML tags such as <br/>.`,
 	triggerHints: ['diagram', 'mermaid', 'visualize', 'flowchart', 'sequence', 'architecture'],
 	allowImplicitInvocation: false
 };

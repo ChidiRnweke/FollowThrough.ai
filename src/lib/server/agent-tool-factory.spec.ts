@@ -6,6 +6,7 @@ import { noteBuilder, testActor, testProvenanceId } from '$lib/testing/fixtures/
 import {
 	AgentTools,
 	agentToolCoverage,
+	agentToolRegistry,
 	LOCKED_TOOL_NAMES,
 	type AgentToolClassification,
 	type ToolAccessPolicy
@@ -227,6 +228,41 @@ describe('Agent tool coverage invariants', () => {
 				'call-1'
 			)
 		).toBe(false);
+	});
+
+	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
+		let receivedProvenanceId: unknown;
+		const factory = {
+			toolPreferences: () => ({ list: async () => [] }),
+			skills: () => ({
+				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
+					receivedProvenanceId = input.provenanceId;
+					return { skill: {}, usages: [] };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const run = {
+			userId: testActor().userId,
+			executionMode: 'auto_accept',
+			model: 'openai/gpt-5.6',
+			provenanceId: testProvenanceId()
+		};
+		const registry = await agentToolRegistry(
+			() => factory,
+			new InMemoryToolRetriever()
+		)({
+			actor: testActor(),
+			request: { prompt: 'Help' } as never,
+			run: run as never,
+			executor: { execute: async (_input, action) => action() }
+		});
+		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
+		expect(loadSkill).toBeDefined();
+		await (loadSkill as FunctionTool).invoke(
+			{} as never,
+			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
+		);
+		expect(receivedProvenanceId).toBe(run.provenanceId);
 	});
 
 	it('dispatches an exact long-tail tool name to its controller', async () => {

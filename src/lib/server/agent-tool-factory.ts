@@ -1224,13 +1224,11 @@ export const agentToolRegistry =
 	async ({
 		actor,
 		request,
-		context,
 		run,
 		executor
 	}: {
 		actor: ActorContext;
 		request: RunAgentInput;
-		context: Readonly<Record<string, unknown>>;
 		run: AgentRun;
 		executor: AgentToolExecutor;
 	}) => {
@@ -1246,7 +1244,7 @@ export const agentToolRegistry =
 			actor,
 			run.executionMode,
 			{
-				provenanceId: (context.provenanceId ?? crypto.randomUUID()) as ProvenanceId,
+				provenanceId: run.provenanceId as ProvenanceId,
 				input: request,
 				model: run.model
 			},
