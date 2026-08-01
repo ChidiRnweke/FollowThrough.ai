@@ -454,9 +454,20 @@
 		-->
 		<ErrorBoundary label="the editor" {fallback}>
 			<Tiptap {editor}>
+				<!-- Mounted on <body> with fixed positioning: inside the editor DOM the
+				     menu is clipped by the pane's scroll viewport whenever the selection
+				     sits at the top edge. `scrollTarget` keeps the position in sync with the
+				     pane's own scroller (the window doesn't fire for it). -->
 				<BubbleMenu
 					{editor}
-					class="flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+					appendTo={() => window.document.body}
+					options={{
+						strategy: 'fixed',
+						scrollTarget:
+							editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ??
+							window
+					}}
+					class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 				>
 					{#if onask}
 						<!--

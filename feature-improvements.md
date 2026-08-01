@@ -23,8 +23,10 @@ Add an image/file branch to the existing paste handler (`src/lib/components/edra
 ### 5. Right-click context menu in editor — M
 No `contextmenu` handling today; the `ui/context-menu` primitive exists and is already used in `project-tree.svelte`. Touch: `src/lib/components/app/note-editor.svelte`, new menu component offering paste raw / paste merge formatting / copy raw / copy formatting.
 
-### 6. Selection controls hidden when text is at top — S
+### 6. Selection controls hidden when text is at top — S — ✅ Done
 The BubbleMenu (`src/lib/components/edra/BubbleMenu.svelte`, instance in `note-editor.svelte:457-571`) flips below the selection but likely clips at the container top. Fix placement/offset/overflow in the bubble menu config.
+
+Done: the menu now mounts on `<body>` (`appendTo`) with floating-ui `strategy: 'fixed'`, so the pane's scroll viewport no longer clips it; `scrollTarget` points at the pane's ScrollArea viewport to keep position in sync, and the menu sits at `z-30` above the sticky utility header.
 
 ### 7. Ctrl+A copies diagrams as images — M
 Hook copy behavior into the Mermaid node view (`src/lib/components/edra/Mermaid.svelte`) using the existing export pipeline (`MermaidExportMenu.svelte`, `mermaid-export.ts`) to put a PNG on the clipboard.
@@ -57,8 +59,10 @@ Debug border rendering in `todo-card.svelte` and the `ui/card` primitive — lik
 
 Fixed: not a ring conflict — `Card.Root`'s hairline is a `ring-1` box-shadow, and the kanban column scroller (`overflow-y-auto`, zero padding) clips box-shadow pixels at its top/right scrollport edges. Added `p-0.5` to the scroller in `kanban-board.svelte`, which also gives the 2px dnd drop-target outline room to render.
 
-### 14. Sort controls for todo table — M
+### 14. Sort controls for todo table — M — ✅ Done
 Add sortable column headers to `todo-table.svelte` (client-side sort first); optionally extend `TodoListFilter` (`src/lib/models/domain.ts:1211`) if server-side sorting is wanted.
+
+Fixed: client-side sorting in `todo-table.svelte` — `sortKey`/`sortDir` state (default null = server order), a `sortedTodos` derivation via `toSorted` with per-column comparators (workflow rank for status, urgency rank for priority, collator for strings, nulls last), and clickable ghost-button headers cycling asc → desc → cleared with `FtChevronUp/Down/ChevronsUd` icons and `aria-sort`. Applied to both the desktop table and the mobile card list. No server changes.
 
 ### 15. Tag todos by category + filter — L
 New schema field + drizzle migration (`src/lib/server/db/schema.ts`, `drizzle/`), domain model + mapper updates (`domain.ts`, `db/mappers.ts`), repository filter, then UI: new category field in `todo-fields/`, filter bar in `todos-workspace.svelte`, `labels.ts`.
