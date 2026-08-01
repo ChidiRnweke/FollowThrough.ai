@@ -84,8 +84,11 @@ Bump `max_results`/`max_total_results` defaults in `src/lib/server/services/agen
 
 Done: agent chat now searches up to 20 results per call and 40 per run. Reference discovery keeps its focused 8/16 budget through the same parser and tool factory, and explicit environment overrides still win.
 
-### 17. Make agent time aware — S
-Client already sends `timeZone`/`localDate` in appContext; inject a time line into the system prompt in `buildAgentInstructions()` (`src/lib/server/services/agent-runs/reasoning.ts:493`), reading from run appContext via `base-context.ts`/`context.ts`.
+### 17. Make agent time aware — M/L — ✅ Done
+
+Client already sends `timeZone`/`localDate` in appContext; inject a time line into the system prompt in `buildAgentInstructions()` (`src/lib/server/services/agent-runs/reasoning.ts:493`), reading from run appContext via `base-context.ts`/`context.ts`. Should also see metadata of when the objects were created (e.g., `createdAt` in `Note`, `Todo`, `Attachment`). Potentially be able to filter artifacts by time (e.g., "only consider notes created in the last 30 days") — would require a new `createdAfter`/`createdBefore` filter in the repository and a new `filterByDate()` helper in `base-context.ts`.
+
+Done: prompts use the server clock rendered in the client IANA timezone with UTC fallback, compact agent views expose creation metadata, and inclusive `createdAfter`/`createdBefore` filters are available on time-bearing list tools and knowledge search. Indexed chunks persist and backfill their owning source's creation time for both lexical and semantic filtering.
 
 ### 18. Vision support in chat + documents — L
 Add a vision capability flag to the model catalog (`services/agent-runs/preferences.ts`), allow image content parts in run submission (`agent-request-factory.ts`, agent controller), and wire attachment upload into the chat UI. Builds on the existing image plumbing in `services/attachments/`.

@@ -342,7 +342,8 @@ export class EmbeddedNoteIndexer implements NoteIndexer {
 				projectId: note.projectId,
 				noteId: note.id,
 				sourceTitle: note.title,
-				sourceRevision: note.currentRevision
+				sourceRevision: note.currentRevision,
+				sourceCreatedAt: note.createdAt
 			}
 		});
 	}
@@ -375,7 +376,8 @@ export class EmbeddedAttachmentIndexer {
 				attachmentPath: attachment.path,
 				sourceTitle,
 				sectionPath: attachment.path,
-				sourceRevision: 1
+				sourceRevision: 1,
+				sourceCreatedAt: attachment.createdAt
 			}
 		});
 		return { truncated: all.length > contents.length };
@@ -411,7 +413,8 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 				projectId,
 				memoryEntryId: entry.id,
 				sourceTitle: MEMORY_SOURCE_TITLE,
-				sourceRevision: 1
+				sourceRevision: 1,
+				sourceCreatedAt: entry.createdAt
 			}
 		});
 	}
@@ -445,7 +448,8 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 				diagramId: diagram.id,
 				sourceTitle,
 				sectionPath: note.title,
-				sourceRevision: 0
+				sourceRevision: 0,
+				sourceCreatedAt: diagram.createdAt
 			}
 		});
 	}

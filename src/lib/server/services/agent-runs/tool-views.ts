@@ -23,23 +23,27 @@ export interface MemoryProjection {
 	readonly id: string;
 	readonly content: string;
 	readonly projectId?: string;
+	readonly createdAt: string;
 }
 
 export const projectMemory = (entry: MemoryEntry): MemoryProjection => ({
 	id: entry.id,
 	content: entry.content,
 	// Only meaningful when listing across scopes; user-scope entries omit it.
-	...(entry.projectId ? { projectId: entry.projectId } : {})
+	...(entry.projectId ? { projectId: entry.projectId } : {}),
+	createdAt: entry.createdAt
 });
 
 export interface ProjectProjection {
 	readonly id: string;
 	readonly name: string;
+	readonly createdAt: string;
 }
 
 export const projectProject = (project: Project): ProjectProjection => ({
 	id: project.id,
-	name: project.name
+	name: project.name,
+	createdAt: project.createdAt
 });
 
 export interface NoteSummaryProjection {
@@ -49,6 +53,7 @@ export interface NoteSummaryProjection {
 	readonly projectId: string;
 	readonly parentId?: string;
 	readonly isPinned?: true;
+	readonly createdAt: string;
 }
 
 /**
@@ -69,7 +74,8 @@ export const projectNoteSummary = (note: NoteSummary): NoteSummaryProjection => 
 	kind: note.kind,
 	projectId: note.projectId,
 	...(note.parentId ? { parentId: note.parentId } : {}),
-	...(note.isPinned ? { isPinned: true as const } : {})
+	...(note.isPinned ? { isPinned: true as const } : {}),
+	createdAt: note.createdAt
 });
 
 export interface TodoProjection {
@@ -82,6 +88,7 @@ export interface TodoProjection {
 	readonly dueDate?: string;
 	readonly projectId: string;
 	readonly linkedNoteId?: string;
+	readonly createdAt: string;
 }
 
 export const projectTodo = (todo: Todo): TodoProjection => ({
@@ -96,7 +103,8 @@ export const projectTodo = (todo: Todo): TodoProjection => ({
 	// A due date is something the agent reasons about; audit stamps are not.
 	...(todo.dueDate ? { dueDate: todo.dueDate } : {}),
 	projectId: todo.projectId,
-	...(todo.linkedNoteId ? { linkedNoteId: todo.linkedNoteId } : {})
+	...(todo.linkedNoteId ? { linkedNoteId: todo.linkedNoteId } : {}),
+	createdAt: todo.createdAt
 });
 
 export interface UserProjection {
@@ -116,6 +124,7 @@ export interface SuggestionProjection {
 	readonly status: string;
 	readonly confidence?: number;
 	readonly payload: unknown;
+	readonly createdAt: string;
 }
 
 export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection => ({
@@ -123,5 +132,6 @@ export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection 
 	kind: suggestion.kind,
 	status: suggestion.status,
 	...(suggestion.confidence === undefined ? {} : { confidence: suggestion.confidence }),
-	payload: suggestion.payload
+	payload: suggestion.payload,
+	createdAt: suggestion.createdAt
 });

@@ -1,4 +1,5 @@
 import type { ActorContext, ProjectId, SearchMatch } from '$lib/models';
+import type { CreatedRange } from '$lib/server/repositories';
 
 export interface KnowledgeSearcher {
 	search(
@@ -6,7 +7,8 @@ export interface KnowledgeSearcher {
 		query: string,
 		limit?: number,
 		projectId?: ProjectId,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]>;
 }
 export interface ContentChunker {

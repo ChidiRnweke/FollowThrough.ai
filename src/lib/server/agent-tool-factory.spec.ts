@@ -241,7 +241,52 @@ describe('Agent tool coverage invariants', () => {
 			{} as never,
 			JSON.stringify({ name: 'list_projects', payload: {} })
 		);
-		expect(result).toEqual({ projects: [{ id: 'project-1', name: 'General' }] });
+		expect(result).toEqual({
+			projects: [{ id: 'project-1', name: 'General', createdAt: '2026-01-01T00:00:00.000Z' }]
+		});
+	});
+
+	it('filters list results inclusively by creation time', async () => {
+		const factory = {
+			projects: () => ({
+				list: async () => ({
+					projects: [
+						{ id: 'first', name: 'First', createdAt: '2026-01-01T00:00:00.000Z' },
+						{ id: 'second', name: 'Second', createdAt: '2026-02-01T00:00:00.000Z' }
+					]
+				})
+			})
+		} as unknown as ControllerFactory;
+		const result = await indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'list_projects',
+				payload: {
+					createdAfter: '2026-02-01T00:00:00.000Z',
+					createdBefore: '2026-02-01T00:00:00.000Z'
+				}
+			})
+		);
+		expect(result).toEqual({
+			projects: [{ id: 'second', name: 'Second', createdAt: '2026-02-01T00:00:00.000Z' }]
+		});
+	});
+
+	it('rejects a reversed creation-time range', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'list_projects',
+				payload: {
+					createdAfter: '2026-02-01T00:00:00.000Z',
+					createdBefore: '2026-01-01T00:00:00.000Z'
+				}
+			})
+		);
+		expect(result).toMatchObject({
+			issues: [{ message: 'createdAfter must be before or equal to createdBefore' }]
+		});
 	});
 
 	it('creates every todo in a single create_todos dispatch', async () => {

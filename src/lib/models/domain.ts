@@ -145,6 +145,7 @@ export type NoteSummary = Pick<
 	| 'title'
 	| 'isPinned'
 	| 'archivedAt'
+	| 'createdAt'
 	| 'updatedAt'
 	| 'currentRevision'
 >;
@@ -494,6 +495,7 @@ export interface SearchDocument {
 	readonly content: string;
 	readonly contentHash: string;
 	readonly sourceRevision: number;
+	readonly sourceCreatedAt?: DateTime;
 	readonly chunkIndex: number;
 	readonly embedding?: readonly number[];
 	readonly embeddingModel?: string;

@@ -117,6 +117,24 @@ describe('Agent runtime boundary', () => {
 		expect(instructions).toContain('<application_context version="1">');
 	});
 
+	it('formats the server clock in the client IANA timezone', () => {
+		const instructions = buildAgentInstructions(
+			{ appContext: { client: { timeZone: 'Europe/Brussels', localDate: 'stale' } } },
+			'',
+			new Date('2026-08-01T12:30:00.000Z')
+		);
+		expect(instructions).toContain('14:30:00');
+	});
+
+	it('falls back to UTC when the client timezone is invalid', () => {
+		const instructions = buildAgentInstructions(
+			{ appContext: { client: { timeZone: 'Mars/Olympus' } } },
+			'',
+			new Date('2026-08-01T12:30:00.000Z')
+		);
+		expect(instructions).toContain('(UTC)');
+	});
+
 	it('tells the model to dispatch searched tools through use_tool', () => {
 		expect(buildAgentInstructions({})).toContain(
 			'Names returned by search_tools are not direct tools: invoke them only through use_tool'

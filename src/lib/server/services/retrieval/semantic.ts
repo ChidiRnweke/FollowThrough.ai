@@ -8,6 +8,7 @@ import type {
 } from '$lib/models';
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { RetrievalIndexRepository } from '$lib/server/repositories';
+import type { CreatedRange } from '$lib/server/repositories';
 interface EmbeddingClient {
 	readonly model: string;
 	embed(
@@ -21,7 +22,8 @@ export interface KnowledgeSearcher {
 		query: string,
 		limit?: number,
 		projectId?: ProjectId,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]>;
 }
 export interface Reranker {
@@ -61,14 +63,15 @@ export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {
 		query: string,
 		limit = 10,
 		projectId?: ProjectId,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
 		const batch = await this.embeddingClient.embed([query], signal);
 		const embedding = batch.vectors[0];
 		if (!embedding || batch.vectors.length !== 1)
 			throw new InvalidGeneratedContentError('Query embedding returned an invalid result');
-		return this.repository.searchByEmbedding(actor, embedding, limit, projectId);
+		return this.repository.searchByEmbedding(actor, embedding, limit, projectId, created);
 	}
 }
 
@@ -89,11 +92,12 @@ export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
 		query: string,
 		limit = 10,
 		projectId?: ProjectId,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
 		const wideLimit = Math.max(this.minCandidates, limit * this.candidateMultiplier);
-		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal);
+		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal, created);
 		if (candidates.length <= limit) return candidates;
 		return this.reranker.rerank(query, candidates, limit, signal);
 	}

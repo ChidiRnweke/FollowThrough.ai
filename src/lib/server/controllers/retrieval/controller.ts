@@ -1,5 +1,6 @@
 import type { ActorContext, ConversationId, Message, NoteId, ProjectId } from '$lib/models';
 import type { Condenser, ConversationJournal, KnowledgeSearcher } from '$lib/server/services';
+import type { DateTime } from '$lib/models';
 
 export interface SearchKnowledgeInput {
 	readonly query: string;
@@ -7,12 +8,15 @@ export interface SearchKnowledgeInput {
 	readonly limit?: number;
 	/** When set, restricts results to notes and facts in this project. */
 	readonly projectId?: ProjectId;
+	readonly createdAfter?: DateTime;
+	readonly createdBefore?: DateTime;
 }
 
 export interface KnowledgeSearchResult {
 	readonly noteId?: NoteId;
 	readonly content: string;
 	readonly score: number;
+	readonly sourceCreatedAt?: DateTime;
 }
 
 export interface RetrievalController {
@@ -51,12 +55,15 @@ export class Retrieval implements RetrievalController {
 			actor,
 			query,
 			limit,
-			input.projectId
+			input.projectId,
+			undefined,
+			{ createdAfter: input.createdAfter, createdBefore: input.createdBefore }
 		);
 		return matches.map((match) => ({
 			noteId: match.document.noteId,
 			content: match.document.content.slice(0, CONTENT_EXCERPT_LIMIT),
-			score: match.score
+			score: match.score,
+			sourceCreatedAt: match.document.sourceCreatedAt
 		}));
 	}
 

@@ -288,6 +288,50 @@ export const agentToolCoverage = {
 } as const satisfies AgentToolCoverage;
 
 const none = z.object({});
+const temporal = <T extends z.ZodRawShape>(shape: T) =>
+	z
+		.object({
+			...shape,
+			createdAfter: z.iso.datetime({ offset: true }).optional(),
+			createdBefore: z.iso.datetime({ offset: true }).optional()
+		})
+		.superRefine((value, context) => {
+			const range = value as { createdAfter?: string; createdBefore?: string };
+			if (
+				range.createdAfter &&
+				range.createdBefore &&
+				Date.parse(range.createdAfter) > Date.parse(range.createdBefore)
+			)
+				context.addIssue({
+					code: 'custom',
+					message: 'createdAfter must be before or equal to createdBefore'
+				});
+		});
+const withinCreatedRange = <T extends { readonly createdAt: string }>(
+	value: T,
+	range: { readonly createdAfter?: string; readonly createdBefore?: string }
+): boolean =>
+	(!range.createdAfter || value.createdAt >= range.createdAfter) &&
+	(!range.createdBefore || value.createdAt <= range.createdBefore);
+const filterCreated = (
+	value: unknown,
+	range: { createdAfter?: string; createdBefore?: string }
+): unknown => {
+	if (Array.isArray(value))
+		return value
+			.filter(
+				(item) =>
+					typeof item !== 'object' ||
+					item === null ||
+					typeof (item as { createdAt?: unknown }).createdAt !== 'string' ||
+					withinCreatedRange(item as { createdAt: string }, range)
+			)
+			.map((item) => filterCreated(item, range));
+	if (typeof value !== 'object' || value === null) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, item]) => [key, filterCreated(item, range)])
+	);
+};
 const id = z.string().uuid();
 const selection = z.object({
 	noteId: id,
@@ -497,19 +541,25 @@ export class AgentTools {
 			description,
 			classification,
 			parameters,
-			execute: (input) => execute(parameters.parse(input))
+			execute: async (input) => {
+				const parsed = parameters.parse(input);
+				const result = await execute(parsed);
+				return filterCreated(result, parsed as { createdAfter?: string; createdBefore?: string });
+			}
 		});
 		return [
 			define(
 				'search',
 				"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps. Pass projectId to restrict results to one project.",
 				'read',
-				z.object({ query: z.string().min(1), projectId: id.optional() }),
+				temporal({ query: z.string().min(1), projectId: id.optional() }),
 				(input) =>
 					factory.retrieval().search(actor, {
 						query: input.query,
 						...(conversationId ? { conversationId } : {}),
-						...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
+						...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
+						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
+						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
 					})
 			),
 			define(
@@ -536,7 +586,7 @@ export class AgentTools {
 				z.object({ today: z.string() }),
 				(input) => factory.workspace().getTodayView(actor, input as never)
 			),
-			define('list_projects', 'List active projects.', 'read', none, async () => ({
+			define('list_projects', 'List active projects.', 'read', temporal({}), async () => ({
 				projects: (await factory.projects().list(actor)).projects.map(projectProject)
 			})),
 			define(
@@ -698,7 +748,7 @@ export class AgentTools {
 				'list_todos',
 				'List todos using optional filters.',
 				'read',
-				z.object({
+				temporal({
 					projectId: id.optional(),
 					noteId: id.optional(),
 					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
@@ -819,7 +869,7 @@ export class AgentTools {
 				'list_suggestions',
 				'List reviewable suggestions by status.',
 				'read',
-				z.object({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
+				temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
 				async (input) => ({
 					suggestions: (await factory.suggestions().list(actor, input as never)).groups.flatMap(
 						(group) => group.suggestions.map((view) => projectSuggestion(view.suggestion))
@@ -847,8 +897,12 @@ export class AgentTools {
 				z.object({ suggestionId: id }),
 				(input) => factory.suggestions().revert(actor, input as never)
 			),
-			define('list_skills', 'List enabled skill summaries and trigger hints.', 'read', none, () =>
-				factory.skills().list(actor)
+			define(
+				'list_skills',
+				'List enabled skill summaries and trigger hints.',
+				'read',
+				temporal({}),
+				() => factory.skills().list(actor)
 			),
 			define(
 				'get_skill',
@@ -898,7 +952,7 @@ export class AgentTools {
 				'list_skill_versions',
 				'List immutable revisions of a skill.',
 				'read',
-				z.object({ noteId: id }),
+				temporal({ noteId: id }),
 				(input) => factory.skills().listVersions(actor, input as never)
 			),
 			define(
@@ -932,7 +986,7 @@ export class AgentTools {
 				'list_api_tokens',
 				'List the MCP access tokens for this workspace. Plaintext is never retrievable; only names, scopes, and timestamps.',
 				'read',
-				none,
+				temporal({}),
 				() => factory.apiTokens().list(actor)
 			),
 			define(
@@ -946,7 +1000,7 @@ export class AgentTools {
 				'list_attachments',
 				'List the immutable resources attached to a note or skill bundle.',
 				'read',
-				z.object({ noteId: id }),
+				temporal({ noteId: id }),
 				(input) => factory.attachments().list(actor, input.noteId as NoteId)
 			),
 			define(
@@ -968,7 +1022,7 @@ export class AgentTools {
 				'list_project_memory',
 				'Read the durable memory entries a specific project shares with agents: facts, decisions, constraints, terminology, and preferences. Use when the request concerns an active or referenced project and its projectId is known.',
 				'read',
-				z.object({ projectId: id }),
+				temporal({ projectId: id }),
 				async (input) => ({
 					entries: (
 						await factory.memory().list(actor, {
@@ -982,7 +1036,7 @@ export class AgentTools {
 				'list_user_memory',
 				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects.',
 				'read',
-				none,
+				temporal({}),
 				async () => {
 					const entries = (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
 						projectMemory
@@ -1005,8 +1059,12 @@ export class AgentTools {
 				}),
 				(input) => factory.memory().propose(actor, input as never)
 			),
-			define('list_trust_policies', 'Read pipeline-specific trust policies.', 'read', none, () =>
-				factory.trustPolicies().list(actor)
+			define(
+				'list_trust_policies',
+				'Read pipeline-specific trust policies.',
+				'read',
+				temporal({}),
+				() => factory.trustPolicies().list(actor)
 			),
 			define(
 				'update_trust_policy',
@@ -1090,14 +1148,14 @@ export class AgentTools {
 				'list_artifacts',
 				'List generated document artifacts for a project.',
 				'read',
-				z.object({ projectId: id }),
+				temporal({ projectId: id }),
 				(input) => factory.deliverables().listArtifacts(actor, input.projectId as never)
 			),
 			define(
 				'list_templates',
 				'List available DOCX templates for a project.',
 				'read',
-				z.object({ projectId: id }),
+				temporal({ projectId: id }),
 				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
 			),
 			define(

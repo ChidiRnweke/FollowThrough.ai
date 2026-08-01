@@ -1,4 +1,16 @@
-import { and, asc, cosineDistance, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	cosineDistance,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	isNull,
+	lte,
+	sql
+} from 'drizzle-orm';
 import type {
 	ActorContext,
 	AttachmentId,
@@ -11,6 +23,7 @@ import type {
 	SearchMatch,
 	UserId
 } from '$lib/models';
+import type { CreatedRange } from '$lib/server/repositories/retrieval-index';
 import type {
 	EmbeddedChunk,
 	IndexSource,
@@ -68,6 +81,7 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 	content: row.content,
 	contentHash: row.contentHash,
 	sourceRevision: row.sourceRevision,
+	sourceCreatedAt: row.sourceCreatedAt.toISOString() as DateTime,
 	chunkIndex: row.chunkIndex,
 	...(row.diagramId ? { diagramId: row.diagramId as SearchDocument['diagramId'] } : {}),
 	...(row.sourceAnchorId
@@ -232,6 +246,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			content: document.content,
 			contentHash: document.contentHash,
 			sourceRevision: document.sourceRevision,
+			sourceCreatedAt: document.sourceCreatedAt ? new Date(document.sourceCreatedAt) : new Date(0),
 			chunkIndex: document.chunkIndex,
 			embedding: document.embedding ? [...document.embedding] : undefined,
 			embeddingModel: document.embeddingModel,
@@ -243,7 +258,8 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		actor: ActorContext,
 		query: string,
 		limit: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		created: CreatedRange = {}
 	): Promise<readonly SearchMatch[]> {
 		// Superseded chunks hold text the user has already edited away: correct to keep
 		// for semantic recall, wrong to surface as a literal match.
@@ -253,6 +269,10 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			sql`${schema.searchChunks.content} ilike ${`%${query}%`}`
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
+		if (created.createdAfter)
+			conditions.push(gte(schema.searchChunks.sourceCreatedAt, new Date(created.createdAfter)));
+		if (created.createdBefore)
+			conditions.push(lte(schema.searchChunks.sourceCreatedAt, new Date(created.createdBefore)));
 		return (
 			await this.database
 				.select()
@@ -267,7 +287,8 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		actor: ActorContext,
 		embedding: readonly number[],
 		limit: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		created: CreatedRange = {}
 	): Promise<readonly SearchMatch[]> {
 		const distance = cosineDistance(schema.searchChunks.embedding, [...embedding]);
 		// Pending chunks have no vector, and a NULL distance sorts ahead of every real
@@ -277,6 +298,10 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			isNotNull(schema.searchChunks.embedding)
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
+		if (created.createdAfter)
+			conditions.push(gte(schema.searchChunks.sourceCreatedAt, new Date(created.createdAfter)));
+		if (created.createdBefore)
+			conditions.push(lte(schema.searchChunks.sourceCreatedAt, new Date(created.createdBefore)));
 		const rows = await this.database
 			.select({ chunk: schema.searchChunks, distance })
 			.from(schema.searchChunks)

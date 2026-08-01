@@ -33,6 +33,10 @@ export interface EmbeddedChunk {
 	readonly id: SearchDocumentId;
 	readonly embedding: readonly number[];
 }
+export interface CreatedRange {
+	readonly createdAfter?: string;
+	readonly createdBefore?: string;
+}
 
 export interface RetrievalIndexRepository {
 	listForAttachment(
@@ -70,13 +74,15 @@ export interface RetrievalIndexRepository {
 		actor: ActorContext,
 		query: string,
 		limit: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]>;
 	searchByEmbedding(
 		actor: ActorContext,
 		embedding: readonly number[],
 		limit: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		created?: CreatedRange
 	): Promise<readonly SearchMatch[]>;
 	deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void>;
 	deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void>;

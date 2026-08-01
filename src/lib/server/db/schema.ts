@@ -852,6 +852,7 @@ export const searchChunks = pgTable(
 		embeddingModel: text('embedding_model'),
 		contentHash: text('content_hash').notNull(),
 		sourceRevision: integer('source_revision').notNull().default(1),
+		sourceCreatedAt: timestamp('source_created_at', { withTimezone: true }).notNull().defaultNow(),
 		chunkIndex: integer('chunk_index').notNull().default(0),
 		// Set when a newer revision of the source has been staged but not yet embedded.
 		// Superseded rows stay searchable by embedding (stale content beats no content)
