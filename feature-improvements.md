@@ -99,5 +99,8 @@ Replace/augment the bespoke scheduler (`src/worker.ts`, `services/scheduler.ts`,
 
 Done: Postgres pending chunks remain the durable embedding queue, with the ten-minute sweep, durable run events, SSE cursor replay, and five-second defensive poll unchanged. Pub/Sub would remain lossy; a reliable Redis queue would require an outbox and reconciliation path without helping the current single-app/single-worker deployment. Index maintenance now reuses the shared batching and scheduler types.
 
-### 21. Proactive agent mode (memory condensation + learning from "no") — L
+### 21. Proactive agent mode (memory condensation + learning from "no") — L — ⏸ Not yet
+
 New scheduled task via `startScheduler` calling an LLM condensation pass over `MemoryLibrary` (`services/memory/library.ts`), plus a notification surface and a feedback signal when the user declines. Largest, most open-ended item — needs its own design pass.
+
+Not yet: the backlog remains, but memory condensation and learning from rejection are intentionally deferred until that design pass. No scheduler, preference, schema, feedback, or notification behavior has been added.
