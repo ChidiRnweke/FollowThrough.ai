@@ -1,4 +1,4 @@
-import { Agent, OpenAIProvider, Runner, tool, type Session } from '@openai/agents';
+import { Agent, OpenAIProvider, Runner, tool } from '@openai/agents';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,6 @@ import type {
 	TextSelection
 } from '$lib/models';
 import { ValidationError } from '$lib/errors';
-import type { AgentSessionRepository } from '$lib/server/repositories';
 
 export interface MermaidDiagramDraft {
 	readonly title?: string;
@@ -95,12 +94,6 @@ type DiagramModelResolver = (
 	preferences: Pick<AgentPreferences, 'defaultModel'>,
 	environmentDefault: string
 ) => string;
-
-type DiagramSessionFactory = (
-	repository: AgentSessionRepository,
-	actor: ActorContext,
-	conversationId: ConversationId
-) => Session;
 
 interface ToolEventMapper {
 	map(event: unknown): AgentEvent | undefined;
@@ -237,8 +230,8 @@ export interface DiagramAgentDependencies {
 	readonly contextBuilder: AgentContextBuilder;
 	readonly conversations: ConversationJournal;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
+	readonly models: { list(): Promise<readonly import('$lib/models').AgentModel[]> };
 	readonly runs: AgentRunStore;
-	readonly sessions: AgentSessionRepository;
 	readonly provenance: {
 		record(
 			actor: ActorContext,
@@ -247,8 +240,8 @@ export interface DiagramAgentDependencies {
 	};
 	readonly builtInSkills: { load(actor: ActorContext, key: string): Promise<Skill> };
 	readonly defaultModel: string;
+	readonly defaultVisionModel: string;
 	readonly resolveModel: DiagramModelResolver;
-	readonly createSession: DiagramSessionFactory;
 	readonly createToolEventMapper: () => ToolEventMapper;
 	readonly observeWorkflow: DiagramWorkflowObserver;
 	readonly drawioValidator: DrawioSourceValidator;
@@ -260,7 +253,26 @@ interface DiagramTask {
 	readonly selection?: TextSelection;
 	readonly source?: string;
 	readonly instruction?: string;
+	readonly renderedPngDataUrl?: string;
 }
+
+export const assertRenderedPng = (dataUrl: string | undefined): void => {
+	if (!dataUrl) return;
+	const encoded = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/)?.[1];
+	if (!encoded) throw new ValidationError('Rendered diagram must be a base64 PNG.');
+	const bytes = Buffer.from(encoded, 'base64');
+	if (bytes.byteLength > 10 * 1024 * 1024)
+		throw new ValidationError('Rendered diagram exceeds the 10 MiB limit.');
+	if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a')
+		throw new ValidationError('Rendered diagram is not a valid PNG.');
+};
+
+export const diagramRevisionModel = (
+	configuredModel: string,
+	supportsVision: boolean,
+	renderedPngDataUrl: string | undefined,
+	fallbackVisionModel: string
+): string => (renderedPngDataUrl && !supportsVision ? fallbackVisionModel : configuredModel);
 
 export class DiagramAuthoring {
 	constructor(
@@ -312,7 +324,8 @@ export class DiagramAuthoring {
 			operation: 'revise',
 			noteId: input.noteId,
 			source: input.source,
-			instruction: input.instruction
+			instruction: input.instruction,
+			renderedPngDataUrl: input.renderedPngDataUrl
 		});
 		return { source: draft.source, ...(draft.title ? { title: draft.title } : {}) };
 	}
@@ -353,6 +366,7 @@ export class DiagramAuthoring {
 	}
 
 	private async execute(actor: ActorContext, task: DiagramTask): Promise<MermaidDiagramDraft> {
+		assertRenderedPng(task.renderedPngDataUrl);
 		if (!this.apiKey)
 			throw new ValidationError('Diagram AI is disabled until OPENROUTER_API_KEY is configured.');
 		if (task.operation === 'generate' && !task.selection?.text.trim())
@@ -373,10 +387,19 @@ export class DiagramAuthoring {
 			contextNoteId: task.noteId
 		});
 		const preferences = await this.dependencies.preferences.get(actor);
-		const model = this.dependencies.resolveModel(
+		const configuredModel = this.dependencies.resolveModel(
 			conversation,
 			preferences,
 			this.dependencies.defaultModel
+		);
+		const configuredCapability = (await this.dependencies.models.list()).find(
+			(candidate) => candidate.id === configuredModel
+		);
+		const model = diagramRevisionModel(
+			configuredModel,
+			configuredCapability?.supportsVision ?? false,
+			task.renderedPngDataUrl,
+			preferences.defaultVisionModel ?? this.dependencies.defaultVisionModel
 		);
 		const run = await this.dependencies.runs.create(actor, {
 			conversationId: conversation.id,
@@ -472,15 +495,21 @@ export class DiagramAuthoring {
 				async () => {
 					const runner = new Runner({
 						modelProvider: provider,
-						traceIncludeSensitiveData: true
+						traceIncludeSensitiveData: false
 					});
-					const stream = await runner.run(agent, input.prompt, {
+					const providerInput = task.renderedPngDataUrl
+						? [
+								{
+									role: 'user' as const,
+									content: [
+										{ type: 'input_text' as const, text: input.prompt },
+										{ type: 'input_image' as const, image: task.renderedPngDataUrl }
+									]
+								}
+							]
+						: input.prompt;
+					const stream = await runner.run(agent, providerInput as never, {
 						stream: true,
-						session: this.dependencies.createSession(
-							this.dependencies.sessions,
-							actor,
-							conversation.id
-						),
 						maxTurns: 12
 					});
 					const mapper = this.dependencies.createToolEventMapper();

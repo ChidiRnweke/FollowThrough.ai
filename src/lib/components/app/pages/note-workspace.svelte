@@ -448,11 +448,17 @@
 
 	async function reviseMermaid(
 		source: string,
-		instruction: string
+		instruction: string,
+		renderedPngDataUrl?: string
 	): Promise<{ readonly source: string; readonly title?: string }> {
 		if (!(await ensureSynchronized('Sync the note before revising its diagram.')))
 			throw new Error('Sync the note before revising its diagram.');
-		const output = await noteActions.reviseDiagram(note.id, source, instruction);
+		const output = await noteActions.reviseDiagram(
+			note.id,
+			source,
+			instruction,
+			renderedPngDataUrl
+		);
 		if (!output) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
 		toast.success('Diagram revised — undo with Ctrl+Z');
 		return output;

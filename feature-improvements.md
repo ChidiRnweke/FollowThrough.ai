@@ -94,8 +94,13 @@ Done: prompts use the server clock rendered in the client IANA timezone with UTC
 
 Add a vision capability flag to the model catalog (`services/agent-runs/preferences.ts`), allow image content parts in run submission (`agent-request-factory.ts`, agent controller), and wire attachment upload into the chat UI. Builds on the existing image plumbing in `services/attachments/`.
 
-### 19. Diagram revise sends screenshot to model — M/L
+Done: OpenRouter input modalities drive native-vision capability, user and conversation vision-model preferences mirror chat-model overrides, and every chat composer accepts pasted or picked PNG/JPEG/WebP images with four-image and 10 MiB limits, previews, removal, image-only sends, transcript thumbnails, native multimodal input, and fallback image descriptions.
+
+### 19. Diagram revise sends screenshot to model — M/L — ✅ Done
+
 Depends on vision (item 18). Render the diagram client-side (already happens in `Mermaid.svelte`), send the raster/SVG with the revise request; server: extend `revise_mermaid_diagram` (`agent-tool-factory.ts:794-812`, `services/diagrams/review.ts`) to accept and forward an image.
+
+Done on the corrected path: `Mermaid.svelte` renders a bounded PNG from the exact edited source and active theme, then the inline revise command sends source, instruction, and image to `DiagramAuthoring`. Native-vision models are retained; text-only configured models fall back to the default vision model. Render failure preserves source-only repair, and the one-shot workflow no longer persists provider session JSON.
 
 ### 20. Redis + cron/pubsub embeddings pipeline — L — ✅ Done — Redis not adopted
 

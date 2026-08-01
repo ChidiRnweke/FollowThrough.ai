@@ -167,6 +167,7 @@ export interface ApplicationConfig {
 	readonly openRouterBaseURL?: string;
 	readonly appURL?: string;
 	readonly defaultAgentModel?: string;
+	readonly defaultVisionModel?: string;
 	readonly recommendedModels?: readonly string[];
 	readonly s3?: ObjectStorageConfig;
 	readonly overrides?: ApplicationOverrides;
@@ -211,6 +212,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const openRouterBaseURL = config.openRouterBaseURL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 	const appURL = config.appURL ?? 'http://localhost:5173';
 	const defaultAgentModel = config.defaultAgentModel ?? DEFAULT_GENERATION_MODEL;
+	const defaultVisionModel =
+		config.defaultVisionModel ??
+		process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
+		defaultAgentModel;
 	// Attachment indexing is deliberately left inline: it already runs off the
 	// request path, and deferring it would report an attachment "ready" before it
 	// was actually retrievable.
@@ -428,14 +433,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		contextBuilder: agentContext,
 		conversations: conversationJournal,
 		preferences,
+		models: modelCatalog,
 		runs: runStore,
-		sessions: agentSessions,
 		provenance,
 		builtInSkills,
 		defaultModel: defaultAgentModel,
+		defaultVisionModel,
 		resolveModel: resolveAgentModel,
-		createSession: (repository, actor, conversationId) =>
-			new ConversationSession(repository, actor, conversationId),
 		createToolEventMapper: () => new AgentToolEventMapper(),
 		observeWorkflow: traceWorkflow,
 		drawioValidator: new DrawioXmlValidator()

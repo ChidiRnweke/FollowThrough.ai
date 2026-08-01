@@ -62,10 +62,17 @@ class NoteActionsStore {
 	async reviseDiagram(
 		noteId: Note['id'],
 		source: string,
-		instruction: string
+		instruction: string,
+		renderedPngDataUrl?: string
 	): Promise<ReviseInlineMermaidOutput | undefined> {
 		const result = await this.call<ReviseInlineMermaidOutput>(
-			() => reviseDiagram({ noteId, source, instruction }) as Promise<ReviseInlineMermaidOutput>,
+			() =>
+				reviseDiagram({
+					noteId,
+					source,
+					instruction,
+					renderedPngDataUrl
+				}) as Promise<ReviseInlineMermaidOutput>,
 			{ run: true }
 		);
 		if (result && 'error' in result) {

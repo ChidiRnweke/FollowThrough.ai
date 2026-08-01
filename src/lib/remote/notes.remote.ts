@@ -145,7 +145,8 @@ export const reviseDiagram = command(
 	z.object({
 		noteId: z.string().uuid(),
 		source: z.string(),
-		instruction: z.string()
+		instruction: z.string(),
+		renderedPngDataUrl: z.string().max(14_000_000).optional()
 	}),
 	async (input) => {
 		try {

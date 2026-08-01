@@ -33,13 +33,15 @@
 		setPendingDrawioSuggestion as applyPendingDrawioSuggestion
 	} from '$lib/client/drawio/tiptap-actions';
 	import { createMediaResize } from './media-resize.svelte.js';
+	import { mermaidPngBlob } from './mermaid-export.js';
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
 	const options = $derived(
 		extension.options as {
 			onRevise?: (
 				source: string,
-				instruction: string
+				instruction: string,
+				renderedPngDataUrl?: string
 			) => Promise<{ readonly source: string; readonly title?: string }>;
 			onConvert?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
 			getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
@@ -327,7 +329,22 @@
 		isRevising = true;
 		revisionError = null;
 		try {
-			const revised = await onRevise(editCode, instruction);
+			let renderedPngDataUrl: string | undefined;
+			try {
+				const blob = await mermaidPngBlob(editCode, {
+					base: colorMode.current === 'dark' ? 'dark' : 'light'
+				});
+				if (blob.size <= 10 * 1024 * 1024)
+					renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
+						const reader = new FileReader();
+						reader.onload = () => resolve(String(reader.result));
+						reader.onerror = () => reject(reader.error);
+						reader.readAsDataURL(blob);
+					});
+			} catch {
+				// Broken Mermaid must still reach the source-only repair path.
+			}
+			const revised = await onRevise(editCode, instruction, renderedPngDataUrl);
 			if (code !== committedSource)
 				throw new Error('The diagram changed while the revision was running. Try again.');
 			editor

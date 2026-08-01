@@ -1,9 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { DrawioSubmissionCollector, MermaidSubmissionValidator } from './authoring';
+import {
+	assertRenderedPng,
+	diagramRevisionModel,
+	DrawioSubmissionCollector,
+	MermaidSubmissionValidator
+} from './authoring';
 import { DrawioXmlValidator } from './drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
 
 describe('Diagram submission safety invariants', () => {
+	it('rejects a rendered payload that is not a PNG', () => {
+		expect(() => assertRenderedPng('data:image/png;base64,dGV4dA==')).toThrow('valid PNG');
+	});
+
+	it('keeps a native-vision diagram model for rendered revisions', () => {
+		expect(diagramRevisionModel('native/model', true, 'png', 'fallback/model')).toBe(
+			'native/model'
+		);
+	});
+
+	it('uses the fallback vision model for a text-only diagram model', () => {
+		expect(diagramRevisionModel('text/model', false, 'png', 'fallback/model')).toBe(
+			'fallback/model'
+		);
+	});
+
+	it('keeps source-only repair on the configured model', () => {
+		expect(diagramRevisionModel('text/model', false, undefined, 'fallback/model')).toBe(
+			'text/model'
+		);
+	});
 	it('accepts styled Mermaid source in the server validator', async () => {
 		await expect(
 			new MermaidSubmissionValidator().validate(
