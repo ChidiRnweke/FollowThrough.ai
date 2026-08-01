@@ -90,6 +90,25 @@ const sessionRootCounts = roots.reduce((counts, span) => {
 }, new Map());
 const oversizedSessions = [...sessionRootCounts].filter(([, count]) => count > 50);
 
+// A run that parks on an approval (or is otherwise abandoned mid-turn) leaves the
+// SDK agent span open, so the trace exports as either a bare `agent.turn` +
+// `Agent workflow` pair (children silently dropped) or with generation/tool spans
+// orphaned beneath a parent that was never exported. Both are the same bug: the
+// accepted tools "become traces" because they detach from the agent.
+const sdkToolNames = new Set(['use_tool', 'search_tools', 'get_note', 'get_workspace_context']);
+const agentTurnRoots = new Set(['agent.turn', 'diagram.agent-turn']);
+const splitAgentTraces = [...spansByTrace].filter(([, traceSpans]) => {
+	const root = traceSpans.find((span) => !span.parent_id);
+	if (!root || !agentTurnRoots.has(root.name)) return false;
+	const hasWorkflow = traceSpans.some((span) => span.name === 'Agent workflow');
+	const traceSpanIds = new Set(traceSpans.map((span) => span.context.span_id));
+	const orphaned = traceSpans.some((span) => span.parent_id && !traceSpanIds.has(span.parent_id));
+	const hasSdkActivity = traceSpans.some(
+		(span) => span.name === 'generation' || span.span_kind === 'TOOL' || sdkToolNames.has(span.name)
+	);
+	return hasWorkflow && (orphaned || !hasSdkActivity);
+});
+
 const report = {
 	project: projectName,
 	since: since.toISOString(),
@@ -109,6 +128,7 @@ const report = {
 		inlineSessionRoots: inlineSessionRoots.map((span) => span.context.trace_id),
 		unresolvedParents: unresolvedParents.map((span) => span.context.span_id),
 		duplicateAgentLlmTraces: duplicateAgentLlmTraces.map(([traceId]) => traceId),
+		splitAgentTraces: splitAgentTraces.map(([traceId]) => traceId),
 		oversizedSessions: oversizedSessions.map(([sessionId, count]) => ({ sessionId, count }))
 	}
 };
