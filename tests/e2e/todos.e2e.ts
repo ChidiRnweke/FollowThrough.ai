@@ -42,3 +42,18 @@ test('toolbar search filters board cards live', async ({ page }) => {
 	await search.fill('');
 	await expect(cards).toHaveCount(initial);
 });
+
+test('quick-add focuses its input when the row opens', async ({ page }) => {
+	await page.setViewportSize(desktop);
+	await page.goto('/todos?view=board');
+	const openColumn = page.locator('section').filter({ hasText: 'Open' }).first();
+	await openColumn.waitFor();
+	await openColumn.getByRole('button', { name: 'Add todo to Open' }).click();
+	await expect(openColumn.getByPlaceholder('Todo title…')).toBeFocused();
+});
+
+test('quick-add focuses its input on the ?quickTodo load path', async ({ page }) => {
+	await page.setViewportSize(desktop);
+	await page.goto('/todos?view=board&quickTodo');
+	await expect(page.locator('#quick-todo-input')).toBeFocused();
+});
