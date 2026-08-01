@@ -34,18 +34,20 @@ The BubbleMenu (`src/lib/components/edra/BubbleMenu.svelte`, instance in `note-e
 
 Done: the menu now mounts on `<body>` (`appendTo`) with floating-ui `strategy: 'fixed'`, so the pane's scroll viewport no longer clips it; `scrollTarget` points at the pane's ScrollArea viewport to keep position in sync, and the menu sits at `z-30` above the sticky utility header.
 
-### 7. Ctrl+A copies diagrams as images — M
+### 7. Ctrl+A copies diagrams as images — M — ✅ Done
 Hook copy behavior into the Mermaid node view (`src/lib/components/edra/Mermaid.svelte`) using the existing export pipeline (`MermaidExportMenu.svelte`, `mermaid-export.ts`) to put a PNG on the clipboard.
+
+Done (clarified: selection containing a diagram copies as PNG): a `copy` handler in `createEditor` detects a selection with exactly one mermaid node and writes a rendered PNG (plus the source as text fallback) via `navigator.clipboard.write`, using a new exported `mermaidPngBlob()` that shares the render-at-theme + rasterise pipeline with the file export.
 
 ## Group 2 — Chat & Agent UI
 
-### 8. Bundle parallel tool calls + "approve all" — M
+### 8. Bundle parallel tool calls + "approve all" — M ✅ Done
 Group concurrent approval cards in the chat panel and add an approve-all action. Touch: `tool-approval-card.svelte`, `agent-action.svelte`, `agent-actions.ts`, `chat-panel.svelte`.
 
-### 9. Read-note output label — S
+### 9. Read-note output label — S ✅ Done
 Add/adjust entries in the label maps in `src/lib/components/app/agent/tool-presentation.ts` (and `labels.ts` if needed) so the note name is shown instead of "read markdown".
 
-### 10. Formatting in reasoning + collapsed by default with clickable title — S
+### 10. Formatting in reasoning + collapsed by default with clickable title — S ✅ Done
 Render reasoning through the existing markdown renderer (`chat-markdown.svelte`) inside `chat-reasoning.svelte`, default to collapsed, make the title row toggle.
 
 ## Group 3 — Todos & Backlog

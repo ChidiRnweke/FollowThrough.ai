@@ -89,6 +89,20 @@ const rasterise = (svg: string, background: string | undefined, scale: number): 
 		image.src = url;
 	});
 
+/**
+ * The diagram as a PNG blob — for the clipboard, where triggering a download
+ * makes no sense. Same render-at-theme + rasterise pipeline as the file export.
+ */
+export const mermaidPngBlob = async (
+	source: string,
+	theme: MermaidTheme,
+	scale: number = window.devicePixelRatio || 1
+): Promise<Blob> => {
+	const svg = await renderAtTheme(source, theme);
+	const dataUrl = await rasterise(svg, mermaidExportBackground(theme), scale);
+	return await (await fetch(dataUrl)).blob();
+};
+
 export const exportMermaidDiagram = async (request: MermaidExportRequest): Promise<void> => {
 	const svg = await renderAtTheme(request.source, request.theme);
 	const name = request.fileName ?? 'diagram';

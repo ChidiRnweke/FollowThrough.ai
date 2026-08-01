@@ -47,8 +47,24 @@ import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
 import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggestion.js';
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
+import { mermaidPngBlob } from '../mermaid-export.js';
+import type { EditorState } from '@tiptap/pm/state';
 
 const lowlight = createLowlight(all);
+
+/**
+ * The diagram source when the selection contains exactly one mermaid node —
+ * the case where copying it as a rendered image is unambiguous. Selections with
+ * several diagrams, or none, keep the default copy behaviour.
+ */
+const singleMermaidSource = (state: EditorState): string | undefined => {
+	const sources: string[] = [];
+	state.selection.content().content.descendants((node) => {
+		if (node.type.name === 'mermaid') sources.push(node.textContent);
+		return true;
+	});
+	return sources.length === 1 ? sources[0] : undefined;
+};
 
 export interface EdraEditorProps {
 	onUpdate?: () => void;
@@ -185,7 +201,33 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				return handleMarkdownPaste(view, event);
 			},
 			// Colours from the source document, not from this note: see clipboard-styles.
-			transformPastedHTML: (html) => stripPastedStyling(html)
+			transformPastedHTML: (html) => stripPastedStyling(html),
+			handleDOMEvents: {
+				copy: (view, event) => {
+					// A copied selection holding exactly one diagram goes onto the clipboard
+					// as a rendered PNG (with the source as the text fallback), so pasting
+					// into a document or chat shows the picture rather than the code.
+					const source = singleMermaidSource(view.state);
+					if (!source || typeof ClipboardItem === 'undefined') return false;
+					event.preventDefault();
+					void (async () => {
+						try {
+							const dark = window.document.documentElement.classList.contains('dark');
+							const png = await mermaidPngBlob(source, { base: dark ? 'dark' : 'light' });
+							await navigator.clipboard.write([
+								new ClipboardItem({
+									'image/png': png,
+									'text/plain': new Blob([source], { type: 'text/plain' })
+								})
+							]);
+						} catch {
+							// A failed render still leaves the diagram's source on the clipboard.
+							await navigator.clipboard.writeText(source).catch(() => {});
+						}
+					})();
+					return true;
+				}
+			}
 		},
 		onUpdate: props?.onUpdate || (() => {})
 	});
