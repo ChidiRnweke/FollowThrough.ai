@@ -48,23 +48,9 @@ import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggesti
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
 import { mermaidPngBlob } from '../mermaid-export.js';
-import type { EditorState } from '@tiptap/pm/state';
+import { singleMermaidSource } from './diagram-copy.js';
 
 const lowlight = createLowlight(all);
-
-/**
- * The diagram source when the selection contains exactly one mermaid node —
- * the case where copying it as a rendered image is unambiguous. Selections with
- * several diagrams, or none, keep the default copy behaviour.
- */
-const singleMermaidSource = (state: EditorState): string | undefined => {
-	const sources: string[] = [];
-	state.selection.content().content.descendants((node) => {
-		if (node.type.name === 'mermaid') sources.push(node.textContent);
-		return true;
-	});
-	return sources.length === 1 ? sources[0] : undefined;
-};
 
 export interface EdraEditorProps {
 	onUpdate?: () => void;

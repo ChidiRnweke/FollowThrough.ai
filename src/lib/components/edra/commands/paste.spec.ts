@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getSchema } from '@tiptap/core';
-import { isLiteralPasteShortcut, looksLikeMarkdown, markdownSlice } from './paste';
+import { clipboardImage, isLiteralPasteShortcut, looksLikeMarkdown, markdownSlice } from './paste';
 import { noteMarkdownExtensions } from './markdown-extensions';
 
 describe('Deciding whether pasted text has structure', () => {
@@ -73,5 +73,29 @@ describe('Recognising the literal-paste shortcut', () => {
 		expect(
 			isLiteralPasteShortcut({ ctrlKey: true, shiftKey: true, key: 'p' } as KeyboardEvent)
 		).toBe(false);
+	});
+});
+
+describe('Detecting a pasted image file', () => {
+	const pasteWith = (files: File[] | null) =>
+		({ clipboardData: files ? { files } : null }) as unknown as ClipboardEvent;
+
+	it('returns the first image file', () => {
+		const png = new File(['a'], 'shot.png', { type: 'image/png' });
+		const jpeg = new File(['b'], 'photo.jpg', { type: 'image/jpeg' });
+		expect(clipboardImage(pasteWith([png, jpeg]))).toBe(png);
+	});
+
+	it('skips files that are not images', () => {
+		const pdf = new File(['a'], 'doc.pdf', { type: 'application/pdf' });
+		expect(clipboardImage(pasteWith([pdf]))).toBeUndefined();
+	});
+
+	it('returns undefined when the paste carries no files', () => {
+		expect(clipboardImage(pasteWith([]))).toBeUndefined();
+	});
+
+	it('returns undefined when there is no clipboard data at all', () => {
+		expect(clipboardImage(pasteWith(null))).toBeUndefined();
 	});
 });
