@@ -38,7 +38,10 @@ class FakeAgentRunTransport implements AgentRunTransport {
 	async get(): Promise<AgentRunSnapshot> {
 		throw new Error('Unexpected reconciliation');
 	}
-	async decideMany(): Promise<AgentRunSnapshot> {
+	async decideMany(
+		input: Parameters<AgentRunTransport['decideMany']>[0]
+	): Promise<AgentRunSnapshot> {
+		void input;
 		throw new Error('Unexpected decision');
 	}
 	async cancel(): Promise<AgentRunSnapshot> {
