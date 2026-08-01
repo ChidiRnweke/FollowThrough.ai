@@ -140,9 +140,11 @@
 					/>
 				{/if}
 				<!-- A long column scrolls inside the tray; the header and the add row
-				     stay put, which is what lets the board fill the page height. -->
+				     stay put, which is what lets the board fill the page height. The p-0.5
+				     keeps the cards' ring hairline (and the dnd drop outline) from being
+				     clipped by the overflow scrollport. -->
 				<div
-					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto"
+					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto p-0.5"
 					use:dragHandleZone={{
 						items: board[status],
 						flipDurationMs: 150,
