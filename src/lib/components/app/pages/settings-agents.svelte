@@ -4,7 +4,7 @@
 	import { webSearchEngines } from '$lib/models';
 	import { saveAgentPreferences } from '$lib/remote/settings.remote';
 	import ExecutionModeControl from '$lib/components/app/agent/execution-mode-control.svelte';
-	import SettingSlider from '$lib/components/app/agent/setting-slider.svelte';
+	import ExportSlider from '$lib/components/app/export-slider.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
@@ -43,6 +43,23 @@
 			toast.error('Could not save agent defaults. Try again.');
 		}
 	});
+
+	const describeResultsPerSearch = (current: number): string => {
+		if (current < 5) return 'narrow lookups';
+		if (current < 15) return 'focused results';
+		if (current <= 30) return 'broad coverage';
+		return 'exhaustive';
+	};
+	const describeTotalResults = (current: number): string => {
+		if (current < 20) return 'light research budget';
+		if (current < 60) return 'moderate research budget';
+		return 'heavy research budget';
+	};
+	const describeTurnLimit = (current: number): string => {
+		if (current < 10) return 'short, cheap runs';
+		if (current < 30) return 'standard runs';
+		return 'long research runs';
+	};
 </script>
 
 <Form {...enhanced} class="flex max-w-3xl flex-col gap-6">
@@ -89,19 +106,42 @@
 				<Field.Title>Results per search</Field.Title>
 				<Field.Description>Caps a single search. Between 1 and 50.</Field.Description>
 			</Field.Content>
-			<SettingSlider
-				name="webSearchMaxResults"
-				label="Results per search"
-				min={1}
-				max={50}
-				defaultValue={defaults.webSearchMaxResults}
-				bind:value={searchMaxResults}
-				anchors={[
-					{ value: 1, label: 'focused' },
-					{ value: defaults.webSearchMaxResults, label: 'default' },
-					{ value: 50, label: 'exhaustive' }
-				]}
-			/>
+			<div class="flex w-64 max-w-full flex-col">
+				<!-- Unset means "follow the deployment default": the slider rests on the
+				     default until dragged, and Reset hands the setting back rather than
+				     pinning the number it happened to show. -->
+				<ExportSlider
+					label="Results per search"
+					value={searchMaxResults ?? defaults.webSearchMaxResults}
+					min={1}
+					max={50}
+					step={1}
+					defaultValue={defaults.webSearchMaxResults}
+					anchors={[
+						{ value: 1, label: 'Focused' },
+						{ value: defaults.webSearchMaxResults, label: 'Default' },
+						{ value: 50, label: 'Exhaustive' }
+					]}
+					describe={describeResultsPerSearch}
+					format={(current) =>
+						searchMaxResults === null ? `Default (${current})` : String(current)}
+					onchange={(next) => (searchMaxResults = next)}
+				/>
+				{#if searchMaxResults !== null}
+					<Button
+						type="button"
+						variant="link"
+						size="sm"
+						class="h-auto self-end px-0 text-xs"
+						onclick={() => (searchMaxResults = null)}>Reset to default</Button
+					>
+				{/if}
+				<Input
+					type="hidden"
+					name="webSearchMaxResults"
+					value={searchMaxResults?.toString() ?? ''}
+				/>
+			</div>
 		</Field.Field>
 		<Field.Separator />
 		<Field.Field orientation="responsive">
@@ -109,19 +149,39 @@
 				<Field.Title>Total results per run</Field.Title>
 				<Field.Description>Across every search in one run. Between 1 and 100.</Field.Description>
 			</Field.Content>
-			<SettingSlider
-				name="webSearchMaxTotalResults"
-				label="Total results per run"
-				min={1}
-				max={100}
-				defaultValue={defaults.webSearchMaxTotalResults}
-				bind:value={searchMaxTotalResults}
-				anchors={[
-					{ value: 1, label: 'light' },
-					{ value: defaults.webSearchMaxTotalResults, label: 'default' },
-					{ value: 100, label: 'heavy' }
-				]}
-			/>
+			<div class="flex w-64 max-w-full flex-col">
+				<ExportSlider
+					label="Total results per run"
+					value={searchMaxTotalResults ?? defaults.webSearchMaxTotalResults}
+					min={1}
+					max={100}
+					step={1}
+					defaultValue={defaults.webSearchMaxTotalResults}
+					anchors={[
+						{ value: 1, label: 'Light' },
+						{ value: defaults.webSearchMaxTotalResults, label: 'Default' },
+						{ value: 100, label: 'Heavy' }
+					]}
+					describe={describeTotalResults}
+					format={(current) =>
+						searchMaxTotalResults === null ? `Default (${current})` : String(current)}
+					onchange={(next) => (searchMaxTotalResults = next)}
+				/>
+				{#if searchMaxTotalResults !== null}
+					<Button
+						type="button"
+						variant="link"
+						size="sm"
+						class="h-auto self-end px-0 text-xs"
+						onclick={() => (searchMaxTotalResults = null)}>Reset to default</Button
+					>
+				{/if}
+				<Input
+					type="hidden"
+					name="webSearchMaxTotalResults"
+					value={searchMaxTotalResults?.toString() ?? ''}
+				/>
+			</div>
 		</Field.Field>
 		<Field.Separator />
 		<Field.Field orientation="responsive">
@@ -132,19 +192,34 @@
 					cap spend. Between 1 and 50.</Field.Description
 				>
 			</Field.Content>
-			<SettingSlider
-				name="agentMaxTurns"
-				label="Turn limit"
-				min={1}
-				max={50}
-				defaultValue={defaults.agentMaxTurns}
-				bind:value={maxTurns}
-				anchors={[
-					{ value: 1, label: 'cautious' },
-					{ value: defaults.agentMaxTurns, label: 'default' },
-					{ value: 50, label: 'deep research' }
-				]}
-			/>
+			<div class="flex w-64 max-w-full flex-col">
+				<ExportSlider
+					label="Turn limit"
+					value={maxTurns ?? defaults.agentMaxTurns}
+					min={1}
+					max={50}
+					step={1}
+					defaultValue={defaults.agentMaxTurns}
+					anchors={[
+						{ value: 1, label: 'Cautious' },
+						{ value: defaults.agentMaxTurns, label: 'Default' },
+						{ value: 50, label: 'Deep research' }
+					]}
+					describe={describeTurnLimit}
+					format={(current) => (maxTurns === null ? `Default (${current})` : String(current))}
+					onchange={(next) => (maxTurns = next)}
+				/>
+				{#if maxTurns !== null}
+					<Button
+						type="button"
+						variant="link"
+						size="sm"
+						class="h-auto self-end px-0 text-xs"
+						onclick={() => (maxTurns = null)}>Reset to default</Button
+					>
+				{/if}
+				<Input type="hidden" name="agentMaxTurns" value={maxTurns?.toString() ?? ''} />
+			</div>
 		</Field.Field>
 		<Field.Separator />
 		<Field.Field orientation="responsive">

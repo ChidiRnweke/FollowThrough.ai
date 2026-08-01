@@ -84,6 +84,7 @@ export default defineConfig({
 					include: [
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
 						'src/lib/components/app/drawio-embed.svelte.spec.ts',
+						'src/lib/components/app/export-slider.svelte.spec.ts',
 						'src/lib/components/app/note-conflict-dialog.svelte.spec.ts',
 						'src/lib/components/app/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
