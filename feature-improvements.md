@@ -93,8 +93,11 @@ Add a vision capability flag to the model catalog (`services/agent-runs/preferen
 ### 19. Diagram revise sends screenshot to model — M/L
 Depends on vision (item 18). Render the diagram client-side (already happens in `Mermaid.svelte`), send the raster/SVG with the revise request; server: extend `revise_mermaid_diagram` (`agent-tool-factory.ts:794-812`, `services/diagrams/review.ts`) to accept and forward an image.
 
-### 20. Redis + cron/pubsub embeddings pipeline — L
-Replace/augment the bespoke scheduler (`src/worker.ts`, `services/scheduler.ts`, `KnowledgeIndexMaintenance`) with a Redis-backed queue for embedding jobs. Architectural decision needed first — no Redis/queue dependency exists today.
+### 20. Redis + cron/pubsub embeddings pipeline — L — ✅ Done — Redis not adopted
+
+Replace/augment the bespoke scheduler (`src/worker.ts`, `services/scheduler.ts`, `KnowledgeIndexMaintenance`) with a Redis-backed queue for embedding jobs. Architectural decision needed first — no Redis/queue dependency exists today. Investigate if we route chat streams through Redis as well to have cleaner resumable streams with less code.
+
+Done: Postgres pending chunks remain the durable embedding queue, with the ten-minute sweep, durable run events, SSE cursor replay, and five-second defensive poll unchanged. Pub/Sub would remain lossy; a reliable Redis queue would require an outbox and reconciliation path without helping the current single-app/single-worker deployment. Index maintenance now reuses the shared batching and scheduler types.
 
 ### 21. Proactive agent mode (memory condensation + learning from "no") — L
 New scheduled task via `startScheduler` calling an LLM condensation pass over `MemoryLibrary` (`services/memory/library.ts`), plus a notification surface and a feedback signal when the user declines. Largest, most open-ended item — needs its own design pass.
