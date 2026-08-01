@@ -225,8 +225,8 @@ export class InMemoryAgentRunPersistence
 		return record;
 	}
 
-	async loadUnconsumed(runId: AgentRunId): Promise<AgentRunDecisionRecord | undefined> {
-		return this.decisions.find((item) => item.runId === runId && !item.consumedAt);
+	async loadUnconsumed(runId: AgentRunId): Promise<readonly AgentRunDecisionRecord[]> {
+		return this.decisions.filter((item) => item.runId === runId && !item.consumedAt);
 	}
 
 	async consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean> {

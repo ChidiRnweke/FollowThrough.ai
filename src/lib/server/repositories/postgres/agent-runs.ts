@@ -128,15 +128,15 @@ export class AgentRunDecisionRecords implements AgentRunDecisionRepository {
 		return toDecision(row);
 	}
 
-	async loadUnconsumed(runId: AgentRunId): Promise<AgentRunDecisionRecord | undefined> {
-		const [row] = await this.database
+	async loadUnconsumed(runId: AgentRunId): Promise<readonly AgentRunDecisionRecord[]> {
+		const rows = await this.database
 			.select()
 			.from(schema.agentRunDecisions)
 			.where(
 				and(eq(schema.agentRunDecisions.runId, runId), isNull(schema.agentRunDecisions.consumedAt))
 			)
 			.orderBy(asc(schema.agentRunDecisions.createdAt));
-		return row ? toDecision(row) : undefined;
+		return rows.map(toDecision);
 	}
 
 	async consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean> {

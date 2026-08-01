@@ -41,7 +41,8 @@
 	import ChatActivity from '$lib/components/app/agent/chat-activity.svelte';
 	import ChatStarters from '$lib/components/app/agent/chat-starters.svelte';
 	import AgentContextBar from '$lib/components/app/agent/agent-context-bar.svelte';
-	import ToolApprovalCard from '$lib/components/app/agent/tool-approval-card.svelte';
+	import ToolApprovalGroup from '$lib/components/app/agent/tool-approval-group.svelte';
+	import { chatPartGroupKey, groupChatParts } from '$lib/components/app/agent/chat-parts';
 	import {
 		isWriteTool,
 		toolDetailLines,
@@ -501,26 +502,28 @@
 								</div>
 							</div>
 						{/if}
-						{#each entry.parts as part, index (part.kind === 'tool' && part.tool.callId ? part.tool.callId : `${entry.id}-${index}`)}
-							{#if part.kind === 'text'}
-								<!-- While the editor is open it stands in for the prose it replaces. -->
-								{#if part.text && editingId !== entry.id}
-									<ChatMarkdown content={part.text} />
-								{/if}
-							{:else if part.kind === 'reasoning'}
-								{#if part.text}
-									<ChatReasoning text={part.text} streaming={entry.status === 'streaming'} />
-								{/if}
+						{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
+							{#if group.kind === 'approvals'}
+								<ToolApprovalGroup
+									tools={group.tools}
+									{shell}
+									busy={chat.deciding}
+									onapprove={() => void chat.decideAll(entry, group.tools, 'approve')}
+									onreject={() => void chat.decideAll(entry, group.tools, 'reject')}
+								/>
 							{:else}
-								{@const tool = part.tool}
-								{#if tool.status === 'approval_required'}
-									<ToolApprovalCard
-										{tool}
-										{shell}
-										onapprove={() => void chat.decide(entry, tool, 'approve')}
-										onreject={() => void chat.decide(entry, tool, 'reject')}
-									/>
+								{@const part = group.part}
+								{#if part.kind === 'text'}
+									<!-- While the editor is open it stands in for the prose it replaces. -->
+									{#if part.text && editingId !== entry.id}
+										<ChatMarkdown content={part.text} />
+									{/if}
+								{:else if part.kind === 'reasoning'}
+									{#if part.text}
+										<ChatReasoning text={part.text} streaming={entry.status === 'streaming'} />
+									{/if}
 								{:else}
+									{@const tool = part.tool}
 									<Collapsible.Root>
 										<Collapsible.Trigger>
 											{#snippet child({ props })}

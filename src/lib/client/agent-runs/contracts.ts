@@ -14,9 +14,10 @@ export interface AgentRunEventConnection {
 export interface AgentRunTransport {
 	submit(input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
 	get(runId: AgentRunId): Promise<AgentRunSnapshot>;
-	decide(input: {
+	/** Decides every parked call in one round trip; the run resumes once, not once per card. */
+	decideMany(input: {
 		runId: AgentRunId;
-		callId: string;
+		callIds: readonly string[];
 		decision: 'approve' | 'reject';
 		message?: string;
 	}): Promise<AgentRunSnapshot>;

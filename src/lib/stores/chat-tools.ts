@@ -35,8 +35,12 @@ export const reconcileToolActivity = (
 	tools: ChatToolActivity[],
 	incoming: ChatToolActivity
 ): ChatToolActivity | undefined => {
-	const exact = incoming.callId ? tools.find((tool) => tool.callId === incoming.callId) : undefined;
-	const existing = exact ?? fallbackTool(tools, incoming);
+	// The fallback is for providers that report an outcome without an id. An event that
+	// *has* an id and matches nothing is a different call — when a turn parks on two
+	// approvals at once, falling back would fold the second onto the first and lose it.
+	const existing = incoming.callId
+		? tools.find((tool) => tool.callId === incoming.callId)
+		: fallbackTool(tools, incoming);
 	if (!existing) return undefined;
 
 	if (incoming.callId) existing.callId = incoming.callId;

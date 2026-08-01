@@ -42,7 +42,8 @@ export interface AgentRunner {
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
 		readonly context: Readonly<Record<string, unknown>>;
-		readonly decision?: AgentRunDecisionRecord;
+		/** Decisions to apply before resuming, one per parked tool call. */
+		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate>;

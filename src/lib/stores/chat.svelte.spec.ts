@@ -38,7 +38,7 @@ class FakeAgentRunTransport implements AgentRunTransport {
 	async get(): Promise<AgentRunSnapshot> {
 		throw new Error('Unexpected reconciliation');
 	}
-	async decide(): Promise<AgentRunSnapshot> {
+	async decideMany(): Promise<AgentRunSnapshot> {
 		throw new Error('Unexpected decision');
 	}
 	async cancel(): Promise<AgentRunSnapshot> {
@@ -159,6 +159,56 @@ describe('chat event projection', () => {
 				text: 'Let me search. Broadly first.'
 			}
 		});
+	});
+
+	it('answers every parked call in one decision', async () => {
+		const decided: { callIds: readonly string[]; decision: string }[] = [];
+		class DecidingTransport extends FakeAgentRunTransport {
+			override async decideMany(input: Parameters<AgentRunTransport['decideMany']>[0]) {
+				decided.push({ callIds: input.callIds, decision: input.decision });
+				return {
+					run: { id: runId, status: 'queued', conversationId },
+					pendingDecisions: []
+				} as unknown as AgentRunSnapshot;
+			}
+		}
+		const store = new ChatStore(
+			new DecidingTransport([
+				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
+				{ type: 'approval_required', runId, callId: 'call-b', name: 'archive_note', arguments: {} }
+			]),
+			new MemoryStorage()
+		);
+		await store.send({ prompt: 'do both' });
+		await Promise.resolve();
+		const reply = store.entries.at(-1)!;
+		const tools = reply.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
+		await store.decideAll(reply, tools, 'approve');
+		expect({ decided, statuses: tools.map((tool) => tool.status) }).toEqual({
+			decided: [{ callIds: ['call-a', 'call-b'], decision: 'approve' }],
+			statuses: ['running', 'running']
+		});
+	});
+
+	it('leaves a failed decision visible on every card it covered', async () => {
+		class FailingTransport extends FakeAgentRunTransport {
+			override async decideMany(): Promise<AgentRunSnapshot> {
+				throw new Error('offline');
+			}
+		}
+		const store = new ChatStore(
+			new FailingTransport([
+				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
+				{ type: 'approval_required', runId, callId: 'call-b', name: 'archive_note', arguments: {} }
+			]),
+			new MemoryStorage()
+		);
+		await store.send({ prompt: 'do both' });
+		await Promise.resolve();
+		const reply = store.entries.at(-1)!;
+		const tools = reply.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
+		await store.decideAll(reply, tools, 'approve');
+		expect(tools.map((tool) => tool.status)).toEqual(['failed', 'failed']);
 	});
 
 	it('keeps reasoning out of the turn prose', async () => {

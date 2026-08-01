@@ -98,7 +98,7 @@ export class AgentRunLifecycle {
 		if (!run) return 'cancelled';
 		const actor: ActorContext = { userId: run.userId };
 		const request = run.inputSnapshot as unknown as RunAgentInput;
-		const decision = await this.deps.decisions.loadUnconsumed(run.id);
+		const decisions = await this.deps.decisions.loadUnconsumed(run.id);
 		const successfulMutations = new Map<string, string>();
 		const toolExecutor: AgentToolExecutor = {
 			execute: async (input, action) => {
@@ -115,7 +115,7 @@ export class AgentRunLifecycle {
 				run,
 				request,
 				context: run.contextSnapshot ?? {},
-				...(decision ? { decision } : {}),
+				...(decisions.length > 0 ? { decisions } : {}),
 				signal,
 				toolExecutor
 			})) {
@@ -136,7 +136,8 @@ export class AgentRunLifecycle {
 				if (update.type === 'approval_checkpoint') {
 					await this.deps.transactions.run(async () => {
 						await this.deps.sessions.replace(run.conversationId, update.sessionItems);
-						if (decision) await this.deps.decisions.consume(run.id, decision.callId, new Date());
+						for (const decision of decisions)
+							await this.deps.decisions.consume(run.id, decision.callId, new Date());
 						await this.deps.runs.transition(run.id, 'running', 'awaiting_approval', {
 							serializedState: update.serializedState,
 							pendingDecisions: update.pendingDecisions,
@@ -150,7 +151,13 @@ export class AgentRunLifecycle {
 					this.deps.eventBus.notify(run.id);
 					return 'awaiting_approval';
 				}
-				await this.complete(run, actor, update.sessionItems, lastEvent?.cursor, decision?.callId);
+				await this.complete(
+					run,
+					actor,
+					update.sessionItems,
+					lastEvent?.cursor,
+					decisions.map((decision) => decision.callId)
+				);
 				return 'completed';
 			}
 			throw new Error('The agent provider ended without a durable outcome');
@@ -245,11 +252,12 @@ export class AgentRunLifecycle {
 		actor: ActorContext,
 		sessionItems: readonly Readonly<Record<string, unknown>>[],
 		eventCursor?: string,
-		decisionCallId?: string
+		decisionCallIds: readonly string[] = []
 	): Promise<void> {
 		await this.deps.transactions.run(async () => {
 			await this.deps.sessions.replace(run.conversationId, sessionItems);
-			if (decisionCallId) await this.deps.decisions.consume(run.id, decisionCallId, new Date());
+			for (const callId of decisionCallIds)
+				await this.deps.decisions.consume(run.id, callId, new Date());
 			const text = await this.deps.events.reconstructText(run.id, 1);
 			await this.deps.conversations.recordAssistantText(
 				actor,

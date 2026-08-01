@@ -60,7 +60,11 @@ export interface AgentRunDecisionRepository {
 			readonly message?: string;
 		}
 	): Promise<AgentRunDecisionRecord>;
-	loadUnconsumed(runId: AgentRunId): Promise<AgentRunDecisionRecord | undefined>;
+	/**
+	 * Every decision still waiting to be applied, oldest first. A turn can park on several
+	 * tool calls at once, and the user may answer all of them before the run resumes.
+	 */
+	loadUnconsumed(runId: AgentRunId): Promise<readonly AgentRunDecisionRecord[]>;
 	consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean>;
 	clearPending(runId: AgentRunId): Promise<boolean>;
 }

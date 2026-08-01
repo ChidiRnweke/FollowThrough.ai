@@ -130,6 +130,8 @@ export class ChatStore {
 	modelOverride = $state<string | null>(null);
 	executionModeOverride = $state<AgentExecutionMode>('approval_required');
 	initialized = $state(false);
+	/** True while a decision is in flight, so a bundle cannot be answered twice. */
+	deciding = $state(false);
 	chips = $state<ContextChip[]>([]);
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
 	/**
@@ -416,24 +418,40 @@ export class ChatStore {
 		this.attach(reply, receipt.runId, receipt.latestCursor, 0);
 	}
 
-	async decide(
+	decide(reply: ChatEntry, tool: ChatToolActivity, decision: 'approve' | 'reject'): Promise<void> {
+		return this.decideAll(reply, [tool], decision);
+	}
+
+	/**
+	 * Answers every parked call in one request. Deciding them one at a time would requeue and
+	 * resume the run between each, so the second decision would arrive at a run that is no
+	 * longer awaiting approval and be rejected.
+	 */
+	async decideAll(
 		reply: ChatEntry,
-		tool: ChatToolActivity,
+		tools: readonly ChatToolActivity[],
 		decision: 'approve' | 'reject'
 	): Promise<void> {
-		if (!tool.runId) return;
+		if (this.deciding) return;
+		const runId = tools.find((tool) => tool.runId)?.runId;
+		if (!runId || tools.length === 0) return;
+		this.deciding = true;
 		try {
-			const snapshot = await this.transport.decide({
-				runId: tool.runId as AgentRunId,
-				callId: tool.callId,
+			const snapshot = await this.transport.decideMany({
+				runId: runId as AgentRunId,
+				callIds: tools.map((tool) => tool.callId),
 				decision
 			});
-			tool.status = decision === 'approve' ? 'running' : 'rejected';
+			for (const tool of tools) tool.status = decision === 'approve' ? 'running' : 'rejected';
 			this.reconcileSnapshot(reply, snapshot);
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
 		} catch {
-			tool.status = 'failed';
-			tool.failure = 'The decision could not be applied.';
+			for (const tool of tools) {
+				tool.status = 'failed';
+				tool.failure = 'The decision could not be applied.';
+			}
+		} finally {
+			this.deciding = false;
 		}
 	}
 

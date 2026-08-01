@@ -18,12 +18,17 @@
 		tool,
 		shell,
 		onapprove,
-		onreject
+		onreject,
+		showFooter = true,
+		busy = false
 	}: {
 		tool: ChatToolActivity;
 		shell?: ShellContext;
 		onapprove: () => void;
 		onreject: () => void;
+		/** False inside a bundle, where one footer answers every card at once. */
+		showFooter?: boolean;
+		busy?: boolean;
 	} = $props();
 
 	const noteId = $derived(targetNoteId(tool.name, tool.arguments));
@@ -154,10 +159,12 @@
 			</ErrorBoundary>
 		{/if}
 	</Card.Content>
-	<Card.Footer class="gap-2 px-4">
-		<Button size="sm" onclick={onapprove}>Approve</Button>
-		<Button size="sm" variant="ghost" onclick={onreject}>Reject</Button>
-	</Card.Footer>
+	{#if showFooter}
+		<Card.Footer class="gap-2 px-4">
+			<Button size="sm" disabled={busy} onclick={onapprove}>Approve</Button>
+			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject</Button>
+		</Card.Footer>
+	{/if}
 </Card.Root>
 
 <Dialog.Root bind:open={expanded}>

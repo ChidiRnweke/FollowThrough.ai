@@ -12,9 +12,9 @@ export class RemoteAgentRunTransport implements AgentRunTransport {
 		return getAgentRun({ runId } as never);
 	}
 
-	async decide(input: Parameters<AgentRunTransport['decide']>[0]) {
-		const { decideAgentRun } = await import('$lib/remote/chat.remote');
-		return decideAgentRun(input as never);
+	async decideMany(input: Parameters<AgentRunTransport['decideMany']>[0]) {
+		const { decideAgentRunBatch } = await import('$lib/remote/chat.remote');
+		return decideAgentRunBatch(input as never);
 	}
 
 	async cancel(runId: AgentRunId) {

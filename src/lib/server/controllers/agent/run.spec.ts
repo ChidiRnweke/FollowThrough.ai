@@ -279,6 +279,51 @@ describe('durable agent lifecycle commands', () => {
 		expect(snapshot.run.status).toBe('queued');
 	});
 
+	it('records every call in a batch decision against one requeue', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000009',
+			input: 'Do both'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = {
+			...original,
+			status: 'awaiting_approval',
+			pendingDecisions: [
+				{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
+				{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+			]
+		};
+		await controller.decideMany(testActor(), {
+			runId: receipt.runId,
+			callIds: ['call-a', 'call-b'],
+			decision: 'approve'
+		});
+		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(2);
+	});
+
+	it('records nothing when one call in a batch is not pending', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000010',
+			input: 'Do both'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = {
+			...original,
+			status: 'awaiting_approval',
+			pendingDecisions: [{ callId: 'call-a', toolName: 'create_todo', arguments: {} }]
+		};
+		await expect(
+			controller.decideMany(testActor(), {
+				runId: receipt.runId,
+				callIds: ['call-a', 'call-missing'],
+				decision: 'approve'
+			})
+		).rejects.toThrow('The pending tool call was not found');
+		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(0);
+	});
+
 	it('rejects a contradictory duplicate decision', async () => {
 		const { controller, runs } = setup();
 		const receipt = await controller.submit(testActor(), {

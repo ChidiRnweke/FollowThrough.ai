@@ -1033,6 +1033,17 @@ export interface DecideAgentRunInput {
 	readonly message?: string;
 }
 
+/**
+ * One turn can park on several tool calls at once, and the user answers them as a batch.
+ * Deciding them one at a time would requeue the run between each, so they travel together.
+ */
+export interface DecideAgentRunBatchInput {
+	readonly runId: AgentRunId;
+	readonly callIds: readonly string[];
+	readonly decision: 'approve' | 'reject';
+	readonly message?: string;
+}
+
 /** A partial edit: omitted fields keep their stored value, `defaultModel: null` clears it. */
 export interface UpdateAgentPreferencesInput {
 	readonly defaultModel?: string | null;

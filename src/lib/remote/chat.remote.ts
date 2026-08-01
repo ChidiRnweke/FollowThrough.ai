@@ -30,6 +30,19 @@ export const decideAgentRun = command(
 			.decide(requestActor(), input as never)
 );
 
+export const decideAgentRunBatch = command(
+	z.object({
+		runId: z.string().uuid(),
+		callIds: z.array(z.string().min(1)).min(1),
+		decision: z.enum(['approve', 'reject']),
+		message: z.string().optional()
+	}),
+	async (input) =>
+		AppFactory.controllers()
+			.agent()
+			.decideMany(requestActor(), input as never)
+);
+
 export const cancelAgentRun = command(runIdInput, async ({ runId }) =>
 	AppFactory.controllers()
 		.agent()

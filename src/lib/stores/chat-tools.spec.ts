@@ -39,6 +39,17 @@ describe('chat tool activity reconciliation', () => {
 		expect(reconcileToolActivity([], runningTool())).toBeUndefined();
 	});
 
+	it('keeps a second parked call apart from the first', () => {
+		const tools = [{ ...runningTool('call-1'), status: 'approval_required' as const }];
+		const merged = reconcileToolActivity(tools, {
+			callId: 'call-2',
+			name: 'archive_note',
+			arguments: {},
+			status: 'approval_required'
+		});
+		expect(merged).toBeUndefined();
+	});
+
 	it('reconciles a provider completion without an id to the only active call', () => {
 		const tools = [runningTool()];
 		reconcileToolActivity(tools, {

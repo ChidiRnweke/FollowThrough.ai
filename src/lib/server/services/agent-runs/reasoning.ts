@@ -290,11 +290,11 @@ export class AgentReasoning {
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
 		readonly context: Readonly<Record<string, unknown>>;
-		readonly decision?: AgentRunDecisionRecord;
+		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate> {
-		const { actor, run, request, context, decision, signal, toolExecutor } = input;
+		const { actor, run, request, context, decisions = [], signal, toolExecutor } = input;
 		if (!this.apiKey)
 			throw new AgentProviderFailure(
 				'Agent chat is disabled until OPENROUTER_API_KEY is configured',
@@ -325,17 +325,27 @@ export class AgentReasoning {
 			const agent = buildAgent(tools);
 			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
 				let state: RunState<unknown, typeof agent> | undefined;
-				if (decision && run.serializedState) {
+				if (decisions.length > 0 && run.serializedState) {
 					state = await RunState.fromString(agent, run.serializedState);
-					const pending = state
-						.getInterruptions()
-						.find((item) => callDetails(item).callId === decision.callId);
-					if (!pending) throw new ValidationError('The pending approval could not be resumed');
-					if (decision.decision === 'approve') state.approve(pending);
-					else
-						state.reject(pending, {
-							message: decision.message ?? 'The user rejected this action. Recover without it.'
-						});
+					const interruptions = state.getInterruptions();
+					// A decision without a matching interruption was already applied on an earlier
+					// pass, so it is skipped rather than fatal; only a resume that lands on none of
+					// them means the state and the decisions have genuinely diverged. Interruptions
+					// left undecided stay parked, and the checkpoint below re-announces them.
+					let applied = 0;
+					for (const decision of decisions) {
+						const pending = interruptions.find(
+							(item) => callDetails(item).callId === decision.callId
+						);
+						if (!pending) continue;
+						applied += 1;
+						if (decision.decision === 'approve') state.approve(pending);
+						else
+							state.reject(pending, {
+								message: decision.message ?? 'The user rejected this action. Recover without it.'
+							});
+					}
+					if (applied === 0) throw new ValidationError('The pending approval could not be resumed');
 				}
 				const stream = await runner.run(agent, state ?? request.prompt, {
 					stream: true,

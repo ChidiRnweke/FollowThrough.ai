@@ -11,6 +11,7 @@ import type {
 	Conversation,
 	ConversationId,
 	DateTime,
+	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
 	Message,
 	RunAgentInput,
@@ -91,6 +92,7 @@ export interface AgentController {
 		after: string
 	): Promise<readonly AgentRunEventRecord[]>;
 	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot>;
+	decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
 	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
 	retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
 	listSessions(
@@ -241,14 +243,31 @@ export class Agent implements AgentController {
 		return this.dependencies.events.replay(actor, runId, after);
 	}
 
-	async decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot> {
+	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot> {
+		const { callId, ...rest } = input;
+		return this.decideMany(actor, { ...rest, callIds: [callId] });
+	}
+
+	async decideMany(
+		actor: ActorContext,
+		input: DecideAgentRunBatchInput
+	): Promise<AgentRunSnapshot> {
 		const snapshot = await this.dependencies.transactionRunner.run(async () => {
 			const run = await this.requireRun(actor, input.runId);
 			if (run.status !== 'awaiting_approval' && run.status !== 'queued')
 				throw new ValidationError('The agent run is not awaiting approval');
-			if (!run.pendingDecisions.some((pending) => pending.callId === input.callId))
-				throw new ValidationError('The pending tool call was not found');
-			await this.dependencies.decisions.record(actor, input);
+			// All or nothing: half a batch recorded against a run that then requeues would
+			// leave the user staring at cards whose decision silently went nowhere.
+			for (const callId of input.callIds)
+				if (!run.pendingDecisions.some((pending) => pending.callId === callId))
+					throw new ValidationError('The pending tool call was not found');
+			for (const callId of input.callIds)
+				await this.dependencies.decisions.record(actor, {
+					runId: input.runId,
+					callId,
+					decision: input.decision,
+					...(input.message === undefined ? {} : { message: input.message })
+				});
 			const queued = await this.dependencies.runs.requeueAfterDecision(actor, run.id, now());
 			if (run.status === 'awaiting_approval')
 				await this.dependencies.events.append(run.id, 0, {
