@@ -24,8 +24,10 @@ Done: `clipboardImage()` detects image files on the clipboard; the paste handler
 
 Done (clarified: heading links): typing `#` opens a suggestion of the current note's headings (ids from the TOC extension) and inserts a `#heading-id` anchor link; a click plugin scrolls to the heading smoothly. New: `HeadingLinkSuggestion.ts` (+ spec), `heading-link-renderer.svelte.ts`, `HeadingLinkList.svelte`.
 
-### 5. Right-click context menu in editor — M
+### 5. Right-click context menu in editor — M — ✅ Done
 No `contextmenu` handling today; the `ui/context-menu` primitive exists and is already used in `project-tree.svelte`. Touch: `src/lib/components/app/note-editor.svelte`, new menu component offering paste raw / paste merge formatting / copy raw / copy formatting.
+
+Done: the editor wrapper is now a `ContextMenu.Trigger` with four items — copy raw / copy with formatting (HTML+plain via `ClipboardItem`) / paste raw (`view.pasteText`) / paste with formatting (`view.pasteHTML`, falls back to raw). `.tiptap` sets `user-select: text` to override the trigger's `select-none`.
 
 ### 6. Selection controls hidden when text is at top — S — ✅ Done
 The BubbleMenu (`src/lib/components/edra/BubbleMenu.svelte`, instance in `note-editor.svelte:457-571`) flips below the selection but likely clips at the container top. Fix placement/offset/overflow in the bubble menu config.
@@ -68,8 +70,10 @@ Add sortable column headers to `todo-table.svelte` (client-side sort first); opt
 
 Fixed: client-side sorting in `todo-table.svelte` — `sortKey`/`sortDir` state (default null = server order), a `sortedTodos` derivation via `toSorted` with per-column comparators (workflow rank for status, urgency rank for priority, collator for strings, nulls last), and clickable ghost-button headers cycling asc → desc → cleared with `FtChevronUp/Down/ChevronsUd` icons and `aria-sort`. Applied to both the desktop table and the mobile card list. No server changes.
 
-### 15. Tag todos by category + filter — L
+### 15. Tag todos by category + filter — L — ✅ Done
 New schema field + drizzle migration (`src/lib/server/db/schema.ts`, `drizzle/`), domain model + mapper updates (`domain.ts`, `db/mappers.ts`), repository filter, then UI: new category field in `todo-fields/`, filter bar in `todos-workspace.svelte`, `labels.ts`.
+
+Fixed: free-text `category` (decision: users invent their own — clients, releases, etc.), so no enum and no `labels.ts` maps. Nullable `text` column (`drizzle/0030_misty_titania.sql`), `Todo.category`/`UpdateTodoInput.category`/`TodoListFilter.category` in `domain.ts`, mapper + repository insert/update/filter + new `listCategories` (distinct values) through catalog and controller, zod field in `todos.remote.ts`. UI: new `todo-category-field.svelte` (text input with a datalist of existing categories, blur/Enter commit, quiet mode), a sortable Category column in `todo-table.svelte` (desktop + mobile card), and an "All categories" Select in the workspace filter bar wired to a `category` URL param on both todos pages. Caveat: the local dev DB had drifted from the migration journal (0017+ never applied, `agent_tool_effects` missing), so `pnpm db:migrate` fails on pre-existing history; the `category` column was applied manually with `ADD COLUMN IF NOT EXISTS`.
 
 ## Group 4 — Agent Platform & Backend
 

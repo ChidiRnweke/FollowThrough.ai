@@ -9,6 +9,9 @@
 	caret-color: var(--foreground);
 	cursor: var(--cursor-ibeam), text;
 	outline: none;
+	/* The context-menu trigger wrapping the editor is `select-none`; the editable
+	   surface must always override that. */
+	user-select: text;
 }
 
 .tiptap:focus-visible {

@@ -55,6 +55,8 @@
 	} from './reference-link-plugin';
 	import TodoNodeView from './todo-node.svelte';
 	import { toast } from 'svelte-sonner';
+	import { DOMSerializer } from '@tiptap/pm/model';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
 		completeAttachmentUpload,
@@ -300,6 +302,81 @@
 		onaction?.(action, readSelection(), editor?.state.selection.to);
 	}
 
+	/** Plain text of the current selection, '' when there is none. */
+	function selectionText(): string {
+		if (!editor) return '';
+		const { from, to, empty } = editor.state.selection;
+		if (empty) return '';
+		return getTextBetween(
+			editor.state.doc,
+			{ from, to },
+			{
+				blockSeparator: BLOCK_SEPARATOR,
+				textSerializers: getTextSerializersFromSchema(editor.schema)
+			}
+		);
+	}
+
+	async function copySelectionRaw(): Promise<void> {
+		const text = selectionText();
+		if (!text) return;
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			toast.error('The clipboard could not be written');
+		}
+	}
+
+	async function copySelectionFormatted(): Promise<void> {
+		if (!editor) return;
+		const text = selectionText();
+		if (!text) return;
+		const container = window.document.createElement('div');
+		container.appendChild(
+			DOMSerializer.fromSchema(editor.schema).serializeFragment(
+				editor.state.selection.content().content
+			)
+		);
+		try {
+			await navigator.clipboard.write([
+				new ClipboardItem({
+					'text/html': new Blob([container.innerHTML], { type: 'text/html' }),
+					'text/plain': new Blob([text], { type: 'text/plain' })
+				})
+			]);
+		} catch {
+			toast.error('The clipboard could not be written');
+		}
+	}
+
+	async function pasteRaw(): Promise<void> {
+		if (!editor) return;
+		try {
+			const text = await navigator.clipboard.readText();
+			if (!text) return;
+			editor.view.focus();
+			editor.view.pasteText(text);
+		} catch {
+			toast.error('The clipboard could not be read');
+		}
+	}
+
+	async function pasteFormatted(): Promise<void> {
+		if (!editor) return;
+		try {
+			const htmlItem = (await navigator.clipboard.read()).find((item) =>
+				item.types.includes('text/html')
+			);
+			// No rich content on the clipboard: raw is the formatted answer too.
+			if (!htmlItem) return await pasteRaw();
+			const html = await (await htmlItem.getType('text/html')).text();
+			editor.view.focus();
+			editor.view.pasteHTML(html);
+		} catch {
+			toast.error('The clipboard could not be read');
+		}
+	}
+
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
 		(perNote?.suggestions.items ?? []).flatMap((item) =>
@@ -483,162 +560,175 @@
 	<!-- No `cursor-text` here: this wrapper is wider and taller than the editable
 	     surface, so the I-beam extended into dead margin where clicking places no
 	     caret. `.tiptap` declares it for the surface that actually takes text. -->
-	<div class="flex min-h-96 flex-1 flex-col">
-		<!--
+	<ContextMenu.Root>
+		<ContextMenu.Trigger class="flex min-h-96 flex-1 flex-col">
+			<!--
 			The editor is the one surface where degrading quietly would be wrong: a
 			node view that throws must not read as "the note is empty". State what
 			happened and say the saved note is intact, because that is the question
 			this failure raises.
 		-->
-		<ErrorBoundary label="the editor" {fallback}>
-			<Tiptap {editor}>
-				<!-- Mounted on <body> with fixed positioning: inside the editor DOM the
+			<ErrorBoundary label="the editor" {fallback}>
+				<Tiptap {editor}>
+					<!-- Mounted on <body> with fixed positioning: inside the editor DOM the
 				     menu is clipped by the pane's scroll viewport whenever the selection
 				     sits at the top edge. `scrollTarget` keeps the position in sync with the
 				     pane's own scroller (the window doesn't fire for it). -->
-				<BubbleMenu
-					{editor}
-					appendTo={() => window.document.body}
-					options={{
-						strategy: 'fixed',
-						scrollTarget:
-							editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? window
-					}}
-					class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
-				>
-					{#if onask}
-						<!--
+					<BubbleMenu
+						{editor}
+						appendTo={() => window.document.body}
+						options={{
+							strategy: 'fixed',
+							scrollTarget:
+								editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? window
+						}}
+						class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+					>
+						{#if onask}
+							<!--
 						The open-ended one, so it leads: the four beside it each do a single
 						fixed thing, and this is the one that says the agent will take any
 						instruction about the selection. Styled exactly like its neighbours —
 						the bubble is already an AI cluster, so the tinted mark the agent
 						carries elsewhere would only break the row's own consistency here.
 					-->
-						<Tip text="Open the chat with the selection attached">
+							<Tip text="Open the chat with the selection attached">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="sm"
+										onmousedown={preserveEditorSelection}
+										onclick={() => onask(agentActions.selection.prompt)}
+									>
+										<Suggestion class="size-4" />
+										Ask about this
+									</Button>
+								{/snippet}
+							</Tip>
+							<Separator orientation="vertical" class="h-5" />
+						{/if}
+						<Tip text="Turn commitments in the selection into todos">
 							{#snippet children({ props })}
 								<Button
 									{...props}
 									variant="ghost"
 									size="sm"
 									onmousedown={preserveEditorSelection}
-									onclick={() => onask(agentActions.selection.prompt)}
+									onclick={() => runSelectionAction('promises')}
 								>
-									<Suggestion class="size-4" />
-									Ask about this
+									<ClipboardCheck class="size-4" />
+									Extract promises
+								</Button>
+							{/snippet}
+						</Tip>
+						<Tip text="Find related notes and propose backlinks">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="sm"
+									onmousedown={preserveEditorSelection}
+									onclick={() => runSelectionAction('relate')}
+								>
+									<Waypoints class="size-4" />
+									Find related
+								</Button>
+							{/snippet}
+						</Tip>
+						<Tip text="Find supporting external references">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="sm"
+									onmousedown={preserveEditorSelection}
+									onclick={() => runSelectionAction('reference')}
+								>
+									<BookOpen class="size-4" />
+									Reference
 								</Button>
 							{/snippet}
 						</Tip>
 						<Separator orientation="vertical" class="h-5" />
-					{/if}
-					<Tip text="Turn commitments in the selection into todos">
-						{#snippet children({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="sm"
-								onmousedown={preserveEditorSelection}
-								onclick={() => runSelectionAction('promises')}
-							>
-								<ClipboardCheck class="size-4" />
-								Extract promises
-							</Button>
-						{/snippet}
-					</Tip>
-					<Tip text="Find related notes and propose backlinks">
-						{#snippet children({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="sm"
-								onmousedown={preserveEditorSelection}
-								onclick={() => runSelectionAction('relate')}
-							>
-								<Waypoints class="size-4" />
-								Find related
-							</Button>
-						{/snippet}
-					</Tip>
-					<Tip text="Find supporting external references">
-						{#snippet children({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="sm"
-								onmousedown={preserveEditorSelection}
-								onclick={() => runSelectionAction('reference')}
-							>
-								<BookOpen class="size-4" />
-								Reference
-							</Button>
-						{/snippet}
-					</Tip>
-					<Separator orientation="vertical" class="h-5" />
-					<Tip text="Generate a mermaid diagram from the selection and insert it">
-						{#snippet children({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="sm"
-								onmousedown={preserveEditorSelection}
-								onclick={() => runSelectionAction('diagram')}
-							>
-								<Workflow class="size-4" />
-								Diagram
-							</Button>
-						{/snippet}
-					</Tip>
-					{#if skills.length > 0 && onskill}
-						<Separator orientation="vertical" class="h-5" />
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props: menuProps })}
-									<Tip text="Run one of your skills on the selection">
-										{#snippet children({ props: tipProps })}
-											<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
-												<Wrench class="size-4" />
-												Skills
-												<ChevronDown class="size-3" />
-											</Button>
-										{/snippet}
-									</Tip>
-								{/snippet}
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Content align="start">
-								{#each skills as skill (skill.noteId)}
-									<DropdownMenu.Item onclick={() => onskill(skill.name)}>
-										<Tip text={skill.description} side="right">
-											{#snippet children({ props })}
-												<span {...props}>{skill.name}</span>
+						<Tip text="Generate a mermaid diagram from the selection and insert it">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="sm"
+									onmousedown={preserveEditorSelection}
+									onclick={() => runSelectionAction('diagram')}
+								>
+									<Workflow class="size-4" />
+									Diagram
+								</Button>
+							{/snippet}
+						</Tip>
+						{#if skills.length > 0 && onskill}
+							<Separator orientation="vertical" class="h-5" />
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger>
+									{#snippet child({ props: menuProps })}
+										<Tip text="Run one of your skills on the selection">
+											{#snippet children({ props: tipProps })}
+												<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
+													<Wrench class="size-4" />
+													Skills
+													<ChevronDown class="size-3" />
+												</Button>
 											{/snippet}
 										</Tip>
-									</DropdownMenu.Item>
-								{/each}
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-					{/if}
-				</BubbleMenu>
-				<EdraEditor
-					class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
-				/>
-			</Tiptap>
-			{#if activeLink}
-				<ReferenceLinkPreview
-					group={activeLink.group}
-					anchor={activeLink.anchor}
-					onretain={retainActiveLink}
-					onurlchange={(url) => (activeLinkUrl = url)}
-					onclose={scheduleActiveLinkClose}
-				/>
-				<div
-					class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
-					role="status"
-					aria-label={`Link destination: ${activeLinkUrl}`}
-				>
-					{activeLinkUrl}
-				</div>
-			{/if}
-		</ErrorBoundary>
-	</div>
+									{/snippet}
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content align="start">
+									{#each skills as skill (skill.noteId)}
+										<DropdownMenu.Item onclick={() => onskill(skill.name)}>
+											<Tip text={skill.description} side="right">
+												{#snippet children({ props })}
+													<span {...props}>{skill.name}</span>
+												{/snippet}
+											</Tip>
+										</DropdownMenu.Item>
+									{/each}
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
+						{/if}
+					</BubbleMenu>
+					<EdraEditor
+						class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
+					/>
+				</Tiptap>
+				{#if activeLink}
+					<ReferenceLinkPreview
+						group={activeLink.group}
+						anchor={activeLink.anchor}
+						onretain={retainActiveLink}
+						onurlchange={(url) => (activeLinkUrl = url)}
+						onclose={scheduleActiveLinkClose}
+					/>
+					<div
+						class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
+						role="status"
+						aria-label={`Link destination: ${activeLinkUrl}`}
+					>
+						{activeLinkUrl}
+					</div>
+				{/if}
+			</ErrorBoundary>
+		</ContextMenu.Trigger>
+		<ContextMenu.Content>
+			<ContextMenu.Item onclick={() => void copySelectionRaw()}>Copy raw</ContextMenu.Item>
+			<ContextMenu.Item onclick={() => void copySelectionFormatted()}>
+				Copy with formatting
+			</ContextMenu.Item>
+			<ContextMenu.Separator />
+			<ContextMenu.Item onclick={() => void pasteRaw()}>Paste raw</ContextMenu.Item>
+			<ContextMenu.Item onclick={() => void pasteFormatted()}>
+				Paste with formatting
+			</ContextMenu.Item>
+		</ContextMenu.Content>
+	</ContextMenu.Root>
 {:else}
 	<div class="space-y-3">
 		<Skeleton class="h-5 w-3/4" />
