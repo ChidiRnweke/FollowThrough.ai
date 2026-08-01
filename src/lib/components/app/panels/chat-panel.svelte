@@ -540,7 +540,7 @@
 													{#if tool.status === 'running'}
 														<LoaderCircle class="size-3.5 animate-spin" />
 													{/if}
-													{toolStatusLabel(tool)}
+													{toolStatusLabel(tool, shell)}
 												</Button>
 											{/snippet}
 										</Collapsible.Trigger>

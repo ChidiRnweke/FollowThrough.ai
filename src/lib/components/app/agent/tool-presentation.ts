@@ -1,5 +1,6 @@
+import type { ShellContext } from '$lib/models';
 import type { ChatToolActivity } from '$lib/stores/chat-tools';
-import { argumentLabel, isIdentifierArgument } from './tool-approval-fields';
+import { argumentLabel, isIdentifierArgument, noteTitle } from './tool-approval-fields';
 
 /** Tools that write the note body, and so speak about the note rather than themselves. */
 const noteBodyTools = new Set(['save_note', 'edit_note']);
@@ -41,24 +42,50 @@ export const friendlyToolLabel = (name: string): string =>
 		.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
 		.join(' ');
 
-export function toolStatusLabel(tool: ChatToolActivity): string {
-	if (tool.status === 'running') return `${friendlyToolLabel(tool.name)}…`;
+/**
+ * Tools whose `noteId` argument is the subject of the row. "Read note" is true of every
+ * such call and so tells the reader nothing; the title is the only part they can act on.
+ */
+const noteScopedTools = new Set([
+	'get_note',
+	'save_note',
+	'edit_note',
+	'publish_note',
+	'discard_note_draft',
+	'rename_note',
+	'archive_note'
+]);
+
+/**
+ * The shell is optional because the note tree may not be loaded, and a note may be missing
+ * from it (archived, or outside the tree) — in which case the row keeps the plain label
+ * rather than showing a placeholder for a name nobody can read.
+ */
+export function toolStatusLabel(tool: ChatToolActivity, shell?: ShellContext): string {
+	const title = noteScopedTools.has(tool.name)
+		? noteTitle(shell, tool.arguments.noteId)
+		: undefined;
+	const named = (label: string): string => (title ? `${label} · ${title}` : label);
+
+	if (tool.status === 'running') return `${named(friendlyToolLabel(tool.name))}…`;
 	if (tool.status === 'rejected')
-		return noteBodyTools.has(tool.name)
-			? 'Note change rejected'
-			: `${friendlyToolLabel(tool.name)} rejected`;
+		return named(
+			noteBodyTools.has(tool.name)
+				? 'Note change rejected'
+				: `${friendlyToolLabel(tool.name)} rejected`
+		);
 	if (tool.status === 'failed')
-		return noteBodyTools.has(tool.name)
-			? 'Note was not saved'
-			: `${friendlyToolLabel(tool.name)} failed`;
+		return named(
+			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${friendlyToolLabel(tool.name)} failed`
+		);
 	if (tool.status === 'succeeded') {
-		if (tool.name === 'save_note') return 'Saved note';
-		if (tool.name === 'edit_note') return 'Edited note';
-		if (tool.name === 'publish_note') return 'Published note';
-		if (tool.name === 'discard_note_draft') return 'Discarded note draft';
-		return completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`;
+		if (tool.name === 'save_note') return named('Saved note');
+		if (tool.name === 'edit_note') return named('Edited note');
+		if (tool.name === 'publish_note') return named('Published note');
+		if (tool.name === 'discard_note_draft') return named('Discarded note draft');
+		return named(completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`);
 	}
-	return friendlyToolLabel(tool.name);
+	return named(friendlyToolLabel(tool.name));
 }
 
 /** Tools that change something the user owns, as opposed to just reading it. */

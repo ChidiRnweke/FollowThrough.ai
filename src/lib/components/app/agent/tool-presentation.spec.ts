@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ShellContext } from '$lib/models';
 import {
 	approvalConsequence,
 	isWriteTool,
@@ -24,6 +25,43 @@ describe('Tool presentation invariants', () => {
 
 	it('describes another completed mutation without exposing its identifier', () => {
 		expect(toolStatusLabel(tool('create_project', 'succeeded'))).toBe('Created project');
+	});
+});
+
+describe('A read names the note it read', () => {
+	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
+	const shell = {
+		noteTree: [{ id: noteId, title: 'Runtime notes' }]
+	} as unknown as ShellContext;
+	const read = (status: 'succeeded' | 'failed' | 'rejected') => ({
+		...tool('get_note', status),
+		arguments: { noteId, format: 'markdown' }
+	});
+
+	it('says which note was read', () => {
+		expect(toolStatusLabel(read('succeeded'), shell)).toBe('Read note · Runtime notes');
+	});
+
+	it('keeps the plain label when the note is not in the tree', () => {
+		expect(toolStatusLabel(read('succeeded'), { noteTree: [] } as unknown as ShellContext)).toBe(
+			'Read note'
+		);
+	});
+
+	it('keeps the plain label when no shell is available', () => {
+		expect(toolStatusLabel(read('succeeded'))).toBe('Read note');
+	});
+
+	it('names the note while the read is still running', () => {
+		expect(toolStatusLabel({ ...read('succeeded'), status: 'running' }, shell)).toBe(
+			'Read note · Runtime notes…'
+		);
+	});
+
+	it('leaves a tool that does not act on a note alone', () => {
+		expect(
+			toolStatusLabel({ ...tool('create_project', 'succeeded'), arguments: { noteId } }, shell)
+		).toBe('Created project');
 	});
 });
 

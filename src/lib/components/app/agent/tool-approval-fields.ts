@@ -59,7 +59,7 @@ const projectName = (shell: ShellContext | undefined, value: unknown): string | 
 		? shell?.projects.find((project) => project.id === value)?.name
 		: undefined;
 
-const noteTitle = (shell: ShellContext | undefined, value: unknown): string | undefined => {
+export const noteTitle = (shell: ShellContext | undefined, value: unknown): string | undefined => {
 	if (typeof value !== 'string') return undefined;
 	const found = shell?.noteTree.find((entry) => entry.id === value);
 	if (!found) return undefined;
