@@ -47,8 +47,8 @@ import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
 import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggestion.js';
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
-import { mermaidPngBlob } from '../mermaid-export.js';
-import { singleMermaidSource } from './diagram-copy.js';
+import { hasMedia, selectionMedia } from './diagram-copy.js';
+import { selectionClipboardItem, selectionPlainText } from './clipboard-payload.js';
 
 const lowlight = createLowlight(all);
 
@@ -189,28 +189,25 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			// Colours from the source document, not from this note: see clipboard-styles.
 			transformPastedHTML: (html) => stripPastedStyling(html),
 			handleDOMEvents: {
+				// Pictures stay pictures on the way out. A diagram is stored as mermaid source
+				// and an image as a relative, cookie-authenticated attachment URL, so the
+				// default serialization pastes code and broken links into anything outside
+				// this app.
 				copy: (view, event) => {
-					// A copied selection holding exactly one diagram goes onto the clipboard
-					// as a rendered PNG (with the source as the text fallback), so pasting
-					// into a document or chat shows the picture rather than the code.
-					const source = singleMermaidSource(view.state);
-					if (!source || typeof ClipboardItem === 'undefined') return false;
+					if (typeof ClipboardItem === 'undefined') return false;
+					const media = selectionMedia(view.state);
+					if (!hasMedia(media)) return false;
 					event.preventDefault();
-					void (async () => {
-						try {
-							const dark = window.document.documentElement.classList.contains('dark');
-							const png = await mermaidPngBlob(source, { base: dark ? 'dark' : 'light' });
-							await navigator.clipboard.write([
-								new ClipboardItem({
-									'image/png': png,
-									'text/plain': new Blob([source], { type: 'text/plain' })
-								})
-							]);
-						} catch {
-							// A failed render still leaves the diagram's source on the clipboard.
-							await navigator.clipboard.writeText(source).catch(() => {});
-						}
-					})();
+
+					// Reached synchronously, while the keystroke's activation is still live: the
+					// pictures are still being rendered inside the item. See `selectionClipboardItem`.
+					void navigator.clipboard.write([selectionClipboardItem(view.state)]).catch(() => {
+						// Whatever went wrong, the selection's text still belongs on the clipboard.
+						const fallback = media.lone?.kind === 'mermaid' ? media.lone.source : undefined;
+						void navigator.clipboard
+							.writeText(fallback ?? selectionPlainText(view.state))
+							.catch(() => {});
+					});
 					return true;
 				}
 			}

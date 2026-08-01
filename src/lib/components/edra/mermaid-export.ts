@@ -1,7 +1,7 @@
-import mermaid from 'mermaid';
 import {
-	createMermaidConfig,
+	initializeMermaid,
 	mermaidExportBackground,
+	renderMermaidOffscreen,
 	sanitizeMermaidSvg,
 	type MermaidTheme
 } from './mermaid-rendering.js';
@@ -31,9 +31,10 @@ const DIMENSION_FALLBACK = { width: 800, height: 600 };
 
 /** Render the source at the requested theme rather than reusing the on-screen SVG. */
 const renderAtTheme = async (source: string, theme: MermaidTheme): Promise<string> => {
-	mermaid.initialize(createMermaidConfig(theme));
-	const { svg } = await mermaid.render(`mermaid-export-${crypto.randomUUID()}`, source);
-	return sanitizeMermaidSvg(svg);
+	initializeMermaid(theme);
+	return sanitizeMermaidSvg(
+		await renderMermaidOffscreen(`mermaid-export-${crypto.randomUUID()}`, source)
+	);
 };
 
 const dimensionsOf = (svg: string): { width: number; height: number } => {

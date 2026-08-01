@@ -411,6 +411,13 @@ export class AgentReasoning {
 				await stream.completed;
 				const interruptions = stream.interruptions;
 				if (interruptions.length > 0) {
+					// The SDK keeps the current agent span open across an approval
+					// interruption so a resumed run can continue the same trace. This
+					// app resumes through a fresh `agent.turn` root, so the parked run's
+					// trace would otherwise keep an un-ended agent span and orphan every
+					// generation/tool span beneath it. End the span so the parked trace
+					// exports as one complete tree.
+					stream.state._currentAgentSpan?.end();
 					const pending: PendingAgentDecision[] = interruptions.map((item) => {
 						const details = callDetails(item);
 						return {

@@ -2,7 +2,6 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import type { NodeViewProps } from '@tiptap/core';
 	import type { DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
-	import mermaid from 'mermaid';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
@@ -10,6 +9,7 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Copy from '@lucide/svelte/icons/copy';
+	import ImageIcon from '@lucide/svelte/icons/image';
 	import Check from '@lucide/svelte/icons/check';
 	import Eye from '@lucide/svelte/icons/eye';
 	import Code from '@lucide/svelte/icons/code';
@@ -22,7 +22,11 @@
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { NodeViewWrapper } from './index.js';
-	import { initializeMermaid, sanitizeMermaidSvg } from './mermaid-rendering.js';
+	import {
+		initializeMermaid,
+		renderMermaidOffscreen,
+		sanitizeMermaidSvg
+	} from './mermaid-rendering.js';
 	import MermaidExportMenu from './MermaidExportMenu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
 	import Tooltip from './Tooltip.svelte';
@@ -69,6 +73,7 @@
 	let isEditing = $state(false);
 	let mode = $state<'both' | 'code' | 'preview'>('both');
 	let copied = $state(false);
+	let copiedImage = $state(false);
 	let showAiRevision = $state(false);
 	let revisionInstruction = $state('');
 	let isRevising = $state(false);
@@ -188,7 +193,7 @@
 		try {
 			// Re-apply the config each render so diagrams always use the current theme.
 			initializeMermaid(colorMode.current === 'dark');
-			const { svg } = await mermaid.render(id, source);
+			const svg = await renderMermaidOffscreen(id, source);
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;
 			target.innerHTML = sanitizeMermaidSvg(svg);
@@ -442,6 +447,34 @@
 		await navigator.clipboard.writeText(source);
 		copied = true;
 		setTimeout(() => (copied = false), 2000);
+	}
+
+	/**
+	 * The picture, not the source: pasting a diagram into a document or a chat is
+	 * the common case, and the code is one button further along for the rare one.
+	 */
+	async function copyImage() {
+		const source = isEditing ? editCode : code;
+		if (!source || typeof ClipboardItem === 'undefined') return;
+		try {
+			// Handed over unresolved: `write` has to be reached while the click's user
+			// activation is still live, and rendering the diagram outlasts it.
+			const png = mermaidPngBlob(source, {
+				base: colorMode.current === 'dark' ? 'dark' : 'light'
+			});
+			png.catch(() => {});
+			await navigator.clipboard.write([
+				new ClipboardItem({
+					'image/png': png,
+					'text/plain': new Blob([source], { type: 'text/plain' })
+				})
+			]);
+			copiedImage = true;
+			setTimeout(() => (copiedImage = false), 2000);
+		} catch {
+			// A diagram that will not render still has its source to offer.
+			await navigator.clipboard.writeText(source).catch(() => {});
+		}
 	}
 
 	const lineCount = $derived((isEditing ? editCode : code)?.split('\n').length ?? 0);
@@ -772,6 +805,20 @@
 							</Tooltip>
 						{/if}
 						<MermaidExportMenu source={code} />
+						<Tooltip tooltip="Copy Image">
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								onclick={() => void copyImage()}
+								aria-label="Copy diagram as image"
+							>
+								{#if copiedImage}
+									<Check class=" text-green-500" />
+								{:else}
+									<ImageIcon class="text-muted-foreground" />
+								{/if}
+							</Button>
+						</Tooltip>
 						<Tooltip tooltip="Copy Code">
 							<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
 								{#if copied}

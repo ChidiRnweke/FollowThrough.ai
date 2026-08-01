@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
 	Agent,
 	Runner,
+	getGlobalTraceProvider,
+	setTraceProcessors,
+	tool,
 	type Model,
 	type ModelRequest,
 	type ModelResponse,
 	type StreamEvent
 } from '@openai/agents';
+import { z } from 'zod';
 import type { AgentRun, DateTime } from '$lib/models';
 import type { AgentSessionRepository } from '$lib/server/repositories';
 import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
@@ -426,5 +430,110 @@ describe('Agent context invariants', () => {
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.projectId).toBe(testProjectId());
+	});
+});
+
+describe('Agent turn span lifecycle', () => {
+	const encoder = new TextEncoder();
+	const chunk = (delta: unknown, finishReason: string | null = null) =>
+		`data: ${JSON.stringify({
+			id: 'chatcmpl-test',
+			object: 'chat.completion.chunk',
+			created: 0,
+			model: 'local/test',
+			choices: [{ index: 0, delta, finish_reason: finishReason }]
+		})}\n\n`;
+
+	class ApprovalFetch {
+		readonly fetch = async (): Promise<Response> => {
+			const body = new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(encoder.encode(chunk({ role: 'assistant', content: null })));
+					controller.enqueue(
+						encoder.encode(
+							chunk({
+								tool_calls: [
+									{
+										index: 0,
+										id: 'call-approval',
+										type: 'function',
+										function: { name: 'save_note', arguments: '{"noteId":"n"}' }
+									}
+								]
+							})
+						)
+					);
+					controller.enqueue(encoder.encode(chunk({}, 'tool_calls')));
+					controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+					controller.close();
+				}
+			});
+			return new Response(body, {
+				status: 200,
+				headers: { 'content-type': 'text/event-stream' }
+			});
+		};
+	}
+
+	const approvalTool = tool({
+		name: 'save_note',
+		description: 'Save a note',
+		parameters: z.object({ noteId: z.string() }),
+		needsApproval: true,
+		execute: async () => ({ ok: true })
+	});
+
+	const bufferedSession = {
+		getSessionId: async () => 'session-test',
+		getItems: async () => [],
+		addItems: async () => undefined,
+		popItem: async () => undefined,
+		clearSession: async () => undefined,
+		applyHistoryMutations: async () => undefined,
+		snapshot: async () => []
+	};
+
+	const reasoning = new AgentReasoning(
+		async () => ({ agentTools: () => [approvalTool], catalog: () => [] }),
+		sessions,
+		'test-key',
+		'https://openrouter.test/api/v1',
+		'http://localhost:5173',
+		new ApprovalFetch().fetch,
+		() => bufferedSession
+	);
+
+	it('ends the SDK agent span when the run parks on an approval', async () => {
+		// The SDK disables tracing under NODE_ENV=test; re-enable so the recording
+		// processor observes the SDK span lifecycle.
+		getGlobalTraceProvider().setDisabled(false);
+		const ended: string[] = [];
+		const processor = {
+			async onTraceStart() {},
+			async onTraceEnd() {},
+			async onSpanStart() {},
+			async onSpanEnd(span: { spanData?: { type?: string } }) {
+				ended.push(String(span.spanData?.type));
+			},
+			async shutdown() {},
+			async forceFlush() {}
+		};
+		setTraceProcessors([processor]);
+		try {
+			const updates = reasoning.execute({
+				actor: testActor(),
+				run,
+				request: { prompt: 'Save this note' },
+				context: run.contextSnapshot!,
+				signal: new AbortController().signal,
+				toolExecutor: { execute: async (_input, action) => action() }
+			});
+			for await (const update of updates) {
+				if (update.type === 'approval_checkpoint') break;
+			}
+		} finally {
+			setTraceProcessors([]);
+		}
+		expect(ended).toContain('agent');
 	});
 });

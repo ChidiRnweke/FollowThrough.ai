@@ -28,7 +28,8 @@
 			{/snippet}
 		</CommandPrimitive.Input>
 		<InputGroup.Addon>
-			<SearchIcon class="size-4 shrink-0 opacity-50" />
+			<!-- No `opacity-50`: it dulls the addon's teal focus colour back to grey. -->
+			<SearchIcon class="size-4 shrink-0" />
 		</InputGroup.Addon>
 	</InputGroup.Root>
 </div>

@@ -55,7 +55,10 @@
 	} from './reference-link-plugin';
 	import TodoNodeView from './todo-node.svelte';
 	import { toast } from 'svelte-sonner';
-	import { DOMSerializer } from '@tiptap/pm/model';
+	import {
+		selectionClipboardItem,
+		selectionPlainText
+	} from '$lib/components/edra/commands/clipboard-payload';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
@@ -304,17 +307,7 @@
 
 	/** Plain text of the current selection, '' when there is none. */
 	function selectionText(): string {
-		if (!editor) return '';
-		const { from, to, empty } = editor.state.selection;
-		if (empty) return '';
-		return getTextBetween(
-			editor.state.doc,
-			{ from, to },
-			{
-				blockSeparator: BLOCK_SEPARATOR,
-				textSerializers: getTextSerializersFromSchema(editor.schema)
-			}
-		);
+		return editor ? selectionPlainText(editor.state) : '';
 	}
 
 	async function copySelectionRaw(): Promise<void> {
@@ -329,21 +322,10 @@
 
 	async function copySelectionFormatted(): Promise<void> {
 		if (!editor) return;
-		const text = selectionText();
-		if (!text) return;
-		const container = window.document.createElement('div');
-		container.appendChild(
-			DOMSerializer.fromSchema(editor.schema).serializeFragment(
-				editor.state.selection.content().content
-			)
-		);
+		// A direct call, not a `copy` event, so it misses the editor's own handler —
+		// it shares the payload builder instead, and pastes the same pictures.
 		try {
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					'text/html': new Blob([container.innerHTML], { type: 'text/html' }),
-					'text/plain': new Blob([text], { type: 'text/plain' })
-				})
-			]);
+			await navigator.clipboard.write([selectionClipboardItem(editor.state)]);
 		} catch {
 			toast.error('The clipboard could not be written');
 		}

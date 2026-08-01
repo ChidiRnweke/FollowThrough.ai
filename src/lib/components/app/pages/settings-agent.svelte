@@ -8,6 +8,7 @@
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
+	import { toast } from 'svelte-sonner';
 
 	let { preferences, models }: { preferences: AgentPreferences; models: readonly AgentModel[] } =
 		$props();
@@ -22,9 +23,21 @@
 		mode = preferences.executionMode;
 		inlineSuggestionsEnabled = preferences.inlineSuggestionsEnabled;
 	});
+
+	// Nothing on this panel moves when it saves — the controls already show what was typed —
+	// so without a toast the button reads as dead. `submit()` resolves false on a validation
+	// issue and throws on a failed request; both are the same story to tell here.
+	const enhanced = saveAgentPreferences.enhance(async (form) => {
+		try {
+			if (await form.submit()) toast.success('Agent defaults saved');
+			else toast.error('Could not save agent defaults. Check the values and try again.');
+		} catch {
+			toast.error('Could not save agent defaults. Try again.');
+		}
+	});
 </script>
 
-<Form {...saveAgentPreferences} class="flex max-w-3xl flex-col gap-6">
+<Form {...enhanced} class="flex max-w-3xl flex-col gap-6">
 	<!-- The preamble carries the submit action on its row, like the scope row on the
 	     tools panel, and the pb-2 steps the row out past the gap to the fields below. -->
 	<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
