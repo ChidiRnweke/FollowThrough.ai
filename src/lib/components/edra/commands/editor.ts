@@ -35,7 +35,12 @@ import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table
 import { setTocItems } from '../toc.svelte';
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
-import { armLiteralPaste, handleMarkdownPaste, isLiteralPasteShortcut } from './paste.js';
+import {
+	armLiteralPaste,
+	clipboardImage,
+	handleMarkdownPaste,
+	isLiteralPasteShortcut
+} from './paste.js';
 import { stripPastedStyling } from './clipboard-styles.js';
 import { NoteLinkMark } from './nodes.js';
 import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
@@ -84,8 +89,10 @@ export interface EdraEditorProps {
 	onOpenNoteLink?: (noteId: string, options: { readonly background: boolean }) => boolean;
 }
 
-export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) =>
-	useEditor({
+export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) => {
+	// Self-referenced only from editor event handlers, which cannot fire during
+	// construction — and undefined-safe for SSR, where there is no editor at all.
+	const editor = useEditor({
 		extensions: [
 			...extensions,
 			...extraExtensions,
@@ -150,9 +157,21 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				if (isLiteralPasteShortcut(event)) armLiteralPaste();
 				return false;
 			},
-			handlePaste: handleMarkdownPaste,
+			handlePaste: (view, event) => {
+				// A pasted image (screenshot) goes through the attachment upload flow;
+				// `uploadMedia` inserts it at the caret once the upload resolves.
+				const image = clipboardImage(event);
+				if (image && props?.onFileUpload) {
+					event.preventDefault();
+					queueMicrotask(() => editor?.commands.uploadMedia(image));
+					return true;
+				}
+				return handleMarkdownPaste(view, event);
+			},
 			// Colours from the source document, not from this note: see clipboard-styles.
 			transformPastedHTML: (html) => stripPastedStyling(html)
 		},
 		onUpdate: props?.onUpdate || (() => {})
 	});
+	return editor;
+};

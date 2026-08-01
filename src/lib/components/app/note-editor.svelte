@@ -54,6 +54,12 @@
 		type ResolvedReferenceLinkGroup
 	} from './reference-link-plugin';
 	import TodoNodeView from './todo-node.svelte';
+	import { toast } from 'svelte-sonner';
+	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
+	import {
+		completeAttachmentUpload,
+		initiateAttachmentUpload
+	} from '$lib/remote/attachments.remote';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
@@ -208,6 +214,38 @@
 				return candidate?.kind === 'drawio' ? candidate : undefined;
 			},
 			getNoteId: () => noteId,
+			// Pasted/dropped images upload as note attachments; the src is the stable
+			// content endpoint (a 302 to a fresh presigned URL), never the expiring
+			// upload URL itself.
+			onFileUpload: async (file) => {
+				try {
+					const intent = await initiateAttachmentUpload({
+						noteId,
+						path: file.name || `pasted-${Date.now()}.png`,
+						mediaType: file.type || 'image/png',
+						byteSize: file.size,
+						checksumSha256: await fileChecksumSha256(file)
+					});
+					const stored = await fetch(intent.uploadUrl, {
+						method: 'PUT',
+						headers: intent.requiredHeaders,
+						body: file
+					});
+					if (!stored.ok) {
+						const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
+						throw new Error(
+							detail
+								? `Object storage rejected the upload: ${detail}`
+								: `Object storage rejected the upload (${stored.status})`
+						);
+					}
+					const uploaded = await completeAttachmentUpload({ uploadId: intent.upload.id });
+					return `/api/attachments/${uploaded.attachment.id}/content`;
+				} catch (error) {
+					toast.error(error instanceof Error ? error.message : 'Image upload failed');
+					throw error;
+				}
+			},
 			getInlineSuggestion: requestInlineSuggestion,
 			findLinkableNotes: (query) => rankNoteLinkTargets(linkableNotes, query),
 			// Read through the prop inside the closure: `createEditor` runs once, so
@@ -464,8 +502,7 @@
 					options={{
 						strategy: 'fixed',
 						scrollTarget:
-							editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ??
-							window
+							editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? window
 					}}
 					class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 				>

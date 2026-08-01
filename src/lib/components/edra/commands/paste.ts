@@ -90,6 +90,22 @@ export const isLiteralPasteShortcut = (event: KeyboardEvent): boolean =>
 	(event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'v';
 
 /**
+ * The first image file on the clipboard, when the paste carries one.
+ *
+ * Screenshots arrive as files, not text: the snipping-tool-style copy puts a
+ * `File` on `clipboardData.files` and no usable `text/plain`, so the Markdown
+ * path below never sees them.
+ */
+export const clipboardImage = (event: ClipboardEvent): File | undefined => {
+	const files = event.clipboardData?.files;
+	if (!files) return undefined;
+	for (const file of files) {
+		if (file.type.startsWith('image/')) return file;
+	}
+	return undefined;
+};
+
+/**
  * ProseMirror `handlePaste`. Returns true only when it has handled the paste itself.
  */
 export const handleMarkdownPaste = (view: EditorView, event: ClipboardEvent): boolean => {

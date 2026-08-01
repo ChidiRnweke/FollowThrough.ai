@@ -14,8 +14,10 @@ Pure CSS on the Tiptap table styles (`src/lib/components/edra/editor.css:409-523
 
 Done: `.tableWrapper` now uses `overflow-x: clip` (a scrollable wrapper would trap sticky cells); `th` cells are `position: sticky; top: var(--note-header-h)` with `background-clip: padding-box` for the border-collapse quirk. `note-workspace.svelte` measures the utility header into `--note-header-h`.
 
-### 3. Paste images into a note — M
+### 3. Paste images into a note — M — ✅ Done
 Add an image/file branch to the existing paste handler (`src/lib/components/edra/commands/paste.ts`), reusing the attachment upload plumbing (`src/lib/client/attachments/`, `file-dropzone.svelte`) and image node (`commands/image-node.ts`, `ImageExtended.svelte`).
+
+Done: `clipboardImage()` detects image files on the clipboard; the paste handler routes them through `uploadMedia`, now wired via a new `onFileUpload` in `note-editor.svelte` that uploads as a note attachment and returns the stable `/api/attachments/{id}/content` URL (302 → fresh presigned URL, so no expiry problem).
 
 ### 4. Link inside a document — S
 `[[note]]` internal linking already exists (`commands/NoteLinkSuggestion.ts`, `NoteLinkList.svelte`, `reference-link-plugin.ts`); scope is likely anchor/heading links or polishing the Link mark UX (`commands/extensions.ts`, `Link.svelte`). Needs one clarifying pass on what "link inside" means.
