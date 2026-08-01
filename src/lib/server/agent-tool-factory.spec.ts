@@ -184,6 +184,18 @@ describe('Agent tool coverage invariants', () => {
 		expect(editNote?.classification).toBe('mutation');
 	});
 
+	it('advertises the read-before-edit contract in edit_note and get_note descriptions', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		const getNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		expect(editNote?.description).toMatch(/MUST call get_note/);
+		expect(editNote?.description).toMatch(/never retry the same oldText/);
+		expect(getNote?.description).toMatch(/before your first edit_note or save_note/);
+	});
+
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
 		const selected = indirectToolFor('approval_required', 'use_tool');
 		expect(

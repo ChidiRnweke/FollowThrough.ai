@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import type { ActorContext, NoteId, ProjectId, TodoId, UserId } from '$lib/models';
+import { sql } from 'drizzle-orm';
+import type { ActorContext, LocalDate, NoteId, ProjectId, TodoId, UserId } from '$lib/models';
 import type { Lab } from './application';
 
 export interface SeedNote {
 	readonly title: string;
 	/** Plain text body; indexed for `search` exactly as a saved note would be. */
 	readonly body: string;
+	/**
+	 * Backdates the note's `created_at` (and its search chunks' `source_created_at`)
+	 * after seeding, so cases can split artifacts by age. Note creation still goes
+	 * through the real controllers — only the timestamp is adjusted afterwards.
+	 */
+	readonly createdAt?: string;
 }
 
 export interface SeedSkill {
@@ -22,6 +29,9 @@ export interface SeedTodo {
 	readonly title: string;
 	/** Reference to a project name in the same fixture. */
 	readonly projectName?: string;
+	readonly dueDate?: string;
+	/** Backdates the todo's `created_at` after seeding. */
+	readonly createdAt?: string;
 }
 
 export interface SeedProject {
@@ -104,6 +114,9 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 					}
 				}
 			});
+			if (seedNote.createdAt) {
+				backdateCreatedAt(lab, actor, note.id, seedNote.createdAt, 'note');
+			}
 		}
 	}
 
@@ -132,14 +145,45 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		const { todo } = await lab.controllers.todos().create(actor, {
 			title: seedTodo.title,
 			projectId,
-			responsibility: 'mine'
+			responsibility: 'mine',
+			...(seedTodo.dueDate ? { dueDate: seedTodo.dueDate as LocalDate } : {})
 		});
 		todoIds.set(seedTodo.title, todo.id);
 		// Composite key for disambiguation when multiple projects share a todo title.
 		if (seedTodo.projectName) {
 			todoIds.set(`${seedTodo.title}|${seedTodo.projectName}`, todo.id);
 		}
+		if (seedTodo.createdAt) backdateCreatedAt(lab, actor, todo.id, seedTodo.createdAt, 'todo');
 	}
 
 	return { actor, projectIds, noteIds, skillIds, todoIds };
+}
+
+/**
+ * Rewrites a seeded row's creation time so fixtures can model artifacts of
+ * different ages. The `search_chunks` copy is rewritten too — the lexical and
+ * semantic filters read `source_created_at`, which the indexer snapshots at
+ * save time, so a case that only backdated the note row would pass `list` while
+ * `search` silently ignored the range.
+ */
+export async function backdateCreatedAt(
+	lab: Lab,
+	actor: ActorContext,
+	id: string,
+	createdAt: string,
+	kind: 'note' | 'todo'
+): Promise<void> {
+	const at = new Date(createdAt);
+	if (kind === 'note') {
+		await lab.db.execute(
+			sql`UPDATE notes SET created_at = ${at}, updated_at = ${at} WHERE id = ${id} AND user_id = ${actor.userId}`
+		);
+		await lab.db.execute(
+			sql`UPDATE search_chunks SET source_created_at = ${at} WHERE note_id = ${id} AND user_id = ${actor.userId}`
+		);
+		return;
+	}
+	await lab.db.execute(
+		sql`UPDATE todos SET created_at = ${at}, updated_at = ${at} WHERE id = ${id} AND user_id = ${actor.userId}`
+	);
 }

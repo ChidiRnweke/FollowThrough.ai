@@ -14,9 +14,14 @@
 
 <div data-slot="command-input-wrapper" class="p-1 pb-0">
 	<InputGroup.Root class="h-9">
+		<!--
+			No `data-slot` here. It reaches the `<input>` through bits-ui's child props and used to
+			land on top of `input-group-control`, which is the attribute the group's whole focus
+			recipe selects on — so the teal border, halo and wash never fired for any Command field.
+			Nothing selects a `command-input` slot; the wrapper above is the hook.
+		-->
 		<CommandPrimitive.Input
 			{value}
-			data-slot="command-input"
 			class={cn(
 				'w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
 				className

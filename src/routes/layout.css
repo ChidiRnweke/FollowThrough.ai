@@ -98,6 +98,12 @@
 	}
 }
 
+@keyframes selection-action-hold {
+	from {
+		background-color: transparent;
+	}
+}
+
 /* Avoid flashing progress for navigations that finish within one micro-duration. */
 .navigation-progress {
 	opacity: 0;
@@ -126,6 +132,11 @@
 
 @media (prefers-reduced-motion: reduce) {
 	.chat-thinking-dots > span {
+		animation: none;
+	}
+
+	/* Drop the reveal, keep the wash: it is state, not decoration. */
+	.selection-action-range {
 		animation: none;
 	}
 }
@@ -759,6 +770,22 @@
 	.suggestion-anchor--todo:hover {
 		background-color: color-mix(in oklab, var(--color-success) 20%, transparent);
 	}
+
+	/* The text an AI selection action is working on, held for the duration of the
+	   run. Brand, not primary: this is the live thing, and it is transient — the
+	   suggestion anchors above it are the durable state and keep the dotted rule. */
+	.selection-action-range {
+		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+		/* Delayed reveal, so an action that resolves quickly never flashes a wash —
+		   the same reasoning as .navigation-progress. */
+		animation: selection-action-hold var(--duration-panel) var(--ease-standard)
+			var(--duration-micro) backwards;
+	}
+
+	.dark .selection-action-range {
+		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
+	}
+
 	.reference-link {
 		cursor: pointer;
 		font-weight: 500;

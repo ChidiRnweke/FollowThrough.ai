@@ -166,6 +166,13 @@ zone and center the voice line inside it.
 - **Split notes:** Document-within-Workbench pattern. Note routes occupy the shell's fixed remaining height and never make the shell scroll. Each mounted note pane owns independent vertical and horizontal scrolling. At narrow workspace widths, one pane is shown at a time without discarding the canonical split URL or the saved divider ratio.
 - Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
+- **A selection action answers where it was asked.** While one runs, the bubble menu becomes a
+  single status line in the same box — the action's own icon, one present-tense clause, and the
+  chat's three-dot activity — and the selected text holds a brand wash until the result settles.
+  The wash is what survives the click that clears the caret selection, so a multi-second agent
+  turn is never traceless; it reveals after `--duration-micro` so a fast action does not flash.
+  The header spinner is the fallback for a selection scrolled out of view, not the primary
+  signal — feedback that lives only in the page chrome reads as nothing having happened.
 - Note synchronization stays in the quiet utility row. Pending device saves and conflicts are explicit;
   three-way comparison belongs in a focused dialog, and resolution always preserves a complete rich
   document version.

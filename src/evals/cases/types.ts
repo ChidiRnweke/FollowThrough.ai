@@ -70,5 +70,9 @@ export const ARCHETYPES = {
 	/** Is proactive ghost text a clean continuation: no preamble, no echo, short? */
 	inlineSuggestionShape: 'inline_suggestion_shape',
 	/** Does project RAG ground ghost text in memory the passage never states? */
-	inlineGrounding: 'inline_grounding'
+	inlineGrounding: 'inline_grounding',
+	/** Does the agent use the system-rendered clock and creation-time filters correctly? */
+	timeAwareness: 'time_awareness',
+	/** Does the agent issue independent reads in parallel rather than serially? */
+	parallelExecution: 'parallel_execution'
 } as const;

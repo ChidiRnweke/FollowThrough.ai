@@ -95,6 +95,9 @@
 	let syncReady = $state(false);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
+	// Pane-local rather than `noteActions.running`: that store is a module
+	// singleton, so in a split it reports the sibling pane's work as this note's.
+	let activeAction = $state<NoteAiAction | undefined>(undefined);
 	let publishing = $state(false);
 	let reconciling = false;
 	let editVersion = 0;
@@ -372,13 +375,27 @@
 		capturedSelection?: TextSelection,
 		insertAt?: number
 	): Promise<void> {
-		let selection = capturedSelection;
-		if (!selection || noteActions.running) {
-			if (!selection) toast.error('Select some text first.');
+		if (!capturedSelection || activeAction) {
+			if (!capturedSelection) toast.error('Select some text first.');
 			return;
 		}
+		// Held until every path below has settled, so the editor's status line and
+		// the wash over the selection are released together with the result.
+		activeAction = action;
+		try {
+			await runSelectionAction(action, capturedSelection, insertAt);
+		} finally {
+			activeAction = undefined;
+		}
+	}
+
+	async function runSelectionAction(
+		action: NoteAiAction,
+		captured: TextSelection,
+		insertAt?: number
+	): Promise<void> {
 		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
-		selection = { ...selection, revision: note.currentRevision };
+		const selection = { ...captured, revision: note.currentRevision };
 		let added: number;
 		if (action === 'promises') {
 			const output = await noteActions.extractPromises(selection);
@@ -706,7 +723,7 @@
 			{/if}
 		</div>
 		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
-			{#if noteActions.running}
+			{#if activeAction}
 				<LoaderCircle
 					class="size-4 animate-spin text-muted-foreground"
 					aria-label="AI action running"
@@ -907,6 +924,7 @@
 				options.background ? workbench.openTabInBackground(noteId) : void workbench.openTab(noteId)}
 			{perNote}
 			onchange={markDirty}
+			{activeAction}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}
 			onask={(prompt) => askSelection(prompt)}

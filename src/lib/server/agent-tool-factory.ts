@@ -638,7 +638,7 @@ export class AgentTools {
 			),
 			define(
 				'get_note',
-				'Read a note with backlinks, references, diagrams, todos, and proposals. Pass format "markdown" to also get the note body as Markdown, which is the text edit_note anchors against.',
+				'Read a note with backlinks, references, diagrams, todos, and proposals. Pass format "markdown" to also get the note body as Markdown, which is the text edit_note anchors against and save_note replaces. Call this with format "markdown" before your first edit_note or save_note on a note each turn.',
 				'read',
 				z.object({ noteId: id, format: z.enum(['default', 'markdown']).optional() }),
 				async (input) => {
@@ -680,7 +680,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_note',
-				'Make targeted replacements inside a note without rewriting it. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite; read the note with get_note using format "markdown" first so oldText matches verbatim.',
+				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note with format "markdown" on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note with format "markdown", and copy the closest text from the error verbatim — never retry the same oldText.',
 				'mutation',
 				z.object({
 					noteId: id,

@@ -7,6 +7,7 @@ import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
+import type { Database } from '$lib/server/db';
 import type { EmbeddingClient } from '$lib/server/services';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
@@ -22,6 +23,13 @@ export interface Lab extends ProductionApplication {
 	 * in the time one agent case takes.
 	 */
 	readonly embeddingClient: EmbeddingClient;
+	/**
+	 * Raw database handle, used only by the seeding helpers to backdate
+	 * `createdAt` on fixtures. Every write otherwise goes through the real
+	 * controllers so the search index and revision history are produced exactly
+	 * as production would.
+	 */
+	readonly db: Database;
 	close(): Promise<void>;
 }
 
@@ -85,6 +93,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		...application,
 		model,
 		embeddingClient,
+		db: database,
 		async close() {
 			await cache.flush();
 			await closeDatabase();

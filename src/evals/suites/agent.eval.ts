@@ -20,6 +20,7 @@ import { intentInterpretationCases } from '../cases/intent-interpretation';
 import { correctnessCases } from '../cases/correctness';
 import { multiTurnCorrectnessCases } from '../cases/multi-turn-correctness';
 import { inlineSuggestionCases } from '../cases/inline-suggestion';
+import { timeAwarenessCases, parallelExecutionCases } from '../cases/time-awareness';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -49,7 +50,10 @@ const allCases = [
 	// Most expensive: multi-turn cases (2-3 API calls each).
 	...multiTurnCorrectnessCases,
 	// Inline suggestions: drive the ghost-text controller directly, no agent turn.
-	...inlineSuggestionCases
+	...inlineSuggestionCases,
+	// Time awareness and parallelism: new-feature behaviour, cheap single turns.
+	...timeAwarenessCases,
+	...parallelExecutionCases
 ];
 
 /**

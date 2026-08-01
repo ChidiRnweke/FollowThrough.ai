@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { mount, onMount, unmount, untrack } from 'svelte';
-	import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
+	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
+	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 	import type {
 		Diagram,
 		DiagramSuggestion,
@@ -53,6 +54,7 @@
 		type AnchoredReferenceLink,
 		type ResolvedReferenceLinkGroup
 	} from './reference-link-plugin';
+	import { createSelectionActionPlugin, selectionActionKey } from './selection-action-plugin';
 	import TodoNodeView from './todo-node.svelte';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -68,6 +70,22 @@
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
+
+
+	const runningCopy: Record<NoteAiAction, string> = {
+		promises: 'Reading for commitments',
+		relate: 'Looking for related notes',
+		reference: 'Looking for references',
+		diagram: 'Drawing a diagram'
+	};
+
+
+	const runningIcon: Record<NoteAiAction, typeof Workflow> = {
+		promises: ClipboardCheck,
+		relate: Waypoints,
+		reference: BookOpen,
+		diagram: Workflow
+	};
 
 	function preserveEditorSelection(event: MouseEvent): void {
 		// Keep the Tiptap selection intact until the bubble-menu action reads it.
@@ -106,7 +124,8 @@
 		onconvertMermaid,
 		onacceptDrawio,
 		onrejectDrawio,
-		diagrams = []
+		diagrams = [],
+		activeAction
 	}: {
 		noteId: NoteId;
 		revision: number;
@@ -136,6 +155,8 @@
 		) => Promise<DrawioDiagram>;
 		onrejectDrawio: (suggestionId: SuggestionId) => Promise<void>;
 		diagrams?: readonly Diagram[];
+		/** The AI selection action running against this note, if any. */
+		activeAction?: NoteAiAction;
 	} = $props();
 
 	let initialized = false;
@@ -302,8 +323,49 @@
 	}
 
 	function runSelectionAction(action: NoteAiAction): void {
-		onaction?.(action, readSelection(), editor?.state.selection.to);
+		if (!editor) return;
+		const { from, to, empty } = editor.state.selection;
+		// Hold the range before handing off, so the wash is already in place by the
+		// time the parent flips activeAction. It is released by the effect below.
+		if (!empty) {
+			editor.view.dispatch(editor.view.state.tr.setMeta(selectionActionKey, { from, to }));
+		}
+		onaction?.(action, readSelection(), to);
 	}
+
+	/**
+	 * Reproduces the plugin's own predicate, plus one exception. The default hides
+	 * the menu unless the editor or something inside the menu holds focus — but the
+	 * running status replaces the buttons, so the click target unmounts and focus
+	 * falls to the body, hiding the status the click was meant to produce. While an
+	 * action runs, a live range is enough.
+	 */
+	const bubbleShouldShow: NonNullable<BubbleMenuPluginProps['shouldShow']> = ({
+		element,
+		view,
+		state,
+		from,
+		to
+	}) => {
+		const { doc, selection } = state;
+		if (selection.empty || !editor?.isEditable) return false;
+		if (!doc.textBetween(from, to).length && isTextSelection(selection)) return false;
+		if (activeAction !== undefined) return true;
+		return view.hasFocus() || element.contains(window.document.activeElement);
+	};
+
+	// Release the wash once the action settles, however it settled — the parent
+	// clears activeAction on success, failure, and the nothing-found paths alike.
+	$effect(() => {
+		if (activeAction !== undefined) return;
+		untrack(() => {
+			if (!editor) return;
+			// Undefined before onMount registers the plugin; empty when nothing is held.
+			const held = selectionActionKey.getState(editor.view.state);
+			if (!held || held.find().length === 0) return;
+			editor.view.dispatch(editor.view.state.tr.setMeta(selectionActionKey, null));
+		});
+	});
 
 	/** Plain text of the current selection, '' when there is none. */
 	function selectionText(): string {
@@ -459,6 +521,7 @@
 				onDeactivate: scheduleActiveLinkClose
 			})
 		);
+		editor.registerPlugin(createSelectionActionPlugin());
 		editor.on('selectionUpdate', () => {
 			const selection = readSelection();
 			if (selection) perNote?.selection.set(selection);
@@ -558,6 +621,7 @@
 				     pane's own scroller (the window doesn't fire for it). -->
 					<BubbleMenu
 						{editor}
+						shouldShow={bubbleShouldShow}
 						appendTo={() => window.document.body}
 						options={{
 							strategy: 'fixed',
@@ -566,115 +630,133 @@
 						}}
 						class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 					>
-						{#if onask}
-							<!--
+						{#if activeAction}
+							{@const Icon = runningIcon[activeAction]}
+							<!-- The row of actions becomes the one that is running, in the same
+						     box at the same place: the answer to "did my click land?" belongs
+						     where the click happened. -->
+							<div
+								class="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground"
+								role="status"
+								aria-live="polite"
+							>
+								<Icon class="size-4" />
+								{runningCopy[activeAction]}
+								<span class="chat-thinking-dots" aria-hidden="true">
+									<span></span><span></span><span></span>
+								</span>
+							</div>
+						{:else}
+							{#if onask}
+								<!--
 						The open-ended one, so it leads: the four beside it each do a single
 						fixed thing, and this is the one that says the agent will take any
 						instruction about the selection. Styled exactly like its neighbours —
 						the bubble is already an AI cluster, so the tinted mark the agent
 						carries elsewhere would only break the row's own consistency here.
 					-->
-							<Tip text="Open the chat with the selection attached">
+								<Tip text="Open the chat with the selection attached">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="sm"
+											onmousedown={preserveEditorSelection}
+											onclick={() => onask(agentActions.selection.prompt)}
+										>
+											<Suggestion class="size-4" />
+											Ask about this
+										</Button>
+									{/snippet}
+								</Tip>
+								<Separator orientation="vertical" class="h-5" />
+							{/if}
+							<Tip text="Turn commitments in the selection into todos">
 								{#snippet children({ props })}
 									<Button
 										{...props}
 										variant="ghost"
 										size="sm"
 										onmousedown={preserveEditorSelection}
-										onclick={() => onask(agentActions.selection.prompt)}
+										onclick={() => runSelectionAction('promises')}
 									>
-										<Suggestion class="size-4" />
-										Ask about this
+										<ClipboardCheck class="size-4" />
+										Extract promises
+									</Button>
+								{/snippet}
+							</Tip>
+							<Tip text="Find related notes and propose backlinks">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="sm"
+										onmousedown={preserveEditorSelection}
+										onclick={() => runSelectionAction('relate')}
+									>
+										<Waypoints class="size-4" />
+										Find related
+									</Button>
+								{/snippet}
+							</Tip>
+							<Tip text="Find supporting external references">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="sm"
+										onmousedown={preserveEditorSelection}
+										onclick={() => runSelectionAction('reference')}
+									>
+										<BookOpen class="size-4" />
+										Reference
 									</Button>
 								{/snippet}
 							</Tip>
 							<Separator orientation="vertical" class="h-5" />
-						{/if}
-						<Tip text="Turn commitments in the selection into todos">
-							{#snippet children({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									onmousedown={preserveEditorSelection}
-									onclick={() => runSelectionAction('promises')}
-								>
-									<ClipboardCheck class="size-4" />
-									Extract promises
-								</Button>
-							{/snippet}
-						</Tip>
-						<Tip text="Find related notes and propose backlinks">
-							{#snippet children({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									onmousedown={preserveEditorSelection}
-									onclick={() => runSelectionAction('relate')}
-								>
-									<Waypoints class="size-4" />
-									Find related
-								</Button>
-							{/snippet}
-						</Tip>
-						<Tip text="Find supporting external references">
-							{#snippet children({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									onmousedown={preserveEditorSelection}
-									onclick={() => runSelectionAction('reference')}
-								>
-									<BookOpen class="size-4" />
-									Reference
-								</Button>
-							{/snippet}
-						</Tip>
-						<Separator orientation="vertical" class="h-5" />
-						<Tip text="Generate a mermaid diagram from the selection and insert it">
-							{#snippet children({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									onmousedown={preserveEditorSelection}
-									onclick={() => runSelectionAction('diagram')}
-								>
-									<Workflow class="size-4" />
-									Diagram
-								</Button>
-							{/snippet}
-						</Tip>
-						{#if skills.length > 0 && onskill}
-							<Separator orientation="vertical" class="h-5" />
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger>
-									{#snippet child({ props: menuProps })}
-										<Tip text="Run one of your skills on the selection">
-											{#snippet children({ props: tipProps })}
-												<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
-													<Wrench class="size-4" />
-													Skills
-													<ChevronDown class="size-3" />
-												</Button>
-											{/snippet}
-										</Tip>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="start">
-									{#each skills as skill (skill.noteId)}
-										<DropdownMenu.Item onclick={() => onskill(skill.name)}>
-											<Tip text={skill.description} side="right">
-												{#snippet children({ props })}
-													<span {...props}>{skill.name}</span>
+							<Tip text="Generate a mermaid diagram from the selection and insert it">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="sm"
+										onmousedown={preserveEditorSelection}
+										onclick={() => runSelectionAction('diagram')}
+									>
+										<Workflow class="size-4" />
+										Diagram
+									</Button>
+								{/snippet}
+							</Tip>
+							{#if skills.length > 0 && onskill}
+								<Separator orientation="vertical" class="h-5" />
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props: menuProps })}
+											<Tip text="Run one of your skills on the selection">
+												{#snippet children({ props: tipProps })}
+													<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
+														<Wrench class="size-4" />
+														Skills
+														<ChevronDown class="size-3" />
+													</Button>
 												{/snippet}
 											</Tip>
-										</DropdownMenu.Item>
-									{/each}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="start">
+										{#each skills as skill (skill.noteId)}
+											<DropdownMenu.Item onclick={() => onskill(skill.name)}>
+												<Tip text={skill.description} side="right">
+													{#snippet children({ props })}
+														<span {...props}>{skill.name}</span>
+													{/snippet}
+												</Tip>
+											</DropdownMenu.Item>
+										{/each}
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							{/if}
 						{/if}
 					</BubbleMenu>
 					<EdraEditor
