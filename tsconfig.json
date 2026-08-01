@@ -11,12 +11,7 @@
 		"sourceMap": true,
 		"strict": true,
 		"ignoreDeprecations": "6.0",
-		"moduleResolution": "bundler",
-		"baseUrl": ".",
-		"paths": {
-			"$lib": ["./src/lib/index.ts"],
-			"$lib/*": ["./src/lib/*"]
-		}
+		"moduleResolution": "bundler"
 	}
 	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
 	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
