@@ -486,17 +486,19 @@
 			     a hovered child row from revealing its parent's buttons. -->
 			<div class="group/entry relative">
 				<Tip text="Reorder {entry.title}" side="right">
-					{#snippet children({ props })}
-						<span use:dragHandle>
-							<Button
-								variant="ghost"
-								{...props}
-								type="button"
-								class="absolute top-0 bottom-0 left-0 z-10 my-auto flex size-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
-								aria-label="Reorder {entry.title}"
-							>
-								<GripVertical class="size-3" />
-							</Button>
+					<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
+					{#snippet children({ props: { type: _type, ...props } })}
+						<!-- Deliberately not a <button>: svelte-dnd-action refuses drags whose
+						     mousedown target has a `value` property (its nested-input guard), and
+						     every <button> has one — so a button grip is ungrabbable except for
+						     the exact pixels of the icon. `type` is dropped: it's button-only. -->
+						<span
+							use:dragHandle
+							{...props}
+							class="absolute top-0 bottom-0 left-0 z-10 my-auto flex size-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
+							aria-label="Reorder {entry.title}"
+						>
+							<GripVertical class="size-3" />
 						</span>
 					{/snippet}
 				</Tip>
