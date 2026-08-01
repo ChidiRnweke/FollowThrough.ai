@@ -44,7 +44,9 @@ import {
 import { stripPastedStyling } from './clipboard-styles.js';
 import { NoteLinkMark } from './nodes.js';
 import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
+import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggestion.js';
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
+import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
 
 const lowlight = createLowlight(all);
 
@@ -130,6 +132,20 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			NoteLinkSuggestion.configure({
 				...(props?.findLinkableNotes ? { findNotes: props.findLinkableNotes } : {}),
 				renderer: createNoteLinkRenderer
+			}),
+			HeadingLinkSuggestion.configure({
+				// Read through the closure: `createEditor` runs once, but the table of
+				// contents changes with every edit.
+				findHeadings: (query) =>
+					rankHeadingTargets(
+						(editor?.storage.tableOfContents?.content ?? []).map(({ id, level, textContent }) => ({
+							id,
+							level,
+							textContent
+						})),
+						query
+					),
+				renderer: createHeadingLinkRenderer
 			}),
 			InlineSuggestion.configure({
 				...(props?.getInlineSuggestion ? { fetchSuggestion: props.getInlineSuggestion } : {}),

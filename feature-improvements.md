@@ -19,8 +19,10 @@ Add an image/file branch to the existing paste handler (`src/lib/components/edra
 
 Done: `clipboardImage()` detects image files on the clipboard; the paste handler routes them through `uploadMedia`, now wired via a new `onFileUpload` in `note-editor.svelte` that uploads as a note attachment and returns the stable `/api/attachments/{id}/content` URL (302 → fresh presigned URL, so no expiry problem).
 
-### 4. Link inside a document — S
+### 4. Link inside a document — S — ✅ Done
 `[[note]]` internal linking already exists (`commands/NoteLinkSuggestion.ts`, `NoteLinkList.svelte`, `reference-link-plugin.ts`); scope is likely anchor/heading links or polishing the Link mark UX (`commands/extensions.ts`, `Link.svelte`). Needs one clarifying pass on what "link inside" means.
+
+Done (clarified: heading links): typing `#` opens a suggestion of the current note's headings (ids from the TOC extension) and inserts a `#heading-id` anchor link; a click plugin scrolls to the heading smoothly. New: `HeadingLinkSuggestion.ts` (+ spec), `heading-link-renderer.svelte.ts`, `HeadingLinkList.svelte`.
 
 ### 5. Right-click context menu in editor — M
 No `contextmenu` handling today; the `ui/context-menu` primitive exists and is already used in `project-tree.svelte`. Touch: `src/lib/components/app/note-editor.svelte`, new menu component offering paste raw / paste merge formatting / copy raw / copy formatting.
