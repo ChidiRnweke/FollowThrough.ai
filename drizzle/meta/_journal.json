@@ -225,6 +225,13 @@
       "when": 1785581298456,
       "tag": "0031_search_source_created_at",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785581910368,
+      "tag": "0032_conversation_vision_models",
+      "breakpoints": true
     }
   ]
 }

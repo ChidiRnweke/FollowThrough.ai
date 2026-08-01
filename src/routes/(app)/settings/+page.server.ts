@@ -39,6 +39,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				name: preferences.defaultModel,
 				provider: preferences.defaultModel.split('/')[0] ?? 'Configured',
 				supportsTools: true,
+				supportsVision: false,
 				recommended: false,
 				capabilities: ['configured']
 			},

@@ -21,6 +21,7 @@ import * as schema from '$lib/server/db/schema';
 const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentPreferences => ({
 	userId: row.userId as AgentPreferences['userId'],
 	...(row.defaultModel ? { defaultModel: row.defaultModel } : {}),
+	...(row.defaultVisionModel ? { defaultVisionModel: row.defaultVisionModel } : {}),
 	executionMode: row.executionMode,
 	inlineSuggestionsEnabled: row.inlineSuggestionsEnabled,
 	createdAt: row.createdAt.toISOString() as AgentPreferences['createdAt'],
@@ -79,6 +80,7 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 			.values({
 				userId: actor.userId,
 				defaultModel: preferences.defaultModel,
+				defaultVisionModel: preferences.defaultVisionModel,
 				executionMode: preferences.executionMode,
 				inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
 				createdAt: new Date(preferences.createdAt),
@@ -88,6 +90,7 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 				target: schema.agentPreferences.userId,
 				set: {
 					defaultModel: preferences.defaultModel,
+					defaultVisionModel: preferences.defaultVisionModel,
 					executionMode: preferences.executionMode,
 					inlineSuggestionsEnabled: preferences.inlineSuggestionsEnabled,
 					updatedAt: new Date(preferences.updatedAt)

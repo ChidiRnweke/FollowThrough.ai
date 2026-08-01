@@ -20,7 +20,11 @@ export class ConversationArchive {
 		if (input.conversationId) {
 			const existing = await this.repository.findById(actor, input.conversationId);
 			if (!existing) throw new NotFoundError('Conversation was not found');
-			if (input.modelOverride === undefined && input.executionModeOverride === undefined)
+			if (
+				input.modelOverride === undefined &&
+				input.visionModelOverride === undefined &&
+				input.executionModeOverride === undefined
+			)
 				return existing;
 			return this.repository.update(actor, {
 				...existing,
@@ -28,6 +32,11 @@ export class ConversationArchive {
 					? { modelOverride: undefined }
 					: input.modelOverride !== undefined
 						? { modelOverride: input.modelOverride }
+						: {}),
+				...(input.visionModelOverride === null
+					? { visionModelOverride: undefined }
+					: input.visionModelOverride !== undefined
+						? { visionModelOverride: input.visionModelOverride }
 						: {}),
 				...(input.executionModeOverride === null
 					? { executionModeOverride: undefined }
@@ -46,6 +55,7 @@ export class ConversationArchive {
 			contextNoteId: input.noteId,
 			title: input.prompt.trim().slice(0, 80) || 'New conversation',
 			...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
+			...(input.visionModelOverride ? { visionModelOverride: input.visionModelOverride } : {}),
 			...(input.executionModeOverride
 				? { executionModeOverride: input.executionModeOverride }
 				: {}),

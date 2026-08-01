@@ -32,6 +32,8 @@ export class AgentSettings implements AgentSettingsController {
 		input: UpdateAgentPreferencesInput
 	): Promise<AgentPreferences> {
 		if (input.defaultModel) await this.dependencies.models.assertSelectable(input.defaultModel);
+		if (input.defaultVisionModel)
+			await this.dependencies.models.assertVisionSelectable?.(input.defaultVisionModel);
 		return this.dependencies.preferences.update(actor, input);
 	}
 

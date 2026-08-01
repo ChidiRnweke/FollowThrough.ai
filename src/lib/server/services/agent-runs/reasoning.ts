@@ -310,6 +310,27 @@ export class AgentReasoning {
 			executor: toolExecutor
 		});
 		const session = this.createSession(this.sessions, actor, run.conversationId);
+		let visionDescriptions: string[] | undefined;
+		if (request.images?.length && request.visionModelOverride) {
+			const client = new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });
+			visionDescriptions = await Promise.all(
+				request.images.map(async (image) => {
+					const response = await client.chat.completions.create({
+						model: request.visionModelOverride!,
+						messages: [
+							{
+								role: 'user',
+								content: [
+									{ type: 'text', text: 'Describe this image precisely for another assistant.' },
+									{ type: 'image_url', image_url: { url: image.dataUrl } }
+								]
+							}
+						]
+					});
+					return response.choices[0]?.message.content ?? 'The image could not be described.';
+				})
+			);
+		}
 		try {
 			const tools = registry.agentTools();
 			const toolRecovery = createToolRecoveryConfig(
@@ -347,7 +368,28 @@ export class AgentReasoning {
 					}
 					if (applied === 0) throw new ValidationError('The pending approval could not be resumed');
 				}
-				const stream = await runner.run(agent, state ?? request.prompt, {
+				const fallbackPrompt = visionDescriptions?.length
+					? `${request.prompt || 'Describe the attached image(s).'}\n\n<hidden_image_context>\n${visionDescriptions.map((description, index) => `Image ${index + 1}: ${description}`).join('\n')}\n</hidden_image_context>`
+					: request.prompt;
+				const initialInput =
+					request.images?.length && !visionDescriptions
+						? [
+								{
+									role: 'user' as const,
+									content: [
+										{
+											type: 'input_text' as const,
+											text: request.prompt || 'Describe the attached image(s).'
+										},
+										...request.images.map((image) => ({
+											type: 'input_image' as const,
+											image: image.dataUrl
+										}))
+									]
+								}
+							]
+						: fallbackPrompt;
+				const stream = await runner.run(agent, (state ?? initialInput) as never, {
 					stream: true,
 					session,
 					maxTurns: 20,

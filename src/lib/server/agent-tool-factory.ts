@@ -1116,6 +1116,7 @@ export class AgentTools {
 				'mutation',
 				z.object({
 					defaultModel: z.string().nullable().optional(),
+					defaultVisionModel: z.string().nullable().optional(),
 					executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
 					inlineSuggestionsEnabled: z.boolean().optional()
 				}),

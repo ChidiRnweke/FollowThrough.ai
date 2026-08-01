@@ -88,18 +88,34 @@ export const runIdInput = z.object({ runId: z.string().uuid() });
  * controller keeps the live snapshot as the effective scope and forwards the
  * staged one to the agent as `requestedScope`.
  */
-export const submitAgentRunSchema = z.object({
-	requestId: id,
-	conversationId: id.optional(),
-	input: z.string().trim().min(1),
-	model: z.string().nullable().optional(),
-	mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
-	projectId: id.optional(),
-	noteId: id.optional(),
-	selection: selectionSchema.optional(),
-	contextNoteIds: z.array(id).optional(),
-	requestedSkillNames: z.array(z.string()).optional(),
-	requestedSkillNoteIds: z.array(id).optional(),
-	appContext: appContextSchema.optional(),
-	retryUserOrdinal: z.number().int().min(1).optional()
-});
+export const submitAgentRunSchema = z
+	.object({
+		requestId: id,
+		conversationId: id.optional(),
+		input: z.string().trim(),
+		images: z
+			.array(
+				z.object({
+					id,
+					mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+					dataUrl: z.string().max(14_000_000),
+					name: z.string().min(1).max(255)
+				})
+			)
+			.max(4)
+			.optional(),
+		model: z.string().nullable().optional(),
+		visionModel: z.string().nullable().optional(),
+		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
+		projectId: id.optional(),
+		noteId: id.optional(),
+		selection: selectionSchema.optional(),
+		contextNoteIds: z.array(id).optional(),
+		requestedSkillNames: z.array(z.string()).optional(),
+		requestedSkillNoteIds: z.array(id).optional(),
+		appContext: appContextSchema.optional(),
+		retryUserOrdinal: z.number().int().min(1).optional()
+	})
+	.refine((input) => input.input.length > 0 || Boolean(input.images?.length), {
+		message: 'A message or image is required.'
+	});

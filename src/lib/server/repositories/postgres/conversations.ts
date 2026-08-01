@@ -17,6 +17,7 @@ const toConversation = (row: typeof schema.conversations.$inferSelect): Conversa
 		: {}),
 	...(row.title ? { title: row.title } : {}),
 	...(row.modelOverride ? { modelOverride: row.modelOverride } : {}),
+	...(row.visionModelOverride ? { visionModelOverride: row.visionModelOverride } : {}),
 	...(row.executionModeOverride ? { executionModeOverride: row.executionModeOverride } : {}),
 	createdAt: row.createdAt.toISOString() as Conversation['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as Conversation['updatedAt']
@@ -74,6 +75,7 @@ export class ConversationRecords implements ConversationRepository {
 				contextProjectId: conversation.contextProjectId,
 				title: conversation.title,
 				modelOverride: conversation.modelOverride,
+				visionModelOverride: conversation.visionModelOverride,
 				executionModeOverride: conversation.executionModeOverride,
 				createdAt: new Date(conversation.createdAt),
 				updatedAt: new Date(conversation.updatedAt)
@@ -90,6 +92,7 @@ export class ConversationRecords implements ConversationRepository {
 				contextNoteId: conversation.contextNoteId,
 				title: conversation.title,
 				modelOverride: conversation.modelOverride,
+				visionModelOverride: conversation.visionModelOverride,
 				executionModeOverride: conversation.executionModeOverride,
 				updatedAt: new Date(conversation.updatedAt)
 			})

@@ -50,6 +50,7 @@ class FakeAgentModelCatalog implements AgentModelCatalog {
 			name: 'Tool model',
 			provider: 'vendor',
 			supportsTools: true,
+			supportsVision: false,
 			recommended: true,
 			capabilities: ['tools']
 		}

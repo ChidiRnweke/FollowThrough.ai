@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import type {
 		AgentPreferences,
+		ConversationImageInput,
 		Conversation,
 		NoteId,
 		ProjectId,
@@ -25,6 +26,7 @@
 		FtSkills as Wrench,
 		FtCheck as Check,
 		FtWorkflow as Workflow,
+		FtAttachments as Paperclip,
 		FtClose as X
 	} from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -116,6 +118,47 @@
 	let handoff = $state<ChatHandoff | undefined>(undefined);
 	let viewport = $state<HTMLElement | null>(null);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
+	let selectedImages = $state<ConversationImageInput[]>([]);
+	const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+	async function addImages(files: readonly File[]): Promise<void> {
+		const accepted = files.filter((file) => IMAGE_TYPES.has(file.type));
+		if (selectedImages.length + accepted.length > 4) {
+			toast.error('Attach at most four images.');
+			return;
+		}
+		if (
+			[...selectedImages].reduce((sum, image) => sum + image.dataUrl.length, 0) +
+				accepted.reduce((sum, file) => sum + file.size, 0) >
+			10 * 1024 * 1024
+		) {
+			toast.error('Images must be 10 MiB combined or less.');
+			return;
+		}
+		for (const file of accepted) {
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(String(reader.result));
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(file);
+			});
+			selectedImages.push({
+				id: crypto.randomUUID(),
+				mediaType: file.type as ConversationImageInput['mediaType'],
+				dataUrl,
+				name: file.name || 'Pasted image'
+			});
+		}
+	}
+
+	function pasteImages(event: ClipboardEvent): void {
+		const images = [...(event.clipboardData?.files ?? [])].filter((file) =>
+			IMAGE_TYPES.has(file.type)
+		);
+		if (!images.length) return;
+		event.preventDefault();
+		void addImages(images);
+	}
 	let followingLatest = $state(true);
 	let showJumpToLatest = $state(false);
 	const draftKey = (): string => `followthrough.chat.draft.${chat.conversationId ?? 'new'}`;
@@ -217,6 +260,7 @@
 			: activeProjectId;
 		return {
 			prompt: text,
+			...(selectedImages.length ? { images: selectedImages } : {}),
 			modelOverride: chat.modelOverride,
 			executionModeOverride: chat.executionModeOverride,
 			...(handoff?.noteId !== undefined
@@ -243,10 +287,12 @@
 
 	async function send(): Promise<void> {
 		const text = prompt.trim();
-		if (!text || chat.isStreaming) return;
+		if ((!text && !selectedImages.length) || chat.isStreaming) return;
+		const sentImages = selectedImages;
 		prompt = '';
+		selectedImages = [];
 		saveDraft();
-		const request = chat.send(requestFor(text));
+		const request = chat.send({ ...requestFor(text), images: sentImages });
 		handoff = undefined;
 		await tick();
 		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
@@ -518,6 +564,12 @@
 									{#if part.text && editingId !== entry.id}
 										<ChatMarkdown content={part.text} />
 									{/if}
+								{:else if part.kind === 'image'}
+									<img
+										src={part.dataUrl}
+										alt={part.name}
+										class="max-h-48 max-w-64 rounded-md object-contain"
+									/>
 								{:else if part.kind === 'reasoning'}
 									{#if part.text}
 										<ChatReasoning text={part.text} streaming={entry.status === 'streaming'} />
@@ -703,6 +755,25 @@
 				{/each}
 			</div>
 		{/if}
+		{#if selectedImages.length}
+			<div class="flex flex-wrap gap-2" aria-label="Attached images">
+				{#each selectedImages as image (image.id)}
+					<div class="relative">
+						<img src={image.dataUrl} alt={image.name} class="size-16 rounded-md object-cover" />
+						<Button
+							variant="secondary"
+							size="icon-xs"
+							class="absolute -right-1 -top-1"
+							aria-label={`Remove ${image.name}`}
+							onclick={() =>
+								(selectedImages = selectedImages.filter((known) => known.id !== image.id))}
+						>
+							<X />
+						</Button>
+					</div>
+				{/each}
+			</div>
+		{/if}
 		<Textarea
 			id="chat-composer"
 			bind:value={prompt}
@@ -712,9 +783,27 @@
 			class="min-h-16 resize-none"
 			onkeydown={handleKeydown}
 			oninput={saveDraft}
+			onpaste={pasteImages}
 			disabled={!agentAvailable}
 		/>
 		<div class="flex items-center gap-2">
+			<label
+				class="tactile inline-flex size-8 items-center justify-center rounded-md"
+				aria-label="Attach images"
+			>
+				<Paperclip class="size-4" />
+				<input
+					type="file"
+					accept="image/png,image/jpeg,image/webp"
+					multiple
+					class="sr-only"
+					onchange={(event) => {
+						const input = event.currentTarget;
+						void addImages([...(input.files ?? [])]);
+						input.value = '';
+					}}
+				/>
+			</label>
 			<!--
 				Auto-accept lets the agent change notes and todos without asking, so it
 				stays legible in the composer rather than moving into the gear with the
@@ -756,7 +845,8 @@
 				class="ml-auto"
 				aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
 				onclick={() => (chat.isStreaming ? void chat.stop() : void send())}
-				disabled={!agentAvailable || (!chat.isStreaming && prompt.trim() === '')}
+				disabled={!agentAvailable ||
+					(!chat.isStreaming && prompt.trim() === '' && !selectedImages.length)}
 			>
 				{#if chat.isStreaming}
 					<Square />

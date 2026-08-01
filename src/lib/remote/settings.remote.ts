@@ -14,6 +14,7 @@ const booleanText = z.enum(['true', 'false']).transform((value) => value === 'tr
 export const saveAgentPreferences = form(
 	z.object({
 		defaultModel: z.string(),
+		defaultVisionModel: z.string(),
 		executionMode: z.enum(['approval_required', 'auto_accept']),
 		inlineSuggestionsEnabled: booleanText
 	}),
@@ -22,6 +23,7 @@ export const saveAgentPreferences = form(
 			.agentSettings()
 			.updatePreferences(requestActor(), {
 				defaultModel: input.defaultModel.trim() || null,
+				defaultVisionModel: input.defaultVisionModel.trim() || null,
 				executionMode: input.executionMode,
 				inlineSuggestionsEnabled: input.inlineSuggestionsEnabled
 			});

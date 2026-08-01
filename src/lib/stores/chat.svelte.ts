@@ -54,6 +54,7 @@ function rejectionMessage(error: unknown): string | undefined {
 interface PersistedConversationChoices {
 	conversationId?: ConversationId;
 	modelOverride?: string | null;
+	visionModelOverride?: string | null;
 	executionModeOverride?: AgentExecutionMode;
 }
 
@@ -74,6 +75,7 @@ export interface ContextChip {
 
 export type ChatPart =
 	| { kind: 'text'; text: string }
+	| { kind: 'image'; id: string; dataUrl: string; name: string }
 	| { kind: 'reasoning'; text: string }
 	| { kind: 'tool'; tool: ChatToolActivity };
 
@@ -128,6 +130,7 @@ export class ChatStore {
 	entries = $state<ChatEntry[]>([]);
 	conversationId = $state<ConversationId | undefined>(undefined);
 	modelOverride = $state<string | null>(null);
+	visionModelOverride = $state<string | null>(null);
 	executionModeOverride = $state<AgentExecutionMode>('approval_required');
 	initialized = $state(false);
 	/** True while a decision is in flight, so a bundle cannot be answered twice. */
@@ -165,6 +168,7 @@ export class ChatStore {
 		const persisted = persistedConversation();
 		this.conversationId = persisted.conversationId;
 		this.modelOverride = persisted.modelOverride ?? null;
+		this.visionModelOverride = persisted.visionModelOverride ?? null;
 		this.executionModeOverride = persisted.executionModeOverride ?? defaultMode;
 		this.initialized = true;
 	}
@@ -267,6 +271,7 @@ export class ChatStore {
 			JSON.stringify({
 				conversationId: this.conversationId,
 				modelOverride: this.modelOverride,
+				visionModelOverride: this.visionModelOverride,
 				executionModeOverride: this.executionModeOverride
 			})
 		);
@@ -302,7 +307,15 @@ export class ChatStore {
 		this.entries.push({
 			id: crypto.randomUUID(),
 			role: 'user',
-			parts: [{ kind: 'text', text: input.prompt }],
+			parts: [
+				...(input.prompt ? [{ kind: 'text' as const, text: input.prompt }] : []),
+				...(input.images ?? []).map((image) => ({
+					kind: 'image' as const,
+					id: image.id,
+					dataUrl: image.dataUrl,
+					name: image.name
+				}))
+			],
 			suggestions: [],
 			status: 'completed'
 		});
@@ -322,8 +335,10 @@ export class ChatStore {
 			const receipt = await this.transport.submit({
 				requestId,
 				input: input.prompt,
+				...(input.images?.length ? { images: input.images } : {}),
 				...(this.conversationId ? { conversationId: this.conversationId } : {}),
 				model: this.modelOverride,
+				visionModel: this.visionModelOverride,
 				mode: this.executionModeOverride,
 				appContext: contextSnapshot,
 				...(input.projectId ? { projectId: input.projectId } : {}),
@@ -466,6 +481,7 @@ export class ChatStore {
 		this.entries = [];
 		this.conversationId = undefined;
 		this.modelOverride = null;
+		this.visionModelOverride = null;
 		this.chips = [];
 		this.autoChipDismissedFor = undefined;
 		this.hydratedConversationId = undefined;

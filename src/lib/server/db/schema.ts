@@ -613,6 +613,7 @@ export const conversations = pgTable(
 		contextNoteId: uuid('context_note_id').references(() => notes.id, { onDelete: 'set null' }),
 		title: text('title'),
 		modelOverride: text('model_override'),
+		visionModelOverride: text('vision_model_override'),
 		executionModeOverride: agentExecutionMode('execution_mode_override'),
 		...timestamps
 	},
@@ -624,6 +625,7 @@ export const agentPreferences = pgTable('agent_preferences', {
 		.primaryKey()
 		.references(() => users.id, { onDelete: 'cascade' }),
 	defaultModel: text('default_model'),
+	defaultVisionModel: text('default_vision_model'),
 	executionMode: agentExecutionMode('execution_mode').notNull().default('approval_required'),
 	inlineSuggestionsEnabled: boolean('inline_suggestions_enabled').notNull().default(true),
 	...timestamps

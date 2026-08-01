@@ -27,6 +27,7 @@ export interface AgentPreferencesStore {
 export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
 	assertSelectable(modelId: string): Promise<void>;
+	assertVisionSelectable?(modelId: string): Promise<void>;
 }
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore {
@@ -52,6 +53,11 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore {
 				? { defaultModel: undefined }
 				: input.defaultModel
 					? { defaultModel: input.defaultModel }
+					: {}),
+			...(input.defaultVisionModel === null
+				? { defaultVisionModel: undefined }
+				: input.defaultVisionModel
+					? { defaultVisionModel: input.defaultVisionModel }
 					: {}),
 			...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
 			...(input.inlineSuggestionsEnabled !== undefined
@@ -79,6 +85,7 @@ export class AgentModels implements AgentModelCatalog {
 			this.cached = response.data
 				.map((model): AgentModel => {
 					const supportsTools = model.supportedParameters.includes('tools');
+					const supportsVision = model.architecture?.inputModalities.includes('image') ?? false;
 					const capabilities = [
 						supportsTools ? 'tools' : undefined,
 						model.supportedParameters.includes('structured_outputs')
@@ -92,6 +99,7 @@ export class AgentModels implements AgentModelCatalog {
 						provider: model.id.split('/')[0] ?? 'OpenRouter',
 						...(model.contextLength ? { contextLength: model.contextLength } : {}),
 						supportsTools,
+						supportsVision,
 						recommended: this.recommended.has(model.id),
 						capabilities
 					};
@@ -112,6 +120,12 @@ export class AgentModels implements AgentModelCatalog {
 		if (!model || !model.supportsTools)
 			throw new ValidationError('The selected model is unavailable or does not support tools');
 	}
+
+	async assertVisionSelectable(modelId: string): Promise<void> {
+		const model = (await this.list()).find((candidate) => candidate.id === modelId);
+		if (!model?.supportsVision)
+			throw new ValidationError('The selected vision model is unavailable or cannot read images');
+	}
 }
 
 export function resolveAgentModel(
@@ -121,6 +135,16 @@ export function resolveAgentModel(
 ): string {
 	return normalizeLanguageModelId(
 		conversation.modelOverride ?? preferences.defaultModel ?? environmentDefault
+	);
+}
+
+export function resolveVisionModel(
+	conversation: Pick<Conversation, 'visionModelOverride'>,
+	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+	environmentDefault: string
+): string {
+	return normalizeLanguageModelId(
+		conversation.visionModelOverride ?? preferences.defaultVisionModel ?? environmentDefault
 	);
 }
 

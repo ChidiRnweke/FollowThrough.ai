@@ -12,10 +12,13 @@
 	let { preferences, models }: { preferences: AgentPreferences; models: readonly AgentModel[] } =
 		$props();
 	let model = $state<string | null>(null);
+	let visionModel = $state<string | null>(null);
+	const visionModels = $derived(models.filter((candidate) => candidate.supportsVision));
 	let mode = $state<AgentExecutionMode>('approval_required');
 	let inlineSuggestionsEnabled = $state(true);
 	$effect(() => {
 		model = preferences.defaultModel ?? null;
+		visionModel = preferences.defaultVisionModel ?? null;
 		mode = preferences.executionMode;
 		inlineSuggestionsEnabled = preferences.inlineSuggestionsEnabled;
 	});
@@ -42,6 +45,22 @@
 				     controls above and change after first render, and the field name is all the schema
 				     needs for a string. -->
 			<Input type="hidden" name="defaultModel" value={model ?? ''} />
+		</Field.Field>
+		<Field.Separator />
+		<Field.Field orientation="responsive">
+			<Field.Content>
+				<Field.Title>Default vision model</Field.Title>
+				<Field.Description
+					>Describes chat images when the selected chat model cannot see them.</Field.Description
+				>
+			</Field.Content>
+			<ModelPicker
+				models={visionModels}
+				bind:value={visionModel}
+				allowDefault
+				defaultLabel="App default"
+			/>
+			<Input type="hidden" name="defaultVisionModel" value={visionModel ?? ''} />
 		</Field.Field>
 		<Field.Separator />
 		<Field.Field orientation="responsive">

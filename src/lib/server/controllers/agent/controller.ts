@@ -385,6 +385,16 @@ export class Agent implements AgentController {
 	}
 
 	private freezeInput(input: SubmitAgentRunInput): RunAgentInput {
+		if ((input.images?.length ?? 0) > 4) throw new ValidationError('Attach at most four images.');
+		const imageBytes = (input.images ?? []).reduce((sum, image) => {
+			if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType))
+				throw new ValidationError('Chat images must be PNG, JPEG, or WebP.');
+			if (!image.dataUrl.startsWith(`data:${image.mediaType};base64,`))
+				throw new ValidationError('Chat image content does not match its media type.');
+			return sum + Buffer.byteLength(image.dataUrl.split(',')[1] ?? '', 'base64');
+		}, 0);
+		if (imageBytes > 10 * 1024 * 1024)
+			throw new ValidationError('Chat images must be 10 MiB combined or less.');
 		const contextProjectId =
 			input.appContext?.currentProject?.id ?? input.appContext?.activeResource?.projectId;
 		const contextNoteId =
@@ -401,6 +411,7 @@ export class Agent implements AgentController {
 		return {
 			requestId: input.requestId,
 			prompt: input.input,
+			...(input.images?.length ? { images: input.images } : {}),
 			...(input.conversationId ? { conversationId: input.conversationId } : {}),
 			...((contextProjectId ?? input.projectId)
 				? { projectId: contextProjectId ?? input.projectId }
@@ -422,6 +433,7 @@ export class Agent implements AgentController {
 					}
 				: {}),
 			...(input.model !== undefined ? { modelOverride: input.model } : {}),
+			...(input.visionModel !== undefined ? { visionModelOverride: input.visionModel } : {}),
 			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {})
 		};
 	}

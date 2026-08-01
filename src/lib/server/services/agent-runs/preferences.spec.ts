@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { OpenRouter } from '@openrouter/sdk';
 import type { AgentPreferences, Conversation } from '$lib/models';
-import { AgentModels, resolveAgentExecutionMode, resolveAgentModel } from './preferences';
+import {
+	AgentModels,
+	resolveAgentExecutionMode,
+	resolveAgentModel,
+	resolveVisionModel
+} from './preferences';
 
 const modelResponse = {
 	data: [
@@ -9,13 +14,15 @@ const modelResponse = {
 			id: 'vendor/tool-model',
 			name: 'Tool Model',
 			contextLength: 128_000,
-			supportedParameters: ['tools', 'reasoning']
+			supportedParameters: ['tools', 'reasoning'],
+			architecture: { inputModalities: ['text', 'image'] }
 		},
 		{
 			id: 'vendor/text-model',
 			name: 'Text Model',
 			contextLength: 32_000,
-			supportedParameters: []
+			supportedParameters: [],
+			architecture: { inputModalities: ['text'] }
 		}
 	]
 };
@@ -71,6 +78,16 @@ describe('Agent model selection invariants', () => {
 		);
 		expect(mode).toBe('auto_accept');
 	});
+
+	it('prefers a conversation vision model over the user default', () => {
+		expect(
+			resolveVisionModel(
+				{ visionModelOverride: 'vision/conversation' },
+				{ defaultVisionModel: 'vision/user' },
+				'vision/environment'
+			)
+		).toBe('vision/conversation');
+	});
 });
 
 describe('OpenRouter catalog invariants', () => {
@@ -100,6 +117,11 @@ describe('OpenRouter catalog invariants', () => {
 	it('marks models without tool support as unavailable', async () => {
 		const models = await catalog(async () => modelResponse).list();
 		expect(models.find((model) => model.id === 'vendor/text-model')?.supportsTools).toBe(false);
+	});
+
+	it('derives native vision support from input modalities', async () => {
+		const models = await catalog(async () => modelResponse).list();
+		expect(models.find((model) => model.id === 'vendor/tool-model')?.supportsVision).toBe(true);
 	});
 
 	it('rejects a newly selected model without tool support', async () => {

@@ -9,6 +9,11 @@
 	import ModelPicker from './model-picker.svelte';
 
 	let { agentModels }: { agentModels: readonly AgentModel[] } = $props();
+	const effectiveChatModel = $derived(
+		agentModels.find((model) => model.id === chat.modelOverride) ??
+			agentModels.find((model) => model.recommended)
+	);
+	const visionModels = $derived(agentModels.filter((model) => model.supportsVision));
 </script>
 
 <!--
@@ -41,6 +46,18 @@
 		<div class="flex flex-col gap-1.5">
 			<span class="text-xs text-muted-foreground">Model</span>
 			<ModelPicker models={agentModels} bind:value={chat.modelOverride} allowDefault />
+		</div>
+		<div class="flex flex-col gap-1.5">
+			<span class="text-xs text-muted-foreground">Vision model</span>
+			<ModelPicker
+				models={visionModels}
+				bind:value={chat.visionModelOverride}
+				allowDefault
+				disabled={effectiveChatModel?.supportsVision ?? false}
+			/>
+			{#if effectiveChatModel?.supportsVision}
+				<p class="text-xs text-muted-foreground">The chat model reads images directly.</p>
+			{/if}
 		</div>
 		<Button variant="outline" size="sm" href="/settings">Defaults and prompt preferences</Button>
 	</Popover.Content>

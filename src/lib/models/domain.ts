@@ -364,6 +364,7 @@ export interface Conversation {
 	readonly contextNoteId?: NoteId;
 	readonly title?: string;
 	readonly modelOverride?: string;
+	readonly visionModelOverride?: string;
 	readonly executionModeOverride?: AgentExecutionMode;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
@@ -397,6 +398,7 @@ export type AgentRunStatus =
 export interface AgentPreferences {
 	readonly userId: UserId;
 	readonly defaultModel?: string;
+	readonly defaultVisionModel?: string;
 	readonly executionMode: AgentExecutionMode;
 	readonly inlineSuggestionsEnabled: boolean;
 	readonly createdAt: DateTime;
@@ -477,6 +479,7 @@ export interface AgentModel {
 	readonly provider: string;
 	readonly contextLength?: number;
 	readonly supportsTools: boolean;
+	readonly supportsVision: boolean;
 	readonly recommended: boolean;
 	readonly capabilities: readonly string[];
 }
@@ -802,6 +805,7 @@ export interface ReviseInlineMermaidInput {
 	readonly noteId: NoteId;
 	readonly source: string;
 	readonly instruction: string;
+	readonly renderedPngDataUrl?: string;
 }
 export interface ReviseInlineMermaidOutput {
 	readonly source: string;
@@ -898,8 +902,10 @@ export interface RunAgentInput {
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly modelOverride?: string | null;
+	readonly visionModelOverride?: string | null;
 	readonly executionModeOverride?: import('./domain').AgentExecutionMode | null;
 	readonly prompt: string;
+	readonly images?: readonly ConversationImageInput[];
 	readonly appContext?: import('./app-context').AppContextSnapshotV1;
 	/**
 	 * Scope the request was staged with, kept only when the live snapshot
@@ -910,6 +916,12 @@ export interface RunAgentInput {
 		readonly projectId?: ProjectId;
 		readonly noteId?: NoteId;
 	};
+}
+export interface ConversationImageInput {
+	readonly id: string;
+	readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
+	readonly dataUrl: string;
+	readonly name: string;
 }
 /**
  * One request for proactive ghost text at the caret. The window around the
@@ -964,7 +976,9 @@ export interface SubmitAgentRunInput {
 	readonly requestId: string;
 	readonly conversationId?: ConversationId;
 	readonly input: string;
+	readonly images?: readonly ConversationImageInput[];
 	readonly model?: string | null;
+	readonly visionModel?: string | null;
 	readonly mode?: import('./domain').AgentExecutionMode | null;
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
@@ -1050,6 +1064,7 @@ export interface DecideAgentRunBatchInput {
 /** A partial edit: omitted fields keep their stored value, `defaultModel: null` clears it. */
 export interface UpdateAgentPreferencesInput {
 	readonly defaultModel?: string | null;
+	readonly defaultVisionModel?: string | null;
 	readonly executionMode?: import('./domain').AgentExecutionMode;
 	readonly inlineSuggestionsEnabled?: boolean;
 }

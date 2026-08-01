@@ -90,7 +90,8 @@ Client already sends `timeZone`/`localDate` in appContext; inject a time line in
 
 Done: prompts use the server clock rendered in the client IANA timezone with UTC fallback, compact agent views expose creation metadata, and inclusive `createdAfter`/`createdBefore` filters are available on time-bearing list tools and knowledge search. Indexed chunks persist and backfill their owning source's creation time for both lexical and semantic filtering.
 
-### 18. Vision support in chat + documents — L
+### 18. Vision support in chat + documents — L — ✅ Done
+
 Add a vision capability flag to the model catalog (`services/agent-runs/preferences.ts`), allow image content parts in run submission (`agent-request-factory.ts`, agent controller), and wire attachment upload into the chat UI. Builds on the existing image plumbing in `services/attachments/`.
 
 ### 19. Diagram revise sends screenshot to model — M/L

@@ -12,6 +12,7 @@
 		allowDefault = false,
 		defaultLabel = 'Use default',
 		compact = false,
+		disabled = false,
 		onchange
 	}: {
 		models: readonly AgentModel[];
@@ -19,6 +20,7 @@
 		allowDefault?: boolean;
 		defaultLabel?: string;
 		compact?: boolean;
+		disabled?: boolean;
 		onchange?: (value: string | null) => void;
 	} = $props();
 
@@ -40,6 +42,7 @@
 				variant="outline"
 				size={compact ? 'sm' : 'default'}
 				class="max-w-64 justify-between"
+				{disabled}
 			>
 				<span class="truncate"
 					>{selected?.name ?? (allowDefault ? defaultLabel : 'Select model')}</span

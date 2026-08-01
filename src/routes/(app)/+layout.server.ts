@@ -29,6 +29,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 				name: agentPreferences.defaultModel,
 				provider: agentPreferences.defaultModel.split('/')[0] ?? 'Configured',
 				supportsTools: true,
+				supportsVision: false,
 				recommended: false,
 				capabilities: ['configured']
 			},
