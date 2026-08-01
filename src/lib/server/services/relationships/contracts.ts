@@ -1,15 +1,12 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	BacklinkView,
 	CreateRelationshipInput,
 	LinkCandidate,
-	Note,
-	NoteId,
-	NoteRelationship,
 	RelationshipId,
-	RelationshipKind,
-	TextSelection
-} from '$lib/models';
+	RelationshipKind
+} from '$lib/models/relationships';
+import type { Note, NoteId, NoteRelationship, TextSelection } from '$lib/models/notes';
 
 export interface LinkFinder {
 	find(actor: ActorContext, selection: TextSelection): Promise<readonly LinkCandidate[]>;

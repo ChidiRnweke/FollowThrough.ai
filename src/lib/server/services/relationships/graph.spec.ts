@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RelationshipGraph } from './graph';
-import { InMemoryRelationshipRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
-import { InMemoryNoteRepository } from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryAnchorRepository } from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+import { InMemoryRelationshipRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -12,7 +12,7 @@ import {
 	testNow,
 	testProjectId,
 	testProvenanceId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const relationships = new InMemoryRelationshipRepository();

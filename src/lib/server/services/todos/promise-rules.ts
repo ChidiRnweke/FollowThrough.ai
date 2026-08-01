@@ -1,4 +1,7 @@
-import type { ActorContext, LocalDate, PromiseCandidate, TextSelection } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { LocalDate } from '$lib/models/workspace';
+import type { PromiseCandidate } from '$lib/models/todos';
+import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 
 const titleCase = (value: string): string =>

@@ -118,16 +118,16 @@ a repository can be checked against a real schema without booting the app.
 
 ## Architecture
 
-| Where                           | What                                                                                                     |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/routes/(app)/`             | Every authenticated page. Guarded in `src/hooks.server.ts` and again in `(app)/+layout.server.ts`.       |
-| `src/routes/(marketing)/`       | The public landing page at `/`. The only unauthenticated route besides `/auth/*`.                        |
-| `src/lib/remote/*.remote.ts`    | SvelteKit remote functions — the client-to-server surface.                                               |
-| `src/lib/server/app-factory.ts` | `AppFactory` / `ControllerFactory`. Wiring lives here; routes ask the factory, never construct services. |
-| `src/lib/server/db/schema.ts`   | The Drizzle schema — ~40 tables, notes through agent runs.                                               |
-| `src/lib/services/retrieval/`   | Indexing, semantic search, and reranking over `search_chunks` (`halfvec(3072)`, pgvector).               |
-| `src/lib/components/edra/`      | The vendored TipTap 3 editor.                                                                            |
-| `src/lib/components/ui/`        | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                                   |
+| Where                                       | What                                                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/routes/(app)/`                         | Every authenticated page. Guarded in `src/hooks.server.ts` and again in `(app)/+layout.server.ts`.       |
+| `src/routes/(marketing)/`                   | The public landing page at `/`. The only unauthenticated route besides `/auth/*`.                        |
+| `src/lib/remote/*.remote.ts`                | SvelteKit remote functions — the client-to-server surface.                                               |
+| `src/lib/server/app-factory.ts`             | `AppFactory` / `ControllerFactory`. Wiring lives here; routes ask the factory, never construct services. |
+| `src/lib/server/db/schema/`                 | Capability-owned Drizzle schemas; `index.ts` is the registry for ~40 tables.                             |
+| `src/lib/server/services/knowledge-search/` | Indexing, semantic search, and reranking over `search_chunks` (`halfvec(3072)`, pgvector).               |
+| `src/lib/components/edra/`                  | The vendored TipTap 3 editor.                                                                            |
+| `src/lib/components/ui/`                    | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                                   |
 
 UI conventions — tokens, type scale, the interaction contract — are in
 [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Read it before adding a component.

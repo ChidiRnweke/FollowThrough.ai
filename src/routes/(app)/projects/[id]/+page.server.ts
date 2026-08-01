@@ -1,6 +1,6 @@
-import type { ProjectId } from '$lib/models';
+import type { ProjectId } from '$lib/models/projects';
 import { AppFactory } from '$lib/server/app-factory';
-import { todayLocalDate } from '$lib/components/app/labels';
+import { todayLocalDate } from '$lib/client/todos/local-date';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {

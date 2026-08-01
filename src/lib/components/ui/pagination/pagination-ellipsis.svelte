@@ -4,7 +4,7 @@
 	import { FtEllipsis as MoreHorizontalIcon } from '$lib/components/icons';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLAttributes<HTMLSpanElement>>> = $props();

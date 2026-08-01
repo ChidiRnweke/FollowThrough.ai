@@ -1,16 +1,15 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
+import { building } from '$app/env';
 import { AppFactory } from '$lib/server/app-factory';
-import { hydrateEnvironment } from '$lib/server/config';
+import { getSessionCookie, hydrateEnvironment } from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
-import { getSessionCookie } from '$lib/utils';
 
 // Prerendering during `vite build` and unit tests both run without a secrets
 // backend, and must not pull configuration (which would, among other things,
 // enable auth and redirect prerendered routes).
-const configurationDisabled = (): boolean =>
-	process.env.npm_lifecycle_event === 'build' || process.env.NODE_ENV === 'test';
+const configurationDisabled = (): boolean => building || process.env.NODE_ENV === 'test';
 
 export const init: ServerInit = async () => {
 	if (configurationDisabled()) return;

@@ -1,14 +1,14 @@
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
-import { Embeddings } from '$lib/server/services/retrieval/embeddings';
-import { SearchRanking } from '$lib/server/services/retrieval/ranking';
-import { ConversationSummary } from '$lib/server/services/conversations/summary';
+import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
+import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
 import type { Database } from '$lib/server/db';
-import type { EmbeddingClient } from '$lib/server/services';
+import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 

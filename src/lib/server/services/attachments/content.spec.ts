@@ -49,13 +49,20 @@ const request = {
 };
 
 describe('AttachmentContent OCR requests', () => {
-	it('sends the whole document as one request', async () => {
+	it('sends the whole document as one request (1/2)', async () => {
 		const { engine, service } = setup();
 		engine.response = [markdown('whole document')];
 
 		const text = await service.parse(request);
 
 		expect(text).toBe('whole document');
+	});
+
+	it('sends the whole document as one request (2/2)', async () => {
+		const { engine, service } = setup();
+		engine.response = [markdown('whole document')];
+
+		const _text = await service.parse(request);
 		expect(engine.calls).toHaveLength(1);
 	});
 

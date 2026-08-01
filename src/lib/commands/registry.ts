@@ -9,10 +9,10 @@ import {
 } from '$lib/components/icons';
 import ListTodo from '@lucide/svelte/icons/list-todo';
 import { toggleMode } from 'mode-watcher';
-import { palette } from '$lib/stores/palette.svelte';
-import { rightPanel } from '$lib/stores/right-panel.svelte';
-import { sidebarToggle } from '$lib/stores/sidebar-toggle.svelte';
-import { createNote } from '$lib/remote/projects.remote';
+import { palette } from '$lib/stores/shell/palette.svelte';
+import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
+import { sidebarToggle } from '$lib/stores/shell/sidebar-toggle.svelte';
+import { createNote } from '$lib/remote/projects/projects.remote';
 
 export interface AppCommand {
 	readonly id: string;

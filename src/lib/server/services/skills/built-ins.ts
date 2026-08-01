@@ -1,16 +1,13 @@
-import type {
-	ActorContext,
-	DateTime,
-	Note,
-	NoteId,
-	NoteRevisionId,
-	ProjectId,
-	Skill,
-	SkillSummary
-} from '$lib/models';
-import { DEFAULT_PROJECT_NAME } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { Skill, SkillSummary } from '$lib/models/skills';
+import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type { NoteRepository, ProjectRepository, SkillRepository } from '$lib/server/repositories';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
+import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 export interface BuiltInSkillDefinition {
 	readonly key: string;
 	readonly name: string;

@@ -1,22 +1,20 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateMemoryEntryInput,
-	DateTime,
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
 	MemorySuggestion,
-	ProjectId,
-	ProvenanceId,
 	UpdateMemoryEntryInput
-} from '$lib/models';
+} from '$lib/models/memory';
+import type { DateTime } from '$lib/models/workspace';
+import type { ProjectId } from '$lib/models/projects';
+import type { ProvenanceId } from '$lib/models/provenance';
 import { InvalidTransitionError, NotFoundError, ValidationError } from '$lib/errors';
-import type {
-	MemoryEntryRepository,
-	ProjectRepository,
-	ProvenanceRepository
-} from '$lib/server/repositories';
-import type { MemoryEntryListFilter } from '$lib/server/repositories';
+import type { MemoryEntryRepository } from '$lib/server/repositories/memory';
+import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
+import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
+import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 
 interface MemoryIndexer {
 	index(actor: ActorContext, entry: MemoryEntry): Promise<void>;

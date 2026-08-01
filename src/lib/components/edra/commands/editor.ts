@@ -22,13 +22,9 @@ import VideoExtendedComp from '../VideoExtended.svelte';
 import IFrameComp from '../IFrame.svelte';
 import MermaidComp from '../Mermaid.svelte';
 import DrawioComp from '../Drawio.svelte';
-import type {
-	DiagramId,
-	DiagramSuggestion,
-	DrawioDiagram,
-	NoteLinkTarget,
-	SuggestionId
-} from '$lib/models';
+import type { DiagramId, DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
+import type { NoteLinkTarget } from '$lib/models/notes';
+import type { SuggestionId } from '$lib/models/suggestions';
 import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';

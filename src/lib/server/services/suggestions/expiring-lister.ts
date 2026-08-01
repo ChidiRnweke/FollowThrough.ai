@@ -1,4 +1,6 @@
-import type { ActorContext, NoteId, Suggestion, SuggestionStatus } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { NoteId } from '$lib/models/notes';
+import type { Suggestion, SuggestionStatus } from '$lib/models/suggestions';
 
 interface SuggestionExpirer {
 	expire(actor: ActorContext): Promise<number>;

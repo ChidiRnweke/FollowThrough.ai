@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findProseMirrorDocumentIssue, type ProseMirrorDocument } from '$lib/models';
+import { findProseMirrorDocumentIssue, type ProseMirrorDocument } from '$lib/models/notes';
 import { noteContentFromMarkdown, noteMarkdownFromContent } from './markdown';
 
 const formatted = noteContentFromMarkdown(

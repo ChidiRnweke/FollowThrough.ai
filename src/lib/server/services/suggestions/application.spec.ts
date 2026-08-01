@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { DiagramSuggestion } from '$lib/models';
+import type { DiagramSuggestion } from '$lib/models/diagrams';
 import { SuggestionApplication } from './application';
-import { InMemoryDiagrams } from '$lib/testing/fakes/in-memory-diagram-skills';
+import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import {
 	testActor,
 	testNow,
 	testNoteId,
 	testProvenanceId,
 	testSuggestionId
-} from '$lib/testing/fixtures/domain-builders';
-import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { DrawioLabelExtractor, DrawioXmlValidator } from '../diagrams/drawio';
 
 const suggestion = (source: string): DiagramSuggestion => ({

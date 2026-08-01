@@ -1,6 +1,6 @@
 import { mount, unmount } from 'svelte';
 import type { SuggestionOptions } from '@tiptap/suggestion';
-import type { NoteLinkTarget } from '$lib/models';
+import type { NoteLinkTarget } from '$lib/models/notes';
 import NoteLinkList from '../NoteLinkList.svelte';
 
 /**

@@ -1,22 +1,18 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { GetTodayViewInput, ShellContext, TodayView } from '$lib/models/workspace';
+import type { PendingMemoryNotification } from '$lib/models/memory';
+import type { Project } from '$lib/models/projects';
+import type { Suggestion } from '$lib/models/suggestions';
+import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
+import type { ProjectLister } from '$lib/server/services/projects/contracts';
+import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { SuggestionLister } from '$lib/server/services/suggestions/contracts';
 import type {
-	ActorContext,
-	GetTodayViewInput,
-	PendingMemoryNotification,
-	Project,
-	ShellContext,
-	Suggestion,
-	TodayView
-} from '$lib/models';
-import type {
-	NoteTreeReader,
-	ProjectLister,
-	SkillFinder,
-	SuggestionLister,
 	TodoLister,
 	TodoViewAssembler,
-	UserReader,
 	WaitingOnFinder
-} from '$lib/server/services';
+} from '$lib/server/services/todos/contracts';
+import type { UserReader } from '$lib/server/services/identity/users';
 
 export interface WorkspaceController {
 	getShellContext(actor: ActorContext): Promise<ShellContext>;

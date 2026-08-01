@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { ControllerFactory } from '$lib/server/controller-factory';
-import { InMemoryToolRetriever } from '$lib/testing/fakes/in-memory-agent';
-import { noteBuilder, testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import {
+	noteBuilder,
+	testActor,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentTools,
 	agentToolCoverage,
@@ -185,15 +189,33 @@ describe('Agent tool coverage invariants', () => {
 		expect(editNote?.classification).toBe('mutation');
 	});
 
-	it('advertises the read-before-edit contract in edit_note and get_note descriptions', () => {
+	it('advertises the read-before-edit contract in edit_note and get_note descriptions (1/3)', () => {
 		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		const _getNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		expect(editNote?.description).toMatch(/MUST call get_note/);
+	});
+
+	it('advertises the read-before-edit contract in edit_note and get_note descriptions (2/3)', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		const _getNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		expect(editNote?.description).toMatch(/never retry the same oldText/);
+	});
+
+	it('advertises the read-before-edit contract in edit_note and get_note descriptions (3/3)', () => {
+		const _editNote = registry('auto_accept')
 			.definitions()
 			.find((definition) => definition.name === 'edit_note');
 		const getNote = registry('auto_accept')
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		expect(editNote?.description).toMatch(/MUST call get_note/);
-		expect(editNote?.description).toMatch(/never retry the same oldText/);
 		expect(getNote?.description).toMatch(/before your first edit_note or save_note/);
 	});
 
@@ -230,7 +252,41 @@ describe('Agent tool coverage invariants', () => {
 		).toBe(false);
 	});
 
-	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
+	it('threads the run provenanceId into load_skill even when the context omits it (1/2)', async () => {
+		let _receivedProvenanceId: unknown;
+		const factory = {
+			toolPreferences: () => ({ list: async () => [] }),
+			skills: () => ({
+				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
+					_receivedProvenanceId = input.provenanceId;
+					return { skill: {}, usages: [] };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const run = {
+			userId: testActor().userId,
+			executionMode: 'auto_accept',
+			model: 'openai/gpt-5.6',
+			provenanceId: testProvenanceId()
+		};
+		const registry = await agentToolRegistry(
+			() => factory,
+			new InMemoryToolRetriever()
+		)({
+			actor: testActor(),
+			request: { prompt: 'Help' } as never,
+			run: run as never,
+			executor: { execute: async (_input, action) => action() }
+		});
+		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
+		expect(loadSkill).toBeDefined();
+		await (loadSkill as FunctionTool).invoke(
+			{} as never,
+			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
+		);
+	});
+
+	it('threads the run provenanceId into load_skill even when the context omits it (2/2)', async () => {
 		let receivedProvenanceId: unknown;
 		const factory = {
 			toolPreferences: () => ({ list: async () => [] }),
@@ -257,7 +313,6 @@ describe('Agent tool coverage invariants', () => {
 			executor: { execute: async (_input, action) => action() }
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
-		expect(loadSkill).toBeDefined();
 		await (loadSkill as FunctionTool).invoke(
 			{} as never,
 			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
@@ -337,7 +392,65 @@ describe('Agent tool coverage invariants', () => {
 		});
 	});
 
-	it('creates every todo in a single create_todos dispatch', async () => {
+	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
+		const projectId = crypto.randomUUID();
+		const calls: { projectId: string; title: string }[] = [];
+		const factory = {
+			todos: () => ({
+				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
+					calls.push(input);
+					return { todo: { id: `todo-${calls.length}`, ...input } };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const _result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'create_todos',
+				payload: {
+					projectId,
+					todos: [
+						{ title: 'Renew TLS certificates', responsibility: 'mine' },
+						{ title: 'Book offsite flights', responsibility: 'mine' },
+						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+					]
+				}
+			})
+		);
+		expect(calls).toHaveLength(3);
+	});
+
+	it('creates every todo in a single create_todos dispatch (2/3)', async () => {
+		const projectId = crypto.randomUUID();
+		const calls: { projectId: string; title: string }[] = [];
+		const factory = {
+			todos: () => ({
+				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
+					calls.push(input);
+					return { todo: { id: `todo-${calls.length}`, ...input } };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const _result = await selected.invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'create_todos',
+				payload: {
+					projectId,
+					todos: [
+						{ title: 'Renew TLS certificates', responsibility: 'mine' },
+						{ title: 'Book offsite flights', responsibility: 'mine' },
+						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+					]
+				}
+			})
+		);
+		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
+	});
+
+	it('creates every todo in a single create_todos dispatch (3/3)', async () => {
 		const projectId = crypto.randomUUID();
 		const calls: { projectId: string; title: string }[] = [];
 		const factory = {
@@ -363,8 +476,6 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		);
-		expect(calls).toHaveLength(3);
-		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
 		expect(result).toEqual({
 			todos: [
 				{
@@ -405,9 +516,13 @@ describe('Agent tool coverage invariants', () => {
 		}
 	});
 
-	it('keeps create_todos in the long-tail catalog, not the first-class tools', () => {
+	it('keeps create_todos in the long-tail catalog, not the first-class tools (1/2)', () => {
 		const instance = registry('auto_accept');
 		expect(instance.catalog().some((tool) => tool.name === 'create_todos')).toBe(true);
+	});
+
+	it('keeps create_todos in the long-tail catalog, not the first-class tools (2/2)', () => {
+		const instance = registry('auto_accept');
 		expect(instance.agentTools().some((tool) => tool.name === 'create_todos')).toBe(false);
 	});
 

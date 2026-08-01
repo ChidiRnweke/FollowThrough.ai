@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { Projects } from './controller';
-import { InMemoryProjects } from '$lib/testing/fakes/in-memory-projects';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const projects = new InMemoryProjects();

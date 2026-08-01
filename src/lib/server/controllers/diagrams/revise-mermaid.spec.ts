@@ -4,22 +4,25 @@ import {
 	drawioBuilder,
 	InMemoryDiagrams,
 	mermaidBuilder
-} from '$lib/testing/fakes/in-memory-diagram-skills';
-import { testActor } from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = (drawio = false) => {
 	const diagrams = new InMemoryDiagrams();
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
-		controller: new Diagrams({
-			diagramFinder: diagrams,
-			mermaidReviser: diagrams,
-			mermaidRenderer: diagrams,
-			textExtractor: diagrams,
-			diagramWriter: diagrams,
-			diagramIndexer: diagrams
-		} as unknown as DiagramsDependencies)
+		controller: new Diagrams(
+			capabilityDependencies<DiagramsDependencies>({
+				diagramFinder: diagrams,
+				mermaidReviser: diagrams,
+				mermaidRenderer: diagrams,
+				textExtractor: diagrams,
+				diagramWriter: diagrams,
+				diagramIndexer: diagrams
+			})
+		)
 	};
 };
 

@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { MemoryChangePayload, MemorySuggestion, Provenance } from '$lib/models';
+import type { MemoryChangePayload, MemorySuggestion } from '$lib/models/memory';
+import type { Provenance } from '$lib/models/provenance';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { MemoryLibrary } from './library';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/retrieval/indexing';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/fakes/in-memory-memory-repository';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
-} from '$lib/testing/fakes/in-memory-search';
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
 	projectBuilder,
 	testActor,
@@ -17,7 +18,7 @@ import {
 	testProjectId,
 	testProvenanceId,
 	testSuggestionId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
 	const entries = new InMemoryMemoryEntryRepository();

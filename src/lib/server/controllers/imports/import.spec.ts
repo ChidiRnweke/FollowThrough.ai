@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
-import { NoteImportsController } from './controller';
+import { NoteImportsController, type ImportsDependencies } from './controller';
 import type { NotesController } from '../notes/controller';
 import type { ProjectsController } from '../projects/controller';
-import { noteBuilder, testActor } from '$lib/testing/fixtures/domain-builders';
-import type {
-	ActorContext,
-	CreateFolderInput,
-	CreateNoteInput,
-	Note,
-	NoteId,
-	ProjectId,
-	SaveNoteInput
-} from '$lib/models';
+import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
+import type { CreateFolderInput, ProjectId } from '$lib/models/projects';
+import type { CreateNoteInput, Note, NoteId, SaveNoteInput } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 
 const projectId = crypto.randomUUID() as ProjectId;
@@ -21,7 +15,7 @@ const projectId = crypto.randomUUID() as ProjectId;
  * Hand-rolled fakes over the two controllers an import composes, recording what it asked
  * for. `failTitles` lets a single file fail so the partial-import behaviour is observable.
  */
-class FakeWorkspace {
+class FakeWorkspace implements ImportsDependencies {
 	created: { title: string; parentId?: NoteId }[] = [];
 	folders: { name: string; parentId?: NoteId }[] = [];
 	saved: { id: NoteId; plainText: string }[] = [];

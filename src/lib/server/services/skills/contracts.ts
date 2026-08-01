@@ -1,16 +1,8 @@
-import type {
-	ActorContext,
-	Note,
-	NoteId,
-	ProvenanceId,
-	ProjectId,
-	Skill,
-	NoteRevision,
-	SkillSummary,
-	SkillUsageView,
-	SkillManifest,
-	TextSelection
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { Note, NoteId, NoteRevision, TextSelection } from '$lib/models/notes';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { ProjectId } from '$lib/models/projects';
+import type { Skill, SkillSummary, SkillUsageView, SkillManifest } from '$lib/models/skills';
 
 export interface SkillCreator {
 	create(

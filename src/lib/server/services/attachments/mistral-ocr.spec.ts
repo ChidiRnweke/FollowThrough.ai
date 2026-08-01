@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MistralOcr } from './mistral-ocr';
+import { MistralOcr, type OcrFetchTransport } from './mistral-ocr';
 
-class FakeFetch {
+class FakeFetch implements OcrFetchTransport {
 	request?: { url: string; init?: RequestInit };
 
 	constructor(

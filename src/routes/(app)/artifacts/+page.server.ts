@@ -1,4 +1,5 @@
-import type { ArtifactView, ProjectId } from '$lib/models';
+import type { ArtifactView } from '$lib/models/deliverables';
+import type { ProjectId } from '$lib/models/projects';
 import { AppFactory } from '$lib/server/app-factory';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';

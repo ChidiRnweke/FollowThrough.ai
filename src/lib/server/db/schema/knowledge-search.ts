@@ -1,0 +1,1 @@
+export { searchChunks } from './registry';

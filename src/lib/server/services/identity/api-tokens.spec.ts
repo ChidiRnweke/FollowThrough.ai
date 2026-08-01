@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryApiTokenRepository, testTokenUser } from '$lib/testing/fakes/in-memory-api-tokens';
-import { testActor } from '$lib/testing/fixtures/domain-builders';
+import {
+	InMemoryApiTokenRepository,
+	testTokenUser
+} from '$lib/testing/identity/fakes/in-memory-api-tokens';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AccessTokens } from './api-tokens';
 
 const userId = testActor().userId;

@@ -1,10 +1,10 @@
 import type { EditorOptions, Storage } from '@tiptap/core';
 import { Editor as TiptapEditor } from '@tiptap/core';
 import type { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
-import type { NoteTodosStore } from '$lib/stores/note-todos.svelte';
-import type { SuggestionTrayStore } from '$lib/stores/suggestion-tray.svelte';
-import type { EditorSelectionStore } from '$lib/stores/editor-selection.svelte';
-import type { NoteSyncStore } from '$lib/stores/note-sync.svelte';
+import type { NoteTodosStore } from '$lib/stores/notes/note-todos.svelte';
+import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
+import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
+import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
 
 /**
  * Per-note store instances attached to the TipTap editor so that NodeViews

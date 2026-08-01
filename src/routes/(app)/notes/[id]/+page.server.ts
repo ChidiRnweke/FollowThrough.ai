@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import type { NoteId } from '$lib/models';
+import type { NoteId } from '$lib/models/notes';
 import { AppFactory } from '$lib/server/app-factory';
-import { parseWorkbenchUrl } from '$lib/stores/workbench-url';
+import { parseWorkbenchUrl } from '$lib/stores/workbench/workbench-url';
 
 // The workbench shell in `(app)/+layout.svelte` always renders the tab strip
 // chrome; this page renders the actual editor surface for `/notes/<id>`

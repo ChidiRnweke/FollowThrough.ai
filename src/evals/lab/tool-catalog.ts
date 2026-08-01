@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type { ActorContext, ProvenanceId, RunAgentInput } from '$lib/models';
-import { EmbeddedToolRetriever, type ToolDescriptor } from '$lib/server/services';
+import type { ActorContext } from '$lib/models/identity';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { RunAgentInput } from '$lib/models/agent';
+import {
+	EmbeddedToolRetriever,
+	type ToolDescriptor
+} from '$lib/server/services/agent/tools/tool-retriever';
 import { AgentTools } from '$lib/server/agent-tool-factory';
 import type { Lab } from './application';
 

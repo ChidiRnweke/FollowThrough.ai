@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { ReferenceCandidate, TextSelection, Url } from '$lib/models';
+import type { ReferenceCandidate, Url } from '$lib/models/references';
+import type { TextSelection } from '$lib/models/notes';
 import { Relationships } from '$lib/server/controllers/relationships/controller';
 import { References } from '$lib/server/controllers/references/controller';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import {
 	InMemoryLinkFinder,
 	InMemoryProvenanceRecorder,
 	InMemoryReferencePipeline
-} from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { noteBuilder, testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	noteBuilder,
+	testActor,
+	testNoteId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),

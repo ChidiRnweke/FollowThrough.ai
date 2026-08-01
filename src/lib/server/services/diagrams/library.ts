@@ -1,11 +1,14 @@
-import type { ActorContext, Diagram, DiagramId, NoteId, ProjectId } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError, OwnershipError } from '$lib/errors';
+import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
-	DiagramRepository,
-	NoteRepository,
 	ProvenanceRepository,
 	SourceAnchorRepository
-} from '$lib/server/repositories';
+} from '$lib/server/repositories/provenance';
 export class DiagramLibrary {
 	constructor(
 		private readonly diagrams: DiagramRepository,

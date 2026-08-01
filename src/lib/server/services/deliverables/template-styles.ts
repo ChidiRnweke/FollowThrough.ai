@@ -1,5 +1,5 @@
 import AdmZip from 'adm-zip';
-import type { ExtractedTemplateStyles } from '$lib/models';
+import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
 
 interface HeadingStyle {
 	name: string;

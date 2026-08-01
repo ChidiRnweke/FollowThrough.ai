@@ -1,9 +1,9 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import QuickCapture from '$lib/components/app/quick-capture.svelte';
-	import TodayTriage from '$lib/components/app/pages/today-triage.svelte';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import QuickCapture from '$lib/components/shell/navigation/quick-capture.svelte';
+	import TodayTriage from '$lib/components/today/workspace/today-triage.svelte';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
 
 	let { data } = $props();
 

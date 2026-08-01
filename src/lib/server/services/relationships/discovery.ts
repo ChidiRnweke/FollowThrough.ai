@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
-import type { RelationshipKind } from '$lib/models';
+import type { RelationshipKind } from '$lib/models/relationships';
 interface OperationObserver {
 	run<T>(
 		name: string,

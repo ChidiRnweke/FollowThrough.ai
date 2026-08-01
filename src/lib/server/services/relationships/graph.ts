@@ -1,20 +1,18 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	BacklinkView,
 	CreateRelationshipInput,
-	DateTime,
-	Note,
-	NoteId,
-	NoteRelationship,
 	RelationshipId
-} from '$lib/models';
+} from '$lib/models/relationships';
+import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, NoteRelationship } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { NoteRelationshipRepository } from '$lib/server/repositories/relationships/relationships';
 import type {
-	NoteRepository,
-	NoteRelationshipRepository,
 	ProvenanceRepository,
 	SourceAnchorRepository
-} from '$lib/server/repositories';
+} from '$lib/server/repositories/provenance';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class RelationshipGraph {
@@ -95,7 +93,7 @@ export class RelationshipGraph {
 	}
 	async findForNote(
 		actor: ActorContext,
-		noteId: import('$lib/models').NoteId
+		noteId: import('$lib/models/notes').NoteId
 	): Promise<readonly NoteRelationship[]> {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.relationships.listForNote(actor, noteId);

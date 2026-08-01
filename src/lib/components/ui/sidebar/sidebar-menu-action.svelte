@@ -4,7 +4,7 @@
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		showOnHover = false,
 		children,

@@ -1,14 +1,14 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateFolderInput,
 	CreateProjectInput,
 	MoveProjectEntryInput,
-	Note,
 	Project,
 	ProjectId,
 	ProjectTreeNode,
 	RenameProjectInput
-} from '$lib/models';
+} from '$lib/models/projects';
+import type { Note } from '$lib/models/notes';
 
 export interface ProjectCreator {
 	create(actor: ActorContext, input: CreateProjectInput): Promise<Project>;

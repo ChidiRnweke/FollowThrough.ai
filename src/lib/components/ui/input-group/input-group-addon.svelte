@@ -28,7 +28,7 @@
 	import type { HTMLAttributes } from 'svelte/elements';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		children,
 		align = 'inline-start',

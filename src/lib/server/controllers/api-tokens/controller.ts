@@ -1,4 +1,4 @@
-import type { ActorContext, ApiToken, ApiTokenId } from '$lib/models';
+import type { ActorContext, ApiToken, ApiTokenId } from '$lib/models/identity';
 import type { IAccessTokens } from '$lib/server/services/identity/api-tokens';
 
 /**

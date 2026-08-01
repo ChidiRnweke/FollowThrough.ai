@@ -3,9 +3,10 @@ import { Suggestions, type SuggestionsDependencies } from './controller';
 import {
 	InMemorySuggestionReader,
 	InMemorySuggestions
-} from '$lib/testing/fakes/in-memory-automation';
-import { InMemorySuggestionArtifacts } from '$lib/testing/fakes/in-memory-artifacts';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+} from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySuggestionArtifacts } from '$lib/testing/suggestions/fakes/in-memory-artifacts';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	suggestionBuilder,
 	memorySuggestionBuilder,
@@ -14,7 +15,7 @@ import {
 	testSuggestionId,
 	testTodoId,
 	todoBuilder
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('Pending memory review invariants', () => {
 	it('returns only profile memory suggestions for the profile scope', async () => {
@@ -27,10 +28,12 @@ describe('Pending memory review invariants', () => {
 			}),
 			suggestionBuilder({ id: testSuggestionId(3) })
 		];
-		const controller = new Suggestions({
-			suggestionLister: reader,
-			suggestionViewAssembler: reader
-		} as unknown as SuggestionsDependencies);
+		const controller = new Suggestions(
+			capabilityDependencies<SuggestionsDependencies>({
+				suggestionLister: reader,
+				suggestionViewAssembler: reader
+			})
+		);
 		const result = await controller.listPendingMemory(testActor(), {});
 		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId()]);
 	});
@@ -48,10 +51,12 @@ describe('Pending memory review invariants', () => {
 				payload: { operation: 'add', content: 'Other project', projectId: testProjectId(2) }
 			})
 		];
-		const controller = new Suggestions({
-			suggestionLister: reader,
-			suggestionViewAssembler: reader
-		} as unknown as SuggestionsDependencies);
+		const controller = new Suggestions(
+			capabilityDependencies<SuggestionsDependencies>({
+				suggestionLister: reader,
+				suggestionViewAssembler: reader
+			})
+		);
 		const result = await controller.listPendingMemory(testActor(), { projectId: testProjectId() });
 		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId(2)]);
 	});
@@ -61,14 +66,16 @@ const setup = () => {
 	const suggestions = new InMemorySuggestions();
 	const artifacts = new InMemorySuggestionArtifacts();
 	const transactionRunner = new InMemoryTransactionRunner([suggestions, artifacts]);
-	const controller = new Suggestions({
-		suggestionFinder: suggestions,
-		suggestionAccepter: suggestions,
-		suggestionRejecter: suggestions,
-		suggestionReverter: suggestions,
-		artifactApplier: artifacts,
-		transactionRunner
-	} as unknown as SuggestionsDependencies);
+	const controller = new Suggestions(
+		capabilityDependencies<SuggestionsDependencies>({
+			suggestionFinder: suggestions,
+			suggestionAccepter: suggestions,
+			suggestionRejecter: suggestions,
+			suggestionReverter: suggestions,
+			artifactApplier: artifacts,
+			transactionRunner
+		})
+	);
 	return {
 		suggestions,
 		artifacts,

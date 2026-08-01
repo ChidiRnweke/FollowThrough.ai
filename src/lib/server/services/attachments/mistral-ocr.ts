@@ -87,6 +87,10 @@ export interface MistralOcrOptions {
 	readonly observer?: OperationObserver;
 }
 
+export interface OcrFetchTransport {
+	readonly fetch: typeof globalThis.fetch;
+}
+
 const IMAGE_PLACEHOLDER = /!\[[^\]]*\]\(([^)]+)\)/g;
 
 /** Mistral returns bare base64 for some formats and a full data URL for others. */

@@ -1,26 +1,24 @@
-import type {
-	AgentController,
-	AgentSettingsController,
-	ApiTokensController,
-	AttachmentsController,
-	DeliverablesController,
-	FeedbackController,
-	DiagramsController,
-	ImportsController,
-	InlineSuggestionsController,
-	MemoryController,
-	NotesController,
-	ProjectsController,
-	ReferencesController,
-	RelationshipsController,
-	RetrievalController,
-	SkillsController,
-	SuggestionsController,
-	TodosController,
-	ToolPreferencesController,
-	TrustPoliciesController,
-	WorkspaceController
-} from './controllers';
+import type { AgentController } from './controllers/agent/controller';
+import type { AgentSettingsController } from './controllers/agent/settings/controller';
+import type { ToolPreferencesController } from './controllers/agent/tool-preferences/controller';
+import type { TrustPoliciesController } from './controllers/agent/trust-policies/controller';
+import type { ApiTokensController } from './controllers/api-tokens/controller';
+import type { AttachmentsController } from './controllers/attachments/controller';
+import type { DeliverablesController } from './controllers/deliverables/controller';
+import type { DiagramsController } from './controllers/diagrams/controller';
+import type { FeedbackController } from './controllers/feedback/controller';
+import type { ImportsController } from './controllers/imports/controller';
+import type { InlineSuggestionsController } from './controllers/inline-suggestions/controller';
+import type { RetrievalController } from './controllers/knowledge-search/controller';
+import type { MemoryController } from './controllers/memory/controller';
+import type { NotesController } from './controllers/notes/controller';
+import type { ProjectsController } from './controllers/projects/controller';
+import type { ReferencesController } from './controllers/references/controller';
+import type { RelationshipsController } from './controllers/relationships/controller';
+import type { SkillsController } from './controllers/skills/controller';
+import type { SuggestionsController } from './controllers/suggestions/controller';
+import type { TodosController } from './controllers/todos/controller';
+import type { WorkspaceController } from './controllers/workspace/controller';
 
 export interface ControllerFactory {
 	workspace(): WorkspaceController;

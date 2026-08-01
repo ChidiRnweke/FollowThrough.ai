@@ -1,13 +1,12 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateReferenceInput,
 	ExternalReference,
-	NoteId,
 	ReferenceCandidate,
 	ReferenceId,
-	ReferenceView,
-	TextSelection
-} from '$lib/models';
+	ReferenceView
+} from '$lib/models/references';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 
 export interface ReferenceSearchOptions {
 	readonly model?: string;

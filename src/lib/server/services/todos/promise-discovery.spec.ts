@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { TextSelection } from '$lib/models';
+import type { TextSelection } from '$lib/models/notes';
 import { PromiseDiscovery } from './promise-discovery';
 import { DeterministicPromiseExtractor } from './promise-rules';
-import { InMemoryStructuredPromiseClient } from '$lib/testing/fakes/in-memory-pipelines';
-import { testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryStructuredPromiseClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),

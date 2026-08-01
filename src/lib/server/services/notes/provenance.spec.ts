@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { NoteProvenance } from './provenance';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
-import { InMemoryAnchorRepository } from '$lib/testing/fakes/in-memory-note-repositories';
-import { anchorBuilder, testActor, testAnchorId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import {
+	anchorBuilder,
+	testActor,
+	testAnchorId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const provenance = new InMemoryProvenanceRepository();

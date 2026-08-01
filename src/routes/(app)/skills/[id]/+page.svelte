@@ -6,13 +6,13 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
-	import SkillEditor from '$lib/components/app/skill-editor.svelte';
-	import NoteConflictDialog from '$lib/components/app/note-conflict-dialog.svelte';
-	import NoteSyncStatus from '$lib/components/app/note-sync-status.svelte';
-	import NoteTitleInlineInput from '$lib/components/app/note-title-inline-input.svelte';
-	import { noteSyncRegistry } from '$lib/stores/registries/note-sync-registry.svelte';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
+	import SkillEditor from '$lib/components/skills/skill-editor.svelte';
+	import NoteConflictDialog from '$lib/components/notes/note-conflict-dialog.svelte';
+	import NoteSyncStatus from '$lib/components/notes/note-sync-status.svelte';
+	import NoteTitleInlineInput from '$lib/components/notes/note-title-inline-input.svelte';
+	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import {
 		FtDownload as Download,
 		FtEdit as Pencil,
@@ -24,7 +24,7 @@
 		importSkillMarkdown,
 		renameSkill,
 		saveSkillDescription
-	} from '$lib/remote/skills.remote';
+	} from '$lib/remote/skills/skills.remote';
 
 	let { data } = $props();
 

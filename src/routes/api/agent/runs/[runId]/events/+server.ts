@@ -1,5 +1,5 @@
-import type { AgentRunId } from '$lib/models';
-import { isTerminalAgentRunStatus } from '$lib/models';
+import type { AgentRunId } from '$lib/models/agent';
+import { isTerminalAgentRunStatus } from '$lib/models/agent';
 import { AppFactory } from '$lib/server/app-factory';
 import type { RequestHandler } from './$types';
 

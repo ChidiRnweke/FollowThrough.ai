@@ -1,7 +1,8 @@
 // chisel-ignore-file route-style:prefer-remote-function -- Multipart archive uploads require File handling and request-size checks before decoding.
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
-import type { NoteId, ProjectId } from '$lib/models';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { ValidationError } from '$lib/errors';
 import { AppFactory } from '$lib/server/app-factory';
 import type { RequestHandler } from './$types';

@@ -13,7 +13,8 @@ import {
 	type MarkdownTokenizer
 } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
-import type { DiagramId, DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
+import type { DiagramId, DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
+import type { SuggestionId } from '$lib/models/suggestions';
 
 /**
  * Returned by a parse handler that does not claim the token.

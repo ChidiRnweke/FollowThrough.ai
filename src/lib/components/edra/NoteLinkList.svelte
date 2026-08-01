@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NoteLinkTarget } from '$lib/models';
+	import type { NoteLinkTarget } from '$lib/models/notes';
 	import { FtDocument as FileText } from '$lib/components/icons';
 
 	let {

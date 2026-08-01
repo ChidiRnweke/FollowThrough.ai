@@ -7,7 +7,7 @@
 		children?: Snippet;
 	};
 
-	let { ref = $bindable(null), children, ...restProps }: Props = $props();
+	let { ref = $bindable(), children, ...restProps }: Props = $props();
 </script>
 
 <form bind:this={ref} data-slot="form" {...restProps}>

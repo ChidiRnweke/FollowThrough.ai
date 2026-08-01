@@ -1,4 +1,4 @@
-import { palette } from '$lib/stores/palette.svelte';
+import { palette } from '$lib/stores/shell/palette.svelte';
 import { runCommand } from './registry';
 
 const CHORD_WINDOW_MS = 1500;

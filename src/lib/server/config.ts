@@ -417,3 +417,65 @@ export async function hydrateEnvironment({
 
 	return environment;
 }
+
+interface CookieJar {
+	get(name: string): string | undefined;
+	set(name: string, value: string, options: CookieOptions): void;
+	delete(name: string, options: { path: string }): void;
+}
+
+interface CookieOptions {
+	path: string;
+	httpOnly: boolean;
+	secure: boolean;
+	sameSite: 'lax';
+	maxAge: number;
+}
+
+const cookieOptions = (secure: boolean, maxAge: number): CookieOptions => ({
+	path: '/',
+	httpOnly: true,
+	secure,
+	sameSite: 'lax',
+	maxAge
+});
+
+export const getSessionCookie = (cookies: Pick<CookieJar, 'get'>): string | null =>
+	cookies.get('session') ?? null;
+
+export const setSessionCookie = (
+	cookies: Pick<CookieJar, 'set'>,
+	sessionId: string,
+	secure: boolean
+): void => cookies.set('session', sessionId, cookieOptions(secure, 60 * 60 * 24 * 30));
+
+export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
+	cookies.delete('session', { path: '/' });
+
+export const getPkceCookie = (
+	cookies: Pick<CookieJar, 'get'>,
+	state: string
+): { codeVerifier: string; state: string } | null => {
+	const data = cookies.get(`oauth_${state}`);
+	if (!data) return null;
+	try {
+		return JSON.parse(data) as { codeVerifier: string; state: string };
+	} catch {
+		return null;
+	}
+};
+
+export const setPkceCookie = (
+	cookies: Pick<CookieJar, 'set'>,
+	state: string,
+	codeVerifier: string,
+	secure: boolean
+): void =>
+	cookies.set(
+		`oauth_${state}`,
+		JSON.stringify({ codeVerifier, state }),
+		cookieOptions(secure, 600)
+	);
+
+export const deletePkceCookie = (cookies: Pick<CookieJar, 'delete'>, state: string): void =>
+	cookies.delete(`oauth_${state}`, { path: '/' });

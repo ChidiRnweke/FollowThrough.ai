@@ -2,9 +2,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ControllerFactory } from '$lib/server/controller-factory';
-import type { ActorContext, ApiTokenScope, ProvenanceId } from '$lib/models';
+import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
+import type { ProvenanceId } from '$lib/models/provenance';
 import { DomainError } from '$lib/errors';
-import type { ToolRetriever } from '$lib/server/services';
+import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import {
 	AgentTools,
 	FIRST_CLASS_TOOL_NAMES,
@@ -15,7 +16,7 @@ import {
 	invalidUseToolPayload,
 	unknownUseToolName,
 	type RecoverableUseToolFailure
-} from '$lib/server/services/agent-runs/tool-recovery';
+} from '$lib/server/services/agent/runs/tool-recovery';
 
 export interface McpToolSurfaceOptions {
 	readonly controllers: ControllerFactory;

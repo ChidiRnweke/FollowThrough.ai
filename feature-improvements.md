@@ -6,7 +6,7 @@ Complexity: **S** = small/localized, **M** = multi-file feature, **L** = cross-c
 
 ### 1. Reorder notes in sidebar — S/M — ✅ Done
 
-`position` ordering already exists in the schema (`src/lib/server/db/schema.ts`, `notes.position`) and the sidebar tree already uses `svelte-dnd-action` (`src/lib/components/app/project-tree.svelte`); the gap is persisting reorder drops. Touch: `project-tree.svelte`, `src/lib/client/note-drag.ts`, `src/lib/stores/project-actions.svelte.ts`, notes repository update method.
+`position` ordering already exists in the notes schema (`src/lib/server/db/schema/notes.ts`, `notes.position`) and the sidebar tree already uses `svelte-dnd-action` (`src/lib/components/projects/project-tree.svelte`); the gap is persisting reorder drops. Touch: `project-tree.svelte`, `src/lib/client/notes/note-drag.ts`, `src/lib/stores/projects/project-actions.svelte.ts`, notes repository update method.
 
 Fixed: the grip was a `<button>`, and svelte-dnd-action refuses drags whose mousedown target has a `value` property (nested-input guard) — every `<button>` has one, so the grip was ungrabbable. Replaced with a styled `<span use:dragHandle>` (the pattern `todo-card.svelte` already uses).
 
@@ -30,7 +30,7 @@ Done (clarified: heading links): typing `#` opens a suggestion of the current no
 
 ### 5. Right-click context menu in editor — M — ✅ Done
 
-No `contextmenu` handling today; the `ui/context-menu` primitive exists and is already used in `project-tree.svelte`. Touch: `src/lib/components/app/note-editor.svelte`, new menu component offering paste raw / paste merge formatting / copy raw / copy formatting.
+No `contextmenu` handling today; the `ui/context-menu` primitive exists and is already used in `project-tree.svelte`. Touch: `src/lib/components/notes/note-editor.svelte`, new menu component offering paste raw / paste merge formatting / copy raw / copy formatting.
 
 Done: the editor wrapper is now a `ContextMenu.Trigger` with four items — copy raw / copy with formatting (HTML+plain via `ClipboardItem`) / paste raw (`view.pasteText`) / paste with formatting (`view.pasteHTML`, falls back to raw). `.tiptap` sets `user-select: text` to override the trigger's `select-none`.
 
@@ -58,7 +58,7 @@ Group concurrent approval cards in the chat panel and add an approve-all action.
 
 ### 9. Read-note output label — S ✅ Done
 
-Add/adjust entries in the label maps in `src/lib/components/app/agent/tool-presentation.ts` (and `labels.ts` if needed) so the note name is shown instead of "read markdown".
+Add/adjust entries in the label maps in `src/lib/components/agent/actions/tool-presentation.ts` (and `src/lib/components/shared/labels.ts` if needed) so the note name is shown instead of "read markdown".
 
 ### 10. Formatting in reasoning + collapsed by default with clickable title — S ✅ Done
 
@@ -90,13 +90,13 @@ Fixed: not a ring conflict — `Card.Root`'s hairline is a `ring-1` box-shadow, 
 
 ### 14. Sort controls for todo table — M — ✅ Done
 
-Add sortable column headers to `todo-table.svelte` (client-side sort first); optionally extend `TodoListFilter` (`src/lib/models/domain.ts:1211`) if server-side sorting is wanted.
+Add sortable column headers to `src/lib/components/todos/todo-table.svelte` (client-side sort first); optionally extend `TodoListFilter` in `src/lib/models/todos/index.ts` if server-side sorting is wanted.
 
 Fixed: client-side sorting in `todo-table.svelte` — `sortKey`/`sortDir` state (default null = server order), a `sortedTodos` derivation via `toSorted` with per-column comparators (workflow rank for status, urgency rank for priority, collator for strings, nulls last), and clickable ghost-button headers cycling asc → desc → cleared with `FtChevronUp/Down/ChevronsUd` icons and `aria-sort`. Applied to both the desktop table and the mobile card list. No server changes.
 
 ### 15. Tag todos by category + filter — L — ✅ Done
 
-New schema field + drizzle migration (`src/lib/server/db/schema.ts`, `drizzle/`), domain model + mapper updates (`domain.ts`, `db/mappers.ts`), repository filter, then UI: new category field in `todo-fields/`, filter bar in `todos-workspace.svelte`, `labels.ts`.
+New schema field + drizzle migration (`src/lib/server/db/schema/todos.ts`, `drizzle/`), todo model + mapper updates (`src/lib/models/todos/index.ts`, `db/mappers.ts`), repository filter, then UI: new category field in `components/todos/fields/`, filter bar in `components/todos/workspace/todos-workspace.svelte`, and shared labels.
 
 Fixed: free-text `category` (decision: users invent their own — clients, releases, etc.), so no enum and no `labels.ts` maps. Nullable `text` column (`drizzle/0030_misty_titania.sql`), `Todo.category`/`UpdateTodoInput.category`/`TodoListFilter.category` in `domain.ts`, mapper + repository insert/update/filter + new `listCategories` (distinct values) through catalog and controller, zod field in `todos.remote.ts`. UI: new `todo-category-field.svelte` (text input with a datalist of existing categories, blur/Enter commit, quiet mode), a sortable Category column in `todo-table.svelte` (desktop + mobile card), and an "All categories" Select in the workspace filter bar wired to a `category` URL param on both todos pages. Caveat: the local dev DB had drifted from the migration journal (0017+ never applied, `agent_tool_effects` missing), so `pnpm db:migrate` fails on pre-existing history; the `category` column was applied manually with `ADD COLUMN IF NOT EXISTS`.
 

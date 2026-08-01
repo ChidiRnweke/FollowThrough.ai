@@ -1,4 +1,4 @@
-import type { ProseMirrorDocument } from '$lib/models';
+import type { ProseMirrorDocument } from '$lib/models/notes';
 
 export interface ProseMirrorVisitorContext {
 	readonly node: Record<string, unknown>;

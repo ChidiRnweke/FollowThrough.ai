@@ -1,25 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { InMemoryTodos } from '$lib/testing/fakes/in-memory-todos';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	testActor,
 	testProjectId,
 	testTodoId,
 	todoBuilder
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const todos = new InMemoryTodos();
 	return {
 		todos,
-		controller: new Todos({
-			todoLister: todos,
-			todoViewAssembler: todos,
-			todoReader: todos,
-			todoEditor: todos,
-			todoDeleter: todos,
-			todoStatusChanger: todos
-		} as unknown as TodosDependencies)
+		controller: new Todos(
+			capabilityDependencies<TodosDependencies>({
+				todoLister: todos,
+				todoViewAssembler: todos,
+				todoReader: todos,
+				todoEditor: todos,
+				todoDeleter: todos,
+				todoStatusChanger: todos
+			})
+		)
 	};
 };
 
@@ -59,7 +62,7 @@ describe('Todo edit invariants', () => {
 		expect(result.todo.category).toBe('Client work');
 	});
 
-	it('clears a category when explicitly set to null or blank', async () => {
+	it('clears a category when explicitly set to null or blank (1/2)', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ category: 'Client work' }), todoBuilder({ id: testTodoId(2) })];
 		const cleared = await controller.update(testActor(), {
@@ -67,6 +70,19 @@ describe('Todo edit invariants', () => {
 			category: null
 		});
 		expect(cleared.todo.category).toBeUndefined();
+		const _blanked = await controller.update(testActor(), {
+			todoId: testTodoId(2),
+			category: '   '
+		});
+	});
+
+	it('clears a category when explicitly set to null or blank (2/2)', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder({ category: 'Client work' }), todoBuilder({ id: testTodoId(2) })];
+		const _cleared = await controller.update(testActor(), {
+			todoId: testTodoId(),
+			category: null
+		});
 		const blanked = await controller.update(testActor(), {
 			todoId: testTodoId(2),
 			category: '   '

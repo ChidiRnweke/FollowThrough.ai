@@ -1,11 +1,7 @@
-import type {
-	ActorContext,
-	AttachmentId,
-	AttachmentUpload,
-	AttachmentView,
-	NoteId,
-	ProjectId
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { AttachmentId, AttachmentUpload, AttachmentView } from '$lib/models/attachments';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 
 /** One ordered piece of OCR output, in the document's reading order. */
 export type OcrContentPart =

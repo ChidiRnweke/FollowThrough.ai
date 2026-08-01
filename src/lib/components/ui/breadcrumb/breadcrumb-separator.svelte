@@ -4,7 +4,7 @@
 	import { FtChevronRight as ChevronRightIcon } from '$lib/components/icons';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		children,
 		...restProps

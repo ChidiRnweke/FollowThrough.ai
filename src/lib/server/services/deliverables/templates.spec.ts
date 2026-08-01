@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { ExtractedTemplateStyles, ProjectTemplate, TemplateId } from '$lib/models';
+import type { ExtractedTemplateStyles, TemplateId } from '$lib/models/deliverables';
+import type { ProjectTemplate } from '$lib/models/projects';
 import { DocumentTemplates } from './templates';
 import {
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
-} from '$lib/testing/fakes/in-memory-deliverables';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { testActor, testNow, testProjectId } from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const templateId = '00000000-0000-4000-8000-000000000091' as TemplateId;
 const template = (overrides: Partial<ProjectTemplate> = {}): ProjectTemplate => ({

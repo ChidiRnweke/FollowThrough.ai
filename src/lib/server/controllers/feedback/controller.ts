@@ -1,4 +1,4 @@
-import type { ActorContext } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
 export interface FeedbackReport {
 	readonly body: string;
 	readonly url: string;

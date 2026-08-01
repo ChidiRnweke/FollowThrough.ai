@@ -20,7 +20,16 @@ const environment = {
 	INFISICAL_ADMIN_CLIENT_SECRET: 'admin-secret'
 };
 
-class FakeSecretClient {
+interface ProvisionerSecretClient {
+	auth(): { universalAuth: { login(): Promise<void> } };
+	secrets(): {
+		listSecrets(): Promise<unknown>;
+		updateSecret(): Promise<void>;
+		createSecret(): Promise<void>;
+	};
+}
+
+class FakeSecretClient implements ProvisionerSecretClient {
 	values: Record<string, string>;
 	error: Error | undefined;
 

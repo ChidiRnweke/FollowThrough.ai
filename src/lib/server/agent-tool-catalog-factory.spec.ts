@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ControllerFactory } from '$lib/server/controller-factory';
-import { testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
+import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describeAgentTools } from './agent-tool-catalog-factory';
 import { AgentTools, LOCKED_TOOL_NAMES } from './agent-tool-factory';
 

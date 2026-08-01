@@ -1,21 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import type { PromiseCandidate, TextSelection } from '$lib/models';
+import type { PromiseCandidate } from '$lib/models/todos';
+import type { TextSelection } from '$lib/models/notes';
 import { Todos, type TodosDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
-import { InMemoryTodos } from '$lib/testing/fakes/in-memory-todos';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import {
 	InMemoryPromiseExtractor,
 	InMemoryProvenanceRecorder,
 	InMemoryTrustPolicyEvaluator
-} from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+} from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),
@@ -44,17 +46,19 @@ const setup = () => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	const todos = new InMemoryTodos();
 	content.notes = [noteBuilder({ plainText: selection.text })];
-	const controller = new Todos({
-		anchorCreator: content,
-		promiseExtractor: extractor,
-		provenanceRecorder: provenance,
-		suggestionCreator: suggestions,
-		trustPolicyEvaluator: trust,
-		todoCreator: todos,
-		suggestionAccepter: suggestions,
-		noteReader: content,
-		transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions, todos])
-	} as unknown as TodosDependencies);
+	const controller = new Todos(
+		capabilityDependencies<TodosDependencies>({
+			anchorCreator: content,
+			promiseExtractor: extractor,
+			provenanceRecorder: provenance,
+			suggestionCreator: suggestions,
+			trustPolicyEvaluator: trust,
+			todoCreator: todos,
+			suggestionAccepter: suggestions,
+			noteReader: content,
+			transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions, todos])
+		})
+	);
 	return { content, extractor, provenance, suggestions, trust, todos, controller };
 };
 

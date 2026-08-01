@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
-import type { ProseMirrorDocument } from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
 
 const TINY_PNG =
@@ -150,7 +150,7 @@ describe('Pdf generation invariants', () => {
 		expect(placed.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('renders both large diagrams inline, without landscape pages', async () => {
+	it('renders both large diagrams inline, without landscape pages (1/5)', async () => {
 		// Two diagrams far wider than the content box: the old export promoted them to
 		// emulated landscape pages, which blanked the pages around them and swallowed
 		// the second diagram.
@@ -175,12 +175,124 @@ describe('Pdf generation invariants', () => {
 		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
 		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
 		// when it draws it onto a page.
+		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
+		const _text = pdfText(buffer);
+	});
+
+	it('renders both large diagrams inline, without landscape pages (2/5)', async () => {
+		// Two diagrams far wider than the content box: the old export promoted them to
+		// emulated landscape pages, which blanked the pages around them and swallowed
+		// the second diagram.
+		const secondSource = 'flowchart LR\n  C --> D';
+		const wide: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: wide }],
+			title: 'Export',
+			diagramPngs: {
+				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
+				[mermaidSourceHash(secondSource)]: TINY_PNG
+			}
+		});
+		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
+		// when it draws it onto a page.
 		const placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		expect(placed.length).toBeGreaterThanOrEqual(2);
+		const _text = pdfText(buffer);
+	});
+
+	it('renders both large diagrams inline, without landscape pages (3/5)', async () => {
+		// Two diagrams far wider than the content box: the old export promoted them to
+		// emulated landscape pages, which blanked the pages around them and swallowed
+		// the second diagram.
+		const secondSource = 'flowchart LR\n  C --> D';
+		const wide: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: wide }],
+			title: 'Export',
+			diagramPngs: {
+				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
+				[mermaidSourceHash(secondSource)]: TINY_PNG
+			}
+		});
+		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
+		// when it draws it onto a page.
+		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		// A landscape A4 MediaBox would be the portrait box swapped.
 		expect(buffer.toString('latin1')).not.toContain('841.89 595.28');
+		const _text = pdfText(buffer);
+	});
+
+	it('renders both large diagrams inline, without landscape pages (4/5)', async () => {
+		// Two diagrams far wider than the content box: the old export promoted them to
+		// emulated landscape pages, which blanked the pages around them and swallowed
+		// the second diagram.
+		const secondSource = 'flowchart LR\n  C --> D';
+		const wide: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: wide }],
+			title: 'Export',
+			diagramPngs: {
+				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
+				[mermaidSourceHash(secondSource)]: TINY_PNG
+			}
+		});
+		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
+		// when it draws it onto a page.
+		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		const text = pdfText(buffer);
 		expect(text).toContain('Before the diagrams.');
+	});
+
+	it('renders both large diagrams inline, without landscape pages (5/5)', async () => {
+		// Two diagrams far wider than the content box: the old export promoted them to
+		// emulated landscape pages, which blanked the pages around them and swallowed
+		// the second diagram.
+		const secondSource = 'flowchart LR\n  C --> D';
+		const wide: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: wide }],
+			title: 'Export',
+			diagramPngs: {
+				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
+				[mermaidSourceHash(secondSource)]: TINY_PNG
+			}
+		});
+		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
+		// when it draws it onto a page.
+		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
+		const text = pdfText(buffer);
 		expect(text).toContain('After the diagrams.');
 	});
 
@@ -206,7 +318,7 @@ describe('Pdf generation invariants', () => {
 		expect(buffer.toString('latin1')).toContain('NotoSerif');
 	});
 
-	it('renders emoji and symbols through fallback fonts', async () => {
+	it('renders emoji and symbols through fallback fonts (1/2)', async () => {
 		const withEmoji: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -226,13 +338,35 @@ describe('Pdf generation invariants', () => {
 			title: 'Export'
 		});
 		expect(buffer.toString('latin1')).toContain('NotoEmoji');
+		const _text = pdfText(buffer);
+	});
+
+	it('renders emoji and symbols through fallback fonts (2/2)', async () => {
+		const withEmoji: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'heading',
+					attrs: { level: 1 },
+					content: [{ type: 'text', text: 'Launch 🚀 update' }]
+				},
+				{
+					type: 'paragraph',
+					content: [{ type: 'text', text: 'Family 👨‍👩‍👧 done ✅ naïve → and ≠' }]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withEmoji }],
+			title: 'Export'
+		});
 		const text = pdfText(buffer);
 		for (const expected of ['Launch', '🚀', '👨', '👩', '👧', '✅', 'naïve', '→', '≠']) {
 			expect(text).toContain(expected);
 		}
 	});
 
-	it('renders tables as a grid, keeping cell text and spans', async () => {
+	it('renders tables as a grid, keeping cell text and spans (1/2)', async () => {
 		const cell = (text: string) => ({
 			type: 'tableCell',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
@@ -264,6 +398,40 @@ describe('Pdf generation invariants', () => {
 			title: 'Export'
 		});
 		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+		const _text = pdfText(buffer);
+	});
+
+	it('renders tables as a grid, keeping cell text and spans (2/2)', async () => {
+		const cell = (text: string) => ({
+			type: 'tableCell',
+			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+		});
+		const header = (text: string) => ({
+			type: 'tableHeader',
+			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+		});
+		const withTable: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'table',
+					content: [
+						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
+							]
+						},
+						{ type: 'tableRow', content: [cell('RevenueUp'), cell('FortyTwo')] }
+					]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withTable }],
+			title: 'Export'
+		});
 		const text = pdfText(buffer);
 		for (const expected of [
 			'QuarterlyMetric',
@@ -276,7 +444,7 @@ describe('Pdf generation invariants', () => {
 		}
 	});
 
-	it('renders code blocks in a panel, keeping indentation and dropping the language', async () => {
+	it('renders code blocks in a panel, keeping indentation and dropping the language (1/3)', async () => {
 		const withCode: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -299,16 +467,75 @@ describe('Pdf generation invariants', () => {
 		const text = pdfText(buffer);
 		// The codeBlock's language attribute is editor metadata, not document content.
 		expect(text).not.toContain('TS');
+	});
+
+	it('renders code blocks in a panel, keeping indentation and dropping the language (2/3)', async () => {
+		const withCode: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'codeBlock',
+					attrs: { language: 'ts' },
+					content: [
+						{
+							type: 'text',
+							text: 'function answer() {\n  const answer = 42;\n  return answer;\n}'
+						}
+					]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withCode }],
+			title: 'Export'
+		});
+		const text = pdfText(buffer);
 		expect(text).toContain('  const answer = 42;');
+	});
+
+	it('renders code blocks in a panel, keeping indentation and dropping the language (3/3)', async () => {
+		const withCode: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'codeBlock',
+					attrs: { language: 'ts' },
+					content: [
+						{
+							type: 'text',
+							text: 'function answer() {\n  const answer = 42;\n  return answer;\n}'
+						}
+					]
+				}
+			]
+		};
+		const buffer = await generatePdf({
+			notes: [{ title: 'Note', document: withCode }],
+			title: 'Export'
+		});
+		const text = pdfText(buffer);
 		expect(text).toContain('  return answer;');
 	});
 
-	it('omits the file name from the page unless includeTitle is set', async () => {
+	it('omits the file name from the page unless includeTitle is set (1/2)', async () => {
 		const titled = await generatePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
 		});
 		expect(pdfText(titled)).not.toContain('ZebraQuarterlyReport');
+
+		const _withTitle = await generatePdf({
+			notes: [{ title: 'Note', document }],
+			title: 'ZebraQuarterlyReport',
+			settings: { ...defaultExportSettings, includeTitle: true }
+		});
+	});
+
+	it('omits the file name from the page unless includeTitle is set (2/2)', async () => {
+		const _titled = await generatePdf({
+			notes: [{ title: 'Note', document }],
+			title: 'ZebraQuarterlyReport'
+		});
 
 		const withTitle = await generatePdf({
 			notes: [{ title: 'Note', document }],

@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { InMemorySkillCreator } from '$lib/testing/fakes/in-memory-diagram-skills';
+import { InMemorySkillCreator } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const noteRepository = new InMemoryNoteRepository();
@@ -22,11 +23,13 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const notes = new NoteCatalog(noteRepository, new InMemoryAnchorRepository(), projects);
 	const skills = new InMemorySkillCreator();
-	const controller = new Skills({
-		skillCreator: skills,
-		noteCreator: notes,
-		transactionRunner: new InMemoryTransactionRunner([skills])
-	} as unknown as SkillsDependencies);
+	const controller = new Skills(
+		capabilityDependencies<SkillsDependencies>({
+			skillCreator: skills,
+			noteCreator: notes,
+			transactionRunner: new InMemoryTransactionRunner([skills])
+		})
+	);
 	return { controller, skills, noteRepository };
 };
 

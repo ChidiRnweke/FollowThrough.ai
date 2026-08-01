@@ -1,11 +1,13 @@
 import OpenAI from 'openai';
-import type { ActorContext, ReferenceCandidate, TextSelection, Url } from '$lib/models';
-import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
+import type { ActorContext } from '$lib/models/identity';
 import {
 	openRouterWebSearchTool,
 	REFERENCE_WEB_SEARCH_DEFAULTS,
 	webSearchOptionsFromEnvironment
-} from '$lib/server/services/agent-runs/web-research';
+} from '$lib/models/agent';
+import type { ReferenceCandidate, Url } from '$lib/models/references';
+import type { TextSelection } from '$lib/models/notes';
+import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 interface OperationObserver {
 	run<T>(
 		name: string,

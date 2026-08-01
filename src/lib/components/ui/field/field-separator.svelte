@@ -5,7 +5,7 @@
 	import type { Snippet } from 'svelte';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		children,
 		...restProps

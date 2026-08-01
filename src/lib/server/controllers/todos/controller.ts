@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateTodoInput,
 	ExtractPromisesInput,
 	ExtractPromisesOutput,
@@ -11,25 +11,26 @@ import type {
 	TodoView,
 	UpdateTodoInput,
 	UpdateTodoOutput
-} from '$lib/models';
+} from '$lib/models/todos';
 import { InvalidGeneratedContentError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { NoteReader, SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
-	NoteReader,
-	PromiseExtractor,
-	ProvenanceRecorder,
-	SelectionAnchorCreator,
 	SuggestionAccepter,
-	SuggestionCreator,
+	SuggestionCreator
+} from '$lib/server/services/suggestions/contracts';
+import type {
 	TodoCreator,
 	TodoDeleter,
 	TodoEditor,
 	TodoLister,
 	TodoReader,
 	TodoStatusChanger,
-	TodoViewAssembler,
-	TrustPolicyEvaluator
-} from '$lib/server/services';
+	TodoViewAssembler
+} from '$lib/server/services/todos/contracts';
+import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
 export interface TodosController {
 	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;

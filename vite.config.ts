@@ -24,6 +24,9 @@ export default defineConfig({
 		managedConfiguration(),
 		tailwindcss(),
 		sveltekit({
+			prerender: {
+				entries: ['/offline']
+			},
 			compilerOptions: {
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true,

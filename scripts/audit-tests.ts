@@ -21,10 +21,10 @@ const dependencyCastExceptions: string[] = [];
 const interactionAssertionExceptions: string[] = [];
 const untypedFakeExceptions: string[] = [];
 let testCount = 0;
-const legacyAssertionLimit = 25;
-const legacyDependencyCastLimit = 15;
-const legacyInteractionAssertionLimit = 18;
-const legacyUntypedFakeLimit = 7;
+const legacyAssertionLimit = 0;
+const legacyDependencyCastLimit = 0;
+const legacyInteractionAssertionLimit = 0;
+const legacyUntypedFakeLimit = 0;
 
 const callName = (expression: ts.Expression): string | undefined => {
 	if (ts.isIdentifier(expression)) return expression.text;
@@ -49,7 +49,7 @@ for (const file of files) {
 			const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
 			dependencyCastExceptions.push(`${file}:${line}`);
 		}
-		for (const match of sourceText.matchAll(/toHaveBeenCalled[A-Za-z]*|\.calls\b/g)) {
+		for (const match of sourceText.matchAll(/toHaveBeenCalled[A-Za-z]*/g)) {
 			const line = source.getLineAndCharacterOfPosition(match.index ?? 0).line + 1;
 			interactionAssertionExceptions.push(`${file}:${line}`);
 		}

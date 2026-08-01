@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { SkillLibrary } from './library';
 import { SkillManifestCodec } from './manifest';
-import { InMemorySkillRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
-import { InMemoryNoteRepository } from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId,
 	testNow,
 	testProvenanceId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const skills = new InMemorySkillRepository();
@@ -120,7 +120,7 @@ describe('Skill management invariants', () => {
 		expect(skills.usages[0]?.contextNoteId).toBe(testNoteId(2));
 	});
 
-	it('updates skill metadata without touching the note or its revision history', async () => {
+	it('updates skill metadata without touching the note or its revision history (1/4)', async () => {
 		const { service, skills, notes } = setup();
 		const skillNote = noteBuilder({
 			kind: 'skill',
@@ -144,8 +144,83 @@ describe('Skill management invariants', () => {
 			isEnabled: false
 		});
 		expect(updated.description).toBe('Use when writing or reviewing decisions');
+	});
+
+	it('updates skill metadata without touching the note or its revision history (2/4)', async () => {
+		const { service, skills, notes } = setup();
+		const skillNote = noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: '## Steps\n1. Write decisions clearly.',
+			currentRevision: 2
+		});
+		notes.notes[0] = skillNote;
+		skills.skills = [
+			{
+				note: skillNote,
+				name: 'Decision writing',
+				description: 'Writes decisions',
+				triggerHints: ['decision'],
+				isEnabled: true
+			}
+		];
+		const updated = await service.update(testActor(), {
+			noteId: skillNote.id,
+			description: 'Use when writing or reviewing decisions',
+			isEnabled: false
+		});
 		expect(updated.isEnabled).toBe(false);
+	});
+
+	it('updates skill metadata without touching the note or its revision history (3/4)', async () => {
+		const { service, skills, notes } = setup();
+		const skillNote = noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: '## Steps\n1. Write decisions clearly.',
+			currentRevision: 2
+		});
+		notes.notes[0] = skillNote;
+		skills.skills = [
+			{
+				note: skillNote,
+				name: 'Decision writing',
+				description: 'Writes decisions',
+				triggerHints: ['decision'],
+				isEnabled: true
+			}
+		];
+		const _updated = await service.update(testActor(), {
+			noteId: skillNote.id,
+			description: 'Use when writing or reviewing decisions',
+			isEnabled: false
+		});
 		expect(notes.notes[0]).toEqual(skillNote);
+	});
+
+	it('updates skill metadata without touching the note or its revision history (4/4)', async () => {
+		const { service, skills, notes } = setup();
+		const skillNote = noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: '## Steps\n1. Write decisions clearly.',
+			currentRevision: 2
+		});
+		notes.notes[0] = skillNote;
+		skills.skills = [
+			{
+				note: skillNote,
+				name: 'Decision writing',
+				description: 'Writes decisions',
+				triggerHints: ['decision'],
+				isEnabled: true
+			}
+		];
+		const _updated = await service.update(testActor(), {
+			noteId: skillNote.id,
+			description: 'Use when writing or reviewing decisions',
+			isEnabled: false
+		});
 		expect(notes.revisions).toHaveLength(0);
 	});
 

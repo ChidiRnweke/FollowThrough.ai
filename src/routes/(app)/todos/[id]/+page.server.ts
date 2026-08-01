@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import type { TodoId } from '$lib/models';
+import type { TodoId } from '$lib/models/todos';
 import { AppFactory } from '$lib/server/app-factory';
-import { safeReturnUrl } from '$lib/utils';
+import { safeReturnUrl } from '$lib/client/todos/return-url';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {

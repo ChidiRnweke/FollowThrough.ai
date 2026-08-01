@@ -1,4 +1,5 @@
-import type { DiagramId, NoteId } from '$lib/models';
+import type { DiagramId } from '$lib/models/diagrams';
+import type { NoteId } from '$lib/models/notes';
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 

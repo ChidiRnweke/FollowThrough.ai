@@ -1,4 +1,4 @@
-import type { ProjectId } from '$lib/models';
+import type { ProjectId } from '$lib/models/projects';
 import { AppFactory } from '$lib/server/app-factory';
 import type { PageServerLoad } from './$types';
 

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import AttachmentList from '$lib/components/app/attachment-list.svelte';
+	import AttachmentList from '$lib/components/attachments/attachment-list.svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
 
 	let { data } = $props();
 

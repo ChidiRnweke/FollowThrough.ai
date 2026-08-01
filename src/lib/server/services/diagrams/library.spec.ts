@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { DiagramLibrary } from './library';
-import { InMemoryDiagramRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
+import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
-import { mermaidBuilder } from '$lib/testing/fakes/in-memory-diagram-skills';
-import { noteBuilder, testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { mermaidBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import {
+	noteBuilder,
+	testActor,
+	testNoteId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();

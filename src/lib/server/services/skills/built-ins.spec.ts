@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROJECT_NAME } from '$lib/models';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
-import { InMemoryNoteRepository } from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemorySkillRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
-import { noteBuilder, projectBuilder, testActor } from '$lib/testing/fixtures/domain-builders';
+import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import {
+	noteBuilder,
+	projectBuilder,
+	testActor
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { BuiltInSkills } from './built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
 

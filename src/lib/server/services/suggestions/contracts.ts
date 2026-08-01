@@ -1,18 +1,17 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { CreateReferenceInput } from '$lib/models/references';
+import type { CreateRelationshipInput } from '$lib/models/relationships';
+import type { CreateTodoInput } from '$lib/models/todos';
+import type { DiagramKind } from '$lib/models/diagrams';
+import type { MemoryChangePayload } from '$lib/models/memory';
+import type { NoteId } from '$lib/models/notes';
+import type { ProvenanceId, SourceAnchorId } from '$lib/models/provenance';
 import type {
-	ActorContext,
-	CreateReferenceInput,
-	CreateRelationshipInput,
-	CreateTodoInput,
-	DiagramKind,
-	MemoryChangePayload,
-	NoteId,
-	ProvenanceId,
-	SourceAnchorId,
 	Suggestion,
 	SuggestionId,
 	SuggestionStatus,
 	SuggestionView
-} from '$lib/models';
+} from '$lib/models/suggestions';
 
 export interface SuggestionProposalBase {
 	readonly noteId?: NoteId;

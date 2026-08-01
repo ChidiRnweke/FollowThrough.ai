@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
-import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
-import { InMemoryProvenanceRecorder } from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { testActor, testNoteId, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import {
+	testActor,
+	testNoteId,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
-import type { InlineMermaidToDrawioConverter } from '$lib/server/services';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import type { InlineMermaidToDrawioConverter } from '$lib/server/services/diagrams/contracts';
 
 class FakeDrawioConverter implements InlineMermaidToDrawioConverter {
 	source = VALID_DRAWIO_XML;
@@ -24,13 +29,15 @@ const setup = () => {
 	const suggestions = new InMemorySuggestions();
 	const provenance = new InMemoryProvenanceRecorder();
 	const converter = new FakeDrawioConverter();
-	const controller = new Diagrams({
-		inlineMermaidToDrawioConverter: converter,
-		drawioXmlValidator: new DrawioXmlValidator(),
-		provenanceRecorder: provenance,
-		suggestionCreator: suggestions,
-		transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
-	} as unknown as DiagramsDependencies);
+	const controller = new Diagrams(
+		capabilityDependencies<DiagramsDependencies>({
+			inlineMermaidToDrawioConverter: converter,
+			drawioXmlValidator: new DrawioXmlValidator(),
+			provenanceRecorder: provenance,
+			suggestionCreator: suggestions,
+			transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
+		})
+	);
 	return { controller, converter, suggestions };
 };
 

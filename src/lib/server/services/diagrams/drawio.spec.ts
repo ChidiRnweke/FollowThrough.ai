@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DrawioLabelExtractor, DrawioSvgSanitizer, DrawioXmlValidator } from './drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 describe('Untrusted draw.io XML invariants', () => {
 	it('accepts uncompressed mxfile graph XML', () => {

@@ -44,7 +44,7 @@ process.stdout.write(
 const { shutdownTelemetry } = await import('./otel-instrumentation.js');
 const { traceOperation, traceWorkflow } = await import('../src/lib/server/services/telemetry.ts');
 const { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } =
-	await import('../src/lib/server/services/retrieval/ranking.ts');
+	await import('../src/lib/server/services/knowledge-search/ranking.ts');
 
 await traceWorkflow(
 	'inline.suggestion',

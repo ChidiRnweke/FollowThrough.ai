@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	DrawioDiagram,
 	ConvertInlineMermaidInput,
 	ConvertInlineMermaidOutput,
@@ -15,9 +15,9 @@ import type {
 	ReviseMermaidDiagramOutput,
 	ReviseInlineMermaidInput,
 	ReviseInlineMermaidOutput
-} from '$lib/models';
+} from '$lib/models/diagrams';
 import { NotFoundError, UnsupportedDiagramOperationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	DiagramFinder,
 	DiagramIndexer,
@@ -30,11 +30,11 @@ import type {
 	InlineMermaidReviser,
 	InlineMermaidToDrawioConverter,
 	DrawioXmlContentValidator,
-	DrawioSvgPreviewSanitizer,
-	ProvenanceRecorder,
-	SelectionAnchorCreator,
-	SuggestionCreator
-} from '$lib/server/services';
+	DrawioSvgPreviewSanitizer
+} from '$lib/server/services/diagrams/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
 export interface DiagramsController {
 	generateMermaid(

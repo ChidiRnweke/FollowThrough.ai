@@ -1,16 +1,13 @@
-import {
-	type ActorContext,
-	type InlineSuggestion,
-	type InlineSuggestionRequest,
-	type Note
-} from '$lib/models';
+import { type ActorContext } from '$lib/models/identity';
+import { type InlineSuggestion, type InlineSuggestionRequest } from '$lib/models/agent';
+import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
+import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
 import type {
-	AgentPreferencesStore,
 	InlineCompletionContextBuilder,
 	InlineCompletionGenerator,
 	InlineSuggestionThrottle
-} from '$lib/server/services';
+} from '$lib/server/services/agent/runs/contracts';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 import { traceWorkflow } from '$lib/server/services/telemetry';
 

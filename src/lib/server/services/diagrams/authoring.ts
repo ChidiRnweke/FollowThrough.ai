@@ -5,28 +5,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import OpenAI from 'openai';
 import { z } from 'zod';
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	AgentEvent,
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
 	Conversation,
 	ConversationId,
+	RunAgentInput,
+	ToolActivity
+} from '$lib/models/agent';
+import type {
 	ConvertInlineMermaidInput,
-	DateTime,
 	DrawioDiagram,
 	MermaidDiagram,
-	NoteId,
-	Provenance,
-	ProvenanceId,
 	ReviseInlineMermaidInput,
-	ReviseInlineMermaidOutput,
-	RunAgentInput,
-	Skill,
-	ToolActivity,
-	TextSelection
-} from '$lib/models';
+	ReviseInlineMermaidOutput
+} from '$lib/models/diagrams';
+import type { DateTime } from '$lib/models/workspace';
+import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { Provenance, ProvenanceId } from '$lib/models/provenance';
+import type { Skill } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 
 export interface MermaidDiagramDraft {
@@ -232,7 +232,7 @@ export interface DiagramAgentDependencies {
 	readonly contextBuilder: AgentContextBuilder;
 	readonly conversations: ConversationJournal;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
-	readonly models: { list(): Promise<readonly import('$lib/models').AgentModel[]> };
+	readonly models: { list(): Promise<readonly import('$lib/models/agent').AgentModel[]> };
 	readonly runs: AgentRunStore;
 	readonly provenance: {
 		record(
@@ -335,7 +335,11 @@ export class DiagramAuthoring {
 	async convertInline(
 		actor: ActorContext,
 		input: ConvertInlineMermaidInput
-	): Promise<{ title: string; source: string; provenanceId?: import('$lib/models').ProvenanceId }> {
+	): Promise<{
+		title: string;
+		source: string;
+		provenanceId?: import('$lib/models/provenance').ProvenanceId;
+	}> {
 		const draft = await this.execute(actor, {
 			operation: 'convert',
 			noteId: input.noteId,
@@ -353,7 +357,7 @@ export class DiagramAuthoring {
 		});
 		const timestamp = now();
 		return {
-			id: crypto.randomUUID() as import('$lib/models').DiagramId,
+			id: crypto.randomUUID() as import('$lib/models/diagrams').DiagramId,
 			userId: actor.userId,
 			noteId: diagram.noteId,
 			kind: 'drawio',

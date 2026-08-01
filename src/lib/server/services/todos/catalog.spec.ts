@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { TodoCatalog } from './catalog';
-import { InMemoryTodoRepository } from '$lib/testing/fakes/in-memory-todo-repository';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -17,7 +17,7 @@ import {
 	testProjectId,
 	testTodoId,
 	todoBuilder
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const todos = new InMemoryTodoRepository();

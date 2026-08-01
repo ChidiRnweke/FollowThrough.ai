@@ -1,17 +1,19 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	ImportMarkdownArchiveInput,
 	ImportMarkdownArchiveOutput,
 	CreateFolderInput,
-	CreateFolderOutput,
+	CreateFolderOutput
+} from '$lib/models/projects';
+import type {
 	CreateNoteInput,
 	CreateNoteOutput,
 	Note,
 	NoteId,
 	SaveNoteInput,
 	SaveNoteOutput
-} from '$lib/models';
-import { resolveWikiLinks } from '$lib/models';
+} from '$lib/models/notes';
+import { resolveWikiLinks } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {

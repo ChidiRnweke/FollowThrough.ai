@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
 	CreateNoteInput,
@@ -19,30 +19,31 @@ import type {
 	SyncNoteOutput,
 	ListNoteSyncInventoryInput,
 	ListNoteSyncInventoryOutput
-} from '$lib/models';
+} from '$lib/models/notes';
 import {
 	collectNoteLinkTargets,
 	noteEtag,
 	noteMatchesEtag,
 	noteSyncContentEquals
-} from '$lib/models';
+} from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	BacklinkViewAssembler,
-	DiagramLister,
-	NoteCreator,
 	NoteLinkReconciler,
-	NoteReader,
-	NoteTreeReader,
+	RelationshipFinder
+} from '$lib/server/services/relationships/contracts';
+import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
+import type { NoteCreator, NoteReader, NoteTreeReader } from '$lib/server/services/notes/contracts';
+import type {
 	ReferenceLister,
-	ReferenceViewAssembler,
-	RelationshipFinder,
+	ReferenceViewAssembler
+} from '$lib/server/services/references/contracts';
+import type {
 	SuggestionLister,
-	SuggestionViewAssembler,
-	TodoLister,
-	TodoViewAssembler
-} from '$lib/server/services';
+	SuggestionViewAssembler
+} from '$lib/server/services/suggestions/contracts';
+import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
 import type {
 	NoteArchiver,
 	NoteEditor,
@@ -51,7 +52,7 @@ import type {
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	SourceAnchorRepairer
-} from '$lib/server/services';
+} from '$lib/server/services/notes/contracts';
 
 export interface NotesController {
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;

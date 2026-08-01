@@ -1,14 +1,14 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	Artifact,
 	ArtifactId,
 	ExportSettings,
 	GenerateDocumentInput,
 	PreviewDocumentInput,
-	ProjectId,
 	ListArtifactsOutput,
 	ListArtifactsParams
-} from '$lib/models';
+} from '$lib/models/deliverables';
+import type { ProjectId } from '$lib/models/projects';
 
 export interface DocumentGenerator {
 	generate(

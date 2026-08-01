@@ -1,9 +1,14 @@
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
-import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
-import { collectImageSources, fetchImages, mermaidSourceHash } from './export-images';
+import type { ExportSettings, ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import { defaultExportSettings } from '$lib/models/deliverables';
+import {
+	collectImageSources,
+	fetchImages,
+	mermaidSourceHash
+} from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };

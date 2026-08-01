@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryStructuredRelationshipClient } from '$lib/testing/fakes/in-memory-pipelines';
+import { InMemoryStructuredRelationshipClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { RelationshipDiscovery } from './discovery';
 
 describe('Relationship classification invariants', () => {

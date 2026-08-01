@@ -1,9 +1,9 @@
 import { AppFactory } from '$lib/server/app-factory';
-import { DEFAULT_MAX_TURNS } from '$lib/server/services/agent-runs/reasoning';
 import {
 	CHAT_WEB_SEARCH_DEFAULTS,
+	DEFAULT_AGENT_MAX_TURNS,
 	webSearchOptionsFromEnvironment
-} from '$lib/server/services/agent-runs/web-research';
+} from '$lib/models/agent';
 import type { PageServerLoad } from './$types';
 
 // Not exported: SvelteKit only permits `load`/`actions`/etc. out of a
@@ -27,7 +27,7 @@ const numericDefaults = () => {
 		webSearchMaxResults: environment.maxResults ?? CHAT_WEB_SEARCH_DEFAULTS.maxResults,
 		webSearchMaxTotalResults:
 			environment.maxTotalResults ?? CHAT_WEB_SEARCH_DEFAULTS.maxTotalResults,
-		agentMaxTurns: DEFAULT_MAX_TURNS
+		agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
 	};
 };
 

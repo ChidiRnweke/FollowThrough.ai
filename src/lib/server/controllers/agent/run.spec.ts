@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRunId, DateTime, RunAgentInput } from '$lib/models';
-import { ConversationArchive } from '$lib/server/services';
-import { InMemoryAgentRunPersistence } from '$lib/testing/fakes/in-memory-agent-runs';
-import { InMemoryAgentSessionRepository } from '$lib/testing/fakes/in-memory-agent-sessions';
-import { InMemoryConversationRepository } from '$lib/testing/fakes/in-memory-conversations';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
+import type { DateTime } from '$lib/models/workspace';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	appContextBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { Agent } from './controller';
-import type { AgentRunLifecycle } from '$lib/server/services/agent-runs/lifecycle';
+import type { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
 
 const noopExecutor: AgentRunLifecycle = {
 	execute: async () => 'completed',
@@ -303,7 +304,7 @@ describe('durable agent lifecycle commands', () => {
 		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(2);
 	});
 
-	it('records nothing when one call in a batch is not pending', async () => {
+	it('records nothing when one call in a batch is not pending (1/2)', async () => {
 		const { controller, runs } = setup();
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000010',
@@ -322,6 +323,20 @@ describe('durable agent lifecycle commands', () => {
 				decision: 'approve'
 			})
 		).rejects.toThrow('The pending tool call was not found');
+	});
+
+	it('records nothing when one call in a batch is not pending (2/2)', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-000000000010',
+			input: 'Do both'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = {
+			...original,
+			status: 'awaiting_approval',
+			pendingDecisions: [{ callId: 'call-a', toolName: 'create_todo', arguments: {} }]
+		};
 		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(0);
 	});
 

@@ -1,24 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentVersion,
 	AttachmentVersionId,
 	AttachmentView
-} from '$lib/models';
+} from '$lib/models/attachments';
 import type {
 	AttachmentRepository,
-	NoteRepository,
 	OwnedAttachmentUpload
-} from '$lib/server/repositories';
+} from '$lib/server/repositories/attachments/attachments';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import {
 	AttachmentParserRegistry,
 	type AttachmentParser,
 	type IAttachmentStorage,
 	type StoredObjectInfo
 } from '$lib/server/services/attachments/storage';
-import { testActor, testNow, testProjectId } from '$lib/testing/fixtures/domain-builders';
+import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DocumentOcr, ImageDescriber, OcrParseInput } from './content';
 import { AttachmentLibrary } from './library';
 
@@ -225,17 +225,23 @@ describe('attachment processing OCR routing', () => {
 		expect(ocr.calls[0].maxPages).toBe(25);
 	});
 
-	it('sends office documents to OCR instead of reporting them unsupported', async () => {
-		const { service, repository, ocr } = setup();
+	it('sends office documents to OCR instead of reporting them unsupported (1/2)', async () => {
+		const { service, repository, ocr: _ocr } = setup();
 
 		await process(service, view('application/octet-stream', 'report.docx'));
 
 		expect(finalUpdate(repository).parserKind).toBe('ocr');
+	});
+
+	it('sends office documents to OCR instead of reporting them unsupported (2/2)', async () => {
+		const { service, repository: _repository, ocr } = setup();
+
+		await process(service, view('application/octet-stream', 'report.docx'));
 		expect(ocr.calls[0].kind).toBe('document');
 	});
 
-	it('decodes text-ish files locally rather than spending an OCR call', async () => {
-		const { service, repository, textParser, ocr } = setup();
+	it('decodes text-ish files locally rather than spending an OCR call (1/3)', async () => {
+		const { service, repository, textParser: _textParser, ocr: _ocr } = setup();
 
 		await process(service, view('text/markdown', 'notes.md'));
 
@@ -243,7 +249,19 @@ describe('attachment processing OCR routing', () => {
 			parserKind: 'text',
 			extractedText: 'decoded text'
 		});
+	});
+
+	it('decodes text-ish files locally rather than spending an OCR call (2/3)', async () => {
+		const { service, repository: _repository, textParser, ocr: _ocr } = setup();
+
+		await process(service, view('text/markdown', 'notes.md'));
 		expect(textParser.calls).toBe(1);
+	});
+
+	it('decodes text-ish files locally rather than spending an OCR call (3/3)', async () => {
+		const { service, repository: _repository, textParser: _textParser, ocr } = setup();
+
+		await process(service, view('text/markdown', 'notes.md'));
 		expect(ocr.calls).toHaveLength(0);
 	});
 
@@ -259,12 +277,18 @@ describe('attachment processing OCR routing', () => {
 		});
 	});
 
-	it('reports a format the engine does not accept as unsupported', async () => {
-		const { service, repository, ocr } = setup();
+	it('reports a format the engine does not accept as unsupported (1/2)', async () => {
+		const { service, repository, ocr: _ocr } = setup();
 
 		await process(service, view('application/zip', 'bundle.zip'));
 
 		expect(finalUpdate(repository).processingStatus).toBe('unsupported');
+	});
+
+	it('reports a format the engine does not accept as unsupported (2/2)', async () => {
+		const { service, repository: _repository, ocr } = setup();
+
+		await process(service, view('application/zip', 'bundle.zip'));
 		expect(ocr.calls).toHaveLength(0);
 	});
 });

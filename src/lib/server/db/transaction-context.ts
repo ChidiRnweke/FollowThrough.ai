@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { TransactionRunner } from '$lib/server/repositories';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 interface TransactionalDatabase {
 	transaction<T>(work: (transaction: unknown) => Promise<T>): Promise<T>;

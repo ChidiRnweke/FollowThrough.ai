@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { ActorContext, ApiToken, ApiTokenId, ApiTokenScope, UserId } from '$lib/models';
+import type {
+	ActorContext,
+	ApiToken,
+	ApiTokenId,
+	ApiTokenScope,
+	UserId
+} from '$lib/models/identity';
 import type {
 	IAccessTokens,
 	MintedApiToken,
 	VerifiedApiToken
 } from '$lib/server/services/identity/api-tokens';
-import { testActor, testNow } from '$lib/testing/fixtures/domain-builders';
+import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ApiTokens } from './controller';
 
 const tokenId = '00000000-0000-4000-8000-000000000071' as ApiTokenId;

@@ -3,13 +3,14 @@ import {
 	APPLICATION_DEFAULTS,
 	EnvSecretsBackend,
 	InfisicalSecretsBackend,
+	type InfisicalLikeClient,
 	SecretsNotFoundError,
 	SecretsReader,
 	hydrateEnvironment,
 	mergePlatformEnvironment
 } from './config';
 
-class FakeSecretsClient {
+class FakeSecretsClient implements InfisicalLikeClient {
 	calls = 0;
 	failures = 0;
 	logins = 0;
@@ -64,7 +65,8 @@ const infisicalBackend = (
 
 const applicationSecrets = () => ({
 	DATABASE_URL: 'postgresql://app',
-	OPENROUTER_API_KEY: 'router-key'
+	OPENROUTER_API_KEY: 'router-key',
+	MISTRAL_API_KEY: 'mistral-key'
 });
 
 describe('secrets backends', () => {

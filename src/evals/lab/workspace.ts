@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import type { ActorContext, LocalDate, NoteId, ProjectId, TodoId, UserId } from '$lib/models';
+import type { ActorContext, UserId } from '$lib/models/identity';
+import type { LocalDate } from '$lib/models/workspace';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 import type { Lab } from './application';
 
 export interface SeedNote {

@@ -1,11 +1,10 @@
-import type { ActorContext, RelateSelectionInput, RelateSelectionOutput } from '$lib/models';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
-import type {
-	LinkFinder,
-	ProvenanceRecorder,
-	SelectionAnchorCreator,
-	SuggestionCreator
-} from '$lib/server/services';
+import type { ActorContext } from '$lib/models/identity';
+import type { RelateSelectionInput, RelateSelectionOutput } from '$lib/models/relationships';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { LinkFinder } from '$lib/server/services/relationships/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
 export interface RelationshipsController {
 	suggestFromSelection(

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
-	import type { DiagramId, DrawioDiagram } from '$lib/models';
+	import type { DiagramId, DrawioDiagram } from '$lib/models/diagrams';
 	import { Button } from '$lib/components/ui/button';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { NodeViewWrapper } from './index.js';
-	import SafeSvgPreview from '$lib/components/app/safe-svg-preview.svelte';
+	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 
 	const { node, extension }: NodeViewProps = $props();
 	const options = $derived(

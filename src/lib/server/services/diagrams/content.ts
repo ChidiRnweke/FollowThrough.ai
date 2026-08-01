@@ -1,11 +1,8 @@
-import type {
-	ActorContext,
-	DateTime,
-	Diagram,
-	MermaidDiagram,
-	ProvenanceId,
-	TextSelection
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { Diagram, MermaidDiagram } from '$lib/models/diagrams';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
@@ -41,8 +38,8 @@ export class DiagramContent {
 
 	async reviseInline(
 		_actor: ActorContext,
-		input: import('$lib/models').ReviseInlineMermaidInput
-	): Promise<import('$lib/models').ReviseInlineMermaidOutput> {
+		input: import('$lib/models/diagrams').ReviseInlineMermaidInput
+	): Promise<import('$lib/models/diagrams').ReviseInlineMermaidOutput> {
 		void _actor;
 		return { source: `${input.source}\n%% ${input.instruction}` };
 	}

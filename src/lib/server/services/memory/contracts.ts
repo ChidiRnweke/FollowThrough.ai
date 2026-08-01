@@ -1,14 +1,14 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateMemoryEntryInput,
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
 	MemorySuggestion,
-	ProvenanceId,
 	UpdateMemoryEntryInput
-} from '$lib/models';
-import type { MemoryEntryListFilter } from '$lib/server/repositories';
+} from '$lib/models/memory';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 
 export interface MemoryEntryReader {
 	get(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;

@@ -4,7 +4,7 @@ import {
 	type Note,
 	type NoteEdit,
 	type NotePatchFailure
-} from '$lib/models';
+} from '$lib/models/notes';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent

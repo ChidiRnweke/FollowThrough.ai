@@ -1,21 +1,21 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateTodoInput,
-	DateTime,
 	Todo,
 	TodoId,
 	TodoListFilter,
 	TodoStatus,
 	TodoView
-} from '$lib/models';
+} from '$lib/models/todos';
+import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type {
-	NoteRepository,
-	ProjectRepository,
 	ProvenanceRepository,
-	SourceAnchorRepository,
-	TodoRepository
-} from '$lib/server/repositories';
+	SourceAnchorRepository
+} from '$lib/server/repositories/provenance';
+import type { TodoRepository } from '$lib/server/repositories/todos/todos';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class TodoCatalog {

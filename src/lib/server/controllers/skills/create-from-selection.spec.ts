@@ -1,22 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemorySkillCreator } from '$lib/testing/fakes/in-memory-diagram-skills';
-import { InMemoryProvenanceRecorder } from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { noteBuilder, testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemorySkillCreator } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import {
+	noteBuilder,
+	testActor,
+	testNoteId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder({ plainText: 'Always capture consequences.' })];
 	const skills = new InMemorySkillCreator();
 	const provenance = new InMemoryProvenanceRecorder();
-	const controller = new Skills({
-		anchorCreator: notes,
-		skillCreator: skills,
-		provenanceRecorder: provenance,
-		transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills])
-	} as unknown as SkillsDependencies);
+	const controller = new Skills(
+		capabilityDependencies<SkillsDependencies>({
+			anchorCreator: notes,
+			skillCreator: skills,
+			provenanceRecorder: provenance,
+			transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills])
+		})
+	);
 	return { controller, notes, skills, provenance };
 };
 

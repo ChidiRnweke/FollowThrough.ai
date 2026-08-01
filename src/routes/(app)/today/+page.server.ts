@@ -1,5 +1,5 @@
 import { AppFactory } from '$lib/server/app-factory';
-import { todayLocalDate } from '$lib/components/app/labels';
+import { todayLocalDate } from '$lib/client/todos/local-date';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {

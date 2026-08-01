@@ -4,15 +4,16 @@ import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNoteId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
@@ -20,11 +21,13 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const indexer = new InMemoryNoteContent();
-	const controller = new Notes({
-		noteArchiver: service,
-		noteIndexer: indexer,
-		transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
-	} as unknown as NotesDependencies);
+	const controller = new Notes(
+		capabilityDependencies<NotesDependencies>({
+			noteArchiver: service,
+			noteIndexer: indexer,
+			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
+		})
+	);
 	return { notes, controller, indexer };
 };
 

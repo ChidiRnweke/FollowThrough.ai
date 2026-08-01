@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SuggestionInbox } from './inbox';
 import { ExpiringSuggestionLister } from './expiring-lister';
-import { InMemorySuggestionRepository } from '$lib/testing/fakes/in-memory-suggestion-repository';
+import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -15,7 +15,7 @@ import {
 	testNow,
 	testProvenanceId,
 	testSuggestionId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const suggestions = new InMemorySuggestionRepository();

@@ -1,5 +1,5 @@
-import type { Session, SessionId, User, UserId } from '$lib/models';
-import type { SessionRepository, UserRepository } from '$lib/server/repositories';
+import type { Session, SessionId, User, UserId } from '$lib/models/identity';
+import type { SessionRepository, UserRepository } from '$lib/server/repositories/identity';
 export interface OAuthTokens {
 	access_token: string;
 	token_type: string;

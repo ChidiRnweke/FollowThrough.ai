@@ -4,7 +4,7 @@
 	import { useSidebar } from './context.svelte.js';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		children,
 		...restProps

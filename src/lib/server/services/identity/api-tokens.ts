@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto';
-import type { ActorContext, ApiToken, ApiTokenId, ApiTokenScope, User, UserId } from '$lib/models';
-import type { ApiTokenRepository } from '$lib/server/repositories';
+import type {
+	ActorContext,
+	ApiToken,
+	ApiTokenId,
+	ApiTokenScope,
+	User,
+	UserId
+} from '$lib/models/identity';
+import type { ApiTokenRepository } from '$lib/server/repositories/identity';
 
 /** Distinguishes our credentials from anything else pasted into a client config. */
 const TOKEN_PREFIX = 'ftm_';

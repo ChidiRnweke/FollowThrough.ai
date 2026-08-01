@@ -1,12 +1,9 @@
-import type {
-	ActorContext,
-	AttachmentId,
-	AttachmentUploadId,
-	NoteId,
-	ProjectId
-} from '$lib/models';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
-import type { AttachmentManager } from '$lib/server/services';
+import type { ActorContext } from '$lib/models/identity';
+import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
 
 export interface AttachmentsController {
 	initiate(

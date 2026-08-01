@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryUserRepository } from '$lib/testing/fakes/in-memory-users';
-import { testActor } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { UserDirectory } from './users';
 
 describe('User boundary invariants', () => {

@@ -20,14 +20,15 @@ import {
 	type IHeaderOptions,
 	type ISectionOptions
 } from 'docx';
-import type { ExportSettings, ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
+import type { ExportSettings, ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	collectImageSources,
 	fetchImages,
 	mermaidSourceHash,
 	svgDimensions
-} from './export-images';
+} from '$lib/server/repositories/deliverables/export-images';
 
 export interface GenerateDocxInput {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];

@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '$lib/errors';
+import {
+	ConflictError,
+	describeError,
+	ExternalServiceError,
+	NotFoundError,
+	ValidationError
+} from '$lib/errors';
 import type { DomainErrorCode } from '$lib/errors';
 import { DOMAIN_ERROR_STATUS, domainErrorStatus } from './errors';
-import { describeError } from './utils';
 
 const ALL_CODES: readonly DomainErrorCode[] = [
 	'VALIDATION',

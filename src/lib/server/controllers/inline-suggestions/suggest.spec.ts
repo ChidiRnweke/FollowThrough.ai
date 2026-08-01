@@ -1,20 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type {
-	ActorContext,
-	InlineCompletionContext,
-	InlineSuggestionRequest,
-	Note,
-	NoteId,
-	ProjectId
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { InlineCompletionContext, InlineSuggestionRequest } from '$lib/models/agent';
+import type { Note, NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type {
 	InlineCompletionContextBuilder,
 	InlineCompletionGenerator,
 	InlineSuggestionThrottle
-} from '$lib/server/services';
-import type { AgentPreferencesStore } from '$lib/server/services/agent-runs/preferences';
+} from '$lib/server/services/agent/runs/contracts';
+import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
-import { noteBuilder, testNow } from '$lib/testing/fixtures/domain-builders';
+import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InlineSuggestions, type InlineSuggestionsDependencies } from './controller';
 
 const actor = { userId: 'user-1' } as ActorContext;

@@ -1,17 +1,19 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateFolderInput,
 	CreateProjectInput,
 	MoveProjectEntryInput,
-	Note,
-	NoteId,
 	Project,
 	ProjectId,
 	ProjectTreeNode,
 	RenameProjectInput
-} from '$lib/models';
+} from '$lib/models/projects';
+import type { Note, NoteId } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type { ProjectRepository, ProjectTreeRepository } from '$lib/server/repositories';
+import type {
+	ProjectRepository,
+	ProjectTreeRepository
+} from '$lib/server/repositories/projects/projects';
 export class ProjectCatalog {
 	constructor(
 		private readonly projects: ProjectRepository,

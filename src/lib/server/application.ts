@@ -3,67 +3,71 @@ import {
 	type ProductionControllerDependencies
 } from '$lib/server/production-controller-factory';
 import { OpenRouter } from '@openrouter/sdk';
+import { ConversationArchive } from './services/agent/conversations/archive';
+import { AgentRunLedger } from './services/agent/runs/ledger';
 import {
-	EmbeddedKnowledgeSearcher,
-	RerankingKnowledgeSearcher,
+	AgentModels,
+	AgentPreferenceCatalog,
+	type AgentModelCatalog
+} from './services/agent/runs/preferences';
+import { normalizeLanguageModelId } from '$lib/models/agent';
+import type { ProvenanceRecorder } from './services/notes/provenance';
+import { ToolTrust } from './services/agent/runs/tool-trust';
+import { ToolAccess } from './services/agent/tools/preferences';
+import { EmbeddedToolRetriever, type ToolRetriever } from './services/agent/tools/tool-retriever';
+import {
+	AttachmentContent,
+	type ImageDescriber,
+	type OcrEngineClient
+} from './services/attachments/content';
+import type { DocumentOcr } from './services/attachments/contracts';
+import { AttachmentLibrary } from './services/attachments/library';
+import { DiagramContent } from './services/diagrams/content';
+import { DiagramLibrary } from './services/diagrams/library';
+import { UserDirectory } from './services/identity/users';
+import type { Condenser } from './services/knowledge-search/contracts';
+import {
 	EmbeddedAttachmentIndexer,
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
-	retrievalChunkerFromEnv,
-	MemoryLibrary,
-	DiagramLibrary,
-	DiagramContent,
-	BuiltInSkills,
-	ExpiringSuggestionLister,
-	AgentModels,
-	AgentPreferenceCatalog,
-	ToolAccess,
-	AgentRunLedger,
-	ConversationArchive,
-	ProjectCatalog,
-	ReferenceLibrary,
-	RelationshipGraph,
-	NoteCatalog,
-	NoteProvenance,
-	SuggestionInbox,
-	SkillLibrary,
-	TodoCatalog,
-	ToolTrust,
-	UserDirectory,
+	retrievalChunkerFromEnv
+} from './services/knowledge-search/indexing';
+import type { EmbeddingClient } from './services/knowledge-search/contracts';
+import {
+	EmbeddedKnowledgeSearcher,
 	ProjectScopedLinkFinder,
-	BuiltInSkillLibrary,
-	AttachmentLibrary,
-	AttachmentContent,
-	EmbeddedToolRetriever,
-	normalizeLanguageModelId,
-	type AgentModelCatalog,
-	type Condenser,
-	type DocumentOcr,
-	type EmbeddingClient,
-	type ImageDescriber,
-	type OcrEngineClient,
-	type ProvenanceRecorder,
-	type ReferenceFinder,
-	type Reranker,
-	type ToolRetriever
-} from '$lib/server/services';
-import type { TransactionRunner } from '$lib/server/repositories';
+	RerankingKnowledgeSearcher,
+	type Reranker
+} from './services/knowledge-search/semantic';
+import { MemoryLibrary } from './services/memory/library';
+import { NoteCatalog } from './services/notes/catalog';
+import { NoteProvenance } from './services/notes/provenance';
+import { ProjectCatalog } from './services/projects/catalog';
+import type { ReferenceFinder } from './services/references/contracts';
+import { ReferenceLibrary } from './services/references/library';
+import { RelationshipGraph } from './services/relationships/graph';
+import { BuiltInSkillLibrary, BuiltInSkills } from './services/skills/built-ins';
+import { SkillLibrary } from './services/skills/library';
+import { ExpiringSuggestionLister } from './services/suggestions/expiring-lister';
+import { SuggestionInbox } from './services/suggestions/inbox';
+import { TodoCatalog } from './services/todos/catalog';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
-import { BaseAgentContext } from './services/agent-runs/base-context';
+import { BaseAgentContext } from './services/agent/runs/base-context';
 import { SuggestionApplication } from './services/suggestions/application';
 import { PromiseDiscovery } from './services/todos/promise-discovery';
 import { DeterministicPromiseExtractor } from './services/todos/promise-rules';
 import { ReferenceDiscovery } from './services/references/discovery';
-import { AgentReasoning, AgentToolEventMapper } from './services/agent-runs/reasoning';
-import { resolveAgentModel } from './services/agent-runs/preferences';
+import { AgentReasoning, AgentToolEventMapper } from './services/agent/runs/reasoning';
+import { resolveAgentModel } from './services/agent/runs/preferences';
 import { agentToolRegistry } from './agent-tool-factory';
 import { BUILT_INS, RETIRED_BUILT_INS } from './services/skills/built-in-definitions';
 import { SkillManifestCodec } from './services/skills/manifest';
 import { extractTemplateStyles } from './services/deliverables/template-styles';
 import { DiagramAuthoring } from './services/diagrams/authoring';
 import { DrawioReview } from './services/diagrams/review';
-import { Embeddings } from './services/retrieval/embeddings';
+import { Embeddings } from './services/knowledge-search/embeddings';
 import {
 	DEFAULT_GENERATION_MODEL,
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
@@ -72,18 +76,18 @@ import {
 	optionalProperty,
 	positiveNumberFromEnvironment
 } from './config';
-import { InlineSuggestionCompletion } from './services/suggestions/inline-completion';
-import { InlineSuggestionContext } from './services/suggestions/inline-context';
-import { InlineSuggestionAdmission } from './services/suggestions/inline-admission';
-import { SearchRanking } from './services/retrieval/ranking';
+import { InlineSuggestionCompletion } from './services/inline-suggestions/inline-completion';
+import { InlineSuggestionContext } from './services/inline-suggestions/inline-context';
+import { InlineSuggestionAdmission } from './services/inline-suggestions/inline-admission';
+import { SearchRanking } from './services/knowledge-search/ranking';
 import { MistralOcr } from './services/attachments/mistral-ocr';
 import { ImageDescription } from './services/attachments/image-description';
-import { ConversationSummary } from './services/conversations/summary';
-import { KnowledgeIndexRecords } from './repositories/postgres/search';
-import { ConversationRecords } from './repositories/postgres/conversations';
-import { AgentContext } from './services/agent-runs/context';
+import { ConversationSummary } from './services/agent/conversations/summary';
+import { KnowledgeIndexRecords } from './repositories/knowledge-search/postgres/search';
+import { ConversationRecords } from './repositories/agent/postgres/conversations';
+import { AgentContext } from './services/agent/runs/context';
 import { AccessTokens } from '$lib/server/services/identity/api-tokens';
-import { ApiTokenRecords } from './repositories/postgres/api-tokens';
+import { ApiTokenRecords } from './repositories/identity/postgres/api-tokens';
 import {
 	AttachmentParserRegistry,
 	AttachmentStorage,
@@ -91,22 +95,22 @@ import {
 	type ObjectStorageConfig
 } from './services/attachments/storage';
 import { RelationshipDiscovery } from './services/relationships/discovery';
-import { ProjectRecords } from './repositories/postgres/projects';
-import { UserRecords } from './repositories/postgres/users';
-import { NoteRecords, SourceAnchorRecords } from './repositories/postgres/notes';
-import { ProvenanceRecords } from './repositories/postgres/provenance';
-import { TodoRecords } from './repositories/postgres/todos';
-import { SuggestionRecords } from './repositories/postgres/suggestions';
-import { TrustPolicyRecords } from './repositories/postgres/trust-policies';
-import { MemoryRecords } from './repositories/postgres/memory-entries';
-import { ExportSettingsRecords } from './repositories/postgres/export-settings';
-import { RelationshipRecords } from './repositories/postgres/relationships';
-import { ReferenceRecords } from './repositories/postgres/references';
-import { DiagramRecords } from './repositories/postgres/diagrams';
-import { SkillRecords } from './repositories/postgres/skills';
-import { AttachmentRecords } from './repositories/postgres/attachments';
-import { TemplateRecords } from './repositories/postgres/templates';
-import { ArtifactRecords } from './repositories/postgres/artifacts';
+import { ProjectRecords } from './repositories/projects/postgres/projects';
+import { UserRecords } from './repositories/identity/postgres/users';
+import { NoteRecords, SourceAnchorRecords } from './repositories/notes/postgres/notes';
+import { ProvenanceRecords } from './repositories/provenance/postgres/provenance';
+import { TodoRecords } from './repositories/todos/postgres/todos';
+import { SuggestionRecords } from './repositories/suggestions/postgres/suggestions';
+import { TrustPolicyRecords } from './repositories/agent/postgres/trust-policies';
+import { MemoryRecords } from './repositories/memory/postgres/memory-entries';
+import { ExportSettingsRecords } from './repositories/deliverables/postgres/export-settings';
+import { RelationshipRecords } from './repositories/relationships/postgres/relationships';
+import { ReferenceRecords } from './repositories/references/postgres/references';
+import { DiagramRecords } from './repositories/diagrams/postgres/diagrams';
+import { SkillRecords } from './repositories/skills/postgres/skills';
+import { AttachmentRecords } from './repositories/attachments/postgres/attachments';
+import { TemplateRecords } from './repositories/deliverables/postgres/templates';
+import { ArtifactRecords } from './repositories/deliverables/postgres/artifacts';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
 import { agentToolCatalog } from './agent-tool-catalog-factory';
@@ -116,11 +120,14 @@ import {
 	AgentPreferenceRecords,
 	AgentRunRecords,
 	AgentSessionRecords
-} from './repositories/postgres/agent-settings';
-import { ToolPreferenceRecords } from './repositories/postgres/tool-preferences';
-import { AgentRunDecisionRecords, AgentRunEventRecords } from './repositories/postgres/agent-runs';
-import { AgentRunLifecycle } from './services/agent-runs/lifecycle';
-import { AgentEvents, type AgentEventBus } from './services/agent-runs/events';
+} from './repositories/agent/postgres/agent-settings';
+import { ToolPreferenceRecords } from './repositories/agent/postgres/tool-preferences';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from './repositories/agent/postgres/agent-runs';
+import { AgentRunLifecycle } from './services/agent/runs/lifecycle';
+import { AgentEvents, type AgentEventBus } from './services/agent/runs/events';
 import {
 	DrawioLabelExtractor,
 	DrawioSvgSanitizer,
@@ -128,14 +135,24 @@ import {
 	DrawioDiagramTextExtractor
 } from './services/diagrams/drawio';
 import type { ScheduledTask } from './services/scheduler';
-import { KnowledgeIndexMaintenance } from './services/retrieval/index-maintenance';
+import { KnowledgeIndexMaintenance } from './services/knowledge-search/index-maintenance';
 import { UploadRetention } from './services/attachments/retention';
-import { FeedbackRecords } from './repositories/postgres/feedback';
+import { FeedbackRecords } from './repositories/feedback/postgres/feedback';
 import { operationObserver, traceAgentTurn, traceWorkflow } from './services/telemetry';
-import { webSearchOptionsFromEnvironment } from './services/agent-runs/web-research';
-import { ConversationBuffer } from './services/conversations/buffer';
-import { ConversationSession } from './services/conversations/session';
-import { LateValue } from '$lib/utils';
+import { webSearchOptionsFromEnvironment } from '$lib/models/agent';
+import { ConversationBuffer } from './services/agent/conversations/buffer';
+
+class LateValue<T> {
+	private value!: T;
+
+	set(value: T): void {
+		this.value = value;
+	}
+
+	get(): T {
+		return this.value;
+	}
+}
 
 /**
  * Collaborators that reach outside the process and are therefore worth

@@ -1,21 +1,20 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateReferenceInput,
-	DateTime,
 	ExternalReference,
-	NoteId,
 	ReferenceCandidate,
 	ReferenceId,
-	ReferenceView,
-	TextSelection
-} from '$lib/models';
+	ReferenceView
+} from '$lib/models/references';
+import type { DateTime } from '$lib/models/workspace';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
-	NoteRepository,
 	ProvenanceRepository,
-	ReferenceRepository,
 	SourceAnchorRepository
-} from '$lib/server/repositories';
+} from '$lib/server/repositories/provenance';
+import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class ReferenceLibrary {

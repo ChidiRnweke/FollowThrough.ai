@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateMemoryEntryInput,
 	DeleteMemoryEntryInput,
 	ListMemoryInput,
@@ -9,20 +9,22 @@ import type {
 	ProposeMemoryChangeInput,
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
-} from '$lib/models';
+} from '$lib/models/memory';
 import { InvalidGeneratedContentError, ValidationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	MemoryChangeApplier,
 	MemoryEntryCreator,
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
-	MemoryEntryLister,
-	ProvenanceRecorder,
+	MemoryEntryLister
+} from '$lib/server/services/memory/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import type {
 	SuggestionAccepter,
-	SuggestionCreator,
-	TrustPolicyEvaluator
-} from '$lib/server/services';
+	SuggestionCreator
+} from '$lib/server/services/suggestions/contracts';
+import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
 export interface MemoryController {
 	list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput>;

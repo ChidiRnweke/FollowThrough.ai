@@ -1,5 +1,5 @@
-import type { AgentModel } from '$lib/models';
-import type { AgentModelCatalog } from '$lib/server/services';
+import type { AgentModel } from '$lib/models/agent';
+import type { AgentModelCatalog } from '$lib/server/services/agent/runs/preferences';
 import type {
 	IAttachmentStorage,
 	StoredObjectInfo

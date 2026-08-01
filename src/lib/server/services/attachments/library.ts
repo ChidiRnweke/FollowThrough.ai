@@ -1,24 +1,22 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { AgentPreferences } from '$lib/models/agent';
 import type {
-	ActorContext,
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentUploadId,
 	AttachmentVersion,
 	AttachmentVersionId,
-	AttachmentView,
-	DateTime,
-	NoteId,
-	NoteRevisionId,
-	ProjectId
-} from '$lib/models';
+	AttachmentView
+} from '$lib/models/attachments';
+import type { DateTime } from '$lib/models/workspace';
+import type { NoteId, NoteRevisionId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type { AttachmentRepository, NoteRepository } from '$lib/server/repositories';
-import type { RetrievalIndexRepository } from '$lib/server/repositories';
-import {
-	resolveAttachmentVisionModel,
-	type AgentPreferencesStore
-} from '$lib/server/services/agent-runs/preferences';
-import { isOcrImage, isOcrSupported } from './formats';
+import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
+import { resolveAttachmentVisionModel } from '$lib/models/agent';
+import { isOcrImage, isOcrSupported } from '$lib/models/attachments/formats';
 
 interface AttachmentStorage {
 	createUploadUrl(input: {
@@ -40,6 +38,10 @@ interface AttachmentParser {
 }
 interface AttachmentParsers {
 	select(mediaType: string, path: string): AttachmentParser | undefined;
+}
+
+interface AttachmentPreferencesStore {
+	get(actor: ActorContext): Promise<AgentPreferences>;
 }
 interface AttachmentIndexer {
 	index(
@@ -97,7 +99,7 @@ export class AttachmentLibrary {
 		private readonly imageDescriber: ImageDescriber,
 		private readonly retrieval?: RetrievalIndexRepository,
 		private readonly indexer?: AttachmentIndexer,
-		private readonly preferences?: AgentPreferencesStore
+		private readonly preferences?: AttachmentPreferencesStore
 	) {}
 
 	/**

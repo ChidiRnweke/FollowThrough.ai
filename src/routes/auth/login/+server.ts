@@ -1,6 +1,6 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/app-factory';
-import { setPkceCookie } from '$lib/utils';
+import { setPkceCookie } from '$lib/server/config';
 
 export const GET: RequestHandler = async ({ cookies }) => {
 	if (!AppFactory.isAuthEnabled()) {

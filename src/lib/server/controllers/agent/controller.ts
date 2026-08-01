@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	AgentEvent,
 	AgentPreferences,
 	AgentRun,
@@ -11,28 +11,28 @@ import type {
 	AgentSessionItem,
 	Conversation,
 	ConversationId,
-	DateTime,
 	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
 	Message,
 	RunAgentInput,
 	SubmitAgentRunInput
-} from '$lib/models';
-import { isTerminalAgentRunStatus } from '$lib/models';
+} from '$lib/models/agent';
+import type { DateTime } from '$lib/models/workspace';
+import { isTerminalAgentRunStatus } from '$lib/models/agent';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
-	AgentPreferencesStore,
-	ConversationJournal
-} from '$lib/server/services';
+	AgentPreferencesStore
+} from '$lib/server/services/agent/runs/preferences';
+import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import {
 	resolveAgentExecutionMode,
 	resolveAgentModel,
 	resolveVisionModel
-} from '$lib/server/services';
-import type { AgentRunLifecycle } from '$lib/server/services/agent-runs/lifecycle';
-import { rewindToUserItem } from '$lib/server/services/conversations/rewind';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+} from '$lib/server/services/agent/runs/preferences';
+import type { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
@@ -192,19 +192,10 @@ export class Agent implements AgentController {
 				);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
-				const model = resolveAgentModel(
-					conversation,
-					preferences,
-					this.dependencies.defaultModel
-				);
+				const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
 				// Settled only now, because it depends on the chat model, which is not
 				// known until the conversation has been resolved.
-				const finalInput = await this.withImageReader(
-					runInput,
-					model,
-					conversation,
-					preferences
-				);
+				const finalInput = await this.withImageReader(runInput, model, conversation, preferences);
 				const run: AgentRun = {
 					id: crypto.randomUUID() as AgentRunId,
 					userId: actor.userId,
@@ -422,7 +413,7 @@ export class Agent implements AgentController {
 		const contextNoteId =
 			input.appContext?.workbench?.focusedNoteId ??
 			(input.appContext?.activeResource?.kind === 'note'
-				? (input.appContext.activeResource.id as import('$lib/models').NoteId)
+				? (input.appContext.activeResource.id as import('$lib/models/notes').NoteId)
 				: undefined);
 		const overriddenProjectId =
 			input.projectId && contextProjectId && input.projectId !== contextProjectId
@@ -434,9 +425,7 @@ export class Agent implements AgentController {
 		// otherwise override the deployment defaults with nothing.
 		const webSearch = {
 			...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
-			...(preferences.webSearchMaxResults
-				? { maxResults: preferences.webSearchMaxResults }
-				: {}),
+			...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
 			...(preferences.webSearchMaxTotalResults
 				? { maxTotalResults: preferences.webSearchMaxTotalResults }
 				: {})

@@ -1,20 +1,11 @@
-import type {
-	AcceptSuggestionOutput,
-	ActorContext,
-	CreateReferenceInput,
-	CreateRelationshipInput,
-	CreateTodoInput,
-	Diagram,
-	DiagramId,
-	MemoryChangePayload,
-	MemoryEntry,
-	ProvenanceId,
-	ReferenceId,
-	RelationshipId,
-	Suggestion,
-	Todo,
-	TodoId
-} from '$lib/models';
+import type { AcceptSuggestionOutput, Suggestion } from '$lib/models/suggestions';
+import type { ActorContext } from '$lib/models/identity';
+import type { CreateReferenceInput, ReferenceId } from '$lib/models/references';
+import type { CreateRelationshipInput, RelationshipId } from '$lib/models/relationships';
+import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { MemoryChangePayload, MemoryEntry } from '$lib/models/memory';
+import type { ProvenanceId } from '$lib/models/provenance';
 import { InvalidTransitionError } from '$lib/errors';
 
 interface TodoCreator {
@@ -27,7 +18,7 @@ interface RelationshipCreator {
 	create(
 		actor: ActorContext,
 		input: CreateRelationshipInput
-	): Promise<import('$lib/models').NoteRelationship>;
+	): Promise<import('$lib/models/notes').NoteRelationship>;
 }
 interface RelationshipDeleter {
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void>;
@@ -36,7 +27,7 @@ interface ReferenceCreator {
 	create(
 		actor: ActorContext,
 		input: CreateReferenceInput
-	): Promise<import('$lib/models').ExternalReference>;
+	): Promise<import('$lib/models/references').ExternalReference>;
 }
 interface ReferenceDeleter {
 	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void>;
@@ -53,7 +44,10 @@ interface MemoryChangeApplier {
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryEntry>;
-	revert(actor: ActorContext, suggestion: import('$lib/models').MemorySuggestion): Promise<void>;
+	revert(
+		actor: ActorContext,
+		suggestion: import('$lib/models/memory').MemorySuggestion
+	): Promise<void>;
 }
 interface DrawioContent {
 	validate(source: string): string;

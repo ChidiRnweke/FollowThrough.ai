@@ -15,7 +15,7 @@ services:
       PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
     labels:
       caddy: notes.chidinweke.be
-      caddy.reverse_proxy: "{{upstreams 3000}}"
+      caddy.reverse_proxy: '{{upstreams 3000}}'
     networks:
       - reverse-proxy
       - postgres-network
@@ -27,13 +27,7 @@ services:
   worker:
     image: ghcr.io/chidirnweke/followthrough.ai:latest
     restart: unless-stopped
-    command:
-      [
-        "node",
-        "--import",
-        "./scripts/otel-instrumentation.js",
-        "build-worker/worker.js",
-      ]
+    command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']
     deploy:
       replicas: 1
     environment:
@@ -54,16 +48,11 @@ services:
 
   migrate:
     image: ghcr.io/chidirnweke/followthrough.ai:latest
-    command:
-      [
-        "sh",
-        "-c",
-        "node scripts/provision-db.js && node scripts/prod-migrate.js",
-      ]
+    command: ['sh', '-c', 'node scripts/provision-db.js && node scripts/prod-migrate.js']
     profiles: [setup]
-    restart: "no"
+    restart: 'no'
     labels:
-      komodo.skip: "true"
+      komodo.skip: 'true'
     environment:
       INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
       INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}

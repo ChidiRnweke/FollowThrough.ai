@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
-import type { NoteLinkTarget } from '$lib/models';
+import type { NoteLinkTarget } from '$lib/models/notes';
 
 /**
  * `@` to link another note.

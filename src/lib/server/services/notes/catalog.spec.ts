@@ -3,8 +3,8 @@ import { NoteCatalog } from './catalog';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -12,7 +12,7 @@ import {
 	testActor,
 	testNoteId,
 	testNow
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const notes = new InMemoryNoteRepository();

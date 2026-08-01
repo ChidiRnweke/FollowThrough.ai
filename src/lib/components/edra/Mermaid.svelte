@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import type { NodeViewProps } from '@tiptap/core';
-	import type { DiagramSuggestion, DrawioDiagram, SuggestionId } from '$lib/models';
+	import type { DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
+	import type { SuggestionId } from '$lib/models/suggestions';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
@@ -30,12 +31,12 @@
 	import MermaidExportMenu from './MermaidExportMenu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
 	import Tooltip from './Tooltip.svelte';
-	import DrawioReviewDialog from '$lib/components/app/drawio-review-dialog.svelte';
-	import type { DrawioExport } from '$lib/client/drawio/embed-adapter';
+	import DrawioReviewDialog from '$lib/components/diagrams/drawio-review-dialog.svelte';
+	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
 	import {
 		insertAcceptedDrawioAfterMermaid,
 		setPendingDrawioSuggestion as applyPendingDrawioSuggestion
-	} from '$lib/client/drawio/tiptap-actions';
+	} from '$lib/client/diagrams/drawio/tiptap-actions';
 	import { createMediaResize } from './media-resize.svelte.js';
 	import { mermaidPngBlob } from './mermaid-export.js';
 

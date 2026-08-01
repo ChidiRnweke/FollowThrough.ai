@@ -24,7 +24,7 @@ interface MigrationJournal {
  */
 export async function createPGliteDatabase(): Promise<{
 	database: Database;
-	transactionRunner: import('$lib/server/repositories').TransactionRunner;
+	transactionRunner: import('$lib/server/repositories/workspace').TransactionRunner;
 	close: () => Promise<void>;
 }> {
 	const client = new PGlite({ extensions: { vector } });

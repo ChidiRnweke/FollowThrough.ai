@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { AttachmentUpload, ProjectId, UserId } from '$lib/models';
-import type { OwnedAttachmentUpload } from '$lib/server/repositories';
-import { UploadRetention } from './retention';
+import type { AttachmentUpload } from '$lib/models/attachments';
+import type { ProjectId } from '$lib/models/projects';
+import type { UserId } from '$lib/models/identity';
+import type { OwnedAttachmentUpload } from '$lib/server/repositories/attachments/attachments';
+import {
+	UploadRetention,
+	type AttachmentStorage,
+	type UploadRetentionRepository
+} from './retention';
 
 const owner = '00000000-0000-4000-8000-000000000001' as UserId;
 const now = () => new Date('2026-07-28T12:00:00.000Z');
@@ -21,7 +27,7 @@ const uploadAt = (expiresAt: string, id = 'a'): OwnedAttachmentUpload => ({
 	}
 });
 
-class FakeUploadStore {
+class FakeUploadStore implements UploadRetentionRepository {
 	deleted: string[] = [];
 	cutoffs: Date[] = [];
 
@@ -32,12 +38,12 @@ class FakeUploadStore {
 		return this.rows.filter((row) => new Date(row.upload.expiresAt) < before).slice(0, limit);
 	}
 
-	async deleteUpload(_actor: unknown, id: AttachmentUpload['id']): Promise<void> {
+	async deleteUpload(_actor: { userId: UserId }, id: AttachmentUpload['id']): Promise<void> {
 		this.deleted.push(id);
 	}
 }
 
-class FakeObjectStore {
+class FakeObjectStore implements AttachmentStorage {
 	removed: string[] = [];
 	failOn?: string;
 
@@ -48,11 +54,7 @@ class FakeObjectStore {
 }
 
 const sweep = (store: FakeUploadStore, objects: FakeObjectStore, graceMs = 60 * 60 * 1000) =>
-	new UploadRetention(
-		store as unknown as ConstructorParameters<typeof UploadRetention>[0],
-		objects as unknown as ConstructorParameters<typeof UploadRetention>[1],
-		{ now, graceMs, logger: { error: () => {}, log: () => {} } }
-	);
+	new UploadRetention(store, objects, { now, graceMs, logger: { error: () => {}, log: () => {} } });
 
 describe('Expired upload sweep', () => {
 	it('removes the orphaned object of an abandoned upload', async () => {

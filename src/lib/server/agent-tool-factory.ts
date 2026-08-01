@@ -1,47 +1,46 @@
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
-import type {
-	AgentSettingsController,
-	ApiTokensController,
-	AttachmentsController,
-	DeliverablesController,
-	DiagramsController,
-	MemoryController,
-	NotesController,
-	ProjectsController,
-	ReferencesController,
-	RelationshipsController,
-	RetrievalController,
-	SkillsController,
-	SuggestionsController,
-	TodosController,
-	ToolPreferencesController,
-	TrustPoliciesController,
-	WorkspaceController
-} from '$lib/server/controllers';
+import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
+import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
+import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
+import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
+import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
+import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
+import type { DiagramsController } from '$lib/server/controllers/diagrams/controller';
+import type { RetrievalController } from '$lib/server/controllers/knowledge-search/controller';
+import type { MemoryController } from '$lib/server/controllers/memory/controller';
+import type { NotesController } from '$lib/server/controllers/notes/controller';
+import type { ProjectsController } from '$lib/server/controllers/projects/controller';
+import type { ReferencesController } from '$lib/server/controllers/references/controller';
+import type { RelationshipsController } from '$lib/server/controllers/relationships/controller';
+import type { SkillsController } from '$lib/server/controllers/skills/controller';
+import type { SuggestionsController } from '$lib/server/controllers/suggestions/controller';
+import type { TodosController } from '$lib/server/controllers/todos/controller';
+import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
 import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ActorContext } from '$lib/models/identity';
+import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type {
-	ActorContext,
-	AgentExecutionMode,
-	AgentRun,
-	NoteId,
-	ProjectId,
-	ProvenanceId,
-	RunAgentInput
-} from '$lib/models';
-import type { AgentToolExecutor, ToolDescriptor, ToolRetriever } from '$lib/server/services';
+	ToolDescriptor,
+	ToolRetriever
+} from '$lib/server/services/agent/tools/tool-retriever';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
 } from '$lib/server/services/notes/markdown';
-import { applyNotePatch, describeNotePatchFailure, webSearchEngines } from '$lib/models';
+import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
+import { webSearchEngines } from '$lib/models/agent';
 import {
 	invalidUseToolEnvelope,
 	invalidUseToolPayload,
 	unknownUseToolName,
 	useToolEnvelopeSchema
-} from './services/agent-runs/tool-recovery';
+} from './services/agent/runs/tool-recovery';
 import {
 	projectMemory,
 	projectNoteSummary,
@@ -49,7 +48,7 @@ import {
 	projectSuggestion,
 	projectTodo,
 	projectUser
-} from './services/agent-runs/tool-views';
+} from './services/agent/runs/tool-views';
 
 /**
  * Stable, frequently used tools the agent can call without first discovering

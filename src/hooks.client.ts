@@ -1,6 +1,6 @@
 import type { HandleClientError } from '@sveltejs/kit';
 import { DomainError } from '$lib/errors';
-import { describeClientError, reportClientError } from '$lib/client/report-error';
+import { describeClientError, reportClientError } from '$lib/client/observability/report-error';
 
 /**
  * The single reporting choke point for the browser.

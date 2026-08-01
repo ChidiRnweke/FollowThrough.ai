@@ -145,7 +145,11 @@ test.describe.serial('agent-native keyboard workflow', () => {
 
 	test('Mod+, opens Settings', async ({ page }) => {
 		await openHome(page);
-		await page.keyboard.press('Control+,');
+		// Chromium reserves Control+, for its own settings UI in some environments,
+		// so exercise the application-level event with the physical key metadata.
+		await page.evaluate(() =>
+			window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', code: 'Comma', ctrlKey: true }))
+		);
 		await expect(page).toHaveURL(/\/settings$/);
 	});
 

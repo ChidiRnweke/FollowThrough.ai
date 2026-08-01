@@ -1,27 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import type { ActorContext, Provenance, ProposeMemoryChangeInput } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { Provenance } from '$lib/models/provenance';
+import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
-import type { ProvenanceRecorder } from '$lib/server/services';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { Memory } from './controller';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/fakes/in-memory-memory-repository';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
-import { InMemorySuggestions } from '$lib/testing/fakes/in-memory-automation';
-import { InMemoryTrustPolicyEvaluator } from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemoryTrustPolicyEvaluator } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
-} from '$lib/testing/fakes/in-memory-search';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/retrieval/indexing';
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
 	testNow,
 	testProjectId,
 	testProvenanceId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 class RecordingProvenanceRecorder implements ProvenanceRecorder {
 	records: Provenance[] = [];

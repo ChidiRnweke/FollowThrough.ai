@@ -15,11 +15,11 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
-	import { createSkill } from '$lib/remote/projects.remote';
-	import { saveSkillDraft, toggleSkill } from '$lib/remote/skills.remote';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
-	import type { NoteId } from '$lib/models';
+	import { createSkill } from '$lib/remote/projects/projects.remote';
+	import { saveSkillDraft, toggleSkill } from '$lib/remote/skills/skills.remote';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
+	import type { NoteId } from '$lib/models/notes';
 
 	let { data } = $props();
 

@@ -1,24 +1,15 @@
-import type {
-	ApiToken,
-	DateTime,
-	Diagram,
-	ExternalReference,
-	LocalDate,
-	MemoryEntry,
-	Note,
-	NoteRelationship,
-	NoteRevision,
-	Provenance,
-	Project,
-	Session,
-	Skill,
-	SourceAnchor,
-	Suggestion,
-	Todo,
-	TrustPolicy,
-	Url,
-	User
-} from '$lib/models';
+import type { ApiToken, Session, User } from '$lib/models/identity';
+import type { DateTime, LocalDate } from '$lib/models/workspace';
+import type { Diagram } from '$lib/models/diagrams';
+import type { ExternalReference, Url } from '$lib/models/references';
+import type { MemoryEntry } from '$lib/models/memory';
+import type { Note, NoteRelationship, NoteRevision } from '$lib/models/notes';
+import type { Provenance, SourceAnchor } from '$lib/models/provenance';
+import type { Project } from '$lib/models/projects';
+import type { Skill } from '$lib/models/skills';
+import type { Suggestion } from '$lib/models/suggestions';
+import type { Todo } from '$lib/models/todos';
+import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
 
 const instant = (value: Date): DateTime => value.toISOString() as DateTime;

@@ -6,7 +6,7 @@ import {
 	suggestionBuilder,
 	testProjectId,
 	testSuggestionId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('Pending memory notification invariants', () => {
 	it('groups profile and project memories into their destinations', () => {

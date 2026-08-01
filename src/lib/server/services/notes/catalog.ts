@@ -1,24 +1,22 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateNoteInput,
-	DateTime,
 	Note,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
 	NoteSummary,
-	Project,
-	SourceAnchor,
-	SourceAnchorId,
 	TextSelection
-} from '$lib/models';
-import { DEFAULT_PROJECT_NAME, findProseMirrorDocumentIssue } from '$lib/models';
+} from '$lib/models/notes';
+import type { DateTime } from '$lib/models/workspace';
+import type { Project } from '$lib/models/projects';
+import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
+import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
+import { findProseMirrorDocumentIssue } from '$lib/models/notes';
 import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type {
-	NoteRepository,
-	ProjectRepository,
-	SourceAnchorRepository
-} from '$lib/server/repositories';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
+import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -106,7 +104,7 @@ export class NoteCatalog {
 	async record(
 		actor: ActorContext,
 		note: Note,
-		provenance?: import('$lib/models').Provenance
+		provenance?: import('$lib/models/provenance').Provenance
 	): Promise<void> {
 		await this.get(actor, note.id);
 		const revision: NoteRevision = {

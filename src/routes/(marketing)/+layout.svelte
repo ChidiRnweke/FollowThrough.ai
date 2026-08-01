@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toggleMode } from 'mode-watcher';
-	import BrandMark from '$lib/components/app/brand-mark.svelte';
+	import BrandMark from '$lib/components/shared/brand-mark.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { FtTheme as Theme } from '$lib/components/icons';
 

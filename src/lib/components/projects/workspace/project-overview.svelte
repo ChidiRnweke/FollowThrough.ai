@@ -1,0 +1,344 @@
+<script lang="ts">
+	import type { GetProjectOutput, ProjectTreeNode } from '$lib/models/projects';
+	import type { NoteId, NoteSummary } from '$lib/models/notes';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Button } from '$lib/components/ui/button';
+	import { Separator } from '$lib/components/ui/separator';
+	import { toast } from 'svelte-sonner';
+	import {
+		FtMemory as Brain,
+		FtChevronRight as ChevronRight,
+		FtEllipsis as Ellipsis,
+		FtDocument as FileText,
+		FtDocumentPlus as FilePlus,
+		FtFolder as Folder,
+		FtFolderOpen as FolderOpen,
+		FtArtifacts as PackageOpen,
+		FtAttachments as Paperclip,
+		FtSkills as Wrench
+	} from '$lib/components/icons';
+	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import EmptyState from '../../shared/empty-state.svelte';
+	import NameDialog from '../name-dialog.svelte';
+	import ResourceRow from '../resource-row.svelte';
+	import { pickTip } from '../resource-tips';
+	import { formatRelativeTime } from '../../shared/labels';
+
+	const depthIndent = (depth: number): string =>
+		['pl-3', 'pl-8', 'pl-13', 'pl-18', 'pl-23', 'pl-28', 'pl-33', 'pl-38'][depth] ?? 'pl-38';
+
+	export interface ProjectCounts {
+		todos: number;
+		memory: number;
+		artifacts: number;
+		attachments: number;
+	}
+
+	let {
+		view,
+		counts,
+		overdueTodoCount = 0,
+		tipSeed = 0,
+		renderedAt,
+		oncreatenote,
+		onimport
+	}: {
+		view: GetProjectOutput;
+		counts: ProjectCounts;
+		overdueTodoCount?: number;
+		// Comes from the loader so SSR and hydration pick the same tips.
+		tipSeed?: number;
+		// The loader's instant — every relative timestamp formats against it so the
+		// two first renders agree.
+		renderedAt: string;
+		oncreatenote?: () => void;
+		onimport?: () => void;
+	} = $props();
+
+	const now = $derived(Date.parse(renderedAt));
+
+	const project = $derived(view.project);
+	let renameEntryOpen = $state(false);
+	let renameEntryId: NoteId | null = $state(null);
+	let renameEntryTitle = $state('');
+
+	function countEntries(nodes: readonly ProjectTreeNode[]): number {
+		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
+	}
+
+	function flatten(nodes: readonly ProjectTreeNode[]): NoteSummary[] {
+		return nodes.flatMap((node) => [node.entry, ...flatten(node.children)]);
+	}
+
+	const entries = $derived(flatten(view.tree));
+
+	// Documents named by the default title are a standing invitation, surfaced
+	// beside the list heading rather than as a section of their own.
+	const unnamed = $derived(entries.filter((entry) => entry.title === 'Untitled'));
+
+	// A populated space states what it holds; an empty one gets a tip instead of a
+	// zero. `undefined` state means "empty", which is what makes the row show its
+	// tip — the two are deliberately exclusive.
+	const todoState = $derived.by(() => {
+		if (counts.todos === 0) return undefined;
+		const open = `${counts.todos} open`;
+		return overdueTodoCount > 0 ? `${open} · ${overdueTodoCount} overdue` : open;
+	});
+
+	const memoryState = $derived(
+		counts.memory === 0 ? undefined : `${counts.memory} the agent can use`
+	);
+
+	const artifactState = $derived(
+		counts.artifacts === 0 ? undefined : `${counts.artifacts} ready to download`
+	);
+
+	const attachmentState = $derived.by(() => {
+		if (counts.attachments === 0) return undefined;
+		return counts.attachments === 1
+			? '1 file grounding the agent'
+			: `${counts.attachments} files grounding the agent`;
+	});
+
+	// Folders have no page of their own, so the row opens in place — otherwise the
+	// nested notes counted in the heading are unreachable from here.
+	const expanded = new SvelteSet<NoteId>();
+
+	function toggleFolder(id: NoteId): void {
+		if (expanded.has(id)) expanded.delete(id);
+		else expanded.add(id);
+	}
+
+	function startRename(id: NoteId, title: string): void {
+		renameEntryId = id;
+		renameEntryTitle = title;
+		renameEntryOpen = true;
+	}
+
+	async function renameEntrySubmit(title: string): Promise<void> {
+		if (!renameEntryId) return;
+		const output = await projectActions.renameNote(renameEntryId, title);
+		if (!output) toast.error('Could not rename. Try again.');
+	}
+
+	async function archiveEntry(id: NoteId): Promise<void> {
+		const output = await projectActions.archiveNote(id);
+		if (!output) toast.error('Could not archive. Try again.');
+	}
+</script>
+
+<!--
+	The four spaces are not peers, and grouping them is the explanation: two are
+	what the project has produced, two are what the agent reasons from. The
+	headings carry the meaning so the rows themselves stay quiet.
+-->
+<!--
+	Spacing carries the grouping: 8px inside a group, 24px between the two groups,
+	and the documents list is pushed a further step away below. Dividers are
+	deliberately absent here — the documents list uses them, so withholding them
+	is what stops four spaces from reading as five more documents.
+-->
+<div class="flex flex-col gap-6" role="navigation" aria-label="Project spaces">
+	<section class="flex flex-col gap-2">
+		<h2 class="eyebrow">Produced here</h2>
+		<ul class="-mx-3 flex flex-col">
+			<ResourceRow
+				href="/projects/{project.id}/todos"
+				label="Todos"
+				icon={ListTodo}
+				state={todoState}
+				tip={todoState ? undefined : pickTip('todos', tipSeed)}
+			/>
+			<ResourceRow
+				href="/artifacts?projectId={project.id}"
+				label="Artifacts"
+				icon={PackageOpen}
+				state={artifactState}
+				tip={artifactState ? undefined : pickTip('artifacts', tipSeed)}
+			/>
+		</ul>
+	</section>
+	<section class="flex flex-col gap-2">
+		<h2 class="eyebrow">What the agent works from</h2>
+		<ul class="-mx-3 flex flex-col">
+			<ResourceRow
+				href="/projects/{project.id}/memory"
+				label="Memory"
+				icon={Brain}
+				state={memoryState}
+				tip={memoryState ? undefined : pickTip('memory', tipSeed)}
+			/>
+			<ResourceRow
+				href="/projects/{project.id}/attachments"
+				label="Attachments"
+				icon={Paperclip}
+				state={attachmentState}
+				tip={attachmentState ? undefined : pickTip('attachments', tipSeed)}
+			/>
+		</ul>
+	</section>
+</div>
+
+<!--
+	One row per entry, emitted flat into the divided list so the separators stay
+	continuous; depth is carried by the left padding instead of nested lists.
+-->
+{#snippet row(node: ProjectTreeNode, depth: number)}
+	{@const isFolder = node.entry.kind === 'folder'}
+	{@const isOpen = expanded.has(node.entry.id)}
+	<li class="group relative">
+		{#if isFolder}
+			<Button
+				variant="ghost"
+				type="button"
+				class="row-interactive {depthIndent(
+					depth
+				)} flex w-full items-center gap-2 py-3 pr-10 text-left text-sm"
+				aria-expanded={isOpen}
+				onclick={() => toggleFolder(node.entry.id)}
+			>
+				<ChevronRight
+					class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
+						? 'rotate-90'
+						: ''}"
+				/>
+				{#if isOpen}
+					<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+				{:else}
+					<Folder class="size-4 shrink-0 text-muted-foreground" />
+				{/if}
+				<span class="min-w-0 flex-1 truncate font-medium">{node.entry.title}</span>
+				<span class="provenance-caption shrink-0">
+					{node.children.length}
+					{node.children.length === 1 ? 'item' : 'items'}
+				</span>
+			</Button>
+		{:else}
+			<a
+				class="row-interactive {depthIndent(depth)} flex items-center gap-2 py-3 pr-10 text-sm"
+				href="/notes/{node.entry.id}"
+			>
+				{#if node.entry.kind === 'skill'}
+					<Wrench class="size-4 shrink-0 text-muted-foreground" />
+				{:else}
+					<FileText class="size-4 shrink-0 text-muted-foreground" />
+				{/if}
+				<span class="min-w-0 flex-1 truncate">{node.entry.title}</span>
+				<span class="provenance-caption shrink-0">
+					{formatRelativeTime(node.entry.updatedAt, now)}
+				</span>
+			</a>
+		{/if}
+		<div
+			class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 has-data-[state=open]:opacity-100"
+		>
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="size-7"
+							aria-label="Actions for {node.entry.title}"
+						>
+							<Ellipsis class="size-4" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end">
+					<DropdownMenu.Item onclick={() => startRename(node.entry.id, node.entry.title)}>
+						Rename
+					</DropdownMenu.Item>
+					<DropdownMenu.Item variant="destructive" onclick={() => void archiveEntry(node.entry.id)}>
+						Archive
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</div>
+	</li>
+	{#if isFolder && isOpen}
+		{#each node.children as child (child.entry.id)}
+			{@render row(child, depth + 1)}
+		{/each}
+	{/if}
+{/snippet}
+
+<!-- Documents -->
+{#if view.tree.length === 0}
+	<!--
+		The hero empty state. An empty project is the product's first impression, so it
+		gets the large shared EmptyState — icon tile, a statement in foreground, one piece
+		of supporting copy — then the ways in: an either/or, so they stack with a quiet
+		divider rather than competing side by side: start fresh, or bring what you have.
+	-->
+	<EmptyState
+		icon={FileText}
+		title="Nothing here yet."
+		hint="Notes you write in this project show up here."
+		size="large"
+		label="Documents"
+	>
+		{#snippet action()}
+			<div class="flex w-full max-w-xs flex-col items-stretch gap-3">
+				<Button size="sm" class="w-full" onclick={oncreatenote}>
+					<FilePlus class="size-4" />
+					Create the first note
+				</Button>
+				<div class="flex items-center gap-3">
+					<Separator class="flex-1" />
+					<span class="text-xs text-muted-foreground/70">or</span>
+					<Separator class="flex-1" />
+				</div>
+				<div class="flex flex-col items-center gap-1.5">
+					<Button variant="outline" size="sm" class="w-full" onclick={onimport}>
+						Import an existing project…
+					</Button>
+					<p class="text-xs text-muted-foreground/70">
+						Already keep notes in Markdown somewhere? Zip the folder and bring them in — structure
+						and all.
+					</p>
+				</div>
+			</div>
+		{/snippet}
+	</EmptyState>
+{:else}
+	<!--
+		A borderless divided list, not a card: the rows are homogeneous and
+		scannable, so hairlines and hover carry the structure on their own.
+	-->
+	<!-- pt-6 on top of the shell's own gap puts a clear step between the spaces
+	     cluster above and the documents list — the two are different in kind. -->
+	<section class="flex flex-col gap-3 pt-6" aria-label="Documents">
+		<div class="flex items-baseline justify-between gap-3">
+			<h2 class="eyebrow">
+				Documents · {countEntries(view.tree)}
+			</h2>
+			<!-- The one standing invitation the list itself cannot make. -->
+			{#if unnamed.length > 0}
+				<a class="provenance-caption hover:underline" href="/notes/{unnamed[0].id}">
+					{unnamed.length}
+					{unnamed.length === 1 ? 'document' : 'documents'} to name
+				</a>
+			{/if}
+		</div>
+		<!-- Bled 12px past the measure so row text aligns with the page title while
+		     the hover wash and hairlines still read as a continuous list. -->
+		<ul class="-mx-3 divide-y divide-border border-t border-border">
+			{#each view.tree as node (node.entry.id)}
+				{@render row(node, 0)}
+			{/each}
+		</ul>
+	</section>
+{/if}
+
+<NameDialog
+	bind:open={renameEntryOpen}
+	title="Rename"
+	label="Name"
+	initialValue={renameEntryTitle}
+	busy={projectActions.busy}
+	onsubmit={renameEntrySubmit}
+/>

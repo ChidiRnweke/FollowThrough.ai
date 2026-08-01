@@ -1,4 +1,6 @@
-import type { ActorContext, Diagram, DrawioDiagram, DiagramId, NoteId } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { Diagram, DrawioDiagram, DiagramId } from '$lib/models/diagrams';
+import type { NoteId } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 
 interface DiagramReader {

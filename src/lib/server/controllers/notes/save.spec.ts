@@ -1,30 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	anchorBuilder,
 	noteBuilder,
 	testActor,
 	testAnchorId,
 	testNoteId
-} from '$lib/testing/fixtures/domain-builders';
-import { noteEtag } from '$lib/models';
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteEtag } from '$lib/models/notes';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
-	const controller = new Notes({
-		noteReader: content,
-		noteTreeReader: content,
-		noteEditor: content,
-		noteLinkReconciler: content,
-		notePublisher: content,
-		revisionRecorder: content,
-		revisionReader: content,
-		anchorRepairer: content,
-		noteIndexer: content,
-		transactionRunner: new InMemoryTransactionRunner([content])
-	} as unknown as NotesDependencies);
+	const controller = new Notes(
+		capabilityDependencies<NotesDependencies>({
+			noteReader: content,
+			noteTreeReader: content,
+			noteEditor: content,
+			noteLinkReconciler: content,
+			notePublisher: content,
+			revisionRecorder: content,
+			revisionReader: content,
+			anchorRepairer: content,
+			noteIndexer: content,
+			transactionRunner: new InMemoryTransactionRunner([content])
+		})
+	);
 	return { content, controller };
 };
 
@@ -193,16 +196,23 @@ describe('Note save transaction invariants', () => {
 });
 
 describe('Note publish invariants', () => {
-	it('creates a revision snapshot on publish', async () => {
+	it('creates a revision snapshot on publish (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
 		expect(content.revisions).toHaveLength(1);
+	});
+
+	it('creates a revision snapshot on publish (2/2)', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
 		expect(content.revisions[0]?.currentRevision).toBe(note.currentRevision);
 	});
 
-	it('sets publishedRevision to currentRevision on the note', async () => {
+	it('sets publishedRevision to currentRevision on the note (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
@@ -211,6 +221,16 @@ describe('Note publish invariants', () => {
 			baseEtag: noteEtag(note)
 		});
 		expect(result.note.publishedRevision).toBe(note.currentRevision);
+	});
+
+	it('sets publishedRevision to currentRevision on the note (2/2)', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		const result = await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note)
+		});
 		expect(result.note.publishedAt).toBeDefined();
 	});
 
@@ -228,7 +248,7 @@ describe('Note publish invariants', () => {
 });
 
 describe('Note discard draft invariants', () => {
-	it('restores content from the last published revision', async () => {
+	it('restores content from the last published revision (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Original' });
 		content.notes = [note];
@@ -239,6 +259,20 @@ describe('Note discard draft invariants', () => {
 			note: { ...content.notes[0]!, plainText: 'Draft change' }
 		});
 		expect(saved.note.plainText).toBe('Draft change');
+		// Discard
+		const _discarded = await controller.discardDraft(testActor(), { noteId: note.id });
+	});
+
+	it('restores content from the last published revision (2/2)', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ plainText: 'Original' });
+		content.notes = [note];
+		// Publish the original
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		// Edit (draft save)
+		const _saved = await controller.save(testActor(), {
+			note: { ...content.notes[0]!, plainText: 'Draft change' }
+		});
 		// Discard
 		const discarded = await controller.discardDraft(testActor(), { noteId: note.id });
 		expect(discarded.note.plainText).toBe('Original');

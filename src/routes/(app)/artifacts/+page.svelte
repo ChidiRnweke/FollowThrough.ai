@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
 	import { Label } from '$lib/components/ui/label';
-	import type { ArtifactId, ArtifactView } from '$lib/models';
+	import type { ArtifactId, ArtifactView } from '$lib/models/deliverables';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import {
 		FtDownload as Download,
@@ -18,19 +18,19 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
-	import ConfirmDelete from '$lib/components/app/confirm-delete.svelte';
+	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import {
 		deleteArtifact,
 		downloadArtifact,
 		regenerateArtifact
-	} from '$lib/remote/deliverables.remote';
-	import { formatBytes, formatDateTime } from '$lib/components/app/labels';
+	} from '$lib/remote/deliverables/deliverables.remote';
+	import { formatBytes, formatDateTime } from '$lib/components/shared/labels';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Pagination from '$lib/components/ui/pagination';
-	import EmptyState from '$lib/components/app/empty-state.svelte';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import EmptyState from '$lib/components/shared/empty-state.svelte';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { ExtractedTemplateStyles, ProseMirrorDocument } from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
+import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
 import { generateDocx } from './docx';
-import { mermaidSourceHash } from './export-images';
+import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 const styles: ExtractedTemplateStyles = {
 	fonts: {
@@ -135,7 +136,7 @@ describe('Docx export parity with PDF', () => {
 		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 	});
 
-	it('renders tables as a grid, keeping cell text and spans', async () => {
+	it('renders tables as a grid, keeping cell text and spans (1/5)', async () => {
 		const withTable: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -164,6 +165,36 @@ describe('Docx export parity with PDF', () => {
 		const zip = await zipFor({ notes: [{ title: 'Note', document: withTable }] });
 		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('<w:tbl>');
+	});
+
+	it('renders tables as a grid, keeping cell text and spans (2/5)', async () => {
+		const withTable: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'table',
+					content: [
+						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
+							]
+						},
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('TallCell'), attrs: { colspan: 1, rowspan: 2, colwidth: null } },
+								cell('FortyTwo')
+							]
+						},
+						{ type: 'tableRow', content: [cell('AfterTall')] }
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withTable }] });
+		const xml = zip.readAsText('word/document.xml');
 		for (const expected of [
 			'QuarterlyMetric',
 			'ValueNow',
@@ -174,12 +205,102 @@ describe('Docx export parity with PDF', () => {
 		]) {
 			expect(xml).toContain(expected);
 		}
+	});
+
+	it('renders tables as a grid, keeping cell text and spans (3/5)', async () => {
+		const withTable: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'table',
+					content: [
+						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
+							]
+						},
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('TallCell'), attrs: { colspan: 1, rowspan: 2, colwidth: null } },
+								cell('FortyTwo')
+							]
+						},
+						{ type: 'tableRow', content: [cell('AfterTall')] }
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withTable }] });
+		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('<w:gridSpan w:val="2"/>');
+	});
+
+	it('renders tables as a grid, keeping cell text and spans (4/5)', async () => {
+		const withTable: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'table',
+					content: [
+						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
+							]
+						},
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('TallCell'), attrs: { colspan: 1, rowspan: 2, colwidth: null } },
+								cell('FortyTwo')
+							]
+						},
+						{ type: 'tableRow', content: [cell('AfterTall')] }
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withTable }] });
+		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('<w:vMerge');
+	});
+
+	it('renders tables as a grid, keeping cell text and spans (5/5)', async () => {
+		const withTable: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'table',
+					content: [
+						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
+							]
+						},
+						{
+							type: 'tableRow',
+							content: [
+								{ ...cell('TallCell'), attrs: { colspan: 1, rowspan: 2, colwidth: null } },
+								cell('FortyTwo')
+							]
+						},
+						{ type: 'tableRow', content: [cell('AfterTall')] }
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withTable }] });
+		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('w:fill="F3F4F6"');
 	});
 
-	it('embeds a browser-rendered diagram as an image', async () => {
+	it('embeds a browser-rendered diagram as an image (1/2)', async () => {
 		const withDiagram: ProseMirrorDocument = {
 			type: 'doc',
 			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
@@ -191,10 +312,23 @@ describe('Docx export parity with PDF', () => {
 			diagramPngs: { [hash]: TINY_PNG }
 		});
 		expect(zip.getEntries().some((entry) => entry.entryName.startsWith('word/media/'))).toBe(true);
+	});
+
+	it('embeds a browser-rendered diagram as an image (2/2)', async () => {
+		const withDiagram: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
+		};
+		const hash = mermaidSourceHash(DIAGRAM_SOURCE);
+		const zip = await zipFor({
+			notes: [{ title: 'Note', document: withDiagram }],
+			diagramSvgs: { [hash]: DIAGRAM_SVG },
+			diagramPngs: { [hash]: TINY_PNG }
+		});
 		expect(zip.readAsText('word/document.xml')).toContain('<w:drawing>');
 	});
 
-	it('keeps the diagram source as code when no render was supplied', async () => {
+	it('keeps the diagram source as code when no render was supplied (1/2)', async () => {
 		const withDiagram: ProseMirrorDocument = {
 			type: 'doc',
 			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
@@ -203,10 +337,20 @@ describe('Docx export parity with PDF', () => {
 			'word/document.xml'
 		);
 		expect(xml).toContain('flowchart');
+	});
+
+	it('keeps the diagram source as code when no render was supplied (2/2)', async () => {
+		const withDiagram: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
+		};
+		const xml = (await zipFor({ notes: [{ title: 'Note', document: withDiagram }] })).readAsText(
+			'word/document.xml'
+		);
 		expect(xml).toContain('Courier New');
 	});
 
-	it('omits the file name from the page unless includeTitle is set', async () => {
+	it('omits the file name from the page unless includeTitle is set (1/2)', async () => {
 		const untitled = await generateDocx({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
@@ -214,6 +358,19 @@ describe('Docx export parity with PDF', () => {
 		expect(new AdmZip(untitled).readAsText('word/document.xml')).not.toContain(
 			'ZebraQuarterlyReport'
 		);
+
+		const _titled = await generateDocx({
+			notes: [{ title: 'Note', document }],
+			title: 'ZebraQuarterlyReport',
+			settings: { ...defaultExportSettings, includeTitle: true }
+		});
+	});
+
+	it('omits the file name from the page unless includeTitle is set (2/2)', async () => {
+		const _untitled = await generateDocx({
+			notes: [{ title: 'Note', document }],
+			title: 'ZebraQuarterlyReport'
+		});
 
 		const titled = await generateDocx({
 			notes: [{ title: 'Note', document }],
@@ -223,18 +380,32 @@ describe('Docx export parity with PDF', () => {
 		expect(new AdmZip(titled).readAsText('word/document.xml')).toContain('ZebraQuarterlyReport');
 	});
 
-	it('honours export settings when no template styles them', async () => {
+	it('honours export settings when no template styles them (1/3)', async () => {
 		const zip = await zipFor({
 			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
 		});
 		expect(zip.readAsText('word/styles.xml')).toContain('Times New Roman');
+		const _xml = zip.readAsText('word/document.xml');
+	});
+
+	it('honours export settings when no template styles them (2/3)', async () => {
+		const zip = await zipFor({
+			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
+		});
 		const xml = zip.readAsText('word/document.xml');
 		// 54pt margins are 1080 twips; 1.6 line height is 384 twentieths of a line.
 		expect(xml).toContain('w:top="1080"');
+	});
+
+	it('honours export settings when no template styles them (3/3)', async () => {
+		const zip = await zipFor({
+			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
+		});
+		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('w:line="384"');
 	});
 
-	it('degrades an unreachable remote image without failing the export', async () => {
+	it('degrades an unreachable remote image without failing the export (1/2)', async () => {
 		const withRemoteImage: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -246,10 +417,23 @@ describe('Docx export parity with PDF', () => {
 			await zipFor({ notes: [{ title: 'Note', document: withRemoteImage }] })
 		).readAsText('word/document.xml');
 		expect(xml).toContain('[image unavailable]');
+	});
+
+	it('degrades an unreachable remote image without failing the export (2/2)', async () => {
+		const withRemoteImage: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'image', attrs: { src: 'http://127.0.0.1:9/missing.png' } },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Still here.' }] }
+			]
+		};
+		const xml = (
+			await zipFor({ notes: [{ title: 'Note', document: withRemoteImage }] })
+		).readAsText('word/document.xml');
 		expect(xml).toContain('Still here.');
 	});
 
-	it('keeps nested lists at their own indent level', async () => {
+	it('keeps nested lists at their own indent level (1/2)', async () => {
 		const withNestedList: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -279,6 +463,37 @@ describe('Docx export parity with PDF', () => {
 			'word/document.xml'
 		);
 		expect(xml).toContain('Inner');
+	});
+
+	it('keeps nested lists at their own indent level (2/2)', async () => {
+		const withNestedList: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'bulletList',
+					content: [
+						{
+							type: 'listItem',
+							content: [
+								{ type: 'paragraph', content: [{ type: 'text', text: 'Outer' }] },
+								{
+									type: 'bulletList',
+									content: [
+										{
+											type: 'listItem',
+											content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Inner' }] }]
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		};
+		const xml = (await zipFor({ notes: [{ title: 'Note', document: withNestedList }] })).readAsText(
+			'word/document.xml'
+		);
 		expect(xml).toContain('<w:ilvl w:val="1"/>');
 	});
 
@@ -301,7 +516,7 @@ describe('Docx export parity with PDF', () => {
 		expect(zip.readAsText('word/numbering.xml')).toContain('<w:numFmt w:val="decimal"/>');
 	});
 
-	it('keeps links and bold inside a blockquote', async () => {
+	it('keeps links and bold inside a blockquote (1/3)', async () => {
 		const withQuote: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -327,8 +542,64 @@ describe('Docx export parity with PDF', () => {
 		};
 		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
 		expect(zip.readAsText('word/_rels/document.xml.rels')).toContain('https://example.com/quoted');
+		const _xml = zip.readAsText('word/document.xml');
+	});
+
+	it('keeps links and bold inside a blockquote (2/3)', async () => {
+		const withQuote: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'blockquote',
+					content: [
+						{
+							type: 'paragraph',
+							content: [
+								{
+									type: 'text',
+									text: 'quoted docs',
+									marks: [
+										{ type: 'link', attrs: { href: 'https://example.com/quoted' } },
+										{ type: 'bold' }
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
 		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('<w:b/>');
+	});
+
+	it('keeps links and bold inside a blockquote (3/3)', async () => {
+		const withQuote: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'blockquote',
+					content: [
+						{
+							type: 'paragraph',
+							content: [
+								{
+									type: 'text',
+									text: 'quoted docs',
+									marks: [
+										{ type: 'link', attrs: { href: 'https://example.com/quoted' } },
+										{ type: 'bold' }
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		};
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
+		const xml = zip.readAsText('word/document.xml');
 		expect(xml).toContain('<w:ind w:left="720"/>');
 	});
 });

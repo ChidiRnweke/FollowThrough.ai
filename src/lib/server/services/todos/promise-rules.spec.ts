@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteId, TextSelection } from '$lib/models';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 import { parsePromises } from './promise-rules';
 
 const selection = (text: string): TextSelection => ({

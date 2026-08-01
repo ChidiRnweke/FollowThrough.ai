@@ -1,10 +1,6 @@
-import type {
-	ActorContext,
-	ExtractedTemplateStyles,
-	ProjectId,
-	ProjectTemplate,
-	TemplateId
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { ExtractedTemplateStyles, TemplateId } from '$lib/models/deliverables';
+import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
 
 export interface TemplateUploader {
 	initiateUpload(

@@ -1,6 +1,6 @@
-import type { ActorContext, User } from '$lib/models';
+import type { ActorContext, User } from '$lib/models/identity';
 import { NotFoundError } from '$lib/errors';
-import type { UserRepository } from '$lib/server/repositories';
+import type { UserRepository } from '$lib/server/repositories/identity';
 export interface UserReader {
 	get(actor: ActorContext): Promise<User>;
 }

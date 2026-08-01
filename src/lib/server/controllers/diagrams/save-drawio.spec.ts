@@ -4,15 +4,16 @@ import {
 	drawioBuilder,
 	InMemoryDiagrams,
 	mermaidBuilder
-} from '$lib/testing/fakes/in-memory-diagram-skills';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
-import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import {
 	DrawioDiagramTextExtractor,
 	DrawioSvgSanitizer,
 	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>API</text></svg>';
 
@@ -21,15 +22,17 @@ const setup = (kind: 'drawio' | 'mermaid' = 'drawio') => {
 	const diagram =
 		kind === 'drawio' ? drawioBuilder({ source: VALID_DRAWIO_XML }) : mermaidBuilder();
 	diagrams.diagrams = [diagram];
-	const controller = new Diagrams({
-		diagramFinder: diagrams,
-		diagramWriter: diagrams,
-		diagramIndexer: diagrams,
-		drawioXmlValidator: new DrawioXmlValidator(),
-		drawioSvgSanitizer: new DrawioSvgSanitizer(),
-		drawioTextExtractor: new DrawioDiagramTextExtractor(),
-		transactionRunner: new InMemoryTransactionRunner([])
-	} as unknown as DiagramsDependencies);
+	const controller = new Diagrams(
+		capabilityDependencies<DiagramsDependencies>({
+			diagramFinder: diagrams,
+			diagramWriter: diagrams,
+			diagramIndexer: diagrams,
+			drawioXmlValidator: new DrawioXmlValidator(),
+			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			transactionRunner: new InMemoryTransactionRunner([])
+		})
+	);
 	return { controller, diagrams, diagram };
 };
 

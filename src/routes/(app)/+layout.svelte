@@ -2,22 +2,23 @@
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount } from 'svelte';
-	import AppSidebar from '$lib/components/app/app-sidebar.svelte';
-	import CommandPalette from '$lib/components/app/command-palette.svelte';
-	import RightPanel from '$lib/components/app/right-panel.svelte';
-	import WorkspaceTabs from '$lib/components/app/workspace-tabs.svelte';
+	import AppSidebar from '$lib/components/shell/navigation/app-sidebar.svelte';
+	import CommandPalette from '$lib/components/shell/navigation/command-palette.svelte';
+	import RightPanel from '$lib/components/shell/workbench/right-panel.svelte';
+	import WorkspaceTabs from '$lib/components/shell/workbench/workspace-tabs.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import type { NoteId, ProjectId } from '$lib/models';
-	import { workbench } from '$lib/stores/workbench.svelte';
-	import { projectActions } from '$lib/stores/project-actions.svelte';
+	import type { NoteId } from '$lib/models/notes';
+	import type { ProjectId } from '$lib/models/projects';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
-	import { appContext } from '$lib/stores/app-context.svelte';
+	import { appContext } from '$lib/stores/agent/app-context.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { palette } from '$lib/stores/palette.svelte';
-	import { openChatSurface } from '$lib/client/responsive-surfaces';
+	import { palette } from '$lib/stores/shell/palette.svelte';
+	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
-	import MemoryNotificationMenu from '$lib/components/app/memory-notification-menu.svelte';
+	import MemoryNotificationMenu from '$lib/components/memory/memory-notification-menu.svelte';
 
 	let { data, children } = $props();
 

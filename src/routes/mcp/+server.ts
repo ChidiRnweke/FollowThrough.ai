@@ -1,7 +1,7 @@
 // chisel-ignore-file error-flow:raw-http-status -- MCP bearer authentication and JSON-RPC method negotiation require protocol-level 401 and 405 responses.
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
-import type { ActorContext, ApiTokenScope } from '$lib/models';
+import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import { AppFactory } from '$lib/server/app-factory';
 import { createMcpToolSurface } from '$lib/server/mcp-tool-factory';
 

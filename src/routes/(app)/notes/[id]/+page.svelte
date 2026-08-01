@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import WorkspacePanes from '$lib/components/app/workspace-panes.svelte';
+	import WorkspacePanes from '$lib/components/shell/workbench/workspace-panes.svelte';
 
 	let { data }: { data: PageData } = $props();
 </script>

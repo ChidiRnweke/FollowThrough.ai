@@ -1,8 +1,15 @@
-import type { ActorContext } from '$lib/models';
-import type { AttachmentRepository, OwnedAttachmentUpload } from '$lib/server/repositories';
-interface AttachmentStorage {
+import type { ActorContext } from '$lib/models/identity';
+import type {
+	AttachmentRepository,
+	OwnedAttachmentUpload
+} from '$lib/server/repositories/attachments/attachments';
+export interface AttachmentStorage {
 	remove(objectKey: string): Promise<void>;
 }
+export type UploadRetentionRepository = Pick<
+	AttachmentRepository,
+	'listExpiredUploads' | 'deleteUpload'
+>;
 interface ScheduledTask {
 	readonly name: string;
 	readonly intervalMs: number;
@@ -42,7 +49,7 @@ export class UploadRetention implements ScheduledTask {
 	private readonly logger: Pick<Console, 'error' | 'log'>;
 
 	constructor(
-		private readonly repository: AttachmentRepository,
+		private readonly repository: UploadRetentionRepository,
 		private readonly storage: AttachmentStorage,
 		options: UploadRetentionOptions = {}
 	) {

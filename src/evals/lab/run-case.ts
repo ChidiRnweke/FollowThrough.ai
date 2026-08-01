@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	AgentExecutionMode,
 	AgentRunEventRecord,
 	AgentRunId,
-	AgentRunStatus,
-	NoteId,
-	ProjectId
-} from '$lib/models';
+	AgentRunStatus
+} from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { Lab } from './application';
 
 const TERMINAL: readonly AgentRunStatus[] = [
@@ -29,7 +29,7 @@ export interface ToolCall {
 
 export interface AgentRunResult {
 	readonly runId: AgentRunId;
-	readonly conversationId: import('$lib/models').ConversationId;
+	readonly conversationId: import('$lib/models/agent').ConversationId;
 	readonly status: AgentRunStatus;
 	readonly finalResponse: string;
 	readonly toolCalls: readonly ToolCall[];
@@ -47,10 +47,10 @@ export interface RunCaseInput {
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
 	readonly contextNoteIds?: readonly NoteId[];
-	readonly selection?: import('$lib/models').TextSelection;
+	readonly selection?: import('$lib/models/notes').TextSelection;
 	readonly requestedSkillNames?: readonly string[];
-	readonly conversationId?: import('$lib/models').ConversationId;
-	readonly appContext?: import('$lib/models').AppContextSnapshotV1;
+	readonly conversationId?: import('$lib/models/agent').ConversationId;
+	readonly appContext?: import('$lib/models/workspace').AppContextSnapshotV1;
 }
 
 /**

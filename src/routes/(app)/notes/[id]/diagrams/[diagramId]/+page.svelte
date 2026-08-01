@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import DrawioEditorPage from '$lib/components/app/pages/drawio-editor-page.svelte';
+	import DrawioEditorPage from '$lib/components/diagrams/workspace/drawio-editor-page.svelte';
 
 	let { data } = $props();
 </script>

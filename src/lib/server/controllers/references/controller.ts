@@ -1,13 +1,14 @@
-import type { ActorContext, FindReferencesInput, FindReferencesOutput } from '$lib/models';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+import type { ActorContext } from '$lib/models/identity';
+import type { FindReferencesInput, FindReferencesOutput } from '$lib/models/references';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
-	ProvenanceRecorder,
 	ReferenceFinder,
 	ReferenceRanker,
-	ReferenceSearchOptions,
-	SelectionAnchorCreator,
-	SuggestionCreator
-} from '$lib/server/services';
+	ReferenceSearchOptions
+} from '$lib/server/services/references/contracts';
+import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
 export interface ReferencesController {
 	suggestFromSelection(

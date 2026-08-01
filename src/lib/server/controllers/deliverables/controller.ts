@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	ArtifactId,
 	ExportSettings,
 	GenerateDocumentInput,
@@ -9,9 +9,9 @@ import type {
 	ListArtifactsParams,
 	PreviewDocumentInput,
 	PreviewDocumentOutput,
-	ProjectId,
 	TemplateId
-} from '$lib/models';
+} from '$lib/models/deliverables';
+import type { ProjectId } from '$lib/models/projects';
 import type {
 	ArtifactDeleter,
 	ArtifactLister,
@@ -20,12 +20,14 @@ import type {
 	DocumentGenerator,
 	DocumentPreviewer,
 	ExportSettingsReader,
-	ExportSettingsWriter,
+	ExportSettingsWriter
+} from '$lib/server/services/deliverables/artifact-contracts';
+import type {
 	TemplateDeleter,
 	TemplateLister,
 	TemplateUploader
-} from '$lib/server/services';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+} from '$lib/server/services/deliverables/template-contracts';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 export interface DeliverablesController {
 	initiateTemplateUpload(
@@ -46,7 +48,7 @@ export interface DeliverablesController {
 	listTemplates(
 		actor: ActorContext,
 		projectId: ProjectId
-	): Promise<readonly import('$lib/models').ProjectTemplate[]>;
+	): Promise<readonly import('$lib/models/projects').ProjectTemplate[]>;
 	deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void>;
 	generateDocument(
 		actor: ActorContext,
@@ -67,7 +69,7 @@ export interface DeliverablesController {
 	getArtifact(
 		actor: ActorContext,
 		artifactId: ArtifactId
-	): Promise<import('$lib/models').Artifact | undefined>;
+	): Promise<import('$lib/models/deliverables').Artifact | undefined>;
 	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	deleteArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<void>;
 	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;

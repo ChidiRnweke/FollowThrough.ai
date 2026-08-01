@@ -6,7 +6,7 @@ import {
 	MermaidSubmissionValidator
 } from './authoring';
 import { DrawioXmlValidator } from './drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/fixtures/drawio';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 describe('Diagram submission safety invariants', () => {
 	it('rejects a rendered payload that is not a PNG', () => {

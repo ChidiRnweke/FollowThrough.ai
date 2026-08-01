@@ -17,7 +17,7 @@
 - **Product mark:** FollowThrough uses a flat teal tile with a continuous white F-to-check path.
   It replaces framework placeholder branding without adding gradients, shadows, or a broader
   ornament system.
-- **Mark usage:** The mark renders via `src/lib/components/app/brand-mark.svelte` (semantic
+- **Mark usage:** The mark renders via `src/lib/components/shared/brand-mark.svelte` (semantic
   tokens, both color modes). It is always present in the sidebar header — the mark alone in
   icon-collapsed mode — and on the offline page. It is never decorated, recolored per-context,
   or repeated inside content surfaces.
@@ -55,7 +55,7 @@
   kind. Navigation sits one step away from identity, and identity one step from content.
   `PageShell` already encodes the header end of this ladder, which is why overriding its
   `header` snippet with a flat `gap-1` stack is a regression rather than a shortcut, and
-  `src/lib/components/app/pages/project-overview.svelte` is the reference implementation for
+  `src/lib/components/projects/workspace/project-overview.svelte` is the reference implementation for
   the content end. A screen whose every gap is equal has no hierarchy no matter how well its
   content is grouped, and the fix is never a divider.
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
@@ -111,7 +111,7 @@ The product celebrates the absence of work rather than apologizing for empty scr
 
 - Canonical empty-state lines: "Nothing overdue. Well held." · "Nothing due today." ·
   "Not waiting on anyone." · "Pin a note to keep it at hand." · "Notes you touch show up here." ·
-  kanban columns use `todoStatusEmptyCopy` in `src/lib/components/app/labels.ts`.
+  kanban columns use `todoStatusEmptyCopy` in `src/lib/components/shared/labels.ts`.
 - The Today page greets with the date as an eyebrow ("Tuesday · 22 July") and a time-aware
   subtitle (morning/afternoon/evening variants). No user name, no weather, no emoji.
 - Errors state what happened and the fix, specifically and without apology.
@@ -119,7 +119,7 @@ The product celebrates the absence of work rather than apologizing for empty scr
 ## Empty states
 
 Empty regions are invitations to act, never dead blank space. Use
-`src/lib/components/app/empty-state.svelte`: a quiet icon, one voice line, an optional hint,
+`src/lib/components/shared/empty-state.svelte`: a quiet icon, one voice line, an optional hint,
 and at most one action. It comes in two sizes: the default slot size (bare muted icon, all-muted
 copy) fills inline gaps — a grid cell, a side panel; `size="large"` is the hero treatment for a
 region that carries a page or a whole section — a brand-wash icon tile (`size-16 rounded-lg

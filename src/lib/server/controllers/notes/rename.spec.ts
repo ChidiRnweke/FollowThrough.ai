@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
-import { noteBuilder, testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import {
+	noteBuilder,
+	testActor,
+	testNoteId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
-	const controller = new Notes({
-		noteReader: content,
-		noteEditor: content,
-		noteLinkReconciler: content,
-		revisionRecorder: content,
-		noteIndexer: content,
-		transactionRunner: new InMemoryTransactionRunner([content])
-	} as unknown as NotesDependencies);
+	const controller = new Notes(
+		capabilityDependencies<NotesDependencies>({
+			noteReader: content,
+			noteEditor: content,
+			noteLinkReconciler: content,
+			revisionRecorder: content,
+			noteIndexer: content,
+			transactionRunner: new InMemoryTransactionRunner([content])
+		})
+	);
 	return { content, controller };
 };
 

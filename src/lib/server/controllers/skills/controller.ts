@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateSkillFromSelectionInput,
 	CreateSkillFromSelectionOutput,
 	CreateSkillInput,
@@ -7,23 +7,22 @@ import type {
 	GetSkillViewInput,
 	ListSkillsOutput,
 	LoadSkillInput,
-	NoteRevision,
-	ProjectId,
 	RestoreSkillVersionInput,
 	SkillView
-} from '$lib/models';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+} from '$lib/models/skills';
+import type { NoteRevision } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { NoteCreator, SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
-	NoteCreator,
-	ProvenanceRecorder,
-	SelectionAnchorCreator,
 	SkillCreator,
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
 	SkillEditor,
 	SkillVersionManager
-} from '$lib/server/services';
+} from '$lib/server/services/skills/contracts';
 
 export interface SkillsController {
 	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;

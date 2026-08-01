@@ -3,7 +3,7 @@
 	import type { HTMLFieldsetAttributes } from 'svelte/elements';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		class: className,
 		children,
 		...restProps

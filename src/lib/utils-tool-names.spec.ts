@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { levenshtein, matchToolName, suggestToolNames } from './utils';
+import { levenshtein, matchToolName, suggestToolNames } from './models/agent/tool-name-matching';
 
 const names = ['search', 'create_project', 'get_workspace_context', 'list_projects'];
 

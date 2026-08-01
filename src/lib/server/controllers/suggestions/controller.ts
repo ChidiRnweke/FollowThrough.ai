@@ -1,23 +1,23 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { Diagram, DiagramId, DrawioDiagram } from '$lib/models/diagrams';
+import type { NoteId } from '$lib/models/notes';
 import type {
-	ActorContext,
-	Diagram,
-	DiagramId,
-	DrawioDiagram,
-	NoteId,
 	AcceptSuggestionInput,
 	AcceptSuggestionOutput,
-	ListPendingMemoryInput,
-	ListPendingMemoryOutput,
 	ListSuggestionsInput,
 	ListSuggestionsOutput,
-	MemorySuggestionView,
 	SuggestionGroup,
 	SuggestionView,
 	RejectSuggestionInput,
 	RevertSuggestionInput,
 	Suggestion
-} from '$lib/models';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+} from '$lib/models/suggestions';
+import type {
+	ListPendingMemoryInput,
+	ListPendingMemoryOutput,
+	MemorySuggestionView
+} from '$lib/models/memory';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type {
 	SuggestionAccepter,
@@ -26,7 +26,7 @@ import type {
 	SuggestionRejecter,
 	SuggestionReverter,
 	SuggestionViewAssembler
-} from '$lib/server/services';
+} from '$lib/server/services/suggestions/contracts';
 
 export interface SuggestionArtifactApplier {
 	apply(actor: ActorContext, suggestion: Suggestion): Promise<AcceptSuggestionOutput['artifact']>;

@@ -83,12 +83,12 @@ export default defineConfig({
 					},
 					include: [
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
-						'src/lib/components/app/drawio-embed.svelte.spec.ts',
-						'src/lib/components/app/export-slider.svelte.spec.ts',
-						'src/lib/components/app/note-conflict-dialog.svelte.spec.ts',
-						'src/lib/components/app/safe-svg-preview.svelte.spec.ts',
+						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',
+						'src/lib/components/notes/export/export-slider.svelte.spec.ts',
+						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
+						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
-						'src/lib/client/note-sync/indexeddb-note-sync-repository.svelte.spec.ts'
+						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts'
 					],
 					isolate: true,
 					maxWorkers: 1,
@@ -125,7 +125,10 @@ export default defineConfig({
 					...common,
 					name: 'contracts',
 					environment: 'node',
-					include: ['src/lib/server/**/*.contract.spec.ts'],
+					include: [
+						'src/lib/server/**/*.contract.spec.ts',
+						'tests/integration/**/*.contract.spec.ts'
+					],
 					globalSetup: ['./src/lib/server/db/contract-global-setup.ts'],
 					fileParallelism: false,
 					maxWorkers: 1

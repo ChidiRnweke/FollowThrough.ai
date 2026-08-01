@@ -11,7 +11,7 @@
 	import { setSidebar } from './context.svelte.js';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		open = $bindable(true),
 		onOpenChange = () => {},
 		class: className,

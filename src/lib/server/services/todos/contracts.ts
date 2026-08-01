@@ -1,13 +1,13 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateTodoInput,
-	SourceAnchor,
 	Todo,
 	TodoId,
 	TodoListFilter,
 	TodoStatus,
 	TodoView
-} from '$lib/models';
+} from '$lib/models/todos';
+import type { SourceAnchor } from '$lib/models/provenance';
 export interface TodoCreator {
 	create(actor: ActorContext, input: CreateTodoInput): Promise<Todo>;
 }
@@ -35,6 +35,7 @@ export interface TodoSourceFinder {
 export interface TodoLister {
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
 	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
+	listCategories(actor: ActorContext): Promise<readonly string[]>;
 }
 export interface TodoViewAssembler {
 	assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]>;

@@ -1,5 +1,5 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	ArchiveProjectInput,
 	ArchiveProjectOutput,
 	CreateFolderInput,
@@ -13,7 +13,7 @@ import type {
 	MoveProjectEntryOutput,
 	RenameProjectInput,
 	RenameProjectOutput
-} from '$lib/models';
+} from '$lib/models/projects';
 import type {
 	FolderCreator,
 	ProjectCreator,
@@ -22,8 +22,8 @@ import type {
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
-} from '$lib/server/services';
-import type { AtomicOperation as TransactionRunner } from '$lib/utils';
+} from '$lib/server/services/projects/contracts';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 export interface ProjectsController {
 	list(actor: ActorContext): Promise<ListProjectsOutput>;

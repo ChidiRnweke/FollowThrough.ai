@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
-import type { TextSelection, Url } from '$lib/models';
+import type { TextSelection } from '$lib/models/notes';
+import type { Url } from '$lib/models/references';
 import { ReferenceResearch, ReferenceDiscovery } from './discovery';
-import { InMemoryWebReferenceClient } from '$lib/testing/fakes/in-memory-pipelines';
-import { testActor, testNoteId } from '$lib/testing/fixtures/domain-builders';
+import { InMemoryWebReferenceClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),

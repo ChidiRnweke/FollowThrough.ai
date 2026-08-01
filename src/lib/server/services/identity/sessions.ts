@@ -1,5 +1,5 @@
-import type { Session, SessionId, User, UserId } from '$lib/models';
-import type { SessionRepository } from '$lib/server/repositories';
+import type { Session, SessionId, User, UserId } from '$lib/models/identity';
+import type { SessionRepository } from '$lib/server/repositories/identity';
 
 export interface ISessionRegistry {
 	logout(sessionId: string): Promise<void>;

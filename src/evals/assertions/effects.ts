@@ -1,4 +1,6 @@
-import type { ActorContext, ProjectId, SuggestionKind } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
+import type { SuggestionKind } from '$lib/models/suggestions';
 import type { Lab } from '../lab/application';
 
 /**

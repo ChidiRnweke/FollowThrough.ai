@@ -1,15 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type {
-	ActorContext,
-	DateTime,
-	ExtractedTemplateStyles,
-	ProjectId,
-	ProjectTemplate,
-	TemplateId
-} from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { ExtractedTemplateStyles, TemplateId } from '$lib/models/deliverables';
+import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type { TemplateRepository } from '$lib/server/repositories';
-import type { TransactionRunner } from '$lib/server/repositories/transaction';
+import type { TemplateRepository } from '$lib/server/repositories/deliverables';
+import type { TransactionRunner } from '$lib/server/repositories/workspace/transaction';
 interface TemplateStorage {
 	createUploadUrl(input: {
 		objectKey: string;
@@ -134,7 +130,7 @@ export class DocumentTemplates {
 		const template = await this.templateRepo.findById(actor, templateId);
 		if (!template) throw new NotFoundError('Template not found');
 		if (template.extractedStyles)
-			return template.extractedStyles as unknown as import('$lib/models').ExtractedTemplateStyles;
+			return template.extractedStyles as unknown as import('$lib/models/deliverables').ExtractedTemplateStyles;
 		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
 		return this.styleExtractor(Buffer.from(buffer));
 	}

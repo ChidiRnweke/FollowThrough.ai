@@ -1,7 +1,8 @@
-import type { ActorContext, Project, ProjectId } from '$lib/models';
-import { DEFAULT_PROJECT_NAME } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { Project, ProjectId } from '$lib/models/projects';
+import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
 import { NotFoundError } from '$lib/errors';
-import type { ProjectRepository } from '$lib/server/repositories';
+import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 
 export async function ensureProjectForActor(
 	repository: ProjectRepository,

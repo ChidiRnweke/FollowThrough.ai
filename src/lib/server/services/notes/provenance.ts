@@ -1,6 +1,11 @@
-import type { ActorContext, DateTime, Provenance, ProvenanceId } from '$lib/models';
+import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { Provenance, ProvenanceId } from '$lib/models/provenance';
 import { NotFoundError } from '$lib/errors';
-import type { ProvenanceRepository, SourceAnchorRepository } from '$lib/server/repositories';
+import type {
+	ProvenanceRepository,
+	SourceAnchorRepository
+} from '$lib/server/repositories/provenance';
 export interface ProvenanceRecorder {
 	record(
 		actor: ActorContext,

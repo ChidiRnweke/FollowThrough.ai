@@ -1,15 +1,14 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	CreateNoteInput,
 	Note,
 	NoteId,
 	NoteRevision,
 	NoteSummary,
-	Provenance,
-	ProjectId,
-	SourceAnchor,
 	TextSelection
-} from '$lib/models';
+} from '$lib/models/notes';
+import type { Provenance, SourceAnchor } from '$lib/models/provenance';
+import type { ProjectId } from '$lib/models/projects';
 export interface NoteCreator {
 	create(actor: ActorContext, input: CreateNoteInput): Promise<Note>;
 }

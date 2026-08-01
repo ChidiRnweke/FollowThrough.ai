@@ -1,6 +1,6 @@
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
-import type { SkillManifest } from '$lib/models';
+import type { SkillManifest } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 
 const slug = z

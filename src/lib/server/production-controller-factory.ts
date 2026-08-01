@@ -1,46 +1,39 @@
+import { Agent, type AgentDependencies } from './controllers/agent/controller';
 import {
-	Agent,
 	AgentSettings,
-	ApiTokens,
-	Attachments,
-	Deliverables,
-	Diagrams,
-	Feedback,
-	NoteImportsController,
-	InlineSuggestions,
-	Memory,
-	Notes,
-	Projects,
-	References,
-	Relationships,
-	Retrieval,
-	Skills,
-	Suggestions,
-	Todos,
+	type AgentSettingsDependencies
+} from './controllers/agent/settings/controller';
+import {
 	ToolPreferences,
+	type ToolPreferencesDependencies
+} from './controllers/agent/tool-preferences/controller';
+import {
 	TrustPolicies,
-	Workspace,
-	type AgentDependencies,
-	type AgentSettingsDependencies,
-	type ApiTokensDependencies,
-	type AttachmentsDependencies,
-	type DeliverablesDependencies,
-	type FeedbackDependencies,
-	type DiagramsDependencies,
-	type InlineSuggestionsDependencies,
-	type MemoryDependencies,
-	type NotesDependencies,
-	type ProjectsDependencies,
-	type ReferencesDependencies,
-	type RelationshipsDependencies,
-	type RetrievalDependencies,
-	type SkillsDependencies,
-	type SuggestionsDependencies,
-	type TodosDependencies,
-	type ToolPreferencesDependencies,
-	type TrustPoliciesDependencies,
-	type WorkspaceDependencies
-} from './controllers';
+	type TrustPoliciesDependencies
+} from './controllers/agent/trust-policies/controller';
+import { ApiTokens, type ApiTokensDependencies } from './controllers/api-tokens/controller';
+import { Attachments, type AttachmentsDependencies } from './controllers/attachments/controller';
+import { Deliverables, type DeliverablesDependencies } from './controllers/deliverables/controller';
+import { Diagrams, type DiagramsDependencies } from './controllers/diagrams/controller';
+import { Feedback, type FeedbackDependencies } from './controllers/feedback/controller';
+import { NoteImportsController } from './controllers/imports/controller';
+import {
+	InlineSuggestions,
+	type InlineSuggestionsDependencies
+} from './controllers/inline-suggestions/controller';
+import { Retrieval, type RetrievalDependencies } from './controllers/knowledge-search/controller';
+import { Memory, type MemoryDependencies } from './controllers/memory/controller';
+import { Notes, type NotesDependencies } from './controllers/notes/controller';
+import { Projects, type ProjectsDependencies } from './controllers/projects/controller';
+import { References, type ReferencesDependencies } from './controllers/references/controller';
+import {
+	Relationships,
+	type RelationshipsDependencies
+} from './controllers/relationships/controller';
+import { Skills, type SkillsDependencies } from './controllers/skills/controller';
+import { Suggestions, type SuggestionsDependencies } from './controllers/suggestions/controller';
+import { Todos, type TodosDependencies } from './controllers/todos/controller';
+import { Workspace, type WorkspaceDependencies } from './controllers/workspace/controller';
 import type { ControllerFactory } from './controller-factory';
 
 export interface ProductionControllerDependencies {

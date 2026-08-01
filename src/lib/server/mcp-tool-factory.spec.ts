@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { ControllerFactory } from '$lib/server/controller-factory';
-import type { ApiTokenScope } from '$lib/models';
-import { InMemoryToolRetriever } from '$lib/testing/fakes/in-memory-agent';
-import { testActor, testProvenanceId } from '$lib/testing/fixtures/domain-builders';
+import type { ApiTokenScope } from '$lib/models/identity';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createMcpToolSurface } from '$lib/server/mcp-tool-factory';
 
 const connect = async (

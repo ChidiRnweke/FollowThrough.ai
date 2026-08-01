@@ -1,8 +1,8 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import ProfileMemory from '$lib/components/app/pages/profile-memory.svelte';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import ProfileMemory from '$lib/components/memory/workspace/profile-memory.svelte';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
 </script>
 
 <PageShell>

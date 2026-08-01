@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryProjectRepository } from '$lib/testing/fakes/in-memory-project-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNoteId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { ProjectCatalog } from './catalog';
 
 const setup = () => {

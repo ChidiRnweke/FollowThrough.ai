@@ -1,17 +1,16 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	Diagram,
 	DiagramId,
 	DrawioDiagram,
 	MermaidDiagram,
-	NoteId,
-	ProjectId,
-	TextSelection,
-	ProvenanceId,
 	ReviseInlineMermaidInput,
 	ReviseInlineMermaidOutput,
 	ConvertInlineMermaidInput
-} from '$lib/models';
+} from '$lib/models/diagrams';
+import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { ProvenanceId } from '$lib/models/provenance';
 export interface MermaidDiagramDraft {
 	readonly title?: string;
 	readonly source: string;

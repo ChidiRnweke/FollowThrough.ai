@@ -1,29 +1,27 @@
 import { randomUUID } from 'node:crypto';
+import type { ActorContext } from '$lib/models/identity';
 import type {
-	ActorContext,
 	Artifact,
 	ArtifactId,
 	ListArtifactsOutput,
 	ListArtifactsParams,
-	DateTime,
 	ExportSettings,
 	ExtractedTemplateStyles,
 	GenerateDocumentInput,
-	Note,
-	NoteId,
-	PreviewDocumentInput,
-	ProjectId,
-	ProseMirrorDocument,
-	Provenance
-} from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
+	PreviewDocumentInput
+} from '$lib/models/deliverables';
+import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, ProseMirrorDocument } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+import type { Provenance } from '$lib/models/provenance';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	ArtifactRepository,
 	ExportSettingsRepository,
 	TemplateRepository
-} from '$lib/server/repositories';
-import type { TransactionRunner } from '$lib/server/repositories/transaction';
+} from '$lib/server/repositories/deliverables';
+import type { TransactionRunner } from '$lib/server/repositories/workspace/transaction';
 interface ArtifactStorage {
 	put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void>;
 	createDownloadUrl(
@@ -127,7 +125,7 @@ export class ArtifactLibrary {
 	private async loadNotes(
 		actor: ActorContext,
 		noteIds: readonly NoteId[]
-	): Promise<{ title: string; document: import('$lib/models').ProseMirrorDocument }[]> {
+	): Promise<{ title: string; document: import('$lib/models/notes').ProseMirrorDocument }[]> {
 		return Promise.all(
 			noteIds.map(async (noteId) => {
 				const note = await this.noteReader.get(actor, noteId);
@@ -151,7 +149,7 @@ export class ArtifactLibrary {
 			const template = await this.templateRepo.findById(actor, input.templateId);
 			if (template?.extractedStyles) {
 				extractedStyles =
-					template.extractedStyles as unknown as import('$lib/models').ExtractedTemplateStyles;
+					template.extractedStyles as unknown as import('$lib/models/deliverables').ExtractedTemplateStyles;
 			}
 		}
 

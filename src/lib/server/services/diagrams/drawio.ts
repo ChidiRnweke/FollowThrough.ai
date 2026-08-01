@@ -1,6 +1,6 @@
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
-import type { Diagram } from '$lib/models';
+import type { Diagram } from '$lib/models/diagrams';
 import { ValidationError } from '$lib/errors';
 
 export interface IDiagramContent {

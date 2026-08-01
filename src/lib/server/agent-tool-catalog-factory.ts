@@ -1,6 +1,7 @@
 import type { ControllerFactory } from '$lib/server/controller-factory';
-import type { ActorContext, ProvenanceId, UserId } from '$lib/models';
-import type { ToolCatalog, ToolCatalogEntry } from '$lib/server/services';
+import type { ActorContext, UserId } from '$lib/models/identity';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { ToolCatalog, ToolCatalogEntry } from '$lib/server/services/agent/tools/preferences';
 import { AgentTools, LOCKED_TOOL_NAMES } from './agent-tool-factory';
 
 /**

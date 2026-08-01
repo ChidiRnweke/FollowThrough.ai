@@ -1,26 +1,20 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, NoteRevision, NoteRevisionId, TextSelection } from '$lib/models/notes';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { ProjectId } from '$lib/models/projects';
 import type {
-	ActorContext,
-	DateTime,
-	Note,
-	NoteId,
-	NoteRevision,
-	NoteRevisionId,
-	ProvenanceId,
-	ProjectId,
 	Skill,
 	SkillSummary,
 	SkillManifest,
 	SkillUsage,
 	SkillUsageId,
-	SkillUsageView,
-	TextSelection
-} from '$lib/models';
+	SkillUsageView
+} from '$lib/models/skills';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type {
-	NoteRepository,
-	ProvenanceRepository,
-	SkillRepository
-} from '$lib/server/repositories';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
+import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 interface SkillManifests {
 	parse(source: string): SkillManifest;
 	serialize(manifest: SkillManifest & { readonly instructions: string }): string;

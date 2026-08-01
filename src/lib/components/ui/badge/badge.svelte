@@ -29,7 +29,7 @@
 	import { cn, type WithElementRef } from '$lib/utils.js';
 
 	let {
-		ref = $bindable(null),
+		ref = $bindable(),
 		href,
 		class: className,
 		variant = 'default',

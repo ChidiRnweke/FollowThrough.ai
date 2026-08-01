@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import ProjectOverview from '$lib/components/app/pages/project-overview.svelte';
+	import ProjectOverview from '$lib/components/projects/workspace/project-overview.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -12,12 +12,12 @@
 		FtFolderPlus as FolderPlus,
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
-	import { projectActions } from '$lib/stores/project-actions.svelte';
-	import NameDialog from '$lib/components/app/name-dialog.svelte';
-	import ExportSettingsDialog from '$lib/components/app/export-settings-dialog.svelte';
-	import ImportNotesDialog from '$lib/components/app/import-notes-dialog.svelte';
-	import AgentAction from '$lib/components/app/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/app/agent/agent-actions';
+	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import NameDialog from '$lib/components/projects/name-dialog.svelte';
+	import ExportSettingsDialog from '$lib/components/notes/export/export-settings-dialog.svelte';
+	import ImportNotesDialog from '$lib/components/notes/import-notes-dialog.svelte';
+	import AgentAction from '$lib/components/agent/agent-action.svelte';
+	import { agentActions } from '$lib/components/agent/agent-actions';
 
 	let { data } = $props();
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteId } from '$lib/models';
+import type { NoteId } from '$lib/models/notes';
 import { rankNoteLinkTargets } from './NoteLinkSuggestion';
 
 const notes = [

@@ -1,26 +1,25 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { CreateReferenceInput } from '$lib/models/references';
+import type { CreateRelationshipInput } from '$lib/models/relationships';
+import type { CreateTodoInput } from '$lib/models/todos';
+import type { DateTime } from '$lib/models/workspace';
+import type { DiagramKind } from '$lib/models/diagrams';
+import type { MemoryChangePayload } from '$lib/models/memory';
+import type { NoteId } from '$lib/models/notes';
+import type { ProvenanceId, SourceAnchorId } from '$lib/models/provenance';
 import type {
-	ActorContext,
-	CreateReferenceInput,
-	CreateRelationshipInput,
-	CreateTodoInput,
-	DateTime,
-	DiagramKind,
-	MemoryChangePayload,
-	NoteId,
-	ProvenanceId,
-	SourceAnchorId,
 	Suggestion,
 	SuggestionId,
 	SuggestionStatus,
 	SuggestionView
-} from '$lib/models';
+} from '$lib/models/suggestions';
 import { ExpiredSuggestionError, InvalidTransitionError, NotFoundError } from '$lib/errors';
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
-	NoteRepository,
 	ProvenanceRepository,
-	SourceAnchorRepository,
-	SuggestionRepository
-} from '$lib/server/repositories';
+	SourceAnchorRepository
+} from '$lib/server/repositories/provenance';
+import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
 
 export interface SuggestionProposalBase {
 	readonly noteId?: NoteId;
@@ -198,8 +197,8 @@ export class SuggestionInbox {
 
 	private payloadBelongsToNote(
 		proposal: SuggestionProposal,
-		noteId: import('$lib/models').NoteId,
-		projectId: import('$lib/models').ProjectId
+		noteId: import('$lib/models/notes').NoteId,
+		projectId: import('$lib/models/projects').ProjectId
 	): boolean {
 		switch (proposal.kind) {
 			case 'todo':

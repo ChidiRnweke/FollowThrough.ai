@@ -6,10 +6,18 @@ describe('built-in skills', () => {
 		expect(BUILT_INS.length).toBeGreaterThan(0);
 	});
 
-	it('forbids HTML labels in the diagramming skill and names the alternative', () => {
+	it('forbids HTML labels in the diagramming skill and names the alternative (1/3)', () => {
 		const diagramming = BUILT_INS.find((definition) => definition.key === 'diagramming');
 		expect(diagramming).toBeDefined();
+	});
+
+	it('forbids HTML labels in the diagramming skill and names the alternative (2/3)', () => {
+		const diagramming = BUILT_INS.find((definition) => definition.key === 'diagramming');
 		expect(diagramming?.instructions).toMatch(/HTML labels/i);
+	});
+
+	it('forbids HTML labels in the diagramming skill and names the alternative (3/3)', () => {
+		const diagramming = BUILT_INS.find((definition) => definition.key === 'diagramming');
 		expect(diagramming?.instructions).toMatch(/escaped \\n/i);
 	});
 });

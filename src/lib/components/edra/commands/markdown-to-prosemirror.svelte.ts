@@ -1,4 +1,4 @@
-import type { ProseMirrorDocument } from '$lib/models';
+import type { ProseMirrorDocument } from '$lib/models/notes';
 import { createEditor } from '$lib/components/edra/commands/editor';
 
 export async function markdownToProseMirror(markdown: string): Promise<{

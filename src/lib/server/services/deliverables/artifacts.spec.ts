@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { ArtifactId, ExportSettings } from '$lib/models';
-import { defaultExportSettings } from '$lib/models';
+import type { ArtifactId, ExportSettings } from '$lib/models/deliverables';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import { ArtifactLibrary } from './artifacts';
 import {
 	InMemoryArtifactRepository,
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
-} from '$lib/testing/fakes/in-memory-deliverables';
-import { InMemoryExportSettingsRepository } from '$lib/testing/fakes/in-memory-export-settings-repository';
-import { InMemoryNoteContent } from '$lib/testing/fakes/in-memory-content';
-import { InMemoryProvenanceRecorder } from '$lib/testing/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/fakes/in-memory-transaction';
+} from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { InMemoryExportSettingsRepository } from '$lib/testing/deliverables/fakes/in-memory-export-settings-repository';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const settings = (overrides: Partial<ExportSettings> = {}): ExportSettings => ({
 	...defaultExportSettings,

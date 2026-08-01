@@ -1,6 +1,8 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
-import type { InlineSuggestionRequest, NoteId, ProjectId } from '$lib/models';
+import type { InlineSuggestionRequest } from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { seedWorkspace } from '../lab/workspace';
 import { inlineSuggestionWorkspace } from '../fixtures/workspaces/inline-suggestion';
 import { ARCHETYPES, type EvalCase } from './types';

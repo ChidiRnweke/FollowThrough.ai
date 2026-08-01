@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ExternalReference, ReferenceId, Url } from '$lib/models';
+import type { ExternalReference, ReferenceId, Url } from '$lib/models/references';
 import { ReferenceLibrary } from './library';
-import { InMemoryReferenceRepository } from '$lib/testing/fakes/in-memory-artifact-repositories';
+import { InMemoryReferenceRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
-} from '$lib/testing/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/fakes/in-memory-provenance-repository';
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -15,7 +15,7 @@ import {
 	testNoteId,
 	testNow,
 	testProvenanceId
-} from '$lib/testing/fixtures/domain-builders';
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const references = new InMemoryReferenceRepository();
