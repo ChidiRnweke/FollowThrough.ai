@@ -46,7 +46,6 @@
 		<div class="flex grow flex-col gap-1">
 			<div class="relative">
 				<Slider
-					type="single"
 					{min}
 					{max}
 					step={1}
