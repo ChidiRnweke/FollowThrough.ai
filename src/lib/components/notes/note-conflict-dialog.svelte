@@ -24,10 +24,16 @@
 
 	async function resolve(choice: 'remote' | 'local'): Promise<void> {
 		resolving = choice;
-		if (choice === 'remote') await onUseRemote();
-		else await onKeepLocal();
-		resolving = undefined;
-		open = false;
+		try {
+			if (choice === 'remote') await onUseRemote();
+			else await onKeepLocal();
+		} finally {
+			// The choice is applied to the device copy before anything that can
+			// fail; leaving the dialog open with both buttons disabled would strand
+			// the note behind a decision that has already been made.
+			resolving = undefined;
+			open = false;
+		}
 	}
 </script>
 

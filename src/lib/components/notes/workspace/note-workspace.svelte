@@ -264,6 +264,20 @@
 		return activeSave;
 	}
 
+	/**
+	 * Pulls the server's view of the note back in after a write. The write itself
+	 * has already succeeded by the time this runs, so a failed refresh is stale
+	 * data rather than lost work: report it and let the caller finish, instead of
+	 * throwing out of a user action and taking the page down with it.
+	 */
+	async function refreshView(): Promise<void> {
+		try {
+			await invalidateAll();
+		} catch {
+			toast.error('Saved, but this note’s view could not be refreshed. Reload to catch up.');
+		}
+	}
+
 	async function flushSaves(options: { auto?: boolean }): Promise<void> {
 		while (saveQueued && editorRef) {
 			saveQueued = false;
@@ -298,7 +312,7 @@
 				conflictOpen = true;
 				if (!saveQueued) return;
 			} else if (record.state === 'synced') {
-				await invalidateAll();
+				await refreshView();
 			}
 		}
 	}
@@ -329,7 +343,7 @@
 			dirty = false;
 			conflictOpen = record.state === 'conflict';
 			toast.success(note.isPinned ? 'Pinned' : 'Unpinned');
-			if (record.state === 'synced') await invalidateAll();
+			if (record.state === 'synced') await refreshView();
 		} else {
 			toast.error('Could not update pin. Try again.');
 		}
@@ -403,7 +417,7 @@
 			added = output.suggestions.filter((s) => s.status === 'proposed').length;
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
-				await invalidateAll();
+				await refreshView();
 			}
 		} else if (action === 'relate') {
 			const output = await noteActions.relate(selection);
@@ -425,7 +439,7 @@
 			}
 			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'reference', noteRef)));
 			added = output.suggestions.filter((s) => s.status === 'proposed').length;
-			await invalidateAll();
+			await refreshView();
 		} else {
 			// Capture the insertion point before the request; the selection may
 			// change or clear while the diagram is generated.
@@ -501,7 +515,7 @@
 		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
 		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
 		suggestionTray.remove(suggestionId);
-		await invalidateAll();
+		await refreshView();
 		toast.success('draw.io diagram accepted');
 		return diagram;
 	}
@@ -583,7 +597,7 @@
 		note = { ...record.local };
 		conflictOpen = record.state === 'conflict';
 		if (record.state === 'synced') {
-			await invalidateAll();
+			await refreshView();
 			return;
 		}
 		if (record.state === 'pending')
@@ -596,7 +610,7 @@
 		note = { ...remote };
 		editorRef?.replaceDocument(remote.document);
 		dirty = false;
-		await invalidateAll();
+		await refreshView();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
@@ -604,7 +618,7 @@
 		if (!record) return;
 		note = { ...record.local };
 		conflictOpen = record.state === 'conflict';
-		if (record.state === 'synced') await invalidateAll();
+		if (record.state === 'synced') await refreshView();
 	}
 
 	async function publish(): Promise<void> {
@@ -625,7 +639,7 @@
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
 			toast.success('Published');
-			await invalidateAll();
+			await refreshView();
 		} catch {
 			toast.error('Could not publish. Try again.');
 		} finally {
@@ -648,7 +662,7 @@
 			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Reverted to last published version');
-			await invalidateAll();
+			await refreshView();
 		} catch {
 			toast.error('Could not discard changes. Try again.');
 		}

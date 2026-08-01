@@ -9,7 +9,7 @@ import type {
 	AttachmentView
 } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
-import type { NoteId, NoteRevisionId } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
@@ -175,6 +175,13 @@ export class AttachmentLibrary {
 		};
 	}
 
+	/**
+	 * Completing an upload deliberately leaves the owning note's `currentRevision`
+	 * alone. That number is the note document's optimistic-concurrency token: the
+	 * editor holds it while a pasted image uploads, so bumping it here made the
+	 * editor's next autosave look stale and raised a spurious conflict for every
+	 * pasted or dropped image. Attachments live beside the document, not in it.
+	 */
 	async complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView> {
 		const upload = await this.attachments.findUpload(actor, uploadId);
 		if (!upload || new Date(upload.expiresAt).getTime() <= Date.now())
@@ -201,7 +208,6 @@ export class AttachmentLibrary {
 			processingStatus: 'queued',
 			createdAt: timestamp
 		});
-		if (upload.noteId) await this.recordBundleRevision(actor, upload.noteId);
 		return view;
 	}
 
@@ -277,28 +283,7 @@ export class AttachmentLibrary {
 		const validatedPath = validateAttachmentPath(path);
 		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
 		await this.attachments.remove(actor, noteId, validatedPath);
-		await this.recordBundleRevision(actor, noteId);
 		if (found) await this.storage.remove(found.version.objectKey);
-	}
-
-	private async recordBundleRevision(actor: ActorContext, noteId: NoteId): Promise<void> {
-		const note = await this.notes.findById(actor, noteId);
-		if (!note) throw new NotFoundError('Note was not found');
-		const timestamp = now();
-		const updated = await this.notes.update(actor, {
-			...note,
-			currentRevision: note.currentRevision + 1,
-			updatedAt: timestamp
-		});
-		await this.notes.insertRevision(actor, {
-			id: crypto.randomUUID() as NoteRevisionId,
-			noteId,
-			revision: updated.currentRevision,
-			title: updated.title,
-			document: updated.document,
-			plainText: updated.plainText,
-			createdAt: timestamp
-		});
 	}
 
 	private async process(actor: ActorContext, view: AttachmentView): Promise<void> {

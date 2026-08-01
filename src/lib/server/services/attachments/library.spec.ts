@@ -3,27 +3,52 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
 	AttachmentUpload,
+	AttachmentUploadId,
 	AttachmentVersion,
 	AttachmentVersionId,
 	AttachmentView
 } from '$lib/models/attachments';
+import type { NoteId } from '$lib/models/notes';
+import type { DateTime } from '$lib/models/workspace';
 import type {
 	AttachmentRepository,
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
-import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import {
 	AttachmentParserRegistry,
 	type AttachmentParser,
 	type IAttachmentStorage,
 	type StoredObjectInfo
 } from '$lib/server/services/attachments/storage';
-import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	noteBuilder,
+	testActor,
+	testNow,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DocumentOcr, ImageDescriber, OcrParseInput } from './content';
 import { AttachmentLibrary } from './library';
 
 const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
 const VERSION_ID = '00000000-0000-4000-8000-0000000000b1' as AttachmentVersionId;
+const UPLOAD_ID = '00000000-0000-4000-8000-0000000000c1' as AttachmentUploadId;
+const UPLOAD_BYTES = 128;
+const UPLOAD_CHECKSUM = 'a'.repeat(64);
+
+/** A pasted image: an upload that names the note it was dropped into. */
+const uploadFor = (noteId: NoteId): AttachmentUpload => ({
+	id: UPLOAD_ID,
+	projectId: testProjectId(),
+	noteId,
+	path: 'pasted-diagram.png',
+	objectKey: 'uploads/pasted-diagram.png',
+	mediaType: 'image/png',
+	byteSize: UPLOAD_BYTES,
+	checksumSha256: UPLOAD_CHECKSUM,
+	expiresAt: new Date(Date.now() + 60_000).toISOString() as DateTime,
+	createdAt: testNow
+});
 
 const view = (mediaType: string, path = 'doc.pdf'): AttachmentView => ({
 	attachment: {
@@ -48,6 +73,9 @@ const view = (mediaType: string, path = 'doc.pdf'): AttachmentView => ({
 
 class StubAttachmentRepository implements AttachmentRepository {
 	readonly updates: AttachmentVersion[] = [];
+	readonly removed: string[] = [];
+	/** Set by the tests that drive `complete()`; the rest never look one up. */
+	upload?: AttachmentUpload;
 
 	private viewOf(version: AttachmentVersion): AttachmentView {
 		return { attachment: view('application/pdf').attachment, version };
@@ -56,8 +84,9 @@ class StubAttachmentRepository implements AttachmentRepository {
 	createUpload(): Promise<AttachmentUpload> {
 		throw new Error('not used');
 	}
-	findUpload(): Promise<AttachmentUpload | undefined> {
-		throw new Error('not used');
+	async findUpload(): Promise<AttachmentUpload | undefined> {
+		if (!this.upload) throw new Error('not used');
+		return this.upload;
 	}
 	deleteUpload(): Promise<void> {
 		throw new Error('not used');
@@ -74,14 +103,18 @@ class StubAttachmentRepository implements AttachmentRepository {
 	findById(): Promise<AttachmentView | undefined> {
 		throw new Error('not used');
 	}
-	findByPath(): Promise<AttachmentView | undefined> {
-		throw new Error('not used');
+	async findByPath(): Promise<AttachmentView | undefined> {
+		return undefined;
 	}
-	finalize(): Promise<AttachmentView> {
-		throw new Error('not used');
+	async finalize(
+		_actor: ActorContext,
+		_upload: AttachmentUpload,
+		version: AttachmentVersion
+	): Promise<AttachmentView> {
+		return this.viewOf(version);
 	}
-	remove(): Promise<void> {
-		throw new Error('not used');
+	async remove(_actor: ActorContext, _noteId: NoteId, path: string): Promise<void> {
+		this.removed.push(path);
 	}
 	removeById(): Promise<void> {
 		throw new Error('not used');
@@ -105,15 +138,13 @@ class StubStorage implements IAttachmentStorage {
 	put(): Promise<void> {
 		throw new Error('not used');
 	}
-	stat(): Promise<StoredObjectInfo> {
-		throw new Error('not used');
+	async stat(): Promise<StoredObjectInfo> {
+		return { byteSize: UPLOAD_BYTES, checksumSha256: UPLOAD_CHECKSUM };
 	}
 	async read(): Promise<Uint8Array> {
 		return new Uint8Array([1, 2, 3]);
 	}
-	promote(): Promise<void> {
-		throw new Error('not used');
-	}
+	async promote(): Promise<void> {}
 	remove(): Promise<void> {
 		throw new Error('not used');
 	}
@@ -152,6 +183,7 @@ class StubImageDescriber implements ImageDescriber {
 interface Harness {
 	service: AttachmentLibrary;
 	repository: StubAttachmentRepository;
+	notes: InMemoryNoteRepository;
 	textParser: StubTextParser;
 	ocr: StubDocumentOcr;
 	describer: StubImageDescriber;
@@ -159,18 +191,19 @@ interface Harness {
 
 const setup = (): Harness => {
 	const repository = new StubAttachmentRepository();
+	const notes = new InMemoryNoteRepository();
 	const textParser = new StubTextParser();
 	const ocr = new StubDocumentOcr();
 	const describer = new StubImageDescriber();
 	const service = new AttachmentLibrary(
 		repository,
-		{} as NoteRepository,
+		notes,
 		new StubStorage(),
 		new AttachmentParserRegistry([textParser]),
 		ocr,
 		describer
 	);
-	return { service, repository, textParser, ocr, describer };
+	return { service, repository, notes, textParser, ocr, describer };
 };
 
 /** process() is private and fire-and-forget in production; tests drive it directly. */
@@ -189,6 +222,43 @@ const finalUpdate = (repository: StubAttachmentRepository): AttachmentVersion =>
 
 afterEach(() => {
 	vi.unstubAllEnvs();
+});
+
+describe('attachments and the note document revision', () => {
+	// `currentRevision` is the document's optimistic-concurrency token. The editor
+	// holds it open while a pasted image uploads, so a bump here surfaced to the
+	// user as a conflict dialog on a note only they had touched.
+	it('leaves the revision alone when an upload completes, so an open editor stays current', async () => {
+		const { service, repository, notes } = setup();
+		const note = noteBuilder({ currentRevision: 7 });
+		notes.notes.push(note);
+		repository.upload = uploadFor(note.id);
+
+		await service.complete(testActor(), UPLOAD_ID);
+
+		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
+	});
+
+	it('writes no note revision snapshot for a completed upload', async () => {
+		const { service, repository, notes } = setup();
+		const note = noteBuilder();
+		notes.notes.push(note);
+		repository.upload = uploadFor(note.id);
+
+		await service.complete(testActor(), UPLOAD_ID);
+
+		expect(notes.revisions).toEqual([]);
+	});
+
+	it('leaves the revision alone when an attachment is removed', async () => {
+		const { service, notes } = setup();
+		const note = noteBuilder({ currentRevision: 7 });
+		notes.notes.push(note);
+
+		await service.remove(testActor(), note.id, 'pasted-diagram.png');
+
+		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
+	});
 });
 
 describe('attachment processing OCR routing', () => {

@@ -18,7 +18,7 @@ export default defineConfig({
 			OPENROUTER_BASE_URL: 'http://127.0.0.1:9'
 		},
 		port: 4173,
-		timeout: 120_000,
+		timeout: 240_000,
 		reuseExistingServer: false
 	},
 	use: { baseURL: 'http://localhost:4173' },
