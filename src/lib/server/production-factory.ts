@@ -2,6 +2,8 @@ import { db, postgresTransactionRunner } from '$lib/server/db';
 import {
 	DEFAULT_GENERATION_MODEL,
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	DEFAULT_MISTRAL_BASE_URL,
+	DEFAULT_OCR_MODEL,
 	requiredEnvironmentValue
 } from './config';
 import { createApplication, type ProductionApplication } from './application';
@@ -27,6 +29,9 @@ export function createProductionFactory(): ProductionApplication {
 		openRouterBaseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
 		appURL: process.env.ORIGIN ?? 'http://localhost:5173',
 		defaultAgentModel: process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_GENERATION_MODEL,
+		mistralApiKey: requiredEnvironmentValue('MISTRAL_API_KEY'),
+		mistralBaseURL: process.env.MISTRAL_BASE_URL ?? DEFAULT_MISTRAL_BASE_URL,
+		ocrModel: process.env.MISTRAL_OCR_MODEL ?? DEFAULT_OCR_MODEL,
 		recommendedModels: (process.env.OPENROUTER_RECOMMENDED_MODELS ?? '')
 			.split(',')
 			.map((model) => model.trim())

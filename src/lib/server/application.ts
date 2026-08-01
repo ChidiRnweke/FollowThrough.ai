@@ -43,7 +43,6 @@ import {
 	type EmbeddingClient,
 	type ImageDescriber,
 	type OcrEngineClient,
-	type PdfSplitter,
 	type ProvenanceRecorder,
 	type ReferenceFinder,
 	type Reranker,
@@ -68,6 +67,8 @@ import { Embeddings } from './services/retrieval/embeddings';
 import {
 	DEFAULT_GENERATION_MODEL,
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	DEFAULT_MISTRAL_BASE_URL,
+	DEFAULT_OCR_MODEL,
 	optionalProperty,
 	positiveNumberFromEnvironment
 } from './config';
@@ -75,9 +76,8 @@ import { InlineSuggestionCompletion } from './services/suggestions/inline-comple
 import { InlineSuggestionContext } from './services/suggestions/inline-context';
 import { InlineSuggestionAdmission } from './services/suggestions/inline-admission';
 import { SearchRanking } from './services/retrieval/ranking';
-import { TextRecognition } from './services/attachments/text-recognition';
+import { MistralOcr } from './services/attachments/mistral-ocr';
 import { ImageDescription } from './services/attachments/image-description';
-import { PdfContent } from './services/attachments/pdf-content';
 import { ConversationSummary } from './services/conversations/summary';
 import { KnowledgeIndexRecords } from './repositories/postgres/search';
 import { ConversationRecords } from './repositories/postgres/conversations';
@@ -132,11 +132,7 @@ import { KnowledgeIndexMaintenance } from './services/retrieval/index-maintenanc
 import { UploadRetention } from './services/attachments/retention';
 import { FeedbackRecords } from './repositories/postgres/feedback';
 import { operationObserver, traceAgentTurn, traceWorkflow } from './services/telemetry';
-import {
-	openRouterWebSearchTool,
-	webSearchOptionsFromEnvironment,
-	withWebResearch
-} from './services/agent-runs/web-research';
+import { webSearchOptionsFromEnvironment } from './services/agent-runs/web-research';
 import { ConversationBuffer } from './services/conversations/buffer';
 import { ConversationSession } from './services/conversations/session';
 import { LateValue } from '$lib/utils';
@@ -156,7 +152,6 @@ export interface ApplicationOverrides {
 	readonly modelCatalog?: AgentModelCatalog;
 	readonly ocrEngine?: OcrEngineClient;
 	readonly imageDescriber?: ImageDescriber;
-	readonly pdfSplitter?: PdfSplitter;
 	readonly documentOcr?: DocumentOcr;
 }
 
@@ -168,6 +163,10 @@ export interface ApplicationConfig {
 	readonly appURL?: string;
 	readonly defaultAgentModel?: string;
 	readonly defaultVisionModel?: string;
+	/** Mistral Document AI, which serves attachment OCR. */
+	readonly mistralApiKey: string;
+	readonly mistralBaseURL?: string;
+	readonly ocrModel?: string;
 	readonly recommendedModels?: readonly string[];
 	readonly s3?: ObjectStorageConfig;
 	readonly overrides?: ApplicationOverrides;
@@ -311,29 +310,28 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
 	const attachmentRepository = new AttachmentRecords(db);
 	const retrievalChunker = retrievalChunkerFromEnv();
+	// OCR runs on Mistral Document AI, not OpenRouter.
 	const ocrEngine =
 		overrides.ocrEngine ??
-		new TextRecognition(openRouterApiKey, {
-			baseURL: openRouterBaseURL,
-			appURL,
+		new MistralOcr(config.mistralApiKey, {
+			baseURL: config.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL,
+			model: config.ocrModel ?? DEFAULT_OCR_MODEL,
 			observer: operationObserver
 		});
 	const imageDescriber =
 		overrides.imageDescriber ??
 		new ImageDescription(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
-	const pdfSplitter = overrides.pdfSplitter ?? new PdfContent();
-	const documentOcr =
-		overrides.documentOcr ?? new AttachmentContent(ocrEngine, imageDescriber, pdfSplitter);
+	const documentOcr = overrides.documentOcr ?? new AttachmentContent(ocrEngine, imageDescriber);
 	const attachments = new AttachmentLibrary(
 		attachmentRepository,
 		noteRepository,
 		attachmentStorage,
 		new AttachmentParserRegistry(),
-		searchRepository,
-		new EmbeddedAttachmentIndexer(searchRepository, embeddingClient, retrievalChunker),
 		documentOcr,
 		imageDescriber,
-		pdfSplitter
+		searchRepository,
+		new EmbeddedAttachmentIndexer(searchRepository, embeddingClient, retrievalChunker),
+		preferences
 	);
 	const noteIndexer = new EmbeddedNoteIndexer(
 		searchRepository,
@@ -450,13 +448,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
-		withWebResearch(
-			undefined,
-			openRouterWebSearchTool(webSearchOptionsFromEnvironment(process.env))
-		),
+		// No transport override: the web-search wrapper is applied per run, so
+		// the deployment's search options are passed as defaults instead.
+		undefined,
 		(repository, actor, conversationId) =>
 			new ConversationBuffer(repository, actor, conversationId),
-		traceAgentTurn
+		traceAgentTurn,
+		webSearchOptionsFromEnvironment(process.env)
 	);
 	const artifactApplier = new SuggestionApplication(
 		todos,
@@ -555,6 +553,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			sessions: agentSessions,
 			transactionRunner,
 			defaultModel: defaultAgentModel,
+			defaultVisionModel,
 			executor: undefined as unknown as AgentRunLifecycle // set below after cyclic wiring
 		},
 		agentSettings: { preferences, models: modelCatalog },

@@ -3,134 +3,110 @@ export type OcrContentPart =
 	| { readonly kind: 'image'; readonly dataUrl: string };
 export interface OcrEngineClient {
 	ocr(input: {
-		pdfBase64: string;
+		documentUrl: string;
+		kind: 'document' | 'image';
 		fileName: string;
-		model: string;
+		maxPages?: number;
 		signal?: AbortSignal;
 	}): Promise<{ readonly parts: readonly OcrContentPart[] }>;
 }
 export interface ImageDescriber {
 	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
 }
-export interface PdfPageRange {
-	readonly start: number;
-	readonly end: number;
-}
-export interface PdfSplitter {
-	pageCount(bytes: Uint8Array): Promise<number>;
-	split(bytes: Uint8Array, ranges: readonly PdfPageRange[]): Promise<Uint8Array[]>;
+export interface OcrParseInput {
+	readonly documentUrl: string;
+	readonly kind: 'document' | 'image';
+	readonly fileName: string;
+	readonly visionModel: string;
+	readonly maxPages?: number;
 }
 export interface DocumentOcr {
-	parse(bytes: Uint8Array, fileName: string, model: string): Promise<string>;
+	parse(input: OcrParseInput): Promise<string>;
 }
 
 /**
- * Mistral OCR accepts one PDF per request and returns at most 8 embedded
- * images per request. Documents at or below this limit go out as a single
- * request; larger documents are split into ranges so the image budget scales
- * with the page count.
+ * A document can now come back with far more images than the old per-request
+ * budget allowed, and each description is its own round trip, so they are
+ * described in parallel rather than one after another. Output order still
+ * follows the document.
  */
-export const OCR_SINGLE_REQUEST_PAGE_LIMIT = 15;
-export const OCR_SPLIT_RANGE_PAGES = 10;
-const OCR_RANGE_CONCURRENCY = 3;
-
-const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString('base64');
-
-const pageRanges = (pages: number): PdfPageRange[] => {
-	const ranges: PdfPageRange[] = [];
-	for (let start = 0; start < pages; start += OCR_SPLIT_RANGE_PAGES)
-		ranges.push({ start, end: Math.min(start + OCR_SPLIT_RANGE_PAGES, pages) - 1 });
-	return ranges;
-};
+const DESCRIPTION_CONCURRENCY = 4;
 
 /**
- * Runs OCR over a PDF and returns one enriched markdown string: the engine's
- * markdown parts in order, with each embedded image replaced by an inlined
- * description at the image's position. Image description failures are
+ * Runs OCR over a document and returns one enriched markdown string: the
+ * engine's markdown parts in order, with each embedded image replaced by an
+ * inlined description at the image's position. Image description failures are
  * non-fatal (a placeholder is kept); OCR engine failures propagate so callers
- * can fall back to a plain text parser.
+ * can fall back to a plain text parser. Tables arrive as markdown from the
+ * engine and are passed through untouched.
  */
 export class AttachmentContent implements DocumentOcr {
 	constructor(
 		private readonly engine: OcrEngineClient,
-		private readonly describer: ImageDescriber,
-		private readonly splitter: PdfSplitter
+		private readonly describer: ImageDescriber
 	) {}
 
-	async parse(bytes: Uint8Array, fileName: string, model: string): Promise<string> {
-		const pages = await this.splitter.pageCount(bytes);
-		const parts =
-			pages <= OCR_SINGLE_REQUEST_PAGE_LIMIT
-				? await this.ocrChunk(bytes, fileName, model)
-				: await this.ocrRanges(bytes, pages, fileName, model);
-		return this.render(parts, model);
-	}
-
-	private async ocrRanges(
-		bytes: Uint8Array,
-		pages: number,
-		fileName: string,
-		model: string
-	): Promise<readonly OcrContentPart[]> {
-		const chunks = await this.splitter.split(bytes, pageRanges(pages));
-		const results: (readonly OcrContentPart[])[] = new Array(chunks.length);
-		let next = 0;
-		const worker = async () => {
-			while (next < chunks.length) {
-				const index = next++;
-				results[index] = await this.ocrChunk(chunks[index], fileName, model);
-			}
-		};
-		await Promise.all(
-			Array.from({ length: Math.min(OCR_RANGE_CONCURRENCY, chunks.length) }, worker)
-		);
-		return results.flat();
-	}
-
-	private async ocrChunk(
-		bytes: Uint8Array,
-		fileName: string,
-		model: string
-	): Promise<readonly OcrContentPart[]> {
+	async parse(input: OcrParseInput): Promise<string> {
 		const content = await this.engine.ocr({
-			pdfBase64: toBase64(bytes),
-			fileName,
-			model,
-			signal: AbortSignal.timeout(120_000)
+			documentUrl: input.documentUrl,
+			kind: input.kind,
+			fileName: input.fileName,
+			...(input.maxPages === undefined ? {} : { maxPages: input.maxPages })
 		});
-		return content.parts;
+		return this.render(content.parts, input.visionModel);
 	}
 
 	private async render(parts: readonly OcrContentPart[], model: string): Promise<string> {
-		const rendered: string[] = [];
+		// Resolve every slot's text first so descriptions can run concurrently
+		// without disturbing the document's reading order.
+		const rendered: string[] = new Array(parts.length).fill('');
+		const images: { slot: number; dataUrl: string; index: number; context?: string }[] = [];
 		let imageIndex = 0;
-		for (const part of parts) {
+		let precedingMarkdown: string | undefined;
+
+		parts.forEach((part, slot) => {
 			if (part.kind === 'markdown') {
 				const text = part.text.trim();
-				if (text) rendered.push(text);
-				continue;
+				rendered[slot] = text;
+				if (text) precedingMarkdown = text;
+				return;
 			}
 			imageIndex += 1;
-			rendered.push(await this.describeImage(part.dataUrl, imageIndex, rendered.at(-1), model));
-		}
-		return rendered.join('\n\n');
+			images.push({
+				slot,
+				dataUrl: part.dataUrl,
+				index: imageIndex,
+				...(precedingMarkdown ? { context: precedingMarkdown.slice(-1000) } : {})
+			});
+		});
+
+		let next = 0;
+		const worker = async () => {
+			while (next < images.length) {
+				const image = images[next++];
+				rendered[image.slot] = await this.describeImage(image, model);
+			}
+		};
+		await Promise.all(
+			Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, images.length) }, worker)
+		);
+
+		return rendered.filter(Boolean).join('\n\n');
 	}
 
 	private async describeImage(
-		dataUrl: string,
-		imageIndex: number,
-		precedingMarkdown: string | undefined,
+		image: { dataUrl: string; index: number; context?: string },
 		model: string
 	): Promise<string> {
 		try {
 			const description = await this.describer.describe({
-				imageDataUrl: dataUrl,
-				...(precedingMarkdown ? { context: precedingMarkdown.slice(-1000) } : {}),
+				imageDataUrl: image.dataUrl,
+				...(image.context ? { context: image.context } : {}),
 				model
 			});
-			return `> **Image ${imageIndex}:** ${description}`;
+			return `> **Image ${image.index}:** ${description}`;
 		} catch {
-			return `> **Image ${imageIndex}:** (description unavailable)`;
+			return `> **Image ${image.index}:** (description unavailable)`;
 		}
 	}
 }

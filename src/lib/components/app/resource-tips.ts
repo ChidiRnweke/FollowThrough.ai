@@ -32,10 +32,10 @@ export const resourceTips: Record<ResourceKey, readonly string[]> = {
 		'Notes you export as docx or pdf land here.',
 		'An export remembers which notes it was built from.'
 	],
-	// Grounded in TextAttachmentParser and PdfAttachmentParser: both extract text
-	// on upload so the agent can quote the source.
+	// Grounded in TextAttachmentParser and the OCR path: both extract text on
+	// upload so the agent can quote the source.
 	attachments: [
-		'PDFs and text files are read on upload, so the agent can quote them.',
+		'PDFs, office documents and images are read on upload, so the agent can quote them.',
 		'Give the agent source material and it answers from yours, not the void.'
 	]
 };

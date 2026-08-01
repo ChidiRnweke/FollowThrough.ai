@@ -150,8 +150,6 @@
 		"marked": "17.0.6",
 		"mermaid": "^11.16.0",
 		"openai": "^6.46.0",
-		"pdf-lib": "^1.17.1",
-		"pdf-parse": "^2.4.5",
 		"pdfmake": "^0.3.11",
 		"postgres": "^3.4.9",
 		"svelte-dnd-action": "^0.9.74",

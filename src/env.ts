@@ -50,6 +50,19 @@ export const variables = defineEnvVars({
 		description: 'Optional inline completion model override.',
 		schema: optionalString
 	},
+	OPENROUTER_WEB_SEARCH_ENGINE: {
+		description:
+			'Default web search engine: auto | native | exa | firecrawl | parallel | perplexity.',
+		schema: optionalString
+	},
+	OPENROUTER_WEB_SEARCH_MAX_RESULTS: {
+		description: 'Default result cap for a single web search.',
+		schema: optionalString
+	},
+	OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS: {
+		description: 'Default result cap across every web search in one run.',
+		schema: optionalString
+	},
 	RETRIEVAL_CHUNK_TOKENS: {
 		description: 'Retrieval chunk target token count.',
 		schema: optionalString
@@ -75,17 +88,20 @@ export const variables = defineEnvVars({
 		description: 'OpenRouter model used to describe uploaded images.',
 		schema: optionalString
 	},
-	OPENROUTER_OCR_MODEL: {
-		description:
-			'OpenRouter model used for PDF OCR and image description (defaults to google/gemini-2.5-flash-lite).',
+	MISTRAL_API_KEY: {
+		description: 'Mistral API key for Document AI OCR. Required to process attachments.',
+		schema: optionalString
+	},
+	MISTRAL_BASE_URL: {
+		description: 'Mistral API base URL (defaults to https://api.mistral.ai/v1).',
+		schema: optionalString
+	},
+	MISTRAL_OCR_MODEL: {
+		description: 'Mistral Document AI OCR model (defaults to mistral-ocr-latest).',
 		schema: optionalString
 	},
 	ATTACHMENT_OCR_MAX_PAGES: {
-		description: 'Maximum PDF page count processed via OCR (defaults to 100).',
-		schema: optionalString
-	},
-	ATTACHMENT_OCR_ENABLED: {
-		description: 'Enable OCR extraction for PDF attachments (defaults to true).',
+		description: 'Maximum page count requested per OCR call (defaults to 100).',
 		schema: optionalString
 	},
 	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString },

@@ -7,47 +7,45 @@ import type {
 	ProjectId
 } from '$lib/models';
 
-/** One ordered piece of OCR output for a PDF page range. */
+/** One ordered piece of OCR output, in the document's reading order. */
 export type OcrContentPart =
 	| { readonly kind: 'markdown'; readonly text: string }
 	| { readonly kind: 'image'; readonly dataUrl: string };
 
 export interface OcrPageContent {
 	readonly parts: readonly OcrContentPart[];
+	readonly pagesProcessed?: number;
 }
 
 /**
- * One OCR engine call for one PDF page range. The engine returns the document
- * content as ordered markdown and embedded-image parts.
+ * One OCR engine call for one document. The engine fetches the document from a
+ * presigned URL and returns its content as ordered markdown and
+ * embedded-image parts.
  */
 export interface OcrEngineClient {
 	ocr(input: {
-		pdfBase64: string;
+		documentUrl: string;
+		kind: 'document' | 'image';
 		fileName: string;
-		model: string;
+		maxPages?: number;
 		signal?: AbortSignal;
 	}): Promise<OcrPageContent>;
 }
 
-/** Describes a single image for search; shared by standalone and PDF-embedded images. */
+/** Describes a single image for search; shared by standalone and embedded images. */
 export interface ImageDescriber {
 	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
 }
 
-export interface PdfPageRange {
-	readonly start: number;
-	readonly end: number;
-}
-
-/** Splits a PDF into page ranges so OCR image budgets scale with page count. */
-export interface PdfSplitter {
-	pageCount(bytes: Uint8Array): Promise<number>;
-	split(bytes: Uint8Array, ranges: readonly PdfPageRange[]): Promise<Uint8Array[]>;
-}
-
-/** Extracts one enriched markdown string from a PDF via an OCR engine. */
+/** Extracts one enriched markdown string from a document via an OCR engine. */
 export interface DocumentOcr {
-	parse(bytes: Uint8Array, fileName: string, model: string): Promise<string>;
+	parse(input: {
+		documentUrl: string;
+		kind: 'document' | 'image';
+		fileName: string;
+		visionModel: string;
+		maxPages?: number;
+	}): Promise<string>;
 }
 
 export interface AttachmentManager {

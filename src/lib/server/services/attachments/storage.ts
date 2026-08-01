@@ -9,7 +9,6 @@ import {
 	S3Client
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { PDFParse } from 'pdf-parse';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
 
 export interface StoredObjectInfo {
@@ -246,27 +245,14 @@ export class TextAttachmentParser implements AttachmentParser {
 	}
 }
 
-export class PdfAttachmentParser implements AttachmentParser {
-	readonly kind = 'pdf';
-	supports(mediaType: string, path: string): boolean {
-		return mediaType === 'application/pdf' || path.toLowerCase().endsWith('.pdf');
-	}
-	async parse(bytes: Uint8Array): Promise<string> {
-		const parser = new PDFParse({ data: bytes });
-		try {
-			return (await parser.getText()).text;
-		} finally {
-			await parser.destroy();
-		}
-	}
-}
-
+/**
+ * Only plain text is decoded in-process. Every other format — PDFs, office
+ * documents, images — is read by the OCR engine, which returns markdown with
+ * tables and described images intact.
+ */
 export class AttachmentParserRegistry {
 	constructor(
-		private readonly parsers: readonly AttachmentParser[] = [
-			new TextAttachmentParser(),
-			new PdfAttachmentParser()
-		]
+		private readonly parsers: readonly AttachmentParser[] = [new TextAttachmentParser()]
 	) {}
 
 	select(mediaType: string, path: string): AttachmentParser | undefined {

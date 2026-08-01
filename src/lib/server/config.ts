@@ -6,6 +6,10 @@ type UserId = string & { readonly __brand: 'UserId' };
 export const DEFAULT_LANGUAGE_MODEL_BASE_URL = 'https://openrouter.ai/api/v1';
 export const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
 
+/** Mistral Document AI, which serves OCR on its own API rather than through OpenRouter. */
+export const DEFAULT_MISTRAL_BASE_URL = 'https://api.mistral.ai/v1';
+export const DEFAULT_OCR_MODEL = 'mistral-ocr-latest';
+
 export const positiveNumberFromEnvironment = (name: string): number | undefined => {
 	const raw = process.env[name];
 	if (raw === undefined) return undefined;
@@ -82,7 +86,11 @@ const INFISICAL_FETCH_BACKOFF_SECONDS = [0.5, 1, 2];
 
 export class SecretsNotFoundError extends Error {}
 
-export const REQUIRED_APPLICATION_KEYS = ['DATABASE_URL', 'OPENROUTER_API_KEY'] as const;
+export const REQUIRED_APPLICATION_KEYS = [
+	'DATABASE_URL',
+	'OPENROUTER_API_KEY',
+	'MISTRAL_API_KEY'
+] as const;
 
 export const APPLICATION_DEFAULTS = Object.freeze({
 	DB_NAME: 'followthrough',
@@ -94,7 +102,16 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	OPENROUTER_DEFAULT_MODEL: 'openai/gpt-5.6',
 	OPENROUTER_RECOMMENDED_MODELS: 'openai/gpt-5.6,anthropic/claude-sonnet-4.5',
 	OPENROUTER_INLINE_MODEL: 'deepseek/deepseek-v4-flash',
+	/* Read by services that hydrate lazily. Without entries here they are never
+	   pulled from the secrets backend, so a user who clears the matching per-user
+	   setting would fall back to a hard-coded literal rather than to whatever
+	   this deployment configured. OPENROUTER_INLINE_COMPLETION_MODEL is
+	   deliberately absent: it is checked ahead of OPENROUTER_INLINE_MODEL, so
+	   giving it a default here would make that one unreachable. */
 	OPENROUTER_ATTACHMENT_VISION_MODEL: 'google/gemini-2.5-flash-lite',
+	MISTRAL_BASE_URL: 'https://api.mistral.ai/v1',
+	MISTRAL_OCR_MODEL: 'mistral-ocr-latest',
+	ATTACHMENT_OCR_MAX_PAGES: '100',
 	/* Exa rather than 'auto': auto resolves to the model's own native search, which
 	   returns snippets from a handful of results. Exa retrieves page content, which is
 	   what makes the difference between citing a headline and answering from the page.

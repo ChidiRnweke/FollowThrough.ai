@@ -74,6 +74,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		db: database,
 		transactionRunner,
 		openRouterApiKey,
+		// Evals never upload attachments, so OCR is wired but never called.
+		mistralApiKey: process.env.MISTRAL_API_KEY ?? 'eval-unused',
 		openRouterBaseURL: baseURL,
 		appURL,
 		defaultAgentModel: model,

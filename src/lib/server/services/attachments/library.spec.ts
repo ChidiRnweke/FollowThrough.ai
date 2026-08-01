@@ -19,7 +19,7 @@ import {
 	type StoredObjectInfo
 } from '$lib/server/services/attachments/storage';
 import { testActor, testNow, testProjectId } from '$lib/testing/fixtures/domain-builders';
-import type { DocumentOcr, ImageDescriber, PdfSplitter } from './content';
+import type { DocumentOcr, ImageDescriber, OcrParseInput } from './content';
 import { AttachmentLibrary } from './library';
 
 const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
@@ -119,23 +119,23 @@ class StubStorage implements IAttachmentStorage {
 	}
 }
 
-class StubPdfParser implements AttachmentParser {
-	readonly kind = 'pdf';
+class StubTextParser implements AttachmentParser {
+	readonly kind = 'text';
 	calls = 0;
-	supports(mediaType: string): boolean {
-		return mediaType === 'application/pdf';
+	supports(mediaType: string, path: string): boolean {
+		return mediaType.startsWith('text/') || path.endsWith('.md');
 	}
 	async parse(): Promise<string> {
 		this.calls += 1;
-		return 'pdf-parse text';
+		return 'decoded text';
 	}
 }
 
 class StubDocumentOcr implements DocumentOcr {
-	calls: { fileName: string; model: string }[] = [];
+	calls: OcrParseInput[] = [];
 	failure?: Error;
-	async parse(_bytes: Uint8Array, fileName: string, model: string): Promise<string> {
-		this.calls.push({ fileName, model });
+	async parse(input: OcrParseInput): Promise<string> {
+		this.calls.push(input);
 		if (this.failure) throw this.failure;
 		return 'ocr text';
 	}
@@ -149,41 +149,28 @@ class StubImageDescriber implements ImageDescriber {
 	}
 }
 
-class StubPdfSplitter implements PdfSplitter {
-	constructor(private readonly pages: number) {}
-	async pageCount(): Promise<number> {
-		return this.pages;
-	}
-	split(): Promise<Uint8Array[]> {
-		throw new Error('not used');
-	}
-}
-
 interface Harness {
 	service: AttachmentLibrary;
 	repository: StubAttachmentRepository;
-	parser: StubPdfParser;
+	textParser: StubTextParser;
 	ocr: StubDocumentOcr;
 	describer: StubImageDescriber;
 }
 
-const setup = (pages = 5): Harness => {
+const setup = (): Harness => {
 	const repository = new StubAttachmentRepository();
-	const parser = new StubPdfParser();
+	const textParser = new StubTextParser();
 	const ocr = new StubDocumentOcr();
 	const describer = new StubImageDescriber();
 	const service = new AttachmentLibrary(
 		repository,
 		{} as NoteRepository,
 		new StubStorage(),
-		new AttachmentParserRegistry([parser]),
-		undefined,
-		undefined,
+		new AttachmentParserRegistry([textParser]),
 		ocr,
-		describer,
-		new StubPdfSplitter(pages)
+		describer
 	);
-	return { service, repository, parser, ocr, describer };
+	return { service, repository, textParser, ocr, describer };
 };
 
 /** process() is private and fire-and-forget in production; tests drive it directly. */
@@ -205,8 +192,8 @@ afterEach(() => {
 });
 
 describe('attachment processing OCR routing', () => {
-	it('stores OCR output with the ocr parser kind for PDFs under the page cap', async () => {
-		const { service, repository, ocr } = setup(5);
+	it('stores OCR output with the ocr parser kind for PDFs', async () => {
+		const { service, repository } = setup();
 
 		await process(service, view('application/pdf'));
 
@@ -215,68 +202,120 @@ describe('attachment processing OCR routing', () => {
 			extractedText: 'ocr text',
 			processingStatus: 'ready'
 		});
-		expect(ocr.calls).toEqual([{ fileName: 'doc.pdf', model: 'google/gemini-2.5-flash-lite' }]);
 	});
 
-	it('falls back to the plain parser when OCR fails', async () => {
-		const { service, repository, parser, ocr } = setup(5);
+	it('hands the engine a presigned url rather than bytes', async () => {
+		const { service, ocr } = setup();
+
+		await process(service, view('application/pdf'));
+
+		expect(ocr.calls[0]).toMatchObject({
+			documentUrl: 'https://storage.test/presigned',
+			kind: 'document',
+			fileName: 'doc.pdf'
+		});
+	});
+
+	it('passes the configured page cap to the engine', async () => {
+		vi.stubEnv('ATTACHMENT_OCR_MAX_PAGES', '25');
+		const { service, ocr } = setup();
+
+		await process(service, view('application/pdf'));
+
+		expect(ocr.calls[0].maxPages).toBe(25);
+	});
+
+	it('sends office documents to OCR instead of reporting them unsupported', async () => {
+		const { service, repository, ocr } = setup();
+
+		await process(service, view('application/octet-stream', 'report.docx'));
+
+		expect(finalUpdate(repository).parserKind).toBe('ocr');
+		expect(ocr.calls[0].kind).toBe('document');
+	});
+
+	it('decodes text-ish files locally rather than spending an OCR call', async () => {
+		const { service, repository, textParser, ocr } = setup();
+
+		await process(service, view('text/markdown', 'notes.md'));
+
+		expect(finalUpdate(repository)).toMatchObject({
+			parserKind: 'text',
+			extractedText: 'decoded text'
+		});
+		expect(textParser.calls).toBe(1);
+		expect(ocr.calls).toHaveLength(0);
+	});
+
+	it('records the attachment as failed when OCR fails, so it can be retried', async () => {
+		const { service, repository, ocr } = setup();
 		ocr.failure = new Error('OCR engine down');
 
 		await process(service, view('application/pdf'));
 
 		expect(finalUpdate(repository)).toMatchObject({
-			parserKind: 'pdf',
-			extractedText: 'pdf-parse text',
-			processingStatus: 'ready'
+			processingStatus: 'failed',
+			processingFailure: 'OCR engine down'
 		});
-		expect(parser.calls).toBe(1);
 	});
 
-	it('uses the plain parser when OCR is disabled', async () => {
-		vi.stubEnv('ATTACHMENT_OCR_ENABLED', 'false');
-		const { service, repository, parser, ocr } = setup(5);
+	it('reports a format the engine does not accept as unsupported', async () => {
+		const { service, repository, ocr } = setup();
 
-		await process(service, view('application/pdf'));
+		await process(service, view('application/zip', 'bundle.zip'));
 
-		expect(finalUpdate(repository).parserKind).toBe('pdf');
-		expect(ocr.calls).toHaveLength(0);
-		expect(parser.calls).toBe(1);
-	});
-
-	it('uses the plain parser for PDFs over the page cap', async () => {
-		vi.stubEnv('ATTACHMENT_OCR_MAX_PAGES', '5');
-		const { service, repository, ocr } = setup(6);
-
-		await process(service, view('application/pdf'));
-
-		expect(finalUpdate(repository).parserKind).toBe('pdf');
+		expect(finalUpdate(repository).processingStatus).toBe('unsupported');
 		expect(ocr.calls).toHaveLength(0);
 	});
 });
 
 describe('attachment processing image branch', () => {
-	it('describes images through the shared describer with the env-resolved model', async () => {
-		vi.stubEnv('OPENROUTER_OCR_MODEL', 'openrouter/ocr-model');
-		const { service, repository, describer } = setup();
+	it('sends images to OCR as an image', async () => {
+		const { service, ocr } = setup();
+
+		await process(service, view('image/png', 'chart.png'));
+
+		expect(ocr.calls[0]).toMatchObject({ kind: 'image', fileName: 'chart.png' });
+	});
+
+	it('keeps the vision description alongside text recovered from an image', async () => {
+		const { service, repository } = setup();
 
 		await process(service, view('image/png', 'chart.png'));
 
 		expect(finalUpdate(repository)).toMatchObject({
-			parserKind: 'vision',
-			extractedText: 'a factual description',
-			processingStatus: 'ready'
+			parserKind: 'ocr',
+			extractedText: 'ocr text\n\n> **Image:** a factual description'
 		});
-		expect(describer.calls).toEqual([
-			{ imageDataUrl: 'https://storage.test/presigned', model: 'openrouter/ocr-model' }
-		]);
 	});
 
-	it('falls back to OPENROUTER_ATTACHMENT_VISION_MODEL when no OCR model is set', async () => {
-		vi.stubEnv('OPENROUTER_ATTACHMENT_VISION_MODEL', 'openrouter/legacy-vision');
+	it('describes an image from its presigned url', async () => {
 		const { service, describer } = setup();
 
 		await process(service, view('image/png', 'chart.png'));
 
-		expect(describer.calls[0].model).toBe('openrouter/legacy-vision');
+		expect(describer.calls).toEqual([
+			{ imageDataUrl: 'https://storage.test/presigned', model: 'google/gemini-2.5-flash-lite' }
+		]);
+	});
+
+	it('keeps the OCR text when the description fails', async () => {
+		const { service, repository, describer } = setup();
+		describer.describe = async () => {
+			throw new Error('Vision unavailable');
+		};
+
+		await process(service, view('image/png', 'chart.png'));
+
+		expect(finalUpdate(repository).extractedText).toBe('ocr text');
+	});
+
+	it('resolves the vision model from OPENROUTER_ATTACHMENT_VISION_MODEL', async () => {
+		vi.stubEnv('OPENROUTER_ATTACHMENT_VISION_MODEL', 'openrouter/vision');
+		const { service, describer } = setup();
+
+		await process(service, view('image/png', 'chart.png'));
+
+		expect(describer.calls[0].model).toBe('openrouter/vision');
 	});
 });

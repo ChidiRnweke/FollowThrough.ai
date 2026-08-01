@@ -14,6 +14,11 @@ import type {
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository, NoteRepository } from '$lib/server/repositories';
 import type { RetrievalIndexRepository } from '$lib/server/repositories';
+import {
+	resolveAttachmentVisionModel,
+	type AgentPreferencesStore
+} from '$lib/server/services/agent-runs/preferences';
+import { isOcrImage, isOcrSupported } from './formats';
 
 interface AttachmentStorage {
 	createUploadUrl(input: {
@@ -44,13 +49,16 @@ interface AttachmentIndexer {
 	): Promise<{ truncated: boolean }>;
 }
 interface DocumentOcr {
-	parse(bytes: Uint8Array, fileName: string, model: string): Promise<string>;
+	parse(input: {
+		documentUrl: string;
+		kind: 'document' | 'image';
+		fileName: string;
+		visionModel: string;
+		maxPages?: number;
+	}): Promise<string>;
 }
 interface ImageDescriber {
 	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
-}
-interface PdfSplitter {
-	pageCount(bytes: Uint8Array): Promise<number>;
 }
 
 const validateAttachmentPath = (value: string): string => {
@@ -70,15 +78,12 @@ const maxAttachmentBytes = (): number =>
 	Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
 const maxParseBytes = (): number =>
 	Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? maxAttachmentBytes());
-const ocrModel = (): string =>
-	process.env.OPENROUTER_OCR_MODEL ??
-	process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
-	'google/gemini-2.5-flash-lite';
-const ocrEnabled = (): boolean => {
-	const raw = process.env.ATTACHMENT_OCR_ENABLED;
-	return raw === undefined ? true : raw !== 'false' && raw !== '0';
-};
+/** The OpenRouter model that describes the images OCR extracts from a document. */
+const deploymentVisionModel = (): string =>
+	process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite';
 const ocrMaxPages = (): number => Number(process.env.ATTACHMENT_OCR_MAX_PAGES ?? 100);
+/** Long enough for the OCR service to fetch a large document, short enough to stay a capability. */
+const OCR_URL_TTL_SECONDS = 900;
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -88,12 +93,30 @@ export class AttachmentLibrary {
 		private readonly notes: NoteRepository,
 		private readonly storage: AttachmentStorage,
 		private readonly parsers: AttachmentParsers,
+		private readonly documentOcr: DocumentOcr,
+		private readonly imageDescriber: ImageDescriber,
 		private readonly retrieval?: RetrievalIndexRepository,
 		private readonly indexer?: AttachmentIndexer,
-		private readonly documentOcr?: DocumentOcr,
-		private readonly imageDescriber?: ImageDescriber,
-		private readonly pdfSplitter?: PdfSplitter
+		private readonly preferences?: AgentPreferencesStore
 	) {}
+
+	/**
+	 * The model that reads this user's attachments. Processing runs off the
+	 * request path and must not fail because a preference could not be read, so a
+	 * lookup failure falls back to the environment rather than aborting the
+	 * attachment.
+	 */
+	private async visionModel(actor: ActorContext): Promise<string> {
+		if (!this.preferences) return deploymentVisionModel();
+		try {
+			return resolveAttachmentVisionModel(
+				await this.preferences.get(actor),
+				deploymentVisionModel()
+			);
+		} catch {
+			return deploymentVisionModel();
+		}
+	}
 
 	async initiate(
 		actor: ActorContext,
@@ -282,24 +305,8 @@ export class AttachmentLibrary {
 			processingStatus: 'processing'
 		});
 		try {
-			const isImage = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(
-				view.version.mediaType
-			);
-			if (isImage) {
-				const extractedText = await this.describeImage(view);
-				if (this.indexer) await this.indexer.index(actor, view.attachment, extractedText);
-				await this.attachments.updateVersion(actor, {
-					...view.version,
-					parserKind: 'vision',
-					extractedText,
-					processingStatus: 'ready',
-					processedAt: now()
-				});
-				return;
-			}
-			const parser = this.parsers.select(view.version.mediaType, view.attachment.path);
-			const parseLimit = maxParseBytes();
-			if (!parser || view.version.byteSize > parseLimit) {
+			const extraction = await this.extractText(view, await this.visionModel(actor));
+			if (!extraction) {
 				await this.attachments.updateVersion(actor, {
 					...view.version,
 					processingStatus: 'unsupported',
@@ -307,8 +314,6 @@ export class AttachmentLibrary {
 				});
 				return;
 			}
-			const bytes = await this.storage.read(view.version.objectKey, parseLimit);
-			const extraction = await this.extractText(view, parser, bytes, parseLimit);
 			const extractedText = extraction.text;
 			let status: AttachmentVersion['processingStatus'] = 'ready';
 			if (this.indexer) {
@@ -333,41 +338,58 @@ export class AttachmentLibrary {
 	}
 
 	/**
-	 * PDFs go through OCR when it is enabled and the document is under the page
-	 * cap, so embedded images and tables are captured. A disabled or over-cap
-	 * OCR path — or any OCR failure — falls back to the plain text parser.
+	 * Plain text is decoded in-process — that is free and lossless, so a markdown
+	 * or JSON attachment never costs an OCR call. Everything else the OCR engine
+	 * accepts goes to OCR, which is what captures tables and embedded images.
+	 *
+	 * Returns undefined for a format nothing can read; OCR failures propagate so
+	 * the attachment is recorded as failed and can be retried, rather than
+	 * silently storing weaker text.
 	 */
 	private async extractText(
 		view: AttachmentView,
-		parser: AttachmentParser,
-		bytes: Uint8Array,
-		parseLimit: number
-	): Promise<{ text: string; parserKind: string }> {
-		const fallback = async () => ({
-			text: (await parser.parse(bytes)).slice(0, parseLimit),
-			parserKind: parser.kind
-		});
-		if (
-			view.version.mediaType !== 'application/pdf' ||
-			!this.documentOcr ||
-			!this.pdfSplitter ||
-			!ocrEnabled()
-		)
-			return fallback();
-		try {
-			if ((await this.pdfSplitter.pageCount(bytes)) > ocrMaxPages()) return fallback();
+		visionModel: string
+	): Promise<{ text: string; parserKind: string } | undefined> {
+		const { mediaType, byteSize, objectKey } = view.version;
+		const path = view.attachment.path;
+		const parseLimit = maxParseBytes();
+
+		const parser = this.parsers.select(mediaType, path);
+		if (parser && byteSize <= parseLimit)
 			return {
-				text: await this.documentOcr.parse(bytes, view.attachment.path, ocrModel()),
-				parserKind: 'ocr'
+				text: (await parser.parse(await this.storage.read(objectKey, parseLimit))).slice(
+					0,
+					parseLimit
+				),
+				parserKind: parser.kind
 			};
-		} catch {
-			return fallback();
-		}
+
+		if (!isOcrSupported(mediaType, path)) return undefined;
+
+		// OCR reads the object straight from a presigned URL, so no bytes pass
+		// through this process.
+		const image = isOcrImage(mediaType, path);
+		const documentUrl = await this.storage.createDownloadUrl(objectKey, OCR_URL_TTL_SECONDS);
+		const text = await this.documentOcr.parse({
+			documentUrl,
+			kind: image ? 'image' : 'document',
+			fileName: path,
+			visionModel,
+			maxPages: ocrMaxPages()
+		});
+		// A photo can carry very little text, so an image keeps a description of
+		// the image itself alongside whatever text OCR recovered.
+		const sections = image ? [text.trim(), await this.describeImage(view, visionModel)] : [text];
+		return { text: sections.filter(Boolean).join('\n\n'), parserKind: 'ocr' };
 	}
 
-	private async describeImage(view: AttachmentView): Promise<string> {
-		if (!this.imageDescriber) throw new Error('Image description is not configured');
-		const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
-		return this.imageDescriber.describe({ imageDataUrl: imageUrl, model: ocrModel() });
+	/** Non-fatal: an attachment is still worth storing without its description. */
+	private async describeImage(view: AttachmentView, visionModel: string): Promise<string> {
+		try {
+			const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
+			return `> **Image:** ${await this.imageDescriber.describe({ imageDataUrl: imageUrl, model: visionModel })}`;
+		} catch {
+			return '';
+		}
 	}
 }
