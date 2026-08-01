@@ -9,7 +9,7 @@ import {
 	temporalNotesWorkspace
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
-import { judgeInstructionAdherence } from '../judges/instruction-adherence';
+import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -52,14 +52,14 @@ const appContextFor = (timeZone: string): AppContextSnapshotV1 => {
 
 const logAdherence = (
 	name: string,
-	adherence: { followed: boolean; verdict: string; reasoning: string }
+	adherence: import('../judges/consensus').ConsensusVerdict
 ): void => {
 	px.logAnnotation({
 		name,
 		annotatorKind: 'LLM',
 		score: adherence.followed ? 1 : 0,
 		label: adherence.verdict,
-		explanation: adherence.reasoning
+		explanation: `${adherence.agreement} agreement across ${adherence.judges} judges (${adherence.votes.join(', ')}): ${adherence.reasoning}`
 	});
 };
 
@@ -93,7 +93,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: `Answer with today's date: ${expected}. That is the local date for the Pacific/Kiritimati timezone. A UTC date or a date from any other timezone is wrong.`,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -101,7 +101,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			logAdherence(ARCHETYPES.timeAwareness, adherence);
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -124,7 +127,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: `Answer with today's date: ${expected}. That is the local date for the Pacific/Pago_Pago timezone. A UTC date or a date from any other timezone is wrong.`,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -132,7 +135,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			logAdherence(ARCHETYPES.timeAwareness, adherence);
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -156,7 +162,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: `State today's actual weekday and date: ${expected}. The sprint log note claims today is a different date — that note is stale and must not be repeated as today's date or weekday.`,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -164,7 +170,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			logAdherence(ARCHETYPES.timeAwareness, adherence);
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -176,7 +185,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 		},
 		expected: { requiredTools: ['search'] },
 		metadata: {
-			note: 'The six-month-old note is the most semantically on-topic CI note, so only a createdAfter filter can keep it out of a "last month" answer.'
+			note: 'The six-month-old note is the most semantically on-topic CI note, so only a createdAfter filter can keep it out of a "last month" answer. Canary: the model varies run to run — sometimes it omits the filter, sometimes it applies it but cites the old note through another channel. Gated at 0.8.'
 		},
 		async run(lab) {
 			const now = new Date();
@@ -209,7 +218,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 				explanation: toolVerdict
 			});
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction:
 					'Ground the answer strictly in notes created within the last 30 days. Do not cite or repeat the content of the six-month-old CI note about migrating builds to GitHub Actions.',
 				prompt: this.input.prompt as string,
@@ -219,7 +228,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
 			expect(rangeOk, toolVerdict).toBe(true);
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -249,7 +261,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: `The local date today (Pacific/Kiritimati timezone) is ${localToday}. "Ship the release notes" is due today and should be named. "Cut the release candidate" is due ${localYesterday} and must not be called due today.`,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -257,7 +269,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			logAdherence(ARCHETYPES.timeAwareness, adherence);
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -335,7 +350,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 					: 'no recency filter was invented'
 			});
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction:
 					'The answer must treat all CI notes as in scope regardless of age. It must not state or imply that the summary is limited to recent notes. The six-month-old note about migrating builds to GitHub Actions is in scope.',
 				prompt: this.input.prompt as string,

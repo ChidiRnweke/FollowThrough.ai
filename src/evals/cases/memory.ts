@@ -5,7 +5,7 @@ import { runCase } from '../lab/run-case';
 import { PERSONA_NAME, personaWorkspace } from '../fixtures/workspaces/profile';
 import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
 import { findCall, scoreToolCalling } from '../assertions/tool-calls';
-import { judgeInstructionAdherence } from '../judges/instruction-adherence';
+import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
 const ENGLISH_ONLY = 'Always answer in English.';
@@ -56,7 +56,7 @@ export const memoryCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: this.input.instruction as string,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -66,12 +66,15 @@ export const memoryCases: readonly EvalCase[] = [
 				annotatorKind: 'LLM',
 				score: adherence.followed ? 1 : 0,
 				label: adherence.verdict,
-				explanation: adherence.reasoning
+				explanation: `${adherence.agreement} agreement across ${adherence.judges} judges (${adherence.votes.join(', ')}): ${adherence.reasoning}`
 			});
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
 			expect(tools.passed, tools.explanation).toBe(true);
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -97,7 +100,7 @@ export const memoryCases: readonly EvalCase[] = [
 				toolCalls: result.calledToolNames
 			});
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: this.input.instruction as string,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -107,11 +110,14 @@ export const memoryCases: readonly EvalCase[] = [
 				annotatorKind: 'LLM',
 				score: adherence.followed ? 1 : 0,
 				label: adherence.verdict,
-				explanation: adherence.reasoning
+				explanation: `${adherence.agreement} agreement across ${adherence.judges} judges (${adherence.votes.join(', ')}): ${adherence.reasoning}`
 			});
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{
@@ -142,7 +148,7 @@ export const memoryCases: readonly EvalCase[] = [
 				toolCalls: result.calledToolNames
 			});
 
-			const adherence = await judgeInstructionAdherence({
+			const adherence = await judgeAdherenceConsensus({
 				instruction: this.input.instruction as string,
 				prompt: this.input.prompt as string,
 				response: result.finalResponse
@@ -152,11 +158,14 @@ export const memoryCases: readonly EvalCase[] = [
 				annotatorKind: 'LLM',
 				score: adherence.followed ? 1 : 0,
 				label: adherence.verdict,
-				explanation: adherence.reasoning
+				explanation: `${adherence.agreement} agreement across ${adherence.judges} judges (${adherence.votes.join(', ')}): ${adherence.reasoning}`
 			});
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(adherence.followed, `${adherence.verdict}: ${adherence.reasoning}`).toBe(true);
+			expect(
+				adherence.followed,
+				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
+			).toBe(true);
 		}
 	},
 	{

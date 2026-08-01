@@ -5,7 +5,7 @@ import { runCase } from '../lab/run-case';
 import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { findCall, scoreToolDiscovery } from '../assertions/tool-calls';
 import { validateMermaid } from '../assertions/mermaid';
-import { judgeAgainstRubric } from '../judges/rubric';
+import { judgeRubricConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -77,7 +77,7 @@ export const diagramCases: readonly EvalCase[] = [
 			expect(source, 'no Mermaid source was produced').not.toBe('');
 			expect(syntax.valid, syntax.problems.join('; ')).toBe(true);
 
-			const faithful = await judgeAgainstRubric({
+			const faithful = await judgeRubricConsensus({
 				subject: 'a Mermaid diagram generated from a note describing a system',
 				criteria: [
 					'The diagram depicts the components described in the source material, not invented ones.',
@@ -90,11 +90,14 @@ export const diagramCases: readonly EvalCase[] = [
 			px.logAnnotation({
 				name: ARCHETYPES.diagramQuality,
 				annotatorKind: 'LLM',
-				score: faithful.passed ? 1 : 0,
-				label: faithful.passed ? 'faithful' : 'unfaithful',
-				explanation: faithful.reasoning
+				score: faithful.followed ? 1 : 0,
+				label: faithful.verdict,
+				explanation: `${faithful.agreement} agreement across ${faithful.judges} judges (${faithful.votes.join(', ')}): ${faithful.reasoning}`
 			});
-			expect(faithful.passed, faithful.reasoning).toBe(true);
+			expect(
+				faithful.followed,
+				`${faithful.verdict} (${faithful.agreement} agreement): ${faithful.reasoning}`
+			).toBe(true);
 		}
 	},
 	{

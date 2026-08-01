@@ -44,13 +44,15 @@ See `references/assertion-lanes.md`. In one line:
 |------|------|----------|
 | Subsystem / deterministic | ~free | The thing under test is a subsystem (retrieval ranking, a filter), not the agent |
 | Tool-call presence / arguments | cheap | "Did the agent reach for the right capability with usable args" |
-| LLM judge | paid | Semantics, precedence, language, scope — anything lexical checks would encode |
+| LLM judge (consensus) | paid | Semantics, precedence, language, scope — anything lexical checks would encode |
 | Composite | paid | A deterministic check pins the mechanism, a judge pins the behaviour |
+
+**LLM judges emit categorical verdicts, never numbers.** A single verdict is a signal; the *score* is the consensus of several parallel judges — majority of three, escalating to five on disagreement, with the agreement fraction recorded. Never ask the model for a numeric score. See `references/assertion-lanes.md`.
 
 Prefer the cheapest lane that actually discriminates. Judge-only is the *default* for behavioural claims; add a deterministic tool-arg assertion when the feature *is* a specific tool or argument.
 
 ### 4. Write the case as data
-A case is declarative: stable `id`, human `name`, `splits` (archetype + tags like `negative` / `regression`), `input`, `expected`, `metadata` (observedAt, note on the regression), and a `run(lab)` that seeds, drives one turn along the *production* path, logs evidence, logs the annotation, and asserts the hard invariants. There is one suite, many cases, sliced by splits — never one dataset per archetype.
+A case is declarative: stable `id`, human `name`, `splits` (archetype + tags like `negative` / `regression`), `input`, `expected`, `metadata` (observedAt, note on the regression), and a `run(lab)` that seeds, drives one turn along the *production* path, runs the judge as a **parallel consensus**, logs evidence, logs the annotation with the agreement, and asserts the hard invariants. There is one suite, many cases, sliced by splits — never one dataset per archetype.
 
 ### 5. Register, run filtered, iterate
 Register in the single suite. Run only your archetype (`-t "time_awareness"`). When a case fails, decide which kind of failure it is:
@@ -79,7 +81,7 @@ recorder.logOutput({ model, response, toolCalls, durationMs })          // evide
 recorder.logAnnotation({ name, score, label, explanation, annotatorKind? })  // 0/1 capability score
 ```
 
-Annotations carry the archetype name and a 0/1; output carries what a human needs to debug a red case. Never put the pass/fail only in a thrown assertion — the annotation is what the dataset accumulates.
+Annotations carry the archetype name and a 0/1 derived from a **categorical verdict** — for judged lanes, the consensus of parallel judges, with the agreement (`2/3`, `3/3`) and the majority reasoning in the explanation. The model never emits a number; the agreement *is* the number. Output carries what a human needs to debug a red case. Never put the pass/fail only in a thrown assertion — the annotation is what the dataset accumulates.
 
 ## Reference files
 

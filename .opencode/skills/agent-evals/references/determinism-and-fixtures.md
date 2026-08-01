@@ -44,6 +44,6 @@ Order matters: backdate *after* the controller-path save/index so the chunks exi
 
 Triage, in order:
 
-1. **Judge over-strictness** — loosen the instruction (format vs meaning).
+1. **Judge instruction ambiguity** — if parallel judges split with no majority, the instruction is ambiguous; re-word it. Consensus turns single-judge wording quirks into agreement, so a majority failure after consensus is the instruction or the behaviour, not one judge's mood.
 2. **Wrong lane** — the model reached the behaviour another way; pivot the assertion.
 3. **Real variance** — the agent genuinely varies run to run. This is what pass-rate gating is for: measure it across repetitions and gate at a threshold below 1, rather than deleting the case.

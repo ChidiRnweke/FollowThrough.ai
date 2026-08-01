@@ -24,7 +24,7 @@ Assert the agent reached for the right capability, or passed usable arguments. D
 
 ## Lane 3 — LLM judge
 
-Hand the instruction, the user prompt, and the response to a judge model that returns a structured verdict (`followed` / `violated` / `not_applicable`) with one line of reasoning.
+Hand the instruction, the user prompt, and the response to a judge model that returns a structured **categorical verdict** (`followed` / `violated` / `not_applicable`) with one line of reasoning.
 
 **Use when** the claim is semantic: language, precedence, scope, grounding. A lexical check would encode one rule into the harness and misjudge every other instruction.
 
@@ -32,7 +32,26 @@ Hand the instruction, the user prompt, and the response to a judge model that re
 
 **Pinning**: a stronger model than the subject, separately configured, so the judge can catch the subject's mistakes.
 
-**Flakiness**: judges occasionally over-fixate on wording. If the date was right but the format differed, that is a judge bug, not an agent failure — loosen the instruction. If the judge wavers on an otherwise-stable deterministic check, prefer the deterministic check as the hard gate and keep the judge as the recorded signal.
+**Never numeric output.** A judge emits a categorical verdict, never a score. The *number* a case records comes from consensus, not from asking the model for a number.
+
+### Consensus — parallel judges, majority verdict
+
+A single verdict is a signal; the score is the consensus. Run several judges **in parallel** and take the majority:
+
+- Start with three. If they agree unanimously, you are done — the consensus is 3/3.
+- If they disagree, that is exactly the "unsure" case: escalate with two more judges and take the majority of five.
+- A tied top verdict is reported as `split` and fails the case — never round a tie into a fake majority.
+- Record the **agreement** (`2/3`, `3/3`, `3/5`) in the annotation explanation. That agreement is the number; the 0/1 score is derived from the consensus verdict.
+- Keep the majority judge's reasoning in the explanation so a red case stays debuggable.
+
+Two operational notes from running this in anger:
+
+- **Parallel judges multiply the transient-failure surface.** An empty completion or timeout on one of three parallel calls must be retried, not allowed to kill the case. Retry each judge call before its vote counts.
+- **Consensus turns judge flakiness into agreement.** The cases that used to flip on a single judge's wording now pass or fail on the majority, so the remaining variance is the agent's, not the judge's.
+
+This repo's implementation: `judgeAdherenceConsensus` / `judgeRubricConsensus` in `src/evals/judges/consensus.ts` (pure aggregation in `consensus-aggregate.ts`, unit-tested).
+
+**If the judge genuinely cannot decide** — the verdicts split with no majority even after escalation — that is not a green light. Record `split` (score 0) and re-read the instruction: an instruction that judges can't agree on is ambiguous, and an ambiguous instruction is a bad case.
 
 ## Lane 4 — Composite
 
