@@ -115,6 +115,7 @@ export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
 		...row,
 		description: row.description ?? undefined,
 		priority: row.priority ?? undefined,
+		category: row.category ?? undefined,
 		dueDate: row.dueDate ? (row.dueDate as LocalDate) : undefined,
 		dueDateVerbatim: row.dueDateVerbatim ?? undefined,
 		promiseStrength: row.promiseStrength ?? undefined,

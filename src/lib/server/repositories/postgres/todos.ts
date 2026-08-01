@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, lte, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, type SQL } from 'drizzle-orm';
 import type { ActorContext, Todo, TodoId, TodoListFilter } from '$lib/models';
 import { NotFoundError } from '$lib/errors';
 import type { TodoRepository } from '$lib/server/repositories/todos';
@@ -43,6 +43,7 @@ export class TodoRecords implements TodoRepository {
 		if (filter.responsibility)
 			conditions.push(eq(schema.todos.responsibility, filter.responsibility));
 		if (filter.dueBefore) conditions.push(lte(schema.todos.dueDate, filter.dueBefore));
+		if (filter.category) conditions.push(eq(schema.todos.category, filter.category));
 		if (filter.noteId) {
 			const anchors = await this.database
 				.select({ id: schema.sourceAnchors.id })
@@ -86,6 +87,23 @@ export class TodoRecords implements TodoRepository {
 		return row?.total ?? 0;
 	}
 
+	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+		const rows = await this.database
+			.selectDistinct({ category: schema.todos.category })
+			.from(schema.todos)
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.todos.projectId))
+			.where(
+				and(
+					eq(schema.todos.userId, actor.userId),
+					isNull(schema.todos.deletedAt),
+					isNull(schema.projects.archivedAt),
+					isNotNull(schema.todos.category)
+				)
+			)
+			.orderBy(asc(schema.todos.category));
+		return rows.map((row) => row.category!);
+	}
+
 	async insert(actor: ActorContext, todo: Todo): Promise<Todo> {
 		const [row] = await this.database
 			.insert(schema.todos)
@@ -98,6 +116,7 @@ export class TodoRecords implements TodoRepository {
 				status: todo.status,
 				responsibility: todo.responsibility,
 				priority: todo.priority,
+				category: todo.category,
 				waitingOn: todo.waitingOn,
 				dueDate: todo.dueDate,
 				dueDateVerbatim: todo.dueDateVerbatim,
@@ -123,6 +142,7 @@ export class TodoRecords implements TodoRepository {
 				status: todo.status,
 				responsibility: todo.responsibility,
 				priority: todo.priority ?? null,
+				category: todo.category ?? null,
 				waitingOn: todo.waitingOn,
 				dueDate: todo.dueDate,
 				dueDateVerbatim: todo.dueDateVerbatim,

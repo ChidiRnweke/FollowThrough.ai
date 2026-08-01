@@ -6,19 +6,23 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const projectId = params.id as ProjectId;
 	const status = url.searchParams.get('status') as TodoStatus | null;
 	const responsibility = url.searchParams.get('responsibility') as TodoResponsibility | null;
+	const category = url.searchParams.get('category');
 	const filter: TodoListFilter = {
 		projectId,
 		...(status !== null ? { status } : {}),
-		...(responsibility !== null ? { responsibility } : {})
+		...(responsibility !== null ? { responsibility } : {}),
+		...(category ? { category } : {})
 	};
 	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
-	const [output, projectView] = await Promise.all([
+	const [output, projectView, categories] = await Promise.all([
 		factory.todos().list(actor, filter),
-		factory.projects().get(actor, { projectId })
+		factory.projects().get(actor, { projectId }),
+		factory.todos().listCategories(actor)
 	]);
 	return {
 		todos: output.todos,
+		categories,
 		view: url.searchParams.get('view') ?? 'board',
 		project: projectView.project
 	};

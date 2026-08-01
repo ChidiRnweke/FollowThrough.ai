@@ -297,6 +297,7 @@ export const todos = pgTable(
 		status: todoStatus('status').notNull().default('open'),
 		responsibility: todoResponsibility('responsibility').notNull().default('mine'),
 		priority: todoPriority('priority'),
+		category: text('category'),
 		waitingOn: text('waiting_on'),
 		dueDate: date('due_date'),
 		dueDateVerbatim: text('due_date_verbatim'),

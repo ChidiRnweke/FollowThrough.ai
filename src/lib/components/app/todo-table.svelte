@@ -5,6 +5,7 @@
 	import { FtChevronDown, FtChevronUp, FtChevronsUd } from '$lib/components/icons';
 	import TodoStatusField from './todo-fields/todo-status-field.svelte';
 	import TodoPriorityField from './todo-fields/todo-priority-field.svelte';
+	import TodoCategoryField from './todo-fields/todo-category-field.svelte';
 	import TodoDueDateField from './todo-fields/todo-due-date-field.svelte';
 	import TodoResponsibilityField from './todo-fields/todo-responsibility-field.svelte';
 	import TodoSourceField from './todo-fields/todo-source-field.svelte';
@@ -13,15 +14,25 @@
 		todos,
 		projectNames,
 		onopen,
-		notes = []
+		notes = [],
+		categories = []
 	}: {
 		todos: readonly TodoView[];
 		projectNames?: ReadonlyMap<ProjectId, string>;
 		onopen?: (todoId: TodoId) => void;
 		notes?: readonly NoteSummary[];
+		categories?: readonly string[];
 	} = $props();
 
-	type SortKey = 'title' | 'project' | 'status' | 'priority' | 'due' | 'responsibility' | 'source';
+	type SortKey =
+		| 'title'
+		| 'project'
+		| 'status'
+		| 'priority'
+		| 'category'
+		| 'due'
+		| 'responsibility'
+		| 'source';
 
 	// Null = keep the server's order (dueDate asc, updatedAt desc). Clicking a header
 	// cycles asc → desc → cleared.
@@ -43,6 +54,8 @@
 				return statusOrder.indexOf(view.todo.status);
 			case 'priority':
 				return view.todo.priority ? priorityOrder.indexOf(view.todo.priority) : null;
+			case 'category':
+				return view.todo.category ?? null;
 			case 'due':
 				return view.todo.dueDate ?? null;
 			case 'responsibility':
@@ -127,6 +140,13 @@
 					/>
 				</div>
 				<div class="flex flex-col gap-1">
+					<span class="eyebrow">Category</span><TodoCategoryField
+						todoId={view.todo.id}
+						value={view.todo.category}
+						{categories}
+					/>
+				</div>
+				<div class="flex flex-col gap-1">
 					<span class="eyebrow">Due</span><TodoDueDateField
 						todoId={view.todo.id}
 						value={view.todo.dueDate}
@@ -166,6 +186,7 @@
 				{/if}
 				{@render sortHead('status', 'Status')}
 				{@render sortHead('priority', 'Priority')}
+				{@render sortHead('category', 'Category')}
 				{@render sortHead('due', 'Due')}
 				{@render sortHead('responsibility', 'Responsibility')}
 				{@render sortHead('source', 'Source')}
@@ -206,6 +227,14 @@
 						><TodoPriorityField
 							todoId={view.todo.id}
 							value={view.todo.priority}
+							quiet
+						/></Table.Cell
+					>
+					<Table.Cell
+						><TodoCategoryField
+							todoId={view.todo.id}
+							value={view.todo.category}
+							{categories}
 							quiet
 						/></Table.Cell
 					>

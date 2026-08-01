@@ -153,6 +153,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Counts serve the context bar; the agent reads todos through list.'
 		},
+		listCategories: {
+			kind: 'excluded',
+			reason: 'Category names serve the filter menu; the agent reads todos through list.'
+		},
 		create: { kind: 'mutation' },
 		update: { kind: 'mutation' },
 		remove: {

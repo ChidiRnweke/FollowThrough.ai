@@ -195,6 +195,7 @@ export interface Todo {
 	readonly status: TodoStatus;
 	readonly responsibility: TodoResponsibility;
 	readonly priority?: TodoPriority;
+	readonly category?: string;
 	readonly waitingOn?: string;
 	readonly dueDate?: LocalDate;
 	readonly dueDateVerbatim?: string;
@@ -1225,6 +1226,7 @@ export interface TodoListFilter {
 	readonly responsibility?: TodoResponsibility;
 	readonly noteId?: NoteId;
 	readonly dueBefore?: LocalDate;
+	readonly category?: string;
 }
 
 export interface ListTodosOutput {
@@ -1386,6 +1388,7 @@ export interface UpdateTodoInput {
 	readonly dueDate?: LocalDate | null;
 	readonly responsibility?: TodoResponsibility;
 	readonly priority?: TodoPriority | null;
+	readonly category?: string | null;
 	readonly waitingOn?: string | null;
 	readonly linkedNoteId?: NoteId | null;
 }

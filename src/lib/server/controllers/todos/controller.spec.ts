@@ -48,6 +48,45 @@ describe('Todo edit invariants', () => {
 		});
 		expect(result.todo.description).toBeUndefined();
 	});
+
+	it('trims and stores a category', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder()];
+		const result = await controller.update(testActor(), {
+			todoId: testTodoId(),
+			category: '  Client work  '
+		});
+		expect(result.todo.category).toBe('Client work');
+	});
+
+	it('clears a category when explicitly set to null or blank', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [todoBuilder({ category: 'Client work' }), todoBuilder({ id: testTodoId(2) })];
+		const cleared = await controller.update(testActor(), {
+			todoId: testTodoId(),
+			category: null
+		});
+		expect(cleared.todo.category).toBeUndefined();
+		const blanked = await controller.update(testActor(), {
+			todoId: testTodoId(2),
+			category: '   '
+		});
+		expect(blanked.todo.category).toBeUndefined();
+	});
+
+	it('lists distinct categories for the actor, sorted', async () => {
+		const { todos, controller } = setup();
+		todos.todos = [
+			todoBuilder({ category: 'Release 2.0' }),
+			todoBuilder({ id: testTodoId(2), category: 'Client work' }),
+			todoBuilder({ id: testTodoId(3), category: 'Client work' }),
+			todoBuilder({ id: testTodoId(4) })
+		];
+		await expect(controller.listCategories(testActor())).resolves.toEqual([
+			'Client work',
+			'Release 2.0'
+		]);
+	});
 	it('a partial title edit preserves the description', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ description: 'Keep this context' })];

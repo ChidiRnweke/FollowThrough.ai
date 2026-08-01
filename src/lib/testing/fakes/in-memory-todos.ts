@@ -37,6 +37,16 @@ export class InMemoryTodos
 		return (await this.list(actor, filter)).length;
 	}
 
+	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+		return [
+			...new Set(
+				this.todos
+					.filter((todo) => todo.userId === actor.userId && !todo.deletedAt && todo.category)
+					.map((todo) => todo.category!)
+			)
+		].sort();
+	}
+
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
 		if (!input.projectId) throw new ValidationError('Todo project is required');
 		if (!input.title.trim()) throw new ValidationError('Todo title is required');
@@ -106,7 +116,8 @@ export class InMemoryTodos
 				(filter.status === undefined || todo.status === filter.status) &&
 				(filter.responsibility === undefined || todo.responsibility === filter.responsibility) &&
 				(filter.dueBefore === undefined ||
-					(todo.dueDate !== undefined && todo.dueDate <= filter.dueBefore))
+					(todo.dueDate !== undefined && todo.dueDate <= filter.dueBefore)) &&
+				(filter.category === undefined || todo.category === filter.category)
 		);
 	}
 

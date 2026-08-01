@@ -35,6 +35,7 @@ export interface TodosController {
 	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
 	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
 	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
+	listCategories(actor: ActorContext): Promise<readonly string[]>;
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
 	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
 	remove(actor: ActorContext, todoId: TodoId): Promise<void>;
@@ -71,6 +72,9 @@ export class Todos implements TodosController {
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return this.dependencies.todoLister.count(actor, filter);
 	}
+	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+		return this.dependencies.todoLister.listCategories(actor);
+	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
 		const todo = await this.dependencies.todoCreator.create(actor, input);
 		return { todo };
@@ -88,6 +92,7 @@ export class Todos implements TodosController {
 				| 'dueDate'
 				| 'responsibility'
 				| 'priority'
+				| 'category'
 				| 'waitingOn'
 				| 'linkedNoteId'
 			>
@@ -97,6 +102,7 @@ export class Todos implements TodosController {
 			...(input.dueDate !== undefined ? { dueDate: input.dueDate ?? undefined } : {}),
 			...(input.responsibility !== undefined ? { responsibility: input.responsibility } : {}),
 			...(input.priority !== undefined ? { priority: input.priority ?? undefined } : {}),
+			...(input.category !== undefined ? { category: input.category?.trim() || undefined } : {}),
 			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn ?? undefined } : {}),
 			...(input.linkedNoteId !== undefined ? { linkedNoteId: input.linkedNoteId ?? undefined } : {})
 		};

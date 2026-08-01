@@ -104,6 +104,9 @@ export class TodoCatalog {
 	count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return this.todos.count(actor, filter);
 	}
+	listCategories(actor: ActorContext): Promise<readonly string[]> {
+		return this.todos.listCategories(actor);
+	}
 	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]> {
 		return this.list(actor, { dueBefore: through as TodoListFilter['dueBefore'] });
 	}
@@ -163,7 +166,7 @@ export type TodoDeleter = Pick<TodoCatalog, 'softDelete'>;
 export type TodoReader = Pick<TodoCatalog, 'get'>;
 export type TodoEditor = Pick<TodoCatalog, 'update'>;
 export type TodoStatusChanger = Pick<TodoCatalog, 'change'>;
-export type TodoLister = Pick<TodoCatalog, 'list' | 'count'>;
+export type TodoLister = Pick<TodoCatalog, 'list' | 'count' | 'listCategories'>;
 export type DueTodoFinder = Pick<TodoCatalog, 'findDue'>;
 export type WaitingOnFinder = Pick<TodoCatalog, 'findWaitingOn'>;
 export type TodoViewAssembler = Pick<TodoCatalog, 'assemble'>;

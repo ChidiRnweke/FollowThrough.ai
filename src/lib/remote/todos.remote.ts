@@ -14,6 +14,7 @@ export const updateTodo = command(
 			dueDate: z.string().nullable().optional(),
 			responsibility: z.enum(['mine', 'waiting_on']).optional(),
 			priority: z.enum(['low', 'medium', 'high']).nullable().optional(),
+			category: z.string().trim().max(100).nullable().optional(),
 			waitingOn: z.string().nullable().optional(),
 			linkedNoteId: z.string().uuid().nullable().optional()
 		})

@@ -30,5 +30,6 @@
 		basePath="/projects/{data.project.id}/todos"
 		projectId={data.project.id}
 		notes={data.shell.noteTree}
+		categories={data.categories}
 	/>
 </PageShell>

@@ -19,12 +19,23 @@ export class InMemoryTodoRepository implements TodoRepository {
 				(filter.status === undefined || todo.status === filter.status) &&
 				(filter.responsibility === undefined || todo.responsibility === filter.responsibility) &&
 				(filter.dueBefore === undefined ||
-					(todo.dueDate !== undefined && todo.dueDate <= filter.dueBefore))
+					(todo.dueDate !== undefined && todo.dueDate <= filter.dueBefore)) &&
+				(filter.category === undefined || todo.category === filter.category)
 		);
 	}
 
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return (await this.list(actor, filter)).length;
+	}
+
+	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+		return [
+			...new Set(
+				this.todos
+					.filter((todo) => todo.userId === actor.userId && !todo.deletedAt && todo.category)
+					.map((todo) => todo.category!)
+			)
+		].sort();
 	}
 
 	async insert(_actor: ActorContext, todo: Todo): Promise<Todo> {

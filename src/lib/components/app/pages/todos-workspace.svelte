@@ -24,7 +24,8 @@
 		basePath = '/todos',
 		projectId,
 		projects,
-		notes = []
+		notes = [],
+		categories = []
 	}: {
 		todos: readonly TodoView[];
 		view: string;
@@ -32,6 +33,7 @@
 		projectId?: ProjectId;
 		projects?: readonly Project[];
 		notes?: readonly NoteSummary[];
+		categories?: readonly string[];
 	} = $props();
 
 	const projectNames = $derived(
@@ -62,6 +64,7 @@
 	}
 
 	const responsibility = $derived(page.url.searchParams.get('responsibility') ?? 'all');
+	const categoryFilter = $derived(page.url.searchParams.get('category') ?? '');
 
 	/* Title search is a lens over what is already loaded, so it stays local
 	   state instead of a URL param — the server-side params keep doing the
@@ -139,6 +142,27 @@
 				<ToggleGroup.Item value="mine">Mine</ToggleGroup.Item>
 				<ToggleGroup.Item value="waiting_on">Waiting on</ToggleGroup.Item>
 			</ToggleGroup.Root>
+			{#if categories.length > 0}
+				<Select.Root
+					type="single"
+					value={categoryFilter}
+					onValueChange={(value) => setParam('category', value === '' ? undefined : value)}
+				>
+					<Select.Trigger
+						class="h-11 w-full sm:h-8 sm:w-44"
+						size="sm"
+						aria-label="Filter by category"
+					>
+						{categoryFilter === '' ? 'All categories' : categoryFilter}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="">All categories</Select.Item>
+						{#each categories as category (category)}
+							<Select.Item value={category}>{category}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			{/if}
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<Tabs.Root value={view} onValueChange={(value) => setParam('view', value)}>
@@ -182,6 +206,7 @@
 			<TodoTable
 				todos={visibleTodos}
 				{notes}
+				{categories}
 				projectNames={projects ? projectNames : undefined}
 				onopen={open}
 			/>
