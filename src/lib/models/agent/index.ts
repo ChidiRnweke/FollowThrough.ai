@@ -434,6 +434,18 @@ interface CreateReferenceInput {
 	readonly provenanceId?: ProvenanceId;
 }
 
+/**
+ * One explicitly attached context note as assembled for a run. At or under the
+ * token limit the full content rides inside the user message; a larger note
+ * carries no content and the prompt points the model at search_note instead.
+ */
+export interface ContextNote {
+	readonly noteId: NoteId;
+	readonly title: string;
+	readonly content?: string;
+	readonly tokenCount: number;
+}
+
 export interface RunAgentInput {
 	readonly requestId?: string;
 	readonly conversationId?: ConversationId;
@@ -445,8 +457,7 @@ export interface RunAgentInput {
 	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly modelOverride?: string | null;
 	readonly visionModelOverride?: string | null;
-	readonly executionModeOverride?: AgentExecutionMode | null;
-	/**
+	readonly executionModeOverride?: AgentExecutionMode | null; /**
 	 * Limits resolved from the user's preferences when the run was staged, not
 	 * chosen per message. They travel on the request because the services that
 	 * honour them are constructed once for the process and never see an actor.

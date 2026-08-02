@@ -19,7 +19,10 @@ import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
-import type { CreatedRange, SearchFilter } from '$lib/server/repositories/knowledge-search/retrieval-index';
+import type {
+	CreatedRange,
+	SearchFilter
+} from '$lib/server/repositories/knowledge-search/retrieval-index';
 import type {
 	EmbeddedChunk,
 	IndexSource,

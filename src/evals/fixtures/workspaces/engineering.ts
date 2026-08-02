@@ -45,6 +45,32 @@ export const conflictingScopeWorkspace: WorkspaceFixture = {
 };
 
 /**
+ * One note far over `CONTEXT_NOTE_TOKEN_LIMIT`: attaching it must not inject its
+ * body into the run — the agent gets a pointer and has to pull the answer
+ * through `search_note`. The body is long but not pathologically repetitive, so
+ * the index-time tokenizer handles it the way it would real prose.
+ */
+export const oversizedNoteWorkspace: WorkspaceFixture = {
+	projects: [
+		{
+			name: 'Warehouse',
+			notes: [
+				{
+					title: 'Warehouse architecture decision log',
+					body: `${[
+						'The decision log records every warehouse architecture choice since the rewrite.',
+						'The canonical event store is CockroachDB, chosen for serializable cross-region writes.',
+						'The query tier reads from materialized views in ClickHouse, refreshed every five minutes.'
+					].join(
+						'\n\n'
+					)}\n\n${'Each entry follows the same template: context, options considered, decision, and consequences for the warehouse platform. '.repeat(700)}`
+				}
+			]
+		}
+	]
+};
+
+/**
  * Retrieval corpus with several plausibly-similar documents, so a search case
  * measures ranking rather than "did anything come back at all".
  */

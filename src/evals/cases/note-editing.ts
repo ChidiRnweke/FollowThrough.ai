@@ -111,8 +111,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 
 			const tools = scoreToolCalling(result, {
 				required: ['edit_note'],
-				forbidden: ['save_note'],
-				requireNoFailures: false
+				forbidden: ['save_note']
 			});
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
@@ -122,6 +121,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const changed = view.note.plainText.includes('K8s');
 			const preserved = view.note.plainText.includes('Utrecht');
 			noteEffect(view.note.plainText, 'K8s');
 			px.logAnnotation({
@@ -133,12 +133,10 @@ export const noteEditingCases: readonly EvalCase[] = [
 					: 'the edit dropped untargeted content'
 			});
 
-			// The feature under test is the tool choice: a surgical request must go
-			// through edit_note, never save_note. Exact-anchor execution is a model
-			// precision matter the fast eval models do not reliably land, so the
-			// landing is annotated, not gated.
 			expect(result.status).toBe('completed');
 			expect(tools.passed, tools.explanation).toBe(true);
+			expect(changed, 'note body must contain K8s after the edit').toBe(true);
+			expect(preserved, 'untargeted note content must survive a surgical edit').toBe(true);
 		}
 	},
 	{

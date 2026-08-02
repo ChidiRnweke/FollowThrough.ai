@@ -704,7 +704,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_note',
-				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText. Skill bodies are edited with edit_skill or save_skill, not this tool.',
+				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop retrying the patch and use save_note with the complete desired body instead. Skill bodies are edited with edit_skill or save_skill, not this tool.',
 				'mutation',
 				z.object({
 					noteId: id,
@@ -740,7 +740,8 @@ export class AgentTools {
 						noteId: saved.note.id,
 						title: saved.note.title,
 						currentRevision: saved.note.currentRevision,
-						appliedEdits: patched.appliedEdits
+						appliedEdits: patched.appliedEdits,
+						matchedTexts: patched.matchedTexts
 					};
 				}
 			),
@@ -964,7 +965,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_skill',
-				'Mutating tool. Before the first edit to a skill in any turn, you MUST call load_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run load_skill, and copy the closest text from the error verbatim — never retry the same oldText.',
+				'Mutating tool. Before the first edit to a skill in any turn, you MUST call load_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run load_skill, and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop retrying the patch and use save_skill with the complete desired body instead.',
 				'mutation',
 				z.object({
 					noteId: id,
@@ -1001,7 +1002,8 @@ export class AgentTools {
 						noteId: saved.note.id,
 						name: view.skill.name,
 						currentRevision: saved.note.currentRevision,
-						appliedEdits: patched.appliedEdits
+						appliedEdits: patched.appliedEdits,
+						matchedTexts: patched.matchedTexts
 					};
 				}
 			),

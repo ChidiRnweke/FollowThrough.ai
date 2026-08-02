@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Conversation, ConversationId, RunAgentInput } from '$lib/models/agent';
+import type { Conversation, ConversationId, ContextNote, RunAgentInput } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -34,17 +34,10 @@ interface MemoryLister {
 }
 
 /**
- * An attached context note at or under the token limit rides inside the user
- * message in full; a larger one carries no content — the prompt assembly points
- * the model at the search_note tool for it instead.
+ * Token counting for attached context notes: at or under the limit the full
+ * content rides inside the user message; larger notes carry no content and the
+ * prompt assembly points the model at search_note for them instead.
  */
-export interface ContextNote {
-	readonly noteId: NoteId;
-	readonly title: string;
-	readonly content?: string;
-	readonly tokenCount: number;
-}
-
 let sharedEncoding: Tiktoken | undefined;
 const encoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
 

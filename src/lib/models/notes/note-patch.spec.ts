@@ -67,8 +67,8 @@ describe('Rejecting a note patch', () => {
 		});
 	});
 
-	it('suggests the closest text when an anchor is nearly right', () => {
-		const result = patch(body, { oldText: '   Ship the thing.  ', newText: 'x' });
+	it('suggests the closest text when an anchor is close but not a match', () => {
+		const result = patch(body, { oldText: 'Ship the feature.', newText: 'x' });
 		expect(result.ok === false && result.failures[0]).toMatchObject({
 			reason: 'not_found',
 			nearest: 'Ship the thing.'
@@ -113,5 +113,45 @@ describe('Rejecting a note patch', () => {
 			{ oldText: 'missing', newText: 'x' }
 		);
 		expect(result.ok === false && result.failures[0]).toMatchObject({ editIndex: 1 });
+	});
+});
+
+describe('Tolerating a near-exact anchor', () => {
+	it('tolerates padding whitespace around an otherwise exact anchor', () => {
+		const result = patch(body, { oldText: '   Ship the thing.  ', newText: 'Ship it.' });
+		expect(result).toMatchObject({ ok: true, appliedEdits: 1 });
+	});
+
+	it('tolerates internal whitespace drift in the anchor', () => {
+		const result = patch('Ship  the thing.', { oldText: 'Ship the thing.', newText: 'Ship it.' });
+		expect(result.ok && result.markdown).toBe('Ship it.');
+	});
+
+	it('tolerates typographic punctuation in the anchor', () => {
+		const result = patch('Say \u201Chello\u201D.', { oldText: 'Say "hello".', newText: 'Done.' });
+		expect(result.ok && result.markdown).toBe('Done.');
+	});
+
+	it('reports the actual text a tolerant match replaced', () => {
+		const result = patch('Ship  the thing.', { oldText: 'Ship the thing.', newText: 'Ship it.' });
+		expect(result.ok && result.matchedTexts).toEqual(['Ship  the thing.']);
+	});
+
+	it('rejects a tolerant match that is not unique', () => {
+		const result = patch('a  b\na\tb\n', { oldText: 'a b', newText: 'x' });
+		expect(result).toMatchObject({
+			ok: false,
+			failures: [{ reason: 'ambiguous', occurrences: 2 }]
+		});
+	});
+
+	it('replaces every tolerant match when asked to', () => {
+		const result = patch('a  b\na\tb\n', { oldText: 'a b', newText: 'x', replaceAll: true });
+		expect(result.ok && result.markdown).toBe('x\nx\n');
+	});
+
+	it('does not fuzzy-match a similar but different anchor', () => {
+		const result = patch(body, { oldText: 'Ships the thing', newText: 'x' });
+		expect(result.ok === false && result.failures[0]).toMatchObject({ reason: 'not_found' });
 	});
 });

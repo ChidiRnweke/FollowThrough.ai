@@ -5,6 +5,13 @@
  * far more reliably than it counts lines, and uniqueness is a precondition that can be
  * checked, so a bad anchor fails loudly instead of applying at the wrong offset.
  *
+ * Matching is precision-ordered, following the approach Aider's search/replace engine
+ * uses: an exact string match first, then a whitespace- and punctuation-tolerant match
+ * (indentation, double spaces, smart quotes, em dashes) that is applied only when it is
+ * unique — never a general fuzzy/similarity match, which silently applies at the wrong
+ * offset. A non-unique or absent anchor still fails loudly with the nearest text, so the
+ * model can correct itself.
+ *
  * Pure and isomorphic — the agent tool applies these on the server, and the approval
  * card previews the same result in the browser before anyone accepts it.
  */
@@ -34,7 +41,13 @@ export type NotePatchFailure =
 	| { readonly reason: 'empty_anchor'; readonly editIndex: number };
 
 export type NotePatchResult =
-	| { readonly ok: true; readonly markdown: string; readonly appliedEdits: number }
+	| {
+			readonly ok: true;
+			readonly markdown: string;
+			readonly appliedEdits: number;
+			/** The text each edit actually replaced; a tolerant match may differ from oldText. */
+			readonly matchedTexts: readonly string[];
+	  }
 	| { readonly ok: false; readonly failures: readonly NotePatchFailure[] };
 
 const countOccurrences = (haystack: string, needle: string): number => {
@@ -47,14 +60,87 @@ const countOccurrences = (haystack: string, needle: string): number => {
 	return count;
 };
 
-const normalise = (value: string): string => value.replace(/\s+/g, ' ').trim();
+/** Fold typographic punctuation to the plain form a model is likely to reproduce. */
+const normaliseChar = (char: string): string => {
+	switch (char) {
+		case '\u2018':
+		case '\u2019':
+			return "'";
+		case '\u201C':
+		case '\u201D':
+			return '"';
+		case '\u2013':
+		case '\u2014':
+			return '-';
+		case '\u2026':
+			return '...';
+		default:
+			return char;
+	}
+};
+
+/**
+ * Collapse every whitespace run to a single space and fold typographic punctuation,
+ * keeping a per-output-character map back to the original string so a tolerant match
+ * can be located (and replaced) in the untouched source.
+ */
+const normaliseWithMap = (value: string): { text: string; map: number[] } => {
+	const text: string[] = [];
+	const map: number[] = [];
+	let pendingSpace = false;
+	for (let i = 0; i < value.length; i += 1) {
+		const char = value[i];
+		if (/\s/.test(char)) {
+			pendingSpace = true;
+			continue;
+		}
+		if (pendingSpace && text.length > 0) {
+			text.push(' ');
+			map.push(i - 1);
+		}
+		pendingSpace = false;
+		for (const output of normaliseChar(char)) {
+			text.push(output);
+			map.push(i);
+		}
+	}
+	return { text: text.join(''), map };
+};
+
+const normalise = (value: string): string => normaliseWithMap(value).text;
+
+/**
+ * Every span of the note whose normalised text equals the normalised anchor. The
+ * matched span is the untouched source text, so a tolerant replacement replaces
+ * exactly what was matched, padding and punctuation included.
+ */
+const tolerantMatches = (
+	markdown: string,
+	oldText: string
+): readonly { text: string; index: number }[] => {
+	const { text: source, map } = normaliseWithMap(markdown);
+	const target = normaliseWithMap(oldText).text;
+	if (!target) return [];
+	const matches: { text: string; index: number }[] = [];
+	let searchFrom = 0;
+	let at = source.indexOf(target, searchFrom);
+	while (at !== -1) {
+		const from = map[at];
+		const to = map[at + target.length - 1] + 1;
+		matches.push({ text: markdown.slice(from, to), index: from });
+		searchFrom = at + target.length;
+		at = source.indexOf(target, searchFrom);
+	}
+	return matches;
+};
 
 /**
  * Best-matching window of the note for an anchor that did not match.
  *
- * Scored on normalised whitespace, because the usual cause is indentation, a smart
- * quote, or a Markdown escape the model did not reproduce — differences that vanish
- * once the run of whitespace is collapsed.
+ * Scored on normalised whitespace and punctuation, because the usual cause is
+ * indentation, a smart quote, or a Markdown escape the model did not reproduce —
+ * differences that vanish once whitespace is collapsed and typographic punctuation
+ * is folded to its plain form.
  */
 const nearestText = (markdown: string, oldText: string): string | undefined => {
 	const target = normalise(oldText);
@@ -85,6 +171,7 @@ const nearestText = (markdown: string, oldText: string): string | undefined => {
  */
 export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): NotePatchResult => {
 	const failures: NotePatchFailure[] = [];
+	const matchedTexts: string[] = [];
 	let working = markdown.replace(/\r\n/g, '\n');
 
 	edits.forEach((edit, editIndex) => {
@@ -102,6 +189,28 @@ export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): No
 
 		const occurrences = countOccurrences(working, oldText);
 		if (occurrences === 0) {
+			// The anchor was not found verbatim; fall back to a whitespace- and
+			// punctuation-tolerant match, applied only when it is unique.
+			const tolerant = tolerantMatches(working, oldText);
+			if (tolerant.length > 0 && (tolerant.length === 1 || edit.replaceAll)) {
+				for (const match of [...tolerant].sort((a, b) => b.index - a.index)) {
+					working =
+						working.slice(0, match.index) +
+						newText +
+						working.slice(match.index + match.text.length);
+					matchedTexts.push(match.text);
+				}
+				return;
+			}
+			if (tolerant.length > 1) {
+				failures.push({
+					reason: 'ambiguous',
+					editIndex,
+					oldText,
+					occurrences: tolerant.length
+				});
+				return;
+			}
 			const nearest = nearestText(working, oldText);
 			failures.push({ reason: 'not_found', editIndex, oldText, ...(nearest ? { nearest } : {}) });
 			return;
@@ -111,13 +220,14 @@ export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): No
 			return;
 		}
 
+		matchedTexts.push(oldText);
 		working = edit.replaceAll
 			? working.split(oldText).join(newText)
 			: working.replace(oldText, newText);
 	});
 
 	if (failures.length > 0) return { ok: false, failures };
-	return { ok: true, markdown: working, appliedEdits: edits.length };
+	return { ok: true, markdown: working, appliedEdits: edits.length, matchedTexts };
 };
 
 /** One line a model can act on, for each way a patch can be rejected. */

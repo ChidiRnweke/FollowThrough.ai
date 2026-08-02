@@ -3,7 +3,10 @@ import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { architectureWorkspace } from '../fixtures/workspaces/architecture';
-import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
+import {
+	conflictingScopeWorkspace,
+	oversizedNoteWorkspace
+} from '../fixtures/workspaces/engineering';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { findCall, scoreToolCalling } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
@@ -119,9 +122,7 @@ export const contextAwarenessCases: readonly EvalCase[] = [
 
 			const response = result.finalResponse.toLowerCase();
 			const mentionsFirst = response.includes('ledger');
-			const mentionsSecond = ['ingestion', 'dagster', 'iceberg'].some((k) =>
-				response.includes(k)
-			);
+			const mentionsSecond = ['ingestion', 'dagster', 'iceberg'].some((k) => response.includes(k));
 			const passed = mentionsFirst && mentionsSecond;
 			px.logAnnotation({
 				name: ARCHETYPES.contextAwareness,
@@ -135,6 +136,50 @@ export const contextAwarenessCases: readonly EvalCase[] = [
 				passed,
 				'response should draw on both attached notes (Ledger Service overview and Ingestion pipeline)'
 			).toBe(true);
+		}
+	},
+	{
+		id: 'oversized-context-note-uses-search-note',
+		name: 'uses search_note with the attached noteId when the note is too large to inject',
+		splits: [ARCHETYPES.contextAwareness, ARCHETYPES.toolCalling],
+		input: { prompt: 'What is the canonical event store, and why was it chosen?' },
+		expected: { requiredTools: ['search_note'] },
+		metadata: {
+			layer: 'agent',
+			note: 'Attached note is over CONTEXT_NOTE_TOKEN_LIMIT, so the run injects only a pointer; the answer must come through search_note scoped to that noteId.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, oversizedNoteWorkspace);
+			const noteId = workspace.noteIds.get('Warehouse architecture decision log');
+			if (!noteId) throw new Error('Expected note was not seeded');
+
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				contextNoteIds: [noteId]
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 300)
+			});
+
+			const tools = scoreToolCalling(result, { required: ['search_note'] });
+			const call = findCall(result, 'search_note');
+			const usedCorrectId = call?.arguments?.noteId === noteId;
+
+			px.logAnnotation({
+				name: ARCHETYPES.contextAwareness,
+				score: tools.passed && usedCorrectId ? 1 : 0,
+				label: tools.passed && usedCorrectId ? 'pass' : 'fail',
+				explanation: usedCorrectId
+					? 'search_note called with correct noteId'
+					: `search_note called with ${JSON.stringify(call?.arguments?.noteId)}, expected ${noteId}`
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(usedCorrectId, 'search_note must use the attached noteId').toBe(true);
 		}
 	},
 	{

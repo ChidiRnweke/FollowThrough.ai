@@ -162,12 +162,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 500)
 			});
 
-			// A transient wrong-id load_skill the model recovers from is not a failure
-			// here; the effect assertions below are the hard gate.
-			const tools = scoreToolCalling(result, {
-				required: ['edit_skill'],
-				requireNoFailures: false
-			});
+			const tools = scoreToolCalling(result, { required: ['edit_skill'] });
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
 				score: tools.passed ? 1 : 0,

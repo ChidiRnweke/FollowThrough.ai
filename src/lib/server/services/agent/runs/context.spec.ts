@@ -211,7 +211,7 @@ describe('Agent grounding invariants', () => {
 		]);
 	});
 
-	it('omits the content of oversized context notes and reports the token count', async () => {
+	const oversizedContext = async () => {
 		const { builder, notes } = await setup();
 		const longText = 'The platform uses asynchronous messaging between services. '.repeat(600);
 		notes.notes = [
@@ -223,9 +223,15 @@ describe('Agent grounding invariants', () => {
 			{ noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
 			{ provenanceId: testProvenanceId() }
 		);
-		const [attached] = context.contextNotes as { content?: string; tokenCount: number }[];
-		expect(attached?.content).toBeUndefined();
-		expect(attached?.tokenCount).toBeGreaterThan(4000);
+		return (context.contextNotes as { content?: string; tokenCount: number }[])[0];
+	};
+
+	it('omits the content of oversized context notes', async () => {
+		expect((await oversizedContext())?.content).toBeUndefined();
+	});
+
+	it('reports the token count of oversized context notes', async () => {
+		expect((await oversizedContext())?.tokenCount).toBeGreaterThan(4000);
 	});
 
 	it('skips context notes that cannot be loaded', async () => {
