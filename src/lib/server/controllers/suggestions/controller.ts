@@ -28,6 +28,10 @@ import type {
 	SuggestionViewAssembler
 } from '$lib/server/services/suggestions/contracts';
 
+/**
+ * Applies or reverts the concrete edit a suggestion represents, so the controller can
+ * stay agnostic about what accepting a suggestion actually does to the document.
+ */
 export interface SuggestionArtifactApplier {
 	apply(actor: ActorContext, suggestion: Suggestion): Promise<AcceptSuggestionOutput['artifact']>;
 	revert(actor: ActorContext, suggestion: Suggestion): Promise<void>;
@@ -45,6 +49,7 @@ interface DrawioReviewSaver {
 	): Promise<DrawioDiagram>;
 }
 
+/** {@link AcceptSuggestionInput} with an optional reviewed draw.io diagram to persist alongside the accepted suggestion. */
 export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
 	readonly drawioReview?: {
 		readonly noteId: NoteId;
@@ -53,20 +58,55 @@ export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
 	};
 }
 
+/**
+ * Application boundary for suggestions: listing the proposed, accepted, and rejected
+ * sets, and accepting, rejecting, or reverting individual suggestions.
+ *
+ * Acceptance applies the suggestion's edit and records the outcome in one transaction,
+ * so a suggestion is never accepted without its edit actually landing.
+ */
 export interface SuggestionsController {
+	/**
+	 * List suggestions by status, sorted oldest-first and grouped by the note they apply
+	 * to so the UI can present a per-note review surface. Suggestions not tied to a note
+	 * form their own group.
+	 */
 	list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput>;
+	/**
+	 * List the proposed memory suggestions for a project, newest first. Used to surface
+	 * candidate memories for a project's memory pane before any acceptance decision.
+	 */
 	listPendingMemory(
 		actor: ActorContext,
 		input: ListPendingMemoryInput
 	): Promise<ListPendingMemoryOutput>;
+	/**
+	 * Apply a pending suggestion's edit and mark it accepted, atomically. `autoAccepted`
+	 * records whether the user explicitly confirmed the suggestion or let it through
+	 * automatically.
+	 */
 	accept(actor: ActorContext, input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput>;
+	/**
+	 * Accept a suggestion and, when the client submits a reviewed draw.io diagram, persist
+	 * that reviewed version over the generated one.
+	 *
+	 * @throws ValidationError if a review is supplied but the suggestion did not create a
+	 * draw.io diagram, or draw.io review is unavailable in this deployment.
+	 */
 	acceptReviewed(
 		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput
 	): Promise<AcceptSuggestionOutput>;
+	/** Reject a pending suggestion, marking it so it no longer appears in the proposed set. */
 	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion>;
+	/**
+	 * Undo a previously accepted suggestion: revert its edit to the document and reopen
+	 * it, atomically. Reverting is only possible while the accepted artifact still matches
+	 * what was applied.
+	 */
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
 }
+/** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
 	suggestionLister: SuggestionLister;
 	suggestionViewAssembler: SuggestionViewAssembler;
