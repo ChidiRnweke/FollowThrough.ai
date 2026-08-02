@@ -62,13 +62,22 @@
 	let settleEndsAt = 0;
 	let draggingId = $state<TodoId | null>(null);
 
+	/* The dnd zone only ever receives the visible (collapsed-to-5) slice of a
+	   column, since svelte-dnd-action requires its `items` option to match what's
+	   rendered. Reattach the hidden tail here so a drag doesn't drop those todos
+	   from state. */
+	function withHiddenTail(status: TodoStatus, updatedVisible: BoardItem[]): BoardItem[] {
+		if (expanded.has(status)) return updatedVisible;
+		return [...updatedVisible, ...board[status].slice(VISIBLE_LIMIT)];
+	}
+
 	function handleConsider(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
 		draggingId = event.detail.info.id as TodoId;
-		override = { ...board, [status]: event.detail.items };
+		override = { ...board, [status]: withHiddenTail(status, event.detail.items) };
 	}
 
 	function handleFinalize(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
-		override = { ...board, [status]: event.detail.items };
+		override = { ...board, [status]: withHiddenTail(status, event.detail.items) };
 		draggingId = null;
 		settleEndsAt = Date.now() + 300;
 		const moved = event.detail.items.find((item) => item.id === event.detail.info.id);
@@ -91,6 +100,16 @@
 	let addingTo = $state<TodoStatus | null>(page.url.searchParams.has('quickTodo') ? 'open' : null);
 	let newTitle = $state('');
 
+	const VISIBLE_LIMIT = 5;
+	let expanded = $state<Set<TodoStatus>>(new Set());
+
+	function toggleExpanded(status: TodoStatus): void {
+		const next = new Set(expanded);
+		if (next.has(status)) next.delete(status);
+		else next.add(status);
+		expanded = next;
+	}
+
 	async function addTodo(status: TodoStatus): Promise<void> {
 		const title = newTitle.trim();
 		if (!title) return;
@@ -105,6 +124,9 @@
 	class="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
 >
 	{#each columns as status (status)}
+		{@const items = board[status]}
+		{@const isExpanded = expanded.has(status)}
+		{@const visible = isExpanded ? items : items.slice(0, VISIBLE_LIMIT)}
 		<!-- Tinted tray holding default cards — the same layering recipe as the
 		     docked right panel (bg-sidebar + ring hairline). -->
 		<section
@@ -117,10 +139,10 @@
 					<span class={['size-1.5 shrink-0 rounded-full', todoStatusStyle[status].dotClass]}></span>
 				{/if}
 				{todoStatusLabels[status]}
-				<span class="font-normal tabular-nums">{board[status].length}</span>
+				<span class="font-normal tabular-nums">{items.length}</span>
 			</h3>
 			<div class="relative flex min-h-0 flex-1 flex-col">
-				{#if board[status].length === 0 && addingTo !== status}
+				{#if items.length === 0 && addingTo !== status}
 					<p
 						class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground/70"
 					>
@@ -148,7 +170,7 @@
 				<div
 					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto p-0.5"
 					use:dragHandleZone={{
-						items: board[status],
+						items: visible,
 						flipDurationMs: 150,
 						type: 'todo',
 						/* The default drop-target outline is library yellow. */
@@ -157,7 +179,7 @@
 					onconsider={(event) => handleConsider(status, event)}
 					onfinalize={(event) => handleFinalize(status, event)}
 				>
-					{#each board[status] as item (item.id)}
+					{#each visible as item (item.id)}
 						<TodoCard
 							view={item.view}
 							compact
@@ -169,6 +191,16 @@
 						/>
 					{/each}
 				</div>
+				{#if items.length > VISIBLE_LIMIT}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+						onclick={() => toggleExpanded(status)}
+					>
+						{isExpanded ? 'Show less' : `Show ${items.length - VISIBLE_LIMIT} more`}
+					</Button>
+				{/if}
 			</div>
 			{#if status !== 'done'}
 				<Button
