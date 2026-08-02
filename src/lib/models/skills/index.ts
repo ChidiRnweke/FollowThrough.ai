@@ -47,6 +47,7 @@ interface Note {
 	readonly updatedAt: DateTime;
 }
 
+/** A skill is a note plus metadata: the instruction text lives in `note`, everything the agent uses to decide whether to load it lives alongside it. */
 export interface Skill {
 	readonly note: Note;
 	readonly name: string;
@@ -60,6 +61,7 @@ export interface Skill {
 	readonly isEnabled: boolean;
 }
 
+/** The portable SKILL.md form: YAML frontmatter plus an instruction body, used for import/export. */
 export interface SkillManifest {
 	readonly slug: string;
 	readonly description: string;
@@ -79,6 +81,7 @@ export type SkillSummary = Pick<
 	readonly isPinned?: boolean;
 };
 
+/** Recorded every time the agent loads a skill's full instructions, so "which skills actually get used" is answerable later. Reads via `get_skill` don't create one. */
 export interface SkillUsage {
 	readonly id: SkillUsageId;
 	readonly skillNoteId: NoteId;

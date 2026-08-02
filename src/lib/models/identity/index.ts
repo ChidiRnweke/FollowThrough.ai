@@ -18,6 +18,7 @@ export interface ActorContext {
 
 export type ApiTokenScope = 'read' | 'full';
 
+/** An account. `role` gates admin surfaces and `WAITING` blocks sign-in for users pending approval. */
 export interface User {
 	readonly id: UserId;
 	readonly email: string;
@@ -30,6 +31,7 @@ export interface User {
 	readonly updatedAt: DateTime;
 }
 
+/** A signed-in browser session, created after the OAuth2/OIDC callback completes. Unrelated to `ApiToken`, which authenticates MCP instead. */
 export interface Session {
 	readonly id: SessionId;
 	readonly userId: UserId;

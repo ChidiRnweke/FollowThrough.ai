@@ -239,6 +239,7 @@ export interface ProposeMemoryChangeInput {
 	readonly confidence?: number;
 }
 
+/** `appliedEntry` is present only when the trust policy auto-accepted the change; otherwise the suggestion alone is returned, pending review. */
 export interface ProposeMemoryChangeOutput {
 	readonly suggestion: Suggestion;
 	readonly appliedEntry?: MemoryEntry;
@@ -257,6 +258,7 @@ export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'>
 	readonly suggestion: MemorySuggestion;
 }
 
+/** One row in the bell menu: a project's pending-review count, or the single profile-memory row when `projectId` is absent. */
 export interface PendingMemoryNotification {
 	readonly projectId?: ProjectId;
 	readonly label: string;

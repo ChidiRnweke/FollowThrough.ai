@@ -30,6 +30,11 @@ export interface ExtractedTemplateStyles {
 	readonly themeColors: Record<string, string>;
 }
 
+/**
+ * A generated document (PDF or DOCX) produced from one or more notes. Carries
+ * `sourceNoteIds` and an optional `provenanceId`/`runId` so an artifact is always
+ * traceable back to the notes and the run that produced it, never a bare file.
+ */
 export interface Artifact {
 	readonly id: ArtifactId;
 	readonly userId: UserId;
@@ -45,6 +50,10 @@ export interface Artifact {
 	readonly createdAt: DateTime;
 }
 
+/**
+ * An `Artifact` plus display context. `stale` is what tells a reader the source
+ * note changed after this artifact was generated, without them having to diff it.
+ */
 export interface ArtifactView {
 	readonly id: ArtifactId;
 	readonly userId: UserId;

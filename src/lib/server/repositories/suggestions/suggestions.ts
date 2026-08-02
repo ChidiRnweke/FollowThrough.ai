@@ -7,6 +7,7 @@ export type SuggestionTransition = Partial<
 	Pick<Suggestion, 'status' | 'decidedAt' | 'appliedArtifactId' | 'isAutoAccepted' | 'updatedAt'>
 > & { readonly appliedArtifactType?: Suggestion['kind'] };
 
+/** `transition` is a compare-and-swap on `expectedStatus`: a double accept or a decision on an already-decided suggestion fails instead of silently winning. */
 export interface SuggestionRepository {
 	findById(actor: ActorContext, id: SuggestionId): Promise<Suggestion | undefined>;
 	list(

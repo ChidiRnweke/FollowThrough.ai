@@ -2,6 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+/** One repository for both diagram kinds; `Diagram` is the `MermaidDiagram | DrawioDiagram` union, distinguished by `kind`. */
 export interface DiagramRepository {
 	findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly Diagram[]>;

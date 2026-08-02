@@ -6,6 +6,7 @@ export interface ConversationListOptions {
 	readonly offset?: number;
 	readonly query?: string;
 }
+/** A conversation's context (project or note) is fixed on creation; nothing here ever changes it after the first turn. */
 export interface ConversationRepository {
 	list(actor: ActorContext, options?: ConversationListOptions): Promise<readonly Conversation[]>;
 	findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined>;

@@ -10,6 +10,7 @@ import type {
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 
+/** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
@@ -39,6 +40,7 @@ export interface AgentRunRepository {
 	recoverInterrupted(failureMessage: string): Promise<number>;
 }
 
+/** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
 export interface AgentRunEventRepository {
 	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
 	replay(
@@ -50,6 +52,7 @@ export interface AgentRunEventRepository {
 	reconstructText(runId: AgentRunId, attempt: number): Promise<string>;
 }
 
+/** Approvals and rejections for parked tool calls, recorded before the run requeues so a decision is never lost between the click and the resume. */
 export interface AgentRunDecisionRepository {
 	record(
 		actor: ActorContext,

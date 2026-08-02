@@ -14,6 +14,7 @@ export interface OwnedAttachmentUpload {
 	readonly upload: AttachmentUpload;
 }
 
+/** `finalize` is the only path that makes an attachment visible: nothing before it is observable to any reader but the uploader. */
 export interface AttachmentRepository {
 	createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload>;
 	findUpload(

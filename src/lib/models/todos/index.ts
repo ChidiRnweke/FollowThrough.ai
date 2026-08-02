@@ -107,6 +107,7 @@ interface Provenance {
 	readonly createdAt: DateTime;
 }
 
+/** A tracked commitment. `completedAt` is set if and only if `status` is `done`; deletion is soft, so history survives. */
 export interface Todo {
 	readonly id: TodoId;
 	readonly userId: UserId;
@@ -214,6 +215,7 @@ interface CreateReferenceInput {
 	readonly provenanceId?: ProvenanceId;
 }
 
+/** One commitment found by the extractor before it becomes a suggestion. `strength` (explicit/implied/tentative) drives the badge shown in the review UI. */
 export interface PromiseCandidate {
 	readonly action: string;
 	readonly ownerName?: string;
@@ -228,6 +230,7 @@ export interface ExtractPromisesInput {
 	readonly selection: TextSelection;
 }
 
+/** `createdTodos` is populated only for auto-accepted candidates; everything else stays in `suggestions`, pending review. */
 export interface ExtractPromisesOutput {
 	readonly anchorId: SourceAnchorId;
 	readonly suggestions: readonly Suggestion[];

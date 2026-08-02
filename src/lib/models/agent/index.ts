@@ -91,6 +91,7 @@ interface Note {
 	readonly updatedAt: DateTime;
 }
 
+/** Whether a pipeline's suggestions auto-accept or wait for review. The `reference` pipeline never auto-accepts regardless of what is stored here. */
 export interface TrustPolicy {
 	readonly userId: UserId;
 	readonly pipeline: PipelineKind;
@@ -101,6 +102,7 @@ export interface TrustPolicy {
 	readonly updatedAt: DateTime;
 }
 
+/** A chat thread. Its context (project or note) is fixed on the first turn and never changes afterward. */
 export interface Conversation {
 	readonly id: ConversationId;
 	readonly userId: UserId;
@@ -279,12 +281,18 @@ export interface ToolPreference {
 	readonly source: 'default' | 'user' | 'project';
 }
 
+/** A tool call parked at an approval checkpoint, waiting for `decide`/`decideMany`. */
 export interface PendingAgentDecision {
 	readonly callId: string;
 	readonly toolName: string;
 	readonly arguments: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * A durable run. `serializedState` is what lets an `awaiting_approval` run survive a
+ * process restart, and `inputSnapshot` freezes the preferences a retry replays under,
+ * not whatever the user's settings have since become.
+ */
 export interface AgentRun {
 	readonly id: AgentRunId;
 	readonly userId: UserId;
@@ -316,6 +324,7 @@ export interface AgentRunReceipt {
 	readonly latestCursor: string;
 }
 
+/** A run plus its pending decisions and event cursor, the shape both the submit receipt and a resumed poll return. */
 export interface AgentRunSnapshot {
 	readonly run: AgentRun;
 	readonly latestCursor: string;

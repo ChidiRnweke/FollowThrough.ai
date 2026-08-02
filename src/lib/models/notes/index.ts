@@ -71,6 +71,7 @@ type ProducerKind = 'user' | 'pipeline' | 'agent';
 
 type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
+/** A ProseMirror document plus a revision counter, the only concurrency token the sync protocol needs. */
 export interface Note {
 	readonly id: NoteId;
 	readonly userId: UserId;
@@ -106,6 +107,7 @@ export type NoteSummary = Pick<
 	| 'currentRevision'
 >;
 
+/** A published snapshot. History is append-only: `restoreVersion`-style operations copy a snapshot forward as a new current revision rather than rewinding. */
 export interface NoteRevision {
 	readonly id: NoteRevisionId;
 	readonly noteId: NoteId;
@@ -302,6 +304,7 @@ interface CreateReferenceInput {
 	readonly provenanceId?: ProvenanceId;
 }
 
+/** A note paired with the ETag a save must present to land without conflict. */
 export interface VersionedNote {
 	readonly note: Note;
 	readonly etag: NoteEtag;
@@ -313,6 +316,7 @@ export interface SyncNoteInput {
 	readonly operationId: string;
 }
 
+/** `conflict` only fires on genuine divergence: a stale ETag whose remote content matches the submission resolves to `saved` instead, so a retried save never reports a false conflict. */
 export type SyncNoteOutput =
 	| {
 			readonly outcome: 'saved';
@@ -342,6 +346,7 @@ export interface ListNoteSyncInventoryOutput {
 
 export type NoteSyncRecordState = 'synced' | 'pending' | 'syncing' | 'conflict';
 
+/** The offline client's three-way state for one note: the last agreed version, the device copy, and an optional diverged remote copy. */
 export interface NoteSyncRecord {
 	readonly userId: UserId;
 	readonly noteId: NoteId;
@@ -427,6 +432,7 @@ interface ReferenceView {
 	readonly anchor?: SourceAnchor;
 }
 
+/** Everything the editor renders for one note, assembled from parallel reads: the note itself plus its backlinks, references, diagrams, todos, and pending suggestions. */
 export interface NoteView {
 	readonly note: Note;
 	readonly etag: NoteEtag;

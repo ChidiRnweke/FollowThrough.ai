@@ -16,6 +16,11 @@ type DateTime = Brand<string, 'DateTime'>;
 
 export type ContentHash = Brand<string, 'ContentHash'>;
 
+/**
+ * A file attached to a project or a note. Identity is separate from content: an
+ * attachment always points at a `currentVersionId`, so re-uploading a replacement
+ * (via a new version) never breaks links that already reference this attachment.
+ */
 export interface Attachment {
 	readonly id: AttachmentId;
 	readonly projectId: ProjectId;
@@ -26,6 +31,11 @@ export interface Attachment {
 	readonly updatedAt: DateTime;
 }
 
+/**
+ * One stored object and what was extracted from it. `processingStatus` is the
+ * only place the extraction pipeline's progress is observable; `extractedText`
+ * is what indexing and the agent's `read_attachment` tool both read from.
+ */
 export interface AttachmentVersion {
 	readonly id: AttachmentVersionId;
 	readonly attachmentId: AttachmentId;
@@ -42,6 +52,11 @@ export interface AttachmentVersion {
 	readonly createdAt: DateTime;
 }
 
+/**
+ * A pre-bytes reservation created before the client uploads anything. Nothing
+ * about the eventual attachment is visible to other readers until `complete`
+ * promotes it; `expiresAt` is what lets an abandoned upload be swept later.
+ */
 export interface AttachmentUpload {
 	readonly id: AttachmentUploadId;
 	readonly projectId: ProjectId;

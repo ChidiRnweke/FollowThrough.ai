@@ -284,6 +284,7 @@ interface CreateReferenceInput {
 	readonly provenanceId?: ProvenanceId;
 }
 
+/** `autoAccepted` distinguishes a trust-policy auto-accept from a user's manual click, so the two are never conflated in the audit trail. */
 export interface AcceptSuggestionInput {
 	readonly suggestionId: SuggestionId;
 	readonly autoAccepted?: boolean;
@@ -304,6 +305,7 @@ export interface RevertSuggestionInput {
 
 type NoteRef = Pick<Note, 'id' | 'title'>;
 
+/** A suggestion with everything a review UI needs to render a decision: the source note, the quoted anchor, and who or what proposed it. */
 export interface SuggestionView {
 	readonly suggestion: Suggestion;
 	readonly note?: NoteRef;

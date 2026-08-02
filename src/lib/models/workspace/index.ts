@@ -194,6 +194,7 @@ interface TodoView {
 	readonly provenance?: Provenance;
 }
 
+/** The Today triage aggregate: overdue, due-today, and waiting-on todos assembled in parallel, plus what else needs attention. */
 export interface TodayView {
 	readonly overdue: readonly TodoView[];
 	readonly dueToday: readonly TodoView[];
@@ -203,6 +204,7 @@ export interface TodayView {
 	readonly recentNotes: readonly NoteSummary[];
 }
 
+/** Everything the app shell renders on every navigation: user, projects, note tree, skills, and pending review counts. */
 export interface ShellContext {
 	readonly user: User;
 	readonly projects: readonly Project[];

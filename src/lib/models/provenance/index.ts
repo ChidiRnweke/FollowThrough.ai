@@ -18,6 +18,11 @@ type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'mem
 
 export type ProducerKind = 'user' | 'pipeline' | 'agent';
 
+/**
+ * A quoted passage a suggestion or todo was extracted from. Anchors are repaired
+ * (re-pointed), not recomputed from scratch, when a note is edited, so a still-unique
+ * quote keeps its anchor even as surrounding text changes.
+ */
 export interface SourceAnchor {
 	readonly id: SourceAnchorId;
 	readonly noteId: NoteId;
@@ -31,6 +36,11 @@ export interface SourceAnchor {
 	readonly createdAt: DateTime;
 }
 
+/**
+ * Who or what produced something, and how. Every suggestion, memory change, and
+ * agent-generated artifact carries a `provenanceId` pointing here, which is what
+ * makes "what did the agent see and do" answerable after the fact.
+ */
 export interface Provenance {
 	readonly id: ProvenanceId;
 	readonly userId: UserId;

@@ -57,11 +57,17 @@ interface DiagramBase {
 	readonly updatedAt: DateTime;
 }
 
+/** A diagram whose editable source is Mermaid text; `renderedSvg` is a cache, not the source of truth. */
 export interface MermaidDiagram extends DiagramBase {
 	readonly kind: 'mermaid';
 	readonly source: string;
 }
 
+/**
+ * A diagram whose editable source is draw.io XML. `promotedFromId` links back to
+ * the Mermaid diagram it was converted from, when it came from a conversion
+ * rather than being authored directly.
+ */
 export interface DrawioDiagram extends DiagramBase {
 	readonly kind: 'drawio';
 	readonly source: string;

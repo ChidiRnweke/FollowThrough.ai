@@ -20,6 +20,7 @@ type NoteKind = 'folder' | 'note' | 'skill';
 /** Name of the auto-created project that holds unsorted notes and todos. */
 export const DEFAULT_PROJECT_NAME = 'General';
 
+/** The scoping unit every other capability keys off. Archiving is one-way; there is no delete. */
 export interface Project {
 	readonly id: ProjectId;
 	readonly userId: UserId;
@@ -79,6 +80,7 @@ export interface ProjectTemplate {
 	readonly updatedAt: DateTime;
 }
 
+/** One entry in the project's document tree; folders nest children, notes never do. */
 export interface ProjectTreeNode {
 	readonly entry: NoteSummary;
 	readonly children: readonly ProjectTreeNode[];

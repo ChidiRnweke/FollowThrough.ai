@@ -168,6 +168,7 @@ interface CreateReferenceInput {
 	readonly provenanceId?: ProvenanceId;
 }
 
+/** A proposed backlink before it becomes a suggestion, scored by the relate pipeline's confidence. */
 export interface LinkCandidate {
 	readonly targetNoteId: NoteId;
 	readonly kind: RelationshipKind;
@@ -186,6 +187,7 @@ export interface RelateSelectionOutput {
 
 type NoteRef = Pick<Note, 'id' | 'title'>;
 
+/** A relationship plus both endpoint notes, resolved for display without a second round trip. */
 export interface BacklinkView {
 	readonly relationship: NoteRelationship;
 	readonly sourceNote: NoteRef;

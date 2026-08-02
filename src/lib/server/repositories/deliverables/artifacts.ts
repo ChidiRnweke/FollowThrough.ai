@@ -7,6 +7,7 @@ import type {
 } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 
+/** Generated documents. Deleting an artifact removes the record only; the underlying object-storage cleanup happens at the service layer. */
 export interface ArtifactRepository {
 	insert(actor: ActorContext, artifact: Artifact): Promise<Artifact>;
 	listByProject(

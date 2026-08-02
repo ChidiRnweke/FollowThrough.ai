@@ -57,6 +57,7 @@ interface SourceAnchor {
 	readonly createdAt: DateTime;
 }
 
+/** A ranked external link attached to a note, always tied back to the selection that proposed it. */
 export interface ExternalReference {
 	readonly id: ReferenceId;
 	readonly userId: UserId;
@@ -166,6 +167,7 @@ export interface FindReferencesInput {
 	readonly selection: TextSelection;
 }
 
+/** `nothing_relevant` is a real outcome, not an empty list: the anchor is still recorded so the search is auditable even when it found nothing worth suggesting. */
 export type FindReferencesOutput =
 	| {
 			readonly outcome: 'found';

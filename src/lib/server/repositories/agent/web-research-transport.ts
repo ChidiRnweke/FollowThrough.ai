@@ -20,6 +20,7 @@ const appendWebSearchTool = (body: string, tool: WebResearchTool): string => {
 	return JSON.stringify({ ...request, tools });
 };
 
+/** Wraps the OpenRouter fetch to append a web-search tool to every chat-completions request, so web search is available without every call site wiring it in by hand. */
 export const withWebResearch =
 	(delegate: Fetch = globalThis.fetch, tool: WebResearchTool = openRouterWebSearchTool()): Fetch =>
 	async (input, init) => {
