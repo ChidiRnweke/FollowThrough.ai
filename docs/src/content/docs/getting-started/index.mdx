@@ -7,18 +7,16 @@ import { Steps, Aside } from '@astrojs/starlight/components';
 import Screenshot from '../../../components/screenshot.astro';
 import Mermaid from '../../../components/mermaid.astro';
 
-## TL;DR
-
 FollowThrough is an agent-native note editor you never have to brief. You think in notes; the agent extracts the commitments and context, you triage on Today, the agent acts with your approval, and the work becomes artifacts and deliverables.
 
-One project, one note, all the way to a finished output — about ten minutes, start to finish.
+One project, one note, all the way to a finished output: about ten minutes, start to finish.
 
 <Mermaid
 	source={`
 flowchart LR
 	notes["Think in notes"] --> extract["Agent extracts commitments & context"]
 	extract --> today["You triage on Today"]
-	today --> act["Agent acts — with your approval"]
+	today --> act["Agent acts: with your approval"]
 	act --> deliver["Work becomes artifacts & deliverables"]
 	deliver --> notes
 `}
@@ -28,7 +26,7 @@ flowchart LR
 
 1. ### Create a project
 
-   Open the sidebar and create a project. A project is the unit of work that pulls everything else together: its notes, board, memory, skills, and outputs all live under it. Give it a name that tells you — and a future agent — what it is about.
+   Open the sidebar and create a project. A project is the unit of work that pulls everything else together: its notes, board, memory, skills, and outputs all live under it. Give it a name that tells you (and a future agent) what it is about.
 
    <Screenshot id="project-context" alt="A project overview: what the project produced above, what the agent works from below." />
 
@@ -40,7 +38,7 @@ flowchart LR
 
 3. ### Turn thinking into action
 
-   Select a sentence or paragraph that contains a commitment — something you promised to do, or asked someone else to do. Run **Extract promises**. FollowThrough finds the commitments, and each one becomes a reviewable todo suggestion.
+   Select a sentence or paragraph that contains a commitment: something you promised to do, or asked someone else to do. Run **Extract promises**. FollowThrough finds the commitments, and each one becomes a reviewable todo suggestion.
 
    Look at the suggestions pane: each suggestion carries a confidence score and traces back to the exact selection it came from. Accept the ones that are real. Accepted todos appear on your board.
 
@@ -50,7 +48,7 @@ flowchart LR
 
    Open the chat in the project and ask a question, for example: *"Summarize what still needs doing this week."* The agent reads the project's notes, board, and memory rather than asking you to explain the context again.
 
-   If the agent wants to make a change — update the project memory, edit a note, create a todo — it proposes the change first. Accept or reject it in the approval card. Agents propose; you accept.
+   If the agent wants to make a change (update the project memory, edit a note, create a todo) it proposes the change first. Accept or reject it in the approval card. Agents propose; you accept.
 
    <Screenshot id="in-editor-chat" alt="The project chat open beside a note: the agent answers from the project's own context." />
 
@@ -60,7 +58,7 @@ flowchart LR
 
 6. ### Finish something
 
-   When your project has enough material, produce an output that can leave the app. Select a note and generate a document from a template, turn a paragraph into a diagram, or draft a brief. The result is an artifact of the project — connected to the source it came from, not an isolated generation.
+   When your project has enough material, produce an output that can leave the app. Select a note and generate a document from a template, turn a paragraph into a diagram, or draft a brief. The result is an artifact of the project: connected to the source it came from, not an isolated generation.
 
    <Screenshot id="diagram-render" alt="A Mermaid diagram rendered inline in a note, with a draw.io conversion available." />
 
@@ -68,14 +66,14 @@ flowchart LR
 
 <Aside type="note">
 
-Throughout, work moves one direction: notes become actions, actions become artifacts, artifacts become finished work. If a step ever feels like a dead end, it is probably being done in the wrong order — the loop always starts from a note.
+Throughout, work moves one direction: notes become actions, actions become artifacts, artifacts become finished work. If a step ever feels like a dead end, it is probably being done in the wrong order: the loop always starts from a note.
 
 </Aside>
 
 ## What's next
 
-- [The agent](/FollowThrough.ai/using/the-agent/) — everything you can do in the app, the agent can do. Chat surfaces, execution modes, and approval cards.
-- [Todos](/FollowThrough.ai/using/todos/) — the board the agent keeps honest, and the Today triage view.
-- [Memory](/FollowThrough.ai/using/memory/) — what the agent is allowed to remember, per project and per profile.
-- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind every approval card.
-- [Architecture](/FollowThrough.ai/explanation/architecture/) — how the product is put together, for developers.
+- [The agent](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do. Chat surfaces, execution modes, and approval cards.
+- [Todos](/FollowThrough.ai/using/todos/): the board the agent keeps honest, and the Today triage view.
+- [Memory](/FollowThrough.ai/using/memory/): what the agent is allowed to remember, per project and per profile.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/): the trust model behind every approval card.
+- [Architecture](/FollowThrough.ai/explanation/architecture/): how the product is put together, for developers.

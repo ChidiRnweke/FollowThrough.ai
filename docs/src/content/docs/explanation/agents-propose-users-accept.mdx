@@ -6,30 +6,28 @@ description: The trust model that decides what the agent can do on its own.
 import Mermaid from '../../../components/mermaid.astro';
 import Screenshot from '../../../components/screenshot.astro';
 
-## TL;DR
+The agent reads your project freely, proposes every change before applying it, and acts on its own only where you have explicitly set a trust policy. Nothing important is committed silently: and everything it does can be traced back to the exact selection or run it came from.
 
-The agent reads your project freely, proposes every change before applying it, and acts on its own only where you have explicitly set a trust policy. Nothing important is committed silently — and everything it does can be traced back to the exact selection or run it came from.
-
-This is the product's second design principle — **agents propose, the user accepts** — enforced by a three-tier trust model. (The first principle is on [the agent page](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do.)
+This is the product's second design principle (**agents propose, the user accepts**) enforced by a three-tier trust model. (The first principle is on [the agent page](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do.)
 
 <Mermaid
 	source={`
 flowchart LR
 	propose["The agent wants to change something"] --> policy{"Matches a trust policy?"}
-	policy -- "yes" --> auto["Applied immediately — marked auto-accepted"]
-	policy -- "no" --> review["Waits as a suggestion — you accept or reject"]
+	policy -- "yes" --> auto["Applied immediately: marked auto-accepted"]
+	policy -- "no" --> review["Waits as a suggestion: you accept or reject"]
 `}
 />
 
 ## Tier one: read freely
 
-The agent reads the project's context — notes, todos, memory, references — without asking. Reading is side-effect free, so it is never gated. This is what lets the agent help without being re-briefed: it can see the project's state the moment a question is asked.
+The agent reads the project's context (notes, todos, memory, references) without asking. Reading is side-effect free, so it is never gated. This is what lets the agent help without being re-briefed: it can see the project's state the moment a question is asked.
 
 ## Tier two: propose, and apply only with approval
 
-Changes that alter your work — editing a note, creating a todo, updating project memory, inserting a diagram — are proposed as suggestions. The suggestion is reviewable: it shows what would change, where it came from (the exact selection or run), and a confidence score. You accept or reject it.
+Changes that alter your work (editing a note, creating a todo, updating project memory, inserting a diagram) are proposed as suggestions. The suggestion is reviewable: it shows what would change, where it came from (the exact selection or run), and a confidence score. You accept or reject it.
 
-This is the default posture, and it is structural, not cosmetic: the `accept`, `reject`, and `revert` operations in the suggestions, todos, memory, and diagrams controllers exist precisely so no agent change can skip the review step. Some writes have no direct agent path at all — project memory, for instance, can only change through a `propose_memory_change` review.
+This is the default posture, and it is structural, not cosmetic: the `accept`, `reject`, and `revert` operations in the suggestions, todos, memory, and diagrams controllers exist precisely so no agent change can skip the review step. Some writes have no direct agent path at all: project memory, for instance, can only change through a `propose_memory_change` review.
 
 <Screenshot id="agent-tab" alt="An agent run in the project chat, with its proposed changes waiting for review." />
 
@@ -37,19 +35,19 @@ This is the default posture, and it is structural, not cosmetic: the `accept`, `
 
 Some changes are safe enough to skip the human entirely. Trust policies encode rules like *extract-promises results are auto-accepted* or *memory additions are auto-accepted*. When a proposed change matches a policy, it is applied and accepted automatically; the suggestion still exists, marked as auto-accepted, so nothing happens invisibly.
 
-Auto-acceptance is scoped and revocable. You can inspect every rule and change it — and the settings surface for tool enablement keeps the guard that prevents the agent from locking itself out of its own capabilities.
+Auto-acceptance is scoped and revocable. You can inspect every rule and change it: and the settings surface for tool enablement keeps the guard that prevents the agent from locking itself out of its own capabilities.
 
 ## Why provenance matters
 
-Every suggestion and every accepted change carries provenance: which selection it came from, which run proposed it, what pipeline produced it. Provenance is what makes the trust model inspectable. "The agent changed my memory" is only useful if you can trace exactly what the agent saw, proposed, and applied — and revert it if the change was wrong.
+Every suggestion and every accepted change carries provenance: which selection it came from, which run proposed it, what pipeline produced it. Provenance is what makes the trust model inspectable. "The agent changed my memory" is only useful if you can trace exactly what the agent saw, proposed, and applied: and revert it if the change was wrong.
 
 ## The user remains the source of truth
 
-The tiers are ordered by reversibility. Reading is free because it changes nothing. Proposing is the default because a wrong suggestion costs a click to reject. Auto-accepting is the exception, reserved for changes you have explicitly decided are safe. At no point does the agent become the source of truth — the design keeps you there.
+The tiers are ordered by reversibility. Reading is free because it changes nothing. Proposing is the default because a wrong suggestion costs a click to reject. Auto-accepting is the exception, reserved for changes you have explicitly decided are safe. At no point does the agent become the source of truth: the design keeps you there.
 
 ## Related reading
 
-- [The agent](/FollowThrough.ai/using/the-agent/) — the user-facing tour of chat surfaces, execution modes, and approval cards.
-- [Memory](/FollowThrough.ai/using/memory/) — the most protected write path in the product.
-- [The agent, in depth](/FollowThrough.ai/subsystems/agent/) — how approval checkpoints and trust policies are implemented.
-- [Memory, in depth](/FollowThrough.ai/subsystems/memory/) — the proposal transaction behind `propose_memory_change`.
+- [The agent](/FollowThrough.ai/using/the-agent/): the user-facing tour of chat surfaces, execution modes, and approval cards.
+- [Memory](/FollowThrough.ai/using/memory/): the most protected write path in the product.
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/): how approval checkpoints and trust policies are implemented.
+- [Memory, in depth](/FollowThrough.ai/subsystems/memory/): the proposal transaction behind `propose_memory_change`.

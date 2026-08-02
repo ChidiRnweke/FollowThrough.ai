@@ -1,69 +1,65 @@
 ---
 title: The agent
-description: The chat that can do everything you can — because every app capability is a tool it can call, gated by your approval.
+description: Chat with the agent to do anything the app can do. It reads your workspace on its own and proposes changes for your approval, unless you turn on auto-accept.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import Screenshot from '../../../../components/screenshot.astro';
 
-## TL;DR
+Open the chat and ask for anything you'd otherwise do by hand: create a note, update a todo, rename a project, generate a document. The agent runs on one rule: **everything you can do in the app, the agent can do.** Every capability is implemented once, in a controller, and the agent reaches it through a tool that wraps that same controller method. You never have to brief it either. Before it answers, it reads your workspace on its own.
 
-The agent is the chat built into FollowThrough, and it runs on one rule: **everything you can do in the app, the agent can do.** Every app capability is exposed to it as a tool — reading notes, creating todos, renaming projects, exporting documents — and every tool respects the trust model: reads are free, changes wait for your approval unless you switch to auto-accept. You never brief it; it reads your workspace before it answers.
+There are sixty-odd of these tools, and each one is classified as a **read**, a **proposal**, or a **mutation**:
 
-**Everything you can do in the app, the agent can do.**
+- **Reads** run freely. Searching your knowledge base, listing todos, and reading memory ask nothing of you, because none of them change anything.
+- **Proposals** never bypass review. Extracting promises from a selection, proposing a memory change, and generating a diagram all produce suggestion cards for you to accept or reject. A few writes have no direct path at all: memory can only change through `propose_memory_change` review, and the agent cannot delete todos.
+- **Mutations** (editing a note, creating a todo, archiving a project) wait for your approval in the default execution mode, and apply immediately only once you switch to auto-accept.
 
-That is not marketing shorthand. Every capability the app offers — creating a note, updating a todo, renaming a project, generating a document — is implemented once, in a controller, and the agent reaches it through a tool that wraps that same controller method. There are sixty-odd of these tools, each classified as a **read**, a **proposal**, or a **mutation**:
-
-- **Reads** run freely. Searching your knowledge base, listing todos, reading memory — none of it asks permission, because none of it changes anything.
-- **Proposals** never bypass review. Extracting promises from a selection, proposing a memory change, generating a diagram — these produce suggestion cards you accept or reject. Some writes have no direct path at all: memory can only change through `propose_memory_change` review, and the agent cannot delete todos.
-- **Mutations** — editing a note, creating a todo, archiving a project — wait for your approval in the default execution mode, and apply immediately only in auto-accept.
-
-A few capabilities are deliberately out of the agent's reach: it cannot upload your local files (you initiate attachments), and it cannot delete todos, change memory directly, or manage its own API-token creation.
+A few capabilities stay out of the agent's reach on purpose. It cannot upload your local files (you initiate attachments yourself), and it cannot delete todos, change memory directly, or manage its own API-token creation.
 
 <Screenshot id="tools" alt="The tools settings page listing every agent tool with its on/off toggle" />
 
-## Tools you can turn off
+## Turn a tool off
 
-Every tool can be switched off — as your workspace default, or overridden per project. Turn off `create_todo` in a project and the agent loses that capability there entirely: it disappears from the in-app chat, from tool search, and from the MCP surface at once, because there is only one registry behind all three. The **Tools** page in settings lists every tool with its current state and whether that state came from your default or a project override.
+Open **Settings > Tools** to see every tool with its current state and whether that state came from your default or a project override. Flip a tool off there, as your workspace default or for one project, and the agent loses that capability entirely: it disappears from the in-app chat, from tool search, and from the MCP surface all at once, since one registry sits behind all three.
 
-A handful of tools are locked on: `get_workspace_context` and `load_skill` (without them the agent loses its grounding and its instructions), and the two preference tools (a selection that lets the agent disable its own way back would be a trap, not a setting).
+A handful of tools stay locked on regardless: `get_workspace_context` and `load_skill` (without them the agent loses its grounding and its instructions), plus the two preference tools (letting the agent disable its own way back would be a trap, not a setting).
 
-## Where you talk to it
+## Find the chat
 
-The chat runs in two places, showing the same conversations:
+The chat runs in two places, and both show the same conversations:
 
-- **The side panel** sits beside whatever you are doing — below the `2xl` breakpoint it opens as a sheet over the page. It lists up to five recent chats.
-- **The full page** lives at `/chats`, with durable URLs: `/chats/new` for a fresh conversation, `/chats/[id]` for an existing one. The full history is here, and each conversation links back to the project or note it started from — that origin is fixed on the first turn and shown as the chat's context.
+- **The side panel** sits beside whatever you're doing (it opens as a sheet over the page below the `2xl` breakpoint) and lists up to five recent chats.
+- **The full page** lives at `/chats`, with durable URLs: `/chats/new` for a fresh conversation, `/chats/[id]` for an existing one. Open it for the full history. Each conversation links back to the project or note it started from, an origin fixed on the first turn and shown as the chat's context.
 
 <Screenshot id="agent-tab" alt="The agent chat panel with its context sentence, recent chats, and composer" />
 
-## What it reads before answering
+## Check what it's reading
 
-Above an empty thread, a plain-language sentence names the scope — "Before it answers, the agent reads what is in your Inbox project" — with a row of counts (memory, notes, todos, attachments) showing exactly what is in reach, zeros included. Change project and the row re-derives itself.
+Above an empty thread, a plain-language sentence names the scope ("Before it answers, the agent reads what is in your Inbox project"), with a row of counts (memory, notes, todos, attachments) showing exactly what's in reach, zeros included. Change project and the row updates with it.
 
-Behind that sentence, a run starts by reading your workspace context: your projects, the note tree, your skills, and pending work. From there the agent pulls what it needs with read tools — semantic search over notes, documents, and PDFs; user and project memory; todo lists; full note contents. Your preferences and limits are frozen onto the run at submission, so a retried run replays under the settings it was submitted with, not whatever they have since become.
+Behind that sentence, a run starts by reading your workspace context: your projects, the note tree, your skills, and pending work. From there the agent pulls what it needs with read tools: semantic search over notes, documents, and PDFs; user and project memory; todo lists; full note contents. Your preferences and limits freeze onto the run at submission, so retrying a run replays it under the settings it was submitted with, not whatever they've since become.
 
-While you chat you can also steer the context directly: type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP), and pick the model from the gear next to the composer — the picker searches the OpenRouter catalogue and disables models that cannot call tools.
+While you chat you can steer the context directly too. Type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP), and pick the model from the gear next to the composer (the picker searches the OpenRouter catalogue and disables models that can't call tools).
 
-## Execution modes and approval cards
+## Choose an execution mode
 
 The composer carries a toggle between two execution modes, kept visible because it decides whether the agent may write without asking:
 
-- **Approval required** (the default): every mutation parks the run and appears as an approval card before it happens. The card names the action and previews it — a note edit shows the diff. When one turn produces several changes, they bundle with *Approve all* and *Reject all*; the batch is all-or-nothing, so no decision silently goes nowhere. Rejecting tells the agent to recover without that action.
-- **Auto-accept**: mutations apply without asking. Reads and proposals behave the same in both modes — proposals still land as reviewable suggestions.
+- **Approval required** (the default). Every mutation parks the run and appears as an approval card before it happens; the card names the action and previews it (a note edit shows the diff). When one turn produces several changes, they bundle with *Approve all* and *Reject all*, so the batch is all-or-nothing and no decision silently goes nowhere. Rejecting tells the agent to recover without that action.
+- **Auto-accept**. Mutations apply without asking. Reads and proposals behave the same in both modes; proposals still land as reviewable suggestions.
 
 <Screenshot id="in-editor-chat" alt="An agent conversation opened from a note, with the note attached as context" />
 
-A run is a sequence of tool-calling turns, capped at **20 turns** by default (adjustable in settings, up to 50) — a model stuck in a loop stops costing money. There is **one active run per conversation**: sending again while a run is in flight is refused, and a chat with an active run cannot be deleted. Stop halts a running generation; a failed or cancelled run offers retry, which replays it exactly as submitted — a completed run is never replayed. If your connection drops mid-run, the composer shows "Reconnecting" or "Offline · run continues": the run keeps going on the server and the transcript catches up when you are back.
+A run is a sequence of tool-calling turns, capped at **20 turns** by default (adjustable in settings, up to 50), so a model stuck in a loop stops costing money. Only **one run can be active per conversation**: sending again while a run is in flight is refused, and you can't delete a chat with an active run. Stop halts a running generation. Retry replays a failed or cancelled run exactly as submitted (a completed run is never replayed). If your connection drops mid-run, the composer shows "Reconnecting" or "Offline, run continues": the run keeps going on the server, and the transcript catches up once you're back.
 
 <Aside type="tip">
-	Resubmissions are safe. Every prompt is idempotent on its request id, so a retry after a dropped
-	response cannot double-fire the agent.
+	Resubmitting is safe. Every prompt is idempotent on its request id, so a retry after a dropped
+	response can't double-fire the agent.
 </Aside>
 
 ## Keep reading
 
-- [The agent, in depth](/FollowThrough.ai/subsystems/agent/) — how runs, approval checkpoints, and the tool registry are implemented.
-- [Todos](/FollowThrough.ai/using/todos/) — the board the agent extracts commitments onto.
-- [Memory](/FollowThrough.ai/using/memory/) — the most protected write path the agent has.
-- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind execution modes.
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/): how runs, approval checkpoints, and the tool registry are implemented.
+- [Todos](/FollowThrough.ai/using/todos/): the board the agent extracts commitments onto.
+- [Memory](/FollowThrough.ai/using/memory/): the most protected write path the agent has.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/): the trust model behind execution modes.

@@ -1,15 +1,22 @@
 ---
 title: Attachments
-description: Upload a file and FollowThrough reads it for you — OCR'd to markdown, indexed for search, and readable by the agent.
+description: Upload a file and FollowThrough reads it for you, OCR'd to markdown, indexed for search, and readable by the agent.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-## TL;DR
+Use attachments when you want the agent to answer from a real document instead of what you can fit in a chat message: a spec, a contract, a slide deck, a screenshot. Attach a file (up to 50 MB) to a project or a note and it uploads straight to object storage, then gets read in the background: plain text is decoded directly, and PDFs, Office documents, ebooks, and images go through Mistral Document AI OCR. The extracted markdown is indexed into knowledge search, so the agent can answer from your files, and images are described by a vision model so it can "see" them too. Every attachment carries a status badge from `queued` to `ready`, and failures can be retried.
 
-Attach a file (up to 50 MB) to a project or a note and it uploads straight to object storage, then gets read in the background: plain text is decoded directly, and PDFs, Office documents, ebooks, and images go through Mistral Document AI OCR. The extracted markdown is indexed into knowledge search, so the agent can answer from your files — and images are described by a vision model so it can "see" them too. Every attachment carries a status badge from `queued` to `ready`; failures can be retried.
+## Upload a file
 
-## The processing pipeline
+Open the Attachments page under a project (`Project > Attachments`) to see every file in the project, whichever note owns it. Choose **Add attachment** to pick a file and upload it, up to 50 MB per file. The list refreshes itself when the upload is queued; use **Refresh** to re-check processing states at any time.
+
+- Hover a row for its actions: **Download** the original file, **Retry** a failed processing run, or **Remove** the file. Removal asks for confirmation, then deletes the stored file and its search index entries. Notes that embedded the image keep the reference, but the image no longer loads.
+- Paste or drop an image directly into a note to upload it as an attachment of that note and insert it into the document, no separate trip to the Attachments page needed. An archived note can't receive new attachments.
+
+Under the hood, the server checks the stored bytes against the size and checksum declared when the upload started, and rejects the upload on a mismatch rather than keeping a corrupt file. An upload you start but never finish expires after ten minutes, and the reservation is swept up automatically later.
+
+## Read the status badge
 
 Every attachment shows a status badge that moves through a small pipeline:
 
@@ -24,38 +31,28 @@ flowchart LR
     F -->|Retry| Q
 `} />
 
-- **queued** — the upload is stored and waiting to be processed.
-- **processing** — the file is being read right now.
-- **ready** — the full text was extracted and indexed.
-- **partial** — the text was extracted, but only part of it fit the search index.
-- **unsupported** — the file is stored and downloadable, but nothing can read its format, so it has no searchable text.
-- **failed** — processing errored. The row shows the failure message and offers a **Retry** action.
+- **queued:** the upload is stored and waiting to be processed.
+- **processing:** the file is being read right now.
+- **ready:** the full text was extracted and indexed.
+- **partial:** the text was extracted, but only part of it fit the search index.
+- **unsupported:** the file is stored and downloadable, but nothing can read its format, so it has no searchable text.
+- **failed:** processing errored. The row shows the failure message; choose **Retry** to try again.
 
 Processing never blocks the upload: the file is downloadable the moment it lands, whatever its badge says.
 
-## What "read" means
+## Know what gets extracted
 
-What happens in the **processing** step depends on the format:
+What happens during **processing** depends on the format:
 
-- **Plain text** — Markdown, JSON, code, CSV, and similar — is decoded in place. No OCR call, nothing lost.
-- **Documents** — PDFs, Word, PowerPoint, Excel, EPUB, and other office or ebook formats — go to Mistral Document AI, which returns markdown with tables intact, up to 100 pages.
-- **Images embedded in a document** are pulled out by the OCR and replaced by short factual descriptions at the position where they appeared.
+- **Plain text** (Markdown, JSON, code, CSV, and similar) is decoded in place, with no OCR call and nothing lost.
+- **Documents** (PDFs, Word, PowerPoint, Excel, EPUB, and other office or ebook formats) go to Mistral Document AI, which returns markdown with tables intact, up to 100 pages.
+- **Images embedded in a document** are pulled out by the OCR and replaced with short factual descriptions at the position where they appeared.
 - **A standalone image** gets the same treatment: any text the OCR recovers, plus a description of the image itself from a vision model.
 
-The result is one markdown document per attachment. That text is indexed into knowledge search — which is what makes your files searchable alongside your notes — and it is what the agent quotes when it answers questions about the project. When the agent works with attachments, it lists them with `list_attachments` and pages through the extracted text with `read_attachment`; the image descriptions are how it "sees" pictures.
+The result is one markdown document per attachment. That text is indexed into knowledge search, which is what makes your files searchable alongside your notes, and it's what the agent quotes when it answers questions about the project. The agent lists your attachments with `list_attachments` and pages through the extracted text with `read_attachment`; the image descriptions are how it "sees" pictures.
 
-## What you can do
+## See also
 
-The Attachments page lives under a project (`Project > Attachments`) and lists every file in the project, whichever note owns it.
-
-- **Add attachment** picks a file and uploads it — up to 50 MB per file. The list refreshes itself when the upload is queued; a **Refresh** button re-checks processing states.
-- Row actions appear on hover: **Download** the original file, **Retry** a failed processing run, or **Remove** the file. Removal asks for confirmation, and it deletes the stored file and its search index entries — notes that embedded the image keep the reference, but the image no longer loads.
-- Pasting or dropping an image into a note uploads it as an attachment of that note and inserts it into the document — no separate trip to the Attachments page. An archived note cannot receive new attachments.
-
-A few things happen under the hood so a bad upload never surfaces: the server checks the stored bytes against the size and checksum declared when the upload started, and rejects the upload on a mismatch rather than keeping a corrupt file. An upload you start but never finish expires after ten minutes, and the reservation is swept up automatically later.
-
-## Where this fits
-
-- [Attachments, in depth](/FollowThrough.ai/subsystems/attachments/) — the storage and OCR pipeline underneath.
-- [Notes](/FollowThrough.ai/using/notes/) — where pasted and dropped images land.
-- [Search](/FollowThrough.ai/using/search/) — where extracted attachment text becomes findable.
+- [Attachments, in depth](/FollowThrough.ai/subsystems/attachments/): the storage and OCR pipeline underneath.
+- [Notes](/FollowThrough.ai/using/notes/): where pasted and dropped images land.
+- [Search](/FollowThrough.ai/using/search/): where extracted attachment text becomes findable.

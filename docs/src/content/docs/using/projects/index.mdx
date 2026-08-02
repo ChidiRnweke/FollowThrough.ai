@@ -1,16 +1,12 @@
 ---
 title: Projects
-description: The project is the organizing unit of FollowThrough — notes, todos, memory, attachments, skills, and outputs all live under one.
+description: Create a project to organize notes, todos, memory, attachments, skills, and outputs under one roof.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-## TL;DR
-
-A project is the unit everything hangs off. Notes and folders form its document tree, and around them sit the spaces the agent reads from and produces into: memory, attachments, todos, and artifacts. Skills — reusable instruction sets for the agent — are stored in the project too. Every one of these is scoped to a project at the database level, so opening a project gives the agent a complete, bounded picture of one body of work. If you never create one, FollowThrough provisions a default project called **General** and puts everything there.
-
-## What lives under a project
+Create a project to give the agent a complete, bounded picture of one body of work. A project is the unit everything hangs off: notes and folders form its document tree, and around them sit the spaces the agent reads from and produces into (memory, attachments, todos, and artifacts). Skills, reusable instruction sets for the agent, are stored in the project too. If you never create one, FollowThrough provisions a default project called **General** and puts everything there.
 
 <Mermaid
 	source={`
@@ -31,47 +27,36 @@ flowchart LR
 `}
 />
 
-The split that matters is direction: **memory and attachments are what the agent works from** — the material it reasons over when it answers — while **todos and artifacts are what the project produces** — commitments extracted from your notes, and deliverables the agent generated with your approval. Notes sit in the middle as the shared surface you and the agent both write on.
+The split that matters is direction. **Memory and attachments are what the agent works from**, the material it reasons over when it answers, while **todos and artifacts are what the project produces**: commitments extracted from your notes, and deliverables the agent generated with your approval. Notes sit in the middle as the shared surface you and the agent both write on. This scoping isn't cosmetic: when the agent searches your knowledge base, grounds an answer, or lists what it can act on, a project boundary is usually the filter, and you can always ask it to work within one project explicitly.
 
-This scoping is not cosmetic. When the agent searches your knowledge base, grounds an answer, or lists what it can act on, a project boundary is usually the filter — and you can always ask it to work within one project explicitly.
+## Read the overview
 
-## The overview
-
-Opening a project lands on its overview, which groups the spaces by that direction:
-
-- **Produced here** — Todos and Artifacts.
-- **What the agent works from** — Memory and Attachments.
-
-A populated space states what it holds — `3 open · 1 overdue` on Todos, `2 files grounding the agent` on Attachments. An empty space shows a rotating tip about what it's for instead of a zero.
-
-Below the spaces is the document tree. Notes carry their relative last-edited time, and documents still named `Untitled` are counted beside the heading as a standing invitation to name them. An empty project gets the hero treatment: a statement that nothing is here yet, then two ways in — create the first note, or import an existing project as a zip of Markdown files, structure and all. Import is not all-or-nothing; the closing report separates what was imported from what was skipped and what failed, so a partial import is visible instead of silent.
+Open a project to land on its overview, which groups the spaces by that same direction: **Produced here** (Todos and Artifacts) and **What the agent works from** (Memory and Attachments). A populated space states what it holds (`3 open, 1 overdue` on Todos, `2 files grounding the agent` on Attachments); an empty space shows a rotating tip about what it's for instead of a zero.
 
 <Screenshot id="project-context" alt="A project overview with its spaces and document tree." />
 
-## Notes and folders
+Below the spaces sits the document tree. Notes carry their relative last-edited time, and documents still named `Untitled` are counted beside the heading as a standing invitation to name them. If a project is empty, create the first note or import an existing project as a zip of Markdown files, structure and all; the closing report separates what was imported from what was skipped and what failed, so a partial import stays visible instead of silent.
 
-The tree holds notes and folders. Folders have no page of their own — they exist to group notes and expand in place. You can reorder or re-file entries by dragging them in the sidebar tree, and the move is validated: the target must be a folder, and an entry can't be moved under itself or one of its own descendants.
+## Organize notes and folders
 
-## Project memory versus profile memory
+The tree holds notes and folders. Folders have no page of their own; they exist to group notes and expand in place. Drag entries in the sidebar tree to reorder or re-file them. The move is validated: the target must be a folder, and an entry can't move under itself or one of its own descendants.
 
-Memory exists at two levels. **Project memory** is scoped to the project — decisions, constraints, and context that only make sense inside this body of work. **Profile memory** is what the agent knows about you across everything, and it lives on the profile page; a suggested memory that isn't tied to any project surfaces there.
+## Choose project memory or profile memory
 
-The two levels behave differently under the hood: project memory you share with agents becomes searchable and is injected when the agent works in that project, while profile memory is injected into the agent's context directly, everywhere. The [memory page](/FollowThrough.ai/using/memory/) covers the sharing and approval flow.
+Memory exists at two levels. **Project memory** is scoped to the project (decisions, constraints, and context that only make sense inside this body of work), while **profile memory** is what the agent knows about you across everything and lives on the profile page; a suggested memory that isn't tied to any project surfaces there instead. Project memory you share with agents becomes searchable and is injected when the agent works in that project; profile memory is injected into the agent's context directly, everywhere. See [Memory](/FollowThrough.ai/using/memory/) for the sharing and approval flow.
 
-## Creating, renaming, archiving
+## Create, rename, or archive a project
 
-- **Create a project** from the `+` beside the Projects group in the sidebar.
-- **Add a note or folder** from the project page header.
-- **Rename, set export defaults, import a Markdown archive, or archive** from the project actions menu (the `⋯` in the header).
-- **Rename or archive a document** from the hover menu on its row in the documents list.
+- Choose the `+` beside the Projects group in the sidebar to **create a project**.
+- Use the project page header to **add a note or folder**.
+- Open the project actions menu (the `...` in the header) to **rename, set export defaults, import a Markdown archive, or archive**.
+- Use the hover menu on a document's row in the documents list to **rename or archive that document**.
 
-Names are required and trimmed, and two active projects can't share a name — casing aside. The save fails with that explanation rather than overwriting. Archiving a project frees its name for reuse.
-
-Archiving sets a timestamp and takes the project out of every default view: it leaves the sidebar, the workspace, and the name-uniqueness check, and its documents stop appearing in search. There is no delete, and no archived-projects list in the UI to restore from — treat archive as final. The same applies to documents inside a project: archive, not delete.
+Names are required and trimmed, and two active projects can't share a name (casing aside); the save fails with that explanation rather than overwriting. Archiving frees a project's name for reuse, sets a timestamp, and takes the project out of every default view: it leaves the sidebar, the workspace, and the name-uniqueness check, and its documents stop appearing in search. There's no delete, and no archived-projects list in the UI to restore from, so treat archive as final. Documents inside a project work the same way: archive, not delete.
 
 ## More on projects
 
-- [Projects, in depth](/FollowThrough.ai/subsystems/projects/) — the tree, move validation, and repository rules behind this page.
-- [Memory](/FollowThrough.ai/using/memory/) — how the agent proposes and keeps facts at both levels.
-- [Todos](/FollowThrough.ai/using/todos/) — how commitments get extracted and triaged.
-- [Notes](/FollowThrough.ai/using/notes/) — the document surface everything else hangs off.
+- [Projects, in depth](/FollowThrough.ai/subsystems/projects/): the tree, move validation, and repository rules behind this page.
+- [Memory](/FollowThrough.ai/using/memory/): how the agent proposes and keeps facts at both levels.
+- [Todos](/FollowThrough.ai/using/todos/): how commitments get extracted and triaged.
+- [Notes](/FollowThrough.ai/using/notes/): the document surface everything else hangs off.

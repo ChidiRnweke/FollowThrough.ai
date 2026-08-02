@@ -1,30 +1,28 @@
 ---
 title: Settings
-description: Agent preferences, per-user and per-project tool toggles, and trust policies resolve under one rule — an unset per-user setting falls back to the deployment's environment default, never to a hard-coded literal.
+description: Agent preferences, per-user and per-project tool toggles, and trust policies resolve under one rule. An unset per-user setting falls back to the deployment's environment default, never to a hard-coded literal.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-## TL;DR
+Settings is not a capability of its own. It is three thin controllers under `src/lib/server/controllers/agent/` (`settings/`, `tool-preferences/`, `trust-policies/`) plus the `/settings` page that renders them. What holds it together is a single resolution rule: a per-user setting that is absent means "use the deployment default," and the deployment default is always an environment value pulled through the secrets backend, never a constant buried in a service. Two writers, the settings page and the agent's own tools, land on the same controllers, so every limit is enforced exactly once.
 
-Settings is not a capability of its own. It is three thin controllers under `src/lib/server/controllers/agent/` — `settings/`, `tool-preferences/`, `trust-policies/` — plus the `/settings` page that renders them. What holds it together is a single resolution rule: a per-user setting that is absent means "use the deployment default", and the deployment default is always an environment value pulled through the secrets backend, never a constant buried in a service. Two writers — the settings page and the agent's own tools — land on the same controllers, so every limit is enforced exactly once.
-
-Every knob the agent runs under — model choice, execution mode, web-search caps, tool availability, auto-accept policy — is overridable per user and per project, with the deployment's environment as the floor. The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model trust policies plug into is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
+Every knob the agent runs under (model choice, execution mode, web-search caps, tool availability, auto-accept policy) is overridable per user and per project, with the deployment's environment as the floor. The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model trust policies plug into is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
 
 ## Why this subsystem exists
 
-Two writers, one truth: every setting can be changed from the settings page *and* by the agent itself — `update_agent_preferences`, `set_tool_enabled`, and `update_trust_policy` are ordinary agent tools. If validation lived in the UI, the agent path would bypass it; if it lived in both, the two would drift. So both paths land on the same controllers, and each limit is enforced exactly once, in `src/lib/server/controllers/agent/settings/controller.ts`.
+Two writers, one truth: every setting can be changed from the settings page *and* by the agent itself: `update_agent_preferences`, `set_tool_enabled`, and `update_trust_policy` are ordinary agent tools. If validation lived in the UI, the agent path would bypass it; if it lived in both, the two would drift. So both paths land on the same controllers, and each limit is enforced exactly once, in `src/lib/server/controllers/agent/settings/controller.ts`.
 
-The second pressure is that deployments differ. A default model or search cap hard-coded in a service is wrong the moment an operator configures another one — so the resolution chain always ends at an environment value, and `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) is the complete list of keys services may hydrate.
+The second pressure is that deployments differ. A default model or search cap hard-coded in a service is wrong the moment an operator configures another one: so the resolution chain always ends at an environment value, and `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) is the complete list of keys services may hydrate.
 
 <Mermaid
 	source={`
 flowchart LR
-	form["/settings forms"] --> controllers["Settings controllers — validation happens once"]
+	form["/settings forms"] --> controllers["Settings controllers: validation happens once"]
 	tools["Agent tools: update_agent_preferences, set_tool_enabled, update_trust_policy"] --> controllers
-	controllers --> stores["Preference stores — merge and resolution rules"]
+	controllers --> stores["Preference stores: merge and resolution rules"]
 	stores --> repos["Repositories (Drizzle)"]
 	repos --> tables["agent_preferences · tool_preferences · project_tool_overrides · trust_policies"]
 `}
@@ -32,10 +30,10 @@ flowchart LR
 
 ## The pieces involved
 
-- **Models** — `src/lib/models/agent/index.ts`: `AgentPreferences`, `ToolPreference`, `TrustPolicy`, the `webSearchEngines` list (`auto`, `native`, `exa`, `firecrawl`, `parallel`, `perplexity`), `CHAT_WEB_SEARCH_DEFAULTS` (exa, 20 results per search, 40 per run), and `DEFAULT_AGENT_MAX_TURNS` (20).
-- **Services** — `src/lib/server/services/agent/runs/preferences.ts` (`AgentPreferenceCatalog`, the OpenRouter-backed `AgentModels` catalog, and the pure `resolve*` functions), `src/lib/server/services/agent/tools/preferences.ts` (`ToolAccess`), and `src/lib/server/services/agent/runs/tool-trust.ts` (`ToolTrust`).
-- **Controllers** — `src/lib/server/controllers/agent/settings/controller.ts` (`AgentSettings`), `tool-preferences/controller.ts` (`ToolPreferences`), `trust-policies/controller.ts` (`TrustPolicies`). These are the public surface the settings page, the agent tools, and the MCP surface all share.
-- **Repositories** — `src/lib/server/repositories/agent/` owns the four tables: `agent_preferences`, `tool_preferences`, `project_tool_overrides`, `trust_policies` (`src/lib/server/db/schema/registry.ts:581`–`691`).
+- **Models**: `src/lib/models/agent/index.ts`: `AgentPreferences`, `ToolPreference`, `TrustPolicy`, the `webSearchEngines` list (`auto`, `native`, `exa`, `firecrawl`, `parallel`, `perplexity`), `CHAT_WEB_SEARCH_DEFAULTS` (exa, 20 results per search, 40 per run), and `DEFAULT_AGENT_MAX_TURNS` (20).
+- **Services**: `src/lib/server/services/agent/runs/preferences.ts` (`AgentPreferenceCatalog`, the OpenRouter-backed `AgentModels` catalog, and the pure `resolve*` functions), `src/lib/server/services/agent/tools/preferences.ts` (`ToolAccess`), and `src/lib/server/services/agent/runs/tool-trust.ts` (`ToolTrust`).
+- **Controllers**: `src/lib/server/controllers/agent/settings/controller.ts` (`AgentSettings`), `tool-preferences/controller.ts` (`ToolPreferences`), `trust-policies/controller.ts` (`TrustPolicies`). These are the public surface the settings page, the agent tools, and the MCP surface all share.
+- **Repositories**: `src/lib/server/repositories/agent/` owns the four tables: `agent_preferences`, `tool_preferences`, `project_tool_overrides`, `trust_policies` (`src/lib/server/db/schema/registry.ts:581`–`691`).
 
 ## Agent preferences
 
@@ -49,7 +47,7 @@ Validation happens once, in the controller:
 
 When a run needs a value, resolution layers conversation override over user preference over environment:
 
-- Chat and vision model: conversation override → user preference → `OPENROUTER_DEFAULT_MODEL` (default `openai/gpt-5.6`) — `resolveAgentModel` / `resolveVisionModel` in `preferences.ts:154`–`172`.
+- Chat and vision model: conversation override → user preference → `OPENROUTER_DEFAULT_MODEL` (default `openai/gpt-5.6`): `resolveAgentModel` / `resolveVisionModel` in `preferences.ts:154`–`172`.
 - Turn limit: user preference → `DEFAULT_AGENT_MAX_TURNS`.
 - Web search: the user's engine and caps layer over the environment's `OPENROUTER_WEB_SEARCH_*` options, so a user who sets only a result cap still gets the deployment's engine (`resolveWebSearchOptions`, `preferences.ts:185`). With nothing set anywhere, chat searches fall back to `CHAT_WEB_SEARCH_DEFAULTS`.
 - Inline completion walks a longer chain: the user's inline model → `OPENROUTER_INLINE_COMPLETION_MODEL` → `OPENROUTER_INLINE_MODEL` → `DEFAULT_GENERATION_MODEL` (`src/lib/server/services/inline-suggestions/inline-completion.ts:217`–`221`).
@@ -58,11 +56,11 @@ A user with no stored row gets `approval_required` execution mode and inline sug
 
 ## Tool preferences and locked tools
 
-The settings UI never maintains its own tool list. `describeAgentTools()` (`src/lib/server/agent-tool-catalog-factory.ts:35`) derives the catalog from the same `buildDefinitions` the agent runs on — with inert controllers that throw if any tool touches them at define time — and is deliberately not cached, so a tool added in dev appears on reload. The settings surface cannot drift from what exists.
+The settings UI never maintains its own tool list. `describeAgentTools()` (`src/lib/server/agent-tool-catalog-factory.ts:35`) derives the catalog from the same `buildDefinitions` the agent runs on (with inert controllers that throw if any tool touches them at define time) and is deliberately not cached, so a tool added in dev appears on reload. The settings surface cannot drift from what exists.
 
-Each tool resolves through `ToolAccess` (`tools/preferences.ts:112`) in a fixed order: **locked → project override → workspace (user) default → enabled**. Unknown tool names resolve to enabled — a tool added since the stored rows were written is the same case as a tool the user never touched. The resolved `source` (`default` | `user` | `project`) is what lets the UI offer "Reset" on a project override. Writes go through the store, not the UI, so the agent's own `set_tool_enabled` is held to the same rules: unknown names and locked tools are rejected with a `ValidationError` (`tools/preferences.ts:95`).
+Each tool resolves through `ToolAccess` (`tools/preferences.ts:112`) in a fixed order: **locked → project override → workspace (user) default → enabled**. Unknown tool names resolve to enabled: a tool added since the stored rows were written is the same case as a tool the user never touched. The resolved `source` (`default` | `user` | `project`) is what lets the UI offer "Reset" on a project override. Writes go through the store, not the UI, so the agent's own `set_tool_enabled` is held to the same rules: unknown names and locked tools are rejected with a `ValidationError` (`tools/preferences.ts:95`).
 
-Four tools are locked on (`LOCKED_TOOL_NAMES`, `src/lib/server/agent-tool-factory.ts:79`): `get_workspace_context` and `load_skill`, without which the agent loses its grounding and its instructions, and `list_tool_preferences` and `set_tool_enabled`, without which it could disable its own way back. Locked tools read as enabled even if a stored row says otherwise, and the definitions filter keeps them even when the access check would reject them (`agent-tool-factory.ts:401`–`407`). `search_tools` and `use_tool` need no entry — they are assembled outside the definitions list, so no preference can reach them.
+Four tools are locked on (`LOCKED_TOOL_NAMES`, `src/lib/server/agent-tool-factory.ts:79`): `get_workspace_context` and `load_skill`, without which the agent loses its grounding and its instructions, and `list_tool_preferences` and `set_tool_enabled`, without which it could disable its own way back. Locked tools read as enabled even if a stored row says otherwise, and the definitions filter keeps them even when the access check would reject them (`agent-tool-factory.ts:401`–`407`). `search_tools` and `use_tool` need no entry: they are assembled outside the definitions list, so no preference can reach them.
 
 A disabled tool disappears entirely: from chat, from tool search, and from any connected MCP client.
 
@@ -70,29 +68,29 @@ A disabled tool disappears entirely: from chat, from tool search, and from any c
 
 ## Trust policies
 
-A trust policy (`TrustPolicy`) says, per pipeline, whether its suggestions auto-accept or wait for review: `extract_promises`, `relate`, `reference`, `agent`, `memory`. `ToolTrust.list()` materializes all five with `autoAcceptEnabled: false` even when nothing is stored (`tool-trust.ts:29`), so the UI always renders five rows. An update is an upsert keyed on `(userId, pipeline)` — it replaces the previous rule for that pipeline and preserves `createdAt`.
+A trust policy (`TrustPolicy`) says, per pipeline, whether its suggestions auto-accept or wait for review: `extract_promises`, `relate`, `reference`, `agent`, `memory`. `ToolTrust.list()` materializes all five with `autoAcceptEnabled: false` even when nothing is stored (`tool-trust.ts:29`), so the UI always renders five rows. An update is an upsert keyed on `(userId, pipeline)`: it replaces the previous rule for that pipeline and preserves `createdAt`.
 
 The evaluator (`shouldAutoAccept`, `tool-trust.ts:60`) requires the policy to be enabled and, when a `minimumConfidence` is set, the suggestion's confidence to meet it. The threshold is a whole percent 0–100, matching the confidence stored on suggestions and validated on the `update_trust_policy` tool input. One invariant callers rely on: **the `reference` pipeline never auto-accepts**, whatever is stored (`tool-trust.ts:65`).
 
-The evaluator is consulted where suggestions are created — today the promise-extraction path in the todos controller (`src/lib/server/controllers/todos/controller.ts:190`) and the memory proposal path (`src/lib/server/controllers/memory/controller.ts:128`). The settings UI toggles review/auto-accept per pipeline; a confidence threshold can be set through the agent's `update_trust_policy` tool, and the UI preserves and displays it ("Auto-accepts above N% confidence").
+The evaluator is consulted where suggestions are created: today the promise-extraction path in the todos controller (`src/lib/server/controllers/todos/controller.ts:190`) and the memory proposal path (`src/lib/server/controllers/memory/controller.ts:128`). The settings UI toggles review/auto-accept per pipeline; a confidence threshold can be set through the agent's `update_trust_policy` tool, and the UI preserves and displays it ("Auto-accepts above N% confidence").
 
 ## Where defaults come from
 
-Deployment defaults live in `APPLICATION_DEFAULTS` in `src/lib/server/config.ts:95`, and `hydrateEnvironment()` pulls every application key through the secrets backend with those defaults as fallback. The comment there is the invariant: services hydrate lazily, so a key without an entry in `APPLICATION_DEFAULTS` is never pulled from the secrets backend — and a user who clears the matching per-user setting would fall back to a hard-coded literal instead of whatever the deployment configured. `OPENROUTER_INLINE_COMPLETION_MODEL` is deliberately absent from the defaults: it is checked ahead of `OPENROUTER_INLINE_MODEL`, so giving it a default would make that one unreachable.
+Deployment defaults live in `APPLICATION_DEFAULTS` in `src/lib/server/config.ts:95`, and `hydrateEnvironment()` pulls every application key through the secrets backend with those defaults as fallback. The comment there is the invariant: services hydrate lazily, so a key without an entry in `APPLICATION_DEFAULTS` is never pulled from the secrets backend: and a user who clears the matching per-user setting would fall back to a hard-coded literal instead of whatever the deployment configured. `OPENROUTER_INLINE_COMPLETION_MODEL` is deliberately absent from the defaults: it is checked ahead of `OPENROUTER_INLINE_MODEL`, so giving it a default would make that one unreachable.
 
 ## Delivery
 
-`/settings` (`src/routes/(app)/settings/`) has five tabs — Models, Agents, Tools, MCP access, Trust policies — with the tab and the tool-scope project in the URL, so they survive reload. Saves go through the remote functions in `src/lib/remote/settings/settings.remote.ts`: the Models and Agents tabs are separate forms (`saveModelPreferences`, `saveAgentPreferences`) that each send only their own fields, and the controller merges the partial updates. The Agents tab sliders rest on the deployment default resolved server-side — including env overrides — so the UI never hardcodes a number a deployment may have changed. The Tools tab scopes edits to all projects or one.
+`/settings` (`src/routes/(app)/settings/`) has five tabs (Models, Agents, Tools, MCP access, Trust policies), with the tab and the tool-scope project in the URL, so they survive reload. Saves go through the remote functions in `src/lib/remote/settings/settings.remote.ts`: the Models and Agents tabs are separate forms (`saveModelPreferences`, `saveAgentPreferences`) that each send only their own fields, and the controller merges the partial updates. The Agents tab sliders rest on the deployment default resolved server-side, including env overrides, so the UI never hardcodes a number a deployment may have changed. The Tools tab scopes edits to all projects or one.
 
 <Aside type="note">
 
-Execution mode is also settable per conversation from the composer — it resolves as conversation override → user preference (`resolveAgentExecutionMode`, `preferences.ts:202`) — because the mode is too consequential to hide behind settings alone. How it gates a run's durable changes — and how trust policies auto-accept suggestions — is documented under [agent](/FollowThrough.ai/subsystems/agent/).
+Execution mode is also settable per conversation from the composer. It resolves as conversation override, then user preference (`resolveAgentExecutionMode`, `preferences.ts:202`), because the mode is too consequential to hide behind settings alone. How it gates a run's durable changes, and how trust policies auto-accept suggestions, is documented under [agent](/FollowThrough.ai/subsystems/agent/).
 
 </Aside>
 
 ## Invariants
 
-- Every limit is enforced exactly once, in the controller — the settings form and the agent's own tools share the path.
+- Every limit is enforced exactly once, in the controller: the settings form and the agent's own tools share the path.
 - An unset per-user setting falls back to the deployment's environment value; a cleared setting (`null`) means the same thing. No fallback is a literal in a service.
 - Numeric limits are rejected, never clamped.
 - Locked tools are enabled for every reader and rejected on every write, whoever the writer is.
@@ -100,6 +98,6 @@ Execution mode is also settable per conversation from the composer — it resolv
 
 ## Where this plugs in
 
-- [Agent](/FollowThrough.ai/subsystems/agent/) — execution mode, turn limits, and tool availability gate every run; the locked-tool rationale lives in the tool catalog documented there.
-- [Skills](/FollowThrough.ai/subsystems/skills/) — `load_skill` is one of the four locked tools; the skill catalog the agent sees is assembled per run under these preferences.
-- [Todos](/FollowThrough.ai/subsystems/todos/) and [memory](/FollowThrough.ai/subsystems/memory/) — the two pipelines that currently consult `shouldAutoAccept` when their suggestions are created.
+- [Agent](/FollowThrough.ai/subsystems/agent/): execution mode, turn limits, and tool availability gate every run; the locked-tool rationale lives in the tool catalog documented there.
+- [Skills](/FollowThrough.ai/subsystems/skills/): `load_skill` is one of the four locked tools; the skill catalog the agent sees is assembled per run under these preferences.
+- [Todos](/FollowThrough.ai/subsystems/todos/) and [memory](/FollowThrough.ai/subsystems/memory/): the two pipelines that currently consult `shouldAutoAccept` when their suggestions are created.

@@ -1,11 +1,9 @@
 ---
 title: Agent
-description: How the agent works under the hood — a controller-backed tool catalog shared with MCP, and durable, idempotent runs that park on approvals and resume from serialized state.
+description: How the agent works under the hood, a controller-backed tool catalog shared with MCP, and durable, idempotent runs that park on approvals and resume from serialized state.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
-
-## TL;DR
 
 The agent subsystem turns a chat prompt into a durable run: a record with a state machine, an append-only event log the client streams by cursor, and a background executor that drives the OpenAI Agents SDK. Every capability the agent has is a thin `AgentToolDefinition` over an existing controller method, defined once in `src/lib/server/agent-tool-factory.ts` and reused by both the in-app agent and the MCP server. Runs are idempotent on submission, survive restarts, park in `awaiting_approval` with a serialized provider state, and resume exactly where they stopped. User-facing behavior lives in [The agent](/FollowThrough.ai/using/the-agent/).
 
@@ -13,38 +11,46 @@ The agent subsystem turns a chat prompt into a durable run: a record with a stat
 
 **Everything the user can do in the app, the agent can do.**
 
-The mechanism is structural, not aspirational. Every agent capability is an `AgentToolDefinition` wrapping an existing controller method, defined once in `src/lib/server/agent-tool-factory.ts`. Alongside the definitions, the `agentToolCoverage` map classifies **every method of every controller** as `read`, `proposal`, `mutation`, or `excluded`. The type-level `Coverage<T>` (`agent-tool-factory.ts:99`) makes an unclassified controller method a compile error — add a method to a controller and the build fails until you decide how the agent sees it. The principle can't silently rot as the product grows.
+The mechanism is structural, not aspirational. Every agent capability is an `AgentToolDefinition` wrapping an existing controller method, defined once in `src/lib/server/agent-tool-factory.ts`. Alongside the definitions, the `agentToolCoverage` map classifies **every method of every controller** as `read`, `proposal`, `mutation`, or `excluded`. The type-level `Coverage<T>` (`agent-tool-factory.ts:99`) makes an unclassified controller method a compile error: add a method to a controller and the build fails until you decide how the agent sees it. The principle can't silently rot as the product grows.
 
-Exclusions are deliberate and carry written reasons. Deleting todos stays a deliberate user action (`todos.remove`: "Deleting todos stays a deliberate user action in the detail panel"). Memory writes are excluded entirely — `create`, `update`, and `remove` all carry "Memory changes must flow through propose_memory_change review" — so the agent can only ever *propose* memory. The agent can't upload attachments, and browser-protocol methods like note `sync` stay off the catalog too.
+Exclusions are deliberate and carry written reasons. Deleting todos stays a deliberate user action (`todos.remove`: "Deleting todos stays a deliberate user action in the detail panel"). Memory writes are excluded entirely: `create`, `update`, and `remove` all carry "Memory changes must flow through propose_memory_change review," so the agent can only ever *propose* memory. The agent can't upload attachments, and browser-protocol methods like note `sync` stay off the catalog too.
 
 Users shape the surface further: any non-locked tool can be disabled per user or per project. Four tools are locked on (`LOCKED_TOOL_NAMES`, `agent-tool-factory.ts:79-84`): `get_workspace_context`, `load_skill`, `list_tool_preferences`, `set_tool_enabled`. Without the first two the agent loses its grounding; without the preference pair it could disable its own way back from a deselection.
 
-The same definitions drive the MCP server (`src/lib/server/mcp-tool-factory.ts`) — one capability surface, two protocols. The user's tool selection is applied in exactly one place (`AgentTools.definitions()`), so a deselected tool vanishes from the in-app agent, from `search_tools` ranking, from `use_tool` dispatch, and from MCP at once.
+The same definitions drive the MCP server (`src/lib/server/mcp-tool-factory.ts`), one capability surface serving two protocols. The user's tool selection is applied in exactly one place (`AgentTools.definitions()`), so a deselected tool vanishes from the in-app agent, from `search_tools` ranking, from `use_tool` dispatch, and from MCP at once.
 
 The second principle follows from the classifications: **agents propose, users accept.** `proposal` tools (`extract_promises`, `propose_memory_change`, `generate_mermaid_diagram`, …) produce reviewable suggestions rather than edits. `mutation` tools run directly in `auto_accept` mode but require per-call approval in `approval_required` mode (`needsApproval`, `agent-tool-factory.ts:510`).
 
 ## The tool catalog
 
-The in-app agent gets a context-reducing surface. Eight first-class tools are registered directly (`FIRST_CLASS_TOOL_NAMES`, `agent-tool-factory.ts:58-67`): `search`, `list_user_memory`, `list_project_memory`, `get_workspace_context`, `get_note`, `list_todos`, `load_skill`, `propose_memory_change`. Everything else — the long tail of note, todo, project, skill, diagram, suggestion, and settings operations — stays out of the prompt until discovered: `search_tools` runs semantic retrieval over the catalog and returns exact names with input schemas, and `use_tool` dispatches by exact name. An unknown name returns a recoverable error with near-name suggestions instead of failing the turn.
+The in-app agent gets a context-reducing surface. Eight first-class tools are registered directly (`FIRST_CLASS_TOOL_NAMES`, `agent-tool-factory.ts:58-67`): `search`, `list_user_memory`, `list_project_memory`, `get_workspace_context`, `get_note`, `list_todos`, `load_skill`, `propose_memory_change`. Everything else (the long tail of note, todo, project, skill, diagram, suggestion, and settings operations) stays out of the prompt until discovered: `search_tools` runs semantic retrieval over the catalog and returns exact names with input schemas, and `use_tool` dispatches by exact name. An unknown name returns a recoverable error with near-name suggestions instead of failing the turn.
 
 <Mermaid
 	source={`
 flowchart LR
 	prompt["Prompt"] --> direct["First-class tools registered directly"]
-	prompt --> discover["search_tools — semantic retrieval over the catalog"]
-	discover --> dispatch["use_tool — dispatch by exact name"]
+	prompt --> discover["search_tools: semantic retrieval over the catalog"]
+	discover --> dispatch["use_tool: dispatch by exact name"]
 	direct --> ctrl["Controller method"]
 	dispatch --> ctrl
 `}
 />
 
-Because the catalog is controller-backed, tool calls go through the same business rules, authorization, and provenance as UI actions — there is no second, privileged agent path into the domain.
+Because the catalog is controller-backed, tool calls go through the same business rules, authorization, and provenance as UI actions. There is no second, privileged agent path into the domain.
+
+## MCP: the same catalog, a second protocol
+
+`createMcpToolSurface` (`src/lib/server/mcp-tool-factory.ts:80`) exposes this exact tool catalog to any MCP client (Claude Desktop, Cursor, or a custom integration) over one stateless JSON-RPC endpoint, `POST /mcp` (`src/routes/mcp/+server.ts`). It registers the same eight first-class tools directly and the same `search_tools`/`use_tool` pair for everything else, so an external client discovers and calls tools identically to the in-app agent. There is exactly one place a tool gets classified or filtered (`AgentTools.definitions()`), so a tool disabled in Settings disappears from MCP, `search_tools` ranking, and the in-app chat at the same time.
+
+Authentication is deliberately separate from user sign-in. MCP requests carry a Bearer token (`Authorization: Bearer ftm_...`), verified by `AccessTokens.verify` (`src/lib/server/services/identity/api-tokens.ts`) against a SHA-256 hash, never the plaintext, which exists only in the return value of the mint call. A token carries a scope, `read` or `full`: `read` restricts `permitted` tools to the `read` classification (`mcp-tool-factory.ts:102`), so a read-scoped client can search and list but never propose or mutate anything. Tokens are minted only through the Settings UI (`Settings → MCP access`), never programmatically, and a missing or invalid token gets a `401` with `www-authenticate: Bearer realm="followthrough"`.
+
+This is a different system from the OAuth2/OIDC flow that signs a user into the web app (see [Architecture](/FollowThrough.ai/explanation/architecture/)): OAuth2 authenticates a browser session, Bearer tokens authenticate an MCP client, and neither path can stand in for the other.
 
 ## Run lifecycle
 
 The controller's `submit` returns a receipt immediately; `AgentRunLifecycle.execute` (`src/lib/server/services/agent/runs/lifecycle.ts`) runs in the background. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers.
 
-The state machine is owned by the model layer — `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it:
+The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.
 
 <Mermaid
 	source={`
@@ -63,7 +69,7 @@ flowchart LR
 `}
 />
 
-`completed`, `failed`, and `cancelled` are terminal — nothing leaves them. Note that retry is **not** a transition: `retry` inserts a new run (`retryOfRunId` set) that starts fresh at `queued` carrying the original's frozen input.
+`completed`, `failed`, and `cancelled` are terminal: nothing leaves them. Note that retry is **not** a transition: `retry` inserts a new run (`retryOfRunId` set) that starts fresh at `queued` carrying the original's frozen input.
 
 The client reads events over SSE at `GET /api/agent/runs/[runId]/events`: replay from the `Last-Event-ID` (or `after`) cursor via `listRunEvents`, push on event-bus notifications, and a 5-second poll fallback in case a notification is missed. The stream closes once the run is terminal and the cursor has caught up. Cancellation aborts in-process execution immediately via a per-run `AbortController`; a run cancelled while still queued also gets a `cancelled` event so the client's stream explains the silence.
 
@@ -74,23 +80,23 @@ The client reads events over SSE at `GET /api/agent/runs/[runId]/events`: replay
 - **One active run per conversation.** Enforced by a partial unique index, `agent_runs_active_conversation_unique` over `conversation_id` where status is non-terminal (`drizzle/0016_icy_synch.sql:104`). A conflicting submit surfaces as a `ValidationError`.
 - **All-or-nothing approval batches.** `decideMany` validates every call id against the run's pending decisions before recording any; one unknown id rejects the whole batch, and the run requeues only after all decisions are recorded (`controller.ts:369-393`). A turn can park on several tool calls at once, which is why the batch exists.
 - **Execution after commit.** Background execution starts only after the submit transaction commits (`controller.ts:336`), so a failed queue never leaks a run that was never persisted.
-- **Retry is a faithful replay.** Only `failed` and `cancelled` runs retry — never `completed` (`controller.ts:421-422`) — and the new run carries the original's model, execution mode, and frozen input.
+- **Retry is a faithful replay.** Only `failed` and `cancelled` runs retry, never `completed` (`controller.ts:421-422`), and the new run carries the original's model, execution mode, and frozen input.
 
 ## Approvals and durability
 
-An approval checkpoint is a durable pause, not an in-memory wait. When the SDK reports interruptions, the runner yields an `approval_checkpoint` carrying the serialized provider state, the pending decisions, and the session items; the lifecycle persists all three and transitions the run to `awaiting_approval` in one transaction (`lifecycle.ts:136-146`). The process can die there — the run survives.
+An approval checkpoint is a durable pause, not an in-memory wait. When the SDK reports interruptions, the runner yields an `approval_checkpoint` carrying the serialized provider state, the pending decisions, and the session items; the lifecycle persists all three and transitions the run to `awaiting_approval` in one transaction (`lifecycle.ts:136-146`). The process can die there and the run survives.
 
-On `decideMany`, the run requeues and the runner rebuilds the provider state with `RunState.fromString`, applies each decision to its matching interruption, and continues the same turn (`reasoning.ts:366-386`). A decision with no matching interruption is skipped — it was applied on an earlier pass — but a resume that matches none fails with a `ValidationError`, because state and decisions have genuinely diverged. Undecided interruptions stay parked and are re-announced on the next checkpoint.
+On `decideMany`, the run requeues and the runner rebuilds the provider state with `RunState.fromString`, applies each decision to its matching interruption, and continues the same turn (`reasoning.ts:366-386`). A decision with no matching interruption is skipped, since it was applied on an earlier pass, but a resume that matches none fails with a `ValidationError`, because state and decisions have genuinely diverged. Undecided interruptions stay parked and are re-announced on the next checkpoint.
 
 ## Tracing
 
-Telemetry is opt-in. `scripts/otel-instrumentation.js` is a Node preload: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, a `NodeSDK` starts with auto-instrumentations plus the OpenInference instrumentation for `@openai/agents`, exporting to one OTLP collector; spans with the `openinference.project.name` resource attribute route on to Phoenix. `OTEL_*` and `PHOENIX_*` are platform keys — the secrets hydration never reads them from the secrets backend.
+Telemetry is opt-in. `scripts/otel-instrumentation.js` is a Node preload: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, a `NodeSDK` starts with auto-instrumentations plus the OpenInference instrumentation for `@openai/agents`, exporting to one OTLP collector; spans with the `openinference.project.name` resource attribute route on to Phoenix. `OTEL_*` and `PHOENIX_*` are platform keys, so the secrets hydration never reads them from the secrets backend.
 
-Each turn runs inside `traceAgentTurn` (`src/lib/server/services/telemetry.ts:193`), which opens an `agent.turn` root span with the conversation as session id and the model and run id as metadata. The SDK's AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval (`reasoning.ts:437`), because the resumed turn opens a fresh root and an un-ended span would orphan its children; and expected cancellations record `cancelled` as output with an OK status rather than an error.
+Each turn runs inside `traceAgentTurn` (`src/lib/server/services/telemetry.ts:193`), which opens an `agent.turn` root span with the conversation as session id and the model and run id as metadata. The SDK's AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval (`reasoning.ts:437`), because the resumed turn opens a fresh root and an un-ended span would orphan its children, and expected cancellations record `cancelled` as output with an OK status rather than an error.
 
 ## Touching other parts of the system
 
-- [Todos](/FollowThrough.ai/subsystems/todos/) — `list_todos`, `create_todo(s)`, `update_todo`, and the `extract_promises` proposal call the todos controller; deletion is deliberately excluded. Mutations appear in chat as tool activity and, in approval mode, as approval cards.
-- [Search](/FollowThrough.ai/subsystems/search/) — the `search` tool is the knowledge-search retrieval boundary, scoped by the conversation's project.
-- [Memory](/FollowThrough.ai/subsystems/memory/) — memory is read directly but written only through `propose_memory_change` review.
-- [Settings](/FollowThrough.ai/subsystems/settings/) — tool preferences, execution mode, and model overrides are resolved at submission and frozen onto the run; the settings surface derives its tool list from the same definitions the agent runs on.
+- [Todos](/FollowThrough.ai/subsystems/todos/): `list_todos`, `create_todo(s)`, `update_todo`, and the `extract_promises` proposal call the todos controller; deletion is deliberately excluded. Mutations appear in chat as tool activity and, in approval mode, as approval cards.
+- [Search](/FollowThrough.ai/subsystems/search/): the `search` tool is the knowledge-search retrieval boundary, scoped by the conversation's project.
+- [Memory](/FollowThrough.ai/subsystems/memory/): memory is read directly but written only through `propose_memory_change` review.
+- [Settings](/FollowThrough.ai/subsystems/settings/): tool preferences, execution mode, and model overrides are resolved at submission and frozen onto the run; the settings surface derives its tool list from the same definitions the agent runs on.

@@ -1,59 +1,53 @@
 ---
 title: Search
-description: Two kinds of search — semantic search over everything you've saved, and web search the agent runs on your behalf with settings you control.
+description: Everything you save becomes searchable automatically, and you can tune the web search the agent runs on your behalf.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-## TL;DR
+FollowThrough has two kinds of search, and neither is a screen you open: there's no search box in the app. **Knowledge search** is semantic search over your own material (notes, attachments, diagrams, and the memory you've shared with agents), and it powers both the agent's `search` tool and the inline "find related" suggestions in the editor. **Web search** is a tool the agent calls during a run when it needs current or external information, and you choose the engine and the result caps.
 
-FollowThrough has two kinds of search. **Knowledge search** is semantic search over your own material — notes, attachments, diagrams, and the memory you've shared with agents — and it's what powers both the agent's `search` tool and the inline "find related" suggestions in the editor. **Web search** is a tool the agent calls during a run when it needs current or external information; you choose the engine and the result caps. Neither one is a screen you open — there is no search box in the app. Search is a capability the agent (and the editor) call, not a destination.
+## Let your content become searchable
 
-## Knowledge search: your own material
+You don't have to do anything: saving a note, importing a document, drawing a diagram, or letting the agent remember a fact puts that content into the index automatically. Archive or empty a source and it drops out of the index immediately, so the agent never surfaces something you've already put away.
 
-Everything you save becomes searchable without any action from you. Saving a note, importing a document, drawing a diagram, or letting the agent remember a fact puts that content into the index. Archiving or emptying a source removes it from the index immediately — the agent never surfaces something you've already put away.
-
-The retrieval pipeline looks like this:
+The retrieval pipeline works like this:
 
 <Mermaid
 	source={`
 flowchart LR
-	content["Your content<br/>notes · attachments · diagrams · shared memory"] --> chunks["Token-aware chunks<br/>~2,400 tokens, 480 overlap"]
+	content["Your content<br/>notes, attachments, diagrams, shared memory"] --> chunks["Token-aware chunks<br/>~2,400 tokens, 480 overlap"]
 	chunks --> embeddings["Embeddings via OpenRouter<br/>openai/text-embedding-3-large"]
 	embeddings --> index["pgvector index<br/>search_chunks table"]
 	index --> retrieve["Vector retrieval<br/>wide candidate set"]
 	retrieve --> rerank["Reranking<br/>cohere/rerank-4-fast"]
-	rerank --> results["Scored excerpts<br/>8 results · 700 chars each"]
+	rerank --> results["Scored excerpts<br/>8 results, 700 chars each"]
 `}
 />
 
 A few properties worth knowing:
 
-- **Edits are cheap.** Chunks are keyed by content hash, so editing a note only re-embeds the chunks that actually changed — the rest keep their vectors.
+- **Edits are cheap.** Chunks are keyed by content hash, so editing a note only re-embeds the chunks that actually changed. The rest keep their vectors.
 - **Very large attachments are indexed head-first.** The opening portion (up to 50 chunks) is searchable; the remainder is recorded as truncated rather than embedded.
-- **Only shared project memory is indexed.** A memory entry enters the index only if it belongs to a project and you've marked it as shared with agents. Profile memory — what the agent knows about you across everything — is injected into the agent's context directly and never goes through search. Deleted facts never appear in results.
-- **Retrieval is two-stage.** The vector search casts a wide net (at least 40 candidates), then a reranker shrinks that to the final few. Cheap recall first, precision second.
+- **Only shared project memory is indexed.** A memory entry enters the index only if it belongs to a project and you've marked it as shared with agents. Profile memory (what the agent knows about you across everything) is injected into the agent's context directly and never goes through search. Deleted facts never appear in results.
+- **Retrieval is two-stage.** The vector search casts a wide net (at least 40 candidates), then a reranker shrinks that to the final few, so recall comes cheap and precision comes second.
 
-### How the agent uses it
+To see this pipeline in the editor, select text in a note: FollowThrough searches within the project for passages that mention, contradict, or record a prior decision about the selection, and surfaces them as "find related" suggestions. The agent's `search` tool runs the same pipeline and returns a handful of excerpts (eight by default, each capped at 700 characters) with a relevance score. It searches when workspace evidence could improve the answer, searches again with a sharper query when the first results reveal a lead or a gap, and restricts the search to one project when your request is clearly scoped to it.
 
-The agent's `search` tool runs this pipeline and returns a handful of excerpts — eight by default, each capped at 700 characters — with a relevance score. It searches when workspace evidence could improve the answer, and searches again with a sharper query when the first results reveal a lead or a gap. In a longer conversation it condenses the discussion so far into a single statement and searches for that, so a follow-up like "what did we decide about that?" still lands on the right note. When your request is clearly project-scoped, it restricts the search to that project.
+## Tune web search
 
-The same pipeline powers the editor's "find related" suggestions: select text in a note and FollowThrough searches within the project for passages that mention, contradict, or record a prior decision about the selection.
+Web search is a tool attached to every agent conversation. The model calls it when a question needs current or external information (documentation, prices, news) rather than anything you've saved. It runs through the deployment's OpenRouter connection, with Exa as the default engine; without that connection the agent works from your knowledge base alone.
 
-## Web search: the agent looks outward
+Open **Settings > Agents** to set three things, each of which you can leave unset to follow the deployment default:
 
-Web search is a tool attached to every agent conversation. The model invokes it when a question needs current or external information — documentation, prices, news — rather than anything you have saved. It runs through the deployment's OpenRouter connection, with Exa as the default engine; without that connection the agent works from your knowledge base alone.
+- **Web search engine:** `auto`, `native`, `exa`, `firecrawl`, `parallel`, or `perplexity`. Choose `auto` to let the model pick per query.
+- **Results per search:** caps a single search, between 1 and 50. The deployment default is 20.
+- **Total results:** caps what a run may pull across repeated searches, between 1 and 100. The deployment default is 40.
 
-This is the configurable half. In **Settings → Agents** you can set three things, each of which can be left unset to follow the deployment default:
-
-- **Web search engine** — `auto`, `native`, `exa`, `firecrawl`, `parallel`, or `perplexity`. `auto` lets the model choose per query.
-- **Results per search** — caps a single search, between 1 and 50. The deployment default is 20.
-- **Total results** — caps what a run may pull across repeated searches, between 1 and 100. The deployment default is 40.
-
-You can also change these in conversation: the agent has tools for reading and updating its own settings, so asking "use fewer web results" works. Clearing a setting returns it to the deployment default rather than to zero.
+You can also change these mid-conversation: the agent has tools for reading and updating its own settings, so asking "use fewer web results" works. Clearing a setting returns it to the deployment default rather than to zero.
 
 ## Related reading
 
-- [Search, in depth](/FollowThrough.ai/subsystems/search/) — the indexing and retrieval internals behind this page.
-- [Attachments](/FollowThrough.ai/using/attachments/) — what gets extracted from uploaded files before it's indexed.
-- [The agent](/FollowThrough.ai/using/the-agent/) — how runs, tools, and approvals fit together.
+- [Search, in depth](/FollowThrough.ai/subsystems/search/): the indexing and retrieval internals behind this page.
+- [Attachments](/FollowThrough.ai/using/attachments/): what gets extracted from uploaded files before it's indexed.
+- [The agent](/FollowThrough.ai/using/the-agent/): how runs, tools, and approvals fit together.

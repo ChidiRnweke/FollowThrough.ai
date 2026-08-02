@@ -1,30 +1,28 @@
 ---
 title: Todos
-description: How commitments in notes become reviewable, provenance-carrying todos — extraction, scoring, kanban status changes, waiting-on tracking, and the Today view.
+description: How commitments in notes become reviewable, provenance-carrying todos, through extraction, scoring, kanban status changes, waiting-on tracking, and the Today view.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-## TL;DR
-
-Todos track work. Most are created by hand, but the subsystem's center of gravity is `extractPromises`: select text in a note, and in **one transaction** the selection becomes a `SourceAnchor`, candidates are extracted and scored, provenance is recorded, and one `todo` suggestion per candidate is created — with auto-accept straight into a real todo when the user's trust policy allows. Every extracted todo carries the sentence, the note revision, and the pipeline that produced it, so a suggestion is always traceable back to its source. Review, accept, reject, and revert are owned by the shared suggestions pipeline.
+Todos track work. Most are created by hand, but the subsystem's center of gravity is `extractPromises`: select text in a note, and in **one transaction** the selection becomes a `SourceAnchor`, candidates are extracted and scored, provenance is recorded, and one `todo` suggestion per candidate is created, with auto-accept straight into a real todo when the user's trust policy allows. Every extracted todo carries the sentence, the note revision, and the pipeline that produced it, so a suggestion is always traceable back to its source. Review, accept, reject, and revert are owned by the shared suggestions pipeline.
 
 User-facing behavior: [Todos](/FollowThrough.ai/using/todos/).
 
 ## Why this subsystem exists
 
-Meeting notes and project write-ups are full of promises — "Sarah will send the draft by Friday". Left in prose they rot. The todos subsystem extracts those promises into structured records with an owner, a due date, and a strength/confidence score, but it refuses to do so silently: extraction always lands as a suggestion first (unless the user has explicitly trusted the pipeline), and every todo remembers its origin sentence so review is a comparison, not a guess.
+Meeting notes and project write-ups are full of promises, like "Sarah will send the draft by Friday." Left in prose they rot. The todos subsystem extracts those promises into structured records with an owner, a due date, and a strength/confidence score, but it refuses to do so silently: extraction always lands as a suggestion first (unless the user has explicitly trusted the pipeline), and every todo remembers its origin sentence so review is a comparison, not a guess.
 
 ## Where the pieces live
 
-- **Models** — `src/lib/models/todos/index.ts`: `Todo`, `TodoView`, `TodoSuggestion`, `PromiseCandidate`, and the status/responsibility/strength unions.
-- **Services** — `src/lib/server/services/todos/`: `TodoCatalog` (`catalog.ts`) holds the business rules; `promise-extraction/` is the LLM extractor; `promise-rules.ts` is the deterministic fallback extractor.
-- **Controllers** — `src/lib/server/controllers/todos/controller.ts`: the `Todos` class, the documented public surface (`get`, `list`, `count`, `listCategories`, `create`, `update`, `remove`, `extractPromises`). The Today view lives in `src/lib/server/controllers/workspace/controller.ts` (`getTodayView`).
-- **Repositories** — `src/lib/server/repositories/todos/` (`postgres/todos.ts`): all Drizzle queries; rows are mapped to models at the boundary.
+- **Models**: `src/lib/models/todos/index.ts`: `Todo`, `TodoView`, `TodoSuggestion`, `PromiseCandidate`, and the status/responsibility/strength unions.
+- **Services**: `src/lib/server/services/todos/`: `TodoCatalog` (`catalog.ts`) holds the business rules; `promise-extraction/` is the LLM extractor; `promise-rules.ts` is the deterministic fallback extractor.
+- **Controllers**: `src/lib/server/controllers/todos/controller.ts`: the `Todos` class, the documented public surface (`get`, `list`, `count`, `listCategories`, `create`, `update`, `remove`, `extractPromises`). The Today view lives in `src/lib/server/controllers/workspace/controller.ts` (`getTodayView`).
+- **Repositories**: `src/lib/server/repositories/todos/` (`postgres/todos.ts`): all Drizzle queries; rows are mapped to models at the boundary.
 
 ## The extraction transaction
 
-`Todos.extractPromises` (`controller.ts:148`) runs entirely inside the transaction runner. Anchor creation, extraction, provenance recording, suggestion creation, and any auto-accepted todos commit together or not at all — a failed run leaves no orphan anchor and no half-created suggestion.
+`Todos.extractPromises` (`controller.ts:148`) runs entirely inside the transaction runner. Anchor creation, extraction, provenance recording, suggestion creation, and any auto-accepted todos commit together or not at all: a failed run leaves no orphan anchor and no half-created suggestion.
 
 <Mermaid
 	source={`
@@ -43,15 +41,15 @@ flowchart LR
 
 Two details worth knowing:
 
-- The suggestion's payload **is** a `CreateTodoInput` (see `TodoSuggestion` in the models), so accepting it later is literally `TodoCatalog.create(payload)` — every create validation re-runs at accept time.
+- The suggestion's payload **is** a `CreateTodoInput` (see `TodoSuggestion` in the models), so accepting it later is literally `TodoCatalog.create(payload)`: every create validation re-runs at accept time.
 - The suggestion gets `noteId`, the anchor, and the provenance id; the payload additionally bakes in `sourceAnchorId` and `provenanceId`, so the todo created on accept keeps the full chain.
 
 ### Scoring and extraction
 
 The controller depends on a `PromiseExtractor` contract with two implementations:
 
-- `PromiseDiscovery` (LLM, `promise-extraction/`): an OpenRouter chat model with zod-enforced structured output — action, owner, responsibility, verbatim and resolved due date, strength, and a 0–100 confidence. Falls back when no API key is configured.
-- `DeterministicPromiseExtractor` (`promise-rules.ts`): a sentence splitter plus a `promise(s) to / will / should / might` grammar. It skips questions and any sentence containing `could`/`optionally`; maps the marker to `explicit` (95), `implied` (70), or `tentative` (55) confidence; assigns `mine` when the owner is "I"/"we" and `waiting_on` otherwise; and resolves only the word "tomorrow" to a date — other verbatim dates are carried through unresolved.
+- `PromiseDiscovery` (LLM, `promise-extraction/`): an OpenRouter chat model with zod-enforced structured output covering action, owner, responsibility, verbatim and resolved due date, strength, and a 0 to 100 confidence. Falls back when no API key is configured.
+- `DeterministicPromiseExtractor` (`promise-rules.ts`): a sentence splitter plus a `promise(s) to / will / should / might` grammar. It skips questions and any sentence containing `could`/`optionally`; maps the marker to `explicit` (95), `implied` (70), or `tentative` (55) confidence; assigns `mine` when the owner is "I"/"we" and `waiting_on` otherwise; and resolves only the word "tomorrow" to a date, while other verbatim dates carry through unresolved.
 
 Auto-accept is decided per suggestion by `ToolTrust.shouldAutoAccept` (`src/lib/server/services/agent/runs/tool-trust.ts`): the user's trust policy for `extract_promises` must have auto-accept enabled, and the suggestion's confidence must clear the policy's `minimumConfidence` when one is set. The default policy is `autoAcceptEnabled: false`, so extraction proposes unless the user opted in.
 
@@ -59,20 +57,20 @@ Auto-accept is decided per suggestion by `ToolTrust.shouldAutoAccept` (`src/lib/
 
 `TodoStatus` is `backlog | open | in_progress | done | cancelled`. The kanban board (`src/lib/components/todos/kanban-board.svelte`) drags between these columns; every drag is a status change, and all status changes go through `TodoCatalog.change` (`catalog.ts:84`), which has one rule: `completedAt` is stamped exactly when status becomes `done` and stripped on every other status. The controller enforces this by routing any `status` inside `update` through `change`, so there is no path that sets `done` without `completedAt`.
 
-Other `update` rules (`catalog.ts:65`): a todo cannot move between projects during an edit, a linked note must be an unarchived `note` (not a folder or skill) in the same project, and setting responsibility to `mine` clears `waitingOn` — a counterparty cannot survive the switch. A controller-level `update` with no edit at all throws `InvalidGeneratedContentError`; a no-op update is a caller bug.
+Other `update` rules (`catalog.ts:65`): a todo cannot move between projects during an edit, a linked note must be an unarchived `note` (not a folder or skill) in the same project, and setting responsibility to `mine` clears `waitingOn`, since a counterparty cannot survive the switch. A controller-level `update` with no edit at all throws `InvalidGeneratedContentError`; a no-op update is a caller bug.
 
 ## Waiting-on tracking
 
-`TodoResponsibility` is `mine | waiting_on`. A waiting-on todo names its counterparty in `waitingOn` (free text, e.g. "Sarah"). `TodoCatalog.findWaitingOn` is just `list({ responsibility: 'waiting_on' })` — there is no separate state machine; waiting-on is a filter, and clearing it is an edit, not a transition.
+`TodoResponsibility` is `mine | waiting_on`. A waiting-on todo names its counterparty in `waitingOn` (free text, e.g. "Sarah"). `TodoCatalog.findWaitingOn` is just `list({ responsibility: 'waiting_on' })`. There is no separate state machine; waiting-on is a filter, and clearing it is an edit, not a transition.
 
 ## Today view
 
 `Workspace.getTodayView` (`src/lib/server/controllers/workspace/controller.ts:93`) aggregates four reads in parallel:
 
-- `todoLister.list({ dueBefore: today, responsibility: 'mine' })` — everything due up to and including today, split into `overdue` (due date before today, undated items excluded) and `dueToday` (due date exactly today).
-- `waitingOnFinder.findWaitingOn` — all waiting-on todos.
-- `suggestionLister.countByStatus('proposed')` — the pending-review count.
-- `noteTreeReader.list` — for `pinnedNotes` and the five most recently updated `recentNotes`.
+- `todoLister.list({ dueBefore: today, responsibility: 'mine' })`: everything due up to and including today, split into `overdue` (due date before today, undated items excluded) and `dueToday` (due date exactly today).
+- `waitingOnFinder.findWaitingOn`: all waiting-on todos.
+- `suggestionLister.countByStatus('proposed')`: the pending-review count.
+- `noteTreeReader.list`: for `pinnedNotes` and the five most recently updated `recentNotes`.
 
 Due-date filtering in the repository is `dueDate <= dueBefore` (`postgres/todos.ts`), ordered due-date ascending then recently updated. `count` runs without assembling views because the agent context bar calls it on every navigation.
 
@@ -83,10 +81,10 @@ Due-date filtering in the repository is `dueDate <= dueBefore` (`postgres/todos.
 - An extracted todo always traces to its source: `sourceAnchorId` → quote + note revision, `provenanceId` → pipeline + producer. `TodoView.originNote` always means the extraction source; `sourceNote` is the linked note if set, otherwise the origin.
 - `completedAt` is set if and only if status is `done`.
 - Deletion is soft (`deletedAt`); history survives.
-- A suggestion transition is a compare-and-swap on expected status — a double accept or a decision on an already-decided suggestion throws `InvalidTransitionError` rather than silently winning. Revert requires an `appliedArtifactId` and soft-deletes the todo the accept created.
+- A suggestion transition is a compare-and-swap on expected status, so a double accept or a decision on an already-decided suggestion throws `InvalidTransitionError` rather than silently winning. Revert requires an `appliedArtifactId` and soft-deletes the todo the accept created.
 
 ## Neighboring pieces
 
-- [Notes](/FollowThrough.ai/subsystems/notes/) — selections, `SourceAnchor`, and `Provenance` are notes-capability types; extraction starts from a note revision.
-- [Agent](/FollowThrough.ai/subsystems/agent/) — `extractPromises` is registered as a proposal-kind agent tool (`src/lib/server/agent-tool-factory.ts`), and the trust policies that gate auto-accept are agent-run policy. Suggestions review UI also lives beside the agent.
-- Search — todos themselves are not indexed; the note text they came from is.
+- [Notes](/FollowThrough.ai/subsystems/notes/): selections, `SourceAnchor`, and `Provenance` are notes-capability types; extraction starts from a note revision.
+- [Agent](/FollowThrough.ai/subsystems/agent/): `extractPromises` is registered as a proposal-kind agent tool (`src/lib/server/agent-tool-factory.ts`), and the trust policies that gate auto-accept are agent-run policy. Suggestions review UI also lives beside the agent.
+- Search: todos themselves are not indexed; the note text they came from is.

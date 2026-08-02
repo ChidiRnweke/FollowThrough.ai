@@ -5,32 +5,30 @@ description: How durable facts are stored, scoped to a project or the user profi
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-## TL;DR
-
-Memory is one table of durable facts, scoped structurally: an entry with a `projectId` is project memory, an entry with a null `projectId` is the user's profile memory. Direct user edits are immediate. The agent can never write directly — its only write path is `propose_memory_change`, which records provenance, creates a `memory` suggestion, and (when the user's trust policy allows) applies the change and marks the suggestion auto-accepted, all in **one transaction**. Applied changes never mutate a row in place: an `update` inserts a replacement and soft-deletes the old entry, which is what makes every accepted proposal revertible. Entries with `shareWithAgents: false` are filtered out before any agent context or tool sees them.
+Memory is one table of durable facts, scoped structurally: an entry with a `projectId` is project memory, an entry with a null `projectId` is the user's profile memory. Direct user edits are immediate. The agent can never write directly: its only write path is `propose_memory_change`, which records provenance, creates a `memory` suggestion, and (when the user's trust policy allows) applies the change and marks the suggestion auto-accepted, all in **one transaction**. Applied changes never mutate a row in place: an `update` inserts a replacement and soft-deletes the old entry, which is what makes every accepted proposal revertible. Entries with `shareWithAgents: false` are filtered out before any agent context or tool sees them.
 
 User-facing behavior: [Memory](/FollowThrough.ai/using/memory/).
 
 ## Why this subsystem exists
 
-An agent that remembers nothing re-asks the same questions every run; an agent that writes memory freely poisons its own context with unreviewed claims. Memory resolves this by treating agent-remembered facts exactly like extracted todos: proposals with provenance, confidence, and a trust policy. The scoping split exists because two kinds of facts have different blast radii — project facts belong to one workspace and are retrieved on demand, while profile facts describe the user and are injected into every run.
+An agent that remembers nothing re-asks the same questions every run; an agent that writes memory freely poisons its own context with unreviewed claims. Memory resolves this by treating agent-remembered facts exactly like extracted todos: proposals with provenance, confidence, and a trust policy. The scoping split exists because two kinds of facts have different blast radii: project facts belong to one workspace and are retrieved on demand, while profile facts describe the user and are injected into every run.
 
 ## The pieces
 
-- **Models** — `src/lib/models/memory/index.ts`: `MemoryEntry`, `MemoryChangePayload`, `MemorySuggestion`, `MemoryEntryType`.
-- **Services** — `src/lib/server/services/memory/library.ts`: `MemoryLibrary`, the only business-rule holder (create/update/remove/apply/revert).
-- **Controllers** — `src/lib/server/controllers/memory/controller.ts`: the `Memory` class — `list`, `create`, `update`, `remove`, `propose`.
-- **Repositories** — `src/lib/server/repositories/memory/` (`postgres/memory-entries.ts`): user-scoped queries; `list` treats an omitted `projectId` as `projectId IS NULL`, i.e. profile memory.
+- **Models**: `src/lib/models/memory/index.ts`: `MemoryEntry`, `MemoryChangePayload`, `MemorySuggestion`, `MemoryEntryType`.
+- **Services**: `src/lib/server/services/memory/library.ts`: `MemoryLibrary`, the only business-rule holder (create/update/remove/apply/revert).
+- **Controllers**: `src/lib/server/controllers/memory/controller.ts`: the `Memory` class: `list`, `create`, `update`, `remove`, `propose`.
+- **Repositories**: `src/lib/server/repositories/memory/` (`postgres/memory-entries.ts`): user-scoped queries; `list` treats an omitted `projectId` as `projectId IS NULL`, i.e. profile memory.
 
 ## The model
 
-`MemoryEntry` carries `content`, an optional `type` (`fact | decision | constraint | preference`), `shareWithAgents` (default `true`), and three bookkeeping fields: `provenanceId`, `replacesEntryId`, `deletedAt`. Scope is expressed structurally by the nullable `projectId` — there is no scope enum.
+`MemoryEntry` carries `content`, an optional `type` (`fact | decision | constraint | preference`), `shareWithAgents` (default `true`), and three bookkeeping fields: `provenanceId`, `replacesEntryId`, `deletedAt`. Scope is expressed structurally by the nullable `projectId`: there is no scope enum.
 
 Agent-proposed changes are described by `MemoryChangePayload`: an `operation` (`add | update | remove`), an optional target `memoryEntryId`, optional new `content`, `shareWithAgents`, and a free-text `justification`. The payload travels inside a suggestion of kind `memory`, so memory reuses the general suggestion machinery rather than growing its own review flow.
 
 ## The proposal transaction
 
-`Memory.propose` (`controller.ts:105`) validates the payload first — project scope requires a project, `update`/`remove` require a target entry, `add`/`update` require non-blank content — then runs one transaction:
+`Memory.propose` (`controller.ts:105`) validates the payload first (project scope requires a project, `update`/`remove` require a target entry, `add`/`update` require non-blank content) then runs one transaction:
 
 <Mermaid
 	source={`
@@ -41,30 +39,30 @@ flowchart LR
 	prov --> sug["create memory suggestion (with confidence)"]
 	sug --> trust{"trust policy auto-accepts?"}
 	trust -- "yes" --> apply["apply change + mark suggestion auto-accepted"]
-	trust -- "no" --> pending["suggestion stays proposed — user reviews"]
+	trust -- "no" --> pending["suggestion stays proposed: user reviews"]
 `}
 />
 
 Any failure aborts the whole batch: there is no state where a suggestion exists without provenance, or an applied change without an accepted suggestion. Auto-accept is `ToolTrust.shouldAutoAccept(actor, 'memory', suggestion)`: the per-user policy for the `memory` pipeline must have auto-accept enabled, and the suggestion's confidence must clear the policy's `minimumConfidence` when set. The default policy is review-first (`autoAcceptEnabled: false`).
 
-The agent-tool catalog (`src/lib/server/agent-tool-factory.ts:263`) enforces the same rule from the other side: direct memory mutations are gated behind "Memory changes must flow through propose_memory_change review", and the agent gets `propose_memory_change` plus only the read tools `list_project_memory` and `list_user_memory` — both called with `sharedOnly: true`.
+The agent-tool catalog (`src/lib/server/agent-tool-factory.ts:263`) enforces the same rule from the other side: direct memory mutations are gated behind "Memory changes must flow through propose_memory_change review", and the agent gets `propose_memory_change` plus only the read tools `list_project_memory` and `list_user_memory`: both called with `sharedOnly: true`.
 
 ## Apply and revert
 
 `MemoryLibrary.apply` (`library.ts:88`) executes a payload, verifying the provenance record exists first:
 
 - `add` inserts a new entry stamped with the proposal's `provenanceId`.
-- `update` does **not** edit in place — it inserts a replacement entry pointing at the old one via `replacesEntryId`, then soft-deletes the old one.
+- `update` does **not** edit in place: it inserts a replacement entry pointing at the old one via `replacesEntryId`, then soft-deletes the old one.
 - `remove` soft-deletes the target.
 
-`revert` is the exact inverse: an applied `add` or `update` is soft-deleted (and for `update`, the superseded entry is restored); an applied `remove` is restored. It requires the suggestion's `appliedArtifactId` — only a suggestion whose artifact exists can be undone. Because apply only ever inserts or soft-deletes, the table keeps superseded rows and revert is a state change, not a reconstruction. Reading a soft-deleted entry through `getActive` throws `NotFoundError`, so superseded rows are unreachable through the normal path. Every mutation re-indexes the entry through the memory indexer before returning.
+`revert` is the exact inverse: an applied `add` or `update` is soft-deleted (and for `update`, the superseded entry is restored); an applied `remove` is restored. It requires the suggestion's `appliedArtifactId`: only a suggestion whose artifact exists can be undone. Because apply only ever inserts or soft-deletes, the table keeps superseded rows and revert is a state change, not a reconstruction. Reading a soft-deleted entry through `getActive` throws `NotFoundError`, so superseded rows are unreachable through the normal path. Every mutation re-indexes the entry through the memory indexer before returning.
 
 ## How the agent reads memory
 
 The two scopes reach the agent by different paths, and `shareWithAgents` is enforced on both:
 
 - **Profile memory is injected into every run.** The context builder (`src/lib/server/services/agent/runs/context.ts:81-83`) lists profile entries (the repository reads `projectId IS NULL` when no `projectId` is given), keeps those with `shareWithAgents`, and passes their content as `userMemory`. Profile entries never enter the retrieval index.
-- **Project memory is retrieved on demand, not front-loaded.** Each shared, non-deleted project entry is chunked and embedded into the retrieval index by `EmbeddedMemoryIndexer` (`src/lib/server/services/knowledge-search/indexing.ts:355`) under the source title `Project memory`. The indexer is also the privacy and dedup mechanism: an entry that is deleted or unshared indexes to zero contents and has its chunks deleted, and profile entries short-circuit to deletion — so the index never serves stale or private memories. The agent reaches these through the `search` tool and the `sharedOnly` memory list tools.
+- **Project memory is retrieved on demand, not front-loaded.** Each shared, non-deleted project entry is chunked and embedded into the retrieval index by `EmbeddedMemoryIndexer` (`src/lib/server/services/knowledge-search/indexing.ts:355`) under the source title `Project memory`. The indexer is also the privacy and dedup mechanism: an entry that is deleted or unshared indexes to zero contents and has its chunks deleted, and profile entries short-circuit to deletion: so the index never serves stale or private memories. The agent reaches these through the `search` tool and the `sharedOnly` memory list tools.
 
 `Memory.list` itself applies the `sharedOnly` filter at the controller (`controller.ts:83`), so private entries are filtered out before the agent's tools see them.
 
@@ -78,6 +76,6 @@ The two scopes reach the agent by different paths, and `shareWithAgents` is enfo
 
 ## Where it connects
 
-- [Agent](/FollowThrough.ai/subsystems/agent/) — the proposing tool, the run context that injects profile memory, and the trust policies that gate auto-accept all live there.
-- [Search](/FollowThrough.ai/subsystems/search/) — `EmbeddedMemoryIndexer` writes project memory into the shared retrieval index.
-- [Notes](/FollowThrough.ai/subsystems/notes/) — memory reuses the notes capability's provenance recording, and pending memory proposals surface in the workspace shell via `toPendingMemoryNotifications` (`src/lib/server/controllers/workspace/controller.ts:44`).
+- [Agent](/FollowThrough.ai/subsystems/agent/): the proposing tool, the run context that injects profile memory, and the trust policies that gate auto-accept all live there.
+- [Search](/FollowThrough.ai/subsystems/search/): `EmbeddedMemoryIndexer` writes project memory into the shared retrieval index.
+- [Notes](/FollowThrough.ai/subsystems/notes/): memory reuses the notes capability's provenance recording, and pending memory proposals surface in the workspace shell via `toPendingMemoryNotifications` (`src/lib/server/controllers/workspace/controller.ts:44`).

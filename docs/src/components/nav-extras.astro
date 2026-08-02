@@ -1,9 +1,9 @@
 ---
 /**
- * Top-nav extras: the two documentation halves as quiet dropdowns — User docs
- * (2 pages) and Developer docs (4 pages) — then Starlight's default social
- * icons (GitHub). Overrides the SocialIcons slot. On narrow viewports the
- * sidebar covers navigation, so the dropdowns step aside.
+ * Top-nav extras: the sidebar's four content groups as quiet dropdowns, then
+ * Starlight's default social icons (GitHub). Overrides the SocialIcons slot.
+ * On narrow viewports the sidebar covers navigation, so the dropdowns step
+ * aside.
  */
 import Default from '@astrojs/starlight/components/SocialIcons.astro';
 
@@ -11,19 +11,32 @@ const base = import.meta.env.BASE_URL;
 
 const groups = [
 	{
-		label: 'User docs',
+		label: 'Start here',
+		links: [{ href: 'getting-started/', label: 'Getting started' }]
+	},
+	{
+		label: 'Guides',
 		links: [
-			{ href: 'getting-started/', label: 'Getting started' },
-			{ href: 'explanation/agents-propose-users-accept/', label: 'Agents propose, users accept' }
+			{ href: 'using/the-agent/', label: 'The agent' },
+			{ href: 'using/todos/', label: 'Todos' },
+			{ href: 'using/notes/', label: 'Notes' },
+			{ href: 'self-hosting/', label: 'Self-hosting' },
+			{ href: 'guides/add-a-capability/', label: 'Adding a capability' },
+			{ href: 'guides/connect-mcp-client/', label: 'Connect an MCP client' }
 		]
 	},
 	{
-		label: 'Developer docs',
+		label: 'Explanation',
 		links: [
-			{ href: 'self-hosting/', label: 'Self-hosting' },
-			{ href: 'guides/add-a-capability/', label: 'How-to guides' },
-			{ href: 'reference/', label: 'API reference' },
+			{ href: 'explanation/agents-propose-users-accept/', label: 'Agents propose, users accept' },
 			{ href: 'explanation/architecture/', label: 'Architecture' }
+		]
+	},
+	{
+		label: 'Reference',
+		links: [
+			{ href: 'reference/controllers/', label: 'API reference' },
+			{ href: 'subsystems/agent/', label: 'How each feature works' }
 		]
 	}
 ];

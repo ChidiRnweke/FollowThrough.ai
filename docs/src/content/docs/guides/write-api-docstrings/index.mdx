@@ -5,23 +5,23 @@ description: The docstring standard that keeps the generated API reference compl
 
 import { Aside } from '@astrojs/starlight/components';
 
-## TL;DR
-
-The [API reference](/FollowThrough.ai/reference/) is TypeDoc-generated from the controller, service-contract, and factory sources, and the build runs with `excludeNotDocumented` — an undocumented public symbol does not warn, it vanishes. Write docstrings that say *why* a method exists and which invariants callers rely on, in as few words as that takes.
+The API reference ([Models](/FollowThrough.ai/reference/models/), [Repositories](/FollowThrough.ai/reference/repositories/), [Services](/FollowThrough.ai/reference/services/), [Controllers](/FollowThrough.ai/reference/controllers/), [Capability factories](/FollowThrough.ai/reference/factories/)) is TypeDoc-generated from those five layers' sources, and the build runs with `excludeNotDocumented`: an undocumented public symbol does not warn, it vanishes. Write docstrings that say *why* a symbol exists and which invariants callers rely on, in as few words as that takes.
 
 ## Why the standard is enforced by deletion
 
-`docs/astro.config.mjs` points starlight-typedoc at exactly the public surface (`astro.config.mjs:86-91`):
+`docs/astro.config.mjs` runs five separate starlight-typedoc instances, one per layer, each pointed at exactly that layer's public surface:
 
-- `src/lib/server/controllers/**/controller.ts`
-- `src/lib/server/services/**/contracts.ts` and `catalog.ts`
-- `src/lib/server/**/*-factory.ts`
+- `src/lib/models/**/index.ts` (Models)
+- `src/lib/server/repositories/*/*.ts` (Repositories, the contracts only; `postgres/*.ts` implementations sit one path segment deeper and are never an entry point)
+- `src/lib/server/services/**/contracts.ts` and `catalog.ts` (Services)
+- `src/lib/server/controllers/**/controller.ts` (Controllers)
+- `src/lib/server/**/*-factory.ts` (Capability factories)
 
-and sets `excludeNotDocumented: true` for classes, interfaces, methods, properties, functions, and type aliases (`astro.config.mjs:107-121`). TypeDoc drops any of those that lacks a doc comment. So adding an undocumented controller method does not fail a build or annoy a reviewer — the method simply never appears in the reference, and the public surface documented on this site silently diverges from the code. The docstring *is* the publishing step.
+Every instance shares `excludeNotDocumented: true` for classes, interfaces, methods, properties, functions, and type aliases. TypeDoc drops any of those that lacks a doc comment. So adding an undocumented controller method, or a new exported model type, does not fail a build or annoy a reviewer: it simply never appears in the reference, and the public surface documented on this site silently diverges from the code. The docstring *is* the publishing step.
 
 <Aside type="caution">
 
-Internal files — repository Postgres adapters, service implementations, spec files — are not entry points, so they never reach the reference. Docstrings are required only on the contracts: the `<Capability>Controller` interface and its methods, service role interfaces, and capability factories.
+Internal files (repository Postgres adapters, service implementations, spec files) are not entry points, so they never reach the reference. Docstrings are required on: model entities and operation types, repository contract interfaces, service role interfaces, controller interfaces and their methods, and capability factories. Not every exported type needs one; a small ID brand or a trivial re-export can stay undocumented and simply won't appear in the generated reference, which is fine.
 
 </Aside>
 
@@ -39,7 +39,7 @@ Three rules, in order of importance:
 
 Each of these is quoted from the codebase and is what the reference renders today.
 
-**Explain a side effect the name hides** — `SkillsController.loadForAgent` (`src/lib/server/controllers/skills/controller.ts:39`):
+**Explain a side effect the name hides**: `SkillsController.loadForAgent` (`src/lib/server/controllers/skills/controller.ts:39`):
 
 ```ts
 /**
@@ -54,7 +54,7 @@ loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
 
 A caller who reached for this instead of `get` by name alone would write usage records unintentionally. The docstring exists to prevent exactly that mistake.
 
-**Document an invariant and its failure mode** — `AgentController.decideMany` (`src/lib/server/controllers/agent/controller.ts:137`):
+**Document an invariant and its failure mode**: `AgentController.decideMany` (`src/lib/server/controllers/agent/controller.ts:137`):
 
 ```ts
 /**
@@ -73,7 +73,7 @@ decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentR
 
 The signature says the method batches decisions. Only the docstring tells you the batch is atomic, *why* it must be, and what throws when it is not.
 
-**Document the contract, not just the methods** — the interface-level comment on `SkillsController` (`src/lib/server/controllers/skills/controller.ts:27`):
+**Document the contract, not just the methods**: the interface-level comment on `SkillsController` (`src/lib/server/controllers/skills/controller.ts:27`):
 
 ```ts
 /**
@@ -88,6 +88,18 @@ export interface SkillsController {
 
 Interface docstrings are the landing text for the module's reference page. Two sentences that place the capability in the system save a reader from reconstructing it from ten method signatures.
 
+**Say why a model entity's fields hang together**: `MemoryEntry` (`src/lib/models/memory/index.ts`):
+
+```ts
+/**
+ * A durable remembered fact. Entries with a project hold project memory; entries
+ * without one form the user's profile memory, who they are across all projects.
+ */
+export interface MemoryEntry {
+```
+
+The field list alone doesn't say what makes `projectId` optional meaningful. This one sentence is the difference between a reader guessing and a reader knowing.
+
 ## See what the reference actually renders
 
 The docs site is the `@followthrough/docs` workspace package. Preview the reference locally while you write:
@@ -96,7 +108,7 @@ The docs site is the `@followthrough/docs` workspace package. Preview the refere
 pnpm -F @followthrough/docs dev
 ```
 
-and run the full build before opening a pull request — it is the only place a silently dropped symbol shows up, as an absent page:
+and run the full build before opening a pull request: it is the only place a silently dropped symbol shows up, as an absent page:
 
 ```bash
 pnpm -F @followthrough/docs build

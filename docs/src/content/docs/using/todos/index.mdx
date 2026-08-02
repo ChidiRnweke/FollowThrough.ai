@@ -1,58 +1,56 @@
 ---
 title: Todos
-description: The commitment board — everything you owe and everything you are waiting on, with every extracted todo keeping the sentence it came from.
+description: Turn a commitment in a note into a tracked todo, then triage what needs your attention on the Today view.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-## TL;DR
+Todos track commitments: things you owe, and things you're waiting on from other people. The fastest way to fill the board is Extract promises. Select text in a note, let the agent propose todos, and accept the ones that are real. Each accepted card keeps the exact sentence it came from.
 
-Todos track commitments: things you owe, and things you are waiting on from other people. They live on one board across all projects (and pre-filtered under each project), they carry deadlines and a *waiting on* counterparty, and the Today view triages what needs attention now. The fastest way to fill the board is Extract promises: select text in a note, the agent proposes todos, you accept, and the cards appear — each keeping the exact sentence it came from.
-
-## Board and list
+## Find your todos: board and list
 
 <Screenshot id="todo-board" alt="The todo board with Backlog, Open, In progress, and Done columns" />
 
-Todos live on the Todos page across all projects, and under each project at `Project > Todos`. Both surfaces show the same workspace; the project one is pre-filtered. Board and List are two views of the same set, switched by tabs in the toolbar — the choice is part of the URL, so a link lands on the same view.
+Open the Todos page to see every project's todos, or open `Project > Todos` for one project pre-filtered to it. Both show the same workspace. Switch between **Board** and **List** with the tabs in the toolbar. The choice is part of the URL, so a link lands on the same view.
 
-The **board** has four columns: Backlog, Open, In progress, Done. (Cancelled exists in the status dropdown but is not a column.) Drag a card between columns by its handle, or use the card's **Move to…** menu. The checkbox completes a todo; unchecking reopens it. Each column except Done has an **Add** row at the bottom — type a title, Enter commits, Escape cancels. A card shows only what is set: a project badge on the all-projects page, a due-date badge that turns red when overdue, a priority badge for medium and high, and a footer with the source note and who the todo waits on.
+On the **board**, drag a card between its four columns (Backlog, Open, In progress, Done) by its handle, or use the card's **Move to...** menu. (Cancelled exists in the status dropdown but isn't a column.) Check the checkbox to complete a todo, uncheck it to reopen. Type a title in a column's **Add** row and press Enter to create a card there, or Escape to cancel. A card shows only what's set: a project badge on the all-projects page, a due-date badge that turns red when overdue, a priority badge for medium and high, and a footer naming the source note and who the todo waits on.
 
-The **list** is a table with a column per field. Click a header to sort ascending, again for descending, a third time for the default order — due date first, then recently updated. Status, priority, category, due date, responsibility, and source are editable in place; the control appears on hover or keyboard focus and commits the moment you choose. On phones each row becomes a card with the same fields.
+On the **list**, click a column header to sort ascending, click again for descending, and a third time to return to the default order (due date first, then recently updated). Edit status, priority, category, due date, responsibility, and source in place: the control appears on hover or keyboard focus and commits the moment you choose. On phones each row becomes a card with the same fields.
 
-Filters sit above both views: a title search, dropdowns for project and category, and **Mine** / **Waiting on** pills. The dropdowns and pills live in the URL and are shareable.
+Filter either view with the title search, the project and category dropdowns, and the **Mine** and **Waiting on** pills above them. These live in the URL too, so a filtered view is shareable.
 
-## Today: the triage view
+## Triage on Today
 
 <Screenshot id="today-screen" alt="The Today view with overdue, due today, and waiting-on sections" />
 
-Today is where the board meets the clock. It assembles three groups — **overdue**, **due today**, and **waiting on** — plus pending suggestions and recent notes, so the morning question "what needs me?" has one answer. The waiting-on group is the follow-up list: every commitment someone else owes you, by counterparty, ready to be chased.
+Open Today each morning to see three groups at once: **overdue**, **due today**, and **waiting on**, plus pending suggestions and recent notes. The waiting-on group is your follow-up list: every commitment someone else owes you, grouped by counterparty, ready to chase.
 
-That shape comes straight from the todo's fields. A todo carries a status, an optional priority, category, and due date, and a responsibility — **Mine** or **Waiting on** someone, with their name. Switching responsibility back to Mine clears the counterparty; completing a todo stamps the completion date, and reopening clears it.
+Set a todo's priority, category, due date, and responsibility (Mine, or Waiting on someone by name) to control where it lands. Switching responsibility back to Mine clears the counterparty. Completing a todo stamps the completion date; reopening it clears that stamp.
 
-Clicking a title opens the detail panel (a side panel on wide screens, a full page below it). Everything is editable in place — there is no Save button. Two sections matter beyond the fields: **Original context** quotes the sentence the todo was extracted from, with a link into the note at that passage, and **Find the source** asks the agent to locate the note a todo came from and explain what it says. Deleting asks for confirmation — and deletion stays a deliberate user action: the agent has no delete-todo tool at all, by design.
+Click a title to open its detail panel (a side panel on wide screens, a full page below that). Everything there is editable in place, with no Save button. Two things live beyond the fields: **Original context** quotes the sentence the todo was extracted from and links into the note at that passage, and **Find the source** asks the agent to locate the note a todo came from and explain what it says. Deleting asks for confirmation, and deletion stays a deliberate action on your part: the agent has no delete-todo tool at all, by design.
 
-## Extract promises: notes into commitments
+## Extract promises from a note
 
-Select text in a note and the bubble menu offers **Extract promises**. Each genuine commitment in the selection — not questions, suggestions, or floated options — becomes a suggestion card in the note's Suggestions panel: the action, who owns it, the due date with its original wording, and a strength badge when the promise is implied or tentative rather than explicit. **Accept** creates the todo; **Dismiss** drops the suggestion. Either way the todo keeps the quoted sentence as its original context.
+Select text in a note and choose **Extract promises** from the bubble menu. Each genuine commitment in the selection (not a question, a suggestion, or a floated option) becomes a suggestion card in the note's Suggestions panel, naming the action, its owner, the due date in its original wording, and a strength badge when the promise is implied or tentative rather than explicit. Choose **Accept** to create the todo, or **Dismiss** to drop the suggestion. Either way, the todo keeps the quoted sentence as its original context.
 
 <Mermaid
 	source={`
 flowchart LR
 	select["Select text in a note"] --> extract["Extract promises"]
 	extract --> cards["Suggestion cards in the Suggestions panel"]
-	cards --> accept["Accept → todo on the board"]
-	cards --> dismiss["Dismiss → suggestion dropped"]
+	cards --> accept["Accept: todo appears on the board"]
+	cards --> dismiss["Dismiss: suggestion dropped"]
 	accept --> context["Todo keeps the quoted sentence as original context"]
 `}
 />
 
-In Settings you can set the pipeline to auto-accept, optionally only above a confidence threshold. Auto-accepted suggestions become todos immediately, announced by a toast, and stay visibly marked as auto-accepted. The toolbar's **Find todos in my notes** action hands the same job to the agent across your notes instead of one selection — and because extraction is a proposal, not a mutation, it never bypasses review unless your trust policy says so. An extraction that finds nothing creates nothing — no anchor, no suggestions — and tells you to try again.
+Turn on auto-accept for this pipeline in Settings, optionally only above a confidence threshold, and suggestions that clear it become todos immediately (announced by a toast, and still marked as auto-accepted). Use the toolbar's **Find todos in my notes** action to hand the same job to the agent across all your notes instead of one selection. Because extraction is a proposal and not a mutation, it never bypasses review unless your trust policy says so. An extraction that finds nothing creates nothing, no anchor and no suggestions, and tells you to try again.
 
-A todo belongs to one project for its whole life; editing cannot move it between projects.
+A todo belongs to one project for its whole life. Editing it can't move it between projects.
 
 ## Related pages
 
-- [Todos, in depth](/FollowThrough.ai/subsystems/todos/) — the provenance model and the extraction pipeline underneath.
-- [The agent](/FollowThrough.ai/using/the-agent/) — how the agent proposes todos and why deletion stays yours.
-- [Notes](/FollowThrough.ai/using/notes/) — where Extract promises starts.
+- [Todos, in depth](/FollowThrough.ai/subsystems/todos/): the provenance model and the extraction pipeline underneath.
+- [The agent](/FollowThrough.ai/using/the-agent/): how the agent proposes todos, and why deletion stays yours.
+- [Notes](/FollowThrough.ai/using/notes/): where Extract promises starts.

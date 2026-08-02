@@ -1,33 +1,31 @@
 ---
 title: Projects
-description: Projects are the scoping unit every other capability keys off — a thin catalog over the notes table where the move operation is the only transactional write.
+description: Projects are the scoping unit every other capability keys off, a thin catalog over the notes table where the move operation is the only transactional write.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-## TL;DR
-
-A project is a named container that scopes the rest of the app: every note, todo, memory entry, artifact, and attachment carries a `ProjectId`. The subsystem itself owns only the project record and the folder/entry tree built on top of the notes table (folders and notes are note rows; skills are filtered out of the tree). Active project names are unique per user, case-insensitively, enforced by a partial unique index that archiving releases. A user with no project gets a `General` project auto-created on first resolution. The one non-trivial write is `move` — it validates the tree (folder parents, no self-parenting, no moving below a descendant) and renumbers two sibling lists inside a transaction. For the user-facing view, see [Projects](/FollowThrough.ai/using/projects/).
+A project is a named container that scopes the rest of the app: every note, todo, memory entry, artifact, and attachment carries a `ProjectId`. The subsystem itself owns only the project record and the folder/entry tree built on top of the notes table (folders and notes are note rows; skills are filtered out of the tree). Active project names are unique per user, case-insensitively, enforced by a partial unique index that archiving releases. A user with no project gets a `General` project auto-created on first resolution. The one non-trivial write is `move`: it validates the tree (folder parents, no self-parenting, no moving below a descendant) and renumbers two sibling lists inside a transaction. For the user-facing view, see [Projects](/FollowThrough.ai/using/projects/).
 
 ## Why it exists
 
-Todos, memory, attachments, artifacts, and search all need a consistent answer to "which project is this in?" Projects is that answer: it owns the project record, the folder tree, and the archive semantics, so the other capabilities carry a `ProjectId` foreign key and never re-implement scoping. It deliberately owns nothing else — the documents in the tree are notes, the counts on the overview come from the owning controllers.
+Todos, memory, attachments, artifacts, and search all need a consistent answer to "which project is this in?" Projects is that answer: it owns the project record, the folder tree, and the archive semantics, so the other capabilities carry a `ProjectId` foreign key and never re-implement scoping. It deliberately owns nothing else: the documents in the tree are notes, the counts on the overview come from the owning controllers.
 
 ## What owns what
 
-- **Models** — `src/lib/models/projects/index.ts`: `Project`, `ProjectView` (a project plus its `ProjectTreeNode` tree of note summaries), the input/output types for each controller operation, and `DEFAULT_PROJECT_NAME = 'General'` (`index.ts:21`). The file is self-contained: it re-declares its own branded `UserId`, `NoteId`, and `DateTime` rather than importing them from another capability's model.
-- **Services** — `src/lib/server/services/projects/`: `catalog.ts` (`ProjectCatalog`, all the tree and validation rules) and `resolution.ts` (`ensureProjectForActor`).
-- **Controllers** — `src/lib/server/controllers/projects/controller.ts`: the `Projects` controller — `list`, `get`, `create`, `rename`, `archive`, `createFolder`, `move`.
-- **Repositories** — `src/lib/server/repositories/projects/projects.ts` (the `ProjectRepository` / `ProjectTreeRepository` contracts) and `postgres/projects.ts` (`ProjectRecords`, all Drizzle/SQL). The table and its indexes are in `src/lib/server/db/schema/registry.ts:156`.
+- **Models**: `src/lib/models/projects/index.ts`: `Project`, `ProjectView` (a project plus its `ProjectTreeNode` tree of note summaries), the input/output types for each controller operation, and `DEFAULT_PROJECT_NAME = 'General'` (`index.ts:21`). The file is self-contained: it re-declares its own branded `UserId`, `NoteId`, and `DateTime` rather than importing them from another capability's model.
+- **Services**: `src/lib/server/services/projects/`: `catalog.ts` (`ProjectCatalog`, all the tree and validation rules) and `resolution.ts` (`ensureProjectForActor`).
+- **Controllers**: `src/lib/server/controllers/projects/controller.ts`: the `Projects` controller: `list`, `get`, `create`, `rename`, `archive`, `createFolder`, `move`.
+- **Repositories**: `src/lib/server/repositories/projects/projects.ts` (the `ProjectRepository` / `ProjectTreeRepository` contracts) and `postgres/projects.ts` (`ProjectRecords`, all Drizzle/SQL). The table and its indexes are in `src/lib/server/db/schema/registry.ts:156`.
 
-`ProjectCatalog` implements all seven contract facets from `contracts.ts` — creator, reader, lister, editor, tree reader, folder creator, entry mover — exported as `Pick<>` types so consumers depend on the narrow facet they use.
+`ProjectCatalog` implements all seven contract facets from `contracts.ts` (creator, reader, lister, editor, tree reader, folder creator, entry mover) exported as `Pick<>` types so consumers depend on the narrow facet they use.
 
 ## The catalog rules
 
 `ProjectCatalog` (`catalog.ts`) enforces:
 
 - Names and descriptions are trimmed; a blank name is a `ValidationError`, and every write first re-reads the project so a stale or foreign id is a `NotFoundError`.
-- The tree filters out `skill` entries (`catalog.ts:61`) — skills live in the same notes table but are not project documents.
+- The tree filters out `skill` entries (`catalog.ts:61`): skills live in the same notes table but are not project documents.
 - A folder's parent must itself be a folder. A move rejects self-parenting and moving an entry below its own descendant (`catalog.ts:90-98`), and requires a non-negative integer position.
 - A move recomputes positions for both the old and the new sibling list, clamping an out-of-range position to the end (`catalog.ts:112`).
 
@@ -35,7 +33,7 @@ Todos, memory, attachments, artifacts, and search all need a consistent answer t
 
 ## The move transaction
 
-`move` is the only write that needs cross-entry bookkeeping — it repositions two sibling lists — so it alone runs through the transaction runner (`controller.ts:92`); the other writes delegate directly. `get` fetches the project and its tree in parallel.
+`move` is the only write that needs cross-entry bookkeeping (it repositions two sibling lists) so it alone runs through the transaction runner (`controller.ts:92`); the other writes delegate directly. `get` fetches the project and its tree in parallel.
 
 <Mermaid
 	source={`
@@ -57,29 +55,29 @@ The delivery boundary is a set of SvelteKit remote commands in `src/lib/remote/p
 `ProjectRecords` (`postgres/projects.ts`) holds the invariants:
 
 - A partial unique index `projects_user_name_unique` on `(userId, lower(name)) WHERE archived_at IS NULL` (`registry.ts:169`) makes active project names unique per user, case-insensitively; a violation surfaces as `ConflictError('An active project with this name already exists')`. Archiving frees the name.
-- `findById`, `findFirstActive`, `listActive`, and `update` all filter `archived_at IS NULL`, so an archived project is unreachable through the catalog — archive is one-way.
+- `findById`, `findFirstActive`, `listActive`, and `update` all filter `archived_at IS NULL`, so an archived project is unreachable through the catalog: archive is one-way.
 - Tree reads list the project's unarchived notes ordered by `position` then `createdAt` (`postgres/projects.ts:117`); `persistOrder` applies the move's recomputed positions row by row inside the controller's transaction.
 
 ## What project-scoping means
 
-The project id is the join key for the other capabilities. The project overview loader (`src/routes/(app)/projects/[id]/+page.server.ts`) composes the four resource counts in parallel from the owning controllers — `todos().list` with `status: 'open'`, `memory().list`, `deliverables().listArtifacts`, `attachments().listForProject` — and computes the overdue count on the server, because a clock comparison in render would disagree between SSR and hydration.
+The project id is the join key for the other capabilities. The project overview loader (`src/routes/(app)/projects/[id]/+page.server.ts`) composes the four resource counts in parallel from the owning controllers (`todos().list` with `status: 'open'`, `memory().list`, `deliverables().listArtifacts`, `attachments().listForProject`) and computes the overdue count on the server, because a clock comparison in render would disagree between SSR and hydration.
 
-`Workspace.getShellContext` (`src/lib/server/controllers/workspace/controller.ts:76`) reads the shell twice over: five parallel reads — user, projects, note tree, enabled skills, proposed suggestions — and derives `pendingMemoryNotifications` from them: proposed memory suggestions are counted per project, suggestions with no `projectId` become a single "Profile memory" row, and projects with no pending memories are omitted.
+`Workspace.getShellContext` (`src/lib/server/controllers/workspace/controller.ts:76`) reads the shell twice over: five parallel reads (user, projects, note tree, enabled skills, proposed suggestions) and derives `pendingMemoryNotifications` from them: proposed memory suggestions are counted per project, suggestions with no `projectId` become a single "Profile memory" row, and projects with no pending memories are omitted.
 
-The project/profile split is a modeling decision, not a UI one: `MemoryEntry.projectId` is optional, and omitting it means profile memory — see [memory](/FollowThrough.ai/subsystems/memory/).
+The project/profile split is a modeling decision, not a UI one: `MemoryEntry.projectId` is optional, and omitting it means profile memory: see [memory](/FollowThrough.ai/subsystems/memory/).
 
 ## What holds true
 
-- Every consumer can scope by `ProjectId` and resolve a default with `ensureProjectForActor` — an actor always has at least one active project.
+- Every consumer can scope by `ProjectId` and resolve a default with `ensureProjectForActor`: an actor always has at least one active project.
 - Active project names are unique per user, case-insensitively, and the database (not the service) is the enforcer.
 - An archived project is unreachable through the catalog; archive is one-way, and archiving frees the name.
 - A move that fails validation fails before any position write, and one that fails mid-write rolls back inside the transaction runner, so sibling positions are never left half-renumbered.
-- Validation errors carry the server's message to the user — the actions store keeps `lastError` from the HTTP error body, which is how "name already in use" reaches the dialog.
+- Validation errors carry the server's message to the user: the actions store keeps `lastError` from the HTTP error body, which is how "name already in use" reaches the dialog.
 
 ## What scopes by this
 
-- [Notes](/FollowThrough.ai/subsystems/notes/) — the folder/entry tree is built on the notes table; folders are note rows of kind `folder`.
-- [Todos](/FollowThrough.ai/subsystems/todos/) — todos are project-scoped and counted on the overview.
-- [Memory](/FollowThrough.ai/subsystems/memory/) — project memory is indexed for search; profile memory (no `projectId`) is not.
-- [Attachments](/FollowThrough.ai/subsystems/attachments/) — every attachment belongs to a project; `listForProject` backs project-wide browsing.
-- [Agent](/FollowThrough.ai/subsystems/agent/) — agent runs and search calls take a `ProjectId` scope.
+- [Notes](/FollowThrough.ai/subsystems/notes/): the folder/entry tree is built on the notes table; folders are note rows of kind `folder`.
+- [Todos](/FollowThrough.ai/subsystems/todos/): todos are project-scoped and counted on the overview.
+- [Memory](/FollowThrough.ai/subsystems/memory/): project memory is indexed for search; profile memory (no `projectId`) is not.
+- [Attachments](/FollowThrough.ai/subsystems/attachments/): every attachment belongs to a project; `listForProject` backs project-wide browsing.
+- [Agent](/FollowThrough.ai/subsystems/agent/): agent runs and search calls take a `ProjectId` scope.

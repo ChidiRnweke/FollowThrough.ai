@@ -1,33 +1,31 @@
 ---
 title: Memory
-description: How project and profile memory work, and why every agent write to them waits for your approval.
+description: Store durable facts the agent reads before it answers, so you stop re-briefing it. Every agent write waits for your approval unless you turn on auto-accept.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-## TL;DR
+Use memory when you're tired of re-explaining the same context every conversation, a decision the team already made, a constraint that always applies, who you are and how you like to work. Add a fact, decision, or constraint to memory once, and the agent reads it before every answer instead of you re-explaining it each conversation. **Project memory** holds one project's facts, decisions, and constraints; **profile memory** holds who you are and follows you across every project. You can edit memory directly. The agent never can: it calls `propose_memory_change`, and the proposal sits in a review list until you accept or dismiss it. A per-pipeline trust policy in Settings can auto-accept proposals, but review-first is the default.
 
-Memory is the short list of durable facts the agent reads before it answers, so you stop re-briefing it. Project memory holds one project's facts, decisions, and constraints; profile memory holds who you are and follows you across every project. You edit memory directly. The agent never can — it calls `propose_memory_change`, and the proposal sits in a review list until you accept or dismiss it. A per-pipeline trust policy in Settings can auto-accept proposals, but review-first is the default.
+## Choose a scope
 
-## Two scopes
+A memory entry is a short piece of text with an optional type (**fact**, **decision**, **constraint**, or **preference**) and an optional **Share with agents** flag.
 
-A memory entry is a short piece of text with an optional type — **fact**, **decision**, **constraint**, or **preference** — and an optional **Share with agents** flag.
+- **Project memory** belongs to one project: its facts, decisions, constraints, and terminology. Find it at `Project > Memory` and in the Project memory panel of the workbench. It only informs work on that project.
+- **Profile memory** describes you across every project (your role, goals, how you like to work) and lives on your Profile page. It's injected into every agent run, and has no share toggle since it's created shared.
 
-- **Project memory** belongs to one project: its facts, decisions, constraints, and terminology. It lives at `Project > Memory` and in the Project memory panel of the workbench, and it only informs work on that project.
-- **Profile memory** describes you across every project — your role, goals, how you like to work. It lives on your Profile page and is injected into every agent run. Profile entries have no share toggle; they are created shared.
-
-Memory is not where long-form knowledge goes. Entries are a short, recently-updated-first list of facts; anything document-shaped belongs in a note.
+Keep entries short. Memory is not where long-form knowledge goes: it's a recently-updated-first list of facts, and anything document-shaped belongs in a note instead.
 
 <Screenshot id="project-context" alt="A project overview with Memory listed under what the agent works from." />
 
-## What the agent can see
+## Control what the agent can see
 
-Every project entry carries a **Share with agents** checkbox, on by default. Uncheck it and the entry stays visible to you but is never read by the agent — it is filtered out of both retrieval and the memory tools. The agent only ever lists shared entries.
+Every project entry carries a **Share with agents** checkbox, on by default. Uncheck it to keep the entry visible to you while hiding it from the agent: it's filtered out of both retrieval and the memory tools, and the agent only ever lists shared entries.
 
-## The agent proposes, you decide
+## Review what the agent proposes
 
-The agent never writes memory directly. When it notices something worth remembering — a decision made in chat, something you reveal about how you work — it calls the `propose_memory_change` tool with an operation (**add**, **update**, or **remove**), the content, and usually a justification. That creates a suggestion, and the suggestion is where the trust model kicks in.
+The agent never writes memory directly. When it notices something worth remembering (a decision made in chat, something you reveal about how you work), it calls the `propose_memory_change` tool with an operation (**add**, **update**, or **remove**), the content, and usually a justification. That creates a suggestion, which is where the trust model kicks in.
 
 <Mermaid source={`
 flowchart LR
@@ -39,26 +37,24 @@ flowchart LR
     C -->|auto-accept on,<br/>confidence met| E
 `} />
 
-## Reviewing proposals
+Find pending proposals in a **Suggested by the agent** section above the **Remembered** list on the same page. Each one shows its operation, the proposed content, and the agent's justification when it gave one.
 
-Pending proposals wait in a **Suggested by the agent** section above the **Remembered** list on the same page. Each one shows its operation, the proposed content, and the agent's justification when it gave one.
-
-- Tick the checkbox to accept: the change is applied to memory and the proposal leaves the list.
-- **Dismiss** rejects it. Dismissal is silent and final for that proposal — the agent may propose the same fact again in a later conversation.
+- Tick the checkbox to accept: the change applies to memory and the proposal leaves the list.
+- Choose **Dismiss** to reject it. Dismissal is silent and final for that proposal (the agent may propose the same fact again in a later conversation).
 
 Pending proposals also surface in the bell menu in the sidebar, counted per project with a separate row for profile memory, each linking to the page where you review them.
 
-You can stop reviewing one pipeline at a time. In **Settings > Trust policies**, the policy for the memory pipeline can auto-accept proposals, optionally only above a minimum confidence (0–100). Auto-accepted changes are marked as auto-accepted, so nothing lands invisibly even with the policy on. The default is off: nothing is remembered without your say.
+To stop reviewing one pipeline at a time, open **Settings > Trust policies** and turn on auto-accept for the memory pipeline, optionally only above a minimum confidence (0 to 100). Auto-accepted changes are still marked as auto-accepted, so nothing lands invisibly even with the policy on. The default is off: nothing is remembered without your say.
 
-## What you can do directly
+## Add, edit, or delete an entry yourself
 
-- **Add memory** opens a dialog with a text field and an optional type. Your own entries apply immediately — no review step — but every entry needs content; an emptied field cannot be saved.
-- A row's menu offers **Edit**, which rewrites the text inline, and **Delete**, which asks for confirmation first. Deleting is permanent: the agent will no longer remember it.
-- New entries are shared with agents by default; flip the checkbox on the row to keep one private.
+Choose **Add memory** to open a dialog with a text field and an optional type. Your own entries apply immediately, with no review step, but every entry needs content: an emptied field can't be saved.
+
+Open a row's menu for **Edit** (rewrites the text inline) and **Delete** (asks for confirmation first). Deleting is permanent: the agent will no longer remember it. New entries are shared with agents by default; flip the checkbox on the row to keep one private.
 
 ## Next
 
-- [Memory, in depth](/FollowThrough.ai/subsystems/memory/) — how proposals are stored, applied, and traced back to the run that made them.
-- [The agent](/FollowThrough.ai/using/the-agent/) — the chat that proposes these changes.
-- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind every proposal.
-- [Projects](/FollowThrough.ai/using/projects/) — where project memory lives.
+- [Memory, in depth](/FollowThrough.ai/subsystems/memory/): how proposals are stored, applied, and traced back to the run that made them.
+- [The agent](/FollowThrough.ai/using/the-agent/): the chat that proposes these changes.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/): the trust model behind every proposal.
+- [Projects](/FollowThrough.ai/using/projects/): where project memory lives.

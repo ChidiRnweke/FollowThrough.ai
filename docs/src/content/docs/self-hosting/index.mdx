@@ -1,28 +1,26 @@
 ---
 title: Self-hosting
-description: Run FollowThrough yourself — one container image for web and worker, PostgreSQL 17 with pgvector, an S3-compatible object store, and secrets from Infisical or plain environment variables.
+description: Run FollowThrough yourself, one container image for web and worker, PostgreSQL 17 with pgvector, an S3-compatible object store, and secrets from Infisical or plain environment variables.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 import Mermaid from '../../../components/mermaid.astro';
 
-## TL;DR
-
 The hosted instance is in closed beta; the repository is MIT-licensed, so the way in today is to run it yourself. Everything ships as **one container image** (`Dockerfile`, node:22-alpine, multi-stage): the web process serves `build/` on `:3000`, and the worker sidecar runs `build-worker/worker.js` from the same image. The app needs PostgreSQL 17 with pgvector, an S3-compatible object store, an OpenRouter key, and a Mistral key. Configuration comes from an Infisical project by default, or from plain environment variables with `CONFIG_SOURCE=env`. The production path is three commands: create the external networks, run the one-shot `migrate` service under the `setup` profile, then bring up `app` and `worker`.
 
-The architecture this guide assembles — the layered capability design, the agent run pipeline, the worker's role — is documented under [architecture](/FollowThrough.ai/explanation/architecture/).
+The architecture this guide assembles (the layered capability design, the agent run pipeline, the worker's role) is documented under [architecture](/FollowThrough.ai/explanation/architecture/).
 
-Do whatever you want with the code: self-host it, fork it, strip it for parts. Three asks if you do — tell [the author](https://github.com/ChidiRnweke) you're running it (what you use it for shapes what gets built next), star [the repository](https://github.com/ChidiRnweke/FollowThrough.ai), and keep the copyright notice in the LICENSE file. That last one is the license talking, not a favour.
+Do whatever you want with the code: self-host it, fork it, strip it for parts. Three asks if you do: tell [the author](https://github.com/ChidiRnweke) you're running it (what you use it for shapes what gets built next), star [the repository](https://github.com/ChidiRnweke/FollowThrough.ai), and keep the copyright notice in the LICENSE file. That last one is the license talking, not a favour.
 
 ## What you need
 
-- **Docker** — the app image, the database, and the object store all run as containers.
-- **PostgreSQL 17 with pgvector** — every note, todo, memory entry, and embedding lives here. The dev compose file uses `pgvector/pgvector:pg17`.
-- **An S3-compatible object store** — attachments and documents. The dev compose file uses [RustFS](https://rustfs.com); anything S3-compatible works.
-- **An OpenRouter API key** — every model the agent and the pipelines run is reached through OpenRouter.
-- **A Mistral API key** — OCR on attachments, called directly rather than through OpenRouter. Documents are fetched from a presigned object-storage URL, so the bucket must be reachable from Mistral.
-- **An Infisical project** — the default secrets backend; `scripts/provision-db.js` also writes the provisioned `DATABASE_URL` back into it. Skip it entirely with `CONFIG_SOURCE=env`.
-- **An OIDC provider, for multi-user only** — sign-in is wired against Authentik (`AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `AUTHENTIK_CALLBACK_URL`). With no `AUTHENTIK_CLIENT_ID` set, authentication is disabled and the app runs as a single local user (`LOCAL_USER_ID`, defaulting to a fixed UUID) — the normal single-user dev mode (`src/lib/server/config.ts:24`–`47`).
+- **Docker**: the app image, the database, and the object store all run as containers.
+- **PostgreSQL 17 with pgvector**: every note, todo, memory entry, and embedding lives here. The dev compose file uses `pgvector/pgvector:pg17`.
+- **An S3-compatible object store**: attachments and documents. The dev compose file uses [RustFS](https://rustfs.com); anything S3-compatible works.
+- **An OpenRouter API key**: every model the agent and the pipelines run is reached through OpenRouter.
+- **A Mistral API key**: OCR on attachments, called directly rather than through OpenRouter. Documents are fetched from a presigned object-storage URL, so the bucket must be reachable from Mistral.
+- **An Infisical project**: the default secrets backend; `scripts/provision-db.js` also writes the provisioned `DATABASE_URL` back into it. Skip it entirely with `CONFIG_SOURCE=env`.
+- **An OIDC provider, for multi-user only**: sign-in is wired against Authentik (`AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `AUTHENTIK_CALLBACK_URL`). With no `AUTHENTIK_CLIENT_ID` set, authentication is disabled and the app runs as a single local user (`LOCAL_USER_ID`, defaulting to a fixed UUID): the normal single-user dev mode (`src/lib/server/config.ts:24`–`47`).
 
 ## How the pieces fit
 
@@ -30,8 +28,8 @@ Do whatever you want with the code: self-host it, fork it, strip it for parts. T
 	source={`
 flowchart LR
 	browser["Browser"] --> caddy["Caddy (TLS, reverse proxy)"]
-	caddy --> app["app — :3000"]
-	worker["worker sidecar — ×1"]
+	caddy --> app["app: :3000"]
+	worker["worker sidecar: ×1"]
 	app --> db[("PostgreSQL 17 + pgvector")]
 	worker --> db
 	app --> s3[("RustFS / S3")]
@@ -49,20 +47,20 @@ flowchart LR
 `}
 />
 
-Both processes run the same application graph and the same configuration; the worker serves no HTTP and instead ticks the periodic background tasks the request path hands off — search-index maintenance and attachment retention (`src/worker.ts`, wired in `src/lib/server/application.ts:482`). Keep it at **one replica**: the tasks discover their work from the database on every tick, so a second replica only duplicates embedding calls.
+Both processes run the same application graph and the same configuration; the worker serves no HTTP and instead ticks the periodic background tasks the request path hands off: search-index maintenance and attachment retention (`src/worker.ts`, wired in `src/lib/server/application.ts:482`). Keep it at **one replica**: the tasks discover their work from the database on every tick, so a second replica only duplicates embedding calls.
 
 Telemetry is optional but wired in from the start: both processes boot with `scripts/otel-instrumentation.js` and export OTLP to a collector (`OTEL_EXPORTER_OTLP_ENDPOINT`), which filters down to LLM/tool/agent spans and forwards them to Phoenix (`otel-collector-config.yaml`).
 
 ## The image
 
-`Dockerfile` is a four-stage node:22-alpine build: `base` (pnpm via corepack) → `prod-deps` (production `node_modules`) → `builder` (`pnpm build`, which builds both the SvelteKit app and the worker entrypoint via `vite.config.worker.ts`) → `runtime`. The runtime stage carries `build/`, `build-worker/`, `drizzle/` (the migration SQL), `scripts/` (migration and provisioning), and `assets/` (embedded fonts for PDF export) — everything the app, the worker, and the one-shot migrate job need, in one image. The default command serves the app on `:3000`; the worker is the same image with `command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']`.
+`Dockerfile` is a four-stage node:22-alpine build: `base` (pnpm via corepack) → `prod-deps` (production `node_modules`) → `builder` (`pnpm build`, which builds both the SvelteKit app and the worker entrypoint via `vite.config.worker.ts`) → `runtime`. The runtime stage carries `build/`, `build-worker/`, `drizzle/` (the migration SQL), `scripts/` (migration and provisioning), and `assets/` (embedded fonts for PDF export): everything the app, the worker, and the one-shot migrate job need, in one image. The default command serves the app on `:3000`; the worker is the same image with `command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']`.
 
 ## Configuration: bootstrap vs application
 
 Configuration is layered, and the two example files map exactly onto the layers:
 
-- **Bootstrap** (`.env.example`) — five values telling the app where its secrets live: `CONFIG_SOURCE` plus the `INFISICAL_CLIENT_ID` / `CLIENT_SECRET` / `PROJECT_ID` / `ENVIRONMENT` / `URL`. This file stays on the host; nothing application-specific goes in it.
-- **Application** (`.env.infiscal.example`) — everything else, imported into the root of the Infisical project. Three keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (`REQUIRED_APPLICATION_KEYS`, `src/lib/server/config.ts:89`). The rest — model choices, S3 credentials, retrieval chunking, OCR limits — have defaults in `APPLICATION_DEFAULTS` (`config.ts:95`) and can be omitted.
+- **Bootstrap** (`.env.example`): five values telling the app where its secrets live: `CONFIG_SOURCE` plus the `INFISICAL_CLIENT_ID` / `CLIENT_SECRET` / `PROJECT_ID` / `ENVIRONMENT` / `URL`. This file stays on the host; nothing application-specific goes in it.
+- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Three keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (`REQUIRED_APPLICATION_KEYS`, `src/lib/server/config.ts:89`). The rest (model choices, S3 credentials, retrieval chunking, OCR limits) have defaults in `APPLICATION_DEFAULTS` (`config.ts:95`) and can be omitted.
 
 `CONFIG_SOURCE=env` collapses the two layers: application keys are read straight from the process environment and no Infisical client is created. That is the simple path for a single-user box; Infisical earns its keep when you want secrets rotated outside the deployment or shared between the app and the provisioning script.
 
@@ -90,11 +88,11 @@ Configuration is layered, and the two example files map exactly onto the layers:
 
 3. **Put the application config where the app will read it.**
 
-   With Infisical: import `.env.infiscal.example` into your project and replace `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, and `DATABASE_URL` (unless you let provisioning create it — next step). With `CONFIG_SOURCE=env`: export the same keys into the environment.
+   With Infisical: import `.env.infiscal.example` into your project and replace `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, and `DATABASE_URL` (unless you let provisioning create it: next step). With `CONFIG_SOURCE=env`: export the same keys into the environment.
 
 4. **Provision and migrate the database (one shot).**
 
-   The production compose file carries a `migrate` service under the `setup` profile that runs `scripts/provision-db.js` (creates the database and role with a random password, grants privileges, and stores the resulting `DATABASE_URL` in Infisical — skipped entirely if `DATABASE_URL` already exists there) followed by `scripts/prod-migrate.js` (Drizzle migrations from `./drizzle`):
+   The production compose file carries a `migrate` service under the `setup` profile that runs `scripts/provision-db.js` (creates the database and role with a random password, grants privileges, and stores the resulting `DATABASE_URL` in Infisical: skipped entirely if `DATABASE_URL` already exists there) followed by `scripts/prod-migrate.js` (Drizzle migrations from `./drizzle`):
 
    ```sh
    docker compose -f docker-compose.prod.yml --profile setup run --rm migrate
@@ -106,18 +104,18 @@ Configuration is layered, and the two example files map exactly onto the layers:
    docker compose -f docker-compose.prod.yml up -d app worker
    ```
 
-   The app listens on `:3000`. Put your reverse proxy in front of it, set `ORIGIN` to the public URL, and — for multi-user — the four `AUTHENTIK_*` values.
+   The app listens on `:3000`. Put your reverse proxy in front of it, set `ORIGIN` to the public URL, and (for multi-user) the four `AUTHENTIK_*` values.
 
 </Steps>
 
 <Aside type="note">
 
-The shipped `docker-compose.prod.yml` is the author's own deployment: it pulls the published image from GHCR, reads secrets from Infisical, joins four **external** Docker networks (`reverse-proxy`, `postgres-network`, `rustfs-network`, `telemetry-network` — create them with `docker network create` or rewrite the `networks:` block), carries Caddy labels for his reverse proxy, and is reconciled by Komodo (the `komodo.skip` label on the migrate job). Treat it as a reference for how the pieces fit together, not as the only way to run the stack — any arrangement that gives both processes the same configuration, the database, and the bucket works.
+The shipped `docker-compose.prod.yml` is the author's own deployment: it pulls the published image from GHCR, reads secrets from Infisical, joins four **external** Docker networks (`reverse-proxy`, `postgres-network`, `rustfs-network`, `telemetry-network`; create them with `docker network create` or rewrite the `networks:` block), carries Caddy labels for his reverse proxy, and is reconciled by Komodo (the `komodo.skip` label on the migrate job). Treat it as a reference for how the pieces fit together, not as the only way to run the stack: any arrangement that gives both processes the same configuration, the database, and the bucket works.
 
 </Aside>
 
 ## Day two
 
 - **Upgrades** are pull-and-restart plus a re-run of the `setup`-profile migrate step; migrations are ordinary Drizzle SQL under `drizzle/`.
-- **Provisioning is idempotent**: `provision-db.js` fails closed — a listing failure against Infisical is never read as "no secret", so re-running it cannot rotate the password of a database it cannot see.
+- **Provisioning is idempotent**: `provision-db.js` fails closed: a listing failure against Infisical is never read as "no secret", so re-running it cannot rotate the password of a database it cannot see.
 - **Single-user mode** needs no auth provider at all; adding Authentik later only requires the four `AUTHENTIK_*` keys and a restart.
