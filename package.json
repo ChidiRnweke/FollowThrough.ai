@@ -7,6 +7,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
+		"docs:dev": "pnpm -F @followthrough/docs dev",
+		"docs:build": "pnpm -F @followthrough/docs build",
+		"docs:check": "pnpm -F @followthrough/docs check",
 		"dev:e2e": "CONFIG_SOURCE=env MISTRAL_API_KEY=playwright-not-used OPENROUTER_API_KEY=playwright-not-used OPENROUTER_BASE_URL=http://127.0.0.1:9 vite dev --host 127.0.0.1 --port 5173 --strictPort",
 		"build": "vite build && pnpm build:worker",
 		"build:web": "vite build",
