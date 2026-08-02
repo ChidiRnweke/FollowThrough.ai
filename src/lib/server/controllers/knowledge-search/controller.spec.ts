@@ -73,13 +73,13 @@ describe('Retrieval', () => {
 		expect(searcher.query).toBe('CONDENSED');
 	});
 
-	it('trims result content to an excerpt', async () => {
+	it('returns the full chunk content untruncated', async () => {
 		const searcher = new RecordingSearcher([searchMatch('x'.repeat(2000))]);
 		const results = await new Retrieval({
 			knowledgeSearcher: searcher,
 			condenser,
 			conversations: journalOf([])
 		}).search(actor, { query: 'q' });
-		expect(results[0]!.content.length).toBe(700);
+		expect(results[0]!.content.length).toBe(2000);
 	});
 });

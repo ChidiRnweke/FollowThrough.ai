@@ -40,7 +40,6 @@ export interface RetrievalDependencies {
 	conversations: ConversationJournal;
 }
 
-const CONTENT_EXCERPT_LIMIT = 700;
 const DEFAULT_SEARCH_LIMIT = 8;
 
 const messageText = (message: Message): string => {
@@ -69,7 +68,7 @@ export class Retrieval implements RetrievalController {
 		);
 		return matches.map((match) => ({
 			noteId: match.document.noteId,
-			content: match.document.content.slice(0, CONTENT_EXCERPT_LIMIT),
+			content: match.document.content,
 			score: match.score,
 			sourceCreatedAt: match.document.sourceCreatedAt
 		}));

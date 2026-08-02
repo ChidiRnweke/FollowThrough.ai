@@ -21,7 +21,7 @@ flowchart LR
 	embeddings --> index["pgvector index<br/>search_chunks table"]
 	index --> retrieve["Vector retrieval<br/>wide candidate set"]
 	retrieve --> rerank["Reranking<br/>cohere/rerank-4-fast"]
-	rerank --> results["Scored excerpts<br/>8 results, 700 chars each"]
+	rerank --> results["Scored chunks<br/>8 results"]
 `}
 />
 
@@ -32,7 +32,7 @@ A few properties worth knowing:
 - **Only shared project memory is indexed.** A memory entry enters the index only if it belongs to a project and you've marked it as shared with agents. Profile memory (what the agent knows about you across everything) is injected into the agent's context directly and never goes through search. Deleted facts never appear in results.
 - **Retrieval is two-stage.** The vector search casts a wide net (at least 40 candidates), then a reranker shrinks that to the final few, so recall comes cheap and precision comes second.
 
-To see this pipeline in the editor, select text in a note: FollowThrough searches within the project for passages that mention, contradict, or record a prior decision about the selection, and surfaces them as "find related" suggestions. The agent's `search` tool runs the same pipeline and returns a handful of excerpts (eight by default, each capped at 700 characters) with a relevance score. It searches when workspace evidence could improve the answer, searches again with a sharper query when the first results reveal a lead or a gap, and restricts the search to one project when your request is clearly scoped to it.
+To see this pipeline in the editor, select text in a note: FollowThrough searches within the project for passages that mention, contradict, or record a prior decision about the selection, and surfaces them as "find related" suggestions. The agent's `search` tool runs the same pipeline and returns a handful of chunks (eight by default) with a relevance score. It searches when workspace evidence could improve the answer, searches again with a sharper query when the first results reveal a lead or a gap, and restricts the search to one project when your request is clearly scoped to it.
 
 ## Tune web search
 
