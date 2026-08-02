@@ -393,6 +393,14 @@ summary {
 	color: var(--sl-color-gray-2);
 }
 
+/* Give a screenshot room to breathe inside a numbered step: the default
+   <li> flow packs it straight up against the step's prose above and the
+   next step's bullet below. */
+.sl-markdown-content .sl-steps .ft-shot {
+	margin-top: 1.25rem;
+	margin-bottom: 0.5rem;
+}
+
 /* Mermaid diagrams: rendered twice (light/dark themes), swapped with the
    theme like the screenshots. */
 .sl-markdown-content .ft-mermaid {

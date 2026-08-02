@@ -3,21 +3,17 @@ title: Attachments
 description: Presigned two-phase uploads land in S3, then an off-request pipeline runs direct decode, Mistral OCR, and vision description before indexing into knowledge search.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 An attachment is a binary file the agent can read. Upload is two-phase: `initiate` validates the declaration (path, size, SHA-256) and returns a presigned PUT URL; the client writes bytes straight to S3-compatible storage; `complete` re-verifies size and checksum, promotes the object, and commits the records in a transaction. Processing then runs off the request path — plain text is decoded in-process, everything else goes to Mistral Document AI OCR over a presigned URL, embedded images get vision descriptions through OpenRouter, and the text is indexed into knowledge search. A version ends `ready`, `partial` (the index truncated it), `unsupported`, or `failed` (retryable). Uploads are capped at 50 MB by default. For the user-facing view, see [Attachments](/FollowThrough.ai/using/attachments/).
 
-## Intent
-
-Give projects and notes binary context — PDFs, Office documents, images — as searchable text, without file bytes ever passing through the app server.
-
 ## Why it exists
 
 The agent's tools and the search index work on text. Attachments is the subsystem that turns an uploaded file into text: it owns the storage handshake (so large files never proxy through the web process), the extraction pipeline (so a PDF becomes markdown with described images), and the handoff to the index (so the content becomes retrievable).
 
-## Layer map
+## What's in the codebase
 
 - **Models** — `src/lib/models/attachments/index.ts`: `Attachment` (identity: owning project, optional owning note, note-relative `path`, `currentVersionId`), `AttachmentVersion` (one stored object: `objectKey`, media type, byte size, SHA-256 checksum, `extractedText`, and `processingStatus` of `queued | processing | ready | partial | unsupported | failed`), and `AttachmentUpload` (a pre-bytes reservation with a ten-minute `expiresAt`). `src/lib/models/attachments/formats.ts` decides what OCR accepts, by extension rather than media type because browsers report Office and ebook formats inconsistently: images (`jpg`, `png`, `heic`, …) and documents (`pdf`, `docx`, `pptx`, `epub`, `tex`, …).
 - **Services** — `src/lib/server/services/attachments/`: `library.ts` (`AttachmentLibrary` — upload lifecycle and the processing pipeline), `storage.ts` (`AttachmentStorage`, a plain `@aws-sdk/client-s3` client, plus `AttachmentParserRegistry` with its one in-process text parser), `mistral-ocr.ts` (`MistralOcr`), `content.ts` (`AttachmentContent` — OCR result assembly and image description), `image-description.ts` (`ImageDescription` — OpenRouter chat completions), `retention.ts` (`UploadRetention` — the expired-upload sweep).
@@ -72,7 +68,7 @@ Two recovery paths keep the state machine honest. On boot, `recoverInterruptedRu
 
 `UploadRetention` (`retention.ts`) is a scheduled task (every 15 minutes, up to 500 per tick) that reclaims upload reservations expired for more than an hour — the grace lets a slow transfer finish against a reservation that just lapsed. It deletes the staged object before the row, since the row is the only pointer to the object; an already-missing object is the expected case for a client that gave up before uploading and does not block the sweep. It runs in the worker sidecar (`src/worker.ts`), which ticks the `backgroundTasks` the application graph exposes (`application.ts:482`) — the web process builds them and never starts them. Cadence is tunable via `UPLOAD_SWEEP_INTERVAL_MS` and `UPLOAD_SWEEP_MAX_PER_TICK`.
 
-## Invariants callers rely on
+## What never happens
 
 - Nothing is visible before `complete`, and `complete` commits before processing starts — readers never see a half-uploaded or half-persisted attachment.
 - Stored bytes always match the declared size and SHA-256; drift rejects the upload.
@@ -84,7 +80,7 @@ Two recovery paths keep the state machine honest. On boot, `recoverInterruptedRu
 
 Defaults live in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) and are read lazily by the services: `ATTACHMENT_MAX_BYTES` and `ATTACHMENT_PARSE_MAX_BYTES` (both 50 MB), `ATTACHMENT_OCR_MAX_PAGES` (100), `MISTRAL_BASE_URL` / `MISTRAL_OCR_MODEL`, `OPENROUTER_ATTACHMENT_VISION_MODEL`, and the `S3_*` set. `MISTRAL_API_KEY` and `OPENROUTER_API_KEY` are required keys.
 
-## Where it touches other subsystems
+## Downstream and upstream
 
 - [Search](/FollowThrough.ai/subsystems/search/) — extracted text is chunked and embedded by the knowledge-search indexer; truncation is what turns a version `partial`, and removal deletes the index rows.
 - [Agent](/FollowThrough.ai/subsystems/agent/) — the vision model comes from the user's agent preferences; the agent reads attachment text through the `read` paging API.

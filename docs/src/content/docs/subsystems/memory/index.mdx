@@ -3,7 +3,7 @@ title: Memory
 description: How durable facts are stored, scoped to a project or the user profile, proposed by the agent through one reviewable transaction, and filtered before the agent ever sees them.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
@@ -11,15 +11,11 @@ Memory is one table of durable facts, scoped structurally: an entry with a `proj
 
 User-facing behavior: [Memory](/FollowThrough.ai/using/memory/).
 
-## Intent
-
-Let the agent remember durable facts across runs — under the same review, provenance, and revert discipline as every other generated artifact.
-
 ## Why this subsystem exists
 
 An agent that remembers nothing re-asks the same questions every run; an agent that writes memory freely poisons its own context with unreviewed claims. Memory resolves this by treating agent-remembered facts exactly like extracted todos: proposals with provenance, confidence, and a trust policy. The scoping split exists because two kinds of facts have different blast radii — project facts belong to one workspace and are retrieved on demand, while profile facts describe the user and are injected into every run.
 
-## Layer map
+## The pieces
 
 - **Models** — `src/lib/models/memory/index.ts`: `MemoryEntry`, `MemoryChangePayload`, `MemorySuggestion`, `MemoryEntryType`.
 - **Services** — `src/lib/server/services/memory/library.ts`: `MemoryLibrary`, the only business-rule holder (create/update/remove/apply/revert).
@@ -72,7 +68,7 @@ The two scopes reach the agent by different paths, and `shareWithAgents` is enfo
 
 `Memory.list` itself applies the `sharedOnly` filter at the controller (`controller.ts:83`), so private entries are filtered out before the agent's tools see them.
 
-## Invariants callers rely on
+## Guarantees
 
 - A proposal is all-or-nothing: provenance, suggestion, and (when trusted) the applied entry commit together or not at all.
 - Every applied suggestion has an `appliedArtifactId` pointing at a memory entry, and every applied entry traces back to its proposal through `provenanceId`.
@@ -80,7 +76,7 @@ The two scopes reach the agent by different paths, and `shareWithAgents` is enfo
 - Nothing the agent can call mutates an entry without a suggestion existing for the change.
 - A `shareWithAgents: false` entry is unreachable from agent context assembly, agent list tools, and the retrieval index.
 
-## Where it touches other subsystems
+## Where it connects
 
 - [Agent](/FollowThrough.ai/subsystems/agent/) — the proposing tool, the run context that injects profile memory, and the trust policies that gate auto-accept all live there.
 - [Search](/FollowThrough.ai/subsystems/search/) — `EmbeddedMemoryIndexer` writes project memory into the shared retrieval index.

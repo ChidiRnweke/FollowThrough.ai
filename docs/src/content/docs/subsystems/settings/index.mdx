@@ -4,18 +4,14 @@ description: Agent preferences, per-user and per-project tool toggles, and trust
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import Mermaid from '../../../components/mermaid.astro';
-import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../../components/mermaid.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 Settings is not a capability of its own. It is three thin controllers under `src/lib/server/controllers/agent/` — `settings/`, `tool-preferences/`, `trust-policies/` — plus the `/settings` page that renders them. What holds it together is a single resolution rule: a per-user setting that is absent means "use the deployment default", and the deployment default is always an environment value pulled through the secrets backend, never a constant buried in a service. Two writers — the settings page and the agent's own tools — land on the same controllers, so every limit is enforced exactly once.
 
-## Intent
-
-Keep every knob the agent runs under — model choice, execution mode, web-search caps, tool availability, auto-accept policy — overridable per user and per project, with the deployment's environment as the floor.
-
-The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model trust policies plug into is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
+Every knob the agent runs under — model choice, execution mode, web-search caps, tool availability, auto-accept policy — is overridable per user and per project, with the deployment's environment as the floor. The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model trust policies plug into is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
 
 ## Why this subsystem exists
 
@@ -34,7 +30,7 @@ flowchart LR
 `}
 />
 
-## Layer map
+## The pieces involved
 
 - **Models** — `src/lib/models/agent/index.ts`: `AgentPreferences`, `ToolPreference`, `TrustPolicy`, the `webSearchEngines` list (`auto`, `native`, `exa`, `firecrawl`, `parallel`, `perplexity`), `CHAT_WEB_SEARCH_DEFAULTS` (exa, 20 results per search, 40 per run), and `DEFAULT_AGENT_MAX_TURNS` (20).
 - **Services** — `src/lib/server/services/agent/runs/preferences.ts` (`AgentPreferenceCatalog`, the OpenRouter-backed `AgentModels` catalog, and the pure `resolve*` functions), `src/lib/server/services/agent/tools/preferences.ts` (`ToolAccess`), and `src/lib/server/services/agent/runs/tool-trust.ts` (`ToolTrust`).
@@ -102,7 +98,7 @@ Execution mode is also settable per conversation from the composer — it resolv
 - Locked tools are enabled for every reader and rejected on every write, whoever the writer is.
 - The `reference` pipeline never auto-accepts.
 
-## Where it touches other subsystems
+## Where this plugs in
 
 - [Agent](/FollowThrough.ai/subsystems/agent/) — execution mode, turn limits, and tool availability gate every run; the locked-tool rationale lives in the tool catalog documented there.
 - [Skills](/FollowThrough.ai/subsystems/skills/) — `load_skill` is one of the four locked tools; the skill catalog the agent sees is assembled per run under these preferences.

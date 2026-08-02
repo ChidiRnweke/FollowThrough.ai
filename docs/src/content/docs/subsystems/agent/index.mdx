@@ -3,15 +3,11 @@ title: Agent
 description: How the agent works under the hood — a controller-backed tool catalog shared with MCP, and durable, idempotent runs that park on approvals and resume from serialized state.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 The agent subsystem turns a chat prompt into a durable run: a record with a state machine, an append-only event log the client streams by cursor, and a background executor that drives the OpenAI Agents SDK. Every capability the agent has is a thin `AgentToolDefinition` over an existing controller method, defined once in `src/lib/server/agent-tool-factory.ts` and reused by both the in-app agent and the MCP server. Runs are idempotent on submission, survive restarts, park in `awaiting_approval` with a serialized provider state, and resume exactly where they stopped. User-facing behavior lives in [The agent](/FollowThrough.ai/using/the-agent/).
-
-## Intent
-
-Get a developer up to speed on the agent subsystem: the tool catalog, the run lifecycle, and the invariants that make runs safe to retry and resume.
 
 ## Key design principle
 
@@ -71,7 +67,7 @@ flowchart LR
 
 The client reads events over SSE at `GET /api/agent/runs/[runId]/events`: replay from the `Last-Event-ID` (or `after`) cursor via `listRunEvents`, push on event-bus notifications, and a 5-second poll fallback in case a notification is missed. The stream closes once the run is terminal and the cursor has caught up. Cancellation aborts in-process execution immediately via a per-run `AbortController`; a run cancelled while still queued also gets a `cancelled` event so the client's stream explains the silence.
 
-## Invariants callers rely on
+## What callers can rely on
 
 - **Idempotent submission.** `submit` is keyed on `input.requestId`. A repeated submission returns the existing run's receipt, so a client retry after a dropped response cannot double-fire the agent. The insert is `ON CONFLICT DO NOTHING` on `(userId, requestId)` (`repositories/agent/postgres/agent-settings.ts:195-202`); a conflict is re-read and returned as the duplicate's receipt.
 - **Frozen input.** The user's limits and preferences (max turns, web search caps, model overrides, image validation) are resolved and frozen onto `inputSnapshot` at submission (`controller.ts:288-289`). A run retried later replays that snapshot, not the user's current settings.
@@ -92,7 +88,7 @@ Telemetry is opt-in. `scripts/otel-instrumentation.js` is a Node preload: when `
 
 Each turn runs inside `traceAgentTurn` (`src/lib/server/services/telemetry.ts:193`), which opens an `agent.turn` root span with the conversation as session id and the model and run id as metadata. The SDK's AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval (`reasoning.ts:437`), because the resumed turn opens a fresh root and an un-ended span would orphan its children; and expected cancellations record `cancelled` as output with an OK status rather than an error.
 
-## Where it touches other subsystems
+## Touching other parts of the system
 
 - [Todos](/FollowThrough.ai/subsystems/todos/) — `list_todos`, `create_todo(s)`, `update_todo`, and the `extract_promises` proposal call the todos controller; deletion is deliberately excluded. Mutations appear in chat as tool activity and, in approval mode, as approval cards.
 - [Search](/FollowThrough.ai/subsystems/search/) — the `search` tool is the knowledge-search retrieval boundary, scoped by the conversation's project.

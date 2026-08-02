@@ -3,16 +3,12 @@ title: Skills
 description: User-defined, versioned, pinnable instruction sets — stored as notes with a metadata row, advertised to the agent as a budgeted summary catalog, and loaded in full through the locked load_skill tool.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
-import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../../components/mermaid.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 A skill is a reusable instruction set the agent loads on cue. The instruction text lives in an ordinary note with `kind: 'skill'`; everything the agent uses to decide *whether* to load it — name, slug, description, trigger hints, enable flag — lives in a `skills` row keyed by that note's ID. The agent never sees full skill text up front: `AgentContext` packs summaries into a 16,000-character catalog in the system prompt, and the model pulls the full instructions with the locked `load_skill` tool, which records a usage row as a side effect. Versioning comes free from the notes subsystem, pinning is per project, and three built-in skills provision themselves on first listing.
-
-## Intent
-
-Let users teach the agent procedures once — in a form the agent discovers, opts into, and is accounted for — instead of re-prompting the same instructions every conversation.
 
 Skills are the user-facing half of how the agent grounds itself; see [using the agent](/FollowThrough.ai/using/the-agent/) for what loading a skill looks like from the chat side.
 
@@ -20,7 +16,7 @@ Skills are the user-facing half of how the agent grounds itself; see [using the 
 
 Two problems fall out of "let users write their own agent instructions." First, context is finite: a workspace can accumulate hundreds of skills, so the full text of every skill cannot go into every system prompt — discovery has to be cheap, and loading has to be a deliberate act. Second, accountability: once the agent follows user-written instructions, you need to know *which* instructions shaped a given answer. The split design below — summaries always advertised, full text behind a tool call that writes a `skill_usages` row — answers both.
 
-## Layer map
+## Where things live
 
 - **Models** — `src/lib/models/skills/index.ts`: `Skill` (the note plus its metadata), `SkillSummary` (the advertised projection: name, slug, description, trigger hints, `allowImplicitInvocation`, `isEnabled`, pin state), `SkillManifest` (the portable SKILL.md form), `SkillUsage` (one record per agent load).
 - **Services** — `src/lib/server/services/skills/`: `SkillLibrary` (`library.ts`) implements every contract in `contracts.ts`; `SkillManifestCodec` (`manifest.ts`) parses and serializes SKILL.md; `BuiltInSkills` and the `BuiltInSkillLibrary` wrapper (`built-ins.ts`) provision the shipped skills from `built-in-definitions.ts`.
@@ -82,7 +78,7 @@ Upgrades are conservative: a stored built-in is replaced by a newer definition o
 
 Composition lives in `createSkillsCapability` (`src/lib/server/skills-capability-factory.ts`): one repository wired into `SkillLibrary`, `BuiltInSkills`, and the `BuiltInSkillLibrary` wrapper. In `application.ts` the controller's `skillFinder` is the provisioned wrapper — built-ins ensured on every listing — while editing, usage, and versioning go straight to the plain library.
 
-## Invariants
+## What holds
 
 - A skill's body is a note; the `skills` row is metadata only, and dies with the note (cascade on the shared key).
 - The agent never receives full skill text in the system prompt — only summaries, within the 16,000-character budget, with requested and pinned entries immune to truncation.
@@ -90,8 +86,8 @@ Composition lives in `createSkillsCapability` (`src/lib/server/skills-capability
 - Metadata-only edits never create note revisions; content edits always do.
 - `load_skill` is locked on (`LOCKED_TOOL_NAMES`, `agent-tool-factory.ts:79`): the user cannot deselect it, because without it the agent loses its instructions.
 
-## Where it touches other subsystems
+## Related pieces
 
-- [Notes](/FollowThrough.ai/subsystems/notes/) — the skill body, revision history, and sync are the notes subsystem's; skills add metadata, discovery, and usage accounting on top.
+- [Notes](/FollowThrough.ai/subsystems/notes/) — the skill body, revision history, and sync are the notes capability's; skills add metadata, discovery, and usage accounting on top.
 - [Todos](/FollowThrough.ai/subsystems/todos/) — selection distillation shares the anchor and provenance model the todos capability owns.
 - [Agent](/FollowThrough.ai/subsystems/agent/) — the catalog in the system prompt, the `load_skill` tool, and the locked-tool rule all live in the run pipeline documented there.

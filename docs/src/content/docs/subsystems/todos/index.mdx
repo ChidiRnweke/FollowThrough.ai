@@ -3,7 +3,7 @@ title: Todos
 description: How commitments in notes become reviewable, provenance-carrying todos — extraction, scoring, kanban status changes, waiting-on tracking, and the Today view.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
@@ -11,15 +11,11 @@ Todos track work. Most are created by hand, but the subsystem's center of gravit
 
 User-facing behavior: [Todos](/FollowThrough.ai/using/todos/).
 
-## Intent
-
-Turn commitments written down in notes into tracked, reviewable work — without ever losing which sentence produced which todo.
-
 ## Why this subsystem exists
 
 Meeting notes and project write-ups are full of promises — "Sarah will send the draft by Friday". Left in prose they rot. The todos subsystem extracts those promises into structured records with an owner, a due date, and a strength/confidence score, but it refuses to do so silently: extraction always lands as a suggestion first (unless the user has explicitly trusted the pipeline), and every todo remembers its origin sentence so review is a comparison, not a guess.
 
-## Layer map
+## Where the pieces live
 
 - **Models** — `src/lib/models/todos/index.ts`: `Todo`, `TodoView`, `TodoSuggestion`, `PromiseCandidate`, and the status/responsibility/strength unions.
 - **Services** — `src/lib/server/services/todos/`: `TodoCatalog` (`catalog.ts`) holds the business rules; `promise-extraction/` is the LLM extractor; `promise-rules.ts` is the deterministic fallback extractor.
@@ -80,7 +76,7 @@ Other `update` rules (`catalog.ts:65`): a todo cannot move between projects duri
 
 Due-date filtering in the repository is `dueDate <= dueBefore` (`postgres/todos.ts`), ordered due-date ascending then recently updated. `count` runs without assembling views because the agent context bar calls it on every navigation.
 
-## Invariants callers rely on
+## Guarantees callers lean on
 
 - `extractPromises` is all-or-nothing: anchor, provenance, suggestions, and auto-accepted todos commit together or roll back together.
 - A `todo` suggestion's payload is a complete `CreateTodoInput`; accepting it re-runs all create validation, so a suggestion can never create a todo that `create` would reject.
@@ -89,7 +85,7 @@ Due-date filtering in the repository is `dueDate <= dueBefore` (`postgres/todos.
 - Deletion is soft (`deletedAt`); history survives.
 - A suggestion transition is a compare-and-swap on expected status — a double accept or a decision on an already-decided suggestion throws `InvalidTransitionError` rather than silently winning. Revert requires an `appliedArtifactId` and soft-deletes the todo the accept created.
 
-## Where it touches other subsystems
+## Neighboring pieces
 
 - [Notes](/FollowThrough.ai/subsystems/notes/) — selections, `SourceAnchor`, and `Provenance` are notes-capability types; extraction starts from a note revision.
 - [Agent](/FollowThrough.ai/subsystems/agent/) — `extractPromises` is registered as a proposal-kind agent tool (`src/lib/server/agent-tool-factory.ts`), and the trust policies that gate auto-accept are agent-run policy. Suggestions review UI also lives beside the agent.

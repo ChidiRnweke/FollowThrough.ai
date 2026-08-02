@@ -9,9 +9,7 @@ import Mermaid from '../../../components/mermaid.astro';
 
 FollowThrough is a SvelteKit (Svelte 5, TypeScript) monolith, organized capability-first: every layer is sliced by product capability — notes, todos, memory, agent — rather than by technology. It runs on PostgreSQL 17 with pgvector (Drizzle ORM), S3-compatible object storage, and OpenRouter for chat models and embeddings. One Docker image serves both the web app and a worker sidecar; secrets come from Infisical; traces go to Arize Phoenix over OpenTelemetry.
 
-## Intent
-
-This page gets a new engineer up to speed: how the code is layered, what the key modules are, what enforces the rules, and what infrastructure the app runs on. The enforcement-level rules live in `ARCHITECTURE.md` at the repository root; this page is the map.
+The enforcement-level rules live in `ARCHITECTURE.md` at the repository root; this page is the map.
 
 ## Software architecture
 
@@ -46,15 +44,15 @@ Delivery boundaries (SvelteKit routes and remote functions in `src/lib/remote/<c
 
 These layers are used to build the product's capabilities:
 
-1. **Agent** — durable chat runs, approvals, and the tool catalog that wraps every controller. [Agent subsystem](/FollowThrough.ai/subsystems/agent/)
-2. **Todos** — the commitment board: extract promises from notes, triage on Today, track who you're waiting on. [Todos subsystem](/FollowThrough.ai/subsystems/todos/)
-3. **Notes** — the TipTap editor, autosave with ETag sync, publishing, and vault import. [Notes subsystem](/FollowThrough.ai/subsystems/notes/)
-4. **Memory** — project- and profile-scoped durable facts for agents, written only through proposals. [Memory subsystem](/FollowThrough.ai/subsystems/memory/)
-5. **Attachments** — uploads to object storage, Mistral OCR, and indexing into search. [Attachments subsystem](/FollowThrough.ai/subsystems/attachments/)
-6. **Knowledge search** — pgvector semantic indexing, retrieval, and reranking over notes, attachments, and memory. [Search subsystem](/FollowThrough.ai/subsystems/search/)
-7. **Projects** — the organizing unit every other capability hangs off. [Projects subsystem](/FollowThrough.ai/subsystems/projects/)
-8. **Skills** — user-defined, versioned instruction sets the agent loads on cue. [Skills subsystem](/FollowThrough.ai/subsystems/skills/)
-9. **Settings** — per-user and per-project resolution of models, tools, and trust policies. [Settings subsystem](/FollowThrough.ai/subsystems/settings/)
+1. **Agent** — durable chat runs, approvals, and the tool catalog that wraps every controller. [Read more](/FollowThrough.ai/subsystems/agent/)
+2. **Todos** — the commitment board: extract promises from notes, triage on Today, track who you're waiting on. [Read more](/FollowThrough.ai/subsystems/todos/)
+3. **Notes** — the TipTap editor, autosave with ETag sync, publishing, and vault import. [Read more](/FollowThrough.ai/subsystems/notes/)
+4. **Memory** — project- and profile-scoped durable facts for agents, written only through proposals. [Read more](/FollowThrough.ai/subsystems/memory/)
+5. **Attachments** — uploads to object storage, Mistral OCR, and indexing into search. [Read more](/FollowThrough.ai/subsystems/attachments/)
+6. **Knowledge search** — pgvector semantic indexing, retrieval, and reranking over notes, attachments, and memory. [Read more](/FollowThrough.ai/subsystems/search/)
+7. **Projects** — the organizing unit every other capability hangs off. [Read more](/FollowThrough.ai/subsystems/projects/)
+8. **Skills** — user-defined, versioned instruction sets the agent loads on cue. [Read more](/FollowThrough.ai/subsystems/skills/)
+9. **Settings** — per-user and per-project resolution of models, tools, and trust policies. [Read more](/FollowThrough.ai/subsystems/settings/)
 
 ### Enforcement
 

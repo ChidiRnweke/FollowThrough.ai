@@ -3,21 +3,17 @@ title: Projects
 description: Projects are the scoping unit every other capability keys off — a thin catalog over the notes table where the move operation is the only transactional write.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 A project is a named container that scopes the rest of the app: every note, todo, memory entry, artifact, and attachment carries a `ProjectId`. The subsystem itself owns only the project record and the folder/entry tree built on top of the notes table (folders and notes are note rows; skills are filtered out of the tree). Active project names are unique per user, case-insensitively, enforced by a partial unique index that archiving releases. A user with no project gets a `General` project auto-created on first resolution. The one non-trivial write is `move` — it validates the tree (folder parents, no self-parenting, no moving below a descendant) and renumbers two sibling lists inside a transaction. For the user-facing view, see [Projects](/FollowThrough.ai/using/projects/).
 
-## Intent
-
-One organizing unit that every other capability scopes by, with just enough structure — folders and ordering — to keep a project's documents navigable.
-
 ## Why it exists
 
 Todos, memory, attachments, artifacts, and search all need a consistent answer to "which project is this in?" Projects is that answer: it owns the project record, the folder tree, and the archive semantics, so the other capabilities carry a `ProjectId` foreign key and never re-implement scoping. It deliberately owns nothing else — the documents in the tree are notes, the counts on the overview come from the owning controllers.
 
-## Layer map
+## What owns what
 
 - **Models** — `src/lib/models/projects/index.ts`: `Project`, `ProjectView` (a project plus its `ProjectTreeNode` tree of note summaries), the input/output types for each controller operation, and `DEFAULT_PROJECT_NAME = 'General'` (`index.ts:21`). The file is self-contained: it re-declares its own branded `UserId`, `NoteId`, and `DateTime` rather than importing them from another capability's model.
 - **Services** — `src/lib/server/services/projects/`: `catalog.ts` (`ProjectCatalog`, all the tree and validation rules) and `resolution.ts` (`ensureProjectForActor`).
@@ -72,7 +68,7 @@ The project id is the join key for the other capabilities. The project overview 
 
 The project/profile split is a modeling decision, not a UI one: `MemoryEntry.projectId` is optional, and omitting it means profile memory — see [memory](/FollowThrough.ai/subsystems/memory/).
 
-## Invariants callers rely on
+## What holds true
 
 - Every consumer can scope by `ProjectId` and resolve a default with `ensureProjectForActor` — an actor always has at least one active project.
 - Active project names are unique per user, case-insensitively, and the database (not the service) is the enforcer.
@@ -80,7 +76,7 @@ The project/profile split is a modeling decision, not a UI one: `MemoryEntry.pro
 - A move that fails validation fails before any position write, and one that fails mid-write rolls back inside the transaction runner, so sibling positions are never left half-renumbered.
 - Validation errors carry the server's message to the user — the actions store keeps `lastError` from the HTTP error body, which is how "name already in use" reaches the dialog.
 
-## Where it touches other subsystems
+## What scopes by this
 
 - [Notes](/FollowThrough.ai/subsystems/notes/) — the folder/entry tree is built on the notes table; folders are note rows of kind `folder`.
 - [Todos](/FollowThrough.ai/subsystems/todos/) — todos are project-scoped and counted on the overview.

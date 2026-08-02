@@ -4,53 +4,14 @@ description: An agent-native note editor you never have to brief — it turns no
 template: splash
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
 import HomeHero from '../../components/home-hero.astro';
 import HomeSection from '../../components/home-section.astro';
 import ResourceRow from '../../components/resource-row.astro';
 import Screenshot from '../../components/screenshot.astro';
-import Mermaid from '../../components/mermaid.astro';
 
 <HomeHero />
 
 <Screenshot id="today-screen" alt="The Today page: overdue, due today, and waiting-on groups with pinned notes below." />
-
-## Why FollowThrough
-
-The usual way of working with AI is a tax: your notes live in one app, your tasks in another, the project context lives in your head — and every new AI session starts with re-explaining all of it. FollowThrough collapses that into one workspace. The editor is where you think; the agent lives inside it and already carries the project — the decisions saved to memory, the todos, the people you're waiting on.
-
-And the loop closes. The agent doesn't just talk about the work, it does the work — extracting commitments from your notes, keeping the board honest, producing artifacts — always proposing, never committing anything important silently.
-
-<Mermaid
-	source={`
-flowchart LR
-	notes["Think in notes"] --> extract["Agent extracts commitments & context"]
-	extract --> today["You triage on Today"]
-	today --> act["Agent acts — with your approval"]
-	act --> deliver["Work becomes artifacts & deliverables"]
-	deliver --> notes
-`}
-/>
-
-### The five moves
-
-<CardGrid>
-	<Card title="Note → Card" icon="approve-check">
-		Select a commitment in a note; it becomes a reviewable todo on the board, linked back to the exact passage it came from.
-	</Card>
-	<Card title="Selection → Diagram" icon="random">
-		Turn a paragraph into a Mermaid diagram, revise it with AI, promote it to a project artifact.
-	</Card>
-	<Card title="Selection → Image" icon="document">
-		Find and insert a relevant image for a passage without leaving the editor.
-	</Card>
-	<Card title="Project context → Draft" icon="pencil">
-		The agent drafts from the project's notes, memory, and board — no re-briefing, no copy-pasting context.
-	</Card>
-	<Card title="Draft → Deliverable" icon="rocket">
-		Export a draft as a styled PDF or DOCX artifact from a template, ready to leave the app.
-	</Card>
-</CardGrid>
 
 <div className="ft-home-groups">
 

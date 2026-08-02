@@ -3,21 +3,17 @@ title: Search
 description: Notes, attachments, diagrams, and memory are chunked into one pgvector table; retrieval is a wide cosine-distance scan reranked down to the final few.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 Search has two halves that share nothing but the OpenRouter key. **Knowledge search** chunks the user's own content — notes, diagrams, memory entries, attachment text — at 2,400 tokens with a 480-token overlap, embeds each chunk as `openai/text-embedding-3-large`, and stores it in the pgvector `search_chunks` table (`halfvec(3072)`). Embedding is deferred to a background worker in production; content-hash reuse means an edit only re-embeds the chunks that changed. Retrieval embeds the query, pulls `max(40, limit × 5)` candidates by cosine distance, and reranks down to `limit` with `cohere/rerank-4-fast` — 8 results by default, each excerpted to 700 characters. **Web search** never touches the index: an `openrouter:web_search` tool is appended to every agent chat request. For the user-facing view, see [Search](/FollowThrough.ai/using/search/).
 
-## Intent
-
-Give the agent and the UI one semantic index over everything the user has written, cheap to maintain on every save and precise enough to answer from.
-
 ## Why it exists
 
 Every save of a note, diagram, memory entry, or processed attachment changes what the agent should know. Re-embedding whole documents on every keystroke would be slow and expensive, and a pure vector scan returns plausible-but-wrong chunks often enough to matter. The subsystem exists to make indexing incremental (content-hash reuse, deferred embedding) and retrieval precise (wide recall, reranked precision) without a second provider credential.
 
-## Layer map
+## The moving parts
 
 - **Models** — `src/lib/models/knowledge-search/index.ts`: `SearchDocument` (one chunk of searchable text, belonging to exactly one source) and `SearchMatch` (document plus score).
 - **Services** — `src/lib/server/services/knowledge-search/`: `indexing.ts` (`TokenAwareChunker`, the four source indexers, and the shared `applyIndex` algorithm), `embeddings.ts` (`Embeddings`), `semantic.ts` (`EmbeddedKnowledgeSearcher`, `RerankingKnowledgeSearcher`), `ranking.ts` (`SearchRanking`), `index-maintenance.ts` (`KnowledgeIndexMaintenance`, the backfill worker).
@@ -78,7 +74,7 @@ flowchart LR
 
 Web search never touches the index. `withWebResearch` (`repositories/agent/web-research-transport.ts`) wraps the provider's fetch and appends an `openrouter:web_search` tool to every `/chat/completions` request; the model decides whether to call it. Defaults are engine `exa`, 20 results per search, 40 total (`CHAT_WEB_SEARCH_DEFAULTS`, `src/lib/models/agent/index.ts:172`), overridable per deployment via `OPENROUTER_WEB_SEARCH_ENGINE` / `_MAX_RESULTS` / `_MAX_TOTAL_RESULTS` and per user in agent preferences. Exa is the default because it returns page content rather than snippets. Unrecognised engine names and non-positive caps are ignored rather than disabling search.
 
-## Invariants callers rely on
+## Invariants
 
 - Every chunk has exactly one source, enforced by the `search_chunks_single_source` check constraint.
 - A stored vector is only reused when its `embeddingModel` matches the current one — changing the embedding model strands existing chunks until they are re-embedded, which is why the model is pinned to `openai/text-embedding-3-large` (3072 dimensions).
@@ -86,7 +82,7 @@ Web search never touches the index. `withWebResearch` (`repositories/agent/web-r
 - Removal is immediate; only embedding is deferred.
 - If embedding or reranking fails, the search fails — callers never get silently unranked or unembedded results.
 
-## Where it touches other subsystems
+## Who calls in
 
 - [Attachments](/FollowThrough.ai/subsystems/attachments/) — the attachment indexer hands extracted text to `applyIndex`; truncation there is what makes an attachment `partial`.
 - [Memory](/FollowThrough.ai/subsystems/memory/) — project-scoped, agent-shared memory entries are indexed; profile memory is injected into agent context instead.

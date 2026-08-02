@@ -10,10 +10,6 @@ import Mermaid from '../../../components/mermaid.astro';
 
 The hosted instance is in closed beta; the repository is MIT-licensed, so the way in today is to run it yourself. Everything ships as **one container image** (`Dockerfile`, node:22-alpine, multi-stage): the web process serves `build/` on `:3000`, and the worker sidecar runs `build-worker/worker.js` from the same image. The app needs PostgreSQL 17 with pgvector, an S3-compatible object store, an OpenRouter key, and a Mistral key. Configuration comes from an Infisical project by default, or from plain environment variables with `CONFIG_SOURCE=env`. The production path is three commands: create the external networks, run the one-shot `migrate` service under the `setup` profile, then bring up `app` and `worker`.
 
-## Intent
-
-Give an operator everything needed to run the full stack — web, worker, database, object storage, telemetry — from the artifacts in the repository, and mark clearly which of them is the author's own deployment rather than a prescription.
-
 The architecture this guide assembles — the layered capability design, the agent run pipeline, the worker's role — is documented under [architecture](/FollowThrough.ai/explanation/architecture/).
 
 Do whatever you want with the code: self-host it, fork it, strip it for parts. Three asks if you do — tell [the author](https://github.com/ChidiRnweke) you're running it (what you use it for shapes what gets built next), star [the repository](https://github.com/ChidiRnweke/FollowThrough.ai), and keep the copyright notice in the LICENSE file. That last one is the license talking, not a favour.

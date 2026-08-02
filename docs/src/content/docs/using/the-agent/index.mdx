@@ -4,15 +4,11 @@ description: The chat that can do everything you can — because every app capab
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import Screenshot from '../../../components/screenshot.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 The agent is the chat built into FollowThrough, and it runs on one rule: **everything you can do in the app, the agent can do.** Every app capability is exposed to it as a tool — reading notes, creating todos, renaming projects, exporting documents — and every tool respects the trust model: reads are free, changes wait for your approval unless you switch to auto-accept. You never brief it; it reads your workspace before it answers.
-
-## Intent
-
-This page gets you up to speed on what the agent can do, where you talk to it, and how approval and execution modes keep you in charge.
 
 **Everything you can do in the app, the agent can do.**
 
@@ -65,9 +61,9 @@ A run is a sequence of tool-calling turns, capped at **20 turns** by default (ad
 	response cannot double-fire the agent.
 </Aside>
 
-## Where to go next
+## Keep reading
 
-- [Agent subsystem](/FollowThrough.ai/subsystems/agent/) — how runs, approval checkpoints, and the tool registry are implemented.
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/) — how runs, approval checkpoints, and the tool registry are implemented.
 - [Todos](/FollowThrough.ai/using/todos/) — the board the agent extracts commitments onto.
 - [Memory](/FollowThrough.ai/using/memory/) — the most protected write path the agent has.
 - [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind execution modes.

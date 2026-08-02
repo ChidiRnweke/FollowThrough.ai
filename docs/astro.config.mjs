@@ -72,7 +72,7 @@ export default defineConfig({
 							items: [{ autogenerate: { directory: 'guides' } }]
 						},
 						{
-							label: 'Subsystems',
+							label: 'Feature guides',
 							collapsed: true,
 							items: [{ autogenerate: { directory: 'subsystems' } }]
 						},

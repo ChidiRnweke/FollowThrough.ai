@@ -9,10 +9,6 @@ import { Aside } from '@astrojs/starlight/components';
 
 The [API reference](/FollowThrough.ai/reference/) is TypeDoc-generated from the controller, service-contract, and factory sources, and the build runs with `excludeNotDocumented` — an undocumented public symbol does not warn, it vanishes. Write docstrings that say *why* a method exists and which invariants callers rely on, in as few words as that takes.
 
-## Intent
-
-This page is the docstring standard for everything the reference renders, so the generated docs stay complete and stay useful.
-
 ## Why the standard is enforced by deletion
 
 `docs/astro.config.mjs` points starlight-typedoc at exactly the public surface (`astro.config.mjs:86-91`):

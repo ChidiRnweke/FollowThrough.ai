@@ -3,16 +3,12 @@ title: Memory
 description: How project and profile memory work, and why every agent write to them waits for your approval.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
-import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../../components/mermaid.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 Memory is the short list of durable facts the agent reads before it answers, so you stop re-briefing it. Project memory holds one project's facts, decisions, and constraints; profile memory holds who you are and follows you across every project. You edit memory directly. The agent never can — it calls `propose_memory_change`, and the proposal sits in a review list until you accept or dismiss it. A per-pipeline trust policy in Settings can auto-accept proposals, but review-first is the default.
-
-## Intent
-
-Get up to speed on the two memory scopes, what the agent can see, and how proposed changes reach memory.
 
 ## Two scopes
 
@@ -60,9 +56,9 @@ You can stop reviewing one pipeline at a time. In **Settings > Trust policies**,
 - A row's menu offers **Edit**, which rewrites the text inline, and **Delete**, which asks for confirmation first. Deleting is permanent: the agent will no longer remember it.
 - New entries are shared with agents by default; flip the checkbox on the row to keep one private.
 
-## Where to go next
+## Next
 
-- [The memory subsystem](/FollowThrough.ai/subsystems/memory/) — how proposals are stored, applied, and traced back to the run that made them.
+- [Memory, in depth](/FollowThrough.ai/subsystems/memory/) — how proposals are stored, applied, and traced back to the run that made them.
 - [The agent](/FollowThrough.ai/using/the-agent/) — the chat that proposes these changes.
 - [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind every proposal.
 - [Projects](/FollowThrough.ai/using/projects/) — where project memory lives.

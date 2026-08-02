@@ -3,15 +3,11 @@ title: Search
 description: Two kinds of search — semantic search over everything you've saved, and web search the agent runs on your behalf with settings you control.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 FollowThrough has two kinds of search. **Knowledge search** is semantic search over your own material — notes, attachments, diagrams, and the memory you've shared with agents — and it's what powers both the agent's `search` tool and the inline "find related" suggestions in the editor. **Web search** is a tool the agent calls during a run when it needs current or external information; you choose the engine and the result caps. Neither one is a screen you open — there is no search box in the app. Search is a capability the agent (and the editor) call, not a destination.
-
-## Intent
-
-Get up to speed on what gets searched, how retrieval actually works, and which knobs are yours to turn.
 
 ## Knowledge search: your own material
 
@@ -56,8 +52,8 @@ This is the configurable half. In **Settings → Agents** you can set three thin
 
 You can also change these in conversation: the agent has tools for reading and updating its own settings, so asking "use fewer web results" works. Clearing a setting returns it to the deployment default rather than to zero.
 
-## Where to go next
+## Related reading
 
-- [Search subsystem](/FollowThrough.ai/subsystems/search/) — the indexing and retrieval internals behind this page.
+- [Search, in depth](/FollowThrough.ai/subsystems/search/) — the indexing and retrieval internals behind this page.
 - [Attachments](/FollowThrough.ai/using/attachments/) — what gets extracted from uploaded files before it's indexed.
 - [The agent](/FollowThrough.ai/using/the-agent/) — how runs, tools, and approvals fit together.

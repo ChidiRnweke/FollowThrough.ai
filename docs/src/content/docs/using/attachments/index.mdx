@@ -3,15 +3,11 @@ title: Attachments
 description: Upload a file and FollowThrough reads it for you — OCR'd to markdown, indexed for search, and readable by the agent.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 Attach a file (up to 50 MB) to a project or a note and it uploads straight to object storage, then gets read in the background: plain text is decoded directly, and PDFs, Office documents, ebooks, and images go through Mistral Document AI OCR. The extracted markdown is indexed into knowledge search, so the agent can answer from your files — and images are described by a vision model so it can "see" them too. Every attachment carries a status badge from `queued` to `ready`; failures can be retried.
-
-## Intent
-
-Get up to speed on what happens to a file after you upload it and how the agent uses the result.
 
 ## The processing pipeline
 
@@ -58,8 +54,8 @@ The Attachments page lives under a project (`Project > Attachments`) and lists e
 
 A few things happen under the hood so a bad upload never surfaces: the server checks the stored bytes against the size and checksum declared when the upload started, and rejects the upload on a mismatch rather than keeping a corrupt file. An upload you start but never finish expires after ten minutes, and the reservation is swept up automatically later.
 
-## Where to go next
+## Where this fits
 
-- [The attachments subsystem](/FollowThrough.ai/subsystems/attachments/) — the storage and OCR pipeline underneath.
+- [Attachments, in depth](/FollowThrough.ai/subsystems/attachments/) — the storage and OCR pipeline underneath.
 - [Notes](/FollowThrough.ai/using/notes/) — where pasted and dropped images land.
 - [Search](/FollowThrough.ai/using/search/) — where extracted attachment text becomes findable.

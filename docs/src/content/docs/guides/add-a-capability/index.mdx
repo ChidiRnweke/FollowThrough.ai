@@ -4,17 +4,13 @@ description: The layer-by-layer recipe for adding a new capability, from model t
 ---
 
 import { Steps, FileTree, Aside } from '@astrojs/starlight/components';
-import Mermaid from '../../../components/mermaid.astro';
+import Mermaid from '../../../../components/mermaid.astro';
 
 ## TL;DR
 
 A new capability touches the same six places every time: a model module, a repository contract plus its Postgres implementation, a service, a controller, one capability factory, and a delivery boundary. Build them in that order, wire the factory into `src/lib/server/application.ts` in dependency order, document every public controller method, and prove the graph still holds with `pnpm test:architecture`.
 
-## Intent
-
-This guide is the recipe for adding a capability that passes the architecture checks on the first run. The layering rules themselves are explained in [Architecture](/FollowThrough.ai/explanation/architecture/); here we only care about doing it.
-
-The running example is `skills` — small, real, and easy to read end-to-end.
+The layering rules themselves are explained in [Architecture](/FollowThrough.ai/explanation/architecture/); the running example here is `skills` — small, real, and easy to read end-to-end.
 
 ## Where each piece lands
 

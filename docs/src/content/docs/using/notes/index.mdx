@@ -3,16 +3,12 @@ title: Notes
 description: The Markdown editor at the center of FollowThrough — autosaving offline-first, with AI actions on every selection and diagrams that render inline.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
-import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../../components/mermaid.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 A note is a rich-text Markdown document inside a project, edited in a vendored TipTap editor. It autosaves two seconds after you stop typing, saves to your device first, and syncs when it can — the status row always says which state you are in. Select any text and the bubble menu offers AI actions: ask about it, extract promises, find related notes, propose references, or generate a diagram. Mermaid renders inline and converts to draw.io; notes split side by side, publish as versioned snapshots, and import from a Markdown vault.
-
-## Intent
-
-This page gets you up to speed on the editor, the sync model, the AI selection actions, and how notes move in and out of the app.
 
 <Screenshot id="note-view" alt="A note open in the editor, with backlink chips and the save status in the utility row" />
 
@@ -90,9 +86,9 @@ From a project page's menu, **Import an existing project…** takes a `.zip` of 
 
 The archive can be up to 25 MB and 2,000 files, each file up to 1 MB and at most 8 folders deep; `.obsidian/`, `.git/`, `.trash/`, `__MACOSX/`, and other dotfile paths are ignored. An import is not all-or-nothing: readable notes import even when sibling files fail, and the report lists every failed and skipped file with its reason. Two notes with the same name in one folder never merge — the later one gets a ` (2)` suffix.
 
-## Where to go next
+## See also
 
-- [Notes subsystem](/FollowThrough.ai/subsystems/notes/) — storage, revisions, and the sync protocol underneath.
+- [Notes, in depth](/FollowThrough.ai/subsystems/notes/) — storage, revisions, and the sync protocol underneath.
 - [Attachments](/FollowThrough.ai/using/attachments/) — files and images attached to notes.
 - [Search](/FollowThrough.ai/using/search/) — how notes become findable, by you and by the agent.
 - [The agent](/FollowThrough.ai/using/the-agent/) — editing notes through chat with approval cards.

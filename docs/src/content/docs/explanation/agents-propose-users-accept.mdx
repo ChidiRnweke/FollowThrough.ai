@@ -10,9 +10,7 @@ import Screenshot from '../../../components/screenshot.astro';
 
 The agent reads your project freely, proposes every change before applying it, and acts on its own only where you have explicitly set a trust policy. Nothing important is committed silently — and everything it does can be traced back to the exact selection or run it came from.
 
-## Intent
-
-This page explains the product's second design principle — **agents propose, the user accepts** — and the three-tier trust model that enforces it. (The first principle is on [the agent page](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do.)
+This is the product's second design principle — **agents propose, the user accepts** — enforced by a three-tier trust model. (The first principle is on [the agent page](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do.)
 
 <Mermaid
 	source={`
@@ -49,9 +47,9 @@ Every suggestion and every accepted change carries provenance: which selection i
 
 The tiers are ordered by reversibility. Reading is free because it changes nothing. Proposing is the default because a wrong suggestion costs a click to reject. Auto-accepting is the exception, reserved for changes you have explicitly decided are safe. At no point does the agent become the source of truth — the design keeps you there.
 
-## Where to go next
+## Related reading
 
 - [The agent](/FollowThrough.ai/using/the-agent/) — the user-facing tour of chat surfaces, execution modes, and approval cards.
 - [Memory](/FollowThrough.ai/using/memory/) — the most protected write path in the product.
-- [Agent subsystem](/FollowThrough.ai/subsystems/agent/) — how approval checkpoints and trust policies are implemented.
-- [Memory subsystem](/FollowThrough.ai/subsystems/memory/) — the proposal transaction behind `propose_memory_change`.
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/) — how approval checkpoints and trust policies are implemented.
+- [Memory, in depth](/FollowThrough.ai/subsystems/memory/) — the proposal transaction behind `propose_memory_change`.

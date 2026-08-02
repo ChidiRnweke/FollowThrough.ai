@@ -3,16 +3,12 @@ title: Projects
 description: The project is the organizing unit of FollowThrough — notes, todos, memory, attachments, skills, and outputs all live under one.
 ---
 
-import Mermaid from '../../../components/mermaid.astro';
-import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../../components/mermaid.astro';
+import Screenshot from '../../../../components/screenshot.astro';
 
 ## TL;DR
 
 A project is the unit everything hangs off. Notes and folders form its document tree, and around them sit the spaces the agent reads from and produces into: memory, attachments, todos, and artifacts. Skills — reusable instruction sets for the agent — are stored in the project too. Every one of these is scoped to a project at the database level, so opening a project gives the agent a complete, bounded picture of one body of work. If you never create one, FollowThrough provisions a default project called **General** and puts everything there.
-
-## Intent
-
-Get up to speed on how projects organize your work, what the overview shows, and what creating, moving, and archiving actually do.
 
 ## What lives under a project
 
@@ -73,9 +69,9 @@ Names are required and trimmed, and two active projects can't share a name — c
 
 Archiving sets a timestamp and takes the project out of every default view: it leaves the sidebar, the workspace, and the name-uniqueness check, and its documents stop appearing in search. There is no delete, and no archived-projects list in the UI to restore from — treat archive as final. The same applies to documents inside a project: archive, not delete.
 
-## Where to go next
+## More on projects
 
-- [Projects subsystem](/FollowThrough.ai/subsystems/projects/) — the tree, move validation, and repository rules behind this page.
+- [Projects, in depth](/FollowThrough.ai/subsystems/projects/) — the tree, move validation, and repository rules behind this page.
 - [Memory](/FollowThrough.ai/using/memory/) — how the agent proposes and keeps facts at both levels.
 - [Todos](/FollowThrough.ai/using/todos/) — how commitments get extracted and triaged.
 - [Notes](/FollowThrough.ai/using/notes/) — the document surface everything else hangs off.
