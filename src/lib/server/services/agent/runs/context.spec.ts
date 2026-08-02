@@ -206,6 +206,23 @@ describe('Agent grounding invariants', () => {
 		]);
 	});
 
+	it('passes long context notes through untruncated', async () => {
+		const { builder, notes } = await setup();
+		const longText = 'x'.repeat(20_000);
+		notes.notes = [
+			...notes.notes,
+			noteBuilder({ id: testNoteId(6), title: 'Long note', plainText: longText })
+		];
+		const context = await builder.build(
+			testActor(),
+			{ noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.contextNotes).toEqual([
+			{ noteId: testNoteId(6), title: 'Long note', content: longText }
+		]);
+	});
+
 	it('skips context notes that cannot be loaded', async () => {
 		const { builder } = await setup();
 		const context = await builder.build(

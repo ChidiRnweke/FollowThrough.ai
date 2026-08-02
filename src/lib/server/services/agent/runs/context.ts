@@ -32,8 +32,6 @@ interface MemoryLister {
 	): Promise<readonly MemoryEntry[]>;
 }
 
-const CONTEXT_NOTE_CONTENT_LIMIT = 4000;
-
 /**
  * Every enabled skill's summary is advertised; the model is the classifier that
  * decides which instructions to load. This budget is a safety valve for
@@ -90,7 +88,7 @@ export class AgentContext implements AgentContextBuilder {
 			contextNotes: contextNotes.map((note) => ({
 				noteId: note.id,
 				title: note.title,
-				content: note.plainText.slice(0, CONTEXT_NOTE_CONTENT_LIMIT)
+				content: note.plainText
 			})),
 			skills: this.buildCatalog(availableSkills, (skill) =>
 				this.isRequested(skill, requested, requestedNoteIds)
