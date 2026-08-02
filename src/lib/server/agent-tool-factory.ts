@@ -55,9 +55,14 @@ import {
 /**
  * Stable, frequently used tools the agent can call without first discovering
  * them. Everything else stays in the on-demand tool-search catalog.
+ *
+ * `search_note` is first-class not for frequency but because injected prompt
+ * text names it: the oversized-context-note pointer tells the model to call it,
+ * and a tool our own prompts reference must work without a discovery round-trip.
  */
 export const FIRST_CLASS_TOOL_NAMES = [
 	'search',
+	'search_note',
 	'list_user_memory',
 	'list_project_memory',
 	'get_workspace_context',
@@ -563,6 +568,20 @@ export class AgentTools {
 						query: input.query,
 						...(conversationId ? { conversationId } : {}),
 						...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
+						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
+						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
+					})
+			),
+			define(
+				'search_note',
+				'Search within a single note — semantically ranked chunks from that note only, its diagrams included. Use it when an attached note was too large to include in the conversation, or when a question is clearly about one specific note.',
+				'read',
+				temporal({ noteId: id, query: z.string().min(1) }),
+				(input) =>
+					factory.retrieval().search(actor, {
+						query: input.query,
+						noteId: input.noteId as NoteId,
+						...(conversationId ? { conversationId } : {}),
 						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
 						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
 					})

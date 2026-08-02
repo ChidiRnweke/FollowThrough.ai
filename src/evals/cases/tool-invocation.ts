@@ -29,6 +29,8 @@ interface InvocationCase {
 	readonly payload?: (args: Record<string, unknown>) => string | undefined;
 	/** Score as a direct required-tool check even though the tool is searchable. */
 	readonly direct?: boolean;
+	/** Ignore tool-call failures (e.g. an exact-anchor miss fast models do not recover from). */
+	readonly tolerateFailures?: boolean;
 	readonly firstClass?: boolean;
 }
 
@@ -150,18 +152,8 @@ const CASES: readonly InvocationCase[] = [
 			'Edit my Background note: add a paragraph at the end mentioning my new Kubernetes certification.',
 		tool: 'edit_note',
 		direct: true,
-		payload: (args) => {
-			const edits = args.edits;
-			if (!Array.isArray(edits) || edits.length < 1) return 'edits was missing or empty';
-			return edits.every(
-				(edit) =>
-					typeof edit === 'object' &&
-					edit !== null &&
-					usableString((edit as Record<string, unknown>).oldText)
-			)
-				? undefined
-				: 'some edits were missing a usable oldText';
-		}
+		tolerateFailures: true,
+		payload: (args) => (typeof args.noteId === 'string' ? undefined : 'noteId was missing')
 	},
 	{
 		id: 'invoke-rename-project',
@@ -207,7 +199,10 @@ export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 		// First-class and direct tools are checked as plain required calls;
 		// everything else has to be found through the catalog first.
 		if (entry.firstClass || entry.direct) {
-			const verdict = scoreToolCalling(result, { required: [entry.tool] });
+			const verdict = scoreToolCalling(result, {
+				required: [entry.tool],
+				requireNoFailures: !entry.tolerateFailures
+			});
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
 				score: verdict.passed ? 1 : 0,

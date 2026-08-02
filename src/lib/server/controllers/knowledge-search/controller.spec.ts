@@ -4,6 +4,7 @@ import type { ConversationId, Message } from '$lib/models/agent';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
 import type { Condenser, KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { SearchFilter } from '$lib/server/repositories/knowledge-search';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import { Retrieval } from './controller';
 
@@ -31,9 +32,18 @@ const searchMatch = (content: string): SearchMatch => ({
 
 class RecordingSearcher implements KnowledgeSearcher {
 	query = '';
+	filter: SearchFilter | undefined;
 	constructor(private readonly results: readonly SearchMatch[] = []) {}
-	async search(_actor: ActorContext, query: string): Promise<readonly SearchMatch[]> {
+	async search(
+		_actor: ActorContext,
+		query: string,
+		_limit?: number,
+		_projectId?: ProjectId,
+		_signal?: AbortSignal,
+		filter?: SearchFilter
+	): Promise<readonly SearchMatch[]> {
 		this.query = query;
+		this.filter = filter;
 		return this.results;
 	}
 }
@@ -81,5 +91,15 @@ describe('Retrieval', () => {
 			conversations: journalOf([])
 		}).search(actor, { query: 'q' });
 		expect(results[0]!.content.length).toBe(2000);
+	});
+
+	it('passes a note scope through to the searcher', async () => {
+		const searcher = new RecordingSearcher();
+		await new Retrieval({
+			knowledgeSearcher: searcher,
+			condenser,
+			conversations: journalOf([])
+		}).search(actor, { query: 'q', noteId: 'note-9' as never });
+		expect(searcher.filter).toEqual({ noteId: 'note-9' });
 	});
 });

@@ -71,12 +71,13 @@ describe('Agent tool coverage invariants', () => {
 		const coveredActions = classifications.filter(
 			(classification) => classification.kind !== 'excluded'
 		).length;
-		// Five controller actions are deliberately exposed more than once:
+		// Six controller actions are deliberately exposed more than once:
 		// memory.list as list_project_memory and list_user_memory, notes.save as
 		// save_note and edit_note, the skill body write as save_skill and
-		// edit_skill, and todos.create as create_todo (single) and create_todos
-		// (batch).
-		const scopedAliases = 5;
+		// edit_skill, todos.create as create_todo (single) and create_todos
+		// (batch), and retrieval.search as search (knowledge base) and
+		// search_note (single note).
+		const scopedAliases = 6;
 		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
 	});
 
@@ -101,6 +102,7 @@ describe('Agent tool coverage invariants', () => {
 		).agentTools();
 		expect(selected.map((tool) => tool.name)).toEqual([
 			'search',
+			'search_note',
 			'list_user_memory',
 			'list_project_memory',
 			'get_workspace_context',
@@ -130,6 +132,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(
 			[
 				'search',
+				'search_note',
 				'list_user_memory',
 				'list_project_memory',
 				'get_workspace_context',
@@ -139,6 +142,28 @@ describe('Agent tool coverage invariants', () => {
 				'propose_memory_change'
 			].filter((name) => names.has(name))
 		).toEqual([]);
+	});
+
+	it('search_note scopes retrieval to the given note', async () => {
+		const noteId = crypto.randomUUID();
+		let received: unknown;
+		const factory = {
+			retrieval: () => ({
+				search: async (_actor: unknown, input: unknown) => {
+					received = input;
+					return [];
+				}
+			})
+		} as unknown as ControllerFactory;
+		const searchNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Find in this note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'search_note');
+		await searchNote?.execute({ noteId, query: 'messaging' });
+		expect(received).toEqual({ query: 'messaging', noteId });
 	});
 
 	it('returns exact long-tail schemas from tool search', async () => {

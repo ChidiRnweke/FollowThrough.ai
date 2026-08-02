@@ -33,6 +33,15 @@ export interface CreatedRange {
 	readonly createdBefore?: string;
 }
 
+/**
+ * Retrieval scoping beyond the project: a created-at window and, for
+ * note-scoped search (the agent's search_note tool), a single note. Diagram
+ * chunks carry their note's id, so a note filter includes them.
+ */
+export interface SearchFilter extends CreatedRange {
+	readonly noteId?: NoteId;
+}
+
 export interface RetrievalIndexRepository {
 	listForAttachment(
 		actor: ActorContext,
@@ -77,7 +86,7 @@ export interface RetrievalIndexRepository {
 		embedding: readonly number[],
 		limit: number,
 		projectId?: ProjectId,
-		created?: CreatedRange
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]>;
 	deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void>;
 	deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void>;

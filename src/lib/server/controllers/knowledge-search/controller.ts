@@ -12,6 +12,8 @@ export interface SearchKnowledgeInput {
 	readonly limit?: number;
 	/** When set, restricts results to notes and facts in this project. */
 	readonly projectId?: ProjectId;
+	/** When set, restricts results to chunks of this note (diagrams included). */
+	readonly noteId?: NoteId;
 	readonly createdAfter?: DateTime;
 	readonly createdBefore?: DateTime;
 }
@@ -64,7 +66,11 @@ export class Retrieval implements RetrievalController {
 			limit,
 			input.projectId,
 			undefined,
-			{ createdAfter: input.createdAfter, createdBefore: input.createdBefore }
+			{
+				createdAfter: input.createdAfter,
+				createdBefore: input.createdBefore,
+				noteId: input.noteId
+			}
 		);
 		return matches.map((match) => ({
 			noteId: match.document.noteId,

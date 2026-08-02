@@ -5,7 +5,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { SearchMatch } from '$lib/models/knowledge-search';
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
-import type { CreatedRange } from '$lib/server/repositories/knowledge-search';
+import type { SearchFilter } from '$lib/server/repositories/knowledge-search';
 interface EmbeddingClient {
 	readonly model: string;
 	embed(
@@ -20,7 +20,7 @@ export interface KnowledgeSearcher {
 		limit?: number,
 		projectId?: ProjectId,
 		signal?: AbortSignal,
-		created?: CreatedRange
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]>;
 }
 export interface Reranker {
@@ -61,14 +61,14 @@ export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {
 		limit = 10,
 		projectId?: ProjectId,
 		signal?: AbortSignal,
-		created?: CreatedRange
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
 		const batch = await this.embeddingClient.embed([query], signal);
 		const embedding = batch.vectors[0];
 		if (!embedding || batch.vectors.length !== 1)
 			throw new InvalidGeneratedContentError('Query embedding returned an invalid result');
-		return this.repository.searchByEmbedding(actor, embedding, limit, projectId, created);
+		return this.repository.searchByEmbedding(actor, embedding, limit, projectId, filter);
 	}
 }
 
@@ -90,11 +90,11 @@ export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
 		limit = 10,
 		projectId?: ProjectId,
 		signal?: AbortSignal,
-		created?: CreatedRange
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]> {
 		if (!query.trim()) return [];
 		const wideLimit = Math.max(this.minCandidates, limit * this.candidateMultiplier);
-		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal, created);
+		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal, filter);
 		if (candidates.length <= limit) return candidates;
 		return this.reranker.rerank(query, candidates, limit, signal);
 	}

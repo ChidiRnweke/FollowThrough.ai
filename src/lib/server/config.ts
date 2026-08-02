@@ -121,6 +121,9 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS: '40',
 	RETRIEVAL_CHUNK_TOKENS: '2400',
 	RETRIEVAL_CHUNK_OVERLAP_TOKENS: '480',
+	/* Attached context notes at or under this many tokens ride inside the user
+	   message; larger ones are replaced by a pointer to the search_note tool. */
+	CONTEXT_NOTE_TOKEN_LIMIT: '4000',
 	ATTACHMENT_MAX_BYTES: '52428800',
 	ATTACHMENT_PARSE_MAX_BYTES: '52428800',
 	S3_ENDPOINT: 'http://localhost:9000',

@@ -202,13 +202,18 @@ describe('Agent grounding invariants', () => {
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.contextNotes).toEqual([
-			{ noteId: testNoteId(5), title: 'Kickoff', content: 'Decisions from kickoff.' }
+			{
+				noteId: testNoteId(5),
+				title: 'Kickoff',
+				content: 'Decisions from kickoff.',
+				tokenCount: expect.any(Number)
+			}
 		]);
 	});
 
-	it('passes long context notes through untruncated', async () => {
+	it('omits the content of oversized context notes and reports the token count', async () => {
 		const { builder, notes } = await setup();
-		const longText = 'x'.repeat(20_000);
+		const longText = 'The platform uses asynchronous messaging between services. '.repeat(600);
 		notes.notes = [
 			...notes.notes,
 			noteBuilder({ id: testNoteId(6), title: 'Long note', plainText: longText })
@@ -218,9 +223,9 @@ describe('Agent grounding invariants', () => {
 			{ noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect(context.contextNotes).toEqual([
-			{ noteId: testNoteId(6), title: 'Long note', content: longText }
-		]);
+		const [attached] = context.contextNotes as { content?: string; tokenCount: number }[];
+		expect(attached?.content).toBeUndefined();
+		expect(attached?.tokenCount).toBeGreaterThan(4000);
 	});
 
 	it('skips context notes that cannot be loaded', async () => {

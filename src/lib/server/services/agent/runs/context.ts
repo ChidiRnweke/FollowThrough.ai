@@ -6,6 +6,7 @@ import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ResolvedAppContextV1 } from '$lib/models/workspace';
 import type { SkillSummary } from '$lib/models/skills';
+import { getEncoding, type Tiktoken } from 'js-tiktoken';
 interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
@@ -31,6 +32,36 @@ interface MemoryLister {
 		filter: Readonly<Record<string, unknown>>
 	): Promise<readonly MemoryEntry[]>;
 }
+
+/**
+ * An attached context note at or under the token limit rides inside the user
+ * message in full; a larger one carries no content — the prompt assembly points
+ * the model at the search_note tool for it instead.
+ */
+export interface ContextNote {
+	readonly noteId: NoteId;
+	readonly title: string;
+	readonly content?: string;
+	readonly tokenCount: number;
+}
+
+let sharedEncoding: Tiktoken | undefined;
+const encoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
+
+const contextNoteTokenLimit = (): number => {
+	const raw = Number(process.env.CONTEXT_NOTE_TOKEN_LIMIT ?? '4000');
+	return Number.isInteger(raw) && raw > 0 ? raw : 4000;
+};
+
+const contextNoteOf = (note: Note): ContextNote => {
+	const tokenCount = encoding().encode(note.plainText).length;
+	return {
+		noteId: note.id,
+		title: note.title,
+		...(tokenCount <= contextNoteTokenLimit() ? { content: note.plainText } : {}),
+		tokenCount
+	};
+};
 
 /**
  * Every enabled skill's summary is advertised; the model is the classifier that
@@ -85,11 +116,7 @@ export class AgentContext implements AgentContextBuilder {
 			...(userMemories.length > 0
 				? { userMemory: userMemories.map((entry) => entry.content) }
 				: {}),
-			contextNotes: contextNotes.map((note) => ({
-				noteId: note.id,
-				title: note.title,
-				content: note.plainText
-			})),
+			contextNotes: contextNotes.map(contextNoteOf),
 			skills: this.buildCatalog(availableSkills, (skill) =>
 				this.isRequested(skill, requested, requestedNoteIds)
 			)

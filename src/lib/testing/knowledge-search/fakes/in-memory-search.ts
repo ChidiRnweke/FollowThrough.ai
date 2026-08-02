@@ -9,7 +9,8 @@ import type {
 	EmbeddedChunk,
 	IndexSource,
 	PendingIndexSource,
-	RetrievalIndexRepository
+	RetrievalIndexRepository,
+	SearchFilter
 } from '$lib/server/repositories/knowledge-search';
 import type {
 	EmbeddingBatch,
@@ -188,14 +189,16 @@ export class InMemorySearchRepository implements RetrievalIndexRepository {
 		actor: ActorContext,
 		_embedding: readonly number[],
 		limit: number,
-		projectId?: ProjectId
+		projectId?: ProjectId,
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]> {
 		return this.documents
 			.filter(
 				(item) =>
 					item.userId === actor.userId &&
 					item.document.embedding !== undefined &&
-					(projectId === undefined || item.document.projectId === projectId)
+					(projectId === undefined || item.document.projectId === projectId) &&
+					(filter?.noteId === undefined || item.document.noteId === filter.noteId)
 			)
 			.slice(0, limit)
 			.map(({ document }) => ({ document, score: 1 }));

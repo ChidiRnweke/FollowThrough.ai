@@ -92,11 +92,14 @@ export const contextAwarenessCases: readonly EvalCase[] = [
 	},
 	{
 		id: 'context-note-ids-reads-all',
-		name: 'reads all context notes when contextNoteIds are provided',
+		name: 'answers from all attached context notes',
 		splits: [ARCHETYPES.contextAwareness, ARCHETYPES.multiStep],
 		input: { prompt: 'What do these notes have in common? Compare them.' },
-		expected: { minimumGetNoteCalls: 2 },
-		metadata: { layer: 'agent', note: 'Two contextNoteIds provided, both should be read.' },
+		expected: { mentionsBothNotes: true },
+		metadata: {
+			layer: 'agent',
+			note: 'Two contextNoteIds provided; both ride inside the user message, so the answer must draw on each without any tool call.'
+		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, conflictingScopeWorkspace);
 			const noteId1 = workspace.noteIds.get('Ledger Service overview');
@@ -114,17 +117,24 @@ export const contextAwarenessCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 300)
 			});
 
-			const getNoteCount = result.calledToolNames.filter((n) => n === 'get_note').length;
-			const passed = getNoteCount >= 2;
+			const response = result.finalResponse.toLowerCase();
+			const mentionsFirst = response.includes('ledger');
+			const mentionsSecond = ['ingestion', 'dagster', 'iceberg'].some((k) =>
+				response.includes(k)
+			);
+			const passed = mentionsFirst && mentionsSecond;
 			px.logAnnotation({
 				name: ARCHETYPES.contextAwareness,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `get_note called ${getNoteCount} times, needed ≥2`
+				explanation: `response draws on Ledger note: ${mentionsFirst}, on Ingestion note: ${mentionsSecond}`
 			});
 
 			expect(result.status).toBe('completed');
-			expect(passed, `get_note called ${getNoteCount} times, expected ≥2`).toBe(true);
+			expect(
+				passed,
+				'response should draw on both attached notes (Ledger Service overview and Ingestion pipeline)'
+			).toBe(true);
 		}
 	},
 	{

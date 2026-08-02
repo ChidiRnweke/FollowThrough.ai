@@ -1,7 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchMatch } from '$lib/models/knowledge-search';
-import type { CreatedRange } from '$lib/server/repositories/knowledge-search';
+import type { SearchFilter } from '$lib/server/repositories/knowledge-search';
 
 export interface KnowledgeSearcher {
 	search(
@@ -10,7 +10,7 @@ export interface KnowledgeSearcher {
 		limit?: number,
 		projectId?: ProjectId,
 		signal?: AbortSignal,
-		created?: CreatedRange
+		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]>;
 }
 export interface ContentChunker {

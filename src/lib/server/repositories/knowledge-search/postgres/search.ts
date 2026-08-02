@@ -19,7 +19,7 @@ import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
-import type { CreatedRange } from '$lib/server/repositories/knowledge-search/retrieval-index';
+import type { CreatedRange, SearchFilter } from '$lib/server/repositories/knowledge-search/retrieval-index';
 import type {
 	EmbeddedChunk,
 	IndexSource,
@@ -284,7 +284,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		embedding: readonly number[],
 		limit: number,
 		projectId?: ProjectId,
-		created: CreatedRange = {}
+		filter: SearchFilter = {}
 	): Promise<readonly SearchMatch[]> {
 		const distance = cosineDistance(schema.searchChunks.embedding, [...embedding]);
 		// Pending chunks have no vector, and a NULL distance sorts ahead of every real
@@ -294,10 +294,13 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			isNotNull(schema.searchChunks.embedding)
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
-		if (created.createdAfter)
-			conditions.push(gte(schema.searchChunks.sourceCreatedAt, new Date(created.createdAfter)));
-		if (created.createdBefore)
-			conditions.push(lte(schema.searchChunks.sourceCreatedAt, new Date(created.createdBefore)));
+		// Diagram chunks carry their note's id, so a note filter includes them:
+		// searching a note should see its diagrams too.
+		if (filter.noteId) conditions.push(eq(schema.searchChunks.noteId, filter.noteId));
+		if (filter.createdAfter)
+			conditions.push(gte(schema.searchChunks.sourceCreatedAt, new Date(filter.createdAfter)));
+		if (filter.createdBefore)
+			conditions.push(lte(schema.searchChunks.sourceCreatedAt, new Date(filter.createdBefore)));
 		const rows = await this.database
 			.select({ chunk: schema.searchChunks, distance })
 			.from(schema.searchChunks)

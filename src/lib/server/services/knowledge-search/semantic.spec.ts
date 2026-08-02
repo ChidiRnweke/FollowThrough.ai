@@ -55,6 +55,19 @@ describe('Embedded search invariants', () => {
 		const matches = await searcher.search(testActor(), 'messaging', 10, testProjectId());
 		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(2)]);
 	});
+
+	it('limits vector results to the requested note', async () => {
+		const repository = new InMemorySearchRepository();
+		await repository.replaceForNote(testActor(), testNoteId(2), [document()]);
+		await repository.replaceForNote(testActor(), testNoteId(3), [
+			document({ noteId: testNoteId(3) })
+		]);
+		const searcher = new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient());
+		const matches = await searcher.search(testActor(), 'messaging', 10, undefined, undefined, {
+			noteId: testNoteId(3)
+		});
+		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(3)]);
+	});
 });
 
 describe('Relate retrieval invariants', () => {

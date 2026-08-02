@@ -770,13 +770,13 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 	},
 	{
 		id: 'natural-context-compare-notes',
-		name: 'reads multiple notes when asked about their relationship',
+		name: 'answers from multiple attached notes when asked about their relationship',
 		splits: [ARCHETYPES.intentInterpretation, ARCHETYPES.contextAwareness],
 		input: { prompt: "Are these related? What's the thread between them?" },
-		expected: { requiredTools: ['get_note'], minCalls: 2 },
+		expected: { mentionsBothNotes: true },
 		metadata: {
 			layer: 'agent',
-			note: 'Vaguer version of context-note-ids-reads-all. contextNoteIds provided.'
+			note: 'Vaguer version of context-note-ids-reads-all. contextNoteIds provided; both notes ride inside the user message.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, retrievalCorpusWorkspace);
@@ -794,20 +794,20 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 300)
 			});
 
-			const getNoteCount = result.calledToolNames.filter((n) => n === 'get_note').length;
-			const passed = getNoteCount >= 2;
+			const response = result.finalResponse.toLowerCase();
+			const passed = response.includes('postgres') && response.includes('redis');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: passed ? 1 : 0,
 				label: passed ? 'read_both' : 'incomplete',
-				explanation: `get_note called ${getNoteCount} times (expected ≥2)`
+				explanation: `response mentions Postgres: ${response.includes('postgres')}, Redis: ${response.includes('redis')}`
 			});
 
 			expect(result.status).toBe('completed');
 			expect(
-				getNoteCount,
-				`get_note called ${getNoteCount} times, expected ≥2`
-			).toBeGreaterThanOrEqual(2);
+				passed,
+				'response should draw on both attached notes (Postgres failover and Redis eviction runbooks)'
+			).toBe(true);
 		}
 	}
 ];
