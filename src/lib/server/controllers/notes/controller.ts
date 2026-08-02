@@ -54,20 +54,72 @@ import type {
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
 
+/**
+ * Application boundary for notes: the read model, editing and publishing, offline sync,
+ * and archival.
+ *
+ * Reads are assembled in parallel from many sources; writes go through the transaction
+ * runner so a save and its link/index side effects commit atomically.
+ */
 export interface NotesController {
+	/**
+	 * Load the full read model for one note: the document, its ETag, backlinks,
+	 * references, diagrams, todos, and pending suggestions.
+	 *
+	 * The pieces are fetched in parallel because nothing depends on another's result.
+	 */
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
+	/** Create a new, empty note. */
 	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
+	/**
+	 * Persist a note body and, in the same transaction, repair its anchors, reconcile its
+	 * links, and re-index it.
+	 *
+	 * Link reconciliation is deliberately in the transaction: the note's links are
+	 * derived from the document that just landed, so committing the body without the
+	 * derived `mentions` rows would show backlinks the note no longer has.
+	 */
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput>;
+	/**
+	 * Submit a note revision with an ETag for optimistic concurrency, returning either a
+	 * saved outcome or, when the base ETag is stale and the remote diverged, a conflict
+	 * carrying the remote revision so the client can reconcile.
+	 *
+	 * A stale ETag whose remote content happens to be identical still resolves to
+	 * 'saved', so retrying a save that actually landed is never reported as a conflict.
+	 *
+	 * @throws ValidationError if the base ETag does not describe the submitted revision.
+	 */
 	sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput>;
+	/**
+	 * Publish the current state of a note, recording a revision so `discardDraft` can
+	 * restore it later. Guards on the ETag so a concurrent edit cannot be silently
+	 * published over.
+	 *
+	 * @throws StaleRevisionError if the note changed since it was loaded.
+	 */
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput>;
+	/**
+	 * Discard the unpublished draft by restoring the latest published revision.
+	 *
+	 * @throws NotFoundError if no published revision exists yet — there is nothing to
+	 * fall back to.
+	 */
 	discardDraft(actor: ActorContext, input: DiscardNoteDraftInput): Promise<DiscardNoteDraftOutput>;
+	/**
+	 * List every note in a project with the ETag each was last written under, so an
+	 * offline client can diff its local state against the server on the next sync.
+	 */
 	listSyncInventory(
 		actor: ActorContext,
 		input: ListNoteSyncInventoryInput
 	): Promise<ListNoteSyncInventoryOutput>;
+	/** Change a note's title, recording a revision and re-indexing in the same transaction. */
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput>;
+	/** Archive a note and re-index it so archived notes drop out of search results. */
 	archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput>;
 }
+/** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
