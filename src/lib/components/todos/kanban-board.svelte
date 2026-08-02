@@ -130,6 +130,7 @@
 				{#if addingTo === status}
 					<Input
 						id={status === 'open' ? 'quick-todo-input' : undefined}
+						autofocus
 						{@attach (node: HTMLElement) => node.focus()}
 						placeholder="Todo title…"
 						bind:value={newTitle}

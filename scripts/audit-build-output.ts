@@ -49,11 +49,15 @@ for (const file of collectChunks(clientDir)) {
 		continue;
 	}
 	largestApplicationChunk = Math.max(largestApplicationChunk, bytes);
-	failures.push(`${file} is ${(bytes / 1024).toFixed(1)} kB, over the ${THRESHOLD_BYTES / 1024} kB limit`);
+	failures.push(
+		`${file} is ${(bytes / 1024).toFixed(1)} kB, over the ${THRESHOLD_BYTES / 1024} kB limit`
+	);
 }
 
 if (failures.length > 0) {
-	process.stderr.write(`Client chunk audit: ${failures.length} application chunk(s) over the limit.\n`);
+	process.stderr.write(
+		`Client chunk audit: ${failures.length} application chunk(s) over the limit.\n`
+	);
 	process.stderr.write(`${failures.join('\n')}\n`);
 	process.exitCode = 1;
 } else {

@@ -201,6 +201,14 @@ targets, grouped below.
 > in the notes workspace, which needs four store stubs plus a full Tiptap editor
 > and is owned by active parallel work. `note-editor.svelte.spec.ts` already
 > covers the editor boundary (delete/select/revise via injected callbacks).
+>
+> **Fixed (2026-08-02):** the `?quickTodo` focus e2e was failing on the full-load
+> path — the board's `@attach`-only focus was dropped when async `todos` data
+> re-rendered around the SSR-claimed input. Now uses native `autofocus` (covers
+> the full-load path) alongside `@attach` (covers the click-to-add dynamic-mount
+> path) on the quick-add input in `kanban-board.svelte`. No `$effect`. Verified:
+> e2e passes 5× in isolation, `kanban-board.svelte.spec.ts` (click-add focus)
+> passes, full todos + agent-workbench suites green.
 
 **Retained e2e (54):** agent-workbench 100/127/147/181/189/217/258; note-title
 27/34; pwa 23/36/46/64/72; responsive all 8 overflow + 35 + all 4 toolbar-pane +
@@ -401,8 +409,8 @@ Statuses:
 
 ### Open build/runtime warning contracts
 
-| Status | Behavior to protect                                                                            | Test layer and intended file                         | Setup and observable assertion                                                                                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status  | Behavior to protect                                                                                            | Test layer and intended file                                              | Setup and observable assertion                                                                                                                                                          |
+| ------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | covered | Production application chunks remain below the 500 kB threshold (Mermaid's vendor bundle is a known exception) | Build audit, `scripts/audit-build-output.ts` (run via `pnpm build:audit`) | Fails when any application-owned client chunk exceeds 500 kB; the Mermaid vendor bundle is tolerated because a static `import mermaid from 'mermaid'` necessarily bundles its grammars. |
 
 > **Dropped 2026-08-02:** the `wrapDynamicImport` browser-runner regression guarded
