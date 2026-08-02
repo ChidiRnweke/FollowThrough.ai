@@ -1,0 +1,42 @@
+---
+title: Projects
+description: A project groups documents with the todos, memory, artifacts, and attachments the agent works from — and a duplicate name is rejected before it is saved.
+---
+
+import Screenshot from '../../../components/screenshot.astro';
+
+A project is the unit of work in FollowThrough. It holds a tree of documents — notes and folders — and four spaces around them: todos, memory, artifacts, and attachments. Projects are listed in the sidebar; opening one lands on its overview.
+
+## The overview
+
+The overview groups the four spaces by what they do for you, not as four equal nouns:
+
+- **Produced here** — Todos and Artifacts: what the project has produced.
+- **What the agent works from** — Memory and Attachments: the material the agent reasons from when it answers.
+
+A populated space states what it holds — `3 open · 1 overdue` on Todos, `2 files grounding the agent` on Attachments. An empty space shows a rotating tip about what it is for instead of a zero; the tip changes between visits.
+
+Below the spaces, the documents list shows the project's notes and folders. Folders have no page of their own — they expand in place. Notes carry their relative last-edited time, and documents still named `Untitled` are counted beside the heading as a standing invitation to name them.
+
+<Screenshot id="project-context" alt="A project overview with its spaces and document tree." />
+
+An empty project gets the hero treatment: a statement that nothing is here yet, then two ways in — create the first note, or import an existing project as a zip of Markdown files, structure and all.
+
+## Project versus profile
+
+Memory exists at two levels. Project memory is scoped to the project; profile memory is what the agent knows about you across everything. The profile page holds the project-less kind, and a pending memory suggestion that is not tied to a project surfaces there rather than on any project.
+
+## What you can do
+
+- **Create a project** from the `+` beside the Projects group in the sidebar.
+- **Add a note or folder** from the project page header.
+- **Rename, set export defaults, import a Markdown archive, or archive** from the project actions menu (the `⋯` in the header).
+- **Rename or archive a document** from the hover menu on its row in the documents list.
+- **Reorder or re-file documents** by dragging them in the sidebar tree.
+
+## The edges
+
+- Names are required and trimmed; a blank name is rejected. Two active projects cannot share a name — casing aside — and the save fails with that explanation rather than overwriting.
+- Archiving removes a project from the sidebar and the workspace view. There is no delete and no archived-projects list in the UI — treat archive as final.
+- The same applies to documents: archive, not delete.
+- Markdown import is not all-or-nothing. The report at the end separates what was imported from what was skipped and what failed, so a partial import is visible instead of silent.

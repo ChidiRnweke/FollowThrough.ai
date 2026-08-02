@@ -1,0 +1,55 @@
+---
+title: Notes
+description: A note saves to your device first and syncs when it can — the save status in the utility row always says which.
+---
+
+import Screenshot from '../../../components/screenshot.astro';
+
+A note is a rich-text document inside a project. The page is one continuous writing surface with a quiet utility row above it: breadcrumb, save status, and actions. The title lives in the breadcrumb's current-page segment and is edited in place — Enter commits and drops the caret into the body, Escape reverts. An untitled note cannot save; the row says "Add a title to save" until it has one.
+
+<Screenshot id="note-view" alt="A note open in the editor, with backlink chips and the save status in the utility row" />
+
+## Saving and sync status
+
+You never press save for routine editing: the note autosaves two seconds after you stop typing, and Cmd/Ctrl+S saves immediately. Every save lands on your device first, then syncs to the server, so the status in the utility row is the honest one:
+
+- **Saved ·** *time* — device and server agree; the timestamp says how long ago.
+- **Syncing…** — a save is in flight.
+- **Saved on device · retry sync** — you're offline or the server was unreachable; the note is safe locally and syncs on its own when the connection returns.
+- **Couldn't save · retry** — the last sync failed; hover the status for the reason.
+- **Review conflict** — the note changed elsewhere since you started editing.
+- **Unpublished changes** — saved, but newer than the last published version.
+
+A conflict opens a dialog that diffs both versions against the version you both started from: "Your changes" on one tab, "Latest saved version" on the other. **Keep mine** rebases your text on top of the latest version and re-syncs; **Use latest** discards your local edits; **Review later** leaves the note conflicted until you decide. Whichever you pick, you keep a complete document — there is no line-by-line merge.
+
+## Working in the editor
+
+- Type `@` at the start of a word to link another note in the same project. The link lands as the note's title; clicking it opens the target in the workbench without a page reload.
+- Select text to get the bubble menu: **Ask about this**, **Extract promises**, **Find related**, **Reference**, **Diagram**, and any skills you have. While one runs, the menu becomes a single status line and the selection keeps a highlight until the result lands.
+- **Diagram** generates a Mermaid diagram from the selection and inserts it where the cursor was — undo with Ctrl+Z. A Mermaid block renders inline and opens into an editor with its own zoomable preview; from there you can revise it by instruction or convert it to draw.io. A conversion is a draft you review in a dialog: accepting inserts a draw.io preview right after the Mermaid block, dismissing leaves the block untouched. Accepted draw.io diagrams open in a focused editor with an explicit Save.
+- Paste or drop an image and it uploads as a note attachment.
+- Right-click the editor for raw and formatted copy/paste.
+- Suggested continuations (ghost text) appear as you write when inline suggestions are enabled in settings; a suggestion that cannot answer stays silent.
+
+Backlinks sit as compact chips between the utility row and the document — one per related note, in either direction. Hover a chip for the relationship kind (mentions, elaborates, contradicts, prior decision), its justification, and when it was made; a `contradicts` chip is tinted so it reads as a warning, not a link.
+
+## Split view
+
+Drag a note from the sidebar or a workbench tab onto the open note to open it beside the current one. The split is part of the URL (`?split=`), so it survives a reload or a copied link, and the divider ratio you set is remembered. Each pane scrolls independently and keeps its own save status. On a narrow window only one pane shows at a time, with a switcher — the split itself is not discarded. While a split is open, the primary pane's note menu offers **Compare** to ask the agent about both notes.
+
+## Publishing, moving, archiving
+
+**Publish** records the current state as the note's published version; **Discard changes** in the note menu restores the last published one. With unpublished changes present, pressing Cmd/Ctrl+S twice in quick succession publishes instead of saving. The menu also pins a note to the sidebar, moves it between folders, exports it as PDF or DOCX, and archives it.
+
+## Importing a vault
+
+From a project page's menu, **Import an existing project…** takes a `.zip` of Markdown files and recreates it as notes, keeping the folder structure. Each note takes its title from its file name, `[[wiki links]]` between imported notes become real note links, and YAML frontmatter is stripped — the report names any keys that were not imported. The archive can be up to 25 MB and 2,000 files, each file up to 1 MB and at most 8 folders deep; `.obsidian/`, `.git/`, `__MACOSX/`, and other dotfile paths are ignored.
+
+An import is not all-or-nothing: readable notes import even when sibling files fail, and the report lists every failed and skipped file with its reason. Two notes with the same name in one folder never merge — the later one gets a ` (2)` suffix.
+
+## The edges
+
+- An archived note cannot be edited, and a folder holding notes cannot be archived.
+- A note never changes projects or turns into a folder through a save — moving is its own action.
+- Moving, archiving, publishing, and the AI selection actions all require the note to be synced first; if it is not, you are told to sync and nothing happens.
+- If the editor itself fails to render a note, the page says so and offers a retry — the saved note on the server is untouched, because nothing is written while the editor is down.

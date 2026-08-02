@@ -1,0 +1,37 @@
+---
+title: Search
+description: The agent reads your notes, documents, and the web before answering — knowledge search is automatic, and you choose the web search engine.
+---
+
+import Screenshot from '../../../components/screenshot.astro';
+
+The agent has two ways to look things up before it answers: your knowledge base and the web. It decides on its own when each one would improve the answer — you never run a search yourself.
+
+## What the agent reads before answering
+
+**Knowledge search** covers everything you have saved: notes, uploaded documents and PDFs, diagram text, and remembered facts you chose to share with agents. The agent calls it when workspace evidence could improve the answer, and searches again with a sharper query when the first results reveal a lead or a gap. In a longer conversation it condenses the discussion so far into a single statement and searches for that, so a follow-up like "what did we decide about that?" still lands on the right note.
+
+Each search returns a handful of excerpts — eight by default, each capped at 700 characters — with a relevance score. The agent can restrict a search to one project, which it does when your request is clearly project-scoped.
+
+<Screenshot id="agent-tab" alt="The agent tab, where search steps appear as part of a reply" />
+
+**Web search** is a tool attached to every agent conversation. The model invokes it when a question needs current or external information — documentation, prices, news — rather than anything you have saved. FollowThrough routes it through OpenRouter with the Exa engine by default, which retrieves full page content rather than snippets, so the agent answers from the page instead of citing a headline.
+
+## What you can do
+
+Web search is the configurable half. In **Settings → Agents** you set three things, each of which can be left unset to follow the deployment default:
+
+- **Web search engine** — `auto`, `native`, `exa`, `firecrawl`, `parallel`, or `perplexity`. `auto` lets the model choose.
+- **Results per search** — caps a single search, between 1 and 50.
+- **Total results** — caps what a run may pull across repeated searches, between 1 and 100.
+
+You can also ask the agent to change these defaults in conversation; it has a tool for reading and updating its own settings.
+
+Knowledge search needs no configuration. Saving a note, importing a document, or letting the agent remember a fact makes it searchable; archiving a note removes it from the index.
+
+## The edges
+
+- There is no user-facing search box for the knowledge base. Search is a tool the agent calls, not a screen you open.
+- Only project memory you explicitly share with agents is indexed. Facts the agent keeps to itself, and anything you delete, never appear in results.
+- Web search requires the deployment's OpenRouter connection; without it the agent works from your knowledge base alone.
+- Very large attachments are indexed head-first — the opening portion is searchable and the remainder is recorded as truncated.

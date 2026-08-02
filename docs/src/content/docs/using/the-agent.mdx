@@ -1,0 +1,49 @@
+---
+title: The agent
+description: The agent reads your workspace before it answers, and asks before it changes anything unless you switch it to auto-accept.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/screenshot.astro';
+
+The agent is the chat built into FollowThrough. It answers questions from your notes, todos, attachments, and memory, and it can act on them — creating todos, editing notes, saving memory — with your approval.
+
+## Where it lives
+
+The chat runs in two places, and both show the same conversations:
+
+- **The panel** sits beside whatever you are doing. Below the `2xl` breakpoint it opens as a sheet over the page. It lists up to five recent chats.
+- **Full-page chats** live at `/chats`, with durable URLs: `/chats/new` for a fresh conversation and `/chats/[id]` for an existing one. The full history lives here, and each conversation links back to the project or note it started from.
+
+A conversation's origin — the project or note it started in — is fixed on its first turn and shown as the chat's context.
+
+<Screenshot
+	id="agent-tab"
+	alt="The agent chat panel with its context sentence, recent chats, and composer"
+/>
+
+## What the agent reads
+
+Above an empty thread, a plain-language sentence names the scope: "Before it answers, the agent reads what is in your Inbox project." Below it, a row of counts — memory, notes, todos, attachments — shows exactly what is in reach, including zeros. Each count links to the thing it counts and explains itself on hover. Change project and the row re-derives itself.
+
+Once the thread is running, the sentence collapses to the icon-and-count row so the transcript gets the height. The open note also travels along as a context chip above the composer.
+
+## What you can do
+
+- **Ask.** Type in the composer and send. A three-dot activity indicator appears immediately, then human-readable status as the agent works. While it streams, you can scroll up freely — auto-scroll only follows while you are at the latest turn.
+- **Add context.** Type `@` to mention a note or skill; it attaches as a chip you can remove. The open note is attached automatically.
+- **Attach images.** Up to four images per message — PNG, JPEG, or WebP, 10 MiB combined. If the chat model can see images it reads them directly; otherwise a vision model describes them first, so they are never silently dropped.
+- **Switch execution mode** from the composer toggle. This decides whether the agent may write without asking, so it stays visible rather than hiding in settings:
+  - *Approval required* (the default): every change appears as an approval card before it happens.
+  - *Auto-accept*: the agent changes notes and todos without asking.
+- **Approve or reject changes.** Each card names the action and previews it — a note edit shows the diff. When one turn parks on several changes at once, they bundle with *Approve all* and *Reject all*. Rejecting tells the agent to recover without that action.
+- **Choose the model** from the gear next to the composer. The picker searches the OpenRouter catalogue, marks recommended models, and disables models that cannot call tools. A vision model picker sits below it, greyed out when the chat model reads images itself. Choices can be set per conversation or as your default in settings.
+- **Stop, retry, edit.** Stop halts a running generation. A failed or cancelled run offers retry, which replays it exactly as submitted. Your own messages expose copy and edit-in-composer; editing an earlier question rewinds the conversation to just before that turn and re-asks it.
+- **Reconnect without losing the run.** If the connection drops, the composer shows "Reconnecting" or "Offline · run continues" — the run keeps going on the server and the transcript catches up.
+
+## The edges
+
+- One active run per conversation. Submitting again while a run is in flight is refused; stop or finish it first. A chat with an active run also cannot be deleted.
+- A run stops after 20 tool-calling turns by default (raise it in settings) — a model stuck in a loop stops costing money.
+- A completed run can never be retried or replayed; only failed and cancelled runs can.
+- The agent cannot delete todos, upload or remove attachments, or change project memory directly — memory changes always arrive as proposals you review. Web search is available as a tool; it uses your configured engine and result caps.

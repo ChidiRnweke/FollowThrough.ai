@@ -1,0 +1,69 @@
+---
+title: Skills
+description: A skill is a note with kind "skill" plus a metadata row; the agent sees only summaries in a budgeted catalog and loads full instructions through the locked load_skill tool.
+---
+
+import Mermaid from '../../../components/mermaid.astro';
+import Screenshot from '../../../components/screenshot.astro';
+
+A skill is a reusable block of instructions the agent loads on demand. Storage is split in two: the instruction text lives in an ordinary note with `kind: 'skill'`, and everything the agent uses to decide *whether* to load it — name, slug, description, trigger hints, enable flag — lives in a `skills` row keyed by that note's ID. Versioning and autosave come free from the [notes subsystem](/FollowThrough.ai/subsystems/notes/); the skills subsystem adds metadata, discovery, and usage accounting.
+
+The user-facing surface is small: `/skills` lists the catalog and `/skills/{noteId}` edits one skill, with SKILL.md import and export in the detail header.
+
+<Screenshot id="skill-support" alt="The skills catalog, listing each skill with its description and enable state" />
+
+## Model
+
+`src/lib/models/skills/index.ts` defines `Skill` (the note plus its metadata), `SkillSummary` (the advertised projection: name, slug, description, trigger hints, `allowImplicitInvocation`, `isEnabled`, pin state), `SkillManifest` (the portable form), and `SkillUsage` (one record per agent load).
+
+`SkillManifestCodec` (`services/skills/manifest.ts`) parses and serializes SKILL.md: YAML frontmatter (`name`, `description`, optional `license`, `compatibility`, `metadata`) followed by the instruction body. Limits are enforced by zod: slugs are lowercase-hyphenated and at most 64 characters, descriptions at most 1024, compatibility at most 500. The reserved metadata key `followthrough.allow-implicit-invocation: "false"` maps to `allowImplicitInvocation: false` and is stripped from metadata on parse — it is a flag riding in metadata, not user data.
+
+## Service rules
+
+`SkillLibrary` (`services/skills/library.ts`) implements every contract in `services/skills/contracts.ts`. The invariants callers rely on:
+
+- **Creation converts a note.** `create` rejects folders, derives the slug from the name, and rejects a slug that collides with any of the user's other skills ("A skill with this portable name already exists"). A blank description becomes `Reusable instructions for {name}.`
+- **Selection distillation checks out the exact text.** `createFromSelection` rejects the input unless the selection's revision, offsets, and text all match the source note's *current* state, and the provenance record must already exist. The controller records the selection anchor and provenance first, so every distilled skill carries a traceable lineage — see [todos](/FollowThrough.ai/subsystems/todos/) for the anchor and provenance model these records share.
+- **Content edits and metadata edits are different operations.** `update` rejects a call that carries both `raw` SKILL.md and a structured manifest. A metadata-only update (name, description, trigger hints, enable flag) never touches the note's document or revision history — the body belongs to the note sync path. A manifest update rewrites the body and appends a new revision.
+- **History is append-only.** `restoreVersion` copies an old snapshot forward as a *new* current revision (and restores its attachment snapshot) instead of rewinding.
+
+## Built-in skills
+
+Three built-ins ship in `built-in-definitions.ts` — FollowThrough (the product guide), Settings, and Diagramming — plus verbatim retired bodies of earlier releases. `BuiltInSkills.ensure` provisions them into the user's default project, repairs their kind/project/archived state, and adopts a legacy note titled "followthrough" if one exists.
+
+Upgrades are conservative: a stored built-in is replaced by a newer definition only when it still matches a retired release byte-for-byte and was never published — an install the user never edited. Any user edit pins the skill to its current content forever. Retired bodies are never edited in place, because they exist to recognize those installs.
+
+`BuiltInSkillLibrary` wraps the plain finder and calls `ensure` before every `listEnabled`/`listAll`, so built-ins simply appear; nothing needs to call provisioning directly. The diagramming pipeline is the one consumer that loads a built-in by key (`load(actor, 'diagramming')`), and that load refuses a skill the user has disabled. The Diagramming definition sets `allowImplicitInvocation: false`, so it is advertised to the agent only when explicitly requested.
+
+## How the agent discovers and loads a skill
+
+Discovery is a two-step design: summaries are cheap and always advertised, full instructions cost a tool call and are recorded.
+
+<Mermaid
+	source={`
+flowchart LR
+	ensure["BuiltInSkillLibrary.ensure"] --> catalog["AgentContext: listEnabled"]
+	catalog --> filter["filter: enabled, implicit or requested"]
+	filter --> order["order: requested, pinned, alphabetical"]
+	order --> prompt["skills section in system prompt (16 KB budget)"]
+	prompt --> load["agent calls load_skill"]
+	load --> usage["loadForAgent records SkillUsage"]
+`}
+/>
+
+1. `AgentContext` (`services/agent/runs/context.ts`) calls `listEnabled` on the provisioned finder, then keeps skills that are enabled and either allow implicit invocation or were explicitly requested by name, slug, or note ID.
+2. The catalog is ordered requested → pinned in the current project → alphabetical, then packed into a 16,000-character JSON budget. Requested and pinned entries are never dropped; when the rest overflow, the catalog is marked truncated and the prompt tells the model the remainder is reachable through `list_skills`. Ordering is deterministic so the prompt is stable between runs.
+3. `reasoning.ts` renders the catalog as a `<skills>` section in the system prompt, explicitly tagged as untrusted data, with the instruction to call `load_skill` for whatever applies.
+4. `load_skill` calls `SkillsController.loadForAgent`, which is `get` plus a side effect: a `skill_usages` row linking the skill to the run's provenance record and the note it was applied against. That write is what makes "which skills actually get used" answerable later. `get_skill` reads the same view without recording anything.
+
+## Relation to the tool catalog
+
+Every `SkillsController` method is classified in `agentToolCoverage` (`agent-tool-factory.ts`): reads stay reads, creation and edits are mutations, and `serialize` is the one exclusion — the full skill is already reachable through `load_skill`. `load_skill` is both first-class (offered without `search_tools`) and locked: the user cannot deselect it, because without it the agent loses its instructions. The same coverage feeds the MCP surface, so an external host sees the identical skill tools under a `full`-scope token. The agent subsystem page at [agent](/FollowThrough.ai/subsystems/agent/) details the discovery mechanism itself.
+
+## Persistence
+
+`SkillRecords` (`repositories/skills/postgres/skills.ts`) maps three tables. `skills` uses the note ID as its primary key with cascade delete, so deleting the note deletes the skill row with it. `project_skill_pins` is a composite-key join table; pinning is idempotent (`onConflictDoNothing`). `skill_usages` keeps `contextNoteId` and `provenanceId` as set-null references, so usage history survives deletion of the context note. Every query joins through projects and excludes archived ones, and summaries come back ordered by name with pin state resolved for the requested project.
+
+## Composition
+
+`createSkillsCapability` (`src/lib/server/skills-capability-factory.ts`) wires one repository into `SkillLibrary`, `BuiltInSkills`, and the `BuiltInSkillLibrary` wrapper. In `application.ts` the controller's `skillFinder` is the provisioned wrapper — built-ins ensured on every listing — while editing, usage, and versioning go straight to the plain library.

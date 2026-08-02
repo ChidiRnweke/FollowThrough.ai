@@ -1,0 +1,49 @@
+---
+title: Memory
+description: Memory holds the durable facts the agent reads — project memory scoped to one project, profile memory that follows you across all of them.
+---
+
+import Screenshot from '../../../components/screenshot.astro';
+
+Memory is the set of durable facts the agent is allowed to remember. Unlike a note, a memory entry survives the conversation that produced it: it is read again in later chats and retrieval, so the agent stops needing to be re-briefed.
+
+There are two scopes:
+
+- **Project memory** belongs to one project — its facts, decisions, constraints, and terminology. It lives at `Project > Memory` and in the Project memory panel of the workbench.
+- **Profile memory** describes you across every project — your role, goals, how you like to work. It lives on your Profile page, applies everywhere, and is always shared with the agent.
+
+Each entry is a short piece of text with an optional type: **fact**, **decision**, **constraint**, or **preference**.
+
+<Screenshot id="project-context" alt="A project overview with Memory listed under what the agent works from." />
+
+## What the agent can see
+
+Every project entry carries a **Share with agents** checkbox, on by default. Unchecked entries stay visible to you but are never read by the agent — they are excluded from both retrieval and the memory tools. Profile memory has no toggle because it is always shared; it is injected into every agent run.
+
+The agent never writes memory directly. When it notices something worth remembering — a decision made in chat, something you reveal about yourself — it proposes the change instead.
+
+## Reviewing proposals
+
+Proposed changes wait in a **Suggested by the agent** section above the **Remembered** list on the same page. Each proposal shows its operation (**add**, **update**, or **remove**), the content, and the agent's justification when it gave one.
+
+- Tick the checkbox to accept: the change is applied to memory and the proposal leaves the list.
+- **Dismiss** rejects it; memory stays as it was.
+
+Pending proposals also surface in the bell menu in the sidebar, counted per project — with a separate row for profile memory — each linking to the page where you can review them.
+
+You can stop reviewing proposals one pipeline at a time. In Settings, the trust policy for the memory pipeline can auto-accept proposals, optionally only above a minimum confidence (0–100). The default is review-first: nothing is remembered without your say.
+
+## What you can do directly
+
+- **Add memory** opens a dialog with a text field and an optional type. Adding is immediate — no review step for your own entries.
+- A row's menu offers **Edit**, which rewrites the text inline, and **Delete**, which asks for confirmation first. Deleting is permanent; the agent will no longer remember it.
+- New entries are shared with agents by default; flip the checkbox on the row to keep one private.
+
+## The edges
+
+- Memory is not searchable note content — it is a short list of durable facts, ordered by most recently updated. Long-form knowledge belongs in notes.
+- An emptied text field cannot be saved: every entry needs content.
+- Dismissing a proposal is silent and final for that proposal; the agent may propose the same fact again in a later conversation.
+- Auto-accepted changes are marked as such, so nothing lands invisibly even when you turn the trust policy on.
+
+See [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) for the trust model behind proposals, and [the memory subsystem](/FollowThrough.ai/subsystems/memory/) for how proposals are stored and applied.

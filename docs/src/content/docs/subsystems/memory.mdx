@@ -1,0 +1,63 @@
+---
+title: Memory
+description: Memory changes never mutate a row in place — updates insert a replacement and soft-delete the old entry, which is what makes agent-accepted changes revertible.
+---
+
+import Mermaid from '../../../components/mermaid.astro';
+
+Memory stores durable remembered facts in a single table, `memory_entries`. The subsystem is small: one model module, one service (`MemoryLibrary`), one controller, one Postgres repository. The interesting behavior is how agent proposals flow through the suggestion pipeline and how applied changes stay revertible.
+
+## Model
+
+`src/lib/models/memory` defines `MemoryEntry`: content, an optional `type` (`fact` | `decision` | `constraint` | `preference`), a `shareWithAgents` flag defaulting to `true`, and three bookkeeping fields — `provenanceId`, `replacesEntryId`, `deletedAt`. Scope is expressed structurally: an entry with a `projectId` is project memory; an entry without one is the user's profile memory.
+
+Agent-proposed changes are described by `MemoryChangePayload`: an `operation` (`add` | `update` | `remove`), an optional target `memoryEntryId`, optional new `content`, `shareWithAgents`, and a free-text `justification`. The payload travels inside a suggestion of kind `memory`, so memory reuses the general suggestion machinery rather than growing its own review flow.
+
+## Service
+
+`MemoryLibrary` (`src/lib/server/services/memory/library.ts`) holds the business rules:
+
+- Direct `create` / `update` / `remove` require non-blank content (except remove) and validate that the project exists. `remove` is a soft delete: it sets `deletedAt`, nothing is destroyed.
+- `apply` executes a `MemoryChangePayload`. An `add` inserts a new entry stamped with the proposal's provenance. An `update` does **not** edit in place — it inserts a replacement entry pointing at the old one via `replacesEntryId`, then soft-deletes the old one. A `remove` soft-deletes the target.
+- `revert` is the exact inverse: an applied `add` or `update` is soft-deleted (and for `update`, the superseded entry is restored); an applied `remove` is restored. This is why accepts of memory suggestions can be undone.
+- Reading a soft-deleted entry through `getActive` throws `NotFoundError`, so superseded rows are unreachable through the normal path.
+- Every mutation re-indexes the entry through `MemoryIndexer` before returning.
+
+## Controller
+
+`MemoryController` (`src/lib/server/controllers/memory/controller.ts`) is the application boundary. `list`, `create`, `update`, and `remove` delegate to the service; `list` applies the `sharedOnly` filter in memory, so private entries are filtered out before the agent's tools see them.
+
+`propose` is the agent's only write path. It validates the payload (project scope requires a project, `update`/`remove` require a target, `add`/`update` require content) and then runs one transaction: record provenance (producer `agent`, pipeline `memory`), create the suggestion, and — if the trust policy auto-accepts the `memory` pipeline at the suggestion's confidence — apply the change and mark the suggestion auto-accepted. Any failure aborts the whole batch: there is no state where a suggestion exists without provenance, or an applied change without an accepted suggestion.
+
+<Mermaid
+	source={`
+flowchart LR
+	tool["propose_memory_change tool"] --> propose["Memory.propose()"]
+	propose --> tx["single transaction"]
+	tx --> prov["record provenance"]
+	prov --> sug["create memory suggestion"]
+	sug --> trust{"trust policy auto-accepts?"}
+	trust -- "yes" --> apply["apply change, auto-accept"]
+	trust -- "no" --> pending["pending suggestion — user reviews"]
+`}
+/>
+
+The agent tool catalog (`src/lib/server/agent-tool-factory.ts`) enforces the same rule from the other side: direct memory mutations are gated behind "Memory changes must flow through propose_memory_change review", and the agent gets only `propose_memory_change` plus the read tools `list_project_memory` and `list_user_memory` (both `sharedOnly`). Trust policies live in [the agent subsystem](/FollowThrough.ai/subsystems/agent/); the `memory` pipeline defaults to review-first with an optional minimum confidence of 0–100.
+
+## How the agent reads memory
+
+The two scopes reach the agent by different paths:
+
+- **Profile memory** is injected into every run. The context builder (`src/lib/server/services/agent/runs/context.ts`) lists profile entries, keeps those with `shareWithAgents`, and passes their content as `userMemory`.
+- **Project memory** is retrieved on demand, not front-loaded. Each shared, non-deleted project entry is chunked and embedded into the retrieval index by `EmbeddedMemoryIndexer` under the source title "Project memory" — see [the search subsystem](/FollowThrough.ai/subsystems/search/). The indexer is also the dedup mechanism: re-indexing an entry replaces its prior chunks, and an entry that is deleted or unshared has its chunks removed, so the index never serves stale or private memories. Profile entries never enter the index at all.
+
+## Repository
+
+`MemoryEntryRepository` (`src/lib/server/repositories/memory/`) is implemented by `MemoryRecords` in Postgres. All queries are scoped to the acting user. `list` filters by project — an omitted `projectId` means `projectId IS NULL`, i.e. profile memory — excludes soft-deleted rows unless `includeDeleted` is set, and orders by `updatedAt` descending. The table keeps superseded and soft-deleted rows, indexed on `(projectId, deletedAt, updatedAt)`, which is what makes `revert` a state change rather than a reconstruction.
+
+## Invariants callers rely on
+
+- A proposal is all-or-nothing: provenance, suggestion, and (when trusted) the applied entry commit together or not at all.
+- Every applied suggestion has an applied artifact id pointing at a memory entry, and every applied entry traces back to its proposal through `provenanceId`.
+- An accepted memory suggestion can always be reverted, because apply only ever inserts or soft-deletes.
+- Nothing the agent can call mutates an entry without a suggestion existing for the change.

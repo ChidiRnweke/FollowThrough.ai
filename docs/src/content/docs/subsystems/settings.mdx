@@ -1,0 +1,79 @@
+---
+title: Settings
+description: Agent defaults, tool enablement, and trust policies share one rule — every unset per-user setting falls back to the deployment default, never to a hard-coded literal.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Mermaid from '../../../components/mermaid.astro';
+import Screenshot from '../../../components/screenshot.astro';
+
+Settings is not a capability of its own. It is three controllers under `src/lib/server/controllers/agent/` — `settings/`, `tool-preferences/`, `trust-policies/` — plus the `/settings` page that renders them. What holds it together is a single resolution rule: a per-user setting that is absent means "use the deployment default", and the deployment default is always an environment value, never a constant buried in a service.
+
+## Two writers, one validation point
+
+Every setting can be changed from the settings page and by the agent itself — `update_agent_preferences`, `set_tool_enabled`, and `update_trust_policy` are ordinary agent tools. Both paths land on the same controllers, so each limit is enforced exactly once, in the controller (`src/lib/server/controllers/agent/settings/controller.ts`):
+
+- Numeric limits are **rejected, not clamped**: web search results per search 1–50, total results per run 1–100, agent turn limit 1–50. A caller asking for 500 results has misunderstood the setting; silently storing 50 would tell it otherwise.
+- The chat model must exist in the OpenRouter catalog and support tool calling; vision models must accept image input; the inline-completion model is checked for existence only, because it never calls tools.
+- The web search engine must be one of `auto`, `native`, `exa`, `firecrawl`, `parallel`, `perplexity` (`webSearchEngines` in `src/lib/models/agent/index.ts`).
+
+<Mermaid
+	source={`
+flowchart LR
+	form["/settings forms"] --> controllers["Settings controllers — validation happens once"]
+	tools["Agent tools: update_agent_preferences, set_tool_enabled, update_trust_policy"] --> controllers
+	controllers --> stores["Preference stores — merge and resolution rules"]
+	stores --> repos["Repositories (Drizzle)"]
+	repos --> tables["agent_preferences · tool_preferences · project_tool_overrides · trust_policies"]
+`}
+/>
+
+## Agent preferences
+
+`AgentPreferences` (`src/lib/models/agent/index.ts`) stores the user's model choices (chat, vision, inline, attachment-reading), web search engine and result caps, the turn limit, the execution mode, and the inline-suggestions switch. Every optional field is **absent rather than null** when unset, and the update input is a three-state partial edit: omitted keeps the stored value, a value sets it, and explicit `null` clears it back to the deployment default. That is what lets the agent change one setting without resending the rest.
+
+When a run needs a value, resolution layers override over preference over environment (`src/lib/server/services/agent/runs/preferences.ts`):
+
+- Chat and vision model: conversation override → user preference → `OPENROUTER_DEFAULT_MODEL` (default `openai/gpt-5.6`).
+- Turn limit: user preference → `DEFAULT_AGENT_MAX_TURNS` (20).
+- Web search: the user's engine and caps layer over the environment's `OPENROUTER_WEB_SEARCH_*` options, so a user who sets only a result cap still gets the deployment's engine. With nothing set anywhere, chat searches use `exa`, 20 results per search, 40 per run (`CHAT_WEB_SEARCH_DEFAULTS`).
+- Inline completion walks a longer chain: the user's inline model → `OPENROUTER_INLINE_COMPLETION_MODEL` → `OPENROUTER_INLINE_MODEL` → `DEFAULT_GENERATION_MODEL`.
+
+A user with no stored row gets `approval_required` execution mode and inline suggestions on.
+
+## Tool preferences and locked tools
+
+The settings UI never maintains its own tool list. `describeAgentTools()` (`src/lib/server/agent-tool-catalog-factory.ts`) derives the catalog from the same `buildDefinitions` the agent runs on — with inert controllers that throw if any tool touches them at define time — and is deliberately not cached, so a tool added in dev appears on reload. The settings surface cannot drift from what exists.
+
+Each tool resolves through `ToolAccess` (`src/lib/server/services/agent/tools/preferences.ts`) in a fixed order: **locked → project override → workspace (user) default → enabled**. Unknown tool names resolve to enabled — a tool added since the stored rows were written is the same case as a tool the user never touched. The resolved `source` (`default` | `user` | `project`) is what lets the UI offer "Reset" on a project override. Writes go through the store, not the UI, so the agent's own `set_tool_enabled` is held to the same rules: unknown names and locked tools are rejected with a `ValidationError`.
+
+Four tools are locked on (`LOCKED_TOOL_NAMES` in `src/lib/server/agent-tool-factory.ts`): `get_workspace_context` and `load_skill`, without which the agent loses its grounding and its instructions, and `list_tool_preferences` and `set_tool_enabled`, without which it could disable its own way back. Locked tools read as enabled even if a stored row says otherwise, and the definitions filter keeps them even when the access check would reject them. `search_tools` and `use_tool` need no entry — they are assembled outside the definitions list, so no preference can reach them.
+
+A disabled tool disappears entirely: from chat, from tool search, and from any connected MCP client.
+
+<Screenshot id="tools" alt="The Tools settings tab listing agent tools with enable switches" />
+
+## Trust policies
+
+A trust policy (`TrustPolicy`) says, per pipeline, whether its suggestions auto-accept or wait for review: `extract_promises`, `relate`, `reference`, `agent`, `memory`. `ToolTrust.list()` materializes all five with `autoAcceptEnabled: false` even when nothing is stored, so the UI always renders five rows. An update is an upsert keyed on `(userId, pipeline)` — it replaces the previous rule for that pipeline and preserves `createdAt`.
+
+The evaluator (`shouldAutoAccept`) requires the policy to be enabled and, when a `minimumConfidence` (0–100) is set, the suggestion's confidence to meet it. Two invariants callers rely on:
+
+- The `reference` pipeline never auto-accepts, whatever is stored.
+- The threshold is a whole percent, matching the confidence stored on suggestions and enforced by a database CHECK.
+
+The evaluator is consulted where suggestions are created — today the promise-extraction path in the todos controller and the memory proposal path. The settings UI toggles review/auto-accept per pipeline; a confidence threshold can be set through the agent's `update_trust_policy` tool, and the UI preserves and displays it ("Auto-accepts above N% confidence").
+
+## Where defaults come from
+
+Deployment defaults live in `APPLICATION_DEFAULTS` in `src/lib/server/config.ts`, and `hydrateEnvironment()` pulls every application key through the secrets backend with those defaults as fallback. The comment there is the invariant: services hydrate lazily, so a key without an entry in `APPLICATION_DEFAULTS` is never pulled from the secrets backend — and a user who clears the matching per-user setting would fall back to a hard-coded literal instead of whatever the deployment configured. `OPENROUTER_INLINE_COMPLETION_MODEL` is deliberately absent from the defaults: it is checked ahead of `OPENROUTER_INLINE_MODEL`, so giving it a default would make that one unreachable.
+
+## Delivery
+
+`/settings` (`src/routes/(app)/settings/`) has five tabs — Models, Agents, Tools, MCP access, Trust policies — with the tab and the tool-scope project in the URL, so they survive reload. Saves go through the remote functions in `src/lib/remote/settings/settings.remote.ts`: the Models and Agents tabs are separate forms that each send only their own fields, and the controller merges the partial updates. The Agents tab sliders rest on the deployment default resolved server-side — including env overrides — so the UI never hardcodes a number a deployment may have changed. The Tools tab paginates at 15 rows and scopes edits to all projects or one.
+
+<Aside type="note">
+
+Execution mode is also settable per conversation from the composer — the mode is too consequential to hide behind settings alone. How it gates a run's durable changes — and how trust policies auto-accept suggestions — is documented under [agent](/FollowThrough.ai/subsystems/agent/).
+
+</Aside>

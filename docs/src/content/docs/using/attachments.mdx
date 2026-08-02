@@ -1,0 +1,41 @@
+---
+title: Attachments
+description: Files up to 50 MB are read for you — OCR'd to markdown, their images described — so the agent can answer from them.
+---
+
+Attachments are files and images that belong to a project or a single note. Once uploaded, each file is read in the background: its text is extracted, and the result is what the agent searches and quotes when it answers questions about the project.
+
+## What happens after you upload
+
+Every attachment carries a status badge that moves through a small pipeline:
+
+- **queued** — the upload is stored and waiting to be processed.
+- **processing** — the file is being read right now.
+- **ready** — the full text was extracted and indexed.
+- **partial** — the text was extracted, but only part of it fit the search index.
+- **unsupported** — the file is stored and downloadable, but nothing can read its format, so it has no searchable text.
+- **failed** — processing errored. The row shows the failure message and offers a Retry action.
+
+What "read" means depends on the format. Plain text files — Markdown, JSON, code, CSV, and similar — are decoded directly. PDFs, Office documents, ebooks, and images go through OCR, which returns markdown with tables intact. Images embedded in a document are replaced by short factual descriptions at the position where they appeared, and a standalone image gets a description of itself alongside any text the OCR recovered. Documents are read up to 100 pages.
+
+Files up to 50 MB are accepted.
+
+## What you can do
+
+The Attachments page lives under a project (`Project > Attachments`) and lists every file in the project, whichever note owns it. The same list appears in a dialog from the project overview.
+
+- **Add attachment** picks a file and uploads it. The list refreshes itself when the upload is queued; a Refresh button re-checks processing states.
+- Row actions appear on hover: **Download** the original file, **Retry** a failed processing run, or **Remove** the file. Removal asks for confirmation and is permanent.
+- Pasting or dropping an image into a note uploads it as an attachment of that note and inserts it into the document — no separate trip to the Attachments page.
+
+An empty project shows the list's purpose instead of a blank space: files you add ground the agent's answers in the project.
+
+## The edges
+
+- An archived note cannot receive new attachments.
+- Uploading the wrong bytes fails at completion: the server checks the stored file against the size and checksum you declared, and a mismatch rejects the upload rather than keeping a corrupt file.
+- An upload you start but never finish expires after ten minutes; the reservation and any staged bytes are swept up automatically later.
+- Removing an attachment deletes the stored file and its search index entries. Notes that embedded the image keep the reference, but the image no longer loads.
+- Processing never blocks the upload: the file is downloadable the moment it lands, whatever its badge says.
+
+See [how attachments are processed](/FollowThrough.ai/subsystems/attachments/) for the storage and OCR pipeline underneath.

@@ -1,0 +1,62 @@
+---
+title: Projects
+description: Projects are a thin catalog over the notes table — the move operation is the only transactional write, and a partial unique index enforces one active project per name.
+---
+
+import Mermaid from '../../../components/mermaid.astro';
+
+A project is a named container that scopes the other capabilities: every note, todo, memory entry, artifact, and attachment carries a `ProjectId`. The subsystem itself owns only the project record and the folder/entry tree built on top of the notes table.
+
+## Model
+
+`src/lib/models/projects/index.ts` is self-contained: it re-declares its own branded `UserId`, `NoteId`, and `DateTime` rather than importing them from `models/identity` or `models/notes`, per the capability rule that a model imports nothing from another capability's model. That is the identity split made concrete — `models/identity` owns `User`, `Session`, `ApiToken`, and the `ActorContext` (`{ userId }`) every service and repository method takes as its first argument, while the projects model only brands the strings.
+
+The model exports `Project`, the `ProjectView` (a project plus its `ProjectTreeNode` tree of note summaries), and the input/output types for each controller operation. It also names `DEFAULT_PROJECT_NAME = 'General'`, the auto-created project that holds unsorted notes and todos.
+
+## Service
+
+`ProjectCatalog` (`src/lib/server/services/projects/catalog.ts`) implements all seven contract facets from `contracts.ts` — creator, reader, lister, editor, tree reader, folder creator, entry mover — exported as `Pick<>` types so consumers depend on the narrow facet they use. The rules it enforces:
+
+- Names and descriptions are trimmed; a blank name is a `ValidationError`, and every write first re-reads the project so a stale or foreign id is a `NotFoundError`.
+- The tree filters out `skill` entries — skills live in the same notes table but are not project documents.
+- A folder's parent must itself be a folder. A move rejects self-parenting and moving an entry below its own descendant, and requires a non-negative integer position.
+- A move recomputes positions for both the old and the new sibling list, clamping an out-of-range position to the end.
+
+`resolution.ts` adds `ensureProjectForActor`: given an explicit id it resolves or throws `NotFoundError`; given none it returns the actor's first active project, creating `General` when the actor has none.
+
+## Controller
+
+`ProjectsController` (`src/lib/server/controllers/projects/controller.ts`) is the application boundary: `list`, `get`, `create`, `rename`, `archive`, `createFolder`, `move`. `get` fetches the project and its tree in parallel. `move` is the only write that needs cross-entry bookkeeping — it repositions two sibling lists — so it alone runs through the `AtomicOperation` transaction runner from the workspace model; the other writes delegate directly.
+
+<Mermaid
+	source={`
+flowchart LR
+	remote["projects.remote.ts — zod-validated commands"] --> controller["Projects controller"]
+	controller -- "list / get / create / rename / archive / createFolder" --> catalog["ProjectCatalog"]
+	controller -- "move" --> tx["AtomicOperation runner"]
+	tx --> catalog
+	catalog --> records["ProjectRecords — Drizzle / Postgres"]
+`}
+/>
+
+The delivery boundary is a set of SvelteKit remote commands in `src/lib/remote/projects/projects.remote.ts`, each with a zod schema; the client store `project-actions.svelte.ts` calls them and invalidates all loaded data on success.
+
+## Repository
+
+`ProjectRecords` (`src/lib/server/repositories/projects/postgres/projects.ts`) implements both `ProjectRepository` and `ProjectTreeRepository` against Drizzle. The invariants callers rely on:
+
+- A partial unique index `projects_user_name_unique` on `(userId, lower(name))` where `archived_at is null` makes active project names unique per user, case-insensitively; a violation surfaces as `ConflictError('An active project with this name already exists')`. Archiving frees the name.
+- `findById`, `listActive`, and `update` all exclude archived rows, so an archived project is unreachable through the catalog — archive is one-way.
+- Tree reads list the project's unarchived notes ordered by `position` then `createdAt`; `persistOrder` applies the move's recomputed positions row by row inside the controller's transaction.
+
+## The workspace controller and the four resources
+
+The projects subsystem is read twice at the shell level. `Workspace.getShellContext` (`src/lib/server/controllers/workspace/controller.ts`) fans out five parallel reads — user, projects, note tree, enabled skills, proposed suggestions — and derives `pendingMemoryNotifications` from them: proposed memory suggestions are counted per project, and suggestions with no `projectId` become a single "Profile memory" row pointing at `/profile`. Projects with no pending memories are omitted.
+
+The project overview loader composes the four resource counts in parallel from the owning controllers — `todos().list` with `status: 'open'`, `memory().list`, `deliverables().listArtifacts`, `attachments().listForProject` — and computes the overdue count itself, because a clock comparison in render would disagree between SSR and hydration.
+
+The project/profile split is a modeling decision, not a UI one: `MemoryEntry.projectId` is optional, and omitting it means profile memory — see [memory](/FollowThrough.ai/subsystems/memory/). The resources themselves are documented under [todos](/FollowThrough.ai/subsystems/todos/) and [attachments](/FollowThrough.ai/subsystems/attachments/).
+
+## Failure modes
+
+Validation errors carry the server's message to the user — the actions store keeps `lastError` from the HTTP error body and the UI prefers it over generic copy, which is how "name already in use" reaches the dialog. A move that fails validation fails before any position write, and one that fails mid-write rolls back inside the transaction runner, so sibling positions are never left half-renumbered.

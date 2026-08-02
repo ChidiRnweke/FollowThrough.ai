@@ -30,7 +30,7 @@ const diagram = source.trim();
 		startOnLoad: false,
 		securityLevel: 'loose',
 		fontFamily: "'Inter Variable', sans-serif",
-		flowchart: { curve: 'basis', htmlLabels: true }
+		flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: false }
 	} as const;
 
 	mermaid.initialize({
@@ -47,7 +47,27 @@ const diagram = source.trim();
 			fontSize: '14px'
 		}
 	});
+	/**
+	 * Pin each SVG to its own viewBox size. Mermaid emits `width="100%"` with a
+	 * `max-width` style and honours `useMaxWidth: false` inconsistently, and a
+	 * 1900px flowchart squeezed into a 630px column renders its 16px labels at
+	 * about 5px. Natural size plus the container's horizontal scroll keeps them
+	 * legible.
+	 */
+	function pinToNaturalSize(querySelector: string) {
+		for (const svg of document.querySelectorAll<SVGSVGElement>(`${querySelector} svg`)) {
+			const box = svg.viewBox.baseVal;
+			if (!box?.width) continue;
+			svg.removeAttribute('width');
+			svg.removeAttribute('height');
+			svg.style.width = `${box.width}px`;
+			svg.style.height = `${box.height}px`;
+			svg.style.maxWidth = 'none';
+		}
+	}
+
 	await mermaid.run({ querySelector: '.mermaid-light' });
+	pinToNaturalSize('.mermaid-light');
 
 	mermaid.initialize({
 		...shared,
@@ -64,4 +84,5 @@ const diagram = source.trim();
 		}
 	});
 	await mermaid.run({ querySelector: '.mermaid-dark' });
+	pinToNaturalSize('.mermaid-dark');
 </script>

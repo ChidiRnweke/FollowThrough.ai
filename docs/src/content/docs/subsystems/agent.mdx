@@ -1,0 +1,70 @@
+---
+title: Agent
+description: Agent runs are durable, idempotent, event-sourced records — a run parked on an approval survives a restart and resumes from a serialized provider state.
+---
+
+import Mermaid from '../../../components/mermaid.astro';
+
+The agent subsystem turns a chat prompt into a durable run: a record with a state machine, an append-only event log the client polls by cursor, and a background executor that drives the OpenAI Agents SDK against OpenRouter. The user-facing behavior is documented in [The agent](/FollowThrough.ai/using/the-agent/).
+
+## Layers
+
+- **Model** — `src/lib/models/agent/`. Owns `AgentRun`, `Conversation`, `AgentEvent`, and the run state machine. `assertAgentRunTransition` enforces it: `queued → running → awaiting_approval | completed | failed`, with `cancelling → cancelled` as the stop path. `completed`, `failed`, and `cancelled` are terminal; nothing leaves them.
+- **Controller** — `src/lib/server/controllers/agent/controller.ts`. The public contract: `submit`, `getRun`, `listRunEvents`, `decide` / `decideMany`, `cancel`, `retry`, and the conversation operations. It orchestrates repositories and the executor; it never talks to the provider.
+- **Services** — `src/lib/server/services/agent/`: `runs/` (lifecycle, reasoning runner, context, events, preferences), `conversations/` (journal, buffer, rewind), `tools/` (preferences, retriever).
+- **Repositories** — `src/lib/server/repositories/agent/postgres/`: runs, run events, decisions, sessions, conversations, tool preferences, trust policies.
+
+## Invariants callers rely on
+
+- **Idempotent submission.** `submit` is keyed on `input.requestId`. A repeated submission returns the existing run's receipt, so a client retry after a dropped response cannot double-fire the agent. The insert itself is `ON CONFLICT DO NOTHING`; a conflict is re-read and returned as the duplicate's receipt.
+- **Frozen input.** The user's limits and preferences (max turns, web search caps, model overrides, image validation) are resolved and frozen onto `inputSnapshot` at submission. A run retried later replays that snapshot, not the user's current settings.
+- **One active run per conversation.** Enforced by a partial unique index (`agent_runs_active_conversation_unique` over non-terminal statuses). A conflicting submit surfaces as a `ValidationError`.
+- **All-or-nothing approval batches.** `decideMany` validates every call id against the run's pending decisions before recording any; one unknown id rejects the whole batch, and the run requeues only after all decisions are recorded. A turn can park on several tool calls at once, which is why the batch exists.
+- **Execution after commit.** Background execution starts only after the submit transaction commits, so a failed queue never leaks a run that was never persisted.
+- **Retry is a faithful replay.** Only `failed` and `cancelled` runs retry — never `completed` — and the new run carries the original's model, execution mode, and frozen input.
+
+## Run lifecycle
+
+The controller returns a receipt immediately; `AgentRunLifecycle.execute` runs in the background. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams `AgentReasoning` (the `AgentRunner`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers.
+
+<Mermaid
+	source={`
+flowchart LR
+	submit["submit(requestId)"] --> queued["queued"]
+	queued --> running["running"]
+	running -->|"interruptions"| awaiting["awaiting_approval"]
+	awaiting -->|"decideMany"| queued
+	running --> completed["completed"]
+	running --> failed["failed"]
+	running --> cancelling["cancelling"]
+	cancelling --> cancelled["cancelled"]
+	failed -->|"retry"| queued
+	cancelled -->|"retry"| queued
+`}
+/>
+
+When the SDK reports interruptions, the runner yields an `approval_checkpoint`: the serialized provider state, the pending decisions, and the session items are persisted in one transaction and the run parks in `awaiting_approval`. On `decideMany`, the run requeues and the runner rebuilds the provider state from the serialized form, applies each decision to its matching interruption, and continues the same turn. A decision with no matching interruption is skipped — but a resume that matches none fails, because state and decisions have genuinely diverged.
+
+The client reads events over SSE at `GET /api/agent/runs/[runId]/events`. The stream replays from the `Last-Event-ID` (or `after`) cursor via `listRunEvents`, pushes on event-bus notifications, and falls back to a 5-second poll in case a notification is missed; it closes itself once the run is terminal and the cursor has caught up. Cancellation aborts in-process execution immediately via a per-run `AbortController`; a run cancelled while still queued also gets a `cancelled` event so the client's stream explains the silence.
+
+## The tool catalog
+
+Every agent capability is a thin adapter over an existing controller method, defined once in `src/lib/server/agent-tool-factory.ts` (`AgentToolDefinition`). The `agentToolCoverage` map classifies every method of every controller as `read`, `proposal`, `mutation`, or `excluded` with a reason — the type-level `Coverage<T>` makes an unclassified controller method a compile error. Exclusions are deliberate: the agent cannot delete todos, upload or remove attachments, or write project memory directly (memory flows through `propose_memory_change` review).
+
+Two surfaces wrap the same definitions:
+
+- **In-app agent** — a short first-class list (`search`, `get_note`, `list_todos`, `load_skill`, …) is registered directly; everything else is discovered through `search_tools` and dispatched by exact name through `use_tool`, keeping the per-turn context small. Unknown tool names return a recoverable error with near-name suggestions instead of failing the turn.
+- **MCP server** — wraps the same definitions for external hosts.
+
+`needsApproval` is computed per tool: `mutation` tools require approval only in `approval_required` mode; in `auto_accept` mode they run directly. Four tools are locked on (`get_workspace_context`, `load_skill`, `list_tool_preferences`, `set_tool_enabled`) — without them the agent loses its grounding or its own way back from a deselection. Any other tool can be disabled per user or per project; the settings surface derives its list from the same `buildDefinitions` the agent runs on (`describeAgentTools`), so it cannot drift from what exists.
+
+## Tracing
+
+Telemetry is opt-in and assembled in `scripts/otel-instrumentation.js`, a Node preload: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, a `NodeSDK` starts with node auto-instrumentations plus the OpenInference instrumentation for `@openai/agents` (patched in manually — the module hooks don't reach ESM). Everything exports to one OTLP collector; spans carrying the `openinference.project.name` resource attribute are routed on to Phoenix. `OTEL_*` and `PHOENIX_*` are platform keys: the secrets hydration in `config.ts` deliberately never reads them from the secrets backend.
+
+Each turn runs inside `traceAgentTurn` (`src/lib/server/services/telemetry.ts`), which opens an `agent.turn` root span with the conversation as session id, the model and run id as metadata, and the prompt as input. The SDK's own AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval, because the resumed turn opens a fresh root and an un-ended span would orphan its children; and expected cancellations record `cancelled` as output with an OK status rather than an error.
+
+## Where it touches other subsystems
+
+- Tools call the [todos](/FollowThrough.ai/subsystems/todos/) and memory controllers; mutations to either appear in the chat as tool activity and, in approval mode, as approval cards.
+- The `search` tool is the [knowledge search](/FollowThrough.ai/subsystems/search/) retrieval boundary scoped by the conversation's project.

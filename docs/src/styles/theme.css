@@ -213,6 +213,29 @@ summary {
 /* ============================================================
    Chrome (flat surfaces, hairlines)
    ============================================================ */
+/* Sidebar: app density. Starlight marks every group label `.large`
+   (base/semibold white) at every depth, which turns the API reference into a
+   wall of bold — quiet nested labels to sm/medium; only the two top-level
+   documentation halves keep the semibold treatment. */
+.sidebar .group-label .large {
+	font-size: var(--sl-text-sm);
+	font-weight: 500;
+	color: var(--sl-color-gray-1);
+}
+.sidebar .top-level > li > details > summary .group-label .large,
+.sidebar .top-level > li > a.large {
+	font-size: var(--sl-text-base);
+	font-weight: 600;
+	color: var(--sl-color-white);
+}
+
+/* Pagination: the type ladder, not a billboard (Starlight sets the title at
+   --sl-text-2xl). */
+.pagination-links a .link-title {
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
 /* Heading anchor links: Starlight's default gap (0.25em) crowds the icon
    against the heading text. */
 .sl-markdown-content .sl-heading-wrapper {
@@ -377,7 +400,15 @@ summary {
 }
 .sl-markdown-content .ft-mermaid .mermaid {
 	display: flex;
-	justify-content: center;
+	/* `safe` keeps the left edge reachable once the diagram overflows; plain
+	   centring would push it under the scroll origin. */
+	justify-content: safe center;
+	overflow-x: auto;
+}
+/* Natural-size SVGs (mermaid `useMaxWidth: false`) must not be squeezed by
+   the flex container — let them overflow into the scroll area instead. */
+.sl-markdown-content .ft-mermaid .mermaid svg {
+	flex: 0 0 auto;
 }
 .sl-markdown-content .ft-mermaid .mermaid-dark {
 	display: none;
