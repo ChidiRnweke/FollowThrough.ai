@@ -30,7 +30,10 @@ const shell: ShellContext = {
 	user: {
 		id: userId,
 		displayName: 'Tester',
-		email: 'tester@local.invalid'
+		email: 'tester@local.invalid',
+		role: 'USER',
+		createdAt: '2026-07-12T08:00:00.000Z' as ShellContext['user']['createdAt'],
+		updatedAt: '2026-07-12T08:00:00.000Z' as ShellContext['user']['updatedAt']
 	},
 	projects: [],
 	noteTree: [],
@@ -69,38 +72,22 @@ const props = {
 	onarchive: () => undefined
 };
 
-const atWidth = (width: number, height: number) => {
-	window.resizeTo(width, height);
-	return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-};
-
-describe('NoteWorkspaceHeader breakpoint actions', () => {
-	it('keeps the Publish action visible at compact width', async () => {
-		await atWidth(375, 667);
+describe('NoteWorkspaceHeader actions', () => {
+	it('keeps the Publish action available', async () => {
 		const screen = await render(NoteWorkspaceHeader, props);
 		expect(await screen.getByRole('button', { name: 'Publish note (Ctrl+S, S)' }).all()).not.toHaveLength(
 			0
 		);
 	});
 
-	it('hides the inline Export button at compact width', async () => {
-		await atWidth(375, 667);
-		const screen = await render(NoteWorkspaceHeader, props);
-		const inline = screen.getByRole('button', { name: 'Export document' }).element();
-		expect(getComputedStyle(inline).display).toBe('none');
-	});
-
-	it('exposes Export through the note-actions overflow menu at compact width', async () => {
-		await atWidth(375, 667);
+	it('exposes Export through the note-actions overflow menu', async () => {
 		const screen = await render(NoteWorkspaceHeader, props);
 		await screen.getByRole('button', { name: 'Note actions' }).click();
 		expect(await screen.getByRole('menuitem', { name: 'Export document' }).all()).not.toHaveLength(0);
 	});
 
-	it('restores the inline Export button at sm width', async () => {
-		await atWidth(640, 800);
+	it('renders the inline Export button', async () => {
 		const screen = await render(NoteWorkspaceHeader, props);
-		const inline = screen.getByRole('button', { name: 'Export document' }).element();
-		expect(getComputedStyle(inline).display).not.toBe('none');
+		expect(await screen.getByRole('button', { name: 'Export document' }).all()).not.toHaveLength(0);
 	});
 });

@@ -1,0 +1,29 @@
+---
+/**
+ * A resource row — the app's ResourceRow verbatim: brand-wash icon chip,
+ * base/medium label, muted supporting line, row-interactive hover. Wrap in
+ * an <li> inside HomeSection.
+ */
+import { Icon } from '@astrojs/starlight/components';
+import type { StarlightIcon } from '@astrojs/starlight/types';
+
+interface Props {
+	href: string;
+	icon: StarlightIcon;
+	label: string;
+	hint: string;
+}
+
+const { href, icon, label, hint } = Astro.props;
+
+// Content links must carry the site base (`/FollowThrough.ai/`), same rule as public assets.
+const withBase = `${import.meta.env.BASE_URL}${href.replace(/^\/+/, '')}`;
+---
+
+<a class="ft-row ft-resource-row" href={withBase}>
+	<span class="ft-icon-chip"><Icon name={icon} /></span>
+	<span class="ft-row-text">
+		<span class="ft-row-label">{label}</span>
+		<span class="ft-row-hint">{hint}</span>
+	</span>
+</a>

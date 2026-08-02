@@ -205,7 +205,7 @@
 		// Diagrams follow the export's own palette, never the reader's colour mode: the
 		// document lands somewhere we do not control, and a dark-mode render is unusable
 		// on paper. Defaults to light for the same reason.
-		const mermaid = await initializeMermaid({
+		const mermaid = initializeMermaid({
 			base: settings.diagramTheme?.base ?? 'light',
 			...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
 		});
@@ -225,7 +225,7 @@
 				}
 			}
 		} finally {
-			await initializeMermaid(mode.current === 'dark');
+			initializeMermaid(mode.current === 'dark');
 		}
 		return { svgs, pngs };
 	}

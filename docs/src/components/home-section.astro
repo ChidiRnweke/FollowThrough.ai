@@ -1,0 +1,19 @@
+---
+/**
+ * A group of resource rows under an eyebrow heading — the project-overview
+ * "spaces cluster" recipe: 8px inside the group, spacing only, no dividers.
+ * Slot takes <li> items wrapping ResourceRow.
+ */
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<section class="ft-home-section">
+	<h2 class="ft-eyebrow">{title}</h2>
+	<ul class="ft-resource-list">
+		<slot />
+	</ul>
+</section>

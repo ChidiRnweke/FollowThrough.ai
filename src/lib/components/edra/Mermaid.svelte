@@ -177,7 +177,7 @@
 		const id = `mermaid-${crypto.randomUUID().slice(0, 8)}`;
 		try {
 			// Re-apply the config each render so diagrams always use the current theme.
-			await initializeMermaid(colorMode.current === 'dark');
+			initializeMermaid(colorMode.current === 'dark');
 			const svg = await renderMermaidOffscreen(id, source);
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;

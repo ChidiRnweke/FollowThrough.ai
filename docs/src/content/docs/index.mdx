@@ -1,35 +1,30 @@
 ---
-title: FollowThrough.ai Documentation
-description: Developer documentation and API reference for the FollowThrough.ai application.
+title: FollowThrough.ai
+description: How FollowThrough turns notes into finished work — product workflows, self-hosting, architecture, and the internal API contracts.
 template: splash
-hero:
-  tagline: FollowThrough.ai
-  title: Developer documentation
-  actions:
-    - text: Get started
-      link: /getting-started/
-      variant: primary
-    - text: API reference
-      link: /reference/
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import HomeHero from '../../components/home-hero.astro';
+import HomeSection from '../../components/home-section.astro';
+import ResourceRow from '../../components/resource-row.astro';
+import Screenshot from '../../components/screenshot.astro';
 
-FollowThrough.ai is an agentic workspace for turning intentions into finished work. This documentation site covers both how the product works and how its internal application API is structured.
+<HomeHero />
 
-The site is organized using the [Diátaxis](https://diataxis.fr) methodology — four quadrants, each serving a distinct documentation need:
+<Screenshot id="today-screen" alt="The Today page: overdue, due today, and waiting-on groups with pinned notes below." />
 
-<CardGrid>
-	<Card title="Getting started">
-		Follow a tutorial and build your first project end-to-end.
-	</Card>
-	<Card title="How-to guides">
-		Practical, task-oriented guides for real workflows such as saving a note offline or configuring agent skills.
-	</Card>
-	<Card title="API reference">
-		Generated reference documentation for the internal TypeScript API, produced from docstrings via TypeDoc.
-	</Card>
-	<Card title="Explanation">
-		Conceptual material on the architecture and the reasoning behind the design.
-	</Card>
-</CardGrid>
+<div className="ft-home-groups">
+
+<HomeSection title="User documentation">
+	<li><ResourceRow href="/getting-started/" icon="rocket" label="Getting started" hint="Create a project, extract commitments from a note, and ship an artifact. About ten minutes." /></li>
+	<li><ResourceRow href="/explanation/agents-propose-users-accept/" icon="approve-check-circle" label="Trust model" hint="What the agent may do on its own, and what always waits for your accept." /></li>
+</HomeSection>
+
+<HomeSection title="Developer documentation">
+	<li><ResourceRow href="/self-hosting/" icon="server" label="Self-hosting" hint="Closed beta, MIT code. Run it on your own box with Docker, Postgres, and two API keys." /></li>
+	<li><ResourceRow href="/guides/add-a-capability/" icon="pencil" label="How-to guides" hint="Add a capability without breaking the layering rules; write docstrings the reference build actually renders." /></li>
+	<li><ResourceRow href="/reference/" icon="code-branch" label="API reference" hint="Every controller contract the app exposes, generated from docstrings. Undocumented symbols do not appear." /></li>
+	<li><ResourceRow href="/explanation/architecture/" icon="information" label="Architecture" hint="Why capabilities outrank technologies, and why agents propose while users accept." /></li>
+</HomeSection>
+
+</div>

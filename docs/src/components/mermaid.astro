@@ -1,0 +1,67 @@
+---
+/**
+ * A Mermaid diagram, rendered once per theme with the docs' own tokens and
+ * swapped with the Starlight theme (the same trick as the screenshots).
+ * Diagrams stay flat: no per-node colors.
+ *
+ * The source travels as a prop, not a slot: MDX runs slot children through
+ * the Markdown pipeline, which rewrites `-->` to an en-dash and straight
+ * quotes to curly ones before Mermaid ever sees them.
+ */
+interface Props {
+	source: string;
+}
+
+const { source } = Astro.props;
+const diagram = source.trim();
+---
+
+<div class="ft-mermaid">
+	<pre class="mermaid mermaid-light">{diagram}</pre>
+	<pre class="mermaid mermaid-dark">{diagram}</pre>
+</div>
+
+<script>
+	import mermaid from 'mermaid';
+
+	// Token values mirror docs/src/styles/theme.css so a diagram sits on the
+	// page like any other surface: paper background, olive lines, teal accent.
+	const shared = {
+		startOnLoad: false,
+		securityLevel: 'loose',
+		fontFamily: "'Inter Variable', sans-serif",
+		flowchart: { curve: 'basis', htmlLabels: true }
+	} as const;
+
+	mermaid.initialize({
+		...shared,
+		theme: 'base',
+		themeVariables: {
+			background: 'transparent',
+			primaryColor: 'oklch(0.966 0.005 106.5)',
+			primaryTextColor: 'oklch(0.153 0.006 107.1)',
+			primaryBorderColor: 'oklch(0.888 0.007 106.5)',
+			lineColor: 'oklch(0.556 0.031 107.3)',
+			secondaryColor: 'oklch(0.978 0.005 106.5)',
+			tertiaryColor: 'transparent',
+			fontSize: '14px'
+		}
+	});
+	await mermaid.run({ querySelector: '.mermaid-light' });
+
+	mermaid.initialize({
+		...shared,
+		theme: 'base',
+		themeVariables: {
+			background: 'transparent',
+			primaryColor: 'oklch(0.228 0.013 107.4)',
+			primaryTextColor: 'oklch(0.988 0.003 106.5)',
+			primaryBorderColor: 'oklch(1 0 0 / 14%)',
+			lineColor: 'oklch(0.737 0.021 106.9)',
+			secondaryColor: 'oklch(0.286 0.016 107.4)',
+			tertiaryColor: 'transparent',
+			fontSize: '14px'
+		}
+	});
+	await mermaid.run({ querySelector: '.mermaid-dark' });
+</script>

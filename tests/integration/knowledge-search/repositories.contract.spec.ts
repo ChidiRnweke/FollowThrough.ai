@@ -77,75 +77,12 @@ describe('Postgres deferred embedding invariants', () => {
 		chunkIndex: 0,
 		...(embedded ? { embedding: vector, embeddingModel: 'contract-model' } : {})
 	});
-	it('reports a staged chunk with no vector as pending', async () => {
-		const { owner, project, note } = await seedNote('911');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [
-			chunk('911', project.id, note.id, 'pending text', false)
-		]);
-		expect(await repository.listPending(owner, source)).toHaveLength(1);
-	});
-	it('keeps a pending chunk out of vector search', async () => {
-		const { owner, project, note } = await seedNote('912');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [
-			chunk('912', project.id, note.id, 'pending text', false)
-		]);
-		const matches = await repository.searchByEmbedding(owner, vector, 10, project.id);
-		expect(matches).toEqual([]);
-	});
-	it('still answers vector search from the superseded chunk after a re-stage', async () => {
-		const { owner, project, note } = await seedNote('913');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [chunk('913', project.id, note.id, 'original', true)]);
-		await repository.stage(owner, source, [chunk('913b', project.id, note.id, 'rewritten', false)]);
-		const matches = await repository.searchByEmbedding(owner, vector, 10, project.id);
-		expect(matches.map((match) => match.document.content)).toEqual(['original']);
-	});
-	it('hides the superseded chunk from lexical search', async () => {
-		const { owner, project, note } = await seedNote('914');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [chunk('914', project.id, note.id, 'original', true)]);
-		await repository.stage(owner, source, [chunk('914b', project.id, note.id, 'rewritten', false)]);
-		expect(await repository.search(owner, 'original', 10, project.id)).toEqual([]);
-	});
-	it('retires the superseded chunk once the replacement is embedded', async () => {
-		const { owner, project, note } = await seedNote('915');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [chunk('915', project.id, note.id, 'original', true)]);
-		const replacement = chunk('915b', project.id, note.id, 'rewritten', false);
-		await repository.stage(owner, source, [replacement]);
-		await repository.completePending(
-			owner,
-			source,
-			[{ id: replacement.id, embedding: vector }],
-			'contract-model'
-		);
-		const matches = await repository.searchByEmbedding(owner, vector, 10, project.id);
-		expect(matches.map((match) => match.document.content)).toEqual(['rewritten']);
-	});
-	it('holds the superseded chunk when a further revision is still pending', async () => {
-		const { owner, project, note } = await seedNote('916');
-		const repository = new KnowledgeIndexRecords(context.db);
-		const source = { kind: 'note', noteId: note.id } as const;
-		await repository.stage(owner, source, [chunk('916', project.id, note.id, 'original', true)]);
-		const second = chunk('916b', project.id, note.id, 'second', false);
-		await repository.stage(owner, source, [second]);
-		// A third revision lands before the worker writes the second one's vector back.
-		await repository.stage(owner, source, [chunk('916c', project.id, note.id, 'third', false)]);
-		await repository.completePending(
-			owner,
-			source,
-			[{ id: second.id, embedding: vector }],
-			'contract-model'
-		);
-		expect(await repository.searchByEmbedding(owner, vector, 10, project.id)).not.toEqual([]);
-	});
+	// The supersede/hold/retire lifecycle is proven at the unit layer by
+	// services/knowledge-search/index-maintenance.spec.ts against the in-memory
+	// search repository. This file keeps the two SQL-fidelity facts no fake can
+	// prove: the cross-actor sweep attribution and the per-actor pending read
+	// scope. One end-to-end supersede round-trip through real SQL is covered by
+	// the search-by-embedding tests above (replacement supersedes original).
 	// The sweep is deliberately cross-actor — one worker serves every user — so what
 	// matters is that each source is reported against the owner whose data it is.
 	// That pairing is what lets the worker rebuild a correctly scoped ActorContext.

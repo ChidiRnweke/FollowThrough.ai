@@ -3,9 +3,21 @@ title: Agents propose, users accept
 description: The trust model that decides what the agent can do on its own.
 ---
 
+import Mermaid from '../../../components/mermaid.astro';
+import Screenshot from '../../../components/screenshot.astro';
+
 The agent in FollowThrough is powerful by design — it reads the project's notes, board, and memory, and it can edit them. The question the product has to answer is not *can* the agent change something, but *when may it change something without asking*.
 
 The answer is a trust model with three tiers.
+
+<Mermaid
+	source={`
+flowchart LR
+	propose["The agent wants to change something"] --> policy{"Matches a trust policy?"}
+	policy -- "yes" --> auto["Applied immediately — marked auto-accepted"]
+	policy -- "no" --> review["Waits as a suggestion — you accept or reject"]
+`}
+/>
 
 ## Tier one: read freely
 
@@ -16,6 +28,8 @@ The agent reads the project's context — notes, todos, memory, references — w
 Changes that alter the user's work — editing a note, creating a todo, updating project memory, inserting a diagram — are proposed as suggestions. The suggestion is reviewable: it shows what would change, where it came from (the exact selection or run), and a confidence score. The user accepts or rejects it.
 
 This is the default posture captured in the product's guiding principle: **agents propose, the user accepts**. The controller layer enforces it structurally — the `accept`, `reject`, and `revert` operations in the suggestions, todos, memory, and diagrams controllers exist precisely so no agent change can skip the review step.
+
+<Screenshot id="agent-tab" alt="An agent run in the project chat, with its proposed changes waiting for review." />
 
 ## Tier three: trust policies
 

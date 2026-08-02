@@ -16,20 +16,26 @@
    Dark mode (Starlight default)
    ============================================================ */
 :root {
-	/* App tokens (dark) */
+	/* App tokens (dark) — values from src/routes/layout.css `.dark`. */
 	--ft-bg: oklch(0.153 0.006 107.1);
 	--ft-fg: oklch(0.988 0.003 106.5);
 	--ft-card: oklch(0.228 0.013 107.4);
+	--ft-sidebar: oklch(0.228 0.013 107.4);
 	--ft-muted: oklch(0.286 0.016 107.4);
+	--ft-accent-rest: oklch(0.35 0.016 107.4);
 	--ft-muted-fg: oklch(0.737 0.021 106.9);
 	--ft-border: oklch(1 0 0 / 14%);
 	--ft-ring: oklch(0.58 0.031 107.3);
-	--ft-brand: #00bba7;
-	--ft-brand-wash: color-mix(in oklab, #00bba7 14%, transparent);
-	--ft-accent-strong: color-mix(in oklab, #00bba7 82%, #f0fdfa);
+	--ft-brand: oklch(0.704 0.14 182.503);
+	--ft-brand-wash: color-mix(in oklab, var(--ft-brand) 15%, transparent);
+	--ft-accent-strong: color-mix(in oklab, var(--ft-brand) 82%, #f0fdfa);
 	--ft-success: oklch(0.68 0.11 155);
 	--ft-warning: oklch(0.74 0.12 75);
 	--ft-destructive: oklch(0.704 0.191 22.216);
+
+	/* Motion (layout.css): micro feedback, standard ease. */
+	--duration-micro: 125ms;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
 	/* Gray ladder -> Starlight --sl-color-gray-1..7 */
 	--sl-color-white: var(--ft-fg);
@@ -47,7 +53,7 @@
 
 	--sl-color-bg: var(--ft-bg);
 	--sl-color-bg-nav: var(--ft-card);
-	--sl-color-bg-sidebar: var(--ft-card);
+	--sl-color-bg-sidebar: var(--ft-sidebar);
 	--sl-color-bg-inline-code: var(--ft-muted);
 	--sl-color-bg-accent: var(--ft-brand);
 
@@ -100,16 +106,19 @@
    Light mode
    ============================================================ */
 :root[data-theme='light'] {
+	/* "Paper, not screen white": card sits on the background, the sidebar a step below. */
 	--ft-bg: oklch(0.992 0.004 106.5);
 	--ft-fg: oklch(0.153 0.006 107.1);
-	--ft-card: oklch(0.978 0.005 106.5);
-	--ft-muted: oklch(0.955 0.006 106.5);
+	--ft-card: oklch(0.992 0.004 106.5);
+	--ft-sidebar: oklch(0.978 0.005 106.5);
+	--ft-muted: oklch(0.966 0.005 106.5);
+	--ft-accent-rest: oklch(0.966 0.005 106.5);
 	--ft-muted-fg: oklch(0.556 0.031 107.3);
 	--ft-border: oklch(0.888 0.007 106.5);
 	--ft-ring: oklch(0.737 0.021 106.9);
-	--ft-brand: #00786f;
-	--ft-brand-wash: color-mix(in oklab, #00786f 10%, transparent);
-	--ft-accent-strong: #005f5a;
+	--ft-brand: oklch(0.511 0.096 186.391);
+	--ft-brand-wash: color-mix(in oklab, var(--ft-brand) 10%, transparent);
+	--ft-accent-strong: var(--ft-brand);
 	--ft-success: oklch(0.55 0.09 155);
 	--ft-warning: oklch(0.62 0.1 75);
 	--ft-destructive: oklch(0.577 0.245 27.325);
@@ -130,7 +139,7 @@
 
 	--sl-color-bg: var(--ft-bg);
 	--sl-color-bg-nav: var(--ft-card);
-	--sl-color-bg-sidebar: var(--ft-card);
+	--sl-color-bg-sidebar: var(--ft-sidebar);
 	--sl-color-bg-inline-code: var(--ft-muted);
 	--sl-color-bg-accent: var(--ft-brand);
 
@@ -166,6 +175,16 @@
 }
 
 /* ============================================================
+   Base contract (layout.css @layer base)
+   ============================================================ */
+/* Every clickable surface says so. */
+a[href],
+button,
+summary {
+	cursor: pointer;
+}
+
+/* ============================================================
    Typography ladder (DESIGN_SYSTEM.md "Type scale")
    ============================================================ */
 /* Page title = Newsreader medium (the display face reaches content only here). */
@@ -194,6 +213,12 @@
 /* ============================================================
    Chrome (flat surfaces, hairlines)
    ============================================================ */
+/* Heading anchor links: Starlight's default gap (0.25em) crowds the icon
+   against the heading text. */
+.sl-markdown-content .sl-heading-wrapper {
+	--sl-anchor-icon-gap: 0.6em;
+}
+
 /* Wordmark: base/semibold beside the mark, per the chrome legibility floor. */
 .site-title {
 	font-size: 0.875rem;
@@ -226,24 +251,240 @@
 	padding: 0.125rem 0.325rem;
 }
 
-/* Cards (landing): hairline, flat, wash on hover — never a bordered box inside
-   a bordered box. */
-.sl-card {
-	border: 1px solid var(--sl-color-hairline);
-	border-radius: 0.625rem;
-	box-shadow: none;
-	transition: background-color 125ms cubic-bezier(0.2, 0, 0, 1);
-}
-.sl-card:hover {
-	background-color: var(--ft-brand-wash);
-}
-
 /* Asides: hairline with a left rule, flat. */
 .sl-aside {
 	border: 1px solid var(--sl-color-hairline);
 	border-left: 3px solid var(--sl-color-accent);
 	border-radius: 0.5rem;
 	box-shadow: none;
+}
+
+/* ============================================================
+   PageShell header ladder
+   ============================================================ */
+/* No rule between the title panel and the content — the app separates header
+   and content with spacing alone. */
+.content-panel + .content-panel {
+	border-top: 0;
+}
+
+/* ============================================================
+   Home page — the app's own recipes, ported from layout.css and
+   project-overview.svelte. Scoped under .sl-markdown-content so
+   they win over Starlight's element selectors (h2, p, ul, a).
+   ============================================================ */
+
+/* eyebrow — 12px uppercase muted label above a group. */
+.sl-markdown-content .ft-eyebrow {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+	color: var(--sl-color-gray-2);
+}
+
+/* ============================================================
+   Home hero — the app's marketing hero, ported
+   (src/routes/(marketing)/+page.svelte): one Newsreader headline,
+   one muted line, one action. No banner, no second button.
+   ============================================================ */
+.sl-markdown-content .ft-hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1.5rem;
+	max-width: 48rem;
+	margin: 0 auto;
+	padding: 4.5rem 0 0;
+	text-align: center;
+}
+/* The ladder after the hero steps wide: the screenshot and the groups are
+   different kinds of content, so each sits a further step away (64px). */
+.sl-markdown-content .ft-hero + .ft-shot {
+	margin-top: 4rem;
+}
+.sl-markdown-content .ft-hero-title {
+	margin: 0;
+	font-family: 'Newsreader Variable', Georgia, serif;
+	font-size: clamp(2.25rem, 2rem + 1.6vw, 3.75rem);
+	font-weight: 500;
+	letter-spacing: -0.025em;
+	line-height: 1.2;
+	text-wrap: balance;
+	color: var(--sl-color-white);
+}
+.sl-markdown-content .ft-hero-sub {
+	margin: 0;
+	max-width: 32rem;
+	font-size: 1.125rem;
+	color: var(--sl-color-gray-2);
+}
+.sl-markdown-content a.ft-hero-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 2.75rem;
+	padding: 0 2rem;
+	border-radius: 0.5rem;
+	background-color: var(--ft-brand);
+	color: var(--sl-color-text-invert);
+	font-size: 0.875rem;
+	font-weight: 500;
+	text-decoration: none;
+	transition-property: background-color, transform;
+	transition-duration: var(--duration-micro);
+	transition-timing-function: var(--ease-standard);
+}
+.sl-markdown-content a.ft-hero-action:hover {
+	background-color: color-mix(in oklab, var(--ft-brand) 88%, var(--sl-color-white));
+	transform: translateY(-1px);
+}
+.sl-markdown-content a.ft-hero-action:active {
+	transform: none;
+}
+
+/* Product screenshots: the app's screenshot-slot recipe — full width,
+   2xl radius, a hairline ring. Light/dark pair swaps with the theme. */
+.sl-markdown-content .ft-shot {
+	margin: 0;
+}
+.sl-markdown-content .ft-shot img {
+	width: 100%;
+	border-radius: 1.125rem;
+	box-shadow: inset 0 0 0 1px oklch(1 0 0 / 10%);
+	outline: 1px solid var(--sl-color-hairline);
+}
+.sl-markdown-content .ft-shot .ft-shot-dark {
+	display: none;
+}
+:root[data-theme='dark'] .sl-markdown-content .ft-shot .ft-shot-dark {
+	display: block;
+}
+:root[data-theme='dark'] .sl-markdown-content .ft-shot .ft-shot-light {
+	display: none;
+}
+.sl-markdown-content .ft-shot figcaption {
+	margin-top: 0.5rem;
+	font-size: 0.75rem;
+	color: var(--sl-color-gray-2);
+}
+
+/* Mermaid diagrams: rendered twice (light/dark themes), swapped with the
+   theme like the screenshots. */
+.sl-markdown-content .ft-mermaid {
+	margin: 0;
+}
+.sl-markdown-content .ft-mermaid .mermaid {
+	display: flex;
+	justify-content: center;
+}
+.sl-markdown-content .ft-mermaid .mermaid-dark {
+	display: none;
+}
+:root[data-theme='dark'] .sl-markdown-content .ft-mermaid .mermaid-dark {
+	display: flex;
+}
+:root[data-theme='dark'] .sl-markdown-content .ft-mermaid .mermaid-light {
+	display: none;
+}
+
+/* eyebrow — 12px uppercase muted label above a group. */
+
+/* row-interactive: muted-olive wash + 1px lift, micro duration, standard
+   ease. Motion, not elevation — never a shadow. */
+.sl-markdown-content a.ft-row {
+	display: flex;
+	align-items: center;
+	text-decoration: none;
+	border-radius: 0.5rem;
+	transition-property: color, background-color, transform;
+	transition-duration: var(--duration-micro);
+	transition-timing-function: var(--ease-standard);
+}
+.sl-markdown-content a.ft-row:hover {
+	background-color: var(--ft-accent-rest);
+	transform: translateY(-1px);
+}
+.sl-markdown-content a.ft-row:focus-visible {
+	outline: none;
+	background-color: var(--ft-accent-rest);
+	box-shadow: 0 0 0 2px var(--ft-ring);
+	transform: translateY(-1px);
+}
+.sl-markdown-content a.ft-row:active {
+	transform: none;
+}
+
+/* Grouped resource rows (the project-overview spaces cluster): no dividers,
+   grouping is spacing only — 8px inside a group, 24px between groups. */
+.sl-markdown-content .ft-home-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+	margin-top: 4rem;
+}
+.sl-markdown-content .ft-home-section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+/* Rows are bled 12px past the container so labels align with the page
+   title while the hover wash extends (the app's -mx-3 trick). */
+.sl-markdown-content .ft-resource-list {
+	display: flex;
+	flex-direction: column;
+	margin: 0 -0.75rem;
+	padding: 0;
+	list-style: none;
+}
+.sl-markdown-content .ft-resource-list > li {
+	margin: 0;
+}
+.sl-markdown-content a.ft-resource-row {
+	min-height: 2.75rem;
+	gap: 0.75rem;
+	padding: 0.625rem 0.75rem;
+}
+
+/* The canonical icon chip: 36px tile, 8px radius, brand wash, brand icon. */
+.sl-markdown-content .ft-icon-chip {
+	display: flex;
+	width: 2.25rem;
+	height: 2.25rem;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 0.5rem;
+	background-color: var(--ft-brand-wash);
+	color: var(--ft-brand);
+}
+.sl-markdown-content .ft-icon-chip svg {
+	width: 1.125rem;
+	height: 1.125rem;
+}
+
+.sl-markdown-content .ft-row-text {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 0.125rem;
+}
+/* A space outranks a document: base/medium against the doc list's sm. */
+.sl-markdown-content .ft-row-label {
+	overflow: hidden;
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--sl-color-white);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sl-markdown-content .ft-row-hint {
+	overflow: hidden;
+	font-size: 0.875rem;
+	color: var(--sl-color-gray-2);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Native scrollbars mirror the app (thin rounded thumb in the border token). */
@@ -270,7 +511,8 @@
 	background-color: color-mix(in oklab, var(--sl-color-accent) 20%, transparent);
 }
 
-/* Reduced motion: settle everything to 1ms like the app's base guard. */
+/* Reduced motion: settle everything to 1ms like the app's base guard, and
+   opt the row lift out entirely so it doesn't become a jump. */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
@@ -279,5 +521,9 @@
 		animation-duration: 1ms !important;
 		animation-iteration-count: 1 !important;
 		transition-duration: 1ms !important;
+	}
+	.sl-markdown-content a.ft-row:hover,
+	.sl-markdown-content a.ft-row:focus-visible {
+		transform: none;
 	}
 }

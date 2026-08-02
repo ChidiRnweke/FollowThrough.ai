@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 import type { Mermaid } from 'mermaid';
-import { loadMermaid } from './mermaid-script';
+import mermaid from 'mermaid';
 
 /**
  * Hex equivalents of the design tokens in `src/routes/layout.css` (`:root` /
@@ -153,8 +153,7 @@ export const createMermaidConfig = (theme: MermaidTheme | boolean) => {
 };
 
 /** (Re)configure mermaid for the given theme. Cheap — safe to call per render. */
-export const initializeMermaid = async (theme: MermaidTheme | boolean): Promise<Mermaid> => {
-	const mermaid = await loadMermaid();
+export const initializeMermaid = (theme: MermaidTheme | boolean): Mermaid => {
 	mermaid.initialize(createMermaidConfig(theme));
 	return mermaid;
 };
@@ -169,7 +168,6 @@ export const initializeMermaid = async (theme: MermaidTheme | boolean): Promise<
  * of layout while leaving it measurable, which `display: none` would not.
  */
 export const renderMermaidOffscreen = async (id: string, source: string): Promise<string> => {
-	const mermaid = await loadMermaid();
 	const host = document.createElement('div');
 	host.setAttribute('aria-hidden', 'true');
 	host.style.cssText =

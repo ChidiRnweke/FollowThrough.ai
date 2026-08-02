@@ -1,0 +1,28 @@
+---
+/**
+ * The docs home hero — a structural port of the app's marketing hero
+ * (src/routes/(marketing)/+page.svelte): one centered Newsreader headline
+ * with a crayon under one word, one muted line, one action. No banner, no
+ * gradient, no second button.
+ */
+import Crayon from './crayon.astro';
+
+const startHref = `${import.meta.env.BASE_URL}getting-started/`;
+---
+
+<style is:global>
+	/* The hero carries the page's identity; the splash title panel ("FollowThrough.ai")
+	   would only repeat it. This style ships only on the home page, the single place
+	   this component is used. */
+	.content-panel:has(> .sl-container > h1:only-child) {
+		display: none;
+	}
+</style>
+
+<div class="ft-hero">
+	<h1 class="ft-hero-title">
+		FollowThrough's agent already <Crayon>knows</Crayon> what you're working on.
+	</h1>
+	<p class="ft-hero-sub">An AI-native note editor that you never have to brief.</p>
+	<a class="ft-hero-action" href={startHref}>Get started</a>
+</div>

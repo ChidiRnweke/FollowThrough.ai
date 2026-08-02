@@ -4,6 +4,7 @@ description: Build your first project end-to-end, from a note to a finished deli
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/screenshot.astro';
 
 This tutorial walks the core loop of FollowThrough.ai: think in notes, track what matters, preserve context, and finish the work. It takes about ten minutes.
 
@@ -13,9 +14,13 @@ This tutorial walks the core loop of FollowThrough.ai: think in notes, track wha
 
    Open the sidebar and create a project. A project is the unit of work that pulls everything else together: its notes, board, memory, skills, and outputs all live under it. Give it a name that tells you — and a future agent — what it is about.
 
+   <Screenshot id="project-context" alt="A project overview: what the project produced above, what the agent works from below." />
+
 2. ### Write a note
 
    Create a note inside the project and write a few paragraphs. Notes are Markdown, so rough thinking, meeting notes, plans, and drafts all belong here. This is the material every later step works from.
+
+   <Screenshot id="note-view" alt="A note open in the editor: one continuous writing surface, title in the breadcrumb." />
 
 3. ### Turn thinking into action
 
@@ -23,11 +28,15 @@ This tutorial walks the core loop of FollowThrough.ai: think in notes, track wha
 
    Look at the suggestions pane: each suggestion carries a confidence score and traces back to the exact selection it came from. Accept the ones that are real. Accepted todos appear on your board.
 
+   <Screenshot id="in-editor-ai" alt="Extracted promises anchored in the note text, with reviewable suggestions alongside." />
+
 4. ### Ask the agent
 
    Open the chat in the project and ask a question, for example: *"Summarize what still needs doing this week."* The agent reads the project's notes, board, and memory rather than asking you to explain the context again.
 
    If the agent wants to make a change — update the project memory, edit a note, create a todo — it proposes the change first. Accept or reject it in the approval card. Agents propose; you accept.
+
+   <Screenshot id="in-editor-chat" alt="The project chat open beside a note: the agent answers from the project's own context." />
 
 5. ### Review what the agent learned
 
@@ -36,6 +45,8 @@ This tutorial walks the core loop of FollowThrough.ai: think in notes, track wha
 6. ### Finish something
 
    When your project has enough material, produce an output that can leave the app. Select a note and generate a document from a template, turn a paragraph into a diagram, or draft a brief. The result is an artifact of the project — connected to the source it came from, not an isolated generation.
+
+   <Screenshot id="diagram-render" alt="A Mermaid diagram rendered inline in a note, with a draw.io conversion available." />
 
 </Steps>
 
@@ -47,5 +58,5 @@ Throughout, work moves one direction: notes become actions, actions become artif
 
 ## What's next
 
-- Read the [explanation](/explanation/architecture/) to understand how the product is put together.
-- Browse the [API reference](/reference/) for the internal TypeScript contracts behind these features.
+- Read the [explanation](/FollowThrough.ai/explanation/architecture/) to understand how the product is put together.
+- Browse the [API reference](/FollowThrough.ai/reference/) for the internal TypeScript contracts behind these features.

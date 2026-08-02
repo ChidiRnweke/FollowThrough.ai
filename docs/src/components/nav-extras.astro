@@ -1,0 +1,118 @@
+---
+/**
+ * Top-nav extras: the two documentation halves as quiet dropdowns — User docs
+ * (2 pages) and Developer docs (4 pages) — then Starlight's default social
+ * icons (GitHub). Overrides the SocialIcons slot. On narrow viewports the
+ * sidebar covers navigation, so the dropdowns step aside.
+ */
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+
+const base = import.meta.env.BASE_URL;
+
+const groups = [
+	{
+		label: 'User docs',
+		links: [
+			{ href: 'getting-started/', label: 'Getting started' },
+			{ href: 'explanation/agents-propose-users-accept/', label: 'Agents propose, users accept' }
+		]
+	},
+	{
+		label: 'Developer docs',
+		links: [
+			{ href: 'self-hosting/', label: 'Self-hosting' },
+			{ href: 'guides/add-a-capability/', label: 'How-to guides' },
+			{ href: 'reference/', label: 'API reference' },
+			{ href: 'explanation/architecture/', label: 'Architecture' }
+		]
+	}
+];
+---
+
+<nav class="ft-topnav" aria-label="Documentation sections">
+	{
+		groups.map((group) => (
+			<details class="ft-nav-group">
+				<summary>{group.label}</summary>
+				<ul>
+					{group.links.map((link) => (
+						<li>
+							<a href={`${base}${link.href}`}>{link.label}</a>
+						</li>
+					))}
+				</ul>
+			</details>
+		))
+	}
+</nav>
+<Default />
+
+<script>
+	// One menu at a time; outside click and Escape close it.
+	document.addEventListener('click', (event) => {
+		document.querySelectorAll('.ft-nav-group[open]').forEach((menu) => {
+			if (!menu.contains(event.target as Node)) menu.removeAttribute('open');
+		});
+	});
+	document.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape')
+			document.querySelectorAll('.ft-nav-group[open]').forEach((menu) => menu.removeAttribute('open'));
+	});
+</script>
+
+<style>
+	.ft-topnav {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.ft-nav-group {
+		position: relative;
+	}
+	.ft-nav-group summary {
+		list-style: none;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		color: var(--sl-color-gray-1);
+		transition: background-color var(--duration-micro) var(--ease-standard);
+	}
+	.ft-nav-group summary::-webkit-details-marker {
+		display: none;
+	}
+	.ft-nav-group summary:hover,
+	.ft-nav-group[open] summary {
+		background-color: var(--ft-accent-rest);
+	}
+	/* Menu rows take the cursor but never the lift (DESIGN_SYSTEM.md). */
+	.ft-nav-group ul {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 0.375rem);
+		z-index: 10;
+		min-width: 13rem;
+		margin: 0;
+		padding: 0.25rem;
+		list-style: none;
+		border: 1px solid var(--sl-color-hairline);
+		border-radius: 0.5rem;
+		background-color: var(--sl-color-bg-nav);
+	}
+	.ft-nav-group ul a {
+		display: block;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		color: var(--sl-color-gray-1);
+		text-decoration: none;
+		transition: background-color var(--duration-micro) var(--ease-standard);
+	}
+	.ft-nav-group ul a:hover {
+		background-color: var(--ft-accent-rest);
+	}
+	@media (max-width: 64rem) {
+		.ft-topnav {
+			display: none;
+		}
+	}
+</style>

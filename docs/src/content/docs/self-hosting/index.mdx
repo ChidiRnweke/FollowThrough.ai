@@ -1,0 +1,80 @@
+---
+title: Self-hosting
+description: Run FollowThrough on your own machine — closed beta, MIT code.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import Mermaid from '../../../components/mermaid.astro';
+
+The hosted instance is in closed beta and is not taking sign-ups. The repository, however, is MIT-licensed — so the way in today is to run it yourself.
+
+Do whatever you want with it: self-host it, fork it, strip it for parts. Three asks if you do — tell [the author](https://github.com/ChidiRnweke) you're running it (what you use it for shapes what gets built next), star [the repository](https://github.com/ChidiRnweke/FollowThrough.ai), and keep the copyright notice in the LICENSE file. That last one is the license talking, not a favour.
+
+## What you need
+
+- **Docker** — for Postgres and the object store.
+- **Postgres 17 with pgvector** — every note, todo, memory entry, and embedding lives here.
+- **An OpenRouter API key** — the agent's models are reached through OpenRouter.
+- **A Mistral API key** — used for OCR on attachments.
+
+Two things you might expect but do not need: an auth provider (without Authentik configured, the app runs as a single local user), and Infisical (set `CONFIG_SOURCE=env` and plain environment variables are read instead).
+
+## Run it
+
+<Steps>
+
+1. **Clone and start the backing services.**
+
+   ```sh
+   git clone https://github.com/ChidiRnweke/FollowThrough.ai.git
+   cd FollowThrough.ai
+   docker compose up -d postgres rustfs
+   ```
+
+   That gives you Postgres 17 + pgvector on `:5432` and a rustfs (S3-compatible) object store on `:9000`, both with the credentials the app already defaults to.
+
+2. **Configure the environment.**
+
+   ```sh
+   CONFIG_SOURCE=env
+   DATABASE_URL=postgres://followthrough:followthrough@localhost:5432/followthrough
+   OPENROUTER_API_KEY=sk-or-…
+   MISTRAL_API_KEY=…
+   ```
+
+   Everything else has a default in `src/lib/server/config.ts` — the S3 credentials above match `APPLICATION_DEFAULTS` there, so attachments work against the local rustfs with no further setup.
+
+3. **Migrate and start.**
+
+   ```sh
+   pnpm install
+   pnpm db:migrate
+   pnpm build && pnpm start
+   ```
+
+   The app listens on `:3000`.
+
+</Steps>
+
+## What runs where
+
+<Mermaid
+	source={`
+flowchart LR
+	you["You"] --> app["app — :3000"]
+	worker["worker — ×1"]
+	app --> db[("Postgres 17 + pgvector")]
+	worker --> db
+	app --> s3[("S3 object store")]
+	app --> openrouter["OpenRouter"]
+	app --> mistral["Mistral OCR"]
+`}
+/>
+
+The `worker` service runs the same code with a different entrypoint (`build-worker/worker.js`) and handles background work — embeddings, extraction. Keep it at one replica: the tasks discover their work from the database on every tick, so a second replica only duplicates embedding calls.
+
+<Aside type="note">
+
+The shipped `docker-compose.prod.yml` is the author's own deployment: it pulls secrets from Infisical, joins external Docker networks, and carries Caddy labels for his reverse proxy. Treat it as a reference for how the pieces fit together, not as a file you can run unchanged — the steps above are the from-source path.
+
+</Aside>

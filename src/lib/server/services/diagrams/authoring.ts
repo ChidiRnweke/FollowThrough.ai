@@ -152,6 +152,8 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 const source = await readFile(process.argv[1], 'utf8');
 try {
+	// This runs in a sandboxed child process (not the app bundle); the import is
+	// deferred until after the JSDOM shim above so mermaid evaluates with the DOM.
 	const { default: mermaid } = await import('mermaid');
 	await mermaid.parse(source);
 } catch (error) {

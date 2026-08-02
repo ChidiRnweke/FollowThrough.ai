@@ -4,6 +4,7 @@ description: How a new capability is structured from model to delivery boundary.
 ---
 
 import { FileTree, Aside } from '@astrojs/starlight/components';
+import Mermaid from '../../../components/mermaid.astro';
 
 FollowThrough is organized as a set of capabilities — one per product concept. Each capability appears in the same few layers, in the same order. This guide walks what a new capability looks like and the rules that keep it that way.
 
@@ -46,7 +47,7 @@ A controller coordinates services; it does not make domain decisions. Cross-serv
 
 <Aside type="note">
 
-The controller interface is the public API this documentation site renders. Every public method carries a docstring explaining what it does and, where it matters, why — see [writing API docstrings](/guides/write-api-docstrings/).
+The controller interface is the public API this documentation site renders. Every public method carries a docstring explaining what it does and, where it matters, why — see [writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/).
 
 </Aside>
 
@@ -57,6 +58,18 @@ Persist the capability with a contract in `src/lib/server/repositories/<capabili
 ## 5. Composition
 
 Export one `create<Capability>Capability` function from `<capability>-capability-factory.ts`. It wires the repositories, services, and controller for the capability together — nothing else. `application.ts` calls the factories in dependency order and builds the final controller facade.
+
+<Mermaid
+	source={`
+flowchart TB
+	app["application.ts"] --> factory["createNotesCapability()"]
+	factory --> repo["notes repository (Drizzle adapter)"]
+	factory --> service["notes service"]
+	factory --> controller["NotesController"]
+	service -. "depends on" .-> repo
+	controller -. "depends on" .-> service
+`}
+/>
 
 ## The rules that keep it coherent
 

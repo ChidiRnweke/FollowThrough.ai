@@ -1,0 +1,44 @@
+---
+/**
+ * One word in a headline, underlined as if by marker: two wobbly strokes in
+ * the brand teal — a solid pass and a fainter second pass, slightly offset.
+ * Ported from src/lib/components/marketing/crayon.svelte.
+ */
+---
+
+<span class="ft-crayon">
+	<slot />
+	<svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+		<path
+			d="M2 6 C 18 3, 38 8, 55 5 S 85 3, 98 6"
+			fill="none"
+			stroke="var(--ft-brand)"
+			stroke-width="3"
+			stroke-linecap="round"
+			vector-effect="non-scaling-stroke"></path>
+		<path
+			d="M5 8.5 C 26 5.5, 52 9.5, 75 6.5 S 92 5, 97 7.5"
+			fill="none"
+			stroke="var(--ft-brand)"
+			stroke-width="1.8"
+			stroke-linecap="round"
+			opacity="0.4"
+			vector-effect="non-scaling-stroke"></path>
+	</svg>
+</span>
+
+<style>
+	.ft-crayon {
+		position: relative;
+		display: inline-block;
+	}
+	.ft-crayon svg {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		height: 0.25rem;
+		width: 100%;
+		transform: translateY(0.25rem);
+		overflow: visible;
+	}
+</style>

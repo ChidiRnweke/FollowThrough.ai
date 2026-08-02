@@ -3,6 +3,8 @@ title: Architecture
 description: Why FollowThrough is organized as capability-first layers.
 ---
 
+import Mermaid from '../../../components/mermaid.astro';
+
 FollowThrough is a SvelteKit TypeScript monolith, but its directory structure is organized around the product's capabilities first — notes, todos, memory, skills — with frameworks and infrastructure appearing only at delivery boundaries.
 
 This page is about *why* it is arranged that way, not just how.
@@ -22,6 +24,17 @@ Each layer depends only on the layers below it, and the boundary rules are stric
 - **Routes and remote endpoints** delegate to controllers and preserve their public request and response shapes.
 
 The payoff is that each layer is testable in isolation, and the dependency graph is auditable — `pnpm test:architecture` enforces it.
+
+<Mermaid
+	source={`
+flowchart TB
+	routes["Routes & remote endpoints — delivery boundaries"] --> controllers["Controllers — orchestration, no domain decisions"]
+	controllers --> services["Services — business rules"]
+	services --> models["Models — types and IDs, import nothing"]
+	services --> contracts["Repository contracts"]
+	repositories["Repositories — Drizzle, SQL"] -. implements .-> contracts
+`}
+/>
 
 ## Why controllers exist at all
 

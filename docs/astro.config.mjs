@@ -9,12 +9,29 @@ export default defineConfig({
 		starlight({
 			title: 'FollowThrough.ai',
 			description: 'Documentation for the FollowThrough.ai application and its internal API.',
+			favicon: '/favicon.svg',
+			head: [
+				{
+					tag: 'link',
+					attrs: { rel: 'icon', type: 'image/x-icon', href: '/FollowThrough.ai/favicon.ico' }
+				}
+			],
 			logo: {
 				light: './src/assets/followthrough-mark-light.svg',
 				dark: './src/assets/followthrough-mark-dark.svg',
 				alt: 'FollowThrough'
 			},
 			customCss: ['./src/styles/theme.css'],
+			social: [
+				{
+					icon: 'github',
+					label: 'GitHub',
+					href: 'https://github.com/ChidiRnweke/FollowThrough.ai'
+				}
+			],
+			components: {
+				SocialIcons: './src/components/nav-extras.astro'
+			},
 			expressiveCode: {
 				styleOverrides: {
 					borderRadius: '0.5rem',
@@ -26,10 +43,29 @@ export default defineConfig({
 				baseUrl: 'https://github.com/ChidiRnweke/FollowThrough.ai/edit/master/docs'
 			},
 			sidebar: [
-				{ label: 'Getting Started', items: [{ autogenerate: { directory: 'getting-started' } }] },
-				{ label: 'How-to Guides', items: [{ autogenerate: { directory: 'guides' } }] },
-				typeDocSidebarGroup,
-				{ label: 'Explanation', items: [{ autogenerate: { directory: 'explanation' } }] }
+				{
+					label: 'User documentation',
+					items: [
+						{ label: 'Getting started', link: '/getting-started/' },
+						{
+							label: 'Agents propose, users accept',
+							link: '/explanation/agents-propose-users-accept/'
+						}
+					]
+				},
+				{
+					label: 'Developer documentation',
+					items: [
+						{ label: 'Self-hosting', link: '/self-hosting/' },
+						{
+							label: 'How-to guides',
+							collapsed: true,
+							items: [{ autogenerate: { directory: 'guides' } }]
+						},
+						typeDocSidebarGroup,
+						{ label: 'Architecture', link: '/explanation/architecture/' }
+					]
+				}
 			],
 			plugins: [
 				starlightTypeDoc({
@@ -45,6 +81,9 @@ export default defineConfig({
 					typeDoc: {
 						exclude: ['**/*.spec.ts', '**/*.test.ts'],
 						skipErrorChecking: true,
+						/* Pin source links to the branch that exists on origin; the default
+						   (local HEAD SHA) 404s whenever commits are not pushed yet. */
+						gitRevision: 'master',
 						excludeNotDocumented: true,
 						excludeNotDocumentedKinds: [
 							'Class',

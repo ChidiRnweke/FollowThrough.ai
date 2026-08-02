@@ -1,0 +1,21 @@
+---
+/**
+ * A product screenshot with a light/dark pair — the app's screenshot-slot
+ * recipe (full width, 2xl radius, hairline ring). The pair swaps with the
+ * Starlight theme. Files live in docs/public/screenshots/<id>-{light,dark}.jpg.
+ */
+interface Props {
+	id: string;
+	alt: string;
+	caption?: string;
+}
+
+const { id, alt, caption } = Astro.props;
+const base = `${import.meta.env.BASE_URL}screenshots/${id}`;
+---
+
+<figure class="ft-shot">
+	<img class="ft-shot-light" src={`${base}-light.jpg`} {alt} loading="lazy" decoding="async" />
+	<img class="ft-shot-dark" src={`${base}-dark.jpg`} alt="" loading="lazy" decoding="async" />
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
