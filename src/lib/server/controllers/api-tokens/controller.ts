@@ -8,7 +8,9 @@ import type { IAccessTokens } from '$lib/server/services/identity/api-tokens';
  * can do for itself.
  */
 export interface ApiTokensController {
+	/** List the user's API tokens, with secrets masked. */
 	list(actor: ActorContext): Promise<readonly ApiToken[]>;
+	/** Permanently revoke a token; authenticated requests carrying it stop working from that point. */
 	revoke(actor: ActorContext, id: ApiTokenId): Promise<void>;
 }
 

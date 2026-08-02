@@ -23,12 +23,28 @@ const assertRange = (
 		throw new ValidationError(`${label} must be a whole number between ${minimum} and ${maximum}`);
 };
 
+/**
+ * Application boundary for agent preferences: reading and updating the user's defaults,
+ * and listing the models they can choose from.
+ */
 export interface AgentSettingsController {
+	/** Read the user's current agent preferences. */
 	getPreferences(actor: ActorContext): Promise<AgentPreferences>;
+	/**
+	 * Apply an update to the user's agent preferences, validating every value in one
+	 * place — the settings form and the agent's own `update_agent_preferences` tool both
+	 * land here, so the limits have to hold exactly once. Model choices are checked
+	 * selectable, the web search engine must be known, and numeric limits are rejected
+	 * rather than clamped.
+	 *
+	 * @throws ValidationError if a model is not selectable, the engine is unknown, or a
+	 * numeric limit falls outside its range.
+	 */
 	updatePreferences(
 		actor: ActorContext,
 		input: UpdateAgentPreferencesInput
 	): Promise<AgentPreferences>;
+	/** List the models the user can choose from for the agent. */
 	listModels(actor: ActorContext): Promise<readonly AgentModel[]>;
 }
 
