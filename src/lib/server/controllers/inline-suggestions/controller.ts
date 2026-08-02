@@ -14,6 +14,13 @@ import { traceWorkflow } from '$lib/server/services/telemetry';
 const MIN_PREFIX_LENGTH = 12;
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
 
+/**
+ * Application boundary for inline (ghost-text) completions in the editor.
+ *
+ * Fires on every typing pause, so it is aggressively gated: it short-circuits on short
+ * prefixes, disabled preferences, archived notes, and rate limits before any model call
+ * happens, because a completion is a nicety that must never cost a keystroke.
+ */
 export interface InlineSuggestionsController {
 	suggest(
 		actor: ActorContext,

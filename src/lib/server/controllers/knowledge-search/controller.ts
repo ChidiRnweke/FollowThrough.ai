@@ -23,6 +23,10 @@ export interface KnowledgeSearchResult {
 	readonly sourceCreatedAt?: DateTime;
 }
 
+/**
+ * Application boundary for semantic knowledge search across the user's notes and facts,
+ * optionally scoped to a project and a time window.
+ */
 export interface RetrievalController {
 	search(
 		actor: ActorContext,

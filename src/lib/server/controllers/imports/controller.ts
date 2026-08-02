@@ -26,6 +26,14 @@ import {
 	type ParsedMarkdownNote
 } from '$lib/server/services/notes/import';
 
+/**
+ * Application boundary for bulk import of a Markdown archive (a "vault").
+ *
+ * Deliberately not transactional. A four-hundred-note vault with three malformed files
+ * should import the rest and say which failed — rolling the lot back because of one bad
+ * file is the wrong trade for an onboarding action, and a partial import that reports
+ * itself honestly is recoverable.
+ */
 export interface ImportsController {
 	importMarkdownArchive(
 		actor: ActorContext,
