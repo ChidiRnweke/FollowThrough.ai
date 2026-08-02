@@ -9,6 +9,19 @@ export default defineConfig({
 		starlight({
 			title: 'FollowThrough.ai',
 			description: 'Documentation for the FollowThrough.ai application and its internal API.',
+			logo: {
+				light: './src/assets/followthrough-mark-light.svg',
+				dark: './src/assets/followthrough-mark-dark.svg',
+				alt: 'FollowThrough'
+			},
+			customCss: ['./src/styles/theme.css'],
+			expressiveCode: {
+				styleOverrides: {
+					borderRadius: '0.5rem',
+					borderColor: 'var(--sl-color-hairline)',
+					borderWidth: '1px'
+				}
+			},
 			editLink: {
 				baseUrl: 'https://github.com/ChidiRnweke/FollowThrough.ai/edit/master/docs'
 			},

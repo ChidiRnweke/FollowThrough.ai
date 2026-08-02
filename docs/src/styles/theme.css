@@ -1,0 +1,283 @@
+/*
+	FollowThrough docs theme — maps DESIGN_SYSTEM.md tokens onto Starlight's
+	`--sl-*` surface. Token values mirror src/routes/layout.css (OKLCH); the
+	accent discipline, type ladder, and flat-surface rules carry over.
+
+	Starlight's base `:root` block is dark mode; light mode is selected with
+	[data-theme='light'].
+*/
+
+/* ---- Faces: Inter body, Newsreader display (h1 only), JetBrains Mono for code. ---- */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/newsreader';
+
+/* ============================================================
+   Dark mode (Starlight default)
+   ============================================================ */
+:root {
+	/* App tokens (dark) */
+	--ft-bg: oklch(0.153 0.006 107.1);
+	--ft-fg: oklch(0.988 0.003 106.5);
+	--ft-card: oklch(0.228 0.013 107.4);
+	--ft-muted: oklch(0.286 0.016 107.4);
+	--ft-muted-fg: oklch(0.737 0.021 106.9);
+	--ft-border: oklch(1 0 0 / 14%);
+	--ft-ring: oklch(0.58 0.031 107.3);
+	--ft-brand: #00bba7;
+	--ft-brand-wash: color-mix(in oklab, #00bba7 14%, transparent);
+	--ft-accent-strong: color-mix(in oklab, #00bba7 82%, #f0fdfa);
+	--ft-success: oklch(0.68 0.11 155);
+	--ft-warning: oklch(0.74 0.12 75);
+	--ft-destructive: oklch(0.704 0.191 22.216);
+
+	/* Gray ladder -> Starlight --sl-color-gray-1..7 */
+	--sl-color-white: var(--ft-fg);
+	--sl-color-gray-1: color-mix(in oklab, var(--ft-muted-fg) 75%, var(--ft-fg));
+	--sl-color-gray-2: var(--ft-muted-fg);
+	--sl-color-gray-3: var(--ft-ring);
+	--sl-color-gray-4: oklch(0.466 0.025 107.3);
+	--sl-color-gray-5: var(--ft-muted);
+	--sl-color-gray-6: var(--ft-card);
+	--sl-color-black: var(--ft-bg);
+
+	--sl-color-text: var(--sl-color-gray-2);
+	--sl-color-text-accent: var(--sl-color-accent-high);
+	--sl-color-text-invert: var(--ft-bg);
+
+	--sl-color-bg: var(--ft-bg);
+	--sl-color-bg-nav: var(--ft-card);
+	--sl-color-bg-sidebar: var(--ft-card);
+	--sl-color-bg-inline-code: var(--ft-muted);
+	--sl-color-bg-accent: var(--ft-brand);
+
+	--sl-color-hairline: var(--ft-border);
+	--sl-color-hairline-light: oklch(1 0 0 / 8%);
+	--sl-color-hairline-shade: oklch(1 0 0 / 22%);
+
+	--sl-color-accent: var(--ft-brand);
+	--sl-color-accent-high: var(--ft-accent-strong);
+	--sl-color-accent-low: var(--ft-brand-wash);
+
+	--sl-color-backdrop-overlay: hsla(107, 6%, 8%, 0.66);
+
+	/* Semantic status colors follow the app tokens. */
+	--sl-color-green-high: oklch(0.84 0.1 155);
+	--sl-color-green: var(--ft-success);
+	--sl-color-green-low: oklch(0.68 0.11 155 / 18%);
+	--sl-color-red-high: oklch(0.82 0.14 24);
+	--sl-color-red: var(--ft-destructive);
+	--sl-color-red-low: oklch(0.704 0.191 22.216 / 18%);
+	--sl-color-orange-high: oklch(0.86 0.12 75);
+	--sl-color-orange: var(--ft-warning);
+	--sl-color-orange-low: oklch(0.74 0.12 75 / 18%);
+	--sl-color-blue-high: oklch(0.78 0.1 220);
+	--sl-color-blue: oklch(0.62 0.12 220);
+	--sl-color-blue-low: oklch(0.62 0.12 220 / 18%);
+	--sl-color-purple-high: oklch(0.78 0.1 300);
+	--sl-color-purple: oklch(0.62 0.12 300);
+	--sl-color-purple-low: oklch(0.62 0.12 300 / 18%);
+
+	/* Flat surfaces: shadows reduced to a whisper. */
+	--sl-shadow-sm: 0 1px 2px oklch(0 0 0 / 12%);
+	--sl-shadow-md: 0 2px 8px oklch(0 0 0 / 16%);
+	--sl-shadow-lg: 0 6px 24px oklch(0 0 0 / 22%);
+
+	/* Typography */
+	--sl-font: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		sans-serif;
+	--sl-font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas,
+		monospace;
+	--sl-text-base: 1rem;
+	--sl-text-body: 1rem;
+	--sl-line-height: 1.6;
+	--sl-line-height-headings: 1.25;
+	--sl-text-code: 0.875rem;
+	--sl-content-width: 48rem;
+}
+
+/* ============================================================
+   Light mode
+   ============================================================ */
+:root[data-theme='light'] {
+	--ft-bg: oklch(0.992 0.004 106.5);
+	--ft-fg: oklch(0.153 0.006 107.1);
+	--ft-card: oklch(0.978 0.005 106.5);
+	--ft-muted: oklch(0.955 0.006 106.5);
+	--ft-muted-fg: oklch(0.556 0.031 107.3);
+	--ft-border: oklch(0.888 0.007 106.5);
+	--ft-ring: oklch(0.737 0.021 106.9);
+	--ft-brand: #00786f;
+	--ft-brand-wash: color-mix(in oklab, #00786f 10%, transparent);
+	--ft-accent-strong: #005f5a;
+	--ft-success: oklch(0.55 0.09 155);
+	--ft-warning: oklch(0.62 0.1 75);
+	--ft-destructive: oklch(0.577 0.245 27.325);
+
+	--sl-color-white: var(--ft-fg);
+	--sl-color-gray-1: oklch(0.228 0.013 107.4);
+	--sl-color-gray-2: oklch(0.35 0.016 107.4);
+	--sl-color-gray-3: oklch(0.466 0.025 107.3);
+	--sl-color-gray-4: var(--ft-muted-fg);
+	--sl-color-gray-5: var(--ft-ring);
+	--sl-color-gray-6: var(--ft-border);
+	--sl-color-gray-7: var(--ft-muted);
+	--sl-color-black: var(--ft-bg);
+
+	--sl-color-text: var(--sl-color-gray-2);
+	--sl-color-text-accent: var(--ft-brand);
+	--sl-color-text-invert: var(--ft-bg);
+
+	--sl-color-bg: var(--ft-bg);
+	--sl-color-bg-nav: var(--ft-card);
+	--sl-color-bg-sidebar: var(--ft-card);
+	--sl-color-bg-inline-code: var(--ft-muted);
+	--sl-color-bg-accent: var(--ft-brand);
+
+	--sl-color-hairline: var(--ft-border);
+	--sl-color-hairline-light: oklch(0.92 0.006 106.5);
+	--sl-color-hairline-shade: oklch(0.84 0.008 106.5);
+
+	--sl-color-accent: var(--ft-brand);
+	--sl-color-accent-high: var(--ft-accent-strong);
+	--sl-color-accent-low: var(--ft-brand-wash);
+
+	--sl-color-backdrop-overlay: hsla(107, 6%, 36%, 0.5);
+
+	--sl-color-green-high: oklch(0.35 0.08 155);
+	--sl-color-green: var(--ft-success);
+	--sl-color-green-low: oklch(0.55 0.09 155 / 14%);
+	--sl-color-red-high: oklch(0.45 0.18 25);
+	--sl-color-red: var(--ft-destructive);
+	--sl-color-red-low: oklch(0.577 0.245 27.325 / 14%);
+	--sl-color-orange-high: oklch(0.42 0.1 70);
+	--sl-color-orange: var(--ft-warning);
+	--sl-color-orange-low: oklch(0.62 0.1 75 / 14%);
+	--sl-color-blue-high: oklch(0.42 0.09 220);
+	--sl-color-blue: oklch(0.55 0.11 220);
+	--sl-color-blue-low: oklch(0.55 0.11 220 / 14%);
+	--sl-color-purple-high: oklch(0.42 0.09 300);
+	--sl-color-purple: oklch(0.55 0.11 300);
+	--sl-color-purple-low: oklch(0.55 0.11 300 / 14%);
+
+	--sl-shadow-sm: 0 1px 2px oklch(0 0 0 / 6%);
+	--sl-shadow-md: 0 2px 8px oklch(0 0 0 / 8%);
+	--sl-shadow-lg: 0 6px 24px oklch(0 0 0 / 10%);
+}
+
+/* ============================================================
+   Typography ladder (DESIGN_SYSTEM.md "Type scale")
+   ============================================================ */
+/* Page title = Newsreader medium (the display face reaches content only here). */
+.content-panel h1,
+.hero h1 {
+	font-family: 'Newsreader Variable', Georgia, serif;
+	font-size: 1.875rem;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	line-height: 1.2;
+}
+
+/* Section headings stay Inter semibold with the app's tight tracking. */
+.sl-markdown-content h2 {
+	font-size: 1.25rem;
+	letter-spacing: -0.02em;
+}
+.sl-markdown-content h3 {
+	font-size: 1.0625rem;
+	letter-spacing: -0.01em;
+}
+.sl-markdown-content h4 {
+	font-size: 1rem;
+}
+
+/* ============================================================
+   Chrome (flat surfaces, hairlines)
+   ============================================================ */
+/* Wordmark: base/semibold beside the mark, per the chrome legibility floor. */
+.site-title {
+	font-size: 0.875rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+/* Sidebar: active item carries the brand accent on a brand wash — not a new
+   colored fill (DESIGN_SYSTEM.md "Accent discipline"). */
+.sidebar a[aria-current='page'] {
+	color: var(--sl-color-text-accent);
+	background-color: var(--ft-brand-wash);
+}
+
+/* Content links: teal with the app's relaxed underline. */
+.sl-markdown-content a {
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklab, var(--sl-color-text-accent) 40%, transparent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.25rem;
+}
+.sl-markdown-content a:hover {
+	text-decoration-color: var(--sl-color-text-accent);
+}
+
+/* Inline code: quiet muted chip with a hairline. */
+.sl-markdown-content :not(pre) > code {
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.375rem;
+	padding: 0.125rem 0.325rem;
+}
+
+/* Cards (landing): hairline, flat, wash on hover — never a bordered box inside
+   a bordered box. */
+.sl-card {
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.625rem;
+	box-shadow: none;
+	transition: background-color 125ms cubic-bezier(0.2, 0, 0, 1);
+}
+.sl-card:hover {
+	background-color: var(--ft-brand-wash);
+}
+
+/* Asides: hairline with a left rule, flat. */
+.sl-aside {
+	border: 1px solid var(--sl-color-hairline);
+	border-left: 3px solid var(--sl-color-accent);
+	border-radius: 0.5rem;
+	box-shadow: none;
+}
+
+/* Native scrollbars mirror the app (thin rounded thumb in the border token). */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--sl-color-hairline);
+	border: 2px solid transparent;
+	border-radius: 9999px;
+	background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--sl-color-gray-3);
+	background-clip: padding-box;
+}
+
+/* Selection: brand wash like the app. */
+::selection {
+	background-color: color-mix(in oklab, var(--sl-color-accent) 20%, transparent);
+}
+
+/* Reduced motion: settle everything to 1ms like the app's base guard. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+	}
+}
