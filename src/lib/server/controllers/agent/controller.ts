@@ -88,28 +88,113 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
 
 class DuplicateSubmission extends Error {}
 
+/**
+ * Application boundary for the agent: submitting runs, streaming their events, and
+ * managing the conversations (chats) they happen in. Controllers know nothing about
+ * transports; this one deals in run receipts, snapshots, and event cursors.
+ */
 export interface AgentController {
+	/**
+	 * Queue an agent run for the given prompt and return a receipt for the queued run.
+	 *
+	 * Idempotent on `input.requestId`: a repeated submission returns the receipt of the
+	 * run that already consumed that request id rather than queueing a second run, so a
+	 * client retry after a dropped response cannot double-fire the agent.
+	 *
+	 * The user's current limits and preferences are frozen onto the run at submission
+	 * time; a run replayed later runs under the settings it was submitted with, not
+	 * whatever they have since become. The chat model itself is only settled after the
+	 * conversation is resolved, because the model can depend on the conversation's own
+	 * preferences. Execution is kicked off only after the enclosing transaction commits,
+	 * so a failure to queue never leaks a run that was never meant to run.
+	 *
+	 * @throws ValidationError if an explicit model is not selectable, more than four
+	 * images are attached, or an image is not a supported type within the size limit.
+	 */
 	submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
+	/**
+	 * Fetch a single run as a snapshot (the run plus its latest event cursor and pending
+	 * decisions) so a client can resume the event stream and render approval cards.
+	 *
+	 * @throws NotFoundError if no run exists for `runId`.
+	 */
 	getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	/**
+	 * Replay events for a run after the given cursor, for a client that polls the event
+	 * stream while a run executes. The cursor is the opaque continuation returned by the
+	 * previous append, so a client never re-reads events it already saw.
+	 */
 	listRunEvents(
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
 	): Promise<readonly AgentRunEventRecord[]>;
+	/**
+	 * Approve or reject a single pending tool call. Delegates to {@link decideMany};
+	 * kept as a convenience so callers need not wrap one call id in a batch.
+	 */
 	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot>;
+	/**
+	 * Record approvals or rejections for several pending tool calls and requeue the run
+	 * for continued execution.
+	 *
+	 * The batch is all-or-nothing: every call id must currently be pending, otherwise
+	 * nothing is recorded. A partial batch against a run that then requeues would leave
+	 * the user staring at approval cards whose decision silently went nowhere.
+	 *
+	 * @throws ValidationError if the run is not awaiting approval or any call id is not
+	 * pending.
+	 */
 	decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
+	/**
+	 * Request cancellation of a run, aborting any in-process execution immediately.
+	 *
+	 * When the run was still queued the cancellation is also recorded as an event so the
+	 * client's event stream explains why the run never produced output.
+	 */
 	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	/**
+	 * Requeue a failed or cancelled run under the input snapshot it was originally frozen
+	 * with, returning a receipt for the new run.
+	 *
+	 * Only failed or cancelled runs may be retried — a completed run is never replayed —
+	 * and the new run carries the original's frozen model, execution mode, and input so a
+	 * retry is a faithful replay rather than a fresh submission. Like {@link submit}, it
+	 * is idempotent on `requestId`.
+	 *
+	 * @throws ValidationError if the original run is neither failed nor cancelled.
+	 */
 	retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
+	/**
+	 * List the user's conversations, newest first, optionally filtered by free-text
+	 * `query` and paginated by `limit`/`offset`.
+	 */
 	listSessions(
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
 	): Promise<readonly Conversation[]>;
+	/**
+	 * Change a conversation's title as it appears in the conversation list.
+	 */
 	renameSession(
 		actor: ActorContext,
 		conversationId: ConversationId,
 		title: string
 	): Promise<Conversation>;
+	/**
+	 * Delete a conversation and its message history.
+	 *
+	 * Refused while the conversation has an active agent run: deleting the transcript out
+	 * from under a run that is still executing would strand it. Stop or resolve the run
+	 * first.
+	 *
+	 * @throws ValidationError if the conversation has an active run.
+	 */
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
+	/**
+	 * Load a conversation with its full message history and, when one exists, its most
+	 * recent run as a snapshot, so a single call can hydrate a chat view.
+	 */
 	getSession(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -120,22 +205,38 @@ export interface AgentController {
 	}>;
 }
 
+/**
+ * Everything the {@link AgentController} needs to do its work, injected so the
+ * controller can be built and tested without touching real stores or the executor.
+ */
 export interface AgentDependencies {
+	/** Persists conversations and their message history. */
 	conversationJournal: ConversationJournal;
+	/** Per-user agent preferences used to settle defaults when a run is frozen. */
 	preferences: AgentPreferencesStore;
+	/** The catalogue of selectable models, used to validate and resolve run models. */
 	models: AgentModelCatalog;
+	/** Run records: idempotent inserts, lookups by id/request id, cancellation and requeue. */
 	runs: AgentRunRepository;
+	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
+	/** Recorded approvals and rejections for pending tool calls. */
 	decisions: AgentRunDecisionRepository;
+	/** Provider session items, replaced wholesale when a conversation is rewound. */
 	sessions: AgentSessionRepository;
+	/** Executes run mutations atomically so a run is all-or-nothing. */
 	transactionRunner: TransactionRunner;
+	/** Deployment fallback chat model when the user has not chosen one. */
 	defaultModel: string;
+	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
+	/** Executes queued runs in the background and reports their lifecycle. */
 	executor: AgentRunLifecycle;
 }
 
 const activeRuns = new Map<AgentRunId, AbortController>();
 
+/** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
 export class Agent implements AgentController {
 	constructor(private readonly dependencies: AgentDependencies) {}
 
