@@ -36,25 +36,64 @@ import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
+/**
+ * Application boundary for diagrams: generating and revising Mermaid diagrams from a
+ * selection, converting between Mermaid and draw.io, and editing persisted draw.io
+ * diagrams. Agent-generated diagrams arrive as suggestions; only the draw.io editing
+ * surface writes straight to a persisted diagram.
+ */
 export interface DiagramsController {
+	/**
+	 * Generate a Mermaid diagram from a text selection, optionally following an
+	 * instruction, and create a diagram suggestion with provenance — all in one
+	 * transaction so the anchor, provenance, and suggestion land atomically.
+	 */
 	generateMermaid(
 		actor: ActorContext,
 		input: GenerateMermaidDiagramInput
 	): Promise<GenerateMermaidDiagramOutput>;
+	/**
+	 * Revise an existing Mermaid diagram by instruction: re-render its SVG, re-extract
+	 * searchable text, persist, and re-index.
+	 *
+	 * @throws UnsupportedDiagramOperationError if the diagram is not Mermaid — only
+	 * Mermaid can be revised by AI.
+	 */
 	reviseMermaid(
 		actor: ActorContext,
 		input: ReviseMermaidDiagramInput
 	): Promise<ReviseMermaidDiagramOutput>;
+	/** Revise an inline Mermaid diagram in a note's document (one never promoted to a standalone diagram). */
 	reviseInlineMermaid(
 		actor: ActorContext,
 		input: ReviseInlineMermaidInput
 	): Promise<ReviseInlineMermaidOutput>;
+	/**
+	 * Convert an inline Mermaid diagram into a draw.io draft and create a suggestion,
+	 * validating the generated XML and recording provenance before anything is offered.
+	 */
 	convertInlineMermaid(
 		actor: ActorContext,
 		input: ConvertInlineMermaidInput
 	): Promise<ConvertInlineMermaidOutput>;
+	/**
+	 * Fetch a draw.io diagram for editing.
+	 *
+	 * @throws NotFoundError if the diagram is not in the given note; throws
+	 * UnsupportedDiagramOperationError if it is not draw.io.
+	 */
 	getDrawio(actor: ActorContext, input: GetDrawioDiagramInput): Promise<DrawioDiagram>;
+	/**
+	 * Persist an edited draw.io diagram: validate the XML, sanitize the SVG preview,
+	 * re-extract searchable text, write, and re-index in one transaction.
+	 */
 	saveDrawio(actor: ActorContext, input: SaveDrawioDiagramInput): Promise<SaveDrawioDiagramOutput>;
+	/**
+	 * Promote a Mermaid diagram to a draw.io diagram, creating a suggestion the user can
+	 * accept to replace the Mermaid original.
+	 *
+	 * @throws UnsupportedDiagramOperationError if the source is not Mermaid.
+	 */
 	promote(actor: ActorContext, input: PromoteDiagramInput): Promise<PromoteDiagramOutput>;
 }
 

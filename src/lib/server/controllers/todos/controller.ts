@@ -32,14 +32,39 @@ import type {
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
+/**
+ * Application boundary for todos: tracking, filtering, and the promise-extraction
+ * pipeline that turns commitments in text into reviewable todo suggestions.
+ */
 export interface TodosController {
+	/** Load a single todo as a view with its resolved display fields. */
 	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
+	/** List todos by filter, each assembled into a view. */
 	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
+	/** Count todos matching a filter without loading them, for badges and pagination. */
 	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
+	/** List the distinct category names in use, for filter dropdowns. */
 	listCategories(actor: ActorContext): Promise<readonly string[]>;
+	/** Create a todo. */
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
+	/**
+	 * Apply a partial edit to a todo: merges only the supplied fields, then applies a
+	 * status change when the status differs from the current one.
+	 *
+	 * @throws InvalidGeneratedContentError if no edit is supplied at all — an update
+	 * that changes nothing is a caller bug, not a no-op.
+	 */
 	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
+	/** Soft-delete a todo so it disappears from lists while its history survives. */
 	remove(actor: ActorContext, todoId: TodoId): Promise<void>;
+	/**
+	 * Extract commitments from a text selection and create one reviewable todo
+	 * suggestion per candidate, in one transaction.
+	 *
+	 * Suggestions the trust policy deems safe are auto-accepted into real todos; the
+	 * rest stay pending for review. Returns both the created suggestions and any todos
+	 * auto-created from them.
+	 */
 	extractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<ExtractPromisesOutput>;
 }
 export interface TodosDependencies {
