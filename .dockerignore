@@ -7,6 +7,7 @@ screenshots
 test-results
 playwright-report
 artifacts
+docs
 tests
 .agents
 .claude
