@@ -24,24 +24,53 @@ import type {
 	SkillVersionManager
 } from '$lib/server/services/skills/contracts';
 
+/**
+ * Application boundary for skills: reading, creating, editing, and versioning the
+ * skill notes the agent can load.
+ *
+ * Skills are just notes with extra metadata, so creation and versioning go through the
+ * note subsystem; `get` is a pure read, while the agent-facing load also records usage.
+ */
 export interface SkillsController {
+	/** List the user's skills, optionally scoped to a project. */
 	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
+	/** Load a skill and its usage counts for the editor view. Read-only. */
 	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView>;
+	/**
+	 * Load a skill for the agent and record that it was used.
+	 *
+	 * Distinct from {@link get} because loading by the agent is a side effect: it writes
+	 * a usage record linking the skill to the note it was applied against, which is what
+	 * makes "which skills actually get used" observable later.
+	 */
 	loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
+	/** Create a new skill backed by a fresh note, in one transaction. */
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput>;
+	/**
+	 * Create a skill distilled from a text selection.
+	 *
+	 * Records provenance from the source selection first, so the new skill carries a
+	 * traceable lineage back to the content it was extracted from.
+	 */
 	createFromSelection(
 		actor: ActorContext,
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput>;
+	/** List the revision history of a skill's underlying note. */
 	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
+	/** Restore a skill to an earlier revision, in one transaction. */
 	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView>;
+	/** Edit a skill's content, returning the refreshed view with its usage counts. */
 	update(actor: ActorContext, input: Parameters<SkillEditor['update']>[1]): Promise<SkillView>;
+	/** Serialize a skill into the compact form the agent consumes. */
 	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
+	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
 	setPinned(
 		actor: ActorContext,
 		input: { noteId: GetSkillViewInput['noteId']; projectId: ProjectId; pinned: boolean }
 	): Promise<void>;
 }
+/** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
