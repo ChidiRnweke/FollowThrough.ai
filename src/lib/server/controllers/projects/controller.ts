@@ -25,13 +25,25 @@ import type {
 } from '$lib/server/services/projects/contracts';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
+/**
+ * Application boundary for projects and their folder tree: listing, loading, creating,
+ * renaming, archiving, and moving entries. The move is the only write that needs atomic
+ * cross-entry bookkeeping, so it alone runs through the transaction runner.
+ */
 export interface ProjectsController {
+	/** List the user's projects. */
 	list(actor: ActorContext): Promise<ListProjectsOutput>;
+	/** Load a project together with its full entry tree, fetched in parallel. */
 	get(actor: ActorContext, input: GetProjectInput): Promise<GetProjectOutput>;
+	/** Create a project. */
 	create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput>;
+	/** Rename a project. */
 	rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput>;
+	/** Archive a project, removing it from the default workspace view. */
 	archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput>;
+	/** Create a folder inside a project. */
 	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput>;
+	/** Move a note or folder to a new parent and position, atomically. */
 	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput>;
 }
 

@@ -26,11 +26,36 @@ import type {
 } from '$lib/server/services/suggestions/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
+/**
+ * Application boundary for memory: the persistent facts the agent is allowed to read,
+ * managed directly by the user or proposed by the agent.
+ *
+ * Direct edits are immediate; agent proposals go through the suggestion pipeline and are
+ * auto-accepted only when the trust policy says the change is safe.
+ */
 export interface MemoryController {
+	/**
+	 * List memory entries, optionally restricted to those shared with agents. Entries the
+	 * user keeps private are visible here but never to the agent.
+	 */
 	list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput>;
+	/** Add a memory entry. */
 	create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
+	/** Edit an existing memory entry. */
 	update(actor: ActorContext, input: UpdateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
+	/** Delete a memory entry. */
 	remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void>;
+	/**
+	 * Propose a memory change from the agent.
+	 *
+	 * Runs in one transaction: provenance is recorded, a memory suggestion is created,
+	 * and — when the trust policy deems the proposal safe — the change is applied and the
+	 * suggestion auto-accepted. Otherwise it lands as a pending suggestion for the user to
+	 * review. Either way the entry can be traced back to the run that proposed it.
+	 *
+	 * @throws ValidationError if the proposal is malformed (project scope without a
+	 * project, an update/removal without a target entry, or a non-removal without content).
+	 */
 	propose(actor: ActorContext, input: ProposeMemoryChangeInput): Promise<ProposeMemoryChangeOutput>;
 }
 
