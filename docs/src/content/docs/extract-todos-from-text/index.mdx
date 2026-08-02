@@ -1,0 +1,44 @@
+---
+title: Extract todos from pasted text
+description: Paste a meeting transcript, a long email, or any block of text into a note, and let the agent find the commitments in it.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/screenshot.astro';
+
+Meeting notes and email threads are full of commitments buried in prose: "Sarah will send the draft by Friday," "I'll follow up with legal next week." Left as plain text, they rot. This walks through turning a block of pasted text into tracked, reviewable todos in about two minutes.
+
+<Steps>
+
+1. ### Paste the text into a note
+
+   Create a note (or open one) and paste in the raw text: a meeting transcript, an email thread, a rough set of notes. FollowThrough doesn't need it structured or cleaned up first; the extractor reads plain prose.
+
+2. ### Select the part with commitments in it
+
+   Highlight the passage that contains what people promised to do. You don't need to select the whole document, just the paragraphs with the commitments in them; a tighter selection gives the extractor less irrelevant text to sift through.
+
+3. ### Run Extract promises
+
+   Choose **Extract promises** from the bubble menu. FollowThrough reads the selection and finds every genuine commitment in it, not questions, not floated suggestions, just things someone actually promised to do.
+
+   <Screenshot id="in-editor-ai" alt="The bubble menu over a text selection with AI actions, including Extract promises." />
+
+4. ### Review and accept
+
+   Each commitment appears as a suggestion card: the action, who owns it, the due date in its original wording, and a strength badge when the promise is implied rather than stated outright ("I'll try to get to it" reads differently than "I will send it Friday," and the badge reflects that). Accept the ones that are real; dismiss the rest. Accepted todos land on your board, each one still linked back to the exact sentence it came from.
+
+</Steps>
+
+<Aside type="tip">
+	If your workspace has auto-accept turned on for this pipeline (Settings → Trust policies),
+	confident extractions become todos immediately, with a toast announcing it and a visible
+	auto-accepted marker on the card. Nothing about the extraction changes, only whether you review
+	before or after.
+</Aside>
+
+## Related reading
+
+- [Todos](/FollowThrough.ai/using/todos/): the board, the Today triage view, and what "waiting on" tracks.
+- [Notes](/FollowThrough.ai/using/notes/): every other AI action available on a selection.
+- [Todos, in depth](/FollowThrough.ai/subsystems/todos/): the extraction transaction and scoring underneath.

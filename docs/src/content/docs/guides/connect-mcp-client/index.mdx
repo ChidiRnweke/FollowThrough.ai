@@ -1,0 +1,34 @@
+---
+title: Connect an MCP client
+description: Mint a token and point Claude Desktop, Cursor, or any MCP client at your workspace.
+---
+
+import Screenshot from '../../../../components/screenshot.astro';
+
+Open **Settings → MCP access** to run your workspace headless from an external MCP client. The same tool catalog the in-app agent uses (every controller-backed capability, classified as a read, a proposal, or a mutation) is reachable from the client you connect, gated by whichever tools you've left enabled and the scope of the token you mint.
+
+<Screenshot id="mcp-settings" alt="The Settings > MCP access tab, showing the endpoint field and the new-token form." />
+
+## Mint a token
+
+1. In **Settings → MCP access**, name the token after the client you're about to paste it into (`Claude Desktop`, for example), so you know what you're revoking later.
+2. Choose a scope: **Read only** restricts the client to read tools (search, list todos, read memory) and nothing else; **Full access** allows proposals and mutations too, gated the same way the in-app agent's execution mode gates them.
+3. Choose **Create token**. The plaintext token is shown exactly once, in a banner that says so; copy it now. It's stored as a hash, so if you lose it, revoke it and mint another rather than trying to recover it.
+
+## Point your client at the endpoint
+
+Copy the **Endpoint** field on the same page (`/mcp`) and add it to your client's MCP server configuration along with the token as a Bearer credential. In Claude Desktop, for example, this goes in the server's connection settings as an `Authorization: Bearer <token>` header. The connection is stateless JSON-RPC, so there's no separate session to establish beyond that header.
+
+## What the client can do
+
+Once connected, the client discovers tools the same way the in-app agent does: the eight first-class tools (search, list memory, get workspace context, and so on) are available immediately, and everything else is reachable through `search_tools` and `use_tool`. A read-scoped token never sees proposal or mutation tools at all, regardless of what your workspace tool settings allow; a full-access token behaves exactly like your in-app agent, tool selection included.
+
+## Revoke access
+
+Open **Settings → MCP access** and choose **Revoke** on any token's row. Revocation is immediate: the next request with that token fails with a `401`, and there's no grace period.
+
+## Related reading
+
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/): how the tool catalog, first-class tools, and MCP auth fit together.
+- [Architecture](/FollowThrough.ai/explanation/architecture/): where MCP sits next to OAuth2 web sign-in in the infrastructure.
+- [Tool calling](/FollowThrough.ai/explanation/tool-calling/): why the same catalog can serve two protocols without a second, privileged path.

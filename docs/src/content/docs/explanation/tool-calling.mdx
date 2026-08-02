@@ -1,0 +1,36 @@
+---
+title: Tool calling
+description: Why every agent capability is a classified wrapper over a controller method, and why that's enforced at compile time instead of by convention.
+---
+
+The agent's rule is "everything you can do in the app, the agent can do," and the interesting engineering question isn't stating that rule, it's keeping it true as the product grows without anyone remembering to update a list somewhere. FollowThrough's answer is structural: an agent tool is never a hand-written capability of its own, it's a thin `AgentToolDefinition` wrapping an existing controller method, and the mapping from controller method to tool classification is checked by the type system, not by a reviewer's memory.
+
+## Classification is a compile-time obligation, not a convention
+
+Every method of every controller is classified as `read`, `proposal`, `mutation`, or `excluded` in one map, `agentToolCoverage`. The type-level `Coverage<T>` makes an unclassified method a compile error: add a method to a controller, and the build fails until someone decides how the agent sees it. This is the load-bearing design choice. A comment saying "remember to classify new methods" rots the moment the team stops reading it; a type that won't compile doesn't have that failure mode. The classification can't silently drift from the code as the product grows, because there's no way to add a method without confronting the question.
+
+The three classifications map directly to how much trust a capability needs:
+
+- **Read** tools run freely; nothing they do has a side effect worth gating.
+- **Proposal** tools never bypass review: they produce a suggestion the user accepts or rejects, and some capabilities (memory writes, in particular) have no other path at all.
+- **Mutation** tools wait for per-call approval in the default execution mode, and apply immediately only once a user has explicitly switched to auto-accept.
+
+Exclusions exist too, and they're not silence, they're a written reason attached to the method: deleting a todo stays a deliberate user action, so `todos.remove` is excluded with that reasoning in the codebase, not just left off a list. A reader auditing what the agent can't do finds the reason next to the fact.
+
+## Discovery is two-tier, on purpose
+
+If every tool were registered up front, the system prompt would grow linearly with the size of the product, most of it irrelevant to any given turn. Eight tools (search, list memory, get workspace context, and similar) are first-class: registered directly, because they're needed on nearly every turn. Everything else, the long tail of note, todo, project, skill, diagram, and settings operations, stays out of the prompt until discovered: `search_tools` runs semantic retrieval over the full catalog and returns exact names with input schemas, and `use_tool` dispatches by that exact name. An unknown name doesn't fail the turn, it returns a recoverable error with near-name suggestions, so a model that guesses a slightly wrong tool name gets a chance to correct itself instead of the whole turn erroring out.
+
+## One registry, two protocols
+
+The same `AgentToolDefinition` catalog drives both the in-app agent and the MCP server; the user's tool selection is applied in exactly one place, so a tool disabled in Settings vanishes from the in-app chat, from `search_tools` ranking, and from an external MCP client's view all at once. There's no second code path where a capability could exist for one protocol and not the other, and no way for the two surfaces to drift apart, because they're reading the same filtered list, not two independently maintained ones.
+
+## Why this matters more as the product grows
+
+The alternative to this design is a hand-maintained list of agent capabilities that someone updates when they remember to, which is exactly the kind of thing that's correct on day one and quietly wrong eighteen months later. Tying the tool catalog to the controller layer itself, with a compiler-enforced classification, means the agent's capabilities are a direct, unavoidable reflection of the product's public surface: whatever a controller can do, the agent can do, because there is structurally no way to add the former without deciding on the latter.
+
+## Related reading
+
+- [The agent, in depth](/FollowThrough.ai/subsystems/agent/): the tool catalog, run lifecycle, and MCP implementation this page explains the design of.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/): the trust model the three classifications enforce.
+- [The agent](/FollowThrough.ai/using/the-agent/): what this looks like from the chat, including where you can turn a tool off.

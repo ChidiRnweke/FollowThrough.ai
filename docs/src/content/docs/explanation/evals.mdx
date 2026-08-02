@@ -1,0 +1,28 @@
+---
+title: Evaluating the agent
+description: How a dataset-driven, LLM-judged suite checks agent behavior that a unit test can't.
+---
+
+A unit test asserts one input produces one expected output. An agent's behavior doesn't fit that shape: "did it call the right tool," "did it stay within the trust model," "did it resist a prompt injection buried in retrieved content" are judgment calls, not equality checks. FollowThrough's eval suite (`src/evals/`, run as its own vitest project, `pnpm test:evals`) is built for exactly that gap: real conversations run against the real agent, and a separate model judges whether the result was actually good.
+
+## Cases are grouped by what they're actually testing
+
+`src/evals/cases/` holds around twenty archetypes: tool-calling, retrieval, memory, safety, diagrams, note-editing, multi-step reasoning, skill adherence, context-awareness, time-awareness, parallel execution, and more. Each archetype is a family of scenarios that share a concern, not a single test, so "does the agent stay within its trust model" gets exercised across many different conversations rather than one. `src/evals/suites/agent.eval.ts` is where these archetypes actually run against the live agent loop, one Phoenix dataset accumulating examples across all of them, each carrying `splits`/`metadata` and a `passRate` acceptance criterion the archetype is expected to clear.
+
+## The judge is a different model than the one being tested
+
+Arize Phoenix backs this as a dataset/experiment system, not production tracing (that's what the separate `phoenix-trace-audit`/`query`/`smoke-test` scripts are for). The model that judges whether a response was correct is pinned independently of the model under test, defaulting to a stronger model than the subject, because a model grading its own homework is a weaker signal than an independent one grading it. This is the same reason a code review is more useful from someone who didn't write the code: the judge has no stake in the answer looking right.
+
+## Retrieval quality is tested without the agent at all
+
+Not everything worth checking is an agent behavior. `src/evals/cases/retrieval.ts` seeds a corpus directly, calls the retrieval controller's `search` method, and asserts on what ranks first, entirely bypassing the agent loop. The reasoning is direct: retrieval is a subsystem with its own correctness property (does the right chunk come back for a query), and routing that through an agent conversation would only add noise (would the agent have phrased the query well, would it have called search at all) to a question that doesn't need an agent in the loop to answer. Each case logs its outcome back to Phoenix as an annotation, so a regression in ranking quality is visible the same way a regression in an agent conversation is, just measured directly instead of through a model's judgment of a full response.
+
+## Why this is worth having at all
+
+An agent that calls tools, respects a trust model, and reasons over retrieved context has failure modes a type checker and a unit test suite can't see: a model that's technically allowed to call a tool but calls the wrong one, a retrieval pipeline that's technically working but surfaces the wrong passage, a safety boundary that holds against the cases you thought of but not the one you didn't. Running real scenarios against the real system, judged by a model that isn't grading itself, is what turns "we think the agent behaves well" into something checked on every change rather than asserted once and hoped for.
+
+## Related reading
+
+- [Tool calling](/FollowThrough.ai/explanation/tool-calling/): the classification and discovery model these evals exercise.
+- [Vector search and agentic RAG](/FollowThrough.ai/explanation/vector-search-and-rag/): the retrieval pipeline the standalone retrieval cases test directly.
+- [Architecture](/FollowThrough.ai/explanation/architecture/): where Phoenix and OpenTelemetry sit in the wider infrastructure.

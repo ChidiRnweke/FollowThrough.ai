@@ -1,0 +1,15 @@
+---
+title: Models
+description: The capability's data types and branded IDs, the leaf layer every other layer imports from.
+---
+
+A model is a capability's data shape: its types, its branded IDs, and nothing else. Models live under `src/lib/models/<capability>/index.ts`, one folder per capability (`notes`, `todos`, `memory`, `agent`, and so on).
+
+Models are leaf modules. A model never imports another capability's model: foreign IDs are redeclared as local structural aliases instead. `src/lib/models/skills/index.ts` declares its own `NoteId` and `ProjectId` brands rather than importing them from the notes or projects model, so capabilities stay decoupled at the type level even when they reference each other's identifiers. The same brand (`Brand<string, 'NoteId'>`) appears redeclared in a dozen files on purpose: it's cheaper than a shared dependency that would tie every capability's types to every other capability's.
+
+Two kinds of exports live here:
+
+- **Entities**: the shape of a stored thing, `Note`, `Todo`, `MemoryEntry`, `AgentRun`. These carry the invariants callers rely on (a `Todo`'s `completedAt` is set if and only if its status is `done`; a `MemoryEntry` with a `projectId` is project memory, without one it's profile memory).
+- **Operation inputs and outputs**: the shape of a request and its result, `CreateTodoInput`, `ExtractPromisesOutput`, `SyncNoteOutput`. These are what the generated [Controllers](/FollowThrough.ai/reference/controllers/) reference accept and return.
+
+Browse the generated pages below for every documented model in the codebase, grouped by capability.

@@ -1,0 +1,45 @@
+---
+title: 'Diagram a note, then convert it to draw.io'
+description: Turn a paragraph into a Mermaid diagram, then convert it to an editable draw.io file when you need to hand it to a tool that doesn't speak Mermaid.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/screenshot.astro';
+
+A paragraph describing a process or a system is often easier to check as a diagram than as prose. This walks through generating one from a selection and, if you need it in a more widely supported format, converting it to draw.io.
+
+<Steps>
+
+1. ### Select the passage to diagram
+
+   Highlight a paragraph that describes something with structure: steps in a process, components and how they connect, a decision tree. The more concrete the relationships in the text, the better the diagram that comes out of it.
+
+2. ### Run Diagram
+
+   Choose **Diagram** from the bubble menu. FollowThrough generates a Mermaid diagram from the selection and inserts it right where your cursor was. You can undo the insertion with Ctrl+Z if it's not what you wanted.
+
+   <Screenshot id="diagram-render" alt="A Mermaid diagram rendered inline in a note, with a draw.io conversion available." />
+
+3. ### Revise it if needed
+
+   A Mermaid block renders inline as you type, and opens into an editor with its own zoomable preview when you click into it. From there, you can revise the diagram by instruction, describe what to change in words, rather than hand-editing the Mermaid syntax yourself.
+
+4. ### Convert to draw.io
+
+   If you need the diagram in a format other tools can open and edit directly, choose the draw.io conversion from the diagram editor. It opens as a draft in a dialog first: accepting inserts a draw.io preview right after the Mermaid block, and dismissing leaves the original untouched, so converting is never destructive to the Mermaid source.
+
+5. ### Edit and save the draw.io version
+
+   An accepted draw.io diagram opens in its own focused editor with an explicit Save. From here it behaves like any draw.io file: drag shapes, adjust connections, save when you're done.
+
+</Steps>
+
+<Aside type="note">
+	The Mermaid block and its draw.io conversion are independent after the conversion happens.
+	Editing one doesn't update the other, so treat the conversion as a fork, not a live sync.
+</Aside>
+
+## Related reading
+
+- [Notes](/FollowThrough.ai/using/notes/): every AI action available on a selection, diagrams included.
+- [Notes, in depth](/FollowThrough.ai/subsystems/notes/): how diagram conversions are stored and versioned.

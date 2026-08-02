@@ -1,0 +1,14 @@
+---
+title: Repositories
+description: The only place Drizzle and SQL exist. A repository maps rows to models immediately, so nothing above it ever sees a database row.
+---
+
+A repository owns one capability's persistence. It's the only place `Drizzle` and raw SQL appear in the codebase, and it maps rows to models the moment it reads them, so no service, controller, or route ever sees a database row directly.
+
+Each capability declares its persistence as a **contract**: a plain interface with no Drizzle types in its signatures, living directly under `src/lib/server/repositories/<capability>/` (for example `notes.ts`, `todos.ts`, `skills.ts`). A separate `postgres/<capability>.ts` file implements that contract against the real database. Services and controllers depend on the contract, never the Postgres class, which is what makes them testable against hand-written fakes instead of a real database.
+
+Some capabilities split their persistence into more than one contract when the responsibilities genuinely differ. `agent` has six: run state, session items, conversations, tool preferences, trust policies, and web-research transport. Each is its own interface rather than one bloated repository, so a caller injects only the role it actually needs.
+
+A repository's docstring states the one thing a caller can't infer from the method signatures: which write is the compare-and-swap (`NoteRepository.updateIfRevision`), which table never edits in place (`MemoryEntryRepository`, whose `update` backs a soft-delete-and-replace, not a real update), or which record is append-only (`ProvenanceRepository`, `SourceAnchorRepository`'s repair path). Those are the facts that matter when you're deciding whether it's safe to call a method twice.
+
+Browse the generated pages below for every documented repository contract in the codebase.

@@ -1,0 +1,12 @@
+---
+title: Capability factories
+description: One function per capability that wires its repository and services together, and nothing else.
+---
+
+A capability factory is the composition point for one capability: a single `create<Capability>Capability` function that takes the database, plus whatever other capabilities' repositories and services it depends on, and returns this capability's own repository and services, fully wired.
+
+A factory does deliberately little. It doesn't build the controller (that's `ProductionControllerFactory`'s job, constructed per request from the dependency object each factory contributes to), and it doesn't decide business rules (that's the services it constructs). It's the file you read to see, in one place, exactly what a capability needs from the rest of the system: `createSkillsCapability` takes `notes` and `provenance` because skill bodies are notes and skill distillation records provenance, and that dependency list is the whole coupling story.
+
+`src/lib/server/application.ts` calls every capability's factory in dependency order (after everything it consumes, before everything that consumes it) and assembles the controller facade from the result. Adding a capability means adding one factory call here, in the right position; [Adding a capability](/FollowThrough.ai/guides/add-a-capability/) walks through the full recipe with `skills` as the running example.
+
+Browse the generated pages below for every documented capability factory in the codebase.

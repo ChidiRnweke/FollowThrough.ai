@@ -1,0 +1,32 @@
+---
+title: Vector search and agentic RAG
+description: Why retrieval is a tool the agent chooses to call, not a step wired in front of every prompt.
+---
+
+The straightforward way to add retrieval to a chat agent is to embed the user's message, search on it, and stuff the results into the prompt before the model ever sees the question. FollowThrough doesn't do that. Retrieval here is a tool, `search`, that the agent decides to call, decides how to phrase, and decides whether to call again. That distinction, retrieval as an agent decision rather than a pipeline stage, is what "agentic RAG" means in this codebase, and it exists because a fixed pre-fetch step is wrong often enough to matter: it can't tell when a question needs no search at all, and it can't recover when the first query misses.
+
+## What makes a query worth searching
+
+The agent calls `search` when workspace evidence could improve the answer, and it decides that per turn, not per conversation. A question that's purely about the current selection, or that the agent can already answer from the workspace context it was handed at the start of the run (projects, note tree, skills, pending work), doesn't need a search call at all. One that references "the note about X" or "what we decided last week" does. This is a judgment call the model makes, not a rule the code enforces, and that's deliberate: the alternative (searching on every turn regardless) wastes a retrieval pass on turns that don't need one and dilutes the context with irrelevant excerpts on the ones that do.
+
+## Why a multi-turn conversation condenses first
+
+A follow-up like "what did we decide about that?" is meaningless to an embedding model in isolation; "that" resolves only against the conversation so far. Before embedding a query from a longer conversation, the agent condenses the discussion into a single statement and searches on that instead of the raw follow-up. A single-turn question goes through as-is. This is the same problem query rewriting solves in traditional RAG, done here as part of the tool call rather than a separate preprocessing stage, because the agent is the thing with the conversational context to do it correctly.
+
+## Why retrieval is two-stage
+
+A pure vector search over a large, heterogeneous corpus (notes, attachments, diagrams, shared memory, all in one index) returns plausible-but-wrong chunks often enough to hurt an answer's quality. The retrieval pipeline answers this by keeping the stages separate: cast a wide net first (at least 40 candidates by cosine distance, cheap and approximate), then shrink to the final few with a reranker (`cohere/rerank-4-fast`, which sees the actual query text and scores relevance more precisely than a vector distance alone). Cheap recall first, precision second, so the expensive step only ever runs over a small candidate set.
+
+## Why the agent searches again instead of giving up
+
+A single retrieval call is a guess about what the right query looks like, and guesses are sometimes wrong in an informative way, the results reveal a lead ("this mentions a decision made in a different note") or a gap ("nothing here mentions this project at all"). The agent is expected to notice that and search again with a sharper query rather than answering from a weak first result or declining to answer. This is the same reason a person doing manual research rarely stops at their first search query, and it's only possible because retrieval is a tool call the agent controls the cadence of, not a single injected context block it never gets to revise.
+
+## What never goes through this path
+
+Web search is a structurally separate tool (`openrouter:web_search`), attached to every conversation and called when a question needs current or external information rather than anything saved in the workspace. It never touches the retrieval index, and the two are never conflated: a question about "what's in my notes" and a question about "today's exchange rate" resolve through entirely different tools, and the agent is the one deciding which applies.
+
+## Related reading
+
+- [Search, in depth](/FollowThrough.ai/subsystems/search/): the chunking, embedding, and reranking implementation behind this page.
+- [Tool calling](/FollowThrough.ai/explanation/tool-calling/): how `search` fits into the broader read/proposal/mutation classification.
+- [Search](/FollowThrough.ai/using/search/): what this looks like from the editor and chat.

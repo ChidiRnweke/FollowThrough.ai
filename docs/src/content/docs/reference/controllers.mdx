@@ -1,0 +1,12 @@
+---
+title: Controllers
+description: Thin orchestration and the product's documented public surface. Every method here is what the agent's tools wrap, too.
+---
+
+A controller is thin orchestration: it receives an actor context and an input, coordinates whatever services the request needs, and returns a result. It makes no domain decisions of its own, those belong to the services layer, and it wraps multi-step work in the shared transaction runner so a failure partway through never leaves related rows half-written.
+
+Controllers live under `src/lib/server/controllers/<capability>/controller.ts`, and the `<Capability>Controller` interface declared there is the single most important artifact this documentation site generates: it's the product's entire public surface, in one place. Every page under here is real, because the build enforces it. `excludeNotDocumented` is set for this layer, so an undocumented method doesn't get flagged or warned about, it simply never appears. Adding a controller method and forgetting a docstring means the public surface documented on this site silently diverges from the code, which is why [Writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/) treats the docstring as the publishing step, not an afterthought.
+
+The same interfaces are also what the agent runs on. Every `AgentToolDefinition` in `src/lib/server/agent-tool-factory.ts` wraps one controller method, so a method you find here is, with very few deliberate exclusions, a capability the agent has too. See [Tool calling](/FollowThrough.ai/explanation/tool-calling/) for why that's a structural guarantee rather than a convention.
+
+Browse the generated pages below for every documented controller in the codebase.

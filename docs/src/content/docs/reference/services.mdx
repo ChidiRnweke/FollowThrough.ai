@@ -1,0 +1,12 @@
+---
+title: Services
+description: The business rules. A service imports models and repository contracts only, and never another service.
+---
+
+A service holds a capability's business rules: the validation, the state transitions, the decisions a controller shouldn't have to make itself. Services live under `src/lib/server/services/<capability>/`, and the roles they play are declared in a `contracts.ts` (small, role-shaped interfaces like `SkillFinder`, `SkillCreator`, `SkillEditor`, so a controller injects only what it uses) or a `catalog.ts` (the read-heavy, list-and-filter side of a capability).
+
+A service imports models and repository contracts only. It never imports another service, because two services coupling to each other is exactly how business logic turns into spaghetti: cross-capability work belongs one layer up, in the controller that coordinates both. This is checked, not just documented: the topology audit (`pnpm test:architecture`) fails the build on a service-to-service import.
+
+This is also where the product's real behavior lives: `TodoCatalog.change` is the one place a todo's `completedAt` gets stamped or cleared, `MemoryLibrary.apply` is the one place a memory entry gets replaced instead of edited in place, `ToolTrust.shouldAutoAccept` is the one place a trust policy decides whether a suggestion applies itself. Reading a service's docstrings is usually the fastest way to understand what a capability actually guarantees.
+
+Browse the generated pages below for every documented service contract and catalog in the codebase.
