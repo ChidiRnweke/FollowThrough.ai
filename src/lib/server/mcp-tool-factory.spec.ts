@@ -45,6 +45,7 @@ describe('MCP tool surface', () => {
 			'load_skill',
 			'propose_memory_change',
 			'search',
+			'search_note',
 			'search_tools',
 			'use_tool'
 		]);
