@@ -1,0 +1,28 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"lib": ["esnext", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"resolveJsonModule": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
+		"paths": {
+			"$lib": ["../src/lib"],
+			"$lib/*": ["../src/lib/*"]
+		}
+	},
+	"include": [
+		"../src/lib/server/controllers/**/controller.ts",
+		"../src/lib/server/services/**/contracts.ts",
+		"../src/lib/server/services/**/catalog.ts",
+		"../src/lib/server/**/*-factory.ts"
+	],
+	"exclude": ["../src/lib/**/*.spec.ts", "../src/lib/**/*.test.ts"]
+}

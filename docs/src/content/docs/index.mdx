@@ -1,0 +1,35 @@
+---
+title: FollowThrough.ai Documentation
+description: Developer documentation and API reference for the FollowThrough.ai application.
+template: splash
+hero:
+  tagline: FollowThrough.ai
+  title: Developer documentation
+  actions:
+    - text: Get started
+      link: /getting-started/
+      variant: primary
+    - text: API reference
+      link: /reference/
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+FollowThrough.ai is an agentic workspace for turning intentions into finished work. This documentation site covers both how the product works and how its internal application API is structured.
+
+The site is organized using the [Diátaxis](https://diataxis.fr) methodology — four quadrants, each serving a distinct documentation need:
+
+<CardGrid>
+	<Card title="Getting started">
+		Follow a tutorial and build your first project end-to-end.
+	</Card>
+	<Card title="How-to guides">
+		Practical, task-oriented guides for real workflows such as saving a note offline or configuring agent skills.
+	</Card>
+	<Card title="API reference">
+		Generated reference documentation for the internal TypeScript API, produced from docstrings via TypeDoc.
+	</Card>
+	<Card title="Explanation">
+		Conceptual material on the architecture and the reasoning behind the design.
+	</Card>
+</CardGrid>

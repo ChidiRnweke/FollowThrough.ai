@@ -167,6 +167,26 @@ No byte-for-byte duplicates exist: every e2e test covers an _outcome_ the lower
 layer proves only at the mapping/state level. The 12 moves are concrete add-lower
 targets, grouped below.
 
+> **Execution finding (2026-08-02):** the component layer cannot resize the browser
+> viewport (vitest-browser/headless Chromium exposes no viewport API), so Tailwind
+> breakpoint-conditional display (`sm:`/`lg:` hidden/inline) is a real e2e boundary.
+> The note-title and quick-capture moves succeeded as planned; the responsive
+> note-actions moves (57/79/85) reduced to proving the affordances exist at the
+> component layer (`note-workspace-header.svelte.spec.ts` covers Publish presence
+> and overflow-menu Export), with the viewport-specific display assertions staying
+> in e2e. The four move-down groups below remain valid except the note-actions
+> breakpoint group, which is split between component (affordances) and e2e
+> (breakpoints).
+>
+> **Execution decision (2026-08-02):** the registry `run()` `CommandRunner`
+> extraction (agent-workbench moves 153/159/165/171) is **not** done in this pass.
+> It is the optional move in the manifest: it requires a production refactor of
+> `registry.ts` that touches every command, while the four e2e tests it replaces
+> are cheap single-shortcut smoke tests. The keyboard mapping they depend on is
+> already unit-covered (`keyboard.spec.ts`), so the remaining e2e assertions
+> (navigation outcomes) stay as smoke. Revisit only if agent-workbench's slow
+> tests become a problem.
+
 **Retained e2e (54):** agent-workbench 100/127/147/181/189/217/258; note-title
 27/34; pwa 23/36/46/64/72; responsive all 8 overflow + 35 + all 4 toolbar-pane +
 64/91/98/113/123/134/144/152; sidebar 40/51/63/76; todos 5/14/59; workbench-split
