@@ -1,22 +1,62 @@
 ---
 title: FollowThrough.ai
-description: How FollowThrough turns notes into finished work — product workflows, self-hosting, architecture, and the internal API contracts.
+description: An agent-native note editor you never have to brief — it turns notes into actions, keeps project context for agents, and carries work through to finished deliverables.
 template: splash
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
 import HomeHero from '../../components/home-hero.astro';
 import HomeSection from '../../components/home-section.astro';
 import ResourceRow from '../../components/resource-row.astro';
 import Screenshot from '../../components/screenshot.astro';
+import Mermaid from '../../components/mermaid.astro';
 
 <HomeHero />
 
 <Screenshot id="today-screen" alt="The Today page: overdue, due today, and waiting-on groups with pinned notes below." />
 
+## Why FollowThrough
+
+The usual way of working with AI is a tax: your notes live in one app, your tasks in another, the project context lives in your head — and every new AI session starts with re-explaining all of it. FollowThrough collapses that into one workspace. The editor is where you think; the agent lives inside it and already carries the project — the decisions saved to memory, the todos, the people you're waiting on.
+
+And the loop closes. The agent doesn't just talk about the work, it does the work — extracting commitments from your notes, keeping the board honest, producing artifacts — always proposing, never committing anything important silently.
+
+<Mermaid
+	source={`
+flowchart LR
+	notes["Think in notes"] --> extract["Agent extracts commitments & context"]
+	extract --> today["You triage on Today"]
+	today --> act["Agent acts — with your approval"]
+	act --> deliver["Work becomes artifacts & deliverables"]
+	deliver --> notes
+`}
+/>
+
+### The five moves
+
+<CardGrid>
+	<Card title="Note → Card" icon="approve-check">
+		Select a commitment in a note; it becomes a reviewable todo on the board, linked back to the exact passage it came from.
+	</Card>
+	<Card title="Selection → Diagram" icon="random">
+		Turn a paragraph into a Mermaid diagram, revise it with AI, promote it to a project artifact.
+	</Card>
+	<Card title="Selection → Image" icon="document">
+		Find and insert a relevant image for a passage without leaving the editor.
+	</Card>
+	<Card title="Project context → Draft" icon="pencil">
+		The agent drafts from the project's notes, memory, and board — no re-briefing, no copy-pasting context.
+	</Card>
+	<Card title="Draft → Deliverable" icon="rocket">
+		Export a draft as a styled PDF or DOCX artifact from a template, ready to leave the app.
+	</Card>
+</CardGrid>
+
 <div className="ft-home-groups">
 
 <HomeSection title="User documentation">
 	<li><ResourceRow href="/getting-started/" icon="rocket" label="Getting started" hint="Create a project, extract commitments from a note, and ship an artifact. About ten minutes." /></li>
+	<li><ResourceRow href="/using/the-agent/" icon="comment" label="The agent" hint="Everything you can do in the app, the agent can do — every capability a tool, every tool yours to turn off." /></li>
 	<li><ResourceRow href="/explanation/agents-propose-users-accept/" icon="approve-check-circle" label="Trust model" hint="What the agent may do on its own, and what always waits for your accept." /></li>
 </HomeSection>
 
@@ -24,7 +64,7 @@ import Screenshot from '../../components/screenshot.astro';
 	<li><ResourceRow href="/self-hosting/" icon="server" label="Self-hosting" hint="Closed beta, MIT code. Run it on your own box with Docker, Postgres, and two API keys." /></li>
 	<li><ResourceRow href="/guides/add-a-capability/" icon="pencil" label="How-to guides" hint="Add a capability without breaking the layering rules; write docstrings the reference build actually renders." /></li>
 	<li><ResourceRow href="/reference/" icon="code-branch" label="API reference" hint="Every controller contract the app exposes, generated from docstrings. Undocumented symbols do not appear." /></li>
-	<li><ResourceRow href="/explanation/architecture/" icon="information" label="Architecture" hint="Why capabilities outrank technologies, and why agents propose while users accept." /></li>
+	<li><ResourceRow href="/explanation/architecture/" icon="information" label="Architecture" hint="Capability-first layers, the agent's tool catalog, and the infrastructure it runs on." /></li>
 </HomeSection>
 
 </div>

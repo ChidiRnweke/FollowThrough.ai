@@ -74,8 +74,8 @@ Playwright is installed at the root: `npx playwright screenshot --wait-for-timeo
 
 ## 5. Unification + QA pass over the 15 new pages
 
-- Skeleton consistency: user pages = what it does → what you can do → edges; dev pages =
-  models → services → controllers → repositories + invariants + at most one diagram.
+- Skeleton consistency: user pages = TL;DR → intent → what it does → what you can do → where to go next; dev pages =
+  TL;DR → intent → models → services → controllers → repositories + invariants + diagrams where they earn their place.
 - Voice grep (should return nothing): `grep -rniE 'this (page|section|guide) (covers|describes|documents)|methodology' docs/src/content/docs/using docs/src/content/docs/subsystems`.
 - Spot-check the factual claims each agent reported (they are listed in the swarm results —
   e.g. chunk sizes 2400/480, 50 MB attachment limit, `LOCKED_TOOL_NAMES`, run state machine)

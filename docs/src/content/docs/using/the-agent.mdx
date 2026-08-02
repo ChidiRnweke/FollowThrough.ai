@@ -1,49 +1,73 @@
 ---
 title: The agent
-description: The agent reads your workspace before it answers, and asks before it changes anything unless you switch it to auto-accept.
+description: The chat that can do everything you can — because every app capability is a tool it can call, gated by your approval.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import Screenshot from '../../../components/screenshot.astro';
 
-The agent is the chat built into FollowThrough. It answers questions from your notes, todos, attachments, and memory, and it can act on them — creating todos, editing notes, saving memory — with your approval.
+## TL;DR
 
-## Where it lives
+The agent is the chat built into FollowThrough, and it runs on one rule: **everything you can do in the app, the agent can do.** Every app capability is exposed to it as a tool — reading notes, creating todos, renaming projects, exporting documents — and every tool respects the trust model: reads are free, changes wait for your approval unless you switch to auto-accept. You never brief it; it reads your workspace before it answers.
 
-The chat runs in two places, and both show the same conversations:
+## Intent
 
-- **The panel** sits beside whatever you are doing. Below the `2xl` breakpoint it opens as a sheet over the page. It lists up to five recent chats.
-- **Full-page chats** live at `/chats`, with durable URLs: `/chats/new` for a fresh conversation and `/chats/[id]` for an existing one. The full history lives here, and each conversation links back to the project or note it started from.
+This page gets you up to speed on what the agent can do, where you talk to it, and how approval and execution modes keep you in charge.
 
-A conversation's origin — the project or note it started in — is fixed on its first turn and shown as the chat's context.
+**Everything you can do in the app, the agent can do.**
 
-<Screenshot
-	id="agent-tab"
-	alt="The agent chat panel with its context sentence, recent chats, and composer"
-/>
+That is not marketing shorthand. Every capability the app offers — creating a note, updating a todo, renaming a project, generating a document — is implemented once, in a controller, and the agent reaches it through a tool that wraps that same controller method. There are sixty-odd of these tools, each classified as a **read**, a **proposal**, or a **mutation**:
 
-## What the agent reads
+- **Reads** run freely. Searching your knowledge base, listing todos, reading memory — none of it asks permission, because none of it changes anything.
+- **Proposals** never bypass review. Extracting promises from a selection, proposing a memory change, generating a diagram — these produce suggestion cards you accept or reject. Some writes have no direct path at all: memory can only change through `propose_memory_change` review, and the agent cannot delete todos.
+- **Mutations** — editing a note, creating a todo, archiving a project — wait for your approval in the default execution mode, and apply immediately only in auto-accept.
 
-Above an empty thread, a plain-language sentence names the scope: "Before it answers, the agent reads what is in your Inbox project." Below it, a row of counts — memory, notes, todos, attachments — shows exactly what is in reach, including zeros. Each count links to the thing it counts and explains itself on hover. Change project and the row re-derives itself.
+A few capabilities are deliberately out of the agent's reach: it cannot upload your local files (you initiate attachments), and it cannot delete todos, change memory directly, or manage its own API-token creation.
 
-Once the thread is running, the sentence collapses to the icon-and-count row so the transcript gets the height. The open note also travels along as a context chip above the composer.
+<Screenshot id="tools" alt="The tools settings page listing every agent tool with its on/off toggle" />
 
-## What you can do
+## Tools you can turn off
 
-- **Ask.** Type in the composer and send. A three-dot activity indicator appears immediately, then human-readable status as the agent works. While it streams, you can scroll up freely — auto-scroll only follows while you are at the latest turn.
-- **Add context.** Type `@` to mention a note or skill; it attaches as a chip you can remove. The open note is attached automatically.
-- **Attach images.** Up to four images per message — PNG, JPEG, or WebP, 10 MiB combined. If the chat model can see images it reads them directly; otherwise a vision model describes them first, so they are never silently dropped.
-- **Switch execution mode** from the composer toggle. This decides whether the agent may write without asking, so it stays visible rather than hiding in settings:
-  - *Approval required* (the default): every change appears as an approval card before it happens.
-  - *Auto-accept*: the agent changes notes and todos without asking.
-- **Approve or reject changes.** Each card names the action and previews it — a note edit shows the diff. When one turn parks on several changes at once, they bundle with *Approve all* and *Reject all*. Rejecting tells the agent to recover without that action.
-- **Choose the model** from the gear next to the composer. The picker searches the OpenRouter catalogue, marks recommended models, and disables models that cannot call tools. A vision model picker sits below it, greyed out when the chat model reads images itself. Choices can be set per conversation or as your default in settings.
-- **Stop, retry, edit.** Stop halts a running generation. A failed or cancelled run offers retry, which replays it exactly as submitted. Your own messages expose copy and edit-in-composer; editing an earlier question rewinds the conversation to just before that turn and re-asks it.
-- **Reconnect without losing the run.** If the connection drops, the composer shows "Reconnecting" or "Offline · run continues" — the run keeps going on the server and the transcript catches up.
+Every tool can be switched off — as your workspace default, or overridden per project. Turn off `create_todo` in a project and the agent loses that capability there entirely: it disappears from the in-app chat, from tool search, and from the MCP surface at once, because there is only one registry behind all three. The **Tools** page in settings lists every tool with its current state and whether that state came from your default or a project override.
 
-## The edges
+A handful of tools are locked on: `get_workspace_context` and `load_skill` (without them the agent loses its grounding and its instructions), and the two preference tools (a selection that lets the agent disable its own way back would be a trap, not a setting).
 
-- One active run per conversation. Submitting again while a run is in flight is refused; stop or finish it first. A chat with an active run also cannot be deleted.
-- A run stops after 20 tool-calling turns by default (raise it in settings) — a model stuck in a loop stops costing money.
-- A completed run can never be retried or replayed; only failed and cancelled runs can.
-- The agent cannot delete todos, upload or remove attachments, or change project memory directly — memory changes always arrive as proposals you review. Web search is available as a tool; it uses your configured engine and result caps.
+## Where you talk to it
+
+The chat runs in two places, showing the same conversations:
+
+- **The side panel** sits beside whatever you are doing — below the `2xl` breakpoint it opens as a sheet over the page. It lists up to five recent chats.
+- **The full page** lives at `/chats`, with durable URLs: `/chats/new` for a fresh conversation, `/chats/[id]` for an existing one. The full history is here, and each conversation links back to the project or note it started from — that origin is fixed on the first turn and shown as the chat's context.
+
+<Screenshot id="agent-tab" alt="The agent chat panel with its context sentence, recent chats, and composer" />
+
+## What it reads before answering
+
+Above an empty thread, a plain-language sentence names the scope — "Before it answers, the agent reads what is in your Inbox project" — with a row of counts (memory, notes, todos, attachments) showing exactly what is in reach, zeros included. Change project and the row re-derives itself.
+
+Behind that sentence, a run starts by reading your workspace context: your projects, the note tree, your skills, and pending work. From there the agent pulls what it needs with read tools — semantic search over notes, documents, and PDFs; user and project memory; todo lists; full note contents. Your preferences and limits are frozen onto the run at submission, so a retried run replays under the settings it was submitted with, not whatever they have since become.
+
+While you chat you can also steer the context directly: type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP), and pick the model from the gear next to the composer — the picker searches the OpenRouter catalogue and disables models that cannot call tools.
+
+## Execution modes and approval cards
+
+The composer carries a toggle between two execution modes, kept visible because it decides whether the agent may write without asking:
+
+- **Approval required** (the default): every mutation parks the run and appears as an approval card before it happens. The card names the action and previews it — a note edit shows the diff. When one turn produces several changes, they bundle with *Approve all* and *Reject all*; the batch is all-or-nothing, so no decision silently goes nowhere. Rejecting tells the agent to recover without that action.
+- **Auto-accept**: mutations apply without asking. Reads and proposals behave the same in both modes — proposals still land as reviewable suggestions.
+
+<Screenshot id="in-editor-chat" alt="An agent conversation opened from a note, with the note attached as context" />
+
+A run is a sequence of tool-calling turns, capped at **20 turns** by default (adjustable in settings, up to 50) — a model stuck in a loop stops costing money. There is **one active run per conversation**: sending again while a run is in flight is refused, and a chat with an active run cannot be deleted. Stop halts a running generation; a failed or cancelled run offers retry, which replays it exactly as submitted — a completed run is never replayed. If your connection drops mid-run, the composer shows "Reconnecting" or "Offline · run continues": the run keeps going on the server and the transcript catches up when you are back.
+
+<Aside type="tip">
+	Resubmissions are safe. Every prompt is idempotent on its request id, so a retry after a dropped
+	response cannot double-fire the agent.
+</Aside>
+
+## Where to go next
+
+- [Agent subsystem](/FollowThrough.ai/subsystems/agent/) — how runs, approval checkpoints, and the tool registry are implemented.
+- [Todos](/FollowThrough.ai/using/todos/) — the board the agent extracts commitments onto.
+- [Memory](/FollowThrough.ai/using/memory/) — the most protected write path the agent has.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind execution modes.

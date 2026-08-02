@@ -1,82 +1,170 @@
 ---
 title: Adding a capability
-description: How a new capability is structured from model to delivery boundary.
+description: The layer-by-layer recipe for adding a new capability, from model to delivery boundary.
 ---
 
-import { FileTree, Aside } from '@astrojs/starlight/components';
+import { Steps, FileTree, Aside } from '@astrojs/starlight/components';
 import Mermaid from '../../../components/mermaid.astro';
 
-FollowThrough is organized as a set of capabilities — one per product concept. Each capability appears in the same few layers, in the same order. This guide walks what a new capability looks like and the rules that keep it that way.
+## TL;DR
 
-## The shape of a capability
+A new capability touches the same six places every time: a model module, a repository contract plus its Postgres implementation, a service, a controller, one capability factory, and a delivery boundary. Build them in that order, wire the factory into `src/lib/server/application.ts` in dependency order, document every public controller method, and prove the graph still holds with `pnpm test:architecture`.
 
-A capability is a directory that appears at several layers. Take `notes` as the reference example:
+## Intent
+
+This guide is the recipe for adding a capability that passes the architecture checks on the first run. The layering rules themselves are explained in [Architecture](/FollowThrough.ai/explanation/architecture/); here we only care about doing it.
+
+The running example is `skills` — small, real, and easy to read end-to-end.
+
+## Where each piece lands
 
 <FileTree>
-- `src/lib/models/notes.ts`
-- `src/lib/server/controllers/notes/controller.ts`
-- `src/lib/server/services/notes/`
-  - `contracts.ts`
-  - `catalog.ts`
-- `src/lib/server/repositories/notes/`
-  - `contract.ts`
-  - `postgres/index.ts`
-- `src/lib/server/notes-capability-factory.ts`
-- `src/routes/...`
+- src/
+  - lib/
+    - models/skills/index.ts — types and branded IDs, a leaf module
+    - server/
+      - db/schema/registry.ts — Drizzle tables, re-exported from schema/skills.ts
+      - repositories/skills/
+        - skills.ts — the SkillRepository contract
+        - index.ts — barrel re-export
+        - postgres/skills.ts — SkillRecords, the Drizzle implementation
+      - services/skills/
+        - contracts.ts — role interfaces (SkillFinder, SkillCreator, …)
+        - library.ts — the implementation
+      - controllers/skills/controller.ts — SkillsController, the documented surface
+      - skills-capability-factory.ts — createSkillsCapability
+      - application.ts — composition root
+  - routes/… — pages that call the remote functions
+  - lib/remote/skills/skills.remote.ts — delivery boundary
 </FileTree>
 
-Layers are strictly ordered: models → services → controllers → delivery boundaries.
+## The recipe
 
-## 1. Model
+<Steps>
 
-Start with the data. The model module is self-contained: it owns the capability's types and IDs, and it imports nothing from another capability's model.
+1. **Model — `src/lib/models/<cap>/index.ts`**
 
-## 2. Service
+   Define the capability's types and branded IDs. The model is a leaf module: it never imports another capability's model. Foreign IDs are redeclared as local structural aliases — the skills model declares its own `NoteId` and `ProjectId` brands rather than importing them (`src/lib/models/skills/index.ts:3-7`), so capabilities stay decoupled at the type level.
 
-Put the business rules in a service directory with a `contracts.ts` next to the implementation. The contract is the interface your controllers depend on; the implementation (`catalog.ts`) satisfies it. A service imports models and repository contracts only — it never imports another service.
+2. **Repository — `src/lib/server/repositories/<cap>/`**
 
-## 3. Controller
+   Persistence needs three files plus a schema table:
 
-Add `src/lib/server/controllers/<capability>/controller.ts`:
+   - The contract, e.g. `SkillRepository` in `repositories/skills/skills.ts` — a plain interface, no Drizzle types in its signatures.
+   - A barrel `index.ts` that re-exports the contract.
+   - The Postgres implementation in `postgres/<cap>.ts`, e.g. `SkillRecords implements SkillRepository` (`repositories/skills/postgres/skills.ts`). This is the only place Drizzle and SQL exist, and it maps rows to models immediately (`toSkill` from `$lib/server/db/mappers`) — nothing above the repository ever sees a database row.
 
-- An exported interface named `<Capability>Controller` with one method per operation.
-- An exported `<Capability>Dependencies` interface listing every service the controller needs, so it can be built and tested without real stores.
-- A class implementing the interface, delegating to dependencies.
+   Declare the tables in `src/lib/server/db/schema/registry.ts`, re-export them from `schema/<cap>.ts`, then generate the migration:
 
-A controller coordinates services; it does not make domain decisions. Cross-service orchestration lives here, business logic lives in services.
+   ```bash
+   pnpm db:generate
+   ```
 
-<Aside type="note">
+3. **Service — `src/lib/server/services/<cap>/`**
 
-The controller interface is the public API this documentation site renders. Every public method carries a docstring explaining what it does and, where it matters, why — see [writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/).
+   Put the business rules here. `contracts.ts` holds the interfaces the rest of the world depends on — keep them small and role-shaped (`SkillFinder`, `SkillCreator`, `SkillEditor`, … in `services/skills/contracts.ts`) so controllers inject only what they use. The implementation classes satisfy those interfaces. A service imports models and repository contracts only — it never imports another service.
 
-</Aside>
+4. **Controller — `src/lib/server/controllers/<cap>/controller.ts`**
 
-## 4. Repository
+   One file, three exports, following `controllers/skills/controller.ts`:
 
-Persist the capability with a contract in `src/lib/server/repositories/<capability>/` and a Postgres adapter underneath it. Repositories own Drizzle, SQL, and any other persistence behavior, and map directly to models.
+   - `SkillsController` — the interface, one method per operation, taking an `ActorContext` and an input. This interface is the product's public surface: it is what the [API reference](/FollowThrough.ai/reference/) renders, so every method needs a docstring (see step 8).
+   - `SkillsDependencies` — every service role the controller needs, injected so it can be built and tested without real stores.
+   - `class Skills implements SkillsController` — thin orchestration. It coordinates services and wraps multi-step work in `transactionRunner.run(...)`; it makes no domain decisions itself.
 
-## 5. Composition
+   Then register it in the factory types: add a `<cap>(): <Cap>Controller` method to `ControllerFactory` (`src/lib/server/controller-factory.ts`) and implement it in `ProductionControllerFactory` (`src/lib/server/production-controller-factory.ts`), adding your dependencies to `ProductionControllerDependencies`.
 
-Export one `create<Capability>Capability` function from `<capability>-capability-factory.ts`. It wires the repositories, services, and controller for the capability together — nothing else. `application.ts` calls the factories in dependency order and builds the final controller facade.
+5. **Capability factory — `src/lib/server/<cap>-capability-factory.ts`**
 
-<Mermaid
-	source={`
-flowchart TB
-	app["application.ts"] --> factory["createNotesCapability()"]
-	factory --> repo["notes repository (Drizzle adapter)"]
-	factory --> service["notes service"]
-	factory --> controller["NotesController"]
-	service -. "depends on" .-> repo
-	controller -. "depends on" .-> service
-`}
-/>
+   Export exactly one `create<Capability>Capability` function. It takes the database plus the *other capabilities' repositories and services* it depends on, constructs this capability's repository and services, and returns them — nothing else. The real thing, from `src/lib/server/skills-capability-factory.ts:24`:
 
-## The rules that keep it coherent
+   ```ts
+   export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {
+   	const repository = new SkillRecords(input.db);
+   	const library = new SkillLibrary(
+   		repository,
+   		input.notes,
+   		input.provenance,
+   		new SkillManifestCodec()
+   	);
+   	// …
+   	return { library, builtIns, provisioned: new BuiltInSkillLibrary(builtIns, library) };
+   };
+   ```
 
-- Cross-capability imports use capability entry points like `$lib/models/notes`; relative imports stay within a capability.
-- A second-level directory is justified only by a stable subsystem with several related files. Do not introduce `common`, `core`, `misc`, or `helpers`.
-- Transactional work goes through the `AtomicOperation` contract from the workspace model; repositories implement it inside the provided transaction.
+   Note what the factory does *not* do: it does not build the controller. Controllers are constructed per request by `ProductionControllerFactory` from the dependency object you wire in the next step.
+
+6. **Compose — `src/lib/server/application.ts`**
+
+   Two edits in `createApplication`:
+
+   - Call your factory in dependency order — after every capability it consumes, before everything that consumes it. Skills sits after notes and projects (`application.ts:150`):
+
+     ```ts
+     const skillCapability = createSkillsCapability({
+     	db,
+     	projects: projectCapability.repository,
+     	notes: noteCapability.repository,
+     	provenance: noteCapability.provenanceRepository
+     });
+     ```
+
+   - Add the controller's entry to the `dependencies` object passed to `ProductionControllerFactory`, mapping each service role to the instance that satisfies it (`application.ts:392-403`).
+
+   <Mermaid
+   	source={`
+   flowchart TB
+   	app["application.ts"] --> factory["createSkillsCapability()"]
+   	factory --> repo["SkillRecords — postgres adapter"]
+   	factory --> service["SkillLibrary — service"]
+   	app --> controllers["ProductionControllerFactory"]
+   	controllers --> controller["SkillsController"]
+   	service -. implements .-> contract["SkillRepository contract"]
+   	repo -. implements .-> contract
+   	controller -. depends on .-> service
+   `}
+   />
+
+7. **Delivery boundary — `src/lib/remote/<cap>/` or a route**
+
+   Delivery code delegates to controllers; it contains no logic of its own. The remote-function boundary validates input with zod, resolves the actor, and calls the controller — see `src/lib/remote/skills/skills.remote.ts:11`:
+
+   ```ts
+   export const toggleSkill = command(z.object({ noteId, enabled: z.boolean() }), async (input) => {
+   	await AppFactory.controllers()
+   		.skills()
+   		.update(requestActor(), {
+   			noteId: input.noteId as NoteId,
+   			isEnabled: input.enabled
+   		});
+   	return { enabled: input.enabled };
+   });
+   ```
+
+   Server load functions and form actions in `src/routes/` follow the same rule: resolve the actor, call the controller, render the result.
+
+8. **Document the public surface**
+
+   Every method on your `<Capability>Controller` interface needs a docstring that says *why*, not what — the docs build drops undocumented symbols from the reference silently. The standard and real examples are in [Writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/).
+
+</Steps>
 
 ## Verify
 
-Run `pnpm test:architecture` — it checks the dependency graph, test quality, and architectural invariants.
+```bash
+pnpm test:architecture
+```
+
+Three checkers run, and each catches a different way this recipe goes wrong:
+
+- **Topology audit** (`scripts/audit-topology.ts`) — a service importing another service, a model importing across capabilities, SQL outside a repository, a factory with the wrong shape.
+- **Test-quality audit** (`scripts/audit-tests.ts`) — mocks or spies in server-layer tests; hand-written fakes only.
+- **chisel** (`chisel-js check`) — the remaining architecture and design-system invariants.
+
+A red run names the file and the rule. Fix the import, not the checker.
+
+<Aside type="tip">
+
+If you are unsure how a piece should look, read the skills capability top to bottom — model, contract, adapter, service, controller, factory, remote functions. It is the smallest complete example of every rule on this page.
+
+</Aside>

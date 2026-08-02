@@ -1,57 +1,93 @@
 ---
 title: Architecture
-description: Why FollowThrough is organized as capability-first layers.
+description: The software and infrastructure architecture of FollowThrough — capability-first layers, enforced boundaries, and the components it runs on.
 ---
 
 import Mermaid from '../../../components/mermaid.astro';
 
-FollowThrough is a SvelteKit TypeScript monolith, but its directory structure is organized around the product's capabilities first — notes, todos, memory, skills — with frameworks and infrastructure appearing only at delivery boundaries.
+## TL;DR
 
-This page is about *why* it is arranged that way, not just how.
+FollowThrough is a SvelteKit (Svelte 5, TypeScript) monolith, organized capability-first: every layer is sliced by product capability — notes, todos, memory, agent — rather than by technology. It runs on PostgreSQL 17 with pgvector (Drizzle ORM), S3-compatible object storage, and OpenRouter for chat models and embeddings. One Docker image serves both the web app and a worker sidecar; secrets come from Infisical; traces go to Arize Phoenix over OpenTelemetry.
 
-## Capabilities, not technologies
+## Intent
 
-The directory structure names what the product does, not what it is built with. A new engineer landing in `src/lib/server/services/notes/` immediately knows what lives there. Technologies — Drizzle, Postgres, the agent runtime — are constrained to their own layers, so the product's shape does not drift as the technology underneath changes.
+This page gets a new engineer up to speed: how the code is layered, what the key modules are, what enforces the rules, and what infrastructure the app runs on. The enforcement-level rules live in `ARCHITECTURE.md` at the repository root; this page is the map.
 
-## One direction of dependency
-
-Each layer depends only on the layers below it, and the boundary rules are strict:
-
-- **Models** are leaf modules. They hold the capability's data and IDs, and import nothing from another capability.
-- **Services** hold business rules. They import models and repository contracts only — a service never imports another service, because two services coupling to each other is how business logic turns into spaghetti.
-- **Controllers** coordinate services. Cross-service orchestration lives here; domain decisions do not.
-- **Repositories** own persistence. They map Drizzle rows straight to models.
-- **Routes and remote endpoints** delegate to controllers and preserve their public request and response shapes.
-
-The payoff is that each layer is testable in isolation, and the dependency graph is auditable — `pnpm test:architecture` enforces it.
+## Software architecture
 
 <Mermaid
 	source={`
 flowchart TB
-	routes["Routes & remote endpoints — delivery boundaries"] --> controllers["Controllers — orchestration, no domain decisions"]
-	controllers --> services["Services — business rules"]
-	services --> models["Models — types and IDs, import nothing"]
-	services --> contracts["Repository contracts"]
-	repositories["Repositories — Drizzle, SQL"] -. implements .-> contracts
+	delivery["Routes & remote functions — delivery boundaries"]
+	controllers["Controllers — orchestration, the public contract"]
+	services["Services — business rules"]
+	contracts["Repository contracts"]
+	repositories["Repositories — Drizzle, SQL"]
+	models["Models — types and IDs, leaf modules"]
+	delivery --> controllers
+	controllers --> services
+	services --> contracts
+	repositories -. implements .-> contracts
+	repositories --> models
+	services --> models
 `}
 />
 
-## Why controllers exist at all
+The project follows a layered architecture, with each layer sliced by capability (`src/lib/**/<capability>/`):
 
-A controller is a thin orchestration layer: it receives an `ActorContext` and an input, coordinates the services needed to fulfil the request, and returns a result. It holds no queries and no business rules.
+1. **Models** (`src/lib/models/<cap>/`) — the capability's data types and branded IDs. Models are leaf modules: a model never imports another capability's model. Foreign IDs appear as local structural aliases, so capabilities stay decoupled at the type level.
+2. **Repositories** (`src/lib/server/repositories/<cap>/`) — own all persistence. They are the only place Drizzle and SQL exist, and they map rows to models immediately, so nothing above them ever sees a database row. Each capability declares a repository *contract*; the Postgres implementation satisfies it.
+3. **Services** (`src/lib/server/services/<cap>/`) — the business rules. A service imports models and repository contracts only — a service never imports another service, because two services coupling to each other is how business logic turns into spaghetti. Cross-service work goes one layer up.
+4. **Controllers** (`src/lib/server/controllers/<cap>/`) — thin orchestration. A controller receives an actor context and an input, coordinates the services needed to fulfil the request, and returns a result. The `<Capability>Controller` interfaces are the product's documented public surface — they are what the [API reference](/FollowThrough.ai/reference/) renders, and what the agent's tools wrap.
 
-That boundary matters because it is what the API reference documents. The `<Capability>Controller` interfaces are the stable contract between the product's delivery boundaries (routes, remotes) and its services. Keeping the contract at the controller, rather than letting routes talk to services directly, gives every capability one documented public surface.
+Delivery boundaries (SvelteKit routes and remote functions in `src/lib/remote/<cap>/`) delegate to controllers. On the client, each capability mirrors the same slice: remote / client / stores / components. The whole graph is composed in `src/lib/server/application.ts`, which calls each capability's `create<Capability>Capability` factory in dependency order and assembles the controller facade.
 
-## The capability factory
+### Key features and modules
 
-Each capability ends with a `<capability>-capability-factory.ts` that exports one `create<Capability>Capability` function. Factories exist to compose, not to contain logic: they instantiate the repositories, services, and controller for one capability and wire them together. `application.ts` calls the factories in dependency order and assembles the final controller facade.
+These layers are used to build the product's capabilities:
 
-This makes the composition of the whole application readable in one place, and it keeps factories free of the "import everything everywhere" pattern that quietly couples capabilities.
+1. **Agent** — durable chat runs, approvals, and the tool catalog that wraps every controller. [Agent subsystem](/FollowThrough.ai/subsystems/agent/)
+2. **Todos** — the commitment board: extract promises from notes, triage on Today, track who you're waiting on. [Todos subsystem](/FollowThrough.ai/subsystems/todos/)
+3. **Notes** — the TipTap editor, autosave with ETag sync, publishing, and vault import. [Notes subsystem](/FollowThrough.ai/subsystems/notes/)
+4. **Memory** — project- and profile-scoped durable facts for agents, written only through proposals. [Memory subsystem](/FollowThrough.ai/subsystems/memory/)
+5. **Attachments** — uploads to object storage, Mistral OCR, and indexing into search. [Attachments subsystem](/FollowThrough.ai/subsystems/attachments/)
+6. **Knowledge search** — pgvector semantic indexing, retrieval, and reranking over notes, attachments, and memory. [Search subsystem](/FollowThrough.ai/subsystems/search/)
+7. **Projects** — the organizing unit every other capability hangs off. [Projects subsystem](/FollowThrough.ai/subsystems/projects/)
+8. **Skills** — user-defined, versioned instruction sets the agent loads on cue. [Skills subsystem](/FollowThrough.ai/subsystems/skills/)
+9. **Settings** — per-user and per-project resolution of models, tools, and trust policies. [Settings subsystem](/FollowThrough.ai/subsystems/settings/)
 
-## Transactions
+### Enforcement
 
-Anything that must happen atomically goes through the workspace model's `AtomicOperation` contract. Services request atomic work through the contract; repositories implement it inside the provided transaction. The contract keeps the notion of "a transaction" at the domain layer instead of leaking Drizzle's API through the codebase.
+The layering is not a convention — it is checked. `pnpm test:architecture` runs three checkers:
 
-## The stable edges
+- **Topology audit** (`scripts/audit-topology.ts`) — import direction, capability entry points, factory shape, and that maintained docs reference only existing paths.
+- **Test-quality audit** (`scripts/audit-tests.ts`) — no mocks or spies in server layers; hand-written fakes only.
+- **chisel** (`chisel-js check`) — architecture and design-system invariants with pointwise, justified exceptions.
 
-The organization is deliberately hard to change in the wrong ways. Route URLs, exported remote names, loader shapes, database table names, enum values, and migration history are stable edges — changing them breaks the contract with the outside world, so the architecture protects them.
+A new controller method, a cross-service import, or an undocumented public symbol fails the build, not the code review.
+
+## Infrastructure
+
+<Mermaid
+	source={`
+flowchart TB
+	browser["Browser — PWA"] --> caddy["Caddy — TLS, reverse proxy"]
+	caddy --> app["app — SvelteKit, adapter-node"]
+	worker["worker sidecar — same app graph, interval scheduler"]
+	app --> pg[("PostgreSQL 17 + pgvector")]
+	worker --> pg
+	app --> s3[("S3-compatible object storage — RustFS")]
+	app --> oidc["OIDC provider — sign-in (PKCE)"]
+	infisical["Infisical — secrets hydration"] --> app
+	infisical --> worker
+	app --> openrouter["OpenRouter — chat models & embeddings"]
+	app --> mistral["Mistral Document AI — attachment OCR"]
+	app --> otel["OTLP collector"]
+	worker --> otel
+	otel --> phoenix["Arize Phoenix — traces & evals"]
+`}
+/>
+
+One Docker image runs both processes: the web app and the worker sidecar, which composes the same application graph and runs background tasks (search-index maintenance, attachment retention) on a self-rescheduling interval. Tasks rediscover work from the database each tick, so a missed tick costs latency, not correctness.
+
+Configuration is hydrated from Infisical before the SvelteKit server starts; telemetry keys are the deliberate exception, supplied directly by the platform. Agent runs are instrumented end-to-end — every model call, tool call, and retrieval is one inspectable Phoenix trace. Deployment is Komodo-managed Docker Compose behind Caddy; see [Self-hosting](/FollowThrough.ai/self-hosting/) for running it yourself.

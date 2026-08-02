@@ -1,38 +1,38 @@
 ---
 title: Attachments
-description: Presigned two-phase uploads land in S3, then a background pipeline runs Mistral OCR and vision description before indexing.
+description: Presigned two-phase uploads land in S3, then an off-request pipeline runs direct decode, Mistral OCR, and vision description before indexing into knowledge search.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
 import Mermaid from '../../../components/mermaid.astro';
 
-Attachments give projects and notes binary files the agent can read. The subsystem is a two-phase upload over S3-compatible object storage, a background extraction pipeline (direct decode, Mistral OCR, vision description), and a search index handoff.
+## TL;DR
 
-## Models
+An attachment is a binary file the agent can read. Upload is two-phase: `initiate` validates the declaration (path, size, SHA-256) and returns a presigned PUT URL; the client writes bytes straight to S3-compatible storage; `complete` re-verifies size and checksum, promotes the object, and commits the records in a transaction. Processing then runs off the request path — plain text is decoded in-process, everything else goes to Mistral Document AI OCR over a presigned URL, embedded images get vision descriptions through OpenRouter, and the text is indexed into knowledge search. A version ends `ready`, `partial` (the index truncated it), `unsupported`, or `failed` (retryable). Uploads are capped at 50 MB by default. For the user-facing view, see [Attachments](/FollowThrough.ai/using/attachments/).
 
-`src/lib/models/attachments/` defines three records:
+## Intent
 
-- `Attachment` — the stable identity: id, owning project, optional owning note, and a note-relative `path`. It points at a `currentVersionId`.
-- `AttachmentVersion` — one stored object: `objectKey`, media type, byte size, SHA-256 checksum, the `extractedText`, and a `processingStatus` of `queued | processing | ready | partial | unsupported | failed`.
-- `AttachmentUpload` — a reservation created before any bytes exist, with a ten-minute `expiresAt`. Finalizing an upload produces the attachment and its first version.
+Give projects and notes binary context — PDFs, Office documents, images — as searchable text, without file bytes ever passing through the app server.
 
-`formats.ts` decides what OCR accepts, by extension rather than media type because browsers report Office and ebook formats inconsistently: images (`jpg`, `png`, `heic`, …) and documents (`pdf`, `docx`, `pptx`, `epub`, `tex`, …).
+## Why it exists
+
+The agent's tools and the search index work on text. Attachments is the subsystem that turns an uploaded file into text: it owns the storage handshake (so large files never proxy through the web process), the extraction pipeline (so a PDF becomes markdown with described images), and the handoff to the index (so the content becomes retrievable).
+
+## Layer map
+
+- **Models** — `src/lib/models/attachments/index.ts`: `Attachment` (identity: owning project, optional owning note, note-relative `path`, `currentVersionId`), `AttachmentVersion` (one stored object: `objectKey`, media type, byte size, SHA-256 checksum, `extractedText`, and `processingStatus` of `queued | processing | ready | partial | unsupported | failed`), and `AttachmentUpload` (a pre-bytes reservation with a ten-minute `expiresAt`). `src/lib/models/attachments/formats.ts` decides what OCR accepts, by extension rather than media type because browsers report Office and ebook formats inconsistently: images (`jpg`, `png`, `heic`, …) and documents (`pdf`, `docx`, `pptx`, `epub`, `tex`, …).
+- **Services** — `src/lib/server/services/attachments/`: `library.ts` (`AttachmentLibrary` — upload lifecycle and the processing pipeline), `storage.ts` (`AttachmentStorage`, a plain `@aws-sdk/client-s3` client, plus `AttachmentParserRegistry` with its one in-process text parser), `mistral-ocr.ts` (`MistralOcr`), `content.ts` (`AttachmentContent` — OCR result assembly and image description), `image-description.ts` (`ImageDescription` — OpenRouter chat completions), `retention.ts` (`UploadRetention` — the expired-upload sweep).
+- **Controllers** — `src/lib/server/controllers/attachments/controller.ts`: the `Attachments` controller, the documented public surface (`initiate`, `complete`, `list`, `listForProject`, `download`/`downloadById`, `read`, `retry`, `remove`/`removeById`).
+- **Repositories** — `src/lib/server/repositories/attachments/attachments.ts` (contract) and `postgres/attachments.ts` (`AttachmentRecords`, all Drizzle/SQL).
+
+Composition lives in `src/lib/server/attachments-capability-factory.ts`, called from `src/lib/server/application.ts`.
 
 ## The upload lifecycle
 
-The controller (`src/lib/server/controllers/attachments/controller.ts`) exposes `initiate` → `complete`:
-
-1. `initiate` validates the path (relative, no `.`/`..` segments), the size (1 byte to `ATTACHMENT_MAX_BYTES`, default 50 MB), and the checksum (SHA-256 hex), then writes an `AttachmentUpload` row and returns a presigned PUT URL for `staging/<user>/<project>/<uploadId>` plus the exact headers the client must send (`content-type`, `x-amz-meta-sha256`). Nothing is visible to other readers at this point.
+1. `initiate` (`library.ts:123`) requires exactly one owner (note or project), validates the path (relative, no empty/`.`/`..` segments), the size (1 byte to `ATTACHMENT_MAX_BYTES`, default 50 MB — `library.ts:80`, `config.ts:124`), and the checksum (SHA-256 hex). It writes an `AttachmentUpload` row with a ten-minute expiry and returns a presigned PUT URL (600 s) for `staging/<user>/<project>/<uploadId>` plus the headers the client must send (`content-type`, `x-amz-meta-sha256`). Nothing is visible to other readers at this point.
 2. The client PUTs the bytes straight to storage.
-3. `complete` stats the staged object and rejects the upload if size or checksum drift from the declaration, promotes the object to `objects/<user>/<project>/<versionId>`, and finalizes the records. The controller runs `complete` inside the transaction runner and starts background processing only after the commit, so a half-persisted attachment is never observable and a crash never leaves an attachment the client believes is ready but nothing is processing.
+3. `complete` (`library.ts:185`) stats the staged object and rejects the upload if size or checksum drift from the declaration, promotes it to `objects/<user>/<project>/<versionId>`, and finalizes the attachment and first version as `queued`. The controller (`controller.ts:91`) runs `complete` inside the transaction runner and starts background processing only after the commit, so a half-persisted attachment is never observable and a crash never leaves an attachment the client believes is ready with nothing processing it.
 
-`downloadById`/`download` return short-lived (300 s) presigned GET URLs; `read` pages through `extractedText` by offset in slices capped at 20,000 characters, so a client can read a large document without downloading it. `retry` is valid only from `failed` — it re-queues the version and kicks processing again.
-
-<Aside type="note">
-
-Completing an upload deliberately leaves the owning note's `currentRevision` alone. That counter is the editor's optimistic-concurrency token; bumping it for a pasted image made the editor's next autosave look stale and raised spurious conflicts. Attachments live beside the document, not in it.
-
-</Aside>
+`downloadById`/`download` return 300-second presigned GET URLs. `read` pages through `extractedText` by offset in slices capped at 20,000 characters (`library.ts:89`) and requires a `parserKind` — a client can read a large document without downloading it, but only once processing produced text. `retry` is valid only from `failed` (`library.ts:232`); it re-queues the version and kicks processing again.
 
 ## The processing pipeline
 
@@ -41,29 +41,52 @@ Completing an upload deliberately leaves the owning note's `currentRevision` alo
 <Mermaid
 	source={`
 flowchart LR
+	initiate["initiate: validate, presigned PUT (10 min reservation)"] --> staging["client PUTs bytes to staging/…"]
+	staging --> complete["complete: verify size + SHA-256, promote to objects/…, commit in transaction"]
+	complete --> queued
 	queued --> processing
+	processing --> text["in-process UTF-8 text decode"]
+	processing --> ocr["Mistral OCR via presigned URL (900 s TTL)"]
+	ocr --> vision["vision descriptions via OpenRouter (4 concurrent)"]
+	text --> index["knowledge-search indexer"]
+	vision --> index
+	index --> ready
+	index -->|index truncated the text| partial
 	processing --> unsupported["unsupported (no parser, no OCR format)"]
-	processing --> ready["ready (extracted + indexed)"]
-	processing --> partial["partial (index truncated the text)"]
 	processing --> failed["failed (OCR/parse error — retryable)"]
-	failed --> |retry| queued
+	failed -->|retry| queued
 `}
 />
 
-- **Text first.** `AttachmentParserRegistry` holds one in-process parser: UTF-8 text (by `text/*` media type or extension — `md`, `json`, `ts`, `svelte`, …). A Markdown attachment never costs an OCR call. Anything else OCR supports goes to the engine; anything neither accepts ends as `unsupported`.
-- **OCR.** `MistralOcr` calls `POST /v1/ocr` on Mistral directly with the model `MISTRAL_OCR_MODEL` (default `mistral-ocr-latest`), handing the file over as a presigned URL (15-minute TTL) rather than a base64 payload, with a 300 s timeout. `ATTACHMENT_OCR_MAX_PAGES` (default 100) is applied to the *response*, not sent as a page selector, because the selector's behavior past the end of a short document is unspecified. Pages come back as markdown plus embedded images; image placeholders in the markdown (`![id](id)`) mark each image's reading position.
-- **Vision description.** `AttachmentContent` replaces every embedded image with a `> **Image N:** …` description at its position, describing up to four images concurrently with the preceding markdown (last 1,000 chars) as context. A description failure degrades to `(description unavailable)`; an OCR engine failure propagates and marks the version `failed` so it can be retried. Standalone images additionally get a self-description appended after their OCR text — a photo may carry almost no text.
-- **Vision model selection.** The model comes from the user's agent preferences (`resolveAttachmentVisionModel`), falling back to `OPENROUTER_ATTACHMENT_VISION_MODEL` (default `google/gemini-2.5-flash-lite`). A preference lookup failure falls back to the environment rather than failing the attachment.
-- **Indexing.** Extracted text goes to the knowledge-search indexer; if the index truncates it, the version lands as `partial` instead of `ready`. See [search](/FollowThrough.ai/subsystems/search/).
+- **Text first.** `AttachmentParserRegistry` (`storage.ts:253`) holds one in-process parser: UTF-8 text by `text/*` media type or extension (`md`, `json`, `ts`, `svelte`, …), read up to `ATTACHMENT_PARSE_MAX_BYTES` (default 50 MB). A Markdown attachment never costs an OCR call. Anything else OCR supports goes to the engine; anything neither accepts ends as `unsupported`.
+- **OCR.** `MistralOcr` posts to `POST /v1/ocr` on Mistral directly with `MISTRAL_OCR_MODEL` (default `mistral-ocr-latest`), handing the file over as a presigned URL (`OCR_URL_TTL_SECONDS = 900`, `library.ts:88`) with `include_image_base64: true` and a 300 s timeout (`mistral-ocr.ts:23`). `ATTACHMENT_OCR_MAX_PAGES` (default 100) is applied to the *response* (`mistral-ocr.ts:134`), not sent as the request's page selector, because the selector's behavior past the end of a short document is unspecified. Pages come back as markdown plus base64-embedded images; `![id](id)` placeholders in the markdown mark each image's reading position.
+- **Vision description.** `AttachmentContent` (`content.ts`) replaces every embedded image with a `> **Image N:** …` description at its position, describing up to four images concurrently (`DESCRIPTION_CONCURRENCY = 4`) with the preceding markdown (last 1,000 characters) as context. A description failure degrades to `(description unavailable)`; an OCR engine failure propagates and marks the version `failed` so it can be retried. A standalone image additionally gets a self-description appended after its OCR text (`library.ts:369`) — a photo may carry almost no text — and there a description failure degrades to no description at all.
+- **Vision model selection.** The model comes from the user's agent preferences (`resolveAttachmentVisionModel`), falling back to `OPENROUTER_ATTACHMENT_VISION_MODEL` (default `google/gemini-2.5-flash-lite`, `library.ts:85`). Processing runs off the request path, so a preference lookup failure falls back to the environment rather than failing the attachment (`library.ts:111`).
+- **Indexing.** Extracted text goes to the knowledge-search indexer; attachments are indexed head-first at 50 chunks, and if the text produced more, the version lands as `partial` instead of `ready` (`library.ts:305`). See [search](/FollowThrough.ai/subsystems/search/).
 
-On boot, `failInterrupted()` marks versions stuck in `processing` as failed (a restart orphaned them), which makes them retryable. Removal deletes the index entries, the rows, and the stored object.
+Two recovery paths keep the state machine honest. On boot, `recoverInterruptedRuns` (`application.ts:481`, invoked from `hooks.server.ts`) calls the repository's `failInterrupted()` (`postgres/attachments.ts:274`), which marks versions stuck in `processing` as failed with `'Processing was interrupted by a restart'` — a restart orphaned them, and failed means retryable. Removal deletes the index entries, the rows, and the stored object.
 
 ## Storage and retention
 
-`AttachmentStorage` is a plain S3 client (`@aws-sdk/client-s3`) against the endpoint in the `S3_*` keys — rustfs locally (`http://localhost:9000`, bucket `followthrough-attachments`, path-style addressing), created on first use if absent. Object bytes never pass through the app except for the in-process text parser, which reads at most `ATTACHMENT_PARSE_MAX_BYTES`.
+`AttachmentStorage` (`storage.ts:49`) targets the endpoint in the `S3_*` keys — rustfs locally (`http://localhost:9000`, bucket `followthrough-attachments`, path-style addressing) — and creates the bucket on first use if absent. Object bytes never pass through the app except for the in-process text parser, which reads at most `ATTACHMENT_PARSE_MAX_BYTES`.
 
-`UploadRetention` is a scheduled task (every 15 minutes) that reclaims upload reservations expired for more than an hour — the grace lets a slow transfer finish against a reservation that just lapsed. It deletes the staged object before the row, since the row is the only pointer to the object; a missing object is the expected case for a client that gave up before uploading and does not block the sweep.
+`UploadRetention` (`retention.ts`) is a scheduled task (every 15 minutes, up to 500 per tick) that reclaims upload reservations expired for more than an hour — the grace lets a slow transfer finish against a reservation that just lapsed. It deletes the staged object before the row, since the row is the only pointer to the object; an already-missing object is the expected case for a client that gave up before uploading and does not block the sweep. It runs in the worker sidecar (`src/worker.ts`), which ticks the `backgroundTasks` the application graph exposes (`application.ts:482`) — the web process builds them and never starts them. Cadence is tunable via `UPLOAD_SWEEP_INTERVAL_MS` and `UPLOAD_SWEEP_MAX_PER_TICK`.
+
+## Invariants callers rely on
+
+- Nothing is visible before `complete`, and `complete` commits before processing starts — readers never see a half-uploaded or half-persisted attachment.
+- Stored bytes always match the declared size and SHA-256; drift rejects the upload.
+- `processingStatus` only moves `queued → processing → ready | partial | unsupported | failed`, plus `failed → queued` on retry and `processing → failed` on boot recovery.
+- Completing an upload deliberately leaves the owning note's `currentRevision` alone (`library.ts:178`). That counter is the editor's optimistic-concurrency token; bumping it for a pasted image made the editor's next autosave look stale and raised spurious conflicts. Attachments live beside the document, not in it.
+- A version stuck in `processing` across a restart becomes `failed`, never silently `ready`.
 
 ## Configuration
 
-All from `APPLICATION_DEFAULTS` in `src/lib/server/config.ts`: `ATTACHMENT_MAX_BYTES` and `ATTACHMENT_PARSE_MAX_BYTES` (both 50 MB), `ATTACHMENT_OCR_MAX_PAGES` (100), `MISTRAL_BASE_URL` / `MISTRAL_OCR_MODEL`, `OPENROUTER_ATTACHMENT_VISION_MODEL`, and the `S3_*` set. `MISTRAL_API_KEY` and `OPENROUTER_API_KEY` are required keys. The sweep's cadence is tunable via `UPLOAD_SWEEP_INTERVAL_MS` and `UPLOAD_SWEEP_MAX_PER_TICK`.
+Defaults live in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) and are read lazily by the services: `ATTACHMENT_MAX_BYTES` and `ATTACHMENT_PARSE_MAX_BYTES` (both 50 MB), `ATTACHMENT_OCR_MAX_PAGES` (100), `MISTRAL_BASE_URL` / `MISTRAL_OCR_MODEL`, `OPENROUTER_ATTACHMENT_VISION_MODEL`, and the `S3_*` set. `MISTRAL_API_KEY` and `OPENROUTER_API_KEY` are required keys.
+
+## Where it touches other subsystems
+
+- [Search](/FollowThrough.ai/subsystems/search/) — extracted text is chunked and embedded by the knowledge-search indexer; truncation is what turns a version `partial`, and removal deletes the index rows.
+- [Agent](/FollowThrough.ai/subsystems/agent/) — the vision model comes from the user's agent preferences; the agent reads attachment text through the `read` paging API.
+- [Notes](/FollowThrough.ai/subsystems/notes/) — an attachment's optional owning note supplies its project and its note-relative path; archived notes cannot receive attachments.
+- [Projects](/FollowThrough.ai/subsystems/projects/) — every attachment is project-scoped; `listForProject` backs the project overview's attachment count.

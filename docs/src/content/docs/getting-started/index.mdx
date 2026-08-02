@@ -5,8 +5,26 @@ description: Build your first project end-to-end, from a note to a finished deli
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 import Screenshot from '../../../components/screenshot.astro';
+import Mermaid from '../../../components/mermaid.astro';
 
-This tutorial walks the core loop of FollowThrough.ai: think in notes, track what matters, preserve context, and finish the work. It takes about ten minutes.
+## TL;DR
+
+FollowThrough is an agent-native note editor you never have to brief. You think in notes; the agent extracts the commitments and context, you triage on Today, the agent acts with your approval, and the work becomes artifacts and deliverables.
+
+## Intent
+
+This tutorial gets you up to speed on that core loop in about ten minutes — one project, one note, all the way to a finished output.
+
+<Mermaid
+	source={`
+flowchart LR
+	notes["Think in notes"] --> extract["Agent extracts commitments & context"]
+	extract --> today["You triage on Today"]
+	today --> act["Agent acts — with your approval"]
+	act --> deliver["Work becomes artifacts & deliverables"]
+	deliver --> notes
+`}
+/>
 
 <Steps>
 
@@ -58,5 +76,8 @@ Throughout, work moves one direction: notes become actions, actions become artif
 
 ## What's next
 
-- Read the [explanation](/FollowThrough.ai/explanation/architecture/) to understand how the product is put together.
-- Browse the [API reference](/FollowThrough.ai/reference/) for the internal TypeScript contracts behind these features.
+- [The agent](/FollowThrough.ai/using/the-agent/) — everything you can do in the app, the agent can do. Chat surfaces, execution modes, and approval cards.
+- [Todos](/FollowThrough.ai/using/todos/) — the board the agent keeps honest, and the Today triage view.
+- [Memory](/FollowThrough.ai/using/memory/) — what the agent is allowed to remember, per project and per profile.
+- [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/) — the trust model behind every approval card.
+- [Architecture](/FollowThrough.ai/explanation/architecture/) — how the product is put together, for developers.

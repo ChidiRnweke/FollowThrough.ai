@@ -1,61 +1,94 @@
 ---
 title: Search
-description: Notes, attachments, diagrams, and memory are chunked into one pgvector table; retrieval is a vector search widened 5× and reranked down to the final few.
+description: Notes, attachments, diagrams, and memory are chunked into one pgvector table; retrieval is a wide cosine-distance scan reranked down to the final few.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
 import Mermaid from '../../../components/mermaid.astro';
 
-Search has two halves that share nothing but the OpenRouter key: **knowledge search**, an embedding pipeline over the user's own content, and **web search**, an OpenRouter-native tool bolted onto every agent chat request.
+## TL;DR
 
-## Model
+Search has two halves that share nothing but the OpenRouter key. **Knowledge search** chunks the user's own content — notes, diagrams, memory entries, attachment text — at 2,400 tokens with a 480-token overlap, embeds each chunk as `openai/text-embedding-3-large`, and stores it in the pgvector `search_chunks` table (`halfvec(3072)`). Embedding is deferred to a background worker in production; content-hash reuse means an edit only re-embeds the chunks that changed. Retrieval embeds the query, pulls `max(40, limit × 5)` candidates by cosine distance, and reranks down to `limit` with `cohere/rerank-4-fast` — 8 results by default, each excerpted to 700 characters. **Web search** never touches the index: an `openrouter:web_search` tool is appended to every agent chat request. For the user-facing view, see [Search](/FollowThrough.ai/using/search/).
 
-`src/lib/models/knowledge-search` defines `SearchDocument` — one chunk of searchable text — and `SearchMatch`. Every chunk belongs to exactly one source: a note, a diagram, a memory entry, or an attachment. Diagram chunks also carry their note id, so note-scoped queries deliberately exclude them.
+## Intent
 
-Persistence is the `search_chunks` table (`src/lib/server/db/schema/registry.ts`): a pgvector `halfvec(3072)` embedding column, a check constraint enforcing the single-source rule, and a partial index on `user_id WHERE embedding IS NULL` — that index is the backfill queue, so backlog scans stay proportional to the backlog. A `supersededAt` timestamp marks chunks a newer revision has replaced but whose replacements are not yet embedded.
+Give the agent and the UI one semantic index over everything the user has written, cheap to maintain on every save and precise enough to answer from.
+
+## Why it exists
+
+Every save of a note, diagram, memory entry, or processed attachment changes what the agent should know. Re-embedding whole documents on every keystroke would be slow and expensive, and a pure vector scan returns plausible-but-wrong chunks often enough to matter. The subsystem exists to make indexing incremental (content-hash reuse, deferred embedding) and retrieval precise (wide recall, reranked precision) without a second provider credential.
+
+## Layer map
+
+- **Models** — `src/lib/models/knowledge-search/index.ts`: `SearchDocument` (one chunk of searchable text, belonging to exactly one source) and `SearchMatch` (document plus score).
+- **Services** — `src/lib/server/services/knowledge-search/`: `indexing.ts` (`TokenAwareChunker`, the four source indexers, and the shared `applyIndex` algorithm), `embeddings.ts` (`Embeddings`), `semantic.ts` (`EmbeddedKnowledgeSearcher`, `RerankingKnowledgeSearcher`), `ranking.ts` (`SearchRanking`), `index-maintenance.ts` (`KnowledgeIndexMaintenance`, the backfill worker).
+- **Controllers** — `src/lib/server/controllers/knowledge-search/controller.ts`: the `Retrieval` controller, the boundary the agent's `search` tool calls.
+- **Repositories** — `src/lib/server/repositories/knowledge-search/retrieval-index.ts` (contract) and `postgres/search.ts` (`KnowledgeIndexRecords`, all Drizzle/SQL), plus `embedding-batches.ts` (batch embedding with stable ordering).
+
+Persistence is the `search_chunks` table (`src/lib/server/db/schema/registry.ts:864`): a pgvector `halfvec(3072)` embedding column, a `search_chunks_single_source` check constraint (`num_nonnulls(note_id, memory_entry_id, attachment_id) = 1` — diagram chunks share their note's id), and `search_chunks_pending_idx`, a partial index on `user_id WHERE embedding IS NULL`. That index is the backfill queue, so backlog scans stay proportional to the backlog. A `supersededAt` timestamp marks chunks a newer revision has replaced but whose replacements are not yet embedded.
 
 ## Indexing
 
-`TokenAwareChunker` (`services/knowledge-search/indexing.ts`) splits on paragraphs, then sentences, then raw tokens, packing units up to **2400 tokens with a 480-token overlap** (`cl100k_base`). Both come from `RETRIEVAL_CHUNK_TOKENS` / `RETRIEVAL_CHUNK_OVERLAP_TOKENS`. Attachments are indexed head-first: at most 50 chunks, the rest reported as truncated.
+`TokenAwareChunker` (`indexing.ts:43`) splits on paragraphs, then sentences, then raw tokens, packing units up to **2,400 tokens with a 480-token overlap** (`indexing.ts:37-38`) measured with `cl100k_base` via `js-tiktoken`. Both come from `RETRIEVAL_CHUNK_TOKENS` / `RETRIEVAL_CHUNK_OVERLAP_TOKENS` (`config.ts:122-123`). Attachments are indexed head-first: at most 50 chunks (`ATTACHMENT_CHUNK_LIMIT`, `indexing.ts:40`), the rest reported as truncated — which is what marks an attachment `partial` (see [attachments](/FollowThrough.ai/subsystems/attachments/)).
 
-One algorithm, `applyIndex`, serves all four source types:
+One algorithm, `applyIndex` (`indexing.ts:235`), serves all four source types:
 
-- Chunks are keyed by content hash, so an edit only re-embeds the chunks that actually changed — but only if the stored vector came from the current embedding model.
+- Chunks are keyed by content hash (SHA-256 over content plus title/section metadata), so an edit only re-embeds the chunks that actually changed — but only if the stored vector came from the current embedding model (`indexing.ts:254`).
 - Each chunk is embedded with a prefix — the note title, the attachment path, or `Diagram in <note>` — so the vector carries its context.
-- When `deferEmbedding` is set (the production default; `DEFER_EMBEDDING=false` restores inline embedding), chunks are staged without vectors. Previously embedded rows the new revision dropped are marked superseded, not deleted, so semantic search never goes blind mid-rewrite. Lexical search excludes superseded rows — their text is out of date — while semantic search keeps answering from them.
-- Removal is never deferred: an archived note, emptied diagram, or deleted memory entry drops out of the index immediately. Memory entries without a project, or not shared with agents, never enter the index at all — they are injected into agent context directly.
-
-`KnowledgeIndexMaintenance` (`index-maintenance.ts`) is the backfill worker. There is no job table: every tick (10 minutes by default, `EMBEDDING_SWEEP_INTERVAL_MS`) it takes up to 200 sources with vectorless chunks (`EMBEDDING_SWEEP_MAX_SOURCES`), embeds them outside the transaction — the network call must not hold row locks — then attaches vectors in one transaction and retires the superseded rows once nothing is pending. Failures are per-source; a poisoned document does not stall other users.
-
-## Retrieval
-
-`EmbeddedKnowledgeSearcher` embeds the query and runs a cosine-distance scan (`searchByEmbedding`), scoring `1 − distance`. `RerankingKnowledgeSearcher` wraps it: retrieve `max(40, limit × 5)` candidates from the cheap vector search, then shrink to `limit` with the reranker — `cohere/rerank-4-fast` through OpenRouter's `/rerank` endpoint. There is no fallback at either stage: if embedding or reranking fails, the call fails rather than returning meaningless or unranked results.
-
-The `Retrieval` controller (`controllers/knowledge-search/controller.ts`) is the boundary the [agent](/FollowThrough.ai/subsystems/agent/) calls as the `search` tool. Multi-turn conversations are condensed to one statement before embedding; single-turn queries go through as-is. Results are capped at 8 by default and each excerpt is truncated to 700 characters. Blank queries return nothing.
+- When `deferEmbedding` is set, chunks are staged without vectors and previously embedded rows the new revision dropped are marked superseded, not deleted, so semantic search never goes blind mid-rewrite. Lexical search excludes superseded rows — their text is out of date (`postgres/search.ts:264`) — while semantic search keeps answering from them. `deferEmbedding` is on in production (`production-factory.ts:28`; `DEFER_EMBEDDING=false` restores inline embedding) and off by default in `createApplication`, so runners without a worker (evals, tests) stay consistent the moment a write returns. Attachment indexing is deliberately left inline either way: it already runs off the request path, and deferring it would report an attachment `ready` before it was actually retrievable.
+- Removal is never deferred: an archived note, emptied diagram, or deleted memory entry drops out of the index immediately. Memory entries without a project, or not shared with agents, never enter the index at all — they are injected into agent context directly (see [memory](/FollowThrough.ai/subsystems/memory/)).
 
 <Mermaid
 	source={`
 flowchart LR
-	save["note / diagram / memory / attachment saved"] --> chunker["TokenAwareChunker 2400/480"]
-	chunker --> stage["stage chunks (hash-reuse, supersede old)"]
-	stage -->|inline or deferred| embed["Embeddings openai/text-embedding-3-large"]
-	worker["backfill worker 10 min tick"] --> embed
-	embed --> table["search_chunks halfvec 3072"]
-	query["agent search tool"] --> condense["condense conversation if multi-turn"]
-	condense --> vec["cosine scan, max(40, limit×5)"]
-	table --> vec
+	save["note / diagram / memory / attachment saved"] --> chunker["TokenAwareChunker: 2400-token chunks, 480 overlap"]
+	chunker --> hash["content-hash reuse (same embedding model only)"]
+	hash --> stage["stage chunks; dropped rows marked superseded"]
+	stage -->|inline (default outside production)| embed["Embeddings: openai/text-embedding-3-large"]
+	stage -->|deferred (production)| queue["rows with embedding IS NULL (the queue is the data)"]
+	worker["KnowledgeIndexMaintenance: 10 min tick, up to 200 sources"] --> queue
+	queue --> embed
+	embed --> table["search_chunks: halfvec(3072)"]
+`}
+/>
+
+`KnowledgeIndexMaintenance` (`index-maintenance.ts`) is the backfill worker. There is no job table: every tick (10 minutes by default, `EMBEDDING_SWEEP_INTERVAL_MS`) it takes up to 200 sources with vectorless chunks (`EMBEDDING_SWEEP_MAX_SOURCES`), embeds them outside the transaction — the network call must not hold row locks — then attaches vectors in one transaction and retires the superseded rows once nothing is pending. Failures are per-source; a poisoned document does not stall other users. It runs in the worker sidecar (`src/worker.ts`) alongside the attachment retention sweep.
+
+## Retrieval
+
+`EmbeddedKnowledgeSearcher` (`semantic.ts:52`) embeds the query and runs a cosine-distance scan (`searchByEmbedding`, `postgres/search.ts:282`), scoring `1 − distance`; chunks still awaiting a vector are excluded, since a NULL distance would otherwise sort ahead of every real one. `RerankingKnowledgeSearcher` (`semantic.ts:79`) wraps it: retrieve `max(40, limit × 5)` candidates from the cheap vector search, then shrink to `limit` with `SearchRanking` — `cohere/rerank-4-fast` (`ranking.ts:45`) through OpenRouter's `/rerank` endpoint, with the source title and section path included as retrieval evidence. There is no fallback at either stage: if embedding or reranking fails, the call fails rather than returning meaningless or unranked results.
+
+The `Retrieval` controller (`controller.ts`) is the boundary the [agent](/FollowThrough.ai/subsystems/agent/) calls as the `search` tool. Multi-turn conversations are condensed to one statement before embedding; single-turn queries go through as-is. Results are capped at 8 by default (`DEFAULT_SEARCH_LIMIT`) and each excerpt is truncated to 700 characters (`CONTENT_EXCERPT_LIMIT`, `controller.ts:43-44`). Blank queries return nothing.
+
+<Mermaid
+	source={`
+flowchart LR
+	tool["agent search tool → Retrieval controller"] --> condense{"conversation history?"}
+	condense -->|multi-turn| condensed["condense to one statement"]
+	condense -->|single-turn| query["query as-is"]
+	condensed --> embed["embed query"]
+	query --> embed
+	embed --> vec["cosine-distance scan: max(40, limit × 5)"]
+	table["search_chunks"] --> vec
 	vec --> rerank["cohere/rerank-4-fast → top limit"]
+	rerank --> results["≤ 8 results, 700-char excerpts"]
 `}
 />
 
 ## Web search
 
-Web search never touches the index. `withWebResearch` (`repositories/agent/web-research-transport.ts`) wraps the provider's fetch and appends an `openrouter:web_search` tool to every `/chat/completions` request; the model decides whether to call it. Defaults are engine `exa`, 20 results per search, 40 total (`CHAT_WEB_SEARCH_DEFAULTS` in `src/lib/models/agent`), overridable per deployment via `OPENROUTER_WEB_SEARCH_ENGINE` / `_MAX_RESULTS` / `_MAX_TOTAL_RESULTS` and per user in agent preferences. Exa is the default because it returns page content rather than snippets. Unrecognised engine names and non-positive caps are ignored rather than disabling search.
+Web search never touches the index. `withWebResearch` (`repositories/agent/web-research-transport.ts`) wraps the provider's fetch and appends an `openrouter:web_search` tool to every `/chat/completions` request; the model decides whether to call it. Defaults are engine `exa`, 20 results per search, 40 total (`CHAT_WEB_SEARCH_DEFAULTS`, `src/lib/models/agent/index.ts:172`), overridable per deployment via `OPENROUTER_WEB_SEARCH_ENGINE` / `_MAX_RESULTS` / `_MAX_TOTAL_RESULTS` and per user in agent preferences. Exa is the default because it returns page content rather than snippets. Unrecognised engine names and non-positive caps are ignored rather than disabling search.
 
-<Aside type="note">
+## Invariants callers rely on
 
-The embedding model is pinned to `openai/text-embedding-3-large` (3072 dimensions) to keep stored vectors valid; changing it strands existing chunks until they are re-embedded, since hash reuse requires a matching `embeddingModel`.
+- Every chunk has exactly one source, enforced by the `search_chunks_single_source` check constraint.
+- A stored vector is only reused when its `embeddingModel` matches the current one — changing the embedding model strands existing chunks until they are re-embedded, which is why the model is pinned to `openai/text-embedding-3-large` (3072 dimensions).
+- Semantic search never goes blind during a re-index: superseded chunks keep answering until their replacements carry vectors. Lexical search never returns out-of-date text: it excludes superseded rows.
+- Removal is immediate; only embedding is deferred.
+- If embedding or reranking fails, the search fails — callers never get silently unranked or unembedded results.
 
-</Aside>
+## Where it touches other subsystems
 
-Embeddings, reranking, and query condensing all run on the single OpenRouter key — no second provider credential exists. Attachments reach the index through the [attachments subsystem](/FollowThrough.ai/subsystems/attachments/), which parses uploads and hands the text to the attachment indexer.
+- [Attachments](/FollowThrough.ai/subsystems/attachments/) — the attachment indexer hands extracted text to `applyIndex`; truncation there is what makes an attachment `partial`.
+- [Memory](/FollowThrough.ai/subsystems/memory/) — project-scoped, agent-shared memory entries are indexed; profile memory is injected into agent context instead.
+- [Notes](/FollowThrough.ai/subsystems/notes/) — notes and their diagrams are the primary indexed sources; archiving a note removes its chunks immediately.
+- [Agent](/FollowThrough.ai/subsystems/agent/) — the `search` tool is the retrieval controller's main caller; embeddings, reranking, condensing, and web search all run on the single OpenRouter key.

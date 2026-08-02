@@ -1,43 +1,62 @@
 ---
 title: Todos
-description: Every commitment, yours or someone else's, in one board — and every extracted todo keeps the sentence it came from.
+description: The commitment board — everything you owe and everything you are waiting on, with every extracted todo keeping the sentence it came from.
 ---
 
+import Mermaid from '../../../components/mermaid.astro';
 import Screenshot from '../../../components/screenshot.astro';
 
-Todos track commitments: things you owe, and things you are waiting on from other people. They live on the Todos page across all projects, and under each project at `Project > Todos`. Both surfaces show the same workspace; the project one is pre-filtered.
+## TL;DR
 
-A todo is more than a title. It carries a status, an optional priority, category, and due date, a responsibility — **Mine** or **Waiting on** someone, with their name — and, when it came out of a note, a link back to the exact sentence that created it.
+Todos track commitments: things you owe, and things you are waiting on from other people. They live on one board across all projects (and pre-filtered under each project), they carry deadlines and a *waiting on* counterparty, and the Today view triages what needs attention now. The fastest way to fill the board is Extract promises: select text in a note, the agent proposes todos, you accept, and the cards appear — each keeping the exact sentence it came from.
+
+## Intent
+
+This page gets you up to speed on the board and list views, the Today triage, and the extraction pipeline that turns notes into commitments.
 
 ## Board and list
 
 <Screenshot id="todo-board" alt="The todo board with Backlog, Open, In progress, and Done columns" />
 
-Board and List are two views of the same set, switched by tabs in the toolbar; the choice is part of the URL, so a link lands on the same view.
+Todos live on the Todos page across all projects, and under each project at `Project > Todos`. Both surfaces show the same workspace; the project one is pre-filtered. Board and List are two views of the same set, switched by tabs in the toolbar — the choice is part of the URL, so a link lands on the same view.
 
-The **board** has four columns: Backlog, Open, In progress, Done. Drag a card between columns by its handle (revealed on hover), or use the card's **Move to…** menu. The checkbox completes a todo; unchecking reopens it. Each column except Done has an **Add** row at the bottom — type a title, Enter commits, Escape cancels. A card shows only what is set: project badge on the all-projects page, a due-date badge that turns red when overdue, a priority badge for medium and high, and a footer with the source note and who the todo waits on. An empty column says so in one line ("Nothing in flight.").
+The **board** has four columns: Backlog, Open, In progress, Done. (Cancelled exists in the status dropdown but is not a column.) Drag a card between columns by its handle, or use the card's **Move to…** menu. The checkbox completes a todo; unchecking reopens it. Each column except Done has an **Add** row at the bottom — type a title, Enter commits, Escape cancels. A card shows only what is set: a project badge on the all-projects page, a due-date badge that turns red when overdue, a priority badge for medium and high, and a footer with the source note and who the todo waits on.
 
-The **list** is a table with a column per field. Click a header to sort ascending, again for descending, a third time to return to the default order — due date first, then recently updated; todos without a value always sort last. Status, priority, category, due date, responsibility, and source are editable in place: the control appears on hover or keyboard focus and commits the moment you choose. On phones each row becomes a card with the same fields.
+The **list** is a table with a column per field. Click a header to sort ascending, again for descending, a third time for the default order — due date first, then recently updated. Status, priority, category, due date, responsibility, and source are editable in place; the control appears on hover or keyboard focus and commits the moment you choose. On phones each row becomes a card with the same fields.
 
-Filters sit above both views: a title search box, dropdowns for project and category, and **Mine** / **Waiting on** pills. The dropdowns and pills live in the URL and are shareable; the search box just narrows what is already loaded. Category options are the categories your todos actually use.
+Filters sit above both views: a title search, dropdowns for project and category, and **Mine** / **Waiting on** pills. The dropdowns and pills live in the URL and are shareable.
 
-## The detail panel
+## Today: the triage view
 
-Clicking a title opens the todo's details — a side panel on wide screens, a full page below that. Everything is editable in place: text fields commit on blur or Enter and restore the saved value on Escape; selections commit immediately. There is no Save button. The counterparty field appears only while responsibility is Waiting on.
+<Screenshot id="today-screen" alt="The Today view with overdue, due today, and waiting-on sections" />
 
-Two sections matter beyond the fields. **Original context** quotes the sentence the todo was extracted from, with a link into the note at that passage. And **Find the source** asks the agent to locate the note a todo came from and explain what it says. Deleting a todo asks for confirmation and removes it from every board, list, and note that references it.
+Today is where the board meets the clock. It assembles three groups — **overdue**, **due today**, and **waiting on** — plus pending suggestions and recent notes, so the morning question "what needs me?" has one answer. The waiting-on group is the follow-up list: every commitment someone else owes you, by counterparty, ready to be chased.
 
-## Promises from your notes
+That shape comes straight from the todo's fields. A todo carries a status, an optional priority, category, and due date, and a responsibility — **Mine** or **Waiting on** someone, with their name. Switching responsibility back to Mine clears the counterparty; completing a todo stamps the completion date, and reopening clears it.
 
-Select text in a note and the bubble menu offers **Extract promises**. Each genuine commitment in the selection — not questions, suggestions, or floated options — becomes a suggestion card in the note's Suggestions panel, showing the action, who owns it, the due date with its original wording, and a strength badge when the promise is implied or tentative rather than explicit. **Accept** creates the todo; **Dismiss** drops the suggestion. Either way the todo keeps the quoted sentence as its original context.
+Clicking a title opens the detail panel (a side panel on wide screens, a full page below it). Everything is editable in place — there is no Save button. Two sections matter beyond the fields: **Original context** quotes the sentence the todo was extracted from, with a link into the note at that passage, and **Find the source** asks the agent to locate the note a todo came from and explain what it says. Deleting asks for confirmation — and deletion stays a deliberate user action: the agent has no delete-todo tool at all, by design.
 
-In Settings you can set the Extract Promises pipeline to auto-accept, optionally only above a confidence threshold. Auto-accepted suggestions become todos immediately, announced by a toast, and stay visibly marked as auto-accepted. The toolbar's **Find todos in my notes** action hands the same job to the agent across your notes instead of one selection.
+## Extract promises: notes into commitments
 
-## The edges
+Select text in a note and the bubble menu offers **Extract promises**. Each genuine commitment in the selection — not questions, suggestions, or floated options — becomes a suggestion card in the note's Suggestions panel: the action, who owns it, the due date with its original wording, and a strength badge when the promise is implied or tentative rather than explicit. **Accept** creates the todo; **Dismiss** drops the suggestion. Either way the todo keeps the quoted sentence as its original context.
 
-- A todo belongs to one project for its whole life; editing cannot move it.
-- Cancelled exists only in the status dropdown — it is not a board column.
-- Completing stamps the completion date; reopening clears it. Switching responsibility back to Mine clears the counterparty.
-- Extraction failure creates nothing — no anchor, no suggestions — and tells you to try again.
+<Mermaid
+	source={`
+flowchart LR
+	select["Select text in a note"] --> extract["Extract promises"]
+	extract --> cards["Suggestion cards in the Suggestions panel"]
+	cards --> accept["Accept → todo on the board"]
+	cards --> dismiss["Dismiss → suggestion dropped"]
+	accept --> context["Todo keeps the quoted sentence as original context"]
+`}
+/>
 
-See [the todos subsystem](/FollowThrough.ai/subsystems/todos/) for the provenance model and the extraction pipeline underneath.
+In Settings you can set the pipeline to auto-accept, optionally only above a confidence threshold. Auto-accepted suggestions become todos immediately, announced by a toast, and stay visibly marked as auto-accepted. The toolbar's **Find todos in my notes** action hands the same job to the agent across your notes instead of one selection — and because extraction is a proposal, not a mutation, it never bypasses review unless your trust policy says so. An extraction that finds nothing creates nothing — no anchor, no suggestions — and tells you to try again.
+
+A todo belongs to one project for its whole life; editing cannot move it between projects.
+
+## Where to go next
+
+- [Todos subsystem](/FollowThrough.ai/subsystems/todos/) — the provenance model and the extraction pipeline underneath.
+- [The agent](/FollowThrough.ai/using/the-agent/) — how the agent proposes todos and why deletion stays yours.
+- [Notes](/FollowThrough.ai/using/notes/) — where Extract promises starts.
