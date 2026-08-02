@@ -1,0 +1,69 @@
+---
+title: Adding a capability
+description: How a new capability is structured from model to delivery boundary.
+---
+
+import { FileTree, Aside } from '@astrojs/starlight/components';
+
+FollowThrough is organized as a set of capabilities — one per product concept. Each capability appears in the same few layers, in the same order. This guide walks what a new capability looks like and the rules that keep it that way.
+
+## The shape of a capability
+
+A capability is a directory that appears at several layers. Take `notes` as the reference example:
+
+<FileTree>
+- `src/lib/models/notes.ts`
+- `src/lib/server/controllers/notes/controller.ts`
+- `src/lib/server/services/notes/`
+  - `contracts.ts`
+  - `catalog.ts`
+- `src/lib/server/repositories/notes/`
+  - `contract.ts`
+  - `postgres/index.ts`
+- `src/lib/server/notes-capability-factory.ts`
+- `src/routes/...`
+</FileTree>
+
+Layers are strictly ordered: models → services → controllers → delivery boundaries.
+
+## 1. Model
+
+Start with the data. The model module is self-contained: it owns the capability's types and IDs, and it imports nothing from another capability's model.
+
+## 2. Service
+
+Put the business rules in a service directory with a `contracts.ts` next to the implementation. The contract is the interface your controllers depend on; the implementation (`catalog.ts`) satisfies it. A service imports models and repository contracts only — it never imports another service.
+
+## 3. Controller
+
+Add `src/lib/server/controllers/<capability>/controller.ts`:
+
+- An exported interface named `<Capability>Controller` with one method per operation.
+- An exported `<Capability>Dependencies` interface listing every service the controller needs, so it can be built and tested without real stores.
+- A class implementing the interface, delegating to dependencies.
+
+A controller coordinates services; it does not make domain decisions. Cross-service orchestration lives here, business logic lives in services.
+
+<Aside type="note">
+
+The controller interface is the public API this documentation site renders. Every public method carries a docstring explaining what it does and, where it matters, why — see [writing API docstrings](/guides/write-api-docstrings/).
+
+</Aside>
+
+## 4. Repository
+
+Persist the capability with a contract in `src/lib/server/repositories/<capability>/` and a Postgres adapter underneath it. Repositories own Drizzle, SQL, and any other persistence behavior, and map directly to models.
+
+## 5. Composition
+
+Export one `create<Capability>Capability` function from `<capability>-capability-factory.ts`. It wires the repositories, services, and controller for the capability together — nothing else. `application.ts` calls the factories in dependency order and builds the final controller facade.
+
+## The rules that keep it coherent
+
+- Cross-capability imports use capability entry points like `$lib/models/notes`; relative imports stay within a capability.
+- A second-level directory is justified only by a stable subsystem with several related files. Do not introduce `common`, `core`, `misc`, or `helpers`.
+- Transactional work goes through the `AtomicOperation` contract from the workspace model; repositories implement it inside the provided transaction.
+
+## Verify
+
+Run `pnpm test:architecture` — it checks the dependency graph, test quality, and architectural invariants.

@@ -1,0 +1,51 @@
+---
+title: Getting started
+description: Build your first project end-to-end, from a note to a finished deliverable.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+This tutorial walks the core loop of FollowThrough.ai: think in notes, track what matters, preserve context, and finish the work. It takes about ten minutes.
+
+<Steps>
+
+1. ### Create a project
+
+   Open the sidebar and create a project. A project is the unit of work that pulls everything else together: its notes, board, memory, skills, and outputs all live under it. Give it a name that tells you — and a future agent — what it is about.
+
+2. ### Write a note
+
+   Create a note inside the project and write a few paragraphs. Notes are Markdown, so rough thinking, meeting notes, plans, and drafts all belong here. This is the material every later step works from.
+
+3. ### Turn thinking into action
+
+   Select a sentence or paragraph that contains a commitment — something you promised to do, or asked someone else to do. Run **Extract promises**. FollowThrough finds the commitments, and each one becomes a reviewable todo suggestion.
+
+   Look at the suggestions pane: each suggestion carries a confidence score and traces back to the exact selection it came from. Accept the ones that are real. Accepted todos appear on your board.
+
+4. ### Ask the agent
+
+   Open the chat in the project and ask a question, for example: *"Summarize what still needs doing this week."* The agent reads the project's notes, board, and memory rather than asking you to explain the context again.
+
+   If the agent wants to make a change — update the project memory, edit a note, create a todo — it proposes the change first. Accept or reject it in the approval card. Agents propose; you accept.
+
+5. ### Review what the agent learned
+
+   Each project has its own memory: the facts, decisions, and constraints an agent needs to help without being re-briefed. When the agent proposes a memory update, review it. Anything you reject never becomes part of the project's durable understanding.
+
+6. ### Finish something
+
+   When your project has enough material, produce an output that can leave the app. Select a note and generate a document from a template, turn a paragraph into a diagram, or draft a brief. The result is an artifact of the project — connected to the source it came from, not an isolated generation.
+
+</Steps>
+
+<Aside type="note">
+
+Throughout, work moves one direction: notes become actions, actions become artifacts, artifacts become finished work. If a step ever feels like a dead end, it is probably being done in the wrong order — the loop always starts from a note.
+
+</Aside>
+
+## What's next
+
+- Read the [explanation](/explanation/architecture/) to understand how the product is put together.
+- Browse the [API reference](/reference/) for the internal TypeScript contracts behind these features.

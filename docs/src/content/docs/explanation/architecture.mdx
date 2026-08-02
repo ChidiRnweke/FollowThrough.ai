@@ -1,0 +1,44 @@
+---
+title: Architecture
+description: Why FollowThrough is organized as capability-first layers.
+---
+
+FollowThrough is a SvelteKit TypeScript monolith, but its directory structure is organized around the product's capabilities first — notes, todos, memory, skills — with frameworks and infrastructure appearing only at delivery boundaries.
+
+This page is about *why* it is arranged that way, not just how.
+
+## Capabilities, not technologies
+
+The directory structure names what the product does, not what it is built with. A new engineer landing in `src/lib/server/services/notes/` immediately knows what lives there. Technologies — Drizzle, Postgres, the agent runtime — are constrained to their own layers, so the product's shape does not drift as the technology underneath changes.
+
+## One direction of dependency
+
+Each layer depends only on the layers below it, and the boundary rules are strict:
+
+- **Models** are leaf modules. They hold the capability's data and IDs, and import nothing from another capability.
+- **Services** hold business rules. They import models and repository contracts only — a service never imports another service, because two services coupling to each other is how business logic turns into spaghetti.
+- **Controllers** coordinate services. Cross-service orchestration lives here; domain decisions do not.
+- **Repositories** own persistence. They map Drizzle rows straight to models.
+- **Routes and remote endpoints** delegate to controllers and preserve their public request and response shapes.
+
+The payoff is that each layer is testable in isolation, and the dependency graph is auditable — `pnpm test:architecture` enforces it.
+
+## Why controllers exist at all
+
+A controller is a thin orchestration layer: it receives an `ActorContext` and an input, coordinates the services needed to fulfil the request, and returns a result. It holds no queries and no business rules.
+
+That boundary matters because it is what the API reference documents. The `<Capability>Controller` interfaces are the stable contract between the product's delivery boundaries (routes, remotes) and its services. Keeping the contract at the controller, rather than letting routes talk to services directly, gives every capability one documented public surface.
+
+## The capability factory
+
+Each capability ends with a `<capability>-capability-factory.ts` that exports one `create<Capability>Capability` function. Factories exist to compose, not to contain logic: they instantiate the repositories, services, and controller for one capability and wire them together. `application.ts` calls the factories in dependency order and assembles the final controller facade.
+
+This makes the composition of the whole application readable in one place, and it keeps factories free of the "import everything everywhere" pattern that quietly couples capabilities.
+
+## Transactions
+
+Anything that must happen atomically goes through the workspace model's `AtomicOperation` contract. Services request atomic work through the contract; repositories implement it inside the provided transaction. The contract keeps the notion of "a transaction" at the domain layer instead of leaking Drizzle's API through the codebase.
+
+## The stable edges
+
+The organization is deliberately hard to change in the wrong ways. Route URLs, exported remote names, loader shapes, database table names, enum values, and migration history are stable edges — changing them breaks the contract with the outside world, so the architecture protects them.
