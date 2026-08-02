@@ -51,7 +51,7 @@ flowchart LR
 
 `EmbeddedKnowledgeSearcher` (`semantic.ts:52`) embeds the query and runs a cosine-distance scan (`searchByEmbedding`, `postgres/search.ts:282`), scoring `1 − distance`; chunks still awaiting a vector are excluded, since a NULL distance would otherwise sort ahead of every real one. `RerankingKnowledgeSearcher` (`semantic.ts:79`) wraps it: retrieve `max(40, limit × 5)` candidates from the cheap vector search, then shrink to `limit` with `SearchRanking`: `cohere/rerank-4-fast` (`ranking.ts:45`) through OpenRouter's `/rerank` endpoint, with the source title and section path included as retrieval evidence. There is no fallback at either stage: if embedding or reranking fails, the call fails rather than returning meaningless or unranked results.
 
-The `Retrieval` controller (`controller.ts`) is the boundary the [agent](/FollowThrough.ai/subsystems/agent/) calls as the `search` tool. Multi-turn conversations are condensed to one statement before embedding; single-turn queries go through as-is. Results are capped at 8 by default (`DEFAULT_SEARCH_LIMIT`) and returned as full chunks. Blank queries return nothing.
+The `Retrieval` controller (`controller.ts`) is the boundary the [agent](/FollowThrough.ai/subsystems/agent/) calls as the `search` tool. Multi-turn conversations are condensed to one statement before embedding; single-turn queries go through as-is. Results are capped at 8 by default (`DEFAULT_SEARCH_LIMIT`) and returned as full chunks. A `noteId` filter scopes retrieval to one note (its diagram chunks included); that backs the agent's `search_note` tool, which oversized attached context notes point the model at. Blank queries return nothing.
 
 <Mermaid
 	source={`
