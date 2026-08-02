@@ -6,6 +6,11 @@ import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
+/**
+ * Application boundary for relationship (backlink) suggestions between notes: find notes
+ * related to a text selection and create reviewable backlink suggestions, all in one
+ * transaction with provenance tying each suggestion back to the selection's anchor.
+ */
 export interface RelationshipsController {
 	suggestFromSelection(
 		actor: ActorContext,

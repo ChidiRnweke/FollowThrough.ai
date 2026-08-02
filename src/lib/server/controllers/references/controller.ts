@@ -10,6 +10,11 @@ import type {
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
+/**
+ * Application boundary for reference suggestions: given a text selection, find and rank
+ * relevant external references and create reviewable suggestions, all in one
+ * transaction so the anchor, provenance, and suggestions land atomically or not at all.
+ */
 export interface ReferencesController {
 	suggestFromSelection(
 		actor: ActorContext,

@@ -14,8 +14,15 @@ import type {
 } from '$lib/server/services/todos/contracts';
 import type { UserReader } from '$lib/server/services/identity/users';
 
+/**
+ * Application boundary for the workspace shell: the context every screen needs (profile,
+ * projects, note tree, skills, pending counts) and the today view. All reads fetch in
+ * parallel because none depends on another's result.
+ */
 export interface WorkspaceController {
+	/** Load the shell context for the signed-in user. */
 	getShellContext(actor: ActorContext): Promise<ShellContext>;
+	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
@@ -29,6 +36,11 @@ export interface WorkspaceDependencies {
 	todoViewAssembler: TodoViewAssembler;
 }
 
+/**
+ * Derive per-project pending-memory notification rows from proposed memory suggestions,
+ * plus a profile-level row for suggestions not tied to a project. Projects with no
+ * pending memories are omitted so the shell only surfaces counts worth acting on.
+ */
 export const toPendingMemoryNotifications = (
 	projects: readonly Project[],
 	suggestions: readonly Suggestion[]
