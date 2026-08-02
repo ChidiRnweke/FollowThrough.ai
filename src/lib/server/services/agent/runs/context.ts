@@ -45,9 +45,7 @@ const SKILL_CATALOG_BUDGET = 16000;
 interface AdvertisedSkill {
 	readonly noteId: string;
 	readonly name: string;
-	readonly slug?: string;
 	readonly description: string;
-	readonly triggerHints: readonly string[];
 }
 
 /**
@@ -136,9 +134,7 @@ export class AgentContext implements AgentContextBuilder {
 			const advertised: AdvertisedSkill = {
 				noteId: skill.noteId,
 				name: skill.name,
-				slug: skill.slug,
-				description: skill.description,
-				triggerHints: skill.triggerHints
+				description: skill.description
 			};
 			const size = JSON.stringify(advertised).length;
 			if (priority(skill) === 2 && budget + size > SKILL_CATALOG_BUDGET) {

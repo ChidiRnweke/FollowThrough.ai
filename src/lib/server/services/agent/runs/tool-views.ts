@@ -1,6 +1,7 @@
 import type { MemoryEntry } from '$lib/models/memory';
 import type { NoteSummary, NoteView } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
+import type { SkillView } from '$lib/models/skills';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { User } from '$lib/models/identity';
@@ -172,4 +173,27 @@ export const projectNoteView = (view: NoteView, markdown: string): NoteViewProje
 	diagrams: view.diagrams,
 	todos: view.todos,
 	pendingSuggestions: view.pendingSuggestions
+});
+
+export interface SkillViewProjection {
+	readonly noteId: string;
+	readonly name: string;
+	readonly description: string;
+	readonly triggerHints: readonly string[];
+	/** The skill body as Markdown — the same text edit_skill patches and save_skill replaces. */
+	readonly instructions: string;
+}
+
+/**
+ * The agent's read surface for a skill. The body is Markdown, matching the
+ * write tools' anchor text; `isEnabled` already filtered the finder, so it is
+ * never returned. The underlying `note` (ProseMirror `document`, revisions)
+ * and `usages` telemetry stay off the wire.
+ */
+export const projectSkillView = (view: SkillView, instructions: string): SkillViewProjection => ({
+	noteId: view.skill.note.id,
+	name: view.skill.name,
+	description: view.skill.description,
+	triggerHints: view.skill.triggerHints,
+	instructions
 });

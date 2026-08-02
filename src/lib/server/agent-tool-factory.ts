@@ -46,6 +46,7 @@ import {
 	projectNoteSummary,
 	projectNoteView,
 	projectProject,
+	projectSkillView,
 	projectSuggestion,
 	projectTodo,
 	projectUser
@@ -906,22 +907,27 @@ export class AgentTools {
 			),
 			define(
 				'get_skill',
-				'Read a skill and usage history without recording agent use.',
+				'Read a skill body as Markdown without recording agent use.',
 				'read',
 				z.object({ noteId: id }),
-				(input) => factory.skills().get(actor, input as never)
+				async (input) => {
+					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+					return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+				}
 			),
 			define(
 				'load_skill',
-				'Load full skill instructions when its summary applies and record usage.',
+				'Load full skill instructions as Markdown when its summary applies and record usage.',
 				'read',
 				z.object({ noteId: id }),
-				(input) =>
-					factory.skills().loadForAgent(actor, {
+				async (input) => {
+					const view = await factory.skills().loadForAgent(actor, {
 						noteId: input.noteId as NoteId,
 						contextNoteId: this.context.input.noteId,
 						provenanceId: this.context.provenanceId
-					})
+					});
+					return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+				}
 			),
 			define(
 				'create_skill',

@@ -369,6 +369,78 @@ describe('Agent tool coverage invariants', () => {
 		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('plainText');
 	});
 
+	const skillFixture = (body = 'Number every finding.') => {
+		const note = noteBuilder({
+			id: crypto.randomUUID() as never,
+			kind: 'skill',
+			document: {
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
+			} as never
+		});
+		const view = {
+			skill: {
+				note,
+				name: 'Compliance format',
+				description: 'Formats responses for compliance review',
+				triggerHints: ['compliance', 'audit']
+			},
+			usages: [{ usage: { id: 'usage-1' } }, { usage: { id: 'usage-2' } }]
+		};
+		const factory = {
+			skills: () => ({
+				get: async () => view,
+				loadForAgent: async () => view
+			})
+		} as unknown as ControllerFactory;
+		const definitions = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Use a skill' },
+			model: 'openai/gpt-5.6'
+		}).definitions();
+		const skillTool = (name: string) => definitions.find((definition) => definition.name === name);
+		return { noteId: note.id, skillTool };
+	};
+
+	it('returns the skill body as Markdown', async () => {
+		const fixture = skillFixture();
+		expect(
+			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+		).toMatchObject({ instructions: expect.stringContaining('Number every finding.') });
+	});
+
+	it('keeps the skill name, description, and trigger hints on the load', async () => {
+		const fixture = skillFixture();
+		expect(
+			await fixture.skillTool('get_skill')?.execute({ noteId: fixture.noteId })
+		).toMatchObject({
+			name: 'Compliance format',
+			description: 'Formats responses for compliance review',
+			triggerHints: ['compliance', 'audit']
+		});
+	});
+
+	it('keeps the ProseMirror document off the skill wire', async () => {
+		const fixture = skillFixture();
+		expect(
+			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+		).not.toHaveProperty('document');
+	});
+
+	it('keeps the note row off the skill wire', async () => {
+		const fixture = skillFixture();
+		expect(
+			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+		).not.toHaveProperty('note');
+	});
+
+	it('keeps usage telemetry off the skill wire', async () => {
+		const fixture = skillFixture();
+		expect(
+			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+		).not.toHaveProperty('usages');
+	});
+
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
 		const selected = indirectToolFor('approval_required', 'use_tool');
 		expect(
@@ -404,12 +476,18 @@ describe('Agent tool coverage invariants', () => {
 
 	it('threads the run provenanceId into load_skill even when the context omits it (1/2)', async () => {
 		let _receivedProvenanceId: unknown;
+		const skill = {
+			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
+			name: 'Compliance format',
+			description: 'Formats responses for compliance review',
+			triggerHints: ['compliance']
+		};
 		const factory = {
 			toolPreferences: () => ({ list: async () => [] }),
 			skills: () => ({
 				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
 					_receivedProvenanceId = input.provenanceId;
-					return { skill: {}, usages: [] };
+					return { skill, usages: [] };
 				}
 			})
 		} as unknown as ControllerFactory;
@@ -438,12 +516,18 @@ describe('Agent tool coverage invariants', () => {
 
 	it('threads the run provenanceId into load_skill even when the context omits it (2/2)', async () => {
 		let receivedProvenanceId: unknown;
+		const skill = {
+			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
+			name: 'Compliance format',
+			description: 'Formats responses for compliance review',
+			triggerHints: ['compliance']
+		};
 		const factory = {
 			toolPreferences: () => ({ list: async () => [] }),
 			skills: () => ({
 				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
 					receivedProvenanceId = input.provenanceId;
-					return { skill: {}, usages: [] };
+					return { skill, usages: [] };
 				}
 			})
 		} as unknown as ControllerFactory;
