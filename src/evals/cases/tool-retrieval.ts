@@ -157,7 +157,6 @@ const GOALS: readonly RetrievalGoal[] = [
 		goal: 'save this workflow so you can reuse it later',
 		expected: 'create_skill'
 	},
-	{ id: 'skills-get', goal: 'show me the details of one particular skill', expected: 'get_skill' },
 	{
 		id: 'skills-from-selection',
 		goal: 'turn this highlighted procedure into a reusable skill',

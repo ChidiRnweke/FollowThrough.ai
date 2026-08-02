@@ -3,15 +3,15 @@ import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
-import { findCall, scoreToolDiscovery } from '../assertions/tool-calls';
+import { findCall } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
  * Multi-turn correctness cases.
  *
  * These test the most natural user flow: read a note, then edit it. The agent
- * must discover `save_note` via `search_tools` → `use_tool` on the write turn,
- * and must target the correct noteId even when context shifts between turns.
+ * must edit the same noteId it read on a later turn (via edit_note or
+ * save_note), even when context shifts between turns.
  *
  * Each case runs multiple sequential turns using `conversationId` continuity.
  */
@@ -42,7 +42,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			});
 			expect(turn1.status).toBe('completed');
 
-			// Turn 2: edit it — must discover save_note and target the right noteId
+			// Turn 2: edit it — must target the right noteId via edit_note or save_note
 			const turn2 = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
@@ -51,7 +51,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				conversationId: turn1.conversationId
 			});
 
-			const call = findCall(turn2, 'save_note');
+			const call = findCall(turn2, 'edit_note') ?? findCall(turn2, 'save_note');
 			const targetedId =
 				(call?.arguments as Record<string, unknown>)?.noteId ??
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
@@ -74,14 +74,18 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 					: `targeted ${targetedId} instead of ${expectedNoteId}`
 			});
 			px.logAnnotation({
-				name: ARCHETYPES.toolDiscovery,
-				...scoreToolDiscovery(turn2, 'save_note')
+				name: ARCHETYPES.toolCalling,
+				score: call ? 1 : 0,
+				label: call ? 'edited' : 'no_edit',
+				explanation: call
+					? `edited through ${turn2.calledToolNames.filter((name) => name.includes('_note')).join(', ')}`
+					: `no note edit tool was called (${turn2.calledToolNames.join(', ') || 'no tools'})`
 			});
 
 			expect(turn2.status).toBe('completed');
 			expect(
 				call,
-				'save_note was never called — agent failed to discover or invoke it'
+				'neither edit_note nor save_note was ever called on the write turn'
 			).toBeDefined();
 			expect(gotCorrect, `agent edited wrong note: ${targetedId}`).toBe(true);
 		}
@@ -133,7 +137,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				conversationId: turn2.conversationId
 			});
 
-			const call = findCall(turn3, 'save_note');
+			const call = findCall(turn3, 'edit_note') ?? findCall(turn3, 'save_note');
 			const targetedId =
 				(call?.arguments as Record<string, unknown>)?.noteId ??
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
@@ -161,7 +165,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			});
 
 			expect(turn3.status).toBe('completed');
-			expect(call, 'save_note was never called').toBeDefined();
+			expect(call, 'neither edit_note nor save_note was ever called').toBeDefined();
 			expect(gotCorrect, 'agent edited the wrong note').toBe(true);
 		}
 	},

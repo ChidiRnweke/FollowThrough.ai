@@ -199,7 +199,11 @@ export const agentToolCoverage = {
 	},
 	skills: {
 		list: { kind: 'read' },
-		get: { kind: 'read' },
+		get: {
+			kind: 'excluded',
+			reason:
+				'Skill reads go through load_skill; the controller method still serves the UI and the skill write tools.'
+		},
 		loadForAgent: { kind: 'read' },
 		create: { kind: 'mutation' },
 		createFromSelection: { kind: 'mutation' },
@@ -906,18 +910,8 @@ export class AgentTools {
 				() => factory.skills().list(actor)
 			),
 			define(
-				'get_skill',
-				'Read a skill body as Markdown without recording agent use.',
-				'read',
-				z.object({ noteId: id }),
-				async (input) => {
-					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-					return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
-				}
-			),
-			define(
 				'load_skill',
-				'Load full skill instructions as Markdown when its summary applies and record usage.',
+				'Read a skill body as Markdown — its full instructions and details — and record usage. When a skill summary applies, load it here and follow its instructions before answering or acting.',
 				'read',
 				z.object({ noteId: id }),
 				async (input) => {
@@ -951,7 +945,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_skill',
-				'Mutating tool. Before the first edit to a skill in any turn, you MUST call get_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_skill, and copy the closest text from the error verbatim — never retry the same oldText.',
+				'Mutating tool. Before the first edit to a skill in any turn, you MUST call load_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run load_skill, and copy the closest text from the error verbatim — never retry the same oldText.',
 				'mutation',
 				z.object({
 					noteId: id,

@@ -27,6 +27,8 @@ interface InvocationCase {
 	readonly tool: string;
 	/** Checks the dispatched arguments are usable, not word-for-word. */
 	readonly payload?: (args: Record<string, unknown>) => string | undefined;
+	/** Score as a direct required-tool check even though the tool is searchable. */
+	readonly direct?: boolean;
 	readonly firstClass?: boolean;
 }
 
@@ -113,12 +115,6 @@ const CASES: readonly InvocationCase[] = [
 		tool: 'get_today_view'
 	},
 	{
-		id: 'invoke-list-skills',
-		name: 'lists skills when asked what it can do',
-		prompt: 'What reusable skills do you have configured for me?',
-		tool: 'list_skills'
-	},
-	{
 		id: 'invoke-export-document',
 		name: 'exports a document when asked for a shareable file',
 		prompt: 'Turn my Background note into a PDF I can send to someone.',
@@ -148,15 +144,24 @@ const CASES: readonly InvocationCase[] = [
 		payload: (args) => (typeof args.noteId === 'string' ? undefined : 'noteId was missing')
 	},
 	{
-		id: 'invoke-save-note',
+		id: 'invoke-edit-note',
 		name: 'edits a note when asked to update its content',
 		prompt:
 			'Edit my Background note: add a paragraph at the end mentioning my new Kubernetes certification.',
-		tool: 'save_note',
-		payload: (args) =>
-			typeof args.noteId === 'string' && typeof args.markdown === 'string'
+		tool: 'edit_note',
+		direct: true,
+		payload: (args) => {
+			const edits = args.edits;
+			if (!Array.isArray(edits) || edits.length < 1) return 'edits was missing or empty';
+			return edits.every(
+				(edit) =>
+					typeof edit === 'object' &&
+					edit !== null &&
+					usableString((edit as Record<string, unknown>).oldText)
+			)
 				? undefined
-				: 'save_note requires a noteId and Markdown body'
+				: 'some edits were missing a usable oldText';
+		}
 	},
 	{
 		id: 'invoke-rename-project',
@@ -180,7 +185,7 @@ const CASES: readonly InvocationCase[] = [
 export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 	id: entry.id,
 	name: entry.name,
-	splits: [entry.firstClass ? ARCHETYPES.toolCalling : ARCHETYPES.toolDiscovery],
+	splits: [entry.firstClass || entry.direct ? ARCHETYPES.toolCalling : ARCHETYPES.toolDiscovery],
 	input: { prompt: entry.prompt },
 	expected: { tool: entry.tool, firstClass: entry.firstClass ?? false },
 	metadata: { layer: 'agent', tool: entry.tool },
@@ -199,9 +204,9 @@ export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 			response: result.finalResponse.slice(0, 400)
 		});
 
-		// First-class tools are registered directly; everything else has to be
-		// found through the catalog first, so the two are scored differently.
-		if (entry.firstClass) {
+		// First-class and direct tools are checked as plain required calls;
+		// everything else has to be found through the catalog first.
+		if (entry.firstClass || entry.direct) {
 			const verdict = scoreToolCalling(result, { required: [entry.tool] });
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,

@@ -162,12 +162,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 500)
 			});
 
-			// A transient wrong-id get_skill that the model recovers from is not a
-			// failure here; the effect assertions below are the hard gate.
-			const tools = scoreToolCalling(result, {
-				required: ['edit_skill'],
-				requireNoFailures: false
-			});
+			const tools = scoreToolCalling(result, { required: ['edit_skill'] });
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
 				score: tools.passed ? 1 : 0,
@@ -316,6 +311,98 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			expect(result.status).toBe('completed');
 			expect(usedEditTool, 'must edit the skill body through an edit tool').toBe(true);
 			expect(changed, 'skill body must have changed').toBe(true);
+		}
+	},
+	{
+		id: 'skill-reads-content',
+		name: 'reads a skill full instructions when asked for them',
+		splits: [ARCHETYPES.toolCalling],
+		input: {
+			prompt: 'What exactly does the Compliance format skill instruct me to do?'
+		},
+		expected: { requiredTools: ['load_skill'], hash: SKILL_HASH },
+		metadata: {
+			layer: 'agent',
+			note: 'The injected catalog only carries summaries; reading the instructions requires load_skill.'
+		},
+		async run(lab) {
+			const { actor } = await seedWorkspace(lab, skillsWorkspace);
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 500)
+			});
+
+			const tools = scoreToolCalling(result, { required: ['load_skill'] });
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'loaded' : 'not_loaded',
+				explanation: tools.explanation
+			});
+
+			const reflected = result.finalResponse.includes(SKILL_HASH);
+			px.logAnnotation({
+				name: ARCHETYPES.skillAdherence,
+				score: reflected ? 1 : 0,
+				label: reflected ? 'reflected' : 'not_reflected',
+				explanation: reflected
+					? `response reflects the skill body (stamp ${SKILL_HASH})`
+					: 'response does not reflect the skill instructions'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(reflected, `response must reflect the skill body (${SKILL_HASH})`).toBe(true);
+		}
+	},
+	{
+		id: 'skill-listing-no-overcall',
+		name: 'answers what skills exist from the advertised catalog without list_skills',
+		splits: [ARCHETYPES.toolCalling, 'negative'],
+		input: { prompt: 'What reusable skills do you have configured for me?' },
+		expected: { forbiddenTools: ['list_skills'], namesSkill: true },
+		metadata: {
+			layer: 'agent',
+			note: 'Skill summaries are injected into the system prompt; listing them needs no tool call.'
+		},
+		async run(lab) {
+			const { actor } = await seedWorkspace(lab, skillsWorkspace);
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 400)
+			});
+
+			const tools = scoreToolCalling(result, { forbidden: ['list_skills'] });
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'no_overcall' : 'called_list_skills',
+				explanation: tools.explanation
+			});
+
+			const namesSkill = result.finalResponse.toLowerCase().includes('compliance format');
+			px.logAnnotation({
+				name: ARCHETYPES.skillAdherence,
+				score: namesSkill ? 1 : 0,
+				label: namesSkill ? 'names_skill' : 'no_skill_named',
+				explanation: namesSkill
+					? 'response names a real configured skill'
+					: 'response does not name any configured skill'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(namesSkill, 'must answer from the catalog, naming a configured skill').toBe(true);
 		}
 	}
 ];

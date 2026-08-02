@@ -9,6 +9,7 @@ import { memoryCases } from '../cases/memory';
 import { safetyCases } from '../cases/safety';
 import { diagramCases } from '../cases/diagrams';
 import { effectCases } from '../cases/effects';
+import { noteEditingCases } from '../cases/note-editing';
 import { retrievalCases } from '../cases/retrieval';
 import { groundingCases } from '../cases/grounding';
 import { contextAwarenessCases } from '../cases/context-awareness';
@@ -53,6 +54,7 @@ const allCases = [
 	...safetyCases,
 	...diagramCases,
 	...effectCases,
+	...noteEditingCases,
 	// Most expensive: vague multi-intent prompts that exercise interpretation.
 	...intentInterpretationCases,
 	// Correctness: right-target assertions for disambiguation.

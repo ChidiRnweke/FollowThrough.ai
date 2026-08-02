@@ -450,13 +450,13 @@ describe('Agent tool coverage invariants', () => {
 
 	it('keeps the skill name, description, and trigger hints on the load', async () => {
 		const fixture = skillFixture();
-		expect(await fixture.skillTool('get_skill')?.execute({ noteId: fixture.noteId })).toMatchObject(
-			{
-				name: 'Compliance format',
-				description: 'Formats responses for compliance review',
-				triggerHints: ['compliance', 'audit']
-			}
-		);
+		expect(
+			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+		).toMatchObject({
+			name: 'Compliance format',
+			description: 'Formats responses for compliance review',
+			triggerHints: ['compliance', 'audit']
+		});
 	});
 
 	it('keeps the ProseMirror document off the skill wire', async () => {

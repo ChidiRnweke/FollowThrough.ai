@@ -70,7 +70,7 @@ export const correctnessCases: readonly EvalCase[] = [
 		expected: { targetProject: 'Backend' },
 		metadata: {
 			layer: 'agent',
-			note: 'Must save_note on Backend "API documentation", not Mobile\'s.'
+			note: 'Must edit Backend "API documentation", not Mobile\'s, via edit_note or save_note.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, disambiguationWorkspace);
@@ -84,7 +84,7 @@ export const correctnessCases: readonly EvalCase[] = [
 				projectId
 			});
 
-			const call = findCall(result, 'save_note');
+			const call = findCall(result, 'edit_note') ?? findCall(result, 'save_note');
 			const targetedId =
 				(call?.arguments as Record<string, unknown>)?.noteId ??
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
@@ -110,7 +110,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			expect(result.status).toBe('completed');
-			expect(call, 'save_note was never called').toBeDefined();
+			expect(call, 'neither edit_note nor save_note was ever called').toBeDefined();
 			expect(gotCorrect, `agent edited wrong note: ${targetedId}`).toBe(true);
 		}
 	},
