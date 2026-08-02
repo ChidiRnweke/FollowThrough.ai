@@ -263,9 +263,6 @@ describe('Note editor keyboard integration', () => {
 				onconvertMermaid: async () => {
 					throw new Error('Not used by this test');
 				},
-				onacceptDrawio: async () => {
-					throw new Error('Not used by this test');
-				},
 				onrejectDrawio: async () => undefined,
 				diagrams:
 					type === 'drawio'

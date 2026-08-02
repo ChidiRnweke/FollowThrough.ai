@@ -36,6 +36,29 @@
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		align?: InputGroupAddonAlign;
 	} = $props();
+
+	const isButtonTarget = (target: EventTarget | null, boundary: HTMLElement): boolean => {
+		for (
+			let element = target instanceof HTMLElement ? target : null;
+			element;
+			element = element.parentElement
+		) {
+			if (element instanceof HTMLButtonElement) return true;
+			if (element === boundary) return false;
+		}
+		return false;
+	};
+
+	const firstInput = (root: HTMLElement | null): HTMLInputElement | undefined => {
+		if (!root) return undefined;
+		const pending = [...root.children];
+		while (pending.length > 0) {
+			const element = pending.shift();
+			if (element instanceof HTMLInputElement) return element;
+			if (element) pending.unshift(...element.children);
+		}
+		return undefined;
+	};
 </script>
 
 <div
@@ -45,10 +68,8 @@
 	data-align={align}
 	class={cn(inputGroupAddonVariants({ align }), className)}
 	onclick={(e) => {
-		if ((e.target as HTMLElement).closest('button')) {
-			return;
-		}
-		e.currentTarget.parentElement?.querySelector('input')?.focus();
+		if (isButtonTarget(e.target, e.currentTarget)) return;
+		firstInput(e.currentTarget.parentElement)?.focus();
 	}}
 	{...restProps}
 >

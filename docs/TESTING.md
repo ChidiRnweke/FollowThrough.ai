@@ -8,11 +8,11 @@ test.
 
 - `*.spec.ts` runs in the reusable Node lane. Tests in this lane must restore environment variables,
   global state, timers, and singleton state.
-- `*.isolated.spec.ts` is reserved for dependencies or module-global state that cannot safely share a
-  worker.
 - `*.svelte.spec.ts` runs in Chromium and is reserved for native browser, Svelte rendering,
   accessibility, IndexedDB, editor, iframe, clipboard, or DOM serialization behaviour.
-- `*.contract.spec.ts` uses the real PostgreSQL schema and repositories.
+- `tests/integration/<capability>/*.contract.spec.ts` uses the real PostgreSQL schema and
+  repositories through `tests/integration/database-harness.ts`; the schema suite is under
+  `tests/integration/schema`.
 - `*.e2e.ts` covers cohesive user journeys against a built application.
 
 ## Test shape
@@ -42,10 +42,14 @@ processes. Tests must pass in random order and in the fully isolated verificatio
 
 - `pnpm test` — default Node and focused Chromium feedback.
 - `pnpm test:browser:full` — every Chromium component and browser-storage regression.
-- `pnpm test:unit:isolated` — contamination safety check for the reusable Node lane.
 - `pnpm test:contracts` — PostgreSQL schema and repository contracts.
-- `pnpm test:e2e` — application journeys.
-- `pnpm test:pwa` — serial production PWA checks.
+- `pnpm test:e2e` — application journeys against the Vite dev server. Reuses a dev server already
+  running on 5173 (`pnpm dev`, Infisical config), or auto-starts one. Auth stays enabled: a global
+  setup mints/caches a session for the local user in `tests/.auth/state.json` (delete it to force a
+  fresh token). No Authentik interaction is needed.
+- `pnpm dev:e2e` — start the e2e dev server once, then iterate with focused runs such as
+  `pnpm exec playwright test tests/agent-workbench.e2e.ts --project=app --grep "Mod\+K"`.
+- `pnpm test:pwa` — serial production PWA checks; builds and previews on port 4173.
 - `pnpm test:verify` — all non-evaluation verification lanes.
 
 Paid or model-backed evaluations are intentionally explicit and are not part of `test:verify`.

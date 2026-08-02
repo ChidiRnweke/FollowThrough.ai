@@ -69,16 +69,24 @@ const mockSubmit = async (page: Page, runId: string) => {
 	await page.route('**/_app/remote/*/submitAgentRun', async (route) => {
 		await route.fulfill({ contentType: 'application/json', body: remoteResult(runReceipt(runId)) });
 	});
+	await page.route('**/_app/remote/*/getAgentRun*', async (route) => {
+		await route.fulfill({
+			contentType: 'application/json',
+			body: remoteResult(runSnapshot(runId, 'queued'))
+		});
+	});
 };
 
 const openHome = async (page: Page) => {
 	await page.goto('/today');
 	await page.locator('#quick-capture-input').waitFor();
+	await page.waitForLoadState('networkidle');
 };
 
 const openChat = async (page: Page) => {
+	await page.setViewportSize({ width: 1536, height: 960 });
 	await page.getByLabel('Toggle chat panel').click();
-	const panel = page.locator('aside[aria-label="Chat"]');
+	const panel = page.getByRole('complementary', { name: 'Agent' });
 	await expect(panel).toHaveAttribute('aria-hidden', 'false');
 	await expect(panel).toHaveCSS('width', '384px');
 	return panel;
@@ -113,10 +121,27 @@ test('workspace state restores without an SSR hydration mismatch on refresh', as
 });
 
 test.describe.serial('agent-native keyboard workflow', () => {
+	test.beforeEach(async ({ page }) => {
+		await page.setViewportSize({ width: 1536, height: 960 });
+	});
 	test('Mod+Shift+P opens the shared command palette with shortcut hints', async ({ page }) => {
 		await openHome(page);
-		await page.keyboard.press('Control+Shift+P');
-		await expect(page.getByText('⌘K N')).toBeVisible();
+		await page.evaluate(() =>
+			document.body.dispatchEvent(
+				new KeyboardEvent('keydown', {
+					key: 'P',
+					code: 'KeyP',
+					ctrlKey: true,
+					shiftKey: true,
+					bubbles: true
+				})
+			)
+		);
+		const dialog = page.getByRole('dialog', { name: 'Command palette' });
+		await expect(dialog).toBeVisible();
+		const actions = dialog.getByRole('group', { name: 'Actions' });
+		const createNote = actions.getByRole('option', { name: /Create untitled note/ });
+		await expect(createNote).toContainText('⌘K N');
 	});
 
 	test('Mod+K then Q focuses quick capture', async ({ page }) => {
@@ -183,13 +208,16 @@ test.describe('inline agent approvals', () => {
 		const panel = await openChat(page);
 		await panel.locator('#chat-composer').fill('Create a reviewed draft');
 		await panel.getByLabel('Send message').click();
-		await expect(page.getByText('"title": "Reviewed draft"')).toBeVisible();
+		await panel.getByRole('button', { name: 'Review in full' }).click();
+		const review = page.getByRole('dialog', { name: 'Create note' });
+		await expect(review).toBeVisible();
+		await expect(review.getByText('Reviewed draft')).toBeVisible();
 	});
 
 	test('returns a rejection to the same visible conversation', async ({ page }) => {
 		const runId = '00000000-0000-4000-8000-000000000092';
 		await mockSubmit(page, runId);
-		await page.route('**/_app/remote/*/decideAgentRun', async (route) => {
+		await page.route('**/_app/remote/*/decideAgentRunBatch*', async (route) => {
 			await route.fulfill({
 				contentType: 'application/json',
 				body: remoteResult(runSnapshot(runId, 'queued'))
@@ -228,14 +256,20 @@ test.describe('inline agent approvals', () => {
 	});
 
 	test('sends auto-accept as the conversation execution-mode override', async ({ page }) => {
-		let executionMode: unknown;
+		let submittedPayload: string | undefined;
 		const runId = '00000000-0000-4000-8000-000000000095';
 		await page.route('**/_app/remote/*/submitAgentRun', async (route) => {
 			const payload = (route.request().postDataJSON() as { payload: string }).payload;
-			executionMode = payload.includes('auto_accept') ? 'auto_accept' : undefined;
+			submittedPayload = Buffer.from(payload, 'base64').toString('utf8');
 			await route.fulfill({
 				contentType: 'application/json',
 				body: remoteResult(runReceipt(runId))
+			});
+		});
+		await page.route('**/_app/remote/*/getAgentRun*', async (route) => {
+			await route.fulfill({
+				contentType: 'application/json',
+				body: remoteResult(runSnapshot(runId, 'queued'))
 			});
 		});
 		await page.route('**/api/agent/runs/*/events?after=*', async (route) => {
@@ -249,9 +283,10 @@ test.describe('inline agent approvals', () => {
 		});
 		await openHome(page);
 		const panel = await openChat(page);
-		await panel.getByLabel('Allow agent changes automatically').click();
+		await panel.getByRole('button', { name: 'Approval', exact: true }).click();
+		await expect(panel.getByRole('button', { name: 'Auto-accept', exact: true })).toBeVisible();
 		await panel.locator('#chat-composer').fill('Create without pausing');
 		await panel.getByLabel('Send message').click();
-		await expect.poll(() => executionMode).toBe('auto_accept');
+		await expect.poll(() => submittedPayload).toContain('auto_accept');
 	});
 });

@@ -1,7 +1,10 @@
 import { Extension } from '@tiptap/core';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
-import type { NoteLinkTarget } from '$lib/models/notes';
+export interface NoteLinkTarget {
+	readonly id: string;
+	readonly title: string;
+}
 
 /**
  * `@` to link another note.

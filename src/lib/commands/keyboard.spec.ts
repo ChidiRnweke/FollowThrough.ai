@@ -34,6 +34,13 @@ describe('Command chord invariants', () => {
 		expect(commands).toEqual(['new-note']);
 	});
 
+	it('runs quick-capture on the Mod+K Q chord', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('k', 100, { ctrlKey: true }));
+		handler.handle(keyboardEvent('q', 200));
+		expect(commands).toEqual(['quick-capture']);
+	});
+
 	it('expires a chord without intercepting the later key', () => {
 		const { commands, handler } = setup();
 		handler.handle(keyboardEvent('k', 100, { ctrlKey: true }));

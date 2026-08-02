@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteId } from '$lib/models/notes';
 import { rankNoteLinkTargets } from './NoteLinkSuggestion';
 
 const notes = [
-	{ id: 'a' as NoteId, title: 'Design review' },
-	{ id: 'b' as NoteId, title: 'Fundamentals of design' },
-	{ id: 'c' as NoteId, title: 'Redesigned onboarding' },
-	{ id: 'd' as NoteId, title: 'Deployment runbook' }
+	{ id: 'a', title: 'Design review' },
+	{ id: 'b', title: 'Fundamentals of design' },
+	{ id: 'c', title: 'Redesigned onboarding' },
+	{ id: 'd', title: 'Deployment runbook' }
 ];
 
 const titles = (query: string) => rankNoteLinkTargets(notes, query).map((note) => note.title);
@@ -48,7 +47,7 @@ describe('Ranking notes for an @ query', () => {
 	/** A popup taller than the pane is worse than a truncated list. */
 	it('caps how many it offers', () => {
 		const many = Array.from({ length: 30 }, (_unused, index) => ({
-			id: String(index) as NoteId,
+			id: String(index),
 			title: `Note ${index}`
 		}));
 		expect(rankNoteLinkTargets(many, 'Note')).toHaveLength(8);

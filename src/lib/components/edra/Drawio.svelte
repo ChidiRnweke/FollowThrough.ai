@@ -1,22 +1,24 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
-	import type { DiagramId, DrawioDiagram } from '$lib/models/diagrams';
+	import type { Component } from 'svelte';
+	import type { DrawioPreviewProps, DrawioReferenceView } from './commands/nodes.js';
 	import { Button } from '$lib/components/ui/button';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { NodeViewWrapper } from './index.js';
-	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 
 	const { node, extension }: NodeViewProps = $props();
 	const options = $derived(
 		extension.options as {
-			getDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
-			getNoteId?: () => string;
+			getDiagram?: (reference: string) => DrawioReferenceView | undefined;
+			resolveHref?: (reference: string) => string | undefined;
+			preview?: Component<DrawioPreviewProps>;
 		}
 	);
-	const diagramId = $derived(node.attrs.diagramId as DiagramId);
-	const diagram = $derived(options.getDiagram?.(diagramId));
-	const noteId = $derived(options.getNoteId?.());
+	const reference = $derived(node.attrs.diagramId as string);
+	const diagram = $derived(options.getDiagram?.(reference));
+	const href = $derived(options.resolveHref?.(reference));
+	const Preview = $derived(options.preview);
 </script>
 
 <NodeViewWrapper
@@ -31,16 +33,16 @@
 		<span class="text-xs text-muted-foreground" role="status">
 			{diagram ? 'Saved' : 'Loading…'}
 		</span>
-		{#if noteId}
-			<Button href={`/notes/${noteId}/diagrams/${diagramId}`} variant="ghost" size="sm">
+		{#if href}
+			<Button {href} variant="ghost" size="sm">
 				<ExternalLink />
 				Open in draw.io
 			</Button>
 		{/if}
 	</div>
 	<div class="flex min-h-24 items-center justify-center overflow-x-auto bg-background p-4">
-		{#if diagram?.renderedSvg}
-			<SafeSvgPreview
+		{#if diagram?.renderedSvg && Preview}
+			<Preview
 				svg={diagram.renderedSvg}
 				alt={diagram?.title ? `Preview of ${diagram.title}` : 'draw.io diagram preview'}
 				class="max-h-96 max-w-full"

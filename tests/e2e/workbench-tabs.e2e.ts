@@ -33,9 +33,20 @@ async function resetNavigationProgressProbe(page: Page): Promise<void> {
 	});
 }
 
+function dataRequestPattern(pathname: string): RegExp {
+	return new RegExp(`${pathname}/__data[.]json(?:[?].*)?$`);
+}
+
+async function bypassServiceWorker(page: Page): Promise<void> {
+	const session = await page.context().newCDPSession(page);
+	await session.send('Network.enable');
+	await session.send('Network.setBypassServiceWorker', { bypass: true });
+}
+
 async function cacheDataRequest(page: Page, pathname: string): Promise<void> {
+	await bypassServiceWorker(page);
 	let cachedResponse: { body: Buffer; headers: Record<string, string>; status: number } | undefined;
-	await page.route(`**${pathname}/__data.json*`, async (route) => {
+	await page.route(dataRequestPattern(pathname), async (route) => {
 		if (!cachedResponse) {
 			const response = await route.fetch();
 			cachedResponse = {
@@ -49,7 +60,8 @@ async function cacheDataRequest(page: Page, pathname: string): Promise<void> {
 }
 
 async function delayDataRequest(page: Page, pathname: string, delayMs: number): Promise<void> {
-	await page.route(`**${pathname}/__data.json*`, async (route) => {
+	await bypassServiceWorker(page);
+	await page.route(dataRequestPattern(pathname), async (route) => {
 		await new Promise((resolve) => setTimeout(resolve, delayMs));
 		await route.continue();
 	});

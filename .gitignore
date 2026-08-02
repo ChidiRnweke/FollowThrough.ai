@@ -6,6 +6,7 @@ node_modules
 .netlify
 .wrangler
 /.svelte-kit
+/.svelte-kit-browser
 /build
 /build-worker
 
@@ -25,8 +26,11 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 # Playwright
 test-results
+tests/.auth/
 design_doc
 artifacts
+!src/lib/components/artifacts/
+!src/lib/components/artifacts/**
 !src/lib/services/artifacts/
 !src/lib/services/artifacts/**
 !src/routes/(app)/artifacts/

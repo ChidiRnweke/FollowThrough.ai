@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import ProjectOverview from '$lib/components/projects/workspace/project-overview.svelte';
+	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -13,11 +13,8 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
-	import NameDialog from '$lib/components/projects/name-dialog.svelte';
-	import ExportSettingsDialog from '$lib/components/notes/export/export-settings-dialog.svelte';
-	import ImportNotesDialog from '$lib/components/notes/import-notes-dialog.svelte';
-	import AgentAction from '$lib/components/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/agent/agent-actions';
+	import { ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
 

@@ -11,10 +11,10 @@ import { expect, test, type Page } from '@playwright/test';
  *   4. Closes from the secondary note utility row and asserts the URL collapses back
  *      to a single pane.
  *
- * The drag-to-split *gesture* (carrying the note id in the
- * `dataTransfer`) is covered by the `workspace-tabs.svelte.spec.ts`
- * unit tests.  This e2e covers URL plumbing, persistence, layout, and
- * the close affordance.
+ * Divider semantics (keyboard resize, 25-75 limits, double-click reset) are
+ * covered by `workspace-split-resizer.svelte.spec.ts`; the mouse-drag gesture
+ * and reload persistence are only observable here.  This e2e covers URL
+ * plumbing, persistence, layout, and the close affordance.
  */
 
 async function openFirstNote(page: Page): Promise<string> {

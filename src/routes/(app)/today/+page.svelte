@@ -1,9 +1,9 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import QuickCapture from '$lib/components/shell/navigation/quick-capture.svelte';
-	import TodayTriage from '$lib/components/today/workspace/today-triage.svelte';
-	import AgentAction from '$lib/components/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/agent/agent-actions';
+	import { QuickCapture } from '$lib/components/shell';
+	import { TodayTriage } from '$lib/components/today';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
 
@@ -29,6 +29,6 @@
 	{#snippet actions()}
 		<AgentAction action={agentActions.today} />
 	{/snippet}
-	<QuickCapture />
+	<QuickCapture focusOnMount={page.url.searchParams.has('quickCapture')} />
 	<TodayTriage view={data.view} projects={data.shell.projects} />
 </PageShell>

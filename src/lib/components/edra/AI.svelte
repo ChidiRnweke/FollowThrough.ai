@@ -32,6 +32,7 @@
 		Send
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { tick } from 'svelte';
 
 	let inputTag = $state<HTMLTextAreaElement | null>(null);
 	const editor = getEditor();
@@ -41,6 +42,7 @@
 	let aiResponse = $state('');
 	let activeOptionIndex = $state(0);
 	let generating = $state(false);
+	let quickActionElements = $state<(HTMLButtonElement | null)[]>([]);
 
 	// Position tracking for inline editor streaming
 	let originalFrom = $state(0);
@@ -393,13 +395,12 @@
 		}
 	];
 
-	function scrollActiveOptionIntoView() {
-		setTimeout(() => {
-			const activeEl = document.querySelector('.quick-action-active');
-			if (activeEl) {
-				activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-			}
-		}, 0);
+	async function scrollActiveOptionIntoView() {
+		await tick();
+		quickActionElements[activeOptionIndex]?.scrollIntoView({
+			block: 'nearest',
+			behavior: 'smooth'
+		});
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -452,10 +453,11 @@
 {#snippet MenuButton(action: (typeof quickActions)[0], idx: number)}
 	{@const Icon = action.icon}
 	<button
+		bind:this={quickActionElements[idx]}
 		onclick={action.handler}
 		class="focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive not-data-[variant=destructive]:focus:**:text-accent-foreground gap-1.5 rounded-md px-1.5 py-1 text-sm data-inset:pl-7 [&_svg:not([class*='size-'])]:size-4 group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 w-full transition-colors {activeOptionIndex ===
 		idx
-			? 'bg-accent text-accent-foreground quick-action-active'
+			? 'bg-accent text-accent-foreground'
 			: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}"
 	>
 		<Icon />

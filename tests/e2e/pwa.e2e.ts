@@ -14,7 +14,11 @@ const waitForServiceWorker = async (page: Page): Promise<void> => {
 
 /** The note's title lives in the breadcrumb's current-page segment. */
 const noteTitleCrumb = (page: Page) =>
-	page.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]');
+	page
+		.locator('[data-note-pane]:visible')
+		.first()
+		.getByRole('navigation', { name: 'breadcrumb' })
+		.locator('[aria-current="page"]');
 
 test('exposes installable FollowThrough metadata', async ({ page, context }) => {
 	await page.goto('/today');

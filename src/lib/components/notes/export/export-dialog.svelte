@@ -2,7 +2,6 @@
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { defaultExportSettings } from '$lib/models/deliverables';
-	import mermaid from 'mermaid';
 	import { mode } from 'mode-watcher';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -206,7 +205,7 @@
 		// Diagrams follow the export's own palette, never the reader's colour mode: the
 		// document lands somewhere we do not control, and a dark-mode render is unusable
 		// on paper. Defaults to light for the same reason.
-		initializeMermaid({
+		const mermaid = await initializeMermaid({
 			base: settings.diagramTheme?.base ?? 'light',
 			...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
 		});
@@ -226,7 +225,7 @@
 				}
 			}
 		} finally {
-			initializeMermaid(mode.current === 'dark');
+			await initializeMermaid(mode.current === 'dark');
 		}
 		return { svgs, pngs };
 	}

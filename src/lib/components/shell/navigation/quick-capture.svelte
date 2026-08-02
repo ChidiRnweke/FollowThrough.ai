@@ -4,7 +4,10 @@
 	import { captureNote } from '$lib/remote/notes/notes.remote';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
-	let { target = 'Inbox' }: { target?: string } = $props();
+	let {
+		target = 'Inbox',
+		focusOnMount = false
+	}: { target?: string; focusOnMount?: boolean } = $props();
 </script>
 
 <Form {...captureNote}>
@@ -14,6 +17,9 @@
 		</InputGroup.Addon>
 		<InputGroup.Input
 			id="quick-capture-input"
+			{@attach (node: HTMLElement) => {
+				if (focusOnMount) node.focus();
+			}}
 			{...captureNote.fields.title.as('text')}
 			placeholder="Capture a note and start writing…"
 			autocomplete="off"

@@ -100,7 +100,10 @@ test('compact note chat opens in a Sheet with note context', async ({ page }) =>
 	await openFirstNote(page);
 	const noteTitle = (
 		await page
-			.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]')
+			.locator('[data-note-pane]:visible')
+			.first()
+			.getByRole('navigation', { name: 'breadcrumb' })
+			.locator('[aria-current="page"]')
 			.innerText()
 	).trim();
 	await page.getByRole('button', { name: 'Open chat' }).click();
@@ -112,7 +115,8 @@ test('closing compact note chat restores focus to its trigger', async ({ page })
 	await openFirstNote(page);
 	const trigger = page.getByRole('button', { name: 'Open chat' });
 	await trigger.click();
-	await page.getByRole('button', { name: 'Close' }).click();
+	const sheet = page.getByRole('dialog', { name: 'Let FollowThrough act' });
+	await sheet.getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(trigger).toBeFocused();
 });
 
@@ -140,9 +144,17 @@ test('compact todo list uses stacked records', async ({ page }) => {
 test('2xl retains the inline contextual panel width', async ({ page }) => {
 	await page.setViewportSize({ width: 1536, height: 960 });
 	await page.goto('/today');
+	await page.waitForLoadState('networkidle');
 	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
-	const width = await page
-		.locator('aside[aria-label="Chat"]')
-		.evaluate((element) => element.getBoundingClientRect().width);
-	expect(width).toBe(384);
+	await expect(page.getByRole('complementary', { name: 'Agent' })).toHaveCSS('width', '384px');
+});
+
+test('xl opens the contextual panel as a Sheet', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await page.goto('/today');
+	await page.waitForLoadState('networkidle');
+	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
+	const sheet = page.locator('[data-slot="sheet-content"]');
+	await expect(sheet).toBeVisible();
+	await expect(sheet.getByRole('heading', { name: 'Let FollowThrough act' })).toBeVisible();
 });

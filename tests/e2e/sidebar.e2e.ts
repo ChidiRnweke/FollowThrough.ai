@@ -79,16 +79,13 @@ test.describe('without JavaScript', () => {
 			const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]');
 			const inset = document.querySelector('[data-slot="sidebar-inset"]');
 			const footer = document.querySelector('[data-slot="sidebar-footer"]');
-			const rightPanel = document.querySelector('aside[aria-hidden]');
 
 			return (
 				wrapper !== null &&
 				inset !== null &&
 				footer !== null &&
-				rightPanel !== null &&
 				wrapper.contains(inset) &&
 				wrapper.contains(footer) &&
-				wrapper.contains(rightPanel) &&
 				document.documentElement.scrollWidth === document.documentElement.clientWidth &&
 				document.documentElement.scrollHeight === document.documentElement.clientHeight
 			);

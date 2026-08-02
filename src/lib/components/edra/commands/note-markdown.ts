@@ -1,9 +1,7 @@
 import { generateText } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
-import type { ProseMirrorDocument } from '$lib/models/notes';
-import { findProseMirrorDocumentIssue } from '$lib/models/notes';
-import { ValidationError } from '$lib/errors';
 import { noteMarkdownExtensions } from './markdown-extensions.js';
+import type { EdraDocument } from './document.js';
 
 /**
  * Markdown ↔ note conversion.
@@ -18,19 +16,14 @@ const extensions = noteMarkdownExtensions;
 const markdown = new MarkdownManager({ extensions });
 
 export interface NoteMarkdownContent {
-	readonly document: ProseMirrorDocument;
+	readonly document: EdraDocument;
 	readonly plainText: string;
 }
 
 /** Convert a compact Markdown payload into the editor's persisted note content. */
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const parsed = markdown.parse(source);
-	const document = parsed as ProseMirrorDocument;
-	const issue = findProseMirrorDocumentIssue(document);
-	if (issue)
-		throw new ValidationError(
-			`Markdown produced an invalid note document at ${issue.path}: ${issue.message}`
-		);
+	const document = parsed as EdraDocument;
 	return {
 		document,
 		plainText: generateText(parsed, extensions, { blockSeparator: '\n\n' })
@@ -46,5 +39,5 @@ export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => 
  * against — so it has to round-trip every node the editor can produce, not just the ones
  * Markdown has native syntax for.
  */
-export const noteMarkdownFromContent = (document: ProseMirrorDocument): string =>
+export const noteMarkdownFromContent = (document: EdraDocument): string =>
 	markdown.serialize(document as Parameters<typeof markdown.serialize>[0]);

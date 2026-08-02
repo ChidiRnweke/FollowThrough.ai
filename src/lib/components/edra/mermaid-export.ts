@@ -31,7 +31,7 @@ const DIMENSION_FALLBACK = { width: 800, height: 600 };
 
 /** Render the source at the requested theme rather than reusing the on-screen SVG. */
 const renderAtTheme = async (source: string, theme: MermaidTheme): Promise<string> => {
-	initializeMermaid(theme);
+	await initializeMermaid(theme);
 	return sanitizeMermaidSvg(
 		await renderMermaidOffscreen(`mermaid-export-${crypto.randomUUID()}`, source)
 	);

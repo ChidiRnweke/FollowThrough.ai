@@ -7,21 +7,11 @@
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { noteEtag } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
-	import { Tip } from '$lib/components/ui/tooltip';
-	import { mergeProps } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import {
-		FtEllipsis as Ellipsis,
-		FtLoader as LoaderCircle,
-		FtPin as Pin,
-		FtPinOff as PinOff
-	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
+	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import AgentAction from '../../agent/agent-action.svelte';
-	import { agentActions } from '../../agent/agent-actions';
 	import { noteActions } from '$lib/stores/notes/note-actions.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -32,21 +22,10 @@
 	import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
-	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
-	import NoteConflictDialog from '../note-conflict-dialog.svelte';
-	import NoteSyncStatus from '../note-sync-status.svelte';
-	import {
-		FtExport as FileOutput,
-		FtPublish as ArrowUpFromLine,
-		FtUndo as Undo2,
-		FtSuggestion as Lightbulb,
-		FtSuggestion as Suggestion,
-		FtDocument as FileText,
-		FtClose as X
-	} from '$lib/components/icons';
-	import ExportDialog from '../export/export-dialog.svelte';
-	import DrawioReviewDialog from '../../diagrams/drawio-review-dialog.svelte';
+	import { FtSuggestion as Lightbulb } from '$lib/components/icons';
+	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
+	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import { publishNote, discardNoteDraft } from '$lib/remote/notes/notes.remote';
 
 	let {
@@ -671,237 +650,43 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
-{#snippet syncStatus()}
-	<div class="min-w-0 flex-1 sm:flex-none">
-		<NoteSyncStatus
-			status={noteSync.status}
-			updatedAt={note.updatedAt}
-			reason={noteSync.lastError}
-			onRetry={() => void retrySync()}
-			onReview={() => (conflictOpen = true)}
-		/>
-	</div>
-{/snippet}
-
 <div
-	class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
+	class="note-measure @container mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
 	style:--note-header-h="{utilityHeaderHeight}px"
 >
-	<!-- Sticks to the top of the pane's own scroller so save status and note actions stay
-	     reachable in a long note. Kept quiet per the document pattern: an opaque pane
-	     background and one hairline, no shadow — the flat-surface rule still holds. Each
-	     pane scrolls independently, so in a split the two headers stick independently too.
-
-	     No vertical margin or top padding: the pane layer's own `padding-block` sits outside
-	     the scroll viewport, so `top-0` already lands where the row used to. Only `pb-2` is
-	     added, to keep the hairline off the first line of the document. Its measured height
-	     feeds `--note-header-h`, which sticky table headers in editor.css stick below. -->
-	<div
-		class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 sm:min-h-8 sm:flex-row sm:items-center dark:bg-card"
-		data-testid="note-utility-header"
-		bind:clientHeight={utilityHeaderHeight}
-	>
-		<div class="flex min-w-0 items-center gap-1 sm:flex-1">
-			<div class="min-w-0 flex-1">
-				<NoteBreadcrumb
-					{shell}
-					{note}
-					oncommit={(title) => {
-						note = { ...note, title };
-						markDirty();
-					}}
-					onadvance={() => editorRef?.focusStart()}
-				/>
-			</div>
-			{#if onCloseSplit}
-				<Tip text="Close split view">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="icon-sm"
-							class="size-11 sm:size-8"
-							aria-label="Close split view"
-							onclick={onCloseSplit}
-						>
-							<X />
-						</Button>
-					{/snippet}
-				</Tip>
-			{/if}
-		</div>
-		<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
-			{#if activeAction}
-				<LoaderCircle
-					class="size-4 animate-spin text-muted-foreground"
-					aria-label="AI action running"
-				/>
-			{/if}
-			{#if dirty && !note.title.trim()}
-				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
-					>Add a title to save</span
-				>
-			{:else if saveFailed}
-				<Tip text={noteSync.lastError ?? 'The note could not be saved. Your text is still here.'}>
-					{#snippet children({ props })}
-						<span
-							{...props}
-							class="min-w-0 flex-1 text-xs text-destructive sm:flex-none"
-							aria-live="polite"
-						>
-							Couldn’t save · press Ctrl+S to retry
-						</span>
-					{/snippet}
-				</Tip>
-				<!-- A stuck sync outranks both hints below it: those are only ever
-				     informational, while this is the note's one route back to saved. -->
-			{:else if unsynced || noteSync.status === 'saving'}
-				{@render syncStatus()}
-			{:else if dirty}
-				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
-					>Unsaved changes</span
-				>
-			{:else if hasUnpublishedChanges}
-				<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
-					>Unpublished changes</span
-				>
-			{:else}
-				{@render syncStatus()}
-			{/if}
-			<!--
-				Labelled from `lg` up, and folded into the overflow menu below it — the
-				same trade the Export control in this header already makes, because a
-				note header that wraps costs more than a word of discoverability.
-			-->
-			<AgentAction
-				action={agentActions.note}
-				context={{ noteId: note.id, projectId: view.note.projectId }}
-				class="hidden lg:inline-flex"
-			/>
-			<!-- Both carry a keyboard shortcut and Export is icon-only, so the label
-			     is the only place either fact is stated. -->
-			<Tip text="Publish note (Ctrl+S)">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="outline"
-						size="sm"
-						class="h-11 sm:h-8"
-						disabled={!hasUnpublishedChanges || dirty || publishing}
-						aria-label="Publish note (Ctrl+S, S)"
-						onclick={() => void publish()}
-					>
-						{#if publishing}
-							<LoaderCircle class="size-4 animate-spin" />
-						{:else}
-							<ArrowUpFromLine class="size-4" />
-						{/if}
-						Publish
-					</Button>
-				{/snippet}
-			</Tip>
-			<Tip text="Export document">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						class="hidden sm:inline-flex"
-						aria-label="Export document"
-						onclick={() => (exportOpen = true)}
-					>
-						<FileOutput class="size-4" />
-					</Button>
-				{/snippet}
-			</Tip>
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					{#snippet child({ props: menuProps })}
-						<Tip text="Note actions">
-							{#snippet children({ props: tipProps })}
-								<Button
-									{...mergeProps(menuProps, tipProps)}
-									variant="ghost"
-									size="icon-sm"
-									class="size-11 sm:size-8"
-									aria-label="Note actions"
-								>
-									<Ellipsis />
-								</Button>
-							{/snippet}
-						</Tip>
-					{/snippet}
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="end">
-					<DropdownMenu.Item class="lg:hidden" onclick={() => askAboutNote()}>
-						<Suggestion data-icon="inline-start" />
-						{agentActions.note.label}
-					</DropdownMenu.Item>
-					{#if comparable}
-						<!-- Two notes side by side is the one question this screen can ask
-						     that no other screen can, so it appears only when it applies. -->
-						<DropdownMenu.Item onclick={() => askCompare()}>
-							<FileText data-icon="inline-start" />
-							{agentActions.noteCompare.label}
-						</DropdownMenu.Item>
-					{/if}
-					<DropdownMenu.Separator class={comparable ? '' : 'lg:hidden'} />
-					<DropdownMenu.Item class="sm:hidden" onclick={() => (exportOpen = true)}>
-						<FileOutput data-icon="inline-start" />
-						Export document
-					</DropdownMenu.Item>
-					<DropdownMenu.Separator class="sm:hidden" />
-					<DropdownMenu.Group>
-						<DropdownMenu.Item onclick={togglePin}>
-							{#if note.isPinned}
-								<PinOff data-icon="inline-start" />
-								Unpin
-							{:else}
-								<Pin data-icon="inline-start" />
-								Pin to sidebar
-							{/if}
-						</DropdownMenu.Item>
-						<DropdownMenu.Sub>
-							<DropdownMenu.SubTrigger>Move to</DropdownMenu.SubTrigger>
-							<DropdownMenu.SubContent>
-								<DropdownMenu.Group>
-									<DropdownMenu.Item
-										disabled={note.parentId === undefined}
-										onclick={() => void moveTo(undefined)}
-									>
-										Project root
-									</DropdownMenu.Item>
-									{#each folders as folder (folder.id)}
-										<DropdownMenu.Item
-											disabled={folder.id === note.parentId}
-											onclick={() => void moveTo(folder.id)}
-										>
-											{folder.title}
-										</DropdownMenu.Item>
-									{/each}
-								</DropdownMenu.Group>
-							</DropdownMenu.SubContent>
-						</DropdownMenu.Sub>
-					</DropdownMenu.Group>
-					<DropdownMenu.Separator />
-					<DropdownMenu.Group>
-						<DropdownMenu.Item
-							disabled={note.publishedRevision === 0 || !hasUnpublishedChanges}
-							onclick={() => {
-								if (confirm('Discard all changes since last publish?')) void discardDraft();
-							}}
-						>
-							<Undo2 data-icon="inline-start" />
-							Discard changes
-						</DropdownMenu.Item>
-						<DropdownMenu.Item variant="destructive" onclick={() => void archive()}>
-							Archive note
-						</DropdownMenu.Item>
-					</DropdownMenu.Group>
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-		</div>
-	</div>
+	<NoteWorkspaceHeader
+		{shell}
+		{note}
+		projectId={view.note.projectId}
+		{noteSync}
+		{dirty}
+		{saveFailed}
+		{unsynced}
+		{hasUnpublishedChanges}
+		{activeAction}
+		{publishing}
+		{comparable}
+		{folders}
+		{onCloseSplit}
+		bind:height={utilityHeaderHeight}
+		ontitle={(title) => {
+			note = { ...note, title };
+			markDirty();
+		}}
+		onadvance={() => editorRef?.focusStart()}
+		onreviewconflict={() => (conflictOpen = true)}
+		onretry={() => void retrySync()}
+		onpublish={() => void publish()}
+		onexport={() => (exportOpen = true)}
+		onask={askAboutNote}
+		oncompare={askCompare}
+		ontogglepin={() => void togglePin()}
+		onmove={(parentId) => void moveTo(parentId)}
+		ondiscard={() => {
+			if (confirm('Discard all changes since last publish?')) void discardDraft();
+		}}
+		onarchive={() => void archive()}
+	/>
 
 	{#if view.backlinks.length > 0 || pendingCount > 0}
 		<div class="flex flex-wrap items-center gap-1.5">
@@ -938,7 +723,6 @@
 			onask={(prompt) => askSelection(prompt)}
 			onreviseMermaid={reviseMermaid}
 			onconvertMermaid={convertMermaid}
-			onacceptDrawio={acceptDrawio}
 			onrejectDrawio={rejectDrawio}
 		/>
 	{:else}
@@ -956,34 +740,22 @@
 		</div>
 	{/if}
 
-	{#if noteSync.record?.state === 'conflict'}
-		<NoteConflictDialog
-			bind:open={conflictOpen}
-			record={noteSync.record}
-			onUseRemote={useRemoteVersion}
-			onKeepLocal={keepLocalVersion}
-		/>
-	{/if}
-
-	<ExportDialog
-		bind:open={exportOpen}
-		projectId={note.projectId}
-		defaultTitle={note.title}
-		defaultNoteIds={[note.id]}
-		documents={[{ id: note.id, document: note.document }]}
+	<NoteWorkspaceDialogs
+		bind:exportOpen
+		bind:conflictOpen
+		bind:reviewDialogOpen
+		{note}
+		conflictRecord={noteSync.record}
+		{reviewingSuggestion}
+		onUseRemote={useRemoteVersion}
+		onKeepLocal={keepLocalVersion}
+		onAcceptDrawio={async (output) => {
+			const suggestion = reviewingSuggestion;
+			if (!suggestion) return;
+			const diagram = await acceptDrawio(suggestion.id, output.xml, output.svg);
+			editorRef?.completeDrawioConversion(suggestion.id, diagram.id);
+			reviewingSuggestion = null;
+			reviewDialogOpen = false;
+		}}
 	/>
-
-	{#if reviewingSuggestion}
-		<DrawioReviewDialog
-			bind:open={reviewDialogOpen}
-			suggestion={reviewingSuggestion}
-			onaccept={async (output) => {
-				const suggestion = reviewingSuggestion;
-				if (!suggestion) return;
-				await acceptDrawio(suggestion.id, output.xml, output.svg);
-				reviewingSuggestion = null;
-				reviewDialogOpen = false;
-			}}
-		/>
-	{/if}
 </div>

@@ -1,9 +1,8 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import MemoryEntryList from '$lib/components/memory/memory-entry-list.svelte';
+	import { MemoryEntryList } from '$lib/components/memory';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-	import AgentAction from '$lib/components/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/agent/agent-actions';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
 </script>

@@ -5,7 +5,7 @@ import { MediaQuery } from 'svelte/reactivity';
  * instead of covering it. Below this the panel becomes a modal sheet; above it
  * the panel docks and the rest of the app stays usable, so no scrim is drawn.
  */
-export const DOCKED_PANEL_BREAKPOINT = '64rem';
+export const DOCKED_PANEL_BREAKPOINT = '96rem';
 
 const DOCKED_PANEL_QUERY = `min-width: ${DOCKED_PANEL_BREAKPOINT}`;
 

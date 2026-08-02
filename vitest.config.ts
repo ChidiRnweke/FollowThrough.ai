@@ -13,6 +13,22 @@ const svelteCompiler = {
 		filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
 	experimental: { async: true }
 };
+const componentSvelteKit = async () =>
+	(
+		await sveltekit({
+			compilerOptions: svelteCompiler,
+			outDir: '.svelte-kit-browser',
+			files: {
+				hooks: { server: 'src/lib/testing/browser-no-hooks' },
+				routes: 'src/lib/testing/browser-no-routes'
+			},
+			experimental: { remoteFunctions: true, handleRenderingErrors: true }
+		})
+	).map((plugin) =>
+		plugin.name === 'vite-plugin-sveltekit-compile'
+			? { ...plugin, configureServer: undefined, configurePreviewServer: undefined }
+			: plugin
+	);
 
 export default defineConfig({
 	resolve: {
@@ -46,33 +62,7 @@ export default defineConfig({
 				}
 			},
 			{
-				plugins: [
-					sveltekit({
-						compilerOptions: svelteCompiler,
-						experimental: { remoteFunctions: true, handleRenderingErrors: true }
-					})
-				],
-				resolve: { alias: { $lib: lib } },
-				test: {
-					...common,
-					name: 'node-isolated',
-					environment: 'node',
-					include: ['src/**/*.isolated.spec.{js,ts}'],
-					isolate: true,
-					maxWorkers: 1,
-					sequence: { groupOrder: 1 }
-				}
-			},
-			{
-				plugins: [
-					sveltekit({
-						compilerOptions: svelteCompiler,
-						experimental: {
-							remoteFunctions: true,
-							handleRenderingErrors: true
-						}
-					})
-				],
+				plugins: [componentSvelteKit()],
 				test: {
 					...common,
 					name: 'browser-focused',
@@ -82,6 +72,7 @@ export default defineConfig({
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: [
+						'src/lib/components/ui/ref-contracts.svelte.spec.ts',
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
 						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',
 						'src/lib/components/notes/export/export-slider.svelte.spec.ts',
@@ -96,15 +87,7 @@ export default defineConfig({
 				}
 			},
 			{
-				plugins: [
-					sveltekit({
-						compilerOptions: svelteCompiler,
-						experimental: {
-							remoteFunctions: true,
-							handleRenderingErrors: true
-						}
-					})
-				],
+				plugins: [componentSvelteKit()],
 				test: {
 					...common,
 					name: 'browser-full',
@@ -125,10 +108,7 @@ export default defineConfig({
 					...common,
 					name: 'contracts',
 					environment: 'node',
-					include: [
-						'src/lib/server/**/*.contract.spec.ts',
-						'tests/integration/**/*.contract.spec.ts'
-					],
+					include: ['tests/integration/**/*.contract.spec.ts'],
 					globalSetup: ['./src/lib/server/db/contract-global-setup.ts'],
 					fileParallelism: false,
 					maxWorkers: 1

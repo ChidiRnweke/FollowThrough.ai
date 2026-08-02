@@ -22,12 +22,20 @@ capabilities first; frameworks and infrastructure appear only at delivery bounda
 `components/icons`, `components/marketing`, and `components/layout` are intentional presentation
 boundaries rather than product-capability buckets.
 
+The root-level `server/*-capability-factory.ts` modules are composition helpers, not another
+application layer. Each exports one typed `create<Capability>Capability` function. Those functions
+instantiate and connect the existing repositories, services, and controllers for one capability;
+they contain no queries or business rules. `server/application.ts` calls them in dependency order
+and constructs the final controller facade. A typed `finalize(...)` step or lazy callback may close
+a composition-time cycle, but placeholder casts and post-construction mutation are forbidden.
+
 ## Dependency rules
 
 - Routes and remotes delegate to controllers and preserve their public request/response shapes.
 - Controllers may coordinate service contracts. Domain decisions belong in services.
 - Services import models and repository contracts only. A service never imports another service.
-- Repositories own Drizzle and other persistence technology and map immediately to models.
+- Repositories own Drizzle, SQL, and other persistence behavior and map immediately to models. A
+  composition factory may receive the database handle solely to construct a repository.
 - Stores contain reactive state and mutations; browser transports and URL/session adapters live in
   `client`.
 - Models are leaf modules. Every capability model entry is self-contained and imports no other
@@ -35,6 +43,37 @@ boundaries rather than product-capability buckets.
 - Cross-capability imports use capability entry points such as `$lib/models/notes` and
   `$lib/components/todos`. Relative imports stay within a capability.
 - `src/lib/utils.ts` exports only the shadcn `cn` helper.
+
+## Presentation and editor boundaries
+
+Every product component capability exposes a narrow `index.ts`. Routes and other product
+capabilities import that entry; files within the same capability use relative imports. `ui`,
+`icons`, `layout`, `shared`, `edra`, and `marketing` are explicit presentation infrastructure
+exceptions rather than product capabilities.
+
+Large UI coordinators assemble state and application callbacks; they do not own every rendered
+interaction. Chat delegates transcript/turn rendering and composer/context controls, Notes delegates
+its pane-responsive utility header and workspace dialogs while its editor adapter delegates media
+upload, and Projects delegates recursive tree rows, menus, and drag zones. Those children receive
+structural values and explicit callbacks, so they do not become new controllers or services.
+
+Edra owns editor structure: node transactions, opaque references, and pending-reference state. It
+does not know product IDs, client transports, repositories, or product dialogs. Product adapters in
+`components/notes` translate opaque references to suggestion and diagram models, inject preview and
+link resolution, and own review acceptance or rejection through product services.
+
+## Transactions and schema
+
+The workspace operation contract owns `AtomicOperation`; presentation utilities do not. Services
+request atomic work through that contract, while repositories implement persistence inside the
+provided transaction. The Drizzle registry at `server/db/schema/index.ts` re-exports the exact
+capability schemas for migrations and tooling. It does not become a shared query module: concrete
+repositories import their capability schema modules directly.
+
+PostgreSQL contracts mirror those capability boundaries under `tests/integration/<capability>` and
+share actors, timestamps, seed helpers, and connection lifecycle through
+`tests/integration/database-harness.ts`. Schema-only invariants live under
+`tests/integration/schema`; the contract project remains non-parallel against its shared container.
 
 ## Naming and ownership
 

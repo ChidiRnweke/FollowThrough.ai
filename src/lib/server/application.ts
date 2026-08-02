@@ -2,157 +2,35 @@ import {
 	ProductionControllerFactory,
 	type ProductionControllerDependencies
 } from '$lib/server/production-controller-factory';
-import { OpenRouter } from '@openrouter/sdk';
-import { ConversationArchive } from './services/agent/conversations/archive';
-import { AgentRunLedger } from './services/agent/runs/ledger';
-import {
-	AgentModels,
-	AgentPreferenceCatalog,
-	type AgentModelCatalog
-} from './services/agent/runs/preferences';
-import { normalizeLanguageModelId } from '$lib/models/agent';
+import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
-import { ToolTrust } from './services/agent/runs/tool-trust';
-import { ToolAccess } from './services/agent/tools/preferences';
-import { EmbeddedToolRetriever, type ToolRetriever } from './services/agent/tools/tool-retriever';
-import {
-	AttachmentContent,
-	type ImageDescriber,
-	type OcrEngineClient
-} from './services/attachments/content';
+import type { ToolRetriever } from './services/agent/tools/tool-retriever';
+import type { ImageDescriber, OcrEngineClient } from './services/attachments/content';
 import type { DocumentOcr } from './services/attachments/contracts';
-import { AttachmentLibrary } from './services/attachments/library';
-import { DiagramContent } from './services/diagrams/content';
-import { DiagramLibrary } from './services/diagrams/library';
-import { UserDirectory } from './services/identity/users';
-import type { Condenser } from './services/knowledge-search/contracts';
-import {
-	EmbeddedAttachmentIndexer,
-	EmbeddedDiagramIndexer,
-	EmbeddedMemoryIndexer,
-	EmbeddedNoteIndexer,
-	retrievalChunkerFromEnv
-} from './services/knowledge-search/indexing';
-import type { EmbeddingClient } from './services/knowledge-search/contracts';
-import {
-	EmbeddedKnowledgeSearcher,
-	ProjectScopedLinkFinder,
-	RerankingKnowledgeSearcher,
-	type Reranker
-} from './services/knowledge-search/semantic';
-import { MemoryLibrary } from './services/memory/library';
-import { NoteCatalog } from './services/notes/catalog';
-import { NoteProvenance } from './services/notes/provenance';
-import { ProjectCatalog } from './services/projects/catalog';
+import type { Condenser, EmbeddingClient } from './services/knowledge-search/contracts';
+import type { Reranker } from './services/knowledge-search/semantic';
 import type { ReferenceFinder } from './services/references/contracts';
-import { ReferenceLibrary } from './services/references/library';
-import { RelationshipGraph } from './services/relationships/graph';
-import { BuiltInSkillLibrary, BuiltInSkills } from './services/skills/built-ins';
-import { SkillLibrary } from './services/skills/library';
-import { ExpiringSuggestionLister } from './services/suggestions/expiring-lister';
-import { SuggestionInbox } from './services/suggestions/inbox';
-import { TodoCatalog } from './services/todos/catalog';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
-import { BaseAgentContext } from './services/agent/runs/base-context';
-import { SuggestionApplication } from './services/suggestions/application';
-import { PromiseDiscovery } from './services/todos/promise-discovery';
-import { DeterministicPromiseExtractor } from './services/todos/promise-rules';
-import { ReferenceDiscovery } from './services/references/discovery';
-import { AgentReasoning, AgentToolEventMapper } from './services/agent/runs/reasoning';
-import { resolveAgentModel } from './services/agent/runs/preferences';
-import { agentToolRegistry } from './agent-tool-factory';
-import { BUILT_INS, RETIRED_BUILT_INS } from './services/skills/built-in-definitions';
-import { SkillManifestCodec } from './services/skills/manifest';
-import { extractTemplateStyles } from './services/deliverables/template-styles';
-import { DiagramAuthoring } from './services/diagrams/authoring';
-import { DrawioReview } from './services/diagrams/review';
-import { Embeddings } from './services/knowledge-search/embeddings';
-import {
-	DEFAULT_GENERATION_MODEL,
-	DEFAULT_LANGUAGE_MODEL_BASE_URL,
-	DEFAULT_MISTRAL_BASE_URL,
-	DEFAULT_OCR_MODEL,
-	optionalProperty,
-	positiveNumberFromEnvironment
-} from './config';
-import { InlineSuggestionCompletion } from './services/inline-suggestions/inline-completion';
-import { InlineSuggestionContext } from './services/inline-suggestions/inline-context';
-import { InlineSuggestionAdmission } from './services/inline-suggestions/inline-admission';
-import { SearchRanking } from './services/knowledge-search/ranking';
-import { MistralOcr } from './services/attachments/mistral-ocr';
-import { ImageDescription } from './services/attachments/image-description';
-import { ConversationSummary } from './services/agent/conversations/summary';
-import { KnowledgeIndexRecords } from './repositories/knowledge-search/postgres/search';
-import { ConversationRecords } from './repositories/agent/postgres/conversations';
-import { AgentContext } from './services/agent/runs/context';
-import { AccessTokens } from '$lib/server/services/identity/api-tokens';
-import { ApiTokenRecords } from './repositories/identity/postgres/api-tokens';
-import {
-	AttachmentParserRegistry,
-	AttachmentStorage,
-	type IAttachmentStorage,
-	type ObjectStorageConfig
-} from './services/attachments/storage';
-import { RelationshipDiscovery } from './services/relationships/discovery';
-import { ProjectRecords } from './repositories/projects/postgres/projects';
-import { UserRecords } from './repositories/identity/postgres/users';
-import { NoteRecords, SourceAnchorRecords } from './repositories/notes/postgres/notes';
-import { ProvenanceRecords } from './repositories/provenance/postgres/provenance';
-import { TodoRecords } from './repositories/todos/postgres/todos';
-import { SuggestionRecords } from './repositories/suggestions/postgres/suggestions';
-import { TrustPolicyRecords } from './repositories/agent/postgres/trust-policies';
-import { MemoryRecords } from './repositories/memory/postgres/memory-entries';
-import { ExportSettingsRecords } from './repositories/deliverables/postgres/export-settings';
-import { RelationshipRecords } from './repositories/relationships/postgres/relationships';
-import { ReferenceRecords } from './repositories/references/postgres/references';
-import { DiagramRecords } from './repositories/diagrams/postgres/diagrams';
-import { SkillRecords } from './repositories/skills/postgres/skills';
-import { AttachmentRecords } from './repositories/attachments/postgres/attachments';
-import { TemplateRecords } from './repositories/deliverables/postgres/templates';
-import { ArtifactRecords } from './repositories/deliverables/postgres/artifacts';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { agentToolCatalog } from './agent-tool-catalog-factory';
-import { generateDocx } from './services/deliverables/docx';
-import { generatePdf } from './services/deliverables/pdf';
-import {
-	AgentPreferenceRecords,
-	AgentRunRecords,
-	AgentSessionRecords
-} from './repositories/agent/postgres/agent-settings';
-import { ToolPreferenceRecords } from './repositories/agent/postgres/tool-preferences';
-import {
-	AgentRunDecisionRecords,
-	AgentRunEventRecords
-} from './repositories/agent/postgres/agent-runs';
-import { AgentRunLifecycle } from './services/agent/runs/lifecycle';
-import { AgentEvents, type AgentEventBus } from './services/agent/runs/events';
-import {
-	DrawioLabelExtractor,
-	DrawioSvgSanitizer,
-	DrawioXmlValidator,
-	DrawioDiagramTextExtractor
-} from './services/diagrams/drawio';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
+import type { IAttachmentStorage, ObjectStorageConfig } from './services/attachments/storage';
+import type { AgentEventBus } from './services/agent/runs/events';
 import type { ScheduledTask } from './services/scheduler';
-import { KnowledgeIndexMaintenance } from './services/knowledge-search/index-maintenance';
-import { UploadRetention } from './services/attachments/retention';
-import { FeedbackRecords } from './repositories/feedback/postgres/feedback';
-import { operationObserver, traceAgentTurn, traceWorkflow } from './services/telemetry';
-import { webSearchOptionsFromEnvironment } from '$lib/models/agent';
-import { ConversationBuffer } from './services/agent/conversations/buffer';
-
-class LateValue<T> {
-	private value!: T;
-
-	set(value: T): void {
-		this.value = value;
-	}
-
-	get(): T {
-		return this.value;
-	}
-}
+import { createIdentityCapability } from './identity-capability-factory';
+import { createProjectsCapability } from './projects-capability-factory';
+import { createNotesCapability } from './notes-capability-factory';
+import { createReferencesCapability } from './references-capability-factory';
+import { createRelationshipsCapability } from './relationships-capability-factory';
+import { createTodosCapability } from './todos-capability-factory';
+import { createSuggestionsCapability } from './suggestions-capability-factory';
+import { createKnowledgeSearchCapability } from './knowledge-search-capability-factory';
+import { createSkillsCapability } from './skills-capability-factory';
+import { createMemoryCapability } from './memory-capability-factory';
+import { createAttachmentsCapability } from './attachments-capability-factory';
+import { createDeliverablesCapability } from './deliverables-capability-factory';
+import { createDiagramsCapability } from './diagrams-capability-factory';
+import { createAgentCapability } from './agent-capability-factory';
+import { createFeedbackCapability } from './feedback-capability-factory';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -236,264 +114,187 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	// request path, and deferring it would report an attachment "ready" before it
 	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
-
-	const projectRepository = new ProjectRecords(db);
-	const userReader = new UserDirectory(new UserRecords(db));
-	const projects = new ProjectCatalog(projectRepository, projectRepository);
-	const noteRepository = new NoteRecords(db);
-	const anchorRepository = new SourceAnchorRecords(db);
-	const provenanceRepository = new ProvenanceRecords(db);
-	const notes = new NoteCatalog(noteRepository, anchorRepository, projectRepository);
-	const provenance = new NoteProvenance(provenanceRepository, anchorRepository);
-	const todos = new TodoCatalog(
-		new TodoRecords(db),
-		projectRepository,
-		anchorRepository,
-		noteRepository,
-		provenanceRepository
-	);
-	const searchRepository = new KnowledgeIndexRecords(db);
-	const conversationJournal = new ConversationArchive(new ConversationRecords(db));
-	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(db));
-	const apiTokenService = new AccessTokens(new ApiTokenRecords(db));
-	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(db), agentToolCatalog);
-	const runRepository = new AgentRunRecords(db);
-	const runStore = new AgentRunLedger(runRepository);
-	const runEvents = new AgentRunEventRecords(db);
-	const runDecisions = new AgentRunDecisionRecords(db);
-	const agentSessions = new AgentSessionRecords(db);
-	const attachmentStorage =
-		overrides.attachmentStorage ??
-		new AttachmentStorage(
-			config.s3 ?? {
-				endpoint: 'http://localhost:9000',
-				region: 'us-east-1',
-				accessKeyId: 'followthrough',
-				secretAccessKey: 'followthrough-local-secret',
-				bucket: 'followthrough-attachments',
-				forcePathStyle: true
-			}
-		);
-	const templateRepository = new TemplateRecords(db);
-	const artifactRepository = new ArtifactRecords(db);
-	const templates = new DocumentTemplates(
-		attachmentStorage,
-		templateRepository,
-		transactionRunner,
-		extractTemplateStyles
-	);
-	const artifacts = new ArtifactLibrary(
-		artifactRepository,
-		attachmentStorage,
-		generateDocx,
-		generatePdf,
-		provenance,
-		notes,
-		templateRepository,
-		transactionRunner,
-		new ExportSettingsRecords(db)
-	);
-	const modelCatalog =
-		overrides.modelCatalog ??
-		new AgentModels(
-			new OpenRouter({
-				apiKey: openRouterApiKey,
-				httpReferer: appURL,
-				xTitle: 'FollowThrough'
-			}),
-			new Set((config.recommendedModels ?? []).map(normalizeLanguageModelId))
-		);
-	const embeddingClient =
-		overrides.embeddingClient ??
-		new Embeddings(openRouterApiKey, {
-			baseURL: openRouterBaseURL,
-			appURL,
-			observer: operationObserver
-		});
-	const reranker =
-		overrides.reranker ??
-		new SearchRanking(openRouterApiKey, {
-			baseURL: openRouterBaseURL,
-			appURL,
-			observer: operationObserver
-		});
-	const condenser =
-		overrides.condenser ??
-		new ConversationSummary(openRouterApiKey, {
-			baseURL: openRouterBaseURL,
-			appURL,
-			observer: operationObserver
-		});
-	const toolRetriever = new EmbeddedToolRetriever(embeddingClient);
-	const attachmentRepository = new AttachmentRecords(db);
-	const retrievalChunker = retrievalChunkerFromEnv();
-	// OCR runs on Mistral Document AI, not OpenRouter.
-	const ocrEngine =
-		overrides.ocrEngine ??
-		new MistralOcr(config.mistralApiKey, {
-			baseURL: config.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL,
-			model: config.ocrModel ?? DEFAULT_OCR_MODEL,
-			observer: operationObserver
-		});
-	const imageDescriber =
-		overrides.imageDescriber ??
-		new ImageDescription(openRouterApiKey, { baseURL: openRouterBaseURL, appURL });
-	const documentOcr = overrides.documentOcr ?? new AttachmentContent(ocrEngine, imageDescriber);
-	const attachments = new AttachmentLibrary(
-		attachmentRepository,
-		noteRepository,
-		attachmentStorage,
-		new AttachmentParserRegistry(),
-		documentOcr,
-		imageDescriber,
-		searchRepository,
-		new EmbeddedAttachmentIndexer(searchRepository, embeddingClient, retrievalChunker),
-		preferences
-	);
-	const noteIndexer = new EmbeddedNoteIndexer(
-		searchRepository,
-		embeddingClient,
-		retrievalChunker,
-		deferEmbedding
-	);
-	const diagramIndexer = new EmbeddedDiagramIndexer(
-		searchRepository,
-		embeddingClient,
-		notes,
-		retrievalChunker,
-		deferEmbedding
-	);
-	const embeddedKnowledgeSearcher = new EmbeddedKnowledgeSearcher(
-		searchRepository,
-		embeddingClient
-	);
-	const knowledgeSearcher = new RerankingKnowledgeSearcher(embeddedKnowledgeSearcher, reranker);
-	const linkFinder = new ProjectScopedLinkFinder(
-		notes,
-		knowledgeSearcher,
-		new RelationshipDiscovery({ observer: operationObserver })
-	);
-	const relationships = new RelationshipGraph(
-		new RelationshipRecords(db),
-		noteRepository,
-		anchorRepository,
-		provenanceRepository
-	);
-	const references = new ReferenceLibrary(
-		new ReferenceRecords(db),
-		noteRepository,
-		anchorRepository,
-		provenanceRepository
-	);
-	const referenceFinder =
-		overrides.referenceFinder ??
-		new ReferenceDiscovery({
-			apiKey: openRouterApiKey,
-			baseURL: openRouterBaseURL,
-			appURL,
-			defaultModel: normalizeLanguageModelId(defaultAgentModel),
-			observer: operationObserver
-		});
-	const suggestions = new SuggestionInbox(
-		new SuggestionRecords(db),
-		noteRepository,
-		provenanceRepository,
-		anchorRepository
-	);
-	const suggestionLister = new ExpiringSuggestionLister(suggestions, suggestions);
-	const trust = new ToolTrust(new TrustPolicyRecords(db));
-	const diagrams = new DiagramLibrary(
-		new DiagramRecords(db),
-		noteRepository,
-		anchorRepository,
-		provenanceRepository
-	);
-	const diagramTransforms = new DiagramContent();
-	const skillRepository = new SkillRecords(db);
-	const skills = new SkillLibrary(
-		skillRepository,
-		noteRepository,
-		provenanceRepository,
-		new SkillManifestCodec()
-	);
-	const builtInSkills = new BuiltInSkills(projectRepository, noteRepository, skillRepository, {
-		active: BUILT_INS,
-		retired: RETIRED_BUILT_INS
+	const identity = createIdentityCapability({ db });
+	const projectCapability = createProjectsCapability({ db });
+	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
+	const todoCapability = createTodosCapability({
+		db,
+		projects: projectCapability.repository,
+		notes: noteCapability.repository,
+		anchors: noteCapability.anchors,
+		provenance: noteCapability.provenanceRepository
 	});
-	const provisionedSkills = new BuiltInSkillLibrary(builtInSkills, skills);
-	const memoryIndexer = new EmbeddedMemoryIndexer(
-		searchRepository,
-		embeddingClient,
-		retrievalChunker,
-		deferEmbedding
-	);
-	const memory = new MemoryLibrary(
-		new MemoryRecords(db),
-		projectRepository,
-		provenanceRepository,
-		memoryIndexer
-	);
-	const fallbackAgent = new BaseAgentContext(notes);
-	const agentContext = new AgentContext(
-		fallbackAgent,
-		provisionedSkills,
+	const relationshipCapability = createRelationshipsCapability({
+		db,
+		notes: noteCapability.repository,
+		anchors: noteCapability.anchors,
+		provenance: noteCapability.provenanceRepository
+	});
+	const referenceCapability = createReferencesCapability({
+		db,
+		notes: noteCapability.repository,
+		anchors: noteCapability.anchors,
+		provenance: noteCapability.provenanceRepository,
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL,
+		defaultModel: defaultAgentModel,
+		finder: overrides.referenceFinder
+	});
+	const suggestionCapability = createSuggestionsCapability({
+		db,
+		notes: noteCapability.repository,
+		anchors: noteCapability.anchors,
+		provenance: noteCapability.provenanceRepository
+	});
+	const skillCapability = createSkillsCapability({
+		db,
+		projects: projectCapability.repository,
+		notes: noteCapability.repository,
+		provenance: noteCapability.provenanceRepository
+	});
+
+	const projectRepository = projectCapability.repository;
+	const projects = projectCapability.catalog;
+	const noteRepository = noteCapability.repository;
+	const anchorRepository = noteCapability.anchors;
+	const provenanceRepository = noteCapability.provenanceRepository;
+	const notes = noteCapability.catalog;
+	const provenance = noteCapability.provenance;
+	const todos = todoCapability.catalog;
+	const knowledgeSearch = createKnowledgeSearchCapability({
+		db,
+		transactionRunner,
 		notes,
-		conversationJournal,
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL,
+		embeddingClient: overrides.embeddingClient,
+		reranker: overrides.reranker,
+		condenser: overrides.condenser,
+		deferEmbedding
+	});
+	const {
+		repository: searchRepository,
+		condenser,
+		noteIndexer,
+		diagramIndexer,
+		memoryIndexer,
+		searcher: knowledgeSearcher,
+		linkFinder
+	} = knowledgeSearch;
+	const toolRetriever = knowledgeSearch.toolRetriever;
+	const memory = createMemoryCapability({
+		db,
+		projects: projectRepository,
+		provenance: provenanceRepository,
+		indexer: memoryIndexer
+	}).library;
+	const agentCapability = createAgentCapability({
+		db,
+		transactionRunner,
+		controllers: () => controllerFactory,
+		toolRetriever,
+		notes,
+		skills: skillCapability.provisioned,
 		projects,
-		memory
-	);
-	const controllerFactory = new LateValue<ProductionControllerFactory>();
-	const eventBus = new AgentEvents();
-	const diagramAgent = new DiagramAuthoring({
-		contextBuilder: agentContext,
+		memory,
+		provenance,
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL,
+		defaultModel: defaultAgentModel,
+		defaultVisionModel,
+		recommendedModels: config.recommendedModels ?? [],
+		modelCatalog: overrides.modelCatalog
+	});
+	const {
+		conversations: conversationJournal,
+		preferences,
+		models: modelCatalog,
+		toolPreferences,
+		trust,
+		runs: runRepository,
+		runLedger: runStore,
+		runEvents,
+		runDecisions,
+		sessions: agentSessions,
+		context: agentContext,
+		executor,
+		eventBus
+	} = agentCapability;
+	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences, memory });
+	const feedback = createFeedbackCapability({ db });
+	const attachmentCapability = createAttachmentsCapability({
+		db,
+		notes: noteRepository,
+		preferences,
+		searchRepository,
+		indexer: knowledgeSearch.attachmentIndexer,
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL,
+		mistralApiKey: config.mistralApiKey,
+		mistralBaseURL: config.mistralBaseURL,
+		ocrModel: config.ocrModel,
+		s3: config.s3,
+		storage: overrides.attachmentStorage,
+		ocrEngine: overrides.ocrEngine,
+		imageDescriber: overrides.imageDescriber,
+		documentOcr: overrides.documentOcr
+	});
+	const attachmentRepository = attachmentCapability.repository;
+	const attachmentStorage = attachmentCapability.storage;
+	const attachments = attachmentCapability.library;
+	const deliverables = createDeliverablesCapability({
+		db,
+		storage: attachmentStorage,
+		transactionRunner,
+		provenance,
+		notes
+	});
+	const templates = deliverables.templates;
+	const artifacts = deliverables.artifacts;
+	const relationships = relationshipCapability.graph;
+	const references = referenceCapability.library;
+	const referenceFinder = referenceCapability.finder;
+	const suggestions = suggestionCapability.inbox;
+	const suggestionLister = suggestionCapability.lister;
+	const skills = skillCapability.library;
+	const provisionedSkills = skillCapability.provisioned;
+	const diagramCapability = createDiagramsCapability({
+		db,
+		notes: noteRepository,
+		anchors: anchorRepository,
+		provenanceRepository,
+		provenance,
+		context: agentContext,
 		conversations: conversationJournal,
 		preferences,
 		models: modelCatalog,
 		runs: runStore,
-		provenance,
-		builtInSkills,
+		builtInSkills: skillCapability.builtIns,
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
-		resolveModel: resolveAgentModel,
-		createToolEventMapper: () => new AgentToolEventMapper(),
-		observeWorkflow: traceWorkflow,
-		drawioValidator: new DrawioXmlValidator()
+		indexer: diagramIndexer
 	});
-	const agent = new AgentReasoning(
-		agentToolRegistry(() => controllerFactory.get(), toolRetriever),
-		agentSessions,
-		openRouterApiKey,
-		openRouterBaseURL,
-		appURL,
-		// No transport override: the web-search wrapper is applied per run, so
-		// the deployment's search options are passed as defaults instead.
-		undefined,
-		(repository, actor, conversationId) =>
-			new ConversationBuffer(repository, actor, conversationId),
-		traceAgentTurn,
-		webSearchOptionsFromEnvironment(process.env)
-	);
-	const artifactApplier = new SuggestionApplication(
-		todos,
-		relationships,
-		references,
-		diagrams,
-		todos,
-		relationships,
-		references,
-		diagrams,
-		memory,
-		new DrawioXmlValidator(),
-		new DrawioLabelExtractor()
-	);
-	const drawioReview = new DrawioReview(
-		diagrams,
-		new DrawioXmlValidator(),
-		new DrawioSvgSanitizer(),
-		new DrawioDiagramTextExtractor(),
-		diagramIndexer
-	);
-
+	const diagrams = diagramCapability.library;
+	const diagramTransforms = diagramCapability.transforms;
+	const diagramAgent = diagramCapability.authoring;
+	const artifactApplier = suggestionCapability.finalize({
+		todoCreator: todos,
+		relationshipCreator: relationships,
+		referenceCreator: references,
+		diagramWriter: diagrams,
+		todoDeleter: todos,
+		relationshipDeleter: relationships,
+		referenceDeleter: references,
+		diagramDeleter: diagrams,
+		memoryChangeApplier: memory,
+		drawioValidator: diagramCapability.suggestionValidator,
+		drawioLabels: diagramCapability.suggestionLabels
+	});
+	const drawioReview = diagramCapability.review;
 	const dependencies: ProductionControllerDependencies = {
 		todos: {
 			todoLister: todos,
@@ -503,10 +304,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoDeleter: todos,
 			todoStatusChanger: todos,
 			anchorCreator: notes,
-			promiseExtractor: new PromiseDiscovery({
-				fallback: new DeterministicPromiseExtractor(),
-				observer: operationObserver
-			}),
+			promiseExtractor: todoCapability.promiseExtractor,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			trustPolicyEvaluator: trust,
@@ -540,11 +338,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			mermaidReviser: diagramAgent,
 			inlineMermaidReviser: diagramAgent,
 			inlineMermaidToDrawioConverter: diagramAgent,
-			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			drawioXmlValidator: diagramCapability.xmlValidator,
+			drawioSvgSanitizer: diagramCapability.svgSanitizer,
 			mermaidRenderer: diagramTransforms,
 			textExtractor: diagramTransforms,
-			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			drawioTextExtractor: diagramCapability.textExtractor,
 			diagramWriter: diagrams,
 			diagramIndexer,
 			drawioCreator: diagramAgent
@@ -571,10 +369,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel,
-			executor: undefined as unknown as AgentRunLifecycle // set below after cyclic wiring
+			executor
 		},
 		agentSettings: { preferences, models: modelCatalog },
-		apiTokens: { tokens: apiTokenService },
+		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
@@ -604,7 +402,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
-			userReader,
+			userReader: identity.userReader,
 			projectLister: projects,
 			noteTreeReader: notes,
 			skillFinder: provisionedSkills,
@@ -666,65 +464,22 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		inlineSuggestions: {
 			noteReader: notes,
-			preferences,
-			inlineCompletionGenerator: new InlineSuggestionCompletion(openRouterApiKey, {
-				baseURL: openRouterBaseURL,
-				appURL,
-				observer: operationObserver
-			}),
-			inlineCompletionContextBuilder: new InlineSuggestionContext({
-				searcher: embeddedKnowledgeSearcher,
-				memory,
-				reranker,
-				observer: operationObserver
-			}),
+			preferences: finalizedKnowledgeSearch.preferences,
+			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
+			inlineCompletionContextBuilder: finalizedKnowledgeSearch.inlineContext,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
-			inlineSuggestionThrottle: new InlineSuggestionAdmission()
+			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission
 		},
-		feedback: { reports: new FeedbackRecords(db) }
+		feedback
 	};
-	controllerFactory.set(new ProductionControllerFactory(dependencies));
-	const executor = new AgentRunLifecycle({
-		runs: runRepository,
-		events: runEvents,
-		decisions: runDecisions,
-		sessions: agentSessions,
-		transactions: transactionRunner,
-		contextBuilder: agentContext,
-		provenance,
-		conversations: conversationJournal,
-		runner: agent,
-		eventBus
-	});
-	(dependencies.agent as { executor: AgentRunLifecycle }).executor = executor;
+	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
-		controllers: controllerFactory.get(),
+		controllers: controllerFactory,
 		recoverInterruptedRuns: async () =>
 			(await runRepository.recoverInterrupted('Process restarted')) +
 			(await attachmentRepository.failInterrupted()),
-		backgroundTasks: [
-			new KnowledgeIndexMaintenance(searchRepository, embeddingClient, transactionRunner, {
-				...optionalProperty(
-					'intervalMs',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')
-				),
-				...optionalProperty(
-					'maxSourcesPerTick',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
-				)
-			}),
-			new UploadRetention(attachmentRepository, attachmentStorage, {
-				...optionalProperty(
-					'intervalMs',
-					positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')
-				),
-				...optionalProperty(
-					'maxPerTick',
-					positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK')
-				)
-			})
-		],
+		backgroundTasks: [knowledgeSearch.maintenance, attachmentCapability.retention],
 		eventBus,
 		provenance,
 		toolRetriever

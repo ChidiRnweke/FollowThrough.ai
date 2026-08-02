@@ -1,8 +1,8 @@
-import type { ProseMirrorDocument } from '$lib/models/notes';
 import { createEditor } from '$lib/components/edra/commands/editor';
+import type { EdraDocument } from './document.js';
 
 export async function markdownToProseMirror(markdown: string): Promise<{
-	document: ProseMirrorDocument;
+	document: EdraDocument;
 	plainText: string;
 }> {
 	return new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ export async function markdownToProseMirror(markdown: string): Promise<{
 		}
 
 		editor.commands.setContent(markdown);
-		const json = editor.getJSON() as unknown as ProseMirrorDocument;
+		const json = editor.getJSON() as unknown as EdraDocument;
 		const text = editor.getText({ blockSeparator: '\n\n' });
 		editor.destroy();
 		container.remove();

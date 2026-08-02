@@ -2,7 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 /** The note's title lives in the breadcrumb's current-page segment. */
 const titleCrumb = (page: Page) =>
-	page.locator('[data-testid="note-utility-header"] [data-slot="breadcrumb-page"]');
+	page
+		.locator('[data-note-pane]:visible')
+		.first()
+		.getByRole('navigation', { name: 'breadcrumb' })
+		.locator('[aria-current="page"]');
 
 const titleField = (page: Page) => page.getByRole('textbox', { name: 'Note title' });
 

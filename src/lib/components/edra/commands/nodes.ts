@@ -13,8 +13,7 @@ import {
 	type MarkdownTokenizer
 } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
-import type { DiagramId, DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
-import type { SuggestionId } from '$lib/models/suggestions';
+import type { Component } from 'svelte';
 
 /**
  * Returned by a parse handler that does not claim the token.
@@ -43,7 +42,7 @@ declare module '@tiptap/core' {
 		};
 		iframe: { setIframe: (attributes: { src: string }) => ReturnType };
 		mermaid: { setMermaid: (source: string) => ReturnType };
-		drawio: { setDrawio: (diagramId: DiagramId) => ReturnType };
+		drawio: { setDrawio: (diagramReference: string) => ReturnType };
 		callout: { setCallout: () => ReturnType };
 		todoNode: { insertTodoNode: (attributes: { todoId: string }) => ReturnType };
 	}
@@ -212,14 +211,9 @@ export interface MermaidOptions {
 		source: string,
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
-	onConvert?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
-	getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
-	onAcceptDrawio?: (
-		suggestionId: SuggestionId,
-		source: string,
-		renderedSvg: string
-	) => Promise<DrawioDiagram>;
-	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
+	onConvert?: (source: string, instruction?: string) => Promise<string>;
+	onReview?: (reference: string) => void;
+	onDismiss?: (reference: string) => Promise<void>;
 }
 
 export const MermaidNode = Node.create<MermaidOptions>({
@@ -236,9 +230,8 @@ export const MermaidNode = Node.create<MermaidOptions>({
 		return {
 			onRevise: undefined,
 			onConvert: undefined,
-			getDrawioSuggestion: undefined,
-			onAcceptDrawio: undefined,
-			onRejectDrawio: undefined
+			onReview: undefined,
+			onDismiss: undefined
 		};
 	},
 	addAttributes() {
@@ -298,9 +291,21 @@ export const MermaidNode = Node.create<MermaidOptions>({
 	}
 });
 
+export interface DrawioReferenceView {
+	readonly title?: string;
+	readonly renderedSvg?: string;
+}
+
+export interface DrawioPreviewProps {
+	readonly svg: string;
+	readonly alt: string;
+	readonly class?: string;
+}
+
 export interface DrawioOptions {
-	getDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
-	getNoteId?: () => string;
+	getDiagram?: (reference: string) => DrawioReferenceView | undefined;
+	resolveHref?: (reference: string) => string | undefined;
+	preview?: Component<DrawioPreviewProps>;
 }
 
 export const DrawioNode = Node.create<DrawioOptions>({
@@ -309,7 +314,7 @@ export const DrawioNode = Node.create<DrawioOptions>({
 	atom: true,
 	draggable: true,
 	addOptions() {
-		return { getDiagram: undefined, getNoteId: undefined };
+		return { getDiagram: undefined, resolveHref: undefined, preview: undefined };
 	},
 	addAttributes() {
 		return { diagramId: { default: null } };

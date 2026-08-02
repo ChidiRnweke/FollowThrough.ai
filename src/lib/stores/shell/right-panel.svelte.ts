@@ -3,15 +3,31 @@ import type { TodoView } from '$lib/models/todos';
 
 export type RightPanelMode = 'closed' | 'chat' | 'todo-detail' | 'project-memory' | 'suggestions';
 
-class RightPanelStore {
+export class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
 	todoView = $state<TodoView | undefined>(undefined);
 	memoryProjectId = $state<ProjectId | undefined>(undefined);
 	chatTrigger: HTMLElement | undefined;
+	private focusChatComposer: (() => void) | undefined;
+	private chatComposerFocusPending = false;
 
 	openChat(trigger?: HTMLElement): void {
 		this.chatTrigger = trigger;
 		this.mode = 'chat';
+	}
+	registerChatComposerFocus(focus: () => void): () => void {
+		this.focusChatComposer = focus;
+		if (this.chatComposerFocusPending) {
+			this.chatComposerFocusPending = false;
+			focus();
+		}
+		return () => {
+			if (this.focusChatComposer === focus) this.focusChatComposer = undefined;
+		};
+	}
+	requestChatComposerFocus(): void {
+		if (this.focusChatComposer) this.focusChatComposer();
+		else this.chatComposerFocusPending = true;
 	}
 	restoreChatTriggerFocus(): void {
 		this.chatTrigger?.focus();

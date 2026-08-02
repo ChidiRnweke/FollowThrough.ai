@@ -129,6 +129,7 @@
 							{activeProjectId}
 							{agentPreferences}
 							{agentAvailable}
+							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
 						/>
 					{:else if renderedMode === 'todo-detail'}
 						<ScrollArea class="h-full">
@@ -186,6 +187,7 @@
 							{activeProjectId}
 							{agentPreferences}
 							{agentAvailable}
+							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
 						/>
 					{:else if renderedMode === 'project-memory'}
 						<MemoryPanel />

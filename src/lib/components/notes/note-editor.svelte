@@ -2,7 +2,7 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
-	import type { Diagram, DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
+	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
 	import type {
 		NoteId,
 		NoteLinkTarget,
@@ -13,6 +13,7 @@
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
+	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
@@ -27,6 +28,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Separator } from '$lib/components/ui/separator';
+	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import {
 		FtCopied as ClipboardCheck,
 		FtReferences as Waypoints,
@@ -60,11 +62,7 @@
 		selectionPlainText
 	} from '$lib/components/edra/commands/clipboard-payload';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
-	import {
-		completeAttachmentUpload,
-		initiateAttachmentUpload
-	} from '$lib/remote/attachments/attachments.remote';
+	import { uploadNoteAttachment } from './attachment-upload';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
@@ -118,7 +116,6 @@
 		onask,
 		onreviseMermaid,
 		onconvertMermaid,
-		onacceptDrawio,
 		onrejectDrawio,
 		diagrams = [],
 		activeAction
@@ -144,11 +141,6 @@
 			instruction: string
 		) => Promise<{ readonly source: string; readonly title?: string }>;
 		onconvertMermaid: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
-		onacceptDrawio: (
-			suggestionId: SuggestionId,
-			source: string,
-			renderedSvg: string
-		) => Promise<DrawioDiagram>;
 		onrejectDrawio: (suggestionId: SuggestionId) => Promise<void>;
 		diagrams?: readonly Diagram[];
 		/** The AI selection action running against this note, if any. */
@@ -219,50 +211,35 @@
 		{
 			ariaLabel: 'Note body',
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
-			onConvertMermaid: (source, instruction) => onconvertMermaid(source, instruction),
-			getDrawioSuggestion: (suggestionId) => {
+			onConvertMermaid: async (source, instruction) =>
+				(await onconvertMermaid(source, instruction)).id,
+			onReviewDrawio: (reference) => {
 				const candidate = perNote?.suggestions.items.find(
-					(item) => item.suggestion.id === suggestionId
+					(item) => item.suggestion.id === reference
 				)?.suggestion;
-				return candidate?.kind === 'diagram' && candidate.payload.kind === 'drawio'
-					? candidate
-					: undefined;
+				if (candidate?.kind === 'diagram' && candidate.payload.kind === 'drawio')
+					perNote?.suggestions.requestReview(candidate);
 			},
-			onAcceptDrawio: (suggestionId, source, renderedSvg) =>
-				onacceptDrawio(suggestionId, source, renderedSvg),
-			onRejectDrawio: (suggestionId) => onrejectDrawio(suggestionId),
-			getDrawioDiagram: (diagramId) => {
-				const candidate = diagrams.find((diagram) => diagram.id === diagramId);
+			onDismissDrawio: async (reference) => {
+				const candidate = perNote?.suggestions.items.find(
+					(item) => item.suggestion.id === reference
+				)?.suggestion;
+				if (candidate?.kind !== 'diagram' || candidate.payload.kind !== 'drawio')
+					throw new Error('The draw.io conversion is no longer available.');
+				await onrejectDrawio(candidate.id);
+			},
+			getDrawioDiagram: (reference) => {
+				const candidate = diagrams.find((diagram) => diagram.id === reference);
 				return candidate?.kind === 'drawio' ? candidate : undefined;
 			},
-			getNoteId: () => noteId,
+			resolveDrawioHref: (reference) => `/notes/${noteId}/diagrams/${reference}`,
+			drawioPreview: SafeSvgPreview,
 			// Pasted/dropped images upload as note attachments; the src is the stable
 			// content endpoint (a 302 to a fresh presigned URL), never the expiring
 			// upload URL itself.
 			onFileUpload: async (file) => {
 				try {
-					const intent = await initiateAttachmentUpload({
-						noteId,
-						path: file.name || `pasted-${Date.now()}.png`,
-						mediaType: file.type || 'image/png',
-						byteSize: file.size,
-						checksumSha256: await fileChecksumSha256(file)
-					});
-					const stored = await fetch(intent.uploadUrl, {
-						method: 'PUT',
-						headers: intent.requiredHeaders,
-						body: file
-					});
-					if (!stored.ok) {
-						const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
-						throw new Error(
-							detail
-								? `Object storage rejected the upload: ${detail}`
-								: `Object storage rejected the upload (${stored.status})`
-						);
-					}
-					const uploaded = await completeAttachmentUpload({ uploadId: intent.upload.id });
-					return `/api/attachments/${uploaded.attachment.id}/content`;
+					return await uploadNoteAttachment(noteId, file);
 				} catch (error) {
 					toast.error(error instanceof Error ? error.message : 'Image upload failed');
 					throw error;
@@ -576,6 +553,20 @@
 				content: source ? [{ type: 'text', text: source }] : []
 			})
 			.run();
+	}
+
+	export function completeDrawioConversion(suggestionId: SuggestionId, diagramId: DiagramId): void {
+		if (!editor) throw new Error('The editor is not ready.');
+		const completed = completePendingConversion(
+			{
+				state: editor.state,
+				schema: editor.schema,
+				dispatch: (transaction) => editor.view.dispatch(transaction)
+			},
+			suggestionId,
+			diagramId
+		);
+		if (!completed) throw new Error('The pending draw.io conversion is no longer in this note.');
 	}
 </script>
 

@@ -1,15 +1,5 @@
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { PostgresDatabaseContext } from './testcontainer';
-import { connectPostgresTestDatabase } from './testcontainer';
-
-let context: PostgresDatabaseContext;
-
-beforeAll(() => {
-	context = connectPostgresTestDatabase(inject('postgresUrl'));
-});
-afterAll(async () => {
-	await context?.close();
-});
+import { describe, expect, it } from 'vitest';
+import { context } from '../database-harness';
 
 describe('Postgres schema contracts', () => {
 	it('installs the vector extension', async () => {

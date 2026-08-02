@@ -2,8 +2,8 @@
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-	import ChatPanel from '$lib/components/chat/workspace/chat-panel.svelte';
-	import AgentSettingsPopover from '$lib/components/agent/preferences/agent-settings-popover.svelte';
+	import ChatPanel from './chat-panel.svelte';
+	import { AgentSettingsPopover } from '$lib/components/agent';
 
 	let {
 		shell,

@@ -25,9 +25,10 @@ test('board cards omit metadata that is not set', async ({ page }) => {
 	await page.setViewportSize(desktop);
 	await page.goto('/todos?view=board');
 	await page.locator('section').filter({ hasText: 'Backlog' }).first().waitFor();
-	await expect(page.getByText('No priority')).toHaveCount(0);
-	await expect(page.getByText('No due date')).toHaveCount(0);
-	await expect(page.getByText('No source')).toHaveCount(0);
+	const visibleCards = page.locator('[data-slot="card"]:visible');
+	await expect(visibleCards.getByText('No priority')).toHaveCount(0);
+	await expect(visibleCards.getByText('No due date')).toHaveCount(0);
+	await expect(visibleCards.getByText('No source')).toHaveCount(0);
 });
 
 test('toolbar search filters board cards live', async ({ page }) => {
@@ -46,7 +47,10 @@ test('toolbar search filters board cards live', async ({ page }) => {
 test('quick-add focuses its input when the row opens', async ({ page }) => {
 	await page.setViewportSize(desktop);
 	await page.goto('/todos?view=board');
-	const openColumn = page.locator('section').filter({ hasText: 'Open' }).first();
+	await page.waitForLoadState('networkidle');
+	const openColumn = page.locator('section').filter({
+		has: page.getByRole('heading', { name: /^Open \d+$/ })
+	});
 	await openColumn.waitFor();
 	await openColumn.getByRole('button', { name: 'Add todo to Open' }).click();
 	await expect(openColumn.getByPlaceholder('Todo title…')).toBeFocused();

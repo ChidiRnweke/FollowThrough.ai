@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ChatHistoryPage from '$lib/components/chat/workspace/chat-history-page.svelte';
+	import { ChatHistoryPage } from '$lib/components/chat';
 	let { data } = $props();
 </script>
 

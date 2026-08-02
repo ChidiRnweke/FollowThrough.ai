@@ -20,6 +20,25 @@ const managedConfiguration = (): Plugin => ({
 });
 
 export default defineConfig({
+	build: {
+		rolldownOptions: {
+			output: {
+				strictExecutionOrder: true,
+				// Keep production modules statically linked while allowing Rolldown to split
+				// large shared graphs into cacheable chunks below Vite's warning boundary.
+				codeSplitting: {
+					groups: [
+						{
+							name: 'bounded',
+							test: /[\\/](?:src|node_modules)[\\/]/,
+							entriesAware: true,
+							maxSize: 450 * 1024
+						}
+					]
+				}
+			}
+		}
+	},
 	plugins: [
 		managedConfiguration(),
 		tailwindcss(),

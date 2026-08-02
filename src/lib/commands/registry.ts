@@ -12,7 +12,9 @@ import { toggleMode } from 'mode-watcher';
 import { palette } from '$lib/stores/shell/palette.svelte';
 import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 import { sidebarToggle } from '$lib/stores/shell/sidebar-toggle.svelte';
-import { createNote } from '$lib/remote/projects/projects.remote';
+import { tick } from 'svelte';
+import { workbench } from '$lib/stores/workbench/workbench.svelte';
+import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 
 export interface AppCommand {
 	readonly id: string;
@@ -22,10 +24,6 @@ export interface AppCommand {
 	run(): void | Promise<void>;
 }
 
-const focus = (selector: string): void => {
-	queueMicrotask(() => document.querySelector<HTMLElement>(selector)?.focus());
-};
-
 export const commandRegistry: readonly AppCommand[] = [
 	{
 		id: 'new-note',
@@ -34,9 +32,8 @@ export const commandRegistry: readonly AppCommand[] = [
 		icon: FilePlus,
 		async run() {
 			palette.close();
-			const result = await createNote({ title: 'Untitled' });
-			await goto(`/notes/${result.note.id}`);
-			focus('[aria-label="Note title"]');
+			const result = await projectActions.createNote('Untitled');
+			if (result) await workbench.openTab(result.note.id);
 		}
 	},
 	{
@@ -47,7 +44,6 @@ export const commandRegistry: readonly AppCommand[] = [
 		async run() {
 			palette.close();
 			await goto('/todos?view=board&quickTodo=1');
-			focus('#quick-todo-input');
 		}
 	},
 	{
@@ -67,8 +63,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		icon: FilePlus,
 		async run() {
 			palette.close();
-			await goto('/today');
-			focus('#quick-capture-input');
+			await goto('/today?quickCapture=1');
 		}
 	},
 	{
@@ -76,14 +71,15 @@ export const commandRegistry: readonly AppCommand[] = [
 		label: 'Toggle chat and focus composer',
 		shortcut: '⌘⇧I',
 		icon: MessageSquare,
-		run() {
+		async run() {
 			palette.close();
 			if (rightPanel.mode === 'chat') {
 				rightPanel.close();
 				return;
 			}
 			rightPanel.openChat();
-			focus('#chat-composer');
+			await tick();
+			rightPanel.requestChatComposerFocus();
 		}
 	},
 	{

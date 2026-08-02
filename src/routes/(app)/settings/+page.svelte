@@ -3,14 +3,15 @@
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import SettingsPolicies from '$lib/components/settings/workspace/settings-policies.svelte';
-	import SettingsModels from '$lib/components/settings/workspace/settings-models.svelte';
-	import SettingsAgents from '$lib/components/settings/workspace/settings-agents.svelte';
-	import SettingsMcp from '$lib/components/settings/workspace/settings-mcp.svelte';
-	import SettingsTools from '$lib/components/settings/workspace/settings-tools.svelte';
+	import {
+		SettingsAgents,
+		SettingsMcp,
+		SettingsModels,
+		SettingsPolicies,
+		SettingsTools
+	} from '$lib/components/settings';
 	import type { ProjectId } from '$lib/models/projects';
-	import AgentAction from '$lib/components/agent/agent-action.svelte';
-	import { agentActions } from '$lib/components/agent/agent-actions';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 	import * as Tabs from '$lib/components/ui/tabs';
 
 	let { data } = $props();

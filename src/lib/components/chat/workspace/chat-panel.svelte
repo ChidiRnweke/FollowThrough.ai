@@ -9,52 +9,16 @@
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import * as Collapsible from '$lib/components/ui/collapsible';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import {
-		FtSend as SendHorizontal,
-		FtChevronRight as ChevronRight,
-		FtDocument as FileText,
-		FtLoader as LoaderCircle,
-		FtCopy as Copy,
-		FtEdit as Pencil,
-		FtRefresh as RotateCcw,
-		FtStop as Square,
-		FtSkills as Wrench,
-		FtCheck as Check,
-		FtWorkflow as Workflow,
-		FtAttachments as Paperclip,
-		FtClose as X
-	} from '$lib/components/icons';
-	import { Tip } from '$lib/components/ui/tooltip';
 	import { chat, entryText, type ChatEntry, type ContextChip } from '$lib/stores/agent/chat.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { toast } from 'svelte-sonner';
-	import SuggestionCard from '../../suggestions/suggestion-card.svelte';
-	import ChatMarkdown from '$lib/components/chat/chat-markdown.svelte';
-	import ChatReasoning from '$lib/components/chat/chat-reasoning.svelte';
-	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
-	import ChatHistoryList from './chat-history-list.svelte';
-	import ChatActivity from '$lib/components/chat/chat-activity.svelte';
-	import ChatStarters from '$lib/components/chat/chat-starters.svelte';
-	import AgentContextBar from '$lib/components/agent/agent-context-bar.svelte';
-	import ToolApprovalGroup from '$lib/components/chat/actions/tool-approval-group.svelte';
-	import { chatPartGroupKey, groupChatParts } from '$lib/components/chat/chat-parts';
-	import {
-		isWriteTool,
-		toolDetailLines,
-		toolStatusLabel
-	} from '$lib/components/agent/actions/tool-presentation';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { invalidateAll } from '$app/navigation';
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
+	import ChatComposer from './chat-composer.svelte';
+	import ChatThread from './chat-thread.svelte';
 
 	let {
 		shell,
@@ -64,7 +28,8 @@
 		initialConversationId,
 		showHistory = true,
 		agentPreferences,
-		agentAvailable
+		agentAvailable,
+		registerComposerFocus
 	}: {
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
@@ -74,10 +39,12 @@
 		showHistory?: boolean;
 		agentPreferences: AgentPreferences;
 		agentAvailable: boolean;
+		registerComposerFocus?: (focus: () => void) => () => void;
 	} = $props();
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
 		const release = chat.observe();
+		const releaseComposerFocus = registerComposerFocus?.(() => textareaRef?.focus());
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) chat.clear();
 		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
@@ -85,7 +52,10 @@
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else prompt = sessionStorage.getItem(draftKey()) ?? '';
-		return release;
+		return () => {
+			release();
+			releaseComposerFocus?.();
+		};
 	});
 
 	// An invocation point elsewhere in the app wrote a prompt while this panel was
@@ -306,13 +276,6 @@
 	let editingId = $state<string | undefined>(undefined);
 	let editDraft = $state('');
 
-	// Hoisted so the attachment is a stable reference: an inline closure would be
-	// recreated on every keystroke and drag the caret back to the end each time.
-	const focusAtEnd = (node: HTMLTextAreaElement): void => {
-		node.focus();
-		node.setSelectionRange(node.value.length, node.value.length);
-	};
-
 	function startEditing(entry: ChatEntry): void {
 		editingId = entry.id;
 		editDraft = entryText(entry);
@@ -443,29 +406,6 @@
 	}
 </script>
 
-{#snippet chipBadge(chip: ContextChip, auto: boolean)}
-	<Badge variant="secondary" class="max-w-44 gap-1 pr-1">
-		{#if chip.kind === 'skill'}
-			<Wrench class="size-3 shrink-0" />
-		{:else}
-			<FileText class="size-3 shrink-0" />
-		{/if}
-		<span class="truncate">{chip.name}</span>
-		<Button
-			type="button"
-			variant="ghost"
-			size="icon-xs"
-			aria-label="Remove {chip.name} from context"
-			onclick={() => {
-				if (auto) chat.autoChipDismissedFor = chip.id;
-				else chat.removeChip(chip);
-			}}
-		>
-			<X />
-		</Button>
-	</Badge>
-{/snippet}
-
 <div class="flex h-full min-h-0 flex-col gap-2">
 	{#if !agentAvailable}
 		<div class="rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
@@ -474,388 +414,62 @@
 		</div>
 	{/if}
 
-	<!-- One instance, always mounted above the transcript, so the collapse into the
-	     compact row is one element changing size rather than two unrelated ones
-	     swapping. In the empty state it is the first group and the padding below
-	     stands in for the flex gap it used to get from its siblings. -->
-	<div class={chat.entries.length === 0 ? 'pb-8' : ''}>
-		<AgentContextBar {shell} {activeProjectId} {activeNoteId} compact={chat.entries.length > 0} />
-	</div>
-	<ScrollArea class="min-h-0 flex-1 pr-2 " bind:viewportRef={viewport}>
-		<!-- `min-h-full` resolves because bits-ui's viewport is a flex column and its
-		     content child grows into it; it is what lets the empty state sink its
-		     history to the foot of the panel. -->
-		<div class="flex min-h-full flex-col gap-3">
-			{#if chat.entries.length === 0}
-				<!--
-					Groups held apart by spacing rather than boxes: what the agent can see
-					(the context bar, just above this scroll area), what to set it to work
-					on, and where you left off. The panel does not explain in prose that the
-					open note travels along — the context chip above the composer and the
-					placeholder show it.
-
-					Everything stacks from the head of the panel and the slack falls at the
-					foot, above the composer. Pushing the groups apart to fill the panel —
-					by a `lg:pt-32` or by `justify-between` — reads as a hole in the middle
-					rather than as air, because there is nothing between them to look at.
-					The steps do the grouping instead: 40px from the context bar to the
-					starters, 56px down to history, which is the quietest thing here.
-				-->
-				<ChatStarters
-					hasNote={activeNoteId !== undefined}
-					hasProject={activeProjectId !== undefined}
-					onpick={useStarter}
-				/>
-				{#if showHistory && sessions.length > 0}
-					<div class="pt-14">
-						<ChatHistoryList
-							{sessions}
-							{shell}
-							limit={3}
-							density="compact"
-							onselect={(id) => void chat.switchToConversation(id)}
-						/>
-					</div>
-				{/if}
-			{/if}
-			{#each chat.entries as entry (entry.id)}
-				<!--
-					One turn per boundary. A turn carries model output through several
-					renderers (markdown, diffs, tool cards), and the panel has to survive
-					any of them failing: the other turns stay readable and the composer
-					below stays usable.
-				-->
-				<ErrorBoundary label="this turn" class="my-0">
-					<div class="group/turn flex flex-col gap-1.5">
-						<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
-						{#if editingId === entry.id}
-							<!-- Editing happens where the question is, not in the composer: the
-						     turn being replaced has to stay in view while it is rewritten. -->
-							<div class="flex flex-col gap-1.5">
-								<Textarea
-									bind:value={editDraft}
-									rows={2}
-									class="min-h-16 resize-none"
-									aria-label="Edit question"
-									onkeydown={(event) => handleEditKeydown(event, entry)}
-									{@attach focusAtEnd}
-								/>
-								<div class="flex items-center gap-1.5">
-									<Button size="xs" onclick={() => void resubmit(entry, editDraft)}>Resubmit</Button
-									>
-									<Button variant="ghost" size="xs" onclick={cancelEditing}>Cancel</Button>
-									<span class="text-xs text-muted-foreground">
-										Replaces everything below this question.
-									</span>
-								</div>
-							</div>
-						{/if}
-						{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
-							{#if group.kind === 'approvals'}
-								<ToolApprovalGroup
-									tools={group.tools}
-									{shell}
-									busy={chat.deciding}
-									onapprove={() => void chat.decideAll(entry, group.tools, 'approve')}
-									onreject={() => void chat.decideAll(entry, group.tools, 'reject')}
-								/>
-							{:else}
-								{@const part = group.part}
-								{#if part.kind === 'text'}
-									<!-- While the editor is open it stands in for the prose it replaces. -->
-									{#if part.text && editingId !== entry.id}
-										<ChatMarkdown content={part.text} />
-									{/if}
-								{:else if part.kind === 'image'}
-									<img
-										src={part.dataUrl}
-										alt={part.name}
-										class="max-h-48 max-w-64 rounded-md object-contain"
-									/>
-								{:else if part.kind === 'reasoning'}
-									{#if part.text}
-										<ChatReasoning text={part.text} streaming={entry.status === 'streaming'} />
-									{/if}
-								{:else}
-									{@const tool = part.tool}
-									<Collapsible.Root>
-										<Collapsible.Trigger>
-											{#snippet child({ props })}
-												<Button
-													{...props}
-													variant="ghost"
-													size="sm"
-													class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
-														tool.name
-													)
-														? 'text-foreground'
-														: 'text-muted-foreground'}"
-												>
-													<ChevronRight
-														class="size-3.5 transition-transform duration-(--duration-micro)"
-													/>
-													{#if tool.status === 'running'}
-														<LoaderCircle class="size-3.5 animate-spin" />
-													{/if}
-													{toolStatusLabel(tool, shell)}
-												</Button>
-											{/snippet}
-										</Collapsible.Trigger>
-										<Collapsible.Content>
-											<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
-												{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
-													<li class="break-words">{line}</li>
-												{/each}
-											</ul>
-										</Collapsible.Content>
-									</Collapsible.Root>
-								{/if}
-							{/if}
-						{/each}
-						{#if entry.role === 'assistant' && entry.status === 'queued'}
-							<ChatActivity label={entry.error ?? 'Queued'} />
-						{:else if entry.role === 'assistant' && entry.status === 'waiting'}
-							<ChatActivity />
-						{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
-							<ChatActivity
-								label="Agent is working"
-								toolActive={entry.parts.some((part) => part.kind === 'tool')}
-							/>
-						{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
-							<ChatActivity label="Cancellation requested" />
-						{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
-							<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
-								<span
-									>{entry.error ??
-										(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
-								>
-								{#if entry.status === 'failed' && entry.retryable && entry.runId}
-									<Button variant="outline" size="xs" onclick={() => void requestRetry(entry)}>
-										<RotateCcw data-icon="inline-start" /> Retry
-									</Button>
-								{/if}
-							</div>
-						{/if}
-						<!--
-						Actions belong under the thing they act on, aligned with it, and stay
-						hidden until the turn is hovered or tabbed into so a long thread is
-						not a wall of buttons. Tooltips point up, over the message the
-						buttons came from rather than over the turn below.
-					-->
-						{#if editingId !== entry.id && entryText(entry)}
-							<div
-								class="flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
-							>
-								<Tip text="Copy">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon-xs"
-											aria-label="Copy message"
-											onclick={() => void copyMessage(entry)}
-										>
-											<Copy />
-										</Button>
-									{/snippet}
-								</Tip>
-								{#if entry.role === 'user'}
-									<Tip text="Edit and resubmit">
-										{#snippet children({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="icon-xs"
-												aria-label="Edit and resubmit question"
-												disabled={chat.isStreaming}
-												onclick={() => startEditing(entry)}
-											>
-												<Pencil />
-											</Button>
-										{/snippet}
-									</Tip>
-								{:else if entry.status === 'completed'}
-									<Tip text="Ask again">
-										{#snippet children({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="icon-xs"
-												aria-label="Ask again"
-												disabled={chat.isStreaming}
-												onclick={() => askAgain(entry)}
-											>
-												<RotateCcw />
-											</Button>
-										{/snippet}
-									</Tip>
-								{/if}
-							</div>
-						{/if}
-						{#each entry.suggestions as view (view.suggestion.id)}
-							<SuggestionCard
-								{view}
-								busy={(workbench.focusedNoteId &&
-									suggestionTrayRegistry
-										.peek(workbench.focusedNoteId)
-										?.busyIds.includes(view.suggestion.id)) ??
-									false}
-								onaccept={(id) => decide(id, 'accept')}
-								onreject={(id) => decide(id, 'reject')}
-							/>
-						{/each}
-					</div>
-				</ErrorBoundary>
-			{/each}
-		</div>
-	</ScrollArea>
-	{#if showJumpToLatest}
-		<Button variant="outline" size="sm" class="self-end" onclick={jumpToLatest}
-			>Jump to latest</Button
-		>
-	{/if}
-	{#if autoChip || chat.chips.length > 0}
-		<div class="flex flex-wrap items-center gap-1" aria-label="Chat context">
-			{#if autoChip}
-				{@render chipBadge(autoChip, true)}
-			{/if}
-			{#each chat.chips as chip (chip.kind + chip.id)}
-				{@render chipBadge(chip, false)}
-			{/each}
-		</div>
-	{/if}
-	<div class="relative flex flex-col gap-1">
-		{#if mentionCandidates.length > 0}
-			<div
-				class="absolute bottom-full left-0 z-50 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-md"
-				role="listbox"
-				aria-label="Mention a note or skill"
-			>
-				{#each mentionCandidates as candidate, index (candidate.kind + candidate.id)}
-					<Button
-						variant="ghost"
-						type="button"
-						role="option"
-						aria-selected={index === highlighted}
-						class="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm {index ===
-						highlighted
-							? 'bg-accent text-accent-foreground'
-							: ''}"
-						onpointerenter={() => (highlighted = index)}
-						onclick={() => pick(candidate)}
-					>
-						{#if candidate.kind === 'skill'}
-							<Wrench class="size-3.5 shrink-0 text-muted-foreground" />
-						{:else}
-							<FileText class="size-3.5 shrink-0 text-muted-foreground" />
-						{/if}
-						<span class="truncate">{candidate.name}</span>
-						<span class="ml-auto text-xs text-muted-foreground">
-							{candidate.kind === 'skill' ? 'Skill' : 'Note'}
-						</span>
-					</Button>
-				{/each}
-			</div>
-		{/if}
-		{#if selectedImages.length}
-			<div class="flex flex-wrap gap-2" aria-label="Attached images">
-				{#each selectedImages as image (image.id)}
-					<div class="relative">
-						<img src={image.dataUrl} alt={image.name} class="size-16 rounded-md object-cover" />
-						<Button
-							variant="secondary"
-							size="icon-xs"
-							class="absolute -right-1 -top-1"
-							aria-label={`Remove ${image.name}`}
-							onclick={() =>
-								(selectedImages = selectedImages.filter((known) => known.id !== image.id))}
-						>
-							<X />
-						</Button>
-					</div>
-				{/each}
-			</div>
-		{/if}
-		<Textarea
-			id="chat-composer"
-			bind:value={prompt}
-			bind:ref={textareaRef}
-			placeholder="Ask the agent… (@ to add context)"
-			rows={2}
-			class="min-h-16 resize-none"
-			onkeydown={handleKeydown}
-			oninput={saveDraft}
-			onpaste={pasteImages}
-			disabled={!agentAvailable}
-		/>
-		<div class="flex items-center gap-2">
-			<Label
-				class="tactile inline-flex size-8 items-center justify-center rounded-md"
-				aria-label="Attach images"
-			>
-				<Paperclip class="size-4" />
-				<Input
-					type="file"
-					accept="image/png,image/jpeg,image/webp"
-					multiple
-					class="sr-only"
-					onchange={(event) => {
-						const input = event.currentTarget;
-						void addImages([...(input.files ?? [])]);
-						input.value = '';
-					}}
-				/>
-			</Label>
-			<!--
-				Auto-accept lets the agent change notes and todos without asking, so it
-				stays legible in the composer rather than moving into the gear with the
-				model. Quiet when approval is required, accented when it is not.
-			-->
-			<Tip
-				text={chat.executionModeOverride === 'auto_accept'
-					? 'The agent applies changes without asking. Click to require approval.'
-					: 'The agent asks before it changes anything. Click to auto-accept.'}
-			>
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="xs"
-						aria-pressed={chat.executionModeOverride === 'auto_accept'}
-						class={chat.executionModeOverride === 'auto_accept'
-							? 'bg-brand/10 text-brand dark:bg-brand/15'
-							: 'text-muted-foreground'}
-						onclick={toggleExecutionMode}
-					>
-						{#if chat.executionModeOverride === 'auto_accept'}
-							<Workflow data-icon="inline-start" /> Auto-accept
-						{:else}
-							<Check data-icon="inline-start" /> Approval
-						{/if}
-					</Button>
-				{/snippet}
-			</Tip>
-			<Badge
-				variant="secondary"
-				class={chat.isStreaming && chat.connection !== 'connected' ? undefined : 'hidden'}
-				aria-live="polite"
-			>
-				{chat.connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
-			</Badge>
-			<Button
-				size="icon-sm"
-				class="ml-auto"
-				aria-label={chat.isStreaming ? 'Stop generation' : 'Send message'}
-				onclick={() => (chat.isStreaming ? void chat.stop() : void send())}
-				disabled={!agentAvailable ||
-					(!chat.isStreaming && prompt.trim() === '' && !selectedImages.length)}
-			>
-				{#if chat.isStreaming}
-					<Square />
-				{:else}
-					<SendHorizontal class="size-4" />
-				{/if}
-			</Button>
-		</div>
-	</div>
+	<ChatThread
+		{shell}
+		{sessions}
+		{activeNoteId}
+		{activeProjectId}
+		{showHistory}
+		entries={chat.entries}
+		isStreaming={chat.isStreaming}
+		deciding={chat.deciding}
+		{editingId}
+		bind:editDraft
+		bind:viewport
+		{showJumpToLatest}
+		onswitchconversation={(id) => void chat.switchToConversation(id)}
+		onstarter={useStarter}
+		oneditkeydown={handleEditKeydown}
+		onresubmit={(entry, text) => void resubmit(entry, text)}
+		oncanceledit={cancelEditing}
+		onapprove={(entry, tools) => void chat.decideAll(entry, tools, 'approve')}
+		onrejectapproval={(entry, tools) => void chat.decideAll(entry, tools, 'reject')}
+		onretry={(entry) => void requestRetry(entry)}
+		oncopy={(entry) => void copyMessage(entry)}
+		onstartediting={startEditing}
+		onaskagain={askAgain}
+		onsuggestion={(id, decision) => void decide(id, decision)}
+		onsuggestionbusy={(id) =>
+			(workbench.focusedNoteId &&
+				suggestionTrayRegistry.peek(workbench.focusedNoteId)?.busyIds.includes(id)) ??
+			false}
+		onjumptolatest={jumpToLatest}
+	/>
+	<ChatComposer
+		bind:prompt
+		bind:textareaRef
+		{autoChip}
+		chips={chat.chips}
+		{mentionCandidates}
+		{highlighted}
+		{selectedImages}
+		{agentAvailable}
+		isStreaming={chat.isStreaming}
+		connection={chat.connection}
+		executionMode={chat.executionModeOverride}
+		onremovechip={(chip, automatic) => {
+			if (automatic) chat.autoChipDismissedFor = chip.id;
+			else chat.removeChip(chip);
+		}}
+		onpick={pick}
+		onhighlight={(index) => (highlighted = index)}
+		onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
+		onfiles={(files) => void addImages(files)}
+		onkeydown={handleKeydown}
+		oninput={saveDraft}
+		onpaste={pasteImages}
+		ontoggleexecutionmode={toggleExecutionMode}
+		onsend={() => void send()}
+		onstop={() => void chat.stop()}
+	/>
 </div>

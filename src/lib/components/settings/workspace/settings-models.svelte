@@ -2,7 +2,7 @@
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentModel, AgentPreferences } from '$lib/models/agent';
 	import { saveModelPreferences } from '$lib/remote/settings/settings.remote';
-	import ModelPicker from '$lib/components/agent/preferences/model-picker.svelte';
+	import { ModelPicker } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';

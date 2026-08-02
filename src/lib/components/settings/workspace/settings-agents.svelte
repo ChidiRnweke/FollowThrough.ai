@@ -3,8 +3,8 @@
 	import type { AgentExecutionMode, AgentPreferences } from '$lib/models/agent';
 	import { webSearchEngines } from '$lib/models/agent';
 	import { saveAgentPreferences } from '$lib/remote/settings/settings.remote';
-	import ExecutionModeControl from '$lib/components/agent/preferences/execution-mode-control.svelte';
-	import ExportSlider from '$lib/components/notes/export/export-slider.svelte';
+	import { ExecutionModeControl } from '$lib/components/agent';
+	import { ExportSlider } from '$lib/components/notes';
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';

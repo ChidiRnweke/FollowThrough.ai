@@ -75,7 +75,9 @@ worker.addEventListener('activate', (event) => {
  * failure below therefore resolves to a response the caller can read a status
  * from.
  */
-const unavailable = (): Response => new Response('Offline', { status: 503, statusText: 'Offline' });
+const unavailable = (): Response =>
+	// chisel-ignore error-flow:raw-http-status -- A service worker must construct the protocol-level offline response directly.
+	new Response('Offline', { status: 503, statusText: 'Offline' });
 
 const cacheFirst = async (request: Request, pathname: string): Promise<Response> => {
 	const cache = await caches.open(ASSET_CACHE);

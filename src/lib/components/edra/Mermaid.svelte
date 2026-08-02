@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import type { NodeViewProps } from '@tiptap/core';
-	import type { DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
-	import type { SuggestionId } from '$lib/models/suggestions';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
@@ -31,12 +29,7 @@
 	import MermaidExportMenu from './MermaidExportMenu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
 	import Tooltip from './Tooltip.svelte';
-	import DrawioReviewDialog from '$lib/components/diagrams/drawio-review-dialog.svelte';
-	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
-	import {
-		insertAcceptedDrawioAfterMermaid,
-		setPendingDrawioSuggestion as applyPendingDrawioSuggestion
-	} from '$lib/client/diagrams/drawio/tiptap-actions';
+	import { setPendingConversionReference } from './commands/diagram-references.js';
 	import { createMediaResize } from './media-resize.svelte.js';
 	import { mermaidPngBlob } from './mermaid-export.js';
 
@@ -48,22 +41,14 @@
 				instruction: string,
 				renderedPngDataUrl?: string
 			) => Promise<{ readonly source: string; readonly title?: string }>;
-			onConvert?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
-			getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
-			onAcceptDrawio?: (
-				suggestionId: SuggestionId,
-				source: string,
-				renderedSvg: string
-			) => Promise<DrawioDiagram>;
-			onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
+			onConvert?: (source: string, instruction?: string) => Promise<string>;
+			onReview?: (reference: string) => void;
+			onDismiss?: (reference: string) => Promise<void>;
 		}
 	);
 	const onRevise = $derived(options.onRevise);
 	const pendingDrawioSuggestionId = $derived(
-		(node.attrs.pendingDrawioSuggestionId as SuggestionId | null) ?? null
-	);
-	const drawioSuggestion = $derived(
-		pendingDrawioSuggestionId ? options.getDrawioSuggestion?.(pendingDrawioSuggestionId) : undefined
+		(node.attrs.pendingDrawioSuggestionId as string | null) ?? null
 	);
 
 	// The committed code from the document
@@ -81,7 +66,6 @@
 	let revisionError = $state<string | null>(null);
 	let isConverting = $state(false);
 	let conversionError = $state<string | null>(null);
-	let reviewOpen = $state(false);
 
 	// Render state
 	let container: HTMLDivElement | null = $state(null);
@@ -193,7 +177,7 @@
 		const id = `mermaid-${crypto.randomUUID().slice(0, 8)}`;
 		try {
 			// Re-apply the config each render so diagrams always use the current theme.
-			initializeMermaid(colorMode.current === 'dark');
+			await initializeMermaid(colorMode.current === 'dark');
 			const svg = await renderMermaidOffscreen(id, source);
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;
@@ -264,10 +248,10 @@
 		showAiRevision = true;
 	}
 
-	function setPendingDrawioSuggestion(suggestionId: SuggestionId | null): void {
+	function setPendingDrawioSuggestion(reference: string | null): void {
 		const position = getPos();
 		if (typeof position !== 'number') return;
-		applyPendingDrawioSuggestion(
+		setPendingConversionReference(
 			{
 				state: editor.state,
 				schema: editor.schema,
@@ -275,7 +259,7 @@
 			},
 			node,
 			position,
-			suggestionId
+			reference
 		);
 	}
 
@@ -285,11 +269,11 @@
 		isConverting = true;
 		conversionError = null;
 		try {
-			const suggestion = await options.onConvert(code);
+			const reference = await options.onConvert(code);
 			if (code !== committedSource)
 				throw new Error('The Mermaid diagram changed while conversion was running. Try again.');
-			setPendingDrawioSuggestion(suggestion.id);
-			reviewOpen = true;
+			setPendingDrawioSuggestion(reference);
+			options.onReview?.(reference);
 		} catch (failure) {
 			conversionError =
 				failure instanceof Error ? failure.message : 'The diagram could not be converted.';
@@ -298,31 +282,12 @@
 		}
 	}
 
-	async function acceptDrawio(output: DrawioExport): Promise<void> {
-		if (!pendingDrawioSuggestionId || !options.onAcceptDrawio) return;
-		const diagram = await options.onAcceptDrawio(pendingDrawioSuggestionId, output.xml, output.svg);
-		const position = getPos();
-		if (typeof position !== 'number')
-			throw new Error('The accepted diagram could not be inserted into this note.');
-		insertAcceptedDrawioAfterMermaid(
-			{
-				state: editor.state,
-				schema: editor.schema,
-				dispatch: (transaction) => editor.view.dispatch(transaction)
-			},
-			node,
-			position,
-			diagram.id
-		);
-	}
-
 	async function rejectDrawio(): Promise<void> {
-		if (!pendingDrawioSuggestionId || !options.onRejectDrawio) return;
+		if (!pendingDrawioSuggestionId || !options.onDismiss) return;
 		conversionError = null;
 		try {
-			await options.onRejectDrawio(pendingDrawioSuggestionId);
+			await options.onDismiss(pendingDrawioSuggestionId);
 			setPendingDrawioSuggestion(null);
-			reviewOpen = false;
 		} catch (failure) {
 			conversionError = failure instanceof Error ? failure.message : 'Dismissal failed.';
 		}
@@ -717,12 +682,13 @@
 					<div class="flex min-h-10 items-center gap-2 border-x border-b border-border px-3 py-2">
 						<Shapes class="size-4 text-primary" />
 						<p class="min-w-0 flex-1 text-xs text-muted-foreground">
-							{drawioSuggestion
-								? 'draw.io conversion ready to review'
-								: 'draw.io conversion pending'}
+							draw.io conversion ready to review
 						</p>
-						{#if drawioSuggestion}
-							<Button size="sm" variant="outline" onclick={() => (reviewOpen = true)}>Review</Button
+						{#if options.onReview}
+							<Button
+								size="sm"
+								variant="outline"
+								onclick={() => options.onReview?.(pendingDrawioSuggestionId)}>Review</Button
 							>
 						{/if}
 						<Tooltip tooltip="Dismiss conversion">
@@ -843,12 +809,5 @@
 				{/if}
 			{/if}
 		</div>
-		{#if drawioSuggestion}
-			<DrawioReviewDialog
-				bind:open={reviewOpen}
-				suggestion={drawioSuggestion}
-				onaccept={acceptDrawio}
-			/>
-		{/if}
 	{/if}
 </NodeViewWrapper>

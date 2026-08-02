@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { FtArrowLeft as ArrowLeft } from '$lib/components/icons';
-	import TodoDetailPanel from '$lib/components/todos/workspace/todo-detail-panel.svelte';
+	import { TodoDetailPanel } from '$lib/components/todos';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Button } from '$lib/components/ui/button';
 

@@ -2,10 +2,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount } from 'svelte';
-	import AppSidebar from '$lib/components/shell/navigation/app-sidebar.svelte';
-	import CommandPalette from '$lib/components/shell/navigation/command-palette.svelte';
-	import RightPanel from '$lib/components/shell/workbench/right-panel.svelte';
-	import WorkspaceTabs from '$lib/components/shell/workbench/workspace-tabs.svelte';
+	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
@@ -18,7 +15,7 @@
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
-	import MemoryNotificationMenu from '$lib/components/memory/memory-notification-menu.svelte';
+	import { MemoryNotificationMenu } from '$lib/components/memory';
 
 	let { data, children } = $props();
 

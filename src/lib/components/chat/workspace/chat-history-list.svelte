@@ -12,7 +12,7 @@
 		FtTrash as Trash2,
 		FtEdit as Pencil
 	} from '$lib/components/icons';
-	import NameDialog from '$lib/components/projects/name-dialog.svelte';
+	import { NameDialog } from '$lib/components/projects';
 	import { deleteSession, renameSession } from '$lib/remote/agent/chat.remote';
 	import { toast } from 'svelte-sonner';
 	import { chat } from '$lib/stores/agent/chat.svelte';

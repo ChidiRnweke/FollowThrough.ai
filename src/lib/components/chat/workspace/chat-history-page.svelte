@@ -10,7 +10,7 @@
 		FtChat as MessageSquare,
 		FtPlus as Plus
 	} from '$lib/components/icons';
-	import ChatHistoryList from '$lib/components/chat/workspace/chat-history-list.svelte';
+	import ChatHistoryList from './chat-history-list.svelte';
 
 	let {
 		shell,

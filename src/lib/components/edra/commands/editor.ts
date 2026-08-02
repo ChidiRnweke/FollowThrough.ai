@@ -22,9 +22,9 @@ import VideoExtendedComp from '../VideoExtended.svelte';
 import IFrameComp from '../IFrame.svelte';
 import MermaidComp from '../Mermaid.svelte';
 import DrawioComp from '../Drawio.svelte';
-import type { DiagramId, DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
-import type { NoteLinkTarget } from '$lib/models/notes';
-import type { SuggestionId } from '$lib/models/suggestions';
+import type { Component } from 'svelte';
+import type { DrawioPreviewProps, DrawioReferenceView } from './nodes.js';
+import type { NoteLinkTarget } from './NoteLinkSuggestion.js';
 import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
@@ -61,16 +61,12 @@ export interface EdraEditorProps {
 		source: string,
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
-	onConvertMermaid?: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
-	getDrawioSuggestion?: (suggestionId: SuggestionId) => DiagramSuggestion | undefined;
-	onAcceptDrawio?: (
-		suggestionId: SuggestionId,
-		source: string,
-		renderedSvg: string
-	) => Promise<DrawioDiagram>;
-	onRejectDrawio?: (suggestionId: SuggestionId) => Promise<void>;
-	getDrawioDiagram?: (diagramId: DiagramId) => DrawioDiagram | undefined;
-	getNoteId?: () => string;
+	onConvertMermaid?: (source: string, instruction?: string) => Promise<string>;
+	onReviewDrawio?: (reference: string) => void;
+	onDismissDrawio?: (reference: string) => Promise<void>;
+	getDrawioDiagram?: (reference: string) => DrawioReferenceView | undefined;
+	resolveDrawioHref?: (reference: string) => string | undefined;
+	drawioPreview?: Component<DrawioPreviewProps>;
 	/**
 	 * Proactive ghost text at the caret. Injected so the editor stays unaware of
 	 * transports; omitting it disables inline suggestions entirely.
@@ -112,13 +108,13 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			Mermaid(MermaidComp).configure({
 				onRevise: props?.onReviseMermaid,
 				onConvert: props?.onConvertMermaid,
-				getDrawioSuggestion: props?.getDrawioSuggestion,
-				onAcceptDrawio: props?.onAcceptDrawio,
-				onRejectDrawio: props?.onRejectDrawio
+				onReview: props?.onReviewDrawio,
+				onDismiss: props?.onDismissDrawio
 			}),
 			Drawio(DrawioComp).configure({
 				getDiagram: props?.getDrawioDiagram,
-				getNoteId: props?.getNoteId
+				resolveHref: props?.resolveDrawioHref,
+				preview: props?.drawioPreview
 			}),
 			DiagramDeletion,
 			SlashCommand(SlashCommandComp),

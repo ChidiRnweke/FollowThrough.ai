@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import TodosWorkspace from '$lib/components/todos/workspace/todos-workspace.svelte';
+	import { TodosWorkspace } from '$lib/components/todos';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 
 	let { data } = $props();
