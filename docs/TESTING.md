@@ -41,6 +41,15 @@ processes. Tests must pass in random order and in the fully isolated verificatio
 ## Commands
 
 - `pnpm test` — default Node and focused Chromium feedback.
+- `pnpm test:topology` — runs `scripts/audit-topology.ts`, the repository-specific structural audit.
+  It resolves imports, enforces capability entry points and Edra/server boundaries, and rejects stale
+  Vitest includes and maintained documentation paths.
+- `pnpm test:quality` — runs `scripts/audit-tests.ts`, the test-policy ratchet. It rejects mocking
+  libraries, unexplained skips, dependency casts, interaction assertions, untyped manual fakes, and
+  increases to the one-behavioural-assertion migration baseline.
+- `pnpm test:chisel` — runs the pinned Chisel rules independently. The project audits supplement
+  Chisel; they do not replace it or provide a reason to suppress a Chisel violation.
+- `pnpm test:architecture` — runs topology, test-quality, and Chisel checks together.
 - `pnpm test:browser:full` — every Chromium component and browser-storage regression.
 - `pnpm test:contracts` — PostgreSQL schema and repository contracts.
 - `pnpm test:e2e` — application journeys against the Vite dev server. Reuses a dev server already

@@ -6,6 +6,9 @@
 
 For UI design decisions (tokens, style, components) and UX patterns, see @DESIGN_SYSTEM.md.
 
+Run `pnpm test:architecture` after structural or test changes. Its project-specific topology and
+test-quality audits supplement Chisel; do not silence one checker to satisfy another.
+
 ---
 
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
