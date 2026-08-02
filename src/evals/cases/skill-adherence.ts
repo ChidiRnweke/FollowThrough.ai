@@ -137,5 +137,101 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			expect(tools.passed, tools.explanation).toBe(true);
 			expect(followed, `response must contain skill stamp ${SKILL_HASH}`).toBe(true);
 		}
+	},
+	{
+		id: 'skill-edited-with-edit-skill',
+		name: 'edits a skill body in place with edit_skill',
+		splits: [ARCHETYPES.toolCalling, ARCHETYPES.effect, 'skill_editing'],
+		input: {
+			prompt:
+				'Use the edit_skill tool on the Compliance format skill to replace the text "Do not include disclaimers or hedging language." with "Do not include disclaimers or hedging language, and always end with EDIT-OK."'
+		},
+		expected: { requiredTools: ['edit_skill'], effect: 'EDIT-OK landed in the skill body' },
+		metadata: { layer: 'agent', trick: 'mutation must land in the committed skill note' },
+		async run(lab) {
+			const { actor, skillIds } = await seedWorkspace(lab, skillsWorkspace);
+			const skillNoteId = skillIds.get('Compliance format');
+			if (!skillNoteId) throw new Error('Compliance format skill was not seeded');
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 500)
+			});
+
+			const tools = scoreToolCalling(result, { required: ['edit_skill'] });
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'pass' : 'fail',
+				explanation: tools.explanation
+			});
+
+			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const applied = view.note.plainText.includes('EDIT-OK');
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: applied ? 1 : 0,
+				label: applied ? 'landed' : 'missing',
+				explanation: applied
+					? 'skill body now carries EDIT-OK'
+					: 'skill body unchanged — the edit did not land'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(applied, 'skill body must contain EDIT-OK after the edit').toBe(true);
+		}
+	},
+	{
+		id: 'skill-rewritten-with-save-skill',
+		name: 'rewrites a whole skill body with save_skill',
+		splits: [ARCHETYPES.toolCalling, ARCHETYPES.effect, 'skill_editing'],
+		input: {
+			prompt:
+				'Use the save_skill tool to replace the Compliance format skill body with exactly: "Findings are reported as a numbered list ending with the token SAVE-OK."'
+		},
+		expected: { requiredTools: ['save_skill'], effect: 'SAVE-OK landed in the skill body' },
+		metadata: { layer: 'agent', trick: 'whole-body replace must commit' },
+		async run(lab) {
+			const { actor, skillIds } = await seedWorkspace(lab, skillsWorkspace);
+			const skillNoteId = skillIds.get('Compliance format');
+			if (!skillNoteId) throw new Error('Compliance format skill was not seeded');
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 500)
+			});
+
+			const tools = scoreToolCalling(result, { required: ['save_skill'] });
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'pass' : 'fail',
+				explanation: tools.explanation
+			});
+
+			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const applied = view.note.plainText.includes('SAVE-OK');
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: applied ? 1 : 0,
+				label: applied ? 'landed' : 'missing',
+				explanation: applied
+					? 'skill body now carries SAVE-OK'
+					: 'skill body unchanged — the rewrite did not land'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(applied, 'skill body must contain SAVE-OK after the rewrite').toBe(true);
+		}
 	}
 ];

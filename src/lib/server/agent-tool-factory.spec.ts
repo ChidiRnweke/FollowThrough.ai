@@ -71,11 +71,12 @@ describe('Agent tool coverage invariants', () => {
 		const coveredActions = classifications.filter(
 			(classification) => classification.kind !== 'excluded'
 		).length;
-		// Three controller actions are deliberately exposed more than once:
+		// Five controller actions are deliberately exposed more than once:
 		// memory.list as list_project_memory and list_user_memory, notes.save as
-		// save_note (whole-body replace) and edit_note (targeted replacements), and
-		// todos.create as create_todo (single) and create_todos (batch).
-		const scopedAliases = 3;
+		// save_note and edit_note, the skill body write as save_skill and
+		// edit_skill, and todos.create as create_todo (single) and create_todos
+		// (batch).
+		const scopedAliases = 5;
 		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
 	});
 
@@ -188,6 +189,44 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'edit_note');
 		expect(editNote?.classification).toBe('mutation');
+	});
+
+	it('advertises only noteId and markdown for save_skill', () => {
+		const saveSkill = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'save_skill');
+		expect(Object.keys(saveSkill?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
+	});
+
+	it('advertises only noteId and edits for edit_skill', () => {
+		const editSkill = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_skill');
+		expect(Object.keys(editSkill?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
+	});
+
+	it('keeps edit_skill and save_skill searchable instead of registering them directly', () => {
+		const available = registry('auto_accept');
+		expect([
+			available.agentTools().some((candidate) => candidate.name === 'edit_skill'),
+			available.catalog().some((candidate) => candidate.name === 'edit_skill'),
+			available.agentTools().some((candidate) => candidate.name === 'save_skill'),
+			available.catalog().some((candidate) => candidate.name === 'save_skill')
+		]).toEqual([false, true, false, true]);
+	});
+
+	it('classifies edit_skill as a mutation', () => {
+		const editSkill = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_skill');
+		expect(editSkill?.classification).toBe('mutation');
+	});
+
+	it('classifies save_skill as a mutation', () => {
+		const saveSkill = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'save_skill');
+		expect(saveSkill?.classification).toBe('mutation');
 	});
 
 	it('advertises the read-before-edit contract in edit_note and get_note descriptions (1/3)', () => {
@@ -411,13 +450,13 @@ describe('Agent tool coverage invariants', () => {
 
 	it('keeps the skill name, description, and trigger hints on the load', async () => {
 		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('get_skill')?.execute({ noteId: fixture.noteId })
-		).toMatchObject({
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance', 'audit']
-		});
+		expect(await fixture.skillTool('get_skill')?.execute({ noteId: fixture.noteId })).toMatchObject(
+			{
+				name: 'Compliance format',
+				description: 'Formats responses for compliance review',
+				triggerHints: ['compliance', 'audit']
+			}
+		);
 	});
 
 	it('keeps the ProseMirror document off the skill wire', async () => {
@@ -970,6 +1009,101 @@ describe('Agent tool coverage invariants', () => {
 		const fixture = editNoteFixture();
 		const result = await fixture.invoke([{ oldText: 'read-through', newText: 'x' }]);
 		expect(result).toMatchObject({ failure: 'No edits were applied.' });
+	});
+
+	const editSkillFixture = () => {
+		const current = noteBuilder({
+			id: crypto.randomUUID() as never,
+			kind: 'skill',
+			title: 'Compliance format',
+			document: {
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Number every finding.' }] }]
+			} as never
+		});
+		const skill = {
+			note: current,
+			name: 'Compliance format',
+			description: 'Formats responses for compliance review',
+			triggerHints: ['compliance']
+		};
+		let saved: typeof current | undefined;
+		const factory = {
+			skills: () => ({ get: async () => ({ skill, usages: [] }) }),
+			notes: () => ({
+				save: async (_actor: unknown, input: { note: typeof current }) => {
+					saved = input.note;
+					return {
+						note: { ...input.note, currentRevision: 2 },
+						etag: 'note:x:r2',
+						repairedAnchorIds: []
+					};
+				}
+			})
+		} as unknown as ControllerFactory;
+		const invoke = (name: string, payload: unknown) =>
+			indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+				{} as never,
+				JSON.stringify({ name, payload })
+			);
+		return { current, invoke, saved: () => saved };
+	};
+
+	it('applies a targeted edit to a skill body', async () => {
+		const fixture = editSkillFixture();
+		await fixture.invoke('edit_skill', {
+			noteId: fixture.current.id,
+			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
+		});
+		expect(fixture.saved()?.plainText).toContain('exactly once.');
+	});
+
+	it('replaces a whole skill body with save_skill', async () => {
+		const fixture = editSkillFixture();
+		await fixture.invoke('save_skill', {
+			noteId: fixture.current.id,
+			markdown: 'New instructions.'
+		});
+		expect(fixture.saved()?.plainText).toBe('New instructions.');
+	});
+
+	it('reports how many skill edits applied', async () => {
+		const fixture = editSkillFixture();
+		const result = await fixture.invoke('edit_skill', {
+			noteId: fixture.current.id,
+			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
+		});
+		expect(result).toMatchObject({ appliedEdits: 1 });
+	});
+
+	it('saves nothing when a skill anchor does not match', async () => {
+		const fixture = editSkillFixture();
+		await fixture.invoke('edit_skill', {
+			noteId: fixture.current.id,
+			edits: [{ oldText: 'read-through', newText: 'write-behind' }]
+		});
+		expect(fixture.saved()).toBeUndefined();
+	});
+
+	it('refuses edit_skill on a note that is not a skill', async () => {
+		const note = noteBuilder({ id: crypto.randomUUID() as never, kind: 'note' });
+		const factory = {
+			skills: () => ({
+				get: async () => ({
+					skill: { note, name: 'n', description: 'd', triggerHints: [] },
+					usages: []
+				})
+			}),
+			notes: () => ({ save: async () => ({ note: {}, etag: '', repairedAnchorIds: [] }) })
+		} as unknown as ControllerFactory;
+		const result = await indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+			{} as never,
+			JSON.stringify({
+				name: 'edit_skill',
+				payload: { noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] }
+			})
+		);
+		expect(result).toMatchObject({ failure: expect.stringContaining('not a skill') });
 	});
 
 	it('does not expose the agent controller recursively', () => {

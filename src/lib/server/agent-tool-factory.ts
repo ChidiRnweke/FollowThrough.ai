@@ -930,6 +930,69 @@ export class AgentTools {
 				}
 			),
 			define(
+				'save_skill',
+				'Replace a whole skill body with Markdown. Pass only the noteId and the complete desired Markdown instructions; the skill summary, description, and trigger hints are changed separately. Prefer edit_skill unless you are genuinely rewriting the skill end to end — this tool discards anything you leave out.',
+				'mutation',
+				z.object({ noteId: id, markdown: z.string() }),
+				async (input) => {
+					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+					if (view.skill.note.kind !== 'skill')
+						return { failure: 'save_skill only edits skill notes; this note is not a skill.' };
+					const content = noteContentFromMarkdown(input.markdown);
+					const saved = await factory.notes().save(actor, {
+						note: { ...view.skill.note, ...content }
+					});
+					return {
+						noteId: saved.note.id,
+						name: view.skill.name,
+						currentRevision: saved.note.currentRevision
+					};
+				}
+			),
+			define(
+				'edit_skill',
+				'Mutating tool. Before the first edit to a skill in any turn, you MUST call get_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_skill, and copy the closest text from the error verbatim — never retry the same oldText.',
+				'mutation',
+				z.object({
+					noteId: id,
+					edits: z
+						.array(
+							z.object({
+								oldText: z.string().min(1),
+								newText: z.string(),
+								replaceAll: z.boolean().optional()
+							})
+						)
+						.min(1)
+						.max(20)
+				}),
+				async (input) => {
+					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+					if (view.skill.note.kind !== 'skill')
+						return { failure: 'edit_skill only edits skill notes; this note is not a skill.' };
+					const before = noteMarkdownFromContent(view.skill.note.document);
+					const patched = applyNotePatch(before, input.edits);
+					// A failure is returned rather than thrown so the occurrence counts and
+					// nearest matches survive into the model's next attempt.
+					if (!patched.ok)
+						return {
+							failure: 'No edits were applied.',
+							problems: patched.failures.map(describeNotePatchFailure),
+							failures: patched.failures
+						};
+					const content = noteContentFromMarkdown(patched.markdown);
+					const saved = await factory.notes().save(actor, {
+						note: { ...view.skill.note, ...content }
+					});
+					return {
+						noteId: saved.note.id,
+						name: view.skill.name,
+						currentRevision: saved.note.currentRevision,
+						appliedEdits: patched.appliedEdits
+					};
+				}
+			),
+			define(
 				'create_skill',
 				'Create a reusable skill.',
 				'mutation',
