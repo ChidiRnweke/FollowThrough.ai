@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '$lib/models/memory';
-import type { NoteSummary } from '$lib/models/notes';
+import type { NoteSummary, NoteView } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
@@ -139,4 +139,37 @@ export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection 
 	...(suggestion.confidence === undefined ? {} : { confidence: suggestion.confidence }),
 	payload: suggestion.payload,
 	createdAt: suggestion.createdAt
+});
+
+export interface NoteViewProjection {
+	readonly noteId: string;
+	readonly title: string;
+	/** The note body as Markdown — the string edit_note patches and save_note replaces. */
+	readonly markdown: string;
+	/** Kept because publish_note requires the base ETag. */
+	readonly etag: string;
+	backlinks: NoteView['backlinks'];
+	references: NoteView['references'];
+	diagrams: NoteView['diagrams'];
+	todos: NoteView['todos'];
+	pendingSuggestions: NoteView['pendingSuggestions'];
+}
+
+/**
+ * The agent's read surface for a note. The body is the same Markdown the write
+ * tools anchor against; the ProseMirror `document` and the redundant
+ * `plainText` are storage formats the model never uses, so they stay off the
+ * wire. Constructed explicitly (see {@link projectNoteSummary}) so the
+ * declared shape is true on the wire.
+ */
+export const projectNoteView = (view: NoteView, markdown: string): NoteViewProjection => ({
+	noteId: view.note.id,
+	title: view.note.title,
+	markdown,
+	etag: view.etag,
+	backlinks: view.backlinks,
+	references: view.references,
+	diagrams: view.diagrams,
+	todos: view.todos,
+	pendingSuggestions: view.pendingSuggestions
 });

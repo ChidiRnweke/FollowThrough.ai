@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { ControllerFactory } from '$lib/server/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { noteEtag } from '$lib/models/notes';
 import {
 	noteBuilder,
 	testActor,
@@ -217,6 +218,155 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
 		expect(getNote?.description).toMatch(/before your first edit_note or save_note/);
+	});
+
+	it('advertises only noteId for get_note', () => {
+		const getNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		expect(Object.keys(getNote?.parameters.shape ?? {}).sort()).toEqual(['noteId']);
+	});
+
+	it('returns the note body as Markdown, not ProseMirror, by default', () => {
+		const note = noteBuilder({
+			id: crypto.randomUUID() as never,
+			document: {
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world.' }] }]
+			} as never
+		});
+		const factory = {
+			notes: () => ({
+				get: async () => ({
+					note,
+					etag: noteEtag(note),
+					backlinks: [],
+					references: [],
+					diagrams: [],
+					todos: [],
+					pendingSuggestions: []
+				})
+			})
+		} as unknown as ControllerFactory;
+		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Read a note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		return expect(getNote?.execute({ noteId: note.id })).resolves.toMatchObject({
+			noteId: note.id,
+			title: note.title,
+			etag: noteEtag(note),
+			markdown: expect.stringContaining('Hello world.')
+		});
+	});
+
+	it('keeps the related items on the default get_note read', () => {
+		const note = noteBuilder({ id: crypto.randomUUID() as never });
+		const factory = {
+			notes: () => ({
+				get: async () => ({
+					note,
+					etag: noteEtag(note),
+					backlinks: [{ id: 'bl' }],
+					references: [{ id: 'ref' }],
+					diagrams: [{ id: 'dg' }],
+					todos: [{ id: 'td' }],
+					pendingSuggestions: [{ id: 'sg' }]
+				})
+			})
+		} as unknown as ControllerFactory;
+		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Read a note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		return expect(getNote?.execute({ noteId: note.id })).resolves.toMatchObject({
+			backlinks: [{ id: 'bl' }],
+			references: [{ id: 'ref' }],
+			diagrams: [{ id: 'dg' }],
+			todos: [{ id: 'td' }],
+			pendingSuggestions: [{ id: 'sg' }]
+		});
+	});
+
+	it('keeps the ProseMirror document off the get_note wire', () => {
+		const note = noteBuilder({ id: crypto.randomUUID() as never });
+		const factory = {
+			notes: () => ({
+				get: async () => ({
+					note,
+					etag: noteEtag(note),
+					backlinks: [],
+					references: [],
+					diagrams: [],
+					todos: [],
+					pendingSuggestions: []
+				})
+			})
+		} as unknown as ControllerFactory;
+		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Read a note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('document');
+	});
+
+	it('keeps the storage Note row off the get_note wire', () => {
+		const note = noteBuilder({ id: crypto.randomUUID() as never });
+		const factory = {
+			notes: () => ({
+				get: async () => ({
+					note,
+					etag: noteEtag(note),
+					backlinks: [],
+					references: [],
+					diagrams: [],
+					todos: [],
+					pendingSuggestions: []
+				})
+			})
+		} as unknown as ControllerFactory;
+		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Read a note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('note');
+	});
+
+	it('keeps the redundant plainText off the get_note wire', () => {
+		const note = noteBuilder({ id: crypto.randomUUID() as never });
+		const factory = {
+			notes: () => ({
+				get: async () => ({
+					note,
+					etag: noteEtag(note),
+					backlinks: [],
+					references: [],
+					diagrams: [],
+					todos: [],
+					pendingSuggestions: []
+				})
+			})
+		} as unknown as ControllerFactory;
+		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Read a note' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'get_note');
+		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('plainText');
 	});
 
 	it('requires approval for long-tail mutations in approval-required mode', async () => {

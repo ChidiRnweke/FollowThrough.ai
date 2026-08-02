@@ -44,6 +44,7 @@ import {
 import {
 	projectMemory,
 	projectNoteSummary,
+	projectNoteView,
 	projectProject,
 	projectSuggestion,
 	projectTodo,
@@ -637,16 +638,16 @@ export class AgentTools {
 			),
 			define(
 				'get_note',
-				'Read a note with backlinks, references, diagrams, todos, and proposals. Pass format "markdown" to also get the note body as Markdown, which is the text edit_note anchors against and save_note replaces. Call this with format "markdown" before your first edit_note or save_note on a note each turn.',
+				'Read a note with backlinks, references, diagrams, todos, and proposals. The note body is returned as Markdown, which is the text edit_note anchors against and save_note replaces. Call this before your first edit_note or save_note on a note each turn.',
 				'read',
-				z.object({ noteId: id, format: z.enum(['default', 'markdown']).optional() }),
+				z.object({ noteId: id }),
 				async (input) => {
 					const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-					if (input.format !== 'markdown') return view;
-					// Anchors have to match the serializer's output exactly, including its
-					// escaping, so hand back the same string edit_note will patch rather than
-					// leaving the model to reconstruct it from plain text.
-					return { ...view, markdown: noteMarkdownFromContent(view.note.document) };
+					// The read and write surfaces must share one representation: the Markdown
+					// string edit_note patches and save_note replaces, produced by the same
+					// serializer the patch anchors against. ProseMirror JSON is the storage
+					// format and the model never needs it, so it stays off the wire.
+					return projectNoteView(view, noteMarkdownFromContent(view.note.document));
 				}
 			),
 			define(
@@ -679,7 +680,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_note',
-				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note with format "markdown" on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note with format "markdown", and copy the closest text from the error verbatim — never retry the same oldText.',
+				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText.',
 				'mutation',
 				z.object({
 					noteId: id,

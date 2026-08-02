@@ -35,7 +35,7 @@ describe('A read names the note it read', () => {
 	} as unknown as ShellContext;
 	const read = (status: 'succeeded' | 'failed' | 'rejected') => ({
 		...tool('get_note', status),
-		arguments: { noteId, format: 'markdown' }
+		arguments: { noteId }
 	});
 
 	it('says which note was read', () => {
