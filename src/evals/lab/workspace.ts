@@ -5,6 +5,7 @@ import type { LocalDate } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
+import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type { Lab } from './application';
 
 export interface SeedNote {
@@ -133,10 +134,12 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 			...(projectId ? { projectId } : {})
 		});
 		skillIds.set(seedSkill.name, skill.note.id);
-		// Save the skill body so load_skill returns it.
-		await lab.controllers.skills().update(actor, {
-			noteId: skill.note.id,
-			raw: seedSkill.body
+		// Save the skill body through the note path — the same write edit_skill and
+		// save_skill use at runtime — so load_skill returns it as Markdown. The
+		// `raw` manifest path is not used because the fixture body is a plain
+		// instruction body, not a full SKILL.md with YAML frontmatter.
+		await lab.controllers.notes().save(actor, {
+			note: { ...skill.note, ...noteContentFromMarkdown(seedSkill.body) }
 		});
 	}
 

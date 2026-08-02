@@ -660,7 +660,7 @@ export class AgentTools {
 			),
 			define(
 				'save_note',
-				'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Prefer edit_note unless you are genuinely rewriting the note end to end — this tool discards anything you leave out.',
+				'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Prefer edit_note unless you are genuinely rewriting the note end to end — this tool discards anything you leave out. Skill bodies have their own tools: use save_skill or edit_skill instead.',
 				'mutation',
 				z.object({
 					noteId: id,
@@ -681,7 +681,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_note',
-				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText.',
+				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText. Skill bodies are edited with edit_skill or save_skill, not this tool.',
 				'mutation',
 				z.object({
 					noteId: id,

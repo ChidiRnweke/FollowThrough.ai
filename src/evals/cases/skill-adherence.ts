@@ -162,7 +162,12 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 500)
 			});
 
-			const tools = scoreToolCalling(result, { required: ['edit_skill'] });
+			// A transient wrong-id get_skill that the model recovers from is not a
+			// failure here; the effect assertions below are the hard gate.
+			const tools = scoreToolCalling(result, {
+				required: ['edit_skill'],
+				requireNoFailures: false
+			});
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
 				score: tools.passed ? 1 : 0,
@@ -184,6 +189,17 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			expect(result.status).toBe('completed');
 			expect(tools.passed, tools.explanation).toBe(true);
 			expect(applied, 'skill body must contain EDIT-OK after the edit').toBe(true);
+
+			const untargeted = view.note.plainText.includes(SKILL_HASH);
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: untargeted ? 1 : 0,
+				label: untargeted ? 'surgical' : 'rewrote_untargeted_rules',
+				explanation: untargeted
+					? 'untargeted rule 2 survived the targeted edit'
+					: 'the edit dropped untargeted rules — not a surgical edit'
+			});
+			expect(untargeted, 'untargeted rule 2 must survive a targeted skill edit').toBe(true);
 		}
 	},
 	{
@@ -232,6 +248,74 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			expect(result.status).toBe('completed');
 			expect(tools.passed, tools.explanation).toBe(true);
 			expect(applied, 'skill body must contain SAVE-OK after the rewrite').toBe(true);
+
+			const replaced = !view.note.plainText.includes('hedging language');
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: replaced ? 1 : 0,
+				label: replaced ? 'replaced' : 'left_old_body',
+				explanation: replaced
+					? 'old skill body is gone after the rewrite'
+					: 'old skill body text survived save_skill — not a full replace'
+			});
+			expect(replaced, 'save_skill must discard the old body').toBe(true);
+		}
+	},
+	{
+		id: 'skill-edit-triggered-naturally',
+		name: 'edits a skill body from a natural request',
+		splits: [ARCHETYPES.toolCalling, ARCHETYPES.effect, 'skill_editing'],
+		input: {
+			prompt:
+				"Revise the Compliance format skill's instructions so every finding must be numbered starting at 1."
+		},
+		expected: { effect: 'skill body changed' },
+		metadata: {
+			layer: 'agent',
+			note: 'No tool is named — the agent must load the skill and edit its body from natural language.'
+		},
+		async run(lab) {
+			const { actor, skillIds } = await seedWorkspace(lab, skillsWorkspace);
+			const skillNoteId = skillIds.get('Compliance format');
+			if (!skillNoteId) throw new Error('Compliance format skill was not seeded');
+			const seeded = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 500)
+			});
+
+			const called = result.calledToolNames;
+			const usedEditTool = ['edit_skill', 'save_skill', 'edit_note', 'save_note'].some((name) =>
+				called.includes(name)
+			);
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: usedEditTool ? 1 : 0,
+				label: usedEditTool ? 'edited' : 'no_edit',
+				explanation: usedEditTool
+					? `edited through ${called.filter((name) => name.endsWith('_note') || name.endsWith('_skill')).join(', ')}`
+					: `no edit tool was used (${called.join(', ') || 'no tools'})`
+			});
+
+			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const changed = view.note.plainText !== seeded.note.plainText;
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: changed ? 1 : 0,
+				label: changed ? 'changed' : 'unchanged',
+				explanation: changed
+					? 'skill body differs from the seeded instructions'
+					: 'skill body is unchanged after the request'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(usedEditTool, 'must edit the skill body through an edit tool').toBe(true);
+			expect(changed, 'skill body must have changed').toBe(true);
 		}
 	}
 ];
