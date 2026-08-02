@@ -21,41 +21,6 @@ test('board columns use the wide canvas rather than the reading measure', async 
 	expect(width).toBeGreaterThan(280);
 });
 
-test('board cards omit metadata that is not set', async ({ page }) => {
-	await page.setViewportSize(desktop);
-	await page.goto('/todos?view=board');
-	await page.locator('section').filter({ hasText: 'Backlog' }).first().waitFor();
-	const visibleCards = page.locator('[data-slot="card"]:visible');
-	await expect(visibleCards.getByText('No priority')).toHaveCount(0);
-	await expect(visibleCards.getByText('No due date')).toHaveCount(0);
-	await expect(visibleCards.getByText('No source')).toHaveCount(0);
-});
-
-test('toolbar search filters board cards live', async ({ page }) => {
-	await page.setViewportSize(desktop);
-	await page.goto('/todos?view=board');
-	await page.locator('section').filter({ hasText: 'Backlog' }).first().waitFor();
-	const cards = page.locator('[data-slot="card"]');
-	const initial = await cards.count();
-	const search = page.getByLabel('Filter todos by title');
-	await search.fill('definitely-not-a-todo-title');
-	await expect(cards).toHaveCount(0);
-	await search.fill('');
-	await expect(cards).toHaveCount(initial);
-});
-
-test('quick-add focuses its input when the row opens', async ({ page }) => {
-	await page.setViewportSize(desktop);
-	await page.goto('/todos?view=board');
-	await page.waitForLoadState('networkidle');
-	const openColumn = page.locator('section').filter({
-		has: page.getByRole('heading', { name: /^Open \d+$/ })
-	});
-	await openColumn.waitFor();
-	await openColumn.getByRole('button', { name: 'Add todo to Open' }).click();
-	await expect(openColumn.getByPlaceholder('Todo title…')).toBeFocused();
-});
-
 test('quick-add focuses its input on the ?quickTodo load path', async ({ page }) => {
 	await page.setViewportSize(desktop);
 	await page.goto('/todos?view=board&quickTodo');

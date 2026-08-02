@@ -12,6 +12,7 @@
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';
+	import { filterTodosByTitle } from '../todo-filter';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Input } from '$lib/components/ui/input';
@@ -72,11 +73,7 @@
 	   state instead of a URL param — the server-side params keep doing the
 	   shareable filtering. */
 	let query = $state('');
-	const visibleTodos = $derived(
-		query.trim() === ''
-			? todos
-			: todos.filter((item) => item.todo.title.toLowerCase().includes(query.trim().toLowerCase()))
-	);
+	const visibleTodos = $derived(filterTodosByTitle(todos, query));
 
 	let addingListTodo = $state(false);
 	let listTitle = $state('');

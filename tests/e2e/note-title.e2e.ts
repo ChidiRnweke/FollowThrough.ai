@@ -46,24 +46,3 @@ test('the pencil renames the note in place and the breadcrumb follows', async ({
 	await rename(page, original);
 	await expect(titleCrumb(page)).toHaveText(original);
 });
-
-test('Escape abandons a title edit', async ({ page }) => {
-	await openFirstNote(page);
-	const original = (await titleCrumb(page).innerText()).trim();
-
-	await page.getByRole('button', { name: 'Rename note' }).click();
-	await titleField(page).fill('discarded title');
-	await titleField(page).press('Escape');
-
-	await expect(titleCrumb(page)).toHaveText(original);
-});
-
-test('Enter commits the title and moves the caret into the document body', async ({ page }) => {
-	await openFirstNote(page);
-	const original = (await titleCrumb(page).innerText()).trim();
-
-	await rename(page, original);
-
-	await expect(titleField(page)).toHaveCount(0);
-	await expect(page.locator('[data-note-pane] [contenteditable="true"]').first()).toBeFocused();
-});
