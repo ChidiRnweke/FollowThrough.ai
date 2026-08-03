@@ -251,7 +251,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		storage: attachmentStorage,
 		transactionRunner,
 		provenance,
-		notes
+		notes,
+		todos,
+		projects
 	});
 	const templates = deliverables.templates;
 	const artifacts = deliverables.artifacts;
@@ -312,8 +314,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions,
 			noteReader: notes,
 			transactionRunner,
-			projectLister: projects,
-			boardPdfGenerator: deliverables.pdfGenerator
+			boardPdfExporter: deliverables.boardPdfExporter
 		},
 		relationships: {
 			anchorCreator: notes,

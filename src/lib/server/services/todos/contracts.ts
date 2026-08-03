@@ -1,5 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
+	BoardPdfExportResult,
 	CreateTodoInput,
 	Todo,
 	TodoId,
@@ -39,4 +40,7 @@ export interface TodoLister {
 }
 export interface TodoViewAssembler {
 	assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]>;
+}
+export interface BoardPdfExporter {
+	exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult>;
 }

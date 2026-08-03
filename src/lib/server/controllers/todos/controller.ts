@@ -1,35 +1,29 @@
 import type { ActorContext } from '$lib/models/identity';
-import {
-	boardExportDate,
-	boardExportSlug,
-	boardMarkdown,
-	type BoardPdfExportResult,
-	type CreateTodoInput,
-	type ExtractPromisesInput,
-	type ExtractPromisesOutput,
-	type GetTodoViewInput,
-	type ListTodosOutput,
-	type Todo,
-	type TodoId,
-	type TodoListFilter,
-	type TodoView,
-	type UpdateTodoInput,
-	type UpdateTodoOutput
+import type {
+	BoardPdfExportResult,
+	CreateTodoInput,
+	ExtractPromisesInput,
+	ExtractPromisesOutput,
+	GetTodoViewInput,
+	ListTodosOutput,
+	Todo,
+	TodoId,
+	TodoListFilter,
+	TodoView,
+	UpdateTodoInput,
+	UpdateTodoOutput
 } from '$lib/models/todos';
-import { defaultExportSettings, type ExportSettings } from '$lib/models/deliverables';
-import type { ProseMirrorDocument } from '$lib/models/notes';
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { NoteReader, SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { ProjectLister } from '$lib/server/services/projects/contracts';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator
 } from '$lib/server/services/suggestions/contracts';
 import type {
+	BoardPdfExporter,
 	TodoCreator,
 	TodoDeleter,
 	TodoEditor,
@@ -39,16 +33,6 @@ import type {
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
-
-// Same shape as GeneratePdfInput in deliverables/pdf.ts, mirrored here so the controller
-// stays decoupled from the pdfmake-backed module — see deliverables/artifacts.ts.
-interface BoardPdfInput {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	readonly settings?: ExportSettings;
-}
-
-export type BoardPdfGenerator = (input: BoardPdfInput) => Promise<Buffer>;
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction
@@ -103,8 +87,7 @@ export interface TodosDependencies {
 	suggestionAccepter: SuggestionAccepter;
 	noteReader: NoteReader;
 	transactionRunner: TransactionRunner;
-	projectLister: ProjectLister;
-	boardPdfGenerator: BoardPdfGenerator;
+	boardPdfExporter: BoardPdfExporter;
 }
 export class Todos implements TodosController {
 	constructor(private readonly dependencies: TodosDependencies) {}
@@ -124,30 +107,7 @@ export class Todos implements TodosController {
 		return this.dependencies.todoLister.listCategories(actor);
 	}
 	async exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult> {
-		/* Orchestrated here rather than in a service: a service may not import another
-		   service, and this export needs the todo catalog, the project catalog, the
-		   Markdown converter and the PDF pipeline together. Ephemeral by design — the
-		   bytes stream straight to the download as base64, with no artifact record. */
-		const [{ todos }, projects] = await Promise.all([
-			this.list(actor, filter),
-			this.dependencies.projectLister.list(actor)
-		]);
-		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
-		const generatedAt = new Date();
-		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
-		const title = projectName ? `${projectName} todos` : 'Todos';
-		const { document } = noteContentFromMarkdown(
-			boardMarkdown(todos, { title, generatedAt, projectNames })
-		);
-		const pdf = await this.dependencies.boardPdfGenerator({
-			title,
-			notes: [{ title, document }],
-			settings: { ...defaultExportSettings, includeTitle: true }
-		});
-		return {
-			data: pdf.toString('base64'),
-			filename: `kanban-${boardExportSlug(projectName ?? 'all')}-${boardExportDate(generatedAt)}.pdf`
-		};
+		return this.dependencies.boardPdfExporter.exportBoardPdf(actor, filter);
 	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
 		const todo = await this.dependencies.todoCreator.create(actor, input);
