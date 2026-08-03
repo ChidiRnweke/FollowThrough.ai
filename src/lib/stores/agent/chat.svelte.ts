@@ -68,9 +68,11 @@ const persistedConversation = (): PersistedConversationChoices => {
 };
 
 export interface ContextChip {
-	readonly kind: 'note' | 'skill';
+	readonly kind: 'note' | 'skill' | 'folder';
 	readonly id: NoteId;
 	readonly name: string;
+	/** Folders only: how many notes the tag stands for, shown before sending. */
+	readonly noteCount?: number;
 }
 
 export type ChatPart =

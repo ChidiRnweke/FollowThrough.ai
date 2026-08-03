@@ -19,6 +19,15 @@
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
+	import {
+		MENTION_PATTERN,
+		folderNoteIds,
+		liveChips,
+		mentionCandidatesFor,
+		mentionQueryOf,
+		withMention,
+		withoutMention
+	} from './mentions';
 
 	let {
 		shell,
@@ -182,36 +191,44 @@
 
 	// --- @ mention picker ---
 
-	const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
-	const mentionQuery = $derived(MENTION_PATTERN.exec(prompt)?.[2]);
+	const mentionQuery = $derived(mentionQueryOf(prompt));
 	let highlighted = $state(0);
 
-	const mentionCandidates = $derived.by((): ContextChip[] => {
-		if (mentionQuery === undefined || !shell) return [];
-		const query = mentionQuery.toLowerCase();
-		const notes = shell.noteTree
-			.filter(
-				(note) =>
-					note.kind !== 'folder' && !note.archivedAt && note.title.toLowerCase().includes(query)
-			)
-			.slice(0, 6)
-			.map((note): ContextChip => ({ kind: 'note', id: note.id, name: note.title }));
-		const skills = shell.skills
-			.filter((skill) => skill.name.toLowerCase().includes(query))
-			.slice(0, 4)
-			.map((skill): ContextChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
-		return [...notes, ...skills];
-	});
+	const mentionCandidates = $derived(
+		mentionQuery === undefined || !shell
+			? []
+			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills)
+	);
 
 	$effect(() => {
 		void mentionQuery;
 		highlighted = 0;
 	});
 
+	/** The tag stays in the sentence; the chip is the same choice, shown as a badge. */
 	function pick(candidate: ContextChip): void {
-		prompt = prompt.replace(MENTION_PATTERN, '$1');
+		prompt = withMention(prompt, candidate);
 		chat.addChip(candidate);
 		textareaRef?.focus();
+	}
+
+	function unpick(chip: ContextChip): void {
+		prompt = withoutMention(prompt, chip);
+		chat.removeChip(chip);
+	}
+
+	/**
+	 * The text rules: a chip whose tag the user has typed away is no longer attached.
+	 * Done on input rather than in an `$effect` so clearing the prompt to send does
+	 * not drop the chips out from under the request being built.
+	 */
+	function handleInput(): void {
+		saveDraft();
+		const live = liveChips(prompt, chat.chips);
+		const stale = chat.chips.filter(
+			(chip) => !live.some((kept) => kept.kind === chip.kind && kept.id === chip.id)
+		);
+		for (const chip of stale) chat.removeChip(chip);
 	}
 
 	/**
@@ -220,6 +237,14 @@
 	 * edited turn is grounded exactly like a freshly typed one.
 	 */
 	function requestFor(text: string): Omit<RunAgentInput, 'conversationId'> {
+		const folderNotes = shell
+			? chat.chips
+					.filter((chip) => chip.kind === 'folder')
+					.flatMap((chip) => folderNoteIds(shell.noteTree, chip.id))
+			: [];
+		const contextNoteIds = [
+			...new Set([...(autoChip ? [autoChip.id] : []), ...folderNotes])
+		] as NoteId[];
 		// Read the focused pane's editor selection; falls back to undefined
 		// when no pane is mounted (e.g. a fresh `/chats/new` page).
 		const interactionNoteId = workbench.interactionFocusedNoteId ?? workbench.focusedNoteId;
@@ -245,7 +270,9 @@
 				: interactionProjectId !== undefined
 					? { projectId: interactionProjectId }
 					: {}),
-			...(autoChip !== undefined ? { contextNoteIds: [autoChip.id] } : {}),
+			// A tagged folder rides in as the notes inside it; the store unions these
+			// with the note chips it maps itself.
+			...(contextNoteIds.length ? { contextNoteIds } : {}),
 			...(handoff?.selection !== undefined
 				? { selection: handoff.selection, noteId: handoff.selection.noteId }
 				: selection !== undefined
@@ -265,6 +292,8 @@
 		selectedImages = [];
 		saveDraft();
 		const request = chat.send({ ...requestFor(text), images: sentImages });
+		// The tags left with the prompt, so the chips they stood for go too.
+		chat.chips = [];
 		handoff = undefined;
 		await tick();
 		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
@@ -459,14 +488,14 @@
 		executionMode={chat.executionModeOverride}
 		onremovechip={(chip, automatic) => {
 			if (automatic) chat.autoChipDismissedFor = chip.id;
-			else chat.removeChip(chip);
+			else unpick(chip);
 		}}
 		onpick={pick}
 		onhighlight={(index) => (highlighted = index)}
 		onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
 		onfiles={(files) => void addImages(files)}
 		onkeydown={handleKeydown}
-		oninput={saveDraft}
+		oninput={handleInput}
 		onpaste={pasteImages}
 		ontoggleexecutionmode={toggleExecutionMode}
 		onsend={() => void send()}

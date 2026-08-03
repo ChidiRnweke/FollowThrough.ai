@@ -6,6 +6,12 @@ import type { NoteId } from '$lib/models/notes';
 
 const skillChip: ContextChip = { kind: 'skill', id: '1' as NoteId, name: 'Note analyzer' };
 const noteChip: ContextChip = { kind: 'note', id: '2' as NoteId, name: 'Reviewed draft' };
+const folderChip: ContextChip = {
+	kind: 'folder',
+	id: '3' as NoteId,
+	name: 'Research',
+	noteCount: 4
+};
 
 const base = {
 	chips: [],
@@ -40,6 +46,17 @@ describe('ChatComposer mentions', () => {
 		await screen.getByRole('option', { name: /Reviewed draft/ }).click();
 		expect(picked).toEqual(['note:Reviewed draft']);
 	});
+
+	it('offers folders as mention candidates', async () => {
+		const picked: string[] = [];
+		const screen = await render(ChatComposer, {
+			...base,
+			mentionCandidates: [folderChip],
+			onpick: (chip) => picked.push(`${chip.kind}:${chip.name}`)
+		});
+		await screen.getByRole('option', { name: /Research/ }).click();
+		expect(picked).toEqual(['folder:Research']);
+	});
 });
 
 describe('ChatComposer context chips', () => {
@@ -52,6 +69,11 @@ describe('ChatComposer context chips', () => {
 		});
 		await screen.getByRole('button', { name: 'Remove Note analyzer from context' }).click();
 		expect(removed).toEqual(['skill:Note analyzer']);
+	});
+
+	it('shows how many notes a folder chip stands for', async () => {
+		const screen = await render(ChatComposer, { ...base, chips: [folderChip] });
+		await expect.element(screen.getByText('4 notes')).toBeInTheDocument();
 	});
 });
 

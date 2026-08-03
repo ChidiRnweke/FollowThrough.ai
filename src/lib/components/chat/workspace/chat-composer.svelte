@@ -10,6 +10,7 @@
 	import {
 		FtSend as SendHorizontal,
 		FtDocument as FileText,
+		FtFolder as Folder,
 		FtSkills as Wrench,
 		FtCheck as Check,
 		FtWorkflow as Workflow,
@@ -71,10 +72,17 @@
 	<Badge variant="secondary" class="max-w-44 gap-1 pr-1">
 		{#if chip.kind === 'skill'}
 			<Wrench class="size-3 shrink-0" />
+		{:else if chip.kind === 'folder'}
+			<Folder class="size-3 shrink-0" />
 		{:else}
 			<FileText class="size-3 shrink-0" />
 		{/if}
 		<span class="truncate">{chip.name}</span>
+		{#if chip.kind === 'folder'}
+			<span class="shrink-0 text-xs text-muted-foreground">
+				{chip.noteCount === 1 ? '1 note' : `${chip.noteCount ?? 0} notes`}
+			</span>
+		{/if}
 		<Button
 			type="button"
 			variant="ghost"
@@ -103,7 +111,7 @@
 		<div
 			class="absolute bottom-full left-0 z-50 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-md"
 			role="listbox"
-			aria-label="Mention a note or skill"
+			aria-label="Mention a note, folder, or skill"
 		>
 			{#each mentionCandidates as candidate, index (candidate.kind + candidate.id)}
 				<Button
@@ -119,12 +127,14 @@
 				>
 					{#if candidate.kind === 'skill'}
 						<Wrench class="size-3.5 shrink-0 text-muted-foreground" />
+					{:else if candidate.kind === 'folder'}
+						<Folder class="size-3.5 shrink-0 text-muted-foreground" />
 					{:else}
 						<FileText class="size-3.5 shrink-0 text-muted-foreground" />
 					{/if}
 					<span class="truncate">{candidate.name}</span>
 					<span class="ml-auto text-xs text-muted-foreground">
-						{candidate.kind === 'skill' ? 'Skill' : 'Note'}
+						{candidate.kind === 'skill' ? 'Skill' : candidate.kind === 'folder' ? 'Folder' : 'Note'}
 					</span>
 				</Button>
 			{/each}
