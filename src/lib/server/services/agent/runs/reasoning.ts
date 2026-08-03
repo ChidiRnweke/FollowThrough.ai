@@ -25,7 +25,7 @@ import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
-import type { ContextNote } from '$lib/models/agent';
+import type { ContextNote, ConversationId } from '$lib/models/agent';
 
 /**
  * Turns one run may take before the SDK cuts it off. High enough that a
@@ -319,7 +319,7 @@ export class AgentReasoning {
 		private readonly createSession: (
 			repository: AgentSessionRepository,
 			actor: ActorContext,
-			conversationId: import('$lib/models/agent').ConversationId
+			conversationId: ConversationId
 		) => BufferedSession = () => {
 			throw new Error('Conversation sessions are not configured');
 		},

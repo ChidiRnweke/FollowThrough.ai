@@ -7,6 +7,7 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
+	ConversationId,
 	RunAgentInput,
 	ToolActivity
 } from '$lib/models/agent';
@@ -25,7 +26,7 @@ interface AgentContextBuilder {
 		input: RunAgentInput,
 		run: {
 			provenanceId: ProvenanceId;
-			conversationId?: import('$lib/models/agent').ConversationId;
+			conversationId?: ConversationId;
 		}
 	): Promise<Readonly<Record<string, unknown>>>;
 }
@@ -60,13 +61,13 @@ interface ProvenanceRecorder {
 interface ConversationJournal {
 	recordToolActivity(
 		actor: ActorContext,
-		conversationId: import('$lib/models/agent').ConversationId,
+		conversationId: ConversationId,
 		activity: ToolActivity,
 		provenance?: { readonly runId: AgentRunId; readonly eventCursor?: string }
 	): Promise<void>;
 	recordAssistantText(
 		actor: ActorContext,
-		conversationId: import('$lib/models/agent').ConversationId,
+		conversationId: ConversationId,
 		text: string,
 		model?: string,
 		provenance?: { readonly runId: AgentRunId; readonly eventCursor?: string }

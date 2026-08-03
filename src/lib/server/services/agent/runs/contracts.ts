@@ -16,7 +16,8 @@ import type {
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
-import type { Note, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 
@@ -120,8 +121,8 @@ export interface ConversationJournal extends ConversationRecorder {
 		actor: ActorContext,
 		input: {
 			title: string;
-			contextProjectId?: import('$lib/models/projects').ProjectId;
-			contextNoteId?: import('$lib/models/notes').NoteId;
+			contextProjectId?: ProjectId;
+			contextNoteId?: NoteId;
 		}
 	): Promise<Conversation>;
 	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
@@ -145,7 +146,7 @@ export interface ConversationJournal extends ConversationRecorder {
 		text: string,
 		model?: string,
 		provenance?: {
-			readonly runId: import('$lib/models/agent').AgentRunId;
+			readonly runId: AgentRunId;
 			readonly eventCursor?: string;
 		}
 	): Promise<void>;
@@ -154,7 +155,7 @@ export interface ConversationJournal extends ConversationRecorder {
 		conversationId: ConversationId,
 		activity: ToolActivity,
 		provenance?: {
-			readonly runId: import('$lib/models/agent').AgentRunId;
+			readonly runId: AgentRunId;
 			readonly eventCursor?: string;
 		}
 	): Promise<void>;

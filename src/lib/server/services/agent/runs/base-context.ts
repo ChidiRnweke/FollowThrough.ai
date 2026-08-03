@@ -1,14 +1,14 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
-import type { RunAgentInput } from '$lib/models/agent';
+import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 export interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: {
 			provenanceId: ProvenanceId;
-			conversationId?: import('$lib/models/agent').ConversationId;
+			conversationId?: ConversationId;
 		}
 	): Promise<Readonly<Record<string, unknown>>>;
 }
@@ -23,7 +23,7 @@ export class BaseAgentContext implements AgentContextBuilder {
 		input: RunAgentInput,
 		_run: {
 			provenanceId: ProvenanceId;
-			conversationId?: import('$lib/models/agent').ConversationId;
+			conversationId?: ConversationId;
 		}
 	): Promise<Readonly<Record<string, unknown>>> {
 		void _run;

@@ -9,6 +9,8 @@ import type {
 	RunAgentInput,
 	ToolActivity
 } from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError } from '$lib/errors';
 import type { ConversationRepository } from '$lib/server/repositories/agent';
@@ -94,8 +96,8 @@ export class ConversationArchive {
 		actor: ActorContext,
 		input: {
 			title: string;
-			contextProjectId?: import('$lib/models/projects').ProjectId;
-			contextNoteId?: import('$lib/models/notes').NoteId;
+			contextProjectId?: ProjectId;
+			contextNoteId?: NoteId;
 		}
 	): Promise<Conversation> {
 		const timestamp = now();
@@ -172,7 +174,7 @@ export class ConversationArchive {
 		text: string,
 		model?: string,
 		provenance?: {
-			readonly runId: import('$lib/models/agent').AgentRunId;
+			readonly runId: AgentRunId;
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
@@ -191,7 +193,7 @@ export class ConversationArchive {
 		conversationId: ConversationId,
 		activity: ToolActivity,
 		provenance?: {
-			readonly runId: import('$lib/models/agent').AgentRunId;
+			readonly runId: AgentRunId;
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
@@ -221,7 +223,7 @@ export class ConversationArchive {
 		content: Readonly<Record<string, unknown>>,
 		model?: string,
 		provenance?: {
-			readonly runId?: import('$lib/models/agent').AgentRunId;
+			readonly runId?: AgentRunId;
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
