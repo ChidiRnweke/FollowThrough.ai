@@ -139,7 +139,12 @@
 					<span class={['size-1.5 shrink-0 rounded-full', todoStatusStyle[status].dotClass]}></span>
 				{/if}
 				{todoStatusLabels[status]}
-				<span class="font-normal tabular-nums">{items.length}</span>
+				<span
+					class={[
+						'font-semibold tabular-nums',
+						status === 'done' ? 'text-success' : 'text-black dark:text-white'
+					]}>{items.length}</span
+				>
 			</h3>
 			<div class="relative flex min-h-0 flex-1 flex-col">
 				{#if items.length === 0 && addingTo !== status}
@@ -198,7 +203,13 @@
 						class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 						onclick={() => toggleExpanded(status)}
 					>
-						{isExpanded ? 'Show less' : `Show ${items.length - VISIBLE_LIMIT} more`}
+						{#if isExpanded}
+							Show less
+						{:else}
+							Show <span class="font-semibold text-black tabular-nums dark:text-white"
+								>{items.length - VISIBLE_LIMIT}</span
+							> more
+						{/if}
 					</Button>
 				{/if}
 			</div>
