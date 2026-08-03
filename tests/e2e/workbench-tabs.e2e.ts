@@ -168,6 +168,62 @@ test('the tab strip stays visible while the editor scrolls', async ({ page }) =>
 	await expect(tabStrip).toBeVisible();
 });
 
+test('the Close all control stays pinned when the tabs overflow the strip', async ({ page }) => {
+	await openFirstNote(page);
+
+	const tabStrip = page.locator('[role="tablist"][aria-label="Open notes"]');
+	const scroller = tabStrip.locator('[data-tab-strip-scroller]');
+	const controls = tabStrip.locator('[data-tab-strip-controls]');
+	const closeAll = page.getByRole('button', { name: /Close all \d+ tabs/ });
+	const firstTab = page.locator('button[role="tab"]').first();
+
+	await expect(closeAll).toBeVisible();
+
+	// Guarantee horizontal overflow regardless of how many notes the seed
+	// database produced: a wide, non-shrinking spacer inside the scrolling flex
+	// row makes the content wider than the strip's viewport.
+	await scroller.evaluate((element) => {
+		const spacer = document.createElement('div');
+		spacer.setAttribute('aria-hidden', 'true');
+		spacer.style.flex = '0 0 1600px';
+		spacer.style.height = '1px';
+		element.appendChild(spacer);
+	});
+
+	const stripBox = (await tabStrip.boundingBox())!;
+	const tabXBeforeScroll = (await firstTab.boundingBox())!.x;
+	const controlsBoxBefore = (await controls.boundingBox())!;
+
+	// The pinned controls already sit at the strip's right edge before scrolling.
+	expect(
+		Math.abs(controlsBoxBefore.x + controlsBoxBefore.width - (stripBox.x + stripBox.width))
+	).toBeLessThan(4);
+
+	// Scroll the strip to the far end.
+	await scroller.evaluate((element) => {
+		element.scrollLeft = 1600;
+	});
+
+	// The leftmost tab scrolled off the visible strip, so the strip really moved.
+	const tabXAfterScroll = (await firstTab.boundingBox())!.x;
+	expect(tabXAfterScroll).toBeLessThan(stripBox.x);
+	expect(tabXAfterScroll).toBeLessThan(tabXBeforeScroll);
+
+	// The Close all control did not ride along: still on screen, right edge still
+	// glued to the strip's right edge, x unchanged by the scroll.
+	await expect(closeAll).toBeVisible();
+	const controlsBoxAfter = (await controls.boundingBox())!;
+	expect(Math.abs(controlsBoxAfter.x - controlsBoxBefore.x)).toBeLessThan(1);
+	expect(
+		Math.abs(controlsBoxAfter.x + controlsBoxAfter.width - (stripBox.x + stripBox.width))
+	).toBeLessThan(4);
+
+	// It still works from its pinned position: closing everything empties the strip.
+	await closeAll.click();
+	await expect(page.getByRole('tab')).toHaveCount(0);
+	await expect(tabStrip.getByText('No notes open')).toBeVisible();
+});
+
 test('a todo-to-note navigation finishing within the micro-duration never reveals progress', async ({
 	page
 }) => {
