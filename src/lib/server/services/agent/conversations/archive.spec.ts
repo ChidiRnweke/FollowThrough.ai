@@ -85,4 +85,28 @@ describe('Conversation visibility invariants', () => {
 		await journal.remove(testActor(), conversation.id);
 		expect(await journal.listConversations(testActor())).toHaveLength(0);
 	});
+
+	it('stores pasted images on the journaled user message', async () => {
+		const journal = new ConversationArchive(new InMemoryConversationRepository());
+		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Look at this' });
+		const images = [
+			{
+				id: 'img-1',
+				mediaType: 'image/png' as const,
+				dataUrl: 'data:image/png;base64,AAA',
+				name: 'shot.png'
+			}
+		];
+		await journal.recordUserPrompt(testActor(), conversation.id, 'Look at this', undefined, images);
+		const [message] = await journal.listMessages(testActor(), conversation.id);
+		expect(message.content.images).toEqual(images);
+	});
+
+	it('leaves a text-only turn without an images key', async () => {
+		const journal = new ConversationArchive(new InMemoryConversationRepository());
+		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
+		await journal.recordUserPrompt(testActor(), conversation.id, 'Hello');
+		const [message] = await journal.listMessages(testActor(), conversation.id);
+		expect(message.content).toEqual({ type: 'text', text: 'Hello' });
+	});
 });

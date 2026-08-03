@@ -3,8 +3,10 @@ import type {
 	AgentExecutionUpdate,
 	AgentRun,
 	AgentRunDecisionRecord,
+	AgentRunId,
 	Conversation,
 	ConversationId,
+	ConversationImageInput,
 	InlineCompletionContext,
 	InlineSuggestionRequest,
 	Message,
@@ -134,7 +136,8 @@ export interface ConversationJournal extends ConversationRecorder {
 		actor: ActorContext,
 		conversationId: ConversationId,
 		prompt: string,
-		runId?: import('$lib/models/agent').AgentRunId
+		runId?: AgentRunId,
+		images?: readonly ConversationImageInput[]
 	): Promise<void>;
 	recordAssistantText(
 		actor: ActorContext,

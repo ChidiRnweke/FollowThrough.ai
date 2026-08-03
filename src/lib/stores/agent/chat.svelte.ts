@@ -111,6 +111,24 @@ export const entryText = (entry: ChatEntry): string =>
 const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
 	entry.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
 
+/**
+ * Restored journal content is untyped JSON: only re-emit images whose shape we
+ * recognise, so a malformed record degrades to the text-only turn it was before.
+ */
+const restoredImages = (value: unknown): ChatPart[] => {
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter(
+			(item): item is { id: string; dataUrl: string; name: string } =>
+				typeof item === 'object' &&
+				item !== null &&
+				typeof (item as Record<string, unknown>).id === 'string' &&
+				typeof (item as Record<string, unknown>).dataUrl === 'string' &&
+				typeof (item as Record<string, unknown>).name === 'string'
+		)
+		.map((item) => ({ kind: 'image' as const, id: item.id, dataUrl: item.dataUrl, name: item.name }));
+};
+
 const applyToolActivity = (entry: ChatEntry, incoming: ChatToolActivity): void => {
 	if (!reconcileToolActivity(entryTools(entry), incoming))
 		entry.parts.push({ kind: 'tool', tool: incoming });
@@ -216,6 +234,7 @@ export class ChatStore {
 					continue;
 				}
 				const text = typeof message.content.text === 'string' ? message.content.text : '';
+				const images = message.role === 'user' ? restoredImages(message.content.images) : [];
 				entries.push({
 					id: message.id,
 					role: message.role,
@@ -223,7 +242,8 @@ export class ChatStore {
 						...(message.role === 'assistant'
 							? pendingTools.map((tool): ChatPart => ({ kind: 'tool', tool }))
 							: []),
-						...(text ? [{ kind: 'text' as const, text }] : [])
+						...(text ? [{ kind: 'text' as const, text }] : []),
+						...images
 					],
 					suggestions: [],
 					status: 'completed',

@@ -318,7 +318,8 @@ export class Agent implements AgentController {
 					actor,
 					conversation.id,
 					runInput.prompt,
-					run.id
+					run.id,
+					runInput.images
 				);
 				const event = await this.dependencies.events.append(run.id, 0, {
 					type: 'run_queued',

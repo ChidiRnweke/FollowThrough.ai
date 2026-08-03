@@ -1,7 +1,9 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
+	AgentRunId,
 	Conversation,
 	ConversationId,
+	ConversationImageInput,
 	Message,
 	MessageId,
 	RunAgentInput,
@@ -145,11 +147,23 @@ export class ConversationArchive {
 		actor: ActorContext,
 		conversationId: ConversationId,
 		prompt: string,
-		runId?: import('$lib/models/agent').AgentRunId
+		runId?: AgentRunId,
+		images?: readonly ConversationImageInput[]
 	): Promise<void> {
-		await this.append(actor, conversationId, 'user', { type: 'text', text: prompt }, undefined, {
-			runId
-		});
+		await this.append(
+			actor,
+			conversationId,
+			'user',
+			{
+				type: 'text',
+				text: prompt,
+				...(images?.length ? { images: [...images] } : {})
+			},
+			undefined,
+			{
+				runId
+			}
+		);
 	}
 
 	async recordAssistantText(

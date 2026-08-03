@@ -155,6 +155,17 @@ class FailingTransport extends FakeAgentRunTransport {
 	}
 }
 
+class HydratingTransport extends FakeAgentRunTransport {
+	constructor(
+		private readonly session: Awaited<ReturnType<AgentRunTransport['getSession']>>
+	) {
+		super([]);
+	}
+	override async getSession(): Promise<Awaited<ReturnType<AgentRunTransport['getSession']>>> {
+		return this.session;
+	}
+}
+
 const streamedEvents: AgentEvent[] = [
 	{ type: 'text_delta', text: 'Let me check. ' },
 	{ type: 'tool_started', callId: 'call-1', name: 'find_references', arguments: { query: 'x' } },
@@ -329,5 +340,50 @@ describe('stopping a streaming turn', () => {
 		await store.stop();
 		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
 		expect(entryText(reply)).toBe('Working on it');
+	});
+});
+
+describe('restoring a conversation', () => {
+	const hydrateWith = async (content: Readonly<Record<string, unknown>>) => {
+		const session = {
+			conversation: { id: conversationId },
+			messages: [
+				{
+					id: '30000000-0000-4000-8000-000000000001',
+					conversationId,
+					role: 'user',
+					content,
+					createdAt: new Date().toISOString()
+				}
+			]
+		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+		const store = new ChatStore(new HydratingTransport(session), new MemoryStorage());
+		store.conversationId = conversationId;
+		await store.hydrate();
+		return store;
+	};
+
+	it('restores pasted images after the text of the turn', async () => {
+		const store = await hydrateWith({
+			type: 'text',
+			text: 'What is this?',
+			images: [
+				{
+					id: 'img-1',
+					mediaType: 'image/png',
+					dataUrl: 'data:image/png;base64,AAA',
+					name: 'shot.png'
+				}
+			]
+		});
+		expect(store.entries.at(0)?.parts).toEqual([
+			{ kind: 'text', text: 'What is this?' },
+			{ kind: 'image', id: 'img-1', dataUrl: 'data:image/png;base64,AAA', name: 'shot.png' }
+		]);
+	});
+
+	it('degrades a malformed images record to a text-only turn', async () => {
+		const store = await hydrateWith({ type: 'text', text: 'Hi', images: 'not-an-array' });
+		expect(store.entries.at(0)?.parts).toEqual([{ kind: 'text', text: 'Hi' }]);
 	});
 });
