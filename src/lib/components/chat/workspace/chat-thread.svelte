@@ -33,6 +33,7 @@
 	import ToolApprovalGroup from '../actions/tool-approval-group.svelte';
 	import { chatPartGroupKey, groupChatParts } from '../chat-parts';
 	import ChatHistoryList from './chat-history-list.svelte';
+	import ImageLightbox from '../image-lightbox.svelte';
 
 	let {
 		shell,
@@ -162,7 +163,7 @@
 							{#if part.kind === 'text'}
 								{#if part.text && editingId !== entry.id}<ChatMarkdown content={part.text} />{/if}
 							{:else if part.kind === 'image'}
-								<img
+								<ImageLightbox
 									src={part.dataUrl}
 									alt={part.name}
 									class="max-h-48 max-w-64 rounded-md object-contain"

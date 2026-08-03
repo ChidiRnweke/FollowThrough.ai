@@ -18,6 +18,7 @@
 		FtClose as X,
 		FtStop as Square
 	} from '$lib/components/icons';
+	import ImageLightbox from '../image-lightbox.svelte';
 
 	let {
 		prompt = $bindable(''),
@@ -144,7 +145,11 @@
 		<div class="flex flex-wrap gap-2" aria-label="Attached images">
 			{#each selectedImages as image (image.id)}
 				<div class="relative">
-					<img src={image.dataUrl} alt={image.name} class="size-16 rounded-md object-cover" />
+					<ImageLightbox
+						src={image.dataUrl}
+						alt={image.name}
+						class="size-16 rounded-md object-cover"
+					/>
 					<Button
 						variant="secondary"
 						size="icon-xs"
