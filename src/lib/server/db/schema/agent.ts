@@ -12,6 +12,7 @@ export {
 	messageRole,
 	messages,
 	projectToolOverrides,
+	toolEmbeddings,
 	toolPreferences,
 	trustPolicies
 } from './registry';

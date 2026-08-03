@@ -92,7 +92,7 @@ Configuration is layered, and the two example files map exactly onto the layers:
 
 4. **Provision and migrate the database (one shot).**
 
-   The production compose file carries a `migrate` service under the `setup` profile that runs `scripts/provision-db.js` (creates the database and role with a random password, grants privileges, and stores the resulting `DATABASE_URL` in Infisical: skipped entirely if `DATABASE_URL` already exists there) followed by `scripts/prod-migrate.js` (Drizzle migrations from `./drizzle`):
+   The production compose file carries a `migrate` service under the `setup` profile that runs `scripts/provision-db.js` (creates the database and role with a random password, grants privileges, and stores the resulting `DATABASE_URL` in Infisical: skipped entirely if `DATABASE_URL` already exists there) followed by `scripts/prod-migrate.js` (Drizzle migrations from `./drizzle`, then seeds the `tool_embeddings` table used by agent tool search — only changed tool descriptions are re-embedded, so reruns are cheap):
 
    ```sh
    docker compose -f docker-compose.prod.yml --profile setup run --rm migrate

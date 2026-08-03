@@ -915,6 +915,19 @@ export const searchChunks = pgTable(
 	]
 );
 
+// Precomputed embeddings of the static agent tool catalog (name + description),
+// seeded at deploy time next to migrations. `search_tools` ranking reads these
+// vectors instead of embedding descriptions at runtime. contentHash detects
+// description changes so the seeder only re-embeds what drifted.
+export const toolEmbeddings = pgTable('tool_embeddings', {
+	name: text('name').primaryKey(),
+	description: text('description').notNull(),
+	contentHash: text('content_hash').notNull(),
+	embedding: halfvec('embedding', { dimensions: 3072 }).notNull(),
+	embeddingModel: text('embedding_model').notNull(),
+	...timestamps
+});
+
 export const projectTemplates = pgTable(
 	'project_templates',
 	{

@@ -24,9 +24,10 @@ import { operationObserver } from '$lib/server/services/telemetry';
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
 import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
 import {
-	EmbeddedToolRetriever,
+	PgToolRetriever,
 	type ToolRetriever
 } from '$lib/server/services/agent/tools/tool-retriever';
+import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
 import { InlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
@@ -105,7 +106,7 @@ export const createKnowledgeSearchCapability = (
 	return {
 		repository,
 		embeddingClient,
-		toolRetriever: new EmbeddedToolRetriever(embeddingClient),
+		toolRetriever: new PgToolRetriever(embeddingClient, new ToolEmbeddingRecords(input.db)),
 		finalize: ({ preferences, memory }) => ({
 			preferences,
 			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {

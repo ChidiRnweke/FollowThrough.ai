@@ -19,10 +19,17 @@ export default defineConfig({
 		alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) }
 	},
 	build: {
-		ssr: 'src/worker.ts',
+		ssr: true,
 		outDir: 'build-worker',
 		emptyOutDir: true,
 		target: 'node22',
-		rollupOptions: { output: { entryFileNames: 'worker.js' } }
+		rollupOptions: {
+			input: {
+				worker: 'src/worker.ts',
+				// Deploy-time seeder for the tool_embeddings table; runs next to migrations.
+				'seed-tool-embeddings': 'src/seed-tool-embeddings.ts'
+			},
+			output: { entryFileNames: '[name].js' }
+		}
 	}
 });

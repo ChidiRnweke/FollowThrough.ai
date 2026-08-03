@@ -239,6 +239,13 @@
       "when": 1785600587557,
       "tag": "0033_worthless_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785733079709,
+      "tag": "0034_tranquil_smasher",
+      "breakpoints": true
     }
   ]
 }

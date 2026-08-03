@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Node executes this JavaScript entrypoint directly. */
 // @ts-nocheck -- behaviour and dependency contracts are covered by Vitest fakes.
+import { spawnSync } from 'node:child_process';
 import { InfisicalSDK } from '@infisical/sdk';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -72,6 +73,20 @@ async function run() {
 		process.exit(1);
 	}
 	await sql.end();
+
+	// Step 5: Seed tool embeddings into the freshly migrated schema. Runs as a
+	// child process against the worker bundle (the runtime image ships no src/),
+	// with the Infisical-resolved secrets on its environment.
+	console.log('Step 5: Seeding tool embeddings...');
+	const seed = spawnSync('node', ['build-worker/seed-tool-embeddings.js'], {
+		stdio: 'inherit',
+		env: { ...process.env, ...secretMap, DATABASE_URL: connectionString }
+	});
+	if (seed.status !== 0) {
+		console.error('Tool embedding seed failed with status:', seed.status);
+		await shutdownTelemetry();
+		process.exit(1);
+	}
 
 	// Shutdown telemetry before exiting
 	await shutdownTelemetry();

@@ -18,6 +18,7 @@ import {
 	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
+import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { actor, context, now, seedNote } from '../database-harness';
 describe('Postgres conversation repository invariants', () => {
@@ -294,5 +295,56 @@ describe('Postgres trust-policy repository invariants', () => {
 			updatedAt: now
 		});
 		expect(await repository.list(actor('26'))).toEqual([]);
+	});
+});
+describe('Postgres tool-embedding repository invariants', () => {
+	const basis = (index: number) =>
+		Array.from({ length: 3072 }, (_, position) => (position === index ? 1 : 0));
+	const row = (name: string, embedding: readonly number[], hash = `hash-${name}`) => ({
+		name,
+		description: `description of ${name}`,
+		contentHash: hash,
+		embedding,
+		embeddingModel: 'contract-model'
+	});
+
+	it('round-trips seeded rows', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		await repository.upsert([row('contract_alpha', basis(0)), row('contract_beta', basis(1))]);
+		const listed = (await repository.list()).map((entry) => entry.name);
+		expect(listed).toEqual(expect.arrayContaining(['contract_alpha', 'contract_beta']));
+	});
+
+	it('ranks by cosine distance to the query', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		const ranked = await repository.rankByVector(basis(0), ['contract_beta', 'contract_alpha'], 10);
+		expect(ranked).toEqual(['contract_alpha', 'contract_beta']);
+	});
+
+	it('ranks only the requested names and caps the result', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		const ranked = await repository.rankByVector(
+			basis(0),
+			['contract_beta', 'contract_alpha', 'contract_not_seeded'],
+			1
+		);
+		expect(ranked).toEqual(['contract_alpha']);
+	});
+
+	it('overwrites changed rows on conflict', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		await repository.upsert([row('contract_alpha', basis(2), 'hash-v2')]);
+		const updated = (await repository.list()).find((entry) => entry.name === 'contract_alpha');
+		expect(updated?.contentHash).toBe('hash-v2');
+	});
+
+	it('drops tools that left the catalog', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		await repository.upsert([row('contract_gamma', basis(3)), row('contract_delta', basis(4))]);
+		await repository.deleteExcept(['contract_gamma']);
+		const remaining = (await repository.list())
+			.map((entry) => entry.name)
+			.filter((name) => name === 'contract_gamma' || name === 'contract_delta');
+		expect(remaining).toEqual(['contract_gamma']);
 	});
 });

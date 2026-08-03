@@ -51,26 +51,13 @@ import {
 	projectTodo,
 	projectUser
 } from './services/agent/runs/tool-views';
+import {
+	FIRST_CLASS_TOOL_NAMES,
+	TOOL_CATALOG,
+	toolDescription
+} from '$lib/models/agent/tool-catalog';
 
-/**
- * Stable, frequently used tools the agent can call without first discovering
- * them. Everything else stays in the on-demand tool-search catalog.
- *
- * `search_note` is first-class not for frequency but because injected prompt
- * text names it: the oversized-context-note pointer tells the model to call it,
- * and a tool our own prompts reference must work without a discovery round-trip.
- */
-export const FIRST_CLASS_TOOL_NAMES = [
-	'search',
-	'search_note',
-	'list_user_memory',
-	'list_project_memory',
-	'get_workspace_context',
-	'get_note',
-	'list_todos',
-	'load_skill',
-	'propose_memory_change'
-];
+export { FIRST_CLASS_TOOL_NAMES };
 
 /**
  * Tools the user cannot deselect. Without `get_workspace_context` and
@@ -506,9 +493,12 @@ export class AgentTools {
 
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
-		return this.definitions()
-			.filter((definition) => !FIRST_CLASS_TOOL_NAMES.includes(definition.name))
-			.map((definition) => ({ name: definition.name, description: definition.description }));
+		return TOOL_CATALOG.filter(
+			(entry) =>
+				LOCKED_TOOL_NAMES.includes(entry.name) ||
+				!this.toolAccess ||
+				this.toolAccess.isEnabled(entry.name)
+		);
 	}
 
 	private buildTool(definition: Definition): Tool<unknown> {
@@ -560,7 +550,7 @@ export class AgentTools {
 		return [
 			define(
 				'search',
-				"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps. Pass projectId to restrict results to one project.",
+				toolDescription('search'),
 				'read',
 				temporal({ query: z.string().min(1), projectId: id.optional() }),
 				(input) =>
@@ -574,7 +564,7 @@ export class AgentTools {
 			),
 			define(
 				'search_note',
-				'Search within a single note — semantically ranked chunks from that note only, its diagrams included. Use it when an attached note was too large to include in the conversation, or when a question is clearly about one specific note.',
+				toolDescription('search_note'),
 				'read',
 				temporal({ noteId: id, query: z.string().min(1) }),
 				(input) =>
@@ -588,7 +578,7 @@ export class AgentTools {
 			),
 			define(
 				'get_workspace_context',
-				'Read projects, notes, skills, and pending work.',
+				toolDescription('get_workspace_context'),
 				'read',
 				none,
 				async () => {
@@ -605,52 +595,52 @@ export class AgentTools {
 			),
 			define(
 				'get_today_view',
-				'Read work due on a local date.',
+				toolDescription('get_today_view'),
 				'read',
 				z.object({ today: z.string() }),
 				(input) => factory.workspace().getTodayView(actor, input as never)
 			),
-			define('list_projects', 'List active projects.', 'read', temporal({}), async () => ({
+			define('list_projects', toolDescription('list_projects'), 'read', temporal({}), async () => ({
 				projects: (await factory.projects().list(actor)).projects.map(projectProject)
 			})),
 			define(
 				'get_project',
-				'Read a project and its note tree.',
+				toolDescription('get_project'),
 				'read',
 				z.object({ projectId: id }),
 				(input) => factory.projects().get(actor, input as never)
 			),
 			define(
 				'create_project',
-				'Create a project.',
+				toolDescription('create_project'),
 				'mutation',
 				z.object({ name: z.string().min(1), description: z.string().optional() }),
 				(input) => factory.projects().create(actor, input as never)
 			),
 			define(
 				'rename_project',
-				'Rename a project.',
+				toolDescription('rename_project'),
 				'mutation',
 				z.object({ projectId: id, name: z.string().min(1) }),
 				(input) => factory.projects().rename(actor, input as never)
 			),
 			define(
 				'archive_project',
-				'Archive a project.',
+				toolDescription('archive_project'),
 				'mutation',
 				z.object({ projectId: id }),
 				(input) => factory.projects().archive(actor, input as never)
 			),
 			define(
 				'create_folder',
-				'Create a folder in a project.',
+				toolDescription('create_folder'),
 				'mutation',
 				z.object({ projectId: id, name: z.string().min(1), parentId: id.optional() }),
 				(input) => factory.projects().createFolder(actor, input as never)
 			),
 			define(
 				'move_project_entry',
-				'Move or reorder a note or folder.',
+				toolDescription('move_project_entry'),
 				'mutation',
 				z.object({
 					projectId: id,
@@ -662,7 +652,7 @@ export class AgentTools {
 			),
 			define(
 				'get_note',
-				'Read a note with backlinks, references, diagrams, todos, and proposals. The note body is returned as Markdown, which is the text edit_note anchors against and save_note replaces. Call this before your first edit_note or save_note on a note each turn.',
+				toolDescription('get_note'),
 				'read',
 				z.object({ noteId: id }),
 				async (input) => {
@@ -676,14 +666,14 @@ export class AgentTools {
 			),
 			define(
 				'create_note',
-				'Create a note.',
+				toolDescription('create_note'),
 				'mutation',
 				z.object({ title: z.string().min(1), projectId: id.optional(), parentId: id.optional() }),
 				(input) => factory.notes().create(actor, input as never)
 			),
 			define(
 				'save_note',
-				'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Prefer edit_note unless you are genuinely rewriting the note end to end — this tool discards anything you leave out. Skill bodies have their own tools: use save_skill or edit_skill instead.',
+				toolDescription('save_note'),
 				'mutation',
 				z.object({
 					noteId: id,
@@ -704,7 +694,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_note',
-				'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop retrying the patch and use save_note with the complete desired body instead. Skill bodies are edited with edit_skill or save_skill, not this tool.',
+				toolDescription('edit_note'),
 				'mutation',
 				z.object({
 					noteId: id,
@@ -747,31 +737,35 @@ export class AgentTools {
 			),
 			define(
 				'rename_note',
-				'Rename a note.',
+				toolDescription('rename_note'),
 				'mutation',
 				z.object({ noteId: id, title: z.string().min(1) }),
 				(input) => factory.notes().rename(actor, input as never)
 			),
-			define('archive_note', 'Archive a note.', 'mutation', z.object({ noteId: id }), (input) =>
-				factory.notes().archive(actor, input as never)
+			define(
+				'archive_note',
+				toolDescription('archive_note'),
+				'mutation',
+				z.object({ noteId: id }),
+				(input) => factory.notes().archive(actor, input as never)
 			),
 			define(
 				'publish_note',
-				'Publish a note, creating a versioned snapshot.',
+				toolDescription('publish_note'),
 				'mutation',
 				z.object({ noteId: id, baseEtag: z.string() }),
 				(input) => factory.notes().publish(actor, input as never)
 			),
 			define(
 				'discard_note_draft',
-				'Discard unpublished changes and revert to the last published version.',
+				toolDescription('discard_note_draft'),
 				'mutation',
 				z.object({ noteId: id }),
 				(input) => factory.notes().discardDraft(actor, input as never)
 			),
 			define(
 				'list_todos',
-				'List todos using optional filters.',
+				toolDescription('list_todos'),
 				'read',
 				temporal({
 					projectId: id.optional(),
@@ -788,7 +782,7 @@ export class AgentTools {
 			),
 			define(
 				'create_todo',
-				'Create a todo.',
+				toolDescription('create_todo'),
 				'mutation',
 				z.object({
 					projectId: id,
@@ -802,7 +796,7 @@ export class AgentTools {
 			),
 			define(
 				'create_todos',
-				'Create multiple todos in one call. Prefer this over repeated create_todo calls when adding several todos.',
+				toolDescription('create_todos'),
 				'mutation',
 				z.object({
 					projectId: id,
@@ -831,7 +825,7 @@ export class AgentTools {
 			),
 			define(
 				'update_todo',
-				'Edit a todo or change its status.',
+				toolDescription('update_todo'),
 				'mutation',
 				z.object({
 					todoId: id,
@@ -847,21 +841,21 @@ export class AgentTools {
 			),
 			define(
 				'extract_promises',
-				'Propose todos from a text selection without bypassing review.',
+				toolDescription('extract_promises'),
 				'proposal',
 				z.object({ selection }),
 				(input) => factory.todos().extractPromises(actor, input as never)
 			),
 			define(
 				'relate_selection',
-				'Propose relationships for a text selection.',
+				toolDescription('relate_selection'),
 				'proposal',
 				z.object({ selection }),
 				(input) => factory.relationships().suggestFromSelection(actor, input as never)
 			),
 			define(
 				'find_references',
-				'Propose ranked references for a text selection.',
+				toolDescription('find_references'),
 				'proposal',
 				z.object({ selection }),
 				(input) =>
@@ -871,28 +865,28 @@ export class AgentTools {
 			),
 			define(
 				'generate_mermaid_diagram',
-				'Propose a Mermaid diagram from a text selection.',
+				toolDescription('generate_mermaid_diagram'),
 				'proposal',
 				z.object({ selection, instruction: z.string().optional() }),
 				(input) => factory.diagrams().generateMermaid(actor, input as never)
 			),
 			define(
 				'revise_mermaid_diagram',
-				'Revise a durable Mermaid diagram.',
+				toolDescription('revise_mermaid_diagram'),
 				'mutation',
 				z.object({ diagramId: id, instruction: z.string().min(1) }),
 				(input) => factory.diagrams().reviseMermaid(actor, input as never)
 			),
 			define(
 				'promote_diagram',
-				'Propose converting a durable Mermaid diagram to draw.io for explicit review.',
+				toolDescription('promote_diagram'),
 				'proposal',
 				z.object({ diagramId: id }),
 				(input) => factory.diagrams().promote(actor, input as never)
 			),
 			define(
 				'list_suggestions',
-				'List reviewable suggestions by status.',
+				toolDescription('list_suggestions'),
 				'read',
 				temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
 				async (input) => ({
@@ -903,35 +897,31 @@ export class AgentTools {
 			),
 			define(
 				'accept_suggestion',
-				'Accept and apply a suggestion.',
+				toolDescription('accept_suggestion'),
 				'mutation',
 				z.object({ suggestionId: id }),
 				(input) => factory.suggestions().accept(actor, input as never)
 			),
 			define(
 				'reject_suggestion',
-				'Reject a suggestion.',
+				toolDescription('reject_suggestion'),
 				'mutation',
 				z.object({ suggestionId: id }),
 				(input) => factory.suggestions().reject(actor, input as never)
 			),
 			define(
 				'revert_suggestion',
-				'Revert an accepted suggestion.',
+				toolDescription('revert_suggestion'),
 				'mutation',
 				z.object({ suggestionId: id }),
 				(input) => factory.suggestions().revert(actor, input as never)
 			),
-			define(
-				'list_skills',
-				'List enabled skill summaries and trigger hints.',
-				'read',
-				temporal({}),
-				() => factory.skills().list(actor)
+			define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
+				factory.skills().list(actor)
 			),
 			define(
 				'load_skill',
-				'Read a skill body as Markdown — its full instructions and details — and record usage. When a skill summary applies, load it here and follow its instructions before answering or acting.',
+				toolDescription('load_skill'),
 				'read',
 				z.object({ noteId: id }),
 				async (input) => {
@@ -945,7 +935,7 @@ export class AgentTools {
 			),
 			define(
 				'save_skill',
-				'Replace a whole skill body with Markdown. Pass only the noteId and the complete desired Markdown instructions; the skill summary, description, and trigger hints are changed separately. Prefer edit_skill unless you are genuinely rewriting the skill end to end — this tool discards anything you leave out.',
+				toolDescription('save_skill'),
 				'mutation',
 				z.object({ noteId: id, markdown: z.string() }),
 				async (input) => {
@@ -965,7 +955,7 @@ export class AgentTools {
 			),
 			define(
 				'edit_skill',
-				'Mutating tool. Before the first edit to a skill in any turn, you MUST call load_skill on that noteId and copy every oldText verbatim from its returned Markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the skill\'s Markdown, and every edit must apply or none do. Prefer this over save_skill for anything short of a full rewrite. If a call fails with "oldText was not found", re-run load_skill, and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop retrying the patch and use save_skill with the complete desired body instead.',
+				toolDescription('edit_skill'),
 				'mutation',
 				z.object({
 					noteId: id,
@@ -1009,7 +999,7 @@ export class AgentTools {
 			),
 			define(
 				'create_skill',
-				'Create a reusable skill.',
+				toolDescription('create_skill'),
 				'mutation',
 				z.object({
 					name: z.string().min(1),
@@ -1022,7 +1012,7 @@ export class AgentTools {
 			),
 			define(
 				'create_skill_from_selection',
-				'Create a skill from selected note text.',
+				toolDescription('create_skill_from_selection'),
 				'mutation',
 				z.object({
 					selection,
@@ -1034,21 +1024,21 @@ export class AgentTools {
 			),
 			define(
 				'list_skill_versions',
-				'List immutable revisions of a skill.',
+				toolDescription('list_skill_versions'),
 				'read',
 				temporal({ noteId: id }),
 				(input) => factory.skills().listVersions(actor, input as never)
 			),
 			define(
 				'restore_skill_version',
-				'Restore an old skill revision as a new current revision.',
+				toolDescription('restore_skill_version'),
 				'mutation',
 				z.object({ noteId: id, revision: z.number().int().positive() }),
 				(input) => factory.skills().restoreVersion(actor, input as never)
 			),
 			define(
 				'update_skill',
-				"Change a skill's summary or enable and disable it. Send only the fields to change. Instruction text is edited through the skill note itself.",
+				toolDescription('update_skill'),
 				'mutation',
 				z.object({
 					noteId: id,
@@ -1061,35 +1051,31 @@ export class AgentTools {
 			),
 			define(
 				'set_skill_pinned',
-				'Pin or unpin a skill for a project. Pinned skills lead the advertised catalogue.',
+				toolDescription('set_skill_pinned'),
 				'mutation',
 				z.object({ noteId: id, projectId: id, pinned: z.boolean() }),
 				(input) => factory.skills().setPinned(actor, input as never)
 			),
-			define(
-				'list_api_tokens',
-				'List the MCP access tokens for this workspace. Plaintext is never retrievable; only names, scopes, and timestamps.',
-				'read',
-				temporal({}),
-				() => factory.apiTokens().list(actor)
+			define('list_api_tokens', toolDescription('list_api_tokens'), 'read', temporal({}), () =>
+				factory.apiTokens().list(actor)
 			),
 			define(
 				'revoke_api_token',
-				'Revoke an MCP access token. Any client still using it stops working immediately. New tokens are created only in Settings.',
+				toolDescription('revoke_api_token'),
 				'mutation',
 				z.object({ tokenId: id }),
 				(input) => factory.apiTokens().revoke(actor, input.tokenId as never)
 			),
 			define(
 				'list_attachments',
-				'List the immutable resources attached to a note or skill bundle.',
+				toolDescription('list_attachments'),
 				'read',
 				temporal({ noteId: id }),
 				(input) => factory.attachments().list(actor, input.noteId as NoteId)
 			),
 			define(
 				'read_attachment',
-				'Read a bounded chunk from a safely parsed text or PDF attachment. Scripts are returned as text and never executed.',
+				toolDescription('read_attachment'),
 				'read',
 				z.object({
 					noteId: id,
@@ -1104,7 +1090,7 @@ export class AgentTools {
 			),
 			define(
 				'list_project_memory',
-				'Read the durable memory entries a specific project shares with agents: facts, decisions, constraints, terminology, and preferences. Use when the request concerns an active or referenced project and its projectId is known.',
+				toolDescription('list_project_memory'),
 				'read',
 				temporal({ projectId: id }),
 				async (input) => ({
@@ -1118,7 +1104,7 @@ export class AgentTools {
 			),
 			define(
 				'list_user_memory',
-				'Read the user profile memory shared with agents: who the user is, their role, goals, relationships, preferences, and working style across all projects.',
+				toolDescription('list_user_memory'),
 				'read',
 				temporal({}),
 				async () => {
@@ -1130,7 +1116,7 @@ export class AgentTools {
 			),
 			define(
 				'propose_memory_change',
-				'Propose adding, updating, or removing a memory entry without bypassing review. Scope "project" remembers durable project facts, decisions, constraints, and terminology. Scope "user" builds the user profile: whenever the user reveals who they are — role, team, goals, relationships, expertise, preferences, or how they like to work — propose remembering it so future conversations already know them.',
+				toolDescription('propose_memory_change'),
 				'proposal',
 				z.object({
 					scope: z.enum(['project', 'user']),
@@ -1145,14 +1131,14 @@ export class AgentTools {
 			),
 			define(
 				'list_trust_policies',
-				'Read pipeline-specific trust policies.',
+				toolDescription('list_trust_policies'),
 				'read',
 				temporal({}),
 				() => factory.trustPolicies().list(actor)
 			),
 			define(
 				'update_trust_policy',
-				'Change a pipeline-specific trust policy.',
+				toolDescription('update_trust_policy'),
 				'mutation',
 				z.object({
 					pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
@@ -1163,7 +1149,7 @@ export class AgentTools {
 			),
 			define(
 				'list_tool_preferences',
-				"List every FollowThrough tool with whether it is currently turned on, and whether that came from the workspace default or a project override. Use it before changing a tool's availability, or when the user asks what the assistant can and cannot do. Pass projectId to see one project's resolved list.",
+				toolDescription('list_tool_preferences'),
 				'read',
 				z.object({ projectId: id.optional() }),
 				(input) =>
@@ -1173,7 +1159,7 @@ export class AgentTools {
 			),
 			define(
 				'set_tool_enabled',
-				'Turn a FollowThrough tool on or off, adding or removing a capability. Use it whenever the user asks to enable, disable, add or remove a tool, or tells the assistant to stop doing a kind of work entirely. Without projectId this sets the workspace default; with it, only that project changes. A few core tools are always available and will be refused.',
+				toolDescription('set_tool_enabled'),
 				'mutation',
 				z.object({
 					toolName: z.string().min(1),
@@ -1187,16 +1173,12 @@ export class AgentTools {
 						...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
 					})
 			),
-			define(
-				'get_agent_preferences',
-				'Read the agent defaults: chat, vision, inline and attachment models, execution mode, inline suggestions, web search settings, and the turn limit.',
-				'read',
-				none,
-				() => factory.agentSettings().getPreferences(actor)
+			define('get_agent_preferences', toolDescription('get_agent_preferences'), 'read', none, () =>
+				factory.agentSettings().getPreferences(actor)
 			),
 			define(
 				'update_agent_preferences',
-				'Change any agent default: models, execution mode, inline suggestions, web search engine and result caps, or the per-run turn limit. Send only the fields to change; omitted fields keep their stored value and an explicit null clears one back to the deployment default.',
+				toolDescription('update_agent_preferences'),
 				'mutation',
 				z.object({
 					defaultModel: z.string().nullable().optional(),
@@ -1212,16 +1194,12 @@ export class AgentTools {
 				}),
 				(input) => factory.agentSettings().updatePreferences(actor, input)
 			),
-			define(
-				'list_agent_models',
-				'List OpenRouter chat models and tool support.',
-				'read',
-				none,
-				() => factory.agentSettings().listModels(actor)
+			define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
+				factory.agentSettings().listModels(actor)
 			),
 			define(
 				'export_document',
-				'Generate an artifact document (DOCX or PDF) from one or more project notes. Optionally apply a project template.',
+				toolDescription('export_document'),
 				'mutation',
 				z.object({
 					projectId: id,
@@ -1237,28 +1215,28 @@ export class AgentTools {
 			),
 			define(
 				'list_artifacts',
-				'List generated document artifacts for a project.',
+				toolDescription('list_artifacts'),
 				'read',
 				temporal({ projectId: id }),
 				(input) => factory.deliverables().listArtifacts(actor, input.projectId as never)
 			),
 			define(
 				'list_templates',
-				'List available DOCX templates for a project.',
+				toolDescription('list_templates'),
 				'read',
 				temporal({ projectId: id }),
 				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
 			),
 			define(
 				'get_export_settings',
-				'Read the project document-export settings (font, size, line height, margins).',
+				toolDescription('get_export_settings'),
 				'read',
 				z.object({ projectId: id }),
 				(input) => factory.deliverables().getExportSettings(actor, input.projectId as never)
 			),
 			define(
 				'update_export_settings',
-				'Change the project document-export settings.',
+				toolDescription('update_export_settings'),
 				'mutation',
 				z.object({
 					projectId: id,
@@ -1279,28 +1257,28 @@ export class AgentTools {
 			),
 			define(
 				'get_artifact',
-				'Read a generated artifact record.',
+				toolDescription('get_artifact'),
 				'read',
 				z.object({ artifactId: id }),
 				(input) => factory.deliverables().getArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'download_artifact',
-				'Create a time-limited download link for a generated artifact.',
+				toolDescription('download_artifact'),
 				'read',
 				z.object({ artifactId: id }),
 				(input) => factory.deliverables().downloadArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'delete_artifact',
-				'Delete a generated artifact.',
+				toolDescription('delete_artifact'),
 				'mutation',
 				z.object({ artifactId: id }),
 				(input) => factory.deliverables().deleteArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'regenerate_artifact',
-				'Regenerate an artifact from its source notes and return a fresh download link.',
+				toolDescription('regenerate_artifact'),
 				'mutation',
 				z.object({ artifactId: id }),
 				(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId as never)
