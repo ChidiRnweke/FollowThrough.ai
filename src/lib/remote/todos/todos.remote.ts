@@ -1,8 +1,23 @@
 import { z } from 'zod';
-import { command } from '$app/server';
+import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
-import type { UpdateTodoInput } from '$lib/models/todos';
+import type { TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
+
+/** The board's shareable URL filters; the title search stays client-only, so the PDF
+    reflects the server-side filters rather than the search box. */
+export const exportBoardPdf = query(
+	z.object({
+		projectId: z.string().uuid().optional(),
+		responsibility: z.enum(['mine', 'waiting_on']).optional(),
+		category: z.string().trim().max(100).optional()
+	}),
+	async (input) => {
+		return AppFactory.controllers()
+			.todos()
+			.exportBoardPdf(requestActor(), input as TodoListFilter);
+	}
+);
 
 export const updateTodo = command(
 	z

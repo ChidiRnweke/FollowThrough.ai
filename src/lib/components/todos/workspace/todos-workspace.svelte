@@ -12,6 +12,7 @@
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';
+	import TodoExport from '../todo-export.svelte';
 	import { filterTodosByTitle } from '../todo-filter';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
@@ -170,6 +171,11 @@
 					<Tabs.Trigger value="list">List</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
+			<TodoExport
+				todos={visibleTodos}
+				{projectId}
+				projectNames={projects ? projectNames : undefined}
+			/>
 			<AgentAction
 				variant="outline"
 				action={agentActions.todosFromNotes}

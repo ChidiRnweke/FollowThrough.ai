@@ -6,7 +6,7 @@ import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/
 import type { IAttachmentStorage } from '$lib/server/services/attachments/storage';
 import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
 import { generateDocx } from '$lib/server/services/deliverables/docx';
-import { generatePdf } from '$lib/server/services/deliverables/pdf';
+import { generatePdf, type GeneratePdfInput } from '$lib/server/services/deliverables/pdf';
 import { extractTemplateStyles } from '$lib/server/services/deliverables/template-styles';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -23,6 +23,9 @@ export interface DeliverablesCapabilityInput {
 export interface DeliverablesCapability {
 	readonly templates: DocumentTemplates;
 	readonly artifacts: ArtifactLibrary;
+	/** The raw PDF pipeline, exposed for ephemeral exports that persist no artifact —
+	    currently the todos board export. */
+	readonly pdfGenerator: (input: GeneratePdfInput) => Promise<Buffer>;
 }
 
 export const createDeliverablesCapability = (
@@ -46,6 +49,7 @@ export const createDeliverablesCapability = (
 			templateRepository,
 			input.transactionRunner,
 			new ExportSettingsRecords(input.db)
-		)
+		),
+		pdfGenerator: generatePdf
 	};
 };

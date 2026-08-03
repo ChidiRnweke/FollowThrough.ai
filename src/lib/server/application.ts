@@ -311,7 +311,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoCreator: todos,
 			suggestionAccepter: suggestions,
 			noteReader: notes,
-			transactionRunner
+			transactionRunner,
+			projectLister: projects,
+			boardPdfGenerator: deliverables.pdfGenerator
 		},
 		relationships: {
 			anchorCreator: notes,

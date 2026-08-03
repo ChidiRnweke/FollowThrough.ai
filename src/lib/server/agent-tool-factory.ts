@@ -152,6 +152,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Category names serve the filter menu; the agent reads todos through list.'
 		},
+		exportBoardPdf: {
+			kind: 'excluded',
+			reason: 'Board export is a user download; the agent reads todos through list.'
+		},
 		create: { kind: 'mutation' },
 		update: { kind: 'mutation' },
 		remove: {
