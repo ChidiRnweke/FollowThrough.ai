@@ -306,6 +306,12 @@ export interface AgentRun {
 	readonly finishedAt?: DateTime;
 	readonly provenanceId?: ProvenanceId;
 	readonly serializedState?: string;
+	/**
+	 * W3C traceparent of the first turn's root span. Every later execution of this
+	 * run — each approval resume — continues that trace instead of minting a new
+	 * root, so one user request stays one trace in Phoenix.
+	 */
+	readonly traceparent?: string;
 	readonly pendingDecisions: readonly PendingAgentDecision[];
 	readonly failure?: string;
 	readonly providerErrorCode?: string;

@@ -4,6 +4,7 @@ import {
 	ROOT_CONTEXT,
 	SpanStatusCode,
 	trace,
+	TraceFlags,
 	type Attributes,
 	type Context,
 	type Span
@@ -182,7 +183,39 @@ export interface AgentTurnSpanParams {
 	readonly model: string;
 	readonly userId?: string;
 	readonly runId?: string;
+	/**
+	 * W3C traceparent of the turn that started this run. A run resumed after an
+	 * approval passes it back so its turn hangs off the original root instead of
+	 * opening a second trace for the same user request.
+	 */
+	readonly parentTraceparent?: string;
+	/** Receives this turn's own traceparent, so the caller can persist it for a resume. */
+	readonly onRoot?: (traceparent: string) => void;
 }
+
+const TRACE_FLAG_SAMPLED = '01';
+
+/** Serializes a span's context as a W3C `traceparent`. */
+const toTraceparent = (span: Span): string => {
+	const { traceId, spanId } = span.spanContext();
+	return `00-${traceId}-${spanId}-${TRACE_FLAG_SAMPLED}`;
+};
+
+/**
+ * Rebuilds a parent context from a stored `traceparent`. Returns `ROOT_CONTEXT`
+ * for anything malformed, so a corrupted value costs the link, never the trace.
+ */
+const fromTraceparent = (traceparent: string): Context => {
+	const [version, traceId, spanId, flags] = traceparent.split('-');
+	if (version !== '00' || !/^[0-9a-f]{32}$/.test(traceId ?? '')) return ROOT_CONTEXT;
+	if (!/^[0-9a-f]{16}$/.test(spanId ?? '')) return ROOT_CONTEXT;
+	return trace.setSpanContext(ROOT_CONTEXT, {
+		traceId: traceId as string,
+		spanId: spanId as string,
+		traceFlags: flags === TRACE_FLAG_SAMPLED ? TraceFlags.SAMPLED : TraceFlags.NONE,
+		isRemote: true
+	});
+};
 
 /**
  * Drives an async agent stream with the turn root active for every iterator
@@ -206,9 +239,13 @@ export async function* traceAgentTurn<T>(
 		},
 		tags: ['agent', 'turn']
 	};
+	const parent = params.parentTraceparent
+		? fromTraceparent(params.parentTraceparent)
+		: ROOT_CONTEXT;
 	const span = trace
 		.getTracer(TRACER_NAME)
-		.startSpan('agent.turn', { attributes: spanAttributes(workflowParams) }, ROOT_CONTEXT);
+		.startSpan('agent.turn', { attributes: spanAttributes(workflowParams) }, parent);
+	params.onRoot?.(toTraceparent(span));
 	const turnContext = workflowContext(span, workflowParams);
 	let errored = false;
 	try {

@@ -53,6 +53,7 @@ export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
 	...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() as AgentRun['finishedAt'] } : {}),
 	...(row.provenanceId ? { provenanceId: row.provenanceId as AgentRun['provenanceId'] } : {}),
 	...(row.serializedState ? { serializedState: row.serializedState } : {}),
+	...(row.traceparent ? { traceparent: row.traceparent } : {}),
 	pendingDecisions: row.pendingDecisions as unknown as AgentRun['pendingDecisions'],
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
@@ -217,6 +218,7 @@ export class AgentRunRecords implements AgentRunRepository {
 				finishedAt: run.finishedAt ? new Date(run.finishedAt) : null,
 				provenanceId: run.provenanceId ?? null,
 				serializedState: run.serializedState ?? null,
+				traceparent: run.traceparent ?? null,
 				pendingDecisions: toPendingDecisionRows(run),
 				failure: run.failure ?? null,
 				providerErrorCode: run.providerErrorCode ?? null,
@@ -311,6 +313,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			finishedAt: run.finishedAt ? new Date(run.finishedAt) : undefined,
 			provenanceId: run.provenanceId,
 			serializedState: run.serializedState,
+			traceparent: run.traceparent,
 			pendingDecisions: toPendingDecisionRows(run),
 			failure: run.failure,
 			providerErrorCode: run.providerErrorCode,
@@ -345,6 +348,7 @@ export class AgentRunRecords implements AgentRunRepository {
 				...(patch.serializedState !== undefined
 					? { serializedState: patch.serializedState ?? null }
 					: {}),
+				...(patch.traceparent !== undefined ? { traceparent: patch.traceparent ?? null } : {}),
 				...(patch.pendingDecisions !== undefined
 					? {
 							pendingDecisions: patch.pendingDecisions.map((d) => ({

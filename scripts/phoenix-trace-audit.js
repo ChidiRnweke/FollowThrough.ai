@@ -109,6 +109,43 @@ const splitAgentTraces = [...spansByTrace].filter(([, traceSpans]) => {
 	return hasWorkflow && (orphaned || !hasSdkActivity);
 });
 
+// A resumed run reconstructs its agent span from serialized state without
+// starting it, so the OpenInference processor holds no span for it and the
+// generation/tool spans beneath re-parent to the `agent.turn` root instead. The
+// trace still looks well-formed — every parent resolves — which is why
+// `splitAgentTraces` above misses it. The tell is an LLM or TOOL span sitting
+// directly under the turn root while an `Agent workflow` span exists as a leaf.
+const misparentedAgentChildren = spans.filter((span) => {
+	if (span.span_kind !== 'LLM' && span.span_kind !== 'TOOL') return false;
+	const traceSpans = spansByTrace.get(span.context.trace_id) ?? [];
+	const root = traceSpans.find((candidate) => !candidate.parent_id);
+	if (!root || !agentTurnRoots.has(root.name) || span.parent_id !== root.context.span_id)
+		return false;
+	return traceSpans.some((candidate) => candidate.name === 'Agent workflow');
+});
+
+// One user request is one run is one trace. A run spread over several traces
+// means something re-executed it — an approval resume that opened a new root —
+// and the reader has to stitch the turns back together by hand.
+const runTraces = spans.reduce((runs, span) => {
+	const runId = span.attributes?.['metadata.runId'];
+	if (typeof runId !== 'string') return runs;
+	const traces = runs.get(runId) ?? new Set();
+	traces.add(span.context.trace_id);
+	return runs.set(runId, traces);
+}, new Map());
+const splitRunTraces = [...runTraces].filter(([, traces]) => traces.size > 1);
+
+// A base64 image replayed into `input.value` on every turn is the usual cause;
+// it costs collector bandwidth and makes the trace unreadable in the UI.
+const MAX_PAYLOAD_CHARS = 64 * 1024;
+const oversizedSpanPayloads = spans.filter((span) =>
+	['input.value', 'output.value'].some((key) => {
+		const value = span.attributes?.[key];
+		return typeof value === 'string' && value.length > MAX_PAYLOAD_CHARS;
+	})
+);
+
 const report = {
 	project: projectName,
 	since: since.toISOString(),
@@ -129,6 +166,9 @@ const report = {
 		unresolvedParents: unresolvedParents.map((span) => span.context.span_id),
 		duplicateAgentLlmTraces: duplicateAgentLlmTraces.map(([traceId]) => traceId),
 		splitAgentTraces: splitAgentTraces.map(([traceId]) => traceId),
+		misparentedAgentChildren: misparentedAgentChildren.map((span) => span.context.span_id),
+		splitRunTraces: splitRunTraces.map(([runId, traces]) => ({ runId, traces: traces.size })),
+		oversizedSpanPayloads: oversizedSpanPayloads.map((span) => span.context.span_id),
 		oversizedSessions: oversizedSessions.map(([sessionId, count]) => ({ sessionId, count }))
 	}
 };

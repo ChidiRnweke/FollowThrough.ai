@@ -31,6 +31,53 @@ import { formatBody, recordAttributes } from './log-record.js';
 /** The collector routes on this resource attribute; without it nothing reaches Phoenix. */
 const OPENINFERENCE_PROJECT_NAME = 'openinference.project.name';
 
+/**
+ * An attached image rides in the conversation as a base64 data URL and is
+ * replayed on every turn, so it lands in `input.value` on the agent and
+ * generation spans of every turn of every run. One 326 KB PNG cost ~10 MB of
+ * span payload across a single twelve-turn run. Keep enough of the prefix to
+ * identify the image, drop the rest.
+ */
+const MAX_INLINE_BASE64 = 1024;
+const BASE64_DATA_URL = /data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+
+/** @param {string} value */
+const elideInlineBase64 = (value) =>
+	value.replace(BASE64_DATA_URL, (match) =>
+		match.length <= MAX_INLINE_BASE64
+			? match
+			: `${match.slice(0, 64)}…<base64 elided, ${match.length} chars>`
+	);
+
+/**
+ * Rewrites span attributes on the way out rather than at the call site, because
+ * the payload is assembled inside the agents SDK and its own masking only
+ * covers `image.url`-shaped keys, not the serialized `input.value` blob.
+ *
+ * @template {OTLPTraceExporter} T
+ * @param {T} exporter
+ * @returns {T}
+ */
+function withoutInlineBase64(exporter) {
+	const wrapped = {
+		/**
+		 * @param {{ attributes: Record<string, unknown> }[]} spans
+		 * @param {(result: unknown) => void} resultCallback
+		 */
+		export(spans, resultCallback) {
+			for (const span of spans)
+				for (const [key, value] of Object.entries(span.attributes))
+					if (typeof value === 'string' && value.includes(';base64,'))
+						span.attributes[key] = elideInlineBase64(value);
+			// @ts-expect-error the wrapped exporter owns the concrete span type.
+			exporter.export(spans, resultCallback);
+		},
+		shutdown: () => exporter.shutdown(),
+		forceFlush: () => exporter.forceFlush()
+	};
+	return /** @type {T} */ (/** @type {unknown} */ (wrapped));
+}
+
 /** @type {NodeSDK | null} */
 let sdk = null;
 let consoleBridged = false;
@@ -109,7 +156,9 @@ export function initTelemetry(projectNameOverride) {
 
 	// Bridging the OpenAI Agents SDK's own tracing into OpenInference spans is
 	// what makes the agent runs show up in Phoenix.
-	const agentsInstrumentation = new OpenAIAgentsInstrumentation();
+	const agentsInstrumentation = new OpenAIAgentsInstrumentation({
+		traceConfig: { base64ImageMaxLength: MAX_INLINE_BASE64 }
+	});
 
 	sdk = new NodeSDK({
 		resource: resourceFromAttributes({
@@ -118,7 +167,7 @@ export function initTelemetry(projectNameOverride) {
 			'deployment.environment': process.env.NODE_ENV || 'development',
 			[OPENINFERENCE_PROJECT_NAME]: projectName
 		}),
-		traceExporter: new OTLPTraceExporter({ url: endpoint }),
+		traceExporter: withoutInlineBase64(new OTLPTraceExporter({ url: endpoint })),
 		logRecordProcessors: [
 			new BatchLogRecordProcessor({ exporter: new OTLPLogExporter({ url: endpoint }) })
 		],

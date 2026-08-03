@@ -36,8 +36,10 @@ import {
 import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import {
+	createUseToolAttempts,
 	invalidUseToolEnvelope,
 	invalidUseToolPayload,
+	resolveUseToolPayload,
 	unknownUseToolName,
 	useToolEnvelopeSchema
 } from './services/agent/runs/tool-recovery';
@@ -413,15 +415,32 @@ export class AgentTools {
 		const definitions = this.definitions();
 		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
 		const names = definitions.map((definition) => definition.name);
+		const firstClass = new Set(FIRST_CLASS_TOOL_NAMES);
 		const selected = FIRST_CLASS_TOOL_NAMES.map((name) => byName.get(name)).filter(
 			(definition): definition is Definition => definition !== undefined
 		);
 		const direct = selected.map((definition) => this.buildTool(definition));
+		const attempts = createUseToolAttempts();
+
+		// `use_tool` presents the tool's arguments as a free-form `payload` object,
+		// which `z.toJSONSchema` renders with no properties at all — the model is
+		// asked to fill a shape it was never shown, and several model families
+		// answer with an empty object forever. So every long-tail tool is also
+		// registered directly and gated behind `isEnabled`: once `search_tools`
+		// surfaces one, the next turn sees it as an ordinary flat tool with named,
+		// typed arguments, which is the shape models fill reliably. The SDK
+		// re-evaluates `isEnabled` per turn, so nothing has to be rebuilt mid-run.
+		const promoted = new Set<string>();
+		const discoverable = definitions
+			.filter((definition) => !firstClass.has(definition.name))
+			.map((definition) =>
+				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
+			);
 
 		const searchTools = tool({
 			name: 'search_tools',
 			description:
-				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Returns each match with the exact input schema; call it via use_tool.',
+				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema, and becomes callable by its own name as a top-level tool from your next message onward — prefer calling it that way, with its arguments as flat top-level fields.',
 			parameters: z.toJSONSchema(
 				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
 			) as never,
@@ -434,26 +453,38 @@ export class AgentTools {
 				return ranked
 					.map((name) => byName.get(name))
 					.filter((definition): definition is Definition => definition !== undefined)
-					.map((definition) => ({
-						name: definition.name,
-						description: definition.description,
-						classification: definition.classification,
-						input_schema: z.toJSONSchema(definition.parameters)
-					}));
+					.map((definition) => {
+						promoted.add(definition.name);
+						return {
+							name: definition.name,
+							description: definition.description,
+							classification: definition.classification,
+							input_schema: z.toJSONSchema(definition.parameters),
+							callable_directly: true
+						};
+					});
 			}
 		});
 
 		const useTool = tool({
 			name: 'use_tool',
 			description:
-				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools. Pass {"name":"exact_name","payload":{...}} directly; never nest or stringify that object under arguments.',
+				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools, when that tool is not already callable directly. Put the tool\'s arguments under the "payload" field of {"name":"exact_name","payload":{...}}. For example, after search_tools returns edit_note, call use_tool with {"name":"edit_note","payload":{"noteId":"<the note\'s uuid>","edits":[{"oldText":"<exact text copied from get_note>","newText":"<replacement>"}]}}. If you cannot build that nested object, send the same fields as a JSON string in "arguments" instead.',
 			parameters: z.toJSONSchema(useToolEnvelopeSchema) as never,
 			strict: false,
+			// A payload that cannot pass the target's schema can only fail, so it must
+			// not park the run: asking the user to approve a doomed call costs a whole
+			// resume — a fresh trace, a replayed transcript and another billed turn —
+			// and hands the model back the same dead end. Let it fail in `execute`
+			// instead, which returns the recovery inside this turn.
 			needsApproval: async (_context, input) => {
 				const envelope = useToolEnvelopeSchema.safeParse(input);
 				if (!envelope.success) return false;
 				const target = byName.get(envelope.data.name);
-				return target?.classification === 'mutation' && this.mode === 'approval_required';
+				if (target?.classification !== 'mutation' || this.mode !== 'approval_required')
+					return false;
+				const resolved = resolveUseToolPayload(envelope.data);
+				return resolved.ok && target.parameters.safeParse(resolved.payload).success;
 			},
 			errorFunction: (_context, error) =>
 				JSON.stringify(
@@ -464,16 +495,23 @@ export class AgentTools {
 			execute: async (input, _runContext, details) => {
 				const envelope = useToolEnvelopeSchema.safeParse(input);
 				if (!envelope.success) return invalidUseToolEnvelope(envelope.error);
-				const { name, payload } = envelope.data;
+				const { name } = envelope.data;
 				const target = byName.get(name);
 				if (!target) return unknownUseToolName(name, names);
-				const validation = target.parameters.safeParse(payload ?? {});
-				if (!validation.success)
+				const resolved = resolveUseToolPayload(envelope.data);
+				const payload = resolved.ok ? resolved.payload : {};
+				const validation = target.parameters.safeParse(payload);
+				if (!validation.success) {
+					// The tool is offered directly from here on, so the escalated recovery
+					// has somewhere to send a model that keeps failing the envelope.
+					promoted.add(target.name);
 					return invalidUseToolPayload(
 						target.name,
 						validation.error,
-						z.toJSONSchema(target.parameters)
+						z.toJSONSchema(target.parameters),
+						attempts.record(target.name, payload)
 					);
+				}
 				const parsed = validation.data as Record<string, unknown>;
 				if (!this.toolExecutor) return target.execute(parsed);
 				return this.toolExecutor.execute(
@@ -488,7 +526,7 @@ export class AgentTools {
 			}
 		});
 
-		return [...direct, searchTools, useTool];
+		return [...direct, ...discoverable, searchTools, useTool];
 	}
 
 	/** Static name + description catalog, used by the tool retriever. */
@@ -501,12 +539,16 @@ export class AgentTools {
 		);
 	}
 
-	private buildTool(definition: Definition): Tool<unknown> {
+	private buildTool(
+		definition: Definition,
+		options: { isEnabled?: () => boolean } = {}
+	): Tool<unknown> {
 		return tool({
 			name: definition.name,
 			description: definition.description,
 			parameters: z.toJSONSchema(definition.parameters) as never,
 			strict: false,
+			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
 			needsApproval: definition.classification === 'mutation' && this.mode === 'approval_required',
 			errorFunction: (_context, error) =>
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),

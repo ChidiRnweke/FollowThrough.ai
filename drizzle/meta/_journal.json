@@ -246,6 +246,13 @@
       "when": 1785733079709,
       "tag": "0034_tranquil_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785780031557,
+      "tag": "0035_legal_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

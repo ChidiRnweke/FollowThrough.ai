@@ -108,6 +108,7 @@ export type AgentExecutionUpdate =
 	| {
 			readonly type: 'approval_checkpoint';
 			readonly serializedState: string;
+			readonly traceparent?: string;
 			readonly pendingDecisions: readonly PendingAgentDecision[];
 			readonly sessionItems: readonly Readonly<Record<string, unknown>>[];
 	  }

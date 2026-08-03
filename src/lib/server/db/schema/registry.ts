@@ -728,6 +728,7 @@ export const agentRuns = pgTable(
 		finishedAt: timestamp('finished_at', { withTimezone: true }),
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
 		serializedState: text('serialized_state'),
+		traceparent: text('traceparent'),
 		pendingDecisions: jsonb('pending_decisions')
 			.$type<readonly JsonObject[]>()
 			.notNull()

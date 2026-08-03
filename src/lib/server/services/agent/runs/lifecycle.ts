@@ -140,6 +140,9 @@ export class AgentRunLifecycle {
 							await this.deps.decisions.consume(run.id, decision.callId, new Date());
 						await this.deps.runs.transition(run.id, 'running', 'awaiting_approval', {
 							serializedState: update.serializedState,
+							// Carried across the park so the resumed turn joins this run's
+							// trace rather than opening a second one for the same request.
+							...(update.traceparent ? { traceparent: update.traceparent } : {}),
 							pendingDecisions: update.pendingDecisions,
 							updatedAt: new Date().toISOString() as DateTime
 						});

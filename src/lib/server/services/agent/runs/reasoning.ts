@@ -280,6 +280,8 @@ interface AgentTurnContext {
 	readonly model: string;
 	readonly userId?: string;
 	readonly runId?: string;
+	readonly parentTraceparent?: string;
+	readonly onRoot?: (traceparent: string) => void;
 }
 
 type AgentTurnObserver = <T>(
@@ -382,12 +384,22 @@ export class AgentReasoning {
 				traceIncludeSensitiveData: true
 			});
 			let outputText = '';
+			// Captured by the turn observer before the first update is yielded, so the
+			// checkpoint below can hand the next resume the trace this run belongs to.
+			let traceparent = run.traceparent;
 			const buildAgent = (tools: Tool<unknown>[]) => this.buildAgent(context, run, tools);
 			const agent = buildAgent(tools);
 			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
 				let state: RunState<unknown, typeof agent> | undefined;
 				if (decisions.length > 0 && run.serializedState) {
 					state = await RunState.fromString(agent, run.serializedState);
+					// The deserialized agent span is reconstructed with `createSpan`, which
+					// never calls `start()`, so the OpenInference processor holds no OTel
+					// span for it and `ensureAgentSpan` hands it straight back instead of
+					// starting a fresh one. Every generation and tool span beneath it then
+					// falls back to the ambient context and re-parents to `agent.turn`.
+					// Dropping it makes the SDK open a real agent span in this run's trace.
+					state._currentAgentSpan = undefined;
 					const interruptions = state.getInterruptions();
 					// A decision without a matching interruption was already applied on an earlier
 					// pass, so it is skipped rather than fatal; only a resume that lands on none of
@@ -453,11 +465,10 @@ export class AgentReasoning {
 				const interruptions = stream.interruptions;
 				if (interruptions.length > 0) {
 					// The SDK keeps the current agent span open across an approval
-					// interruption so a resumed run can continue the same trace. This
-					// app resumes through a fresh `agent.turn` root, so the parked run's
-					// trace would otherwise keep an un-ended agent span and orphan every
-					// generation/tool span beneath it. End the span so the parked trace
-					// exports as one complete tree.
+					// interruption so a resumed run can continue the same trace. The
+					// resumed run starts its own agent span (see the reset in `runTurn`),
+					// so this one has no continuation and would otherwise export as an
+					// un-ended parent that orphans every span beneath it.
 					stream.state._currentAgentSpan?.end();
 					const pending: PendingAgentDecision[] = interruptions.map((item) => {
 						const details = callDetails(item);
@@ -481,6 +492,7 @@ export class AgentReasoning {
 					yield {
 						type: 'approval_checkpoint',
 						serializedState: stream.state.toString(),
+						...(traceparent ? { traceparent } : {}),
 						pendingDecisions: pending,
 						sessionItems: await session.snapshot()
 					};
@@ -503,7 +515,11 @@ export class AgentReasoning {
 					sessionId: run.conversationId,
 					model: run.model,
 					userId: actor.userId,
-					runId: run.id
+					runId: run.id,
+					...(run.traceparent ? { parentTraceparent: run.traceparent } : {}),
+					onRoot: (value: string) => {
+						traceparent ??= value;
+					}
 				},
 				() => runTurn(),
 				() => outputText

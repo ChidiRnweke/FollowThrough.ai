@@ -34,6 +34,22 @@ const approvalFor = async (
 	return selected.needsApproval({} as never, {} as never, 'call-1');
 };
 
+/**
+ * What the model is actually offered. Long-tail tools are registered up front but
+ * gated behind `isEnabled`, which the SDK re-evaluates every turn, so the raw
+ * `agentTools()` list is not the surface — this is.
+ */
+const enabledToolNames = async (tools: readonly { name: string }[]): Promise<string[]> => {
+	const names: string[] = [];
+	for (const candidate of tools) {
+		const enabled = (candidate as FunctionTool).isEnabled;
+		const active =
+			typeof enabled === 'function' ? await enabled({} as never, {} as never) : enabled !== false;
+		if (active) names.push(candidate.name);
+	}
+	return names;
+};
+
 const indirectToolFor = (
 	mode: 'approval_required' | 'auto_accept',
 	name: 'search_tools' | 'use_tool',
@@ -85,7 +101,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'list_user_memory')).toBe(false);
 	});
 
-	it('keeps only frequent grounding and memory-proposal tools directly available', () => {
+	it('keeps only frequent grounding and memory-proposal tools directly available', async () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_note'];
 		const selected = new AgentTools(
@@ -100,7 +116,7 @@ describe('Agent tool coverage invariants', () => {
 			undefined,
 			retriever
 		).agentTools();
-		expect(selected.map((tool) => tool.name)).toEqual([
+		expect(await enabledToolNames(selected)).toEqual([
 			'search',
 			'search_note',
 			'list_user_memory',
@@ -172,11 +188,33 @@ describe('Agent tool coverage invariants', () => {
 		const selected = indirectToolFor('auto_accept', 'search_tools', { retriever });
 		const result = await selected.invoke({} as never, JSON.stringify({ query: 'create a note' }));
 		expect(Object.keys((result as Record<string, unknown>[])[0]).sort()).toEqual([
+			'callable_directly',
 			'classification',
 			'description',
 			'input_schema',
 			'name'
 		]);
+	});
+
+	it('promotes a searched tool onto the enabled surface', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_note'];
+		const available = new AgentTools(
+			{} as ControllerFactory,
+			testActor(),
+			'auto_accept',
+			{
+				provenanceId: testProvenanceId(),
+				input: { prompt: 'Create a note' },
+				model: 'openai/gpt-5.6'
+			},
+			undefined,
+			retriever
+		);
+		const tools = available.agentTools();
+		const search = tools.find((candidate) => candidate.name === 'search_tools') as FunctionTool;
+		await search.invoke({} as never, JSON.stringify({ query: 'create a note' }));
+		expect(await enabledToolNames(tools)).toContain('create_note');
 	});
 
 	it('advertises only noteId and markdown for save_note', () => {
@@ -186,10 +224,10 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(saveNote?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
 	});
 
-	it('keeps save_note searchable instead of registering it directly', () => {
+	it('keeps save_note searchable instead of offering it before it is discovered', async () => {
 		const available = registry('auto_accept');
 		expect([
-			available.agentTools().some((candidate) => candidate.name === 'save_note'),
+			(await enabledToolNames(available.agentTools())).includes('save_note'),
 			available.catalog().some((candidate) => candidate.name === 'save_note')
 		]).toEqual([false, true]);
 	});
@@ -201,10 +239,10 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(editNote?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
 	});
 
-	it('keeps edit_note searchable instead of registering it directly', () => {
+	it('keeps edit_note searchable instead of offering it before it is discovered', async () => {
 		const available = registry('auto_accept');
 		expect([
-			available.agentTools().some((candidate) => candidate.name === 'edit_note'),
+			(await enabledToolNames(available.agentTools())).includes('edit_note'),
 			available.catalog().some((candidate) => candidate.name === 'edit_note')
 		]).toEqual([false, true]);
 	});
@@ -230,12 +268,13 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(editSkill?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
 	});
 
-	it('keeps edit_skill and save_skill searchable instead of registering them directly', () => {
+	it('keeps edit_skill and save_skill searchable instead of offering them before discovery', async () => {
 		const available = registry('auto_accept');
+		const enabled = await enabledToolNames(available.agentTools());
 		expect([
-			available.agentTools().some((candidate) => candidate.name === 'edit_skill'),
+			enabled.includes('edit_skill'),
 			available.catalog().some((candidate) => candidate.name === 'edit_skill'),
-			available.agentTools().some((candidate) => candidate.name === 'save_skill'),
+			enabled.includes('save_skill'),
 			available.catalog().some((candidate) => candidate.name === 'save_skill')
 		]).toEqual([false, true, false, true]);
 	});
@@ -819,9 +858,9 @@ describe('Agent tool coverage invariants', () => {
 		expect(instance.catalog().some((tool) => tool.name === 'create_todos')).toBe(true);
 	});
 
-	it('keeps create_todos in the long-tail catalog, not the first-class tools (2/2)', () => {
+	it('keeps create_todos in the long-tail catalog, not the first-class tools (2/2)', async () => {
 		const instance = registry('auto_accept');
-		expect(instance.agentTools().some((tool) => tool.name === 'create_todos')).toBe(false);
+		expect(await enabledToolNames(instance.agentTools())).not.toContain('create_todos');
 	});
 
 	it('does not execute a guessed long-tail tool name', async () => {
@@ -875,7 +914,7 @@ describe('Agent tool coverage invariants', () => {
 		);
 		expect(result).toMatchObject({
 			failure: 'Invalid use_tool input.',
-			recovery: expect.stringContaining('Do not nest the object under "arguments"')
+			recovery: expect.stringContaining('exact search_tools name')
 		});
 	});
 
@@ -884,8 +923,52 @@ describe('Agent tool coverage invariants', () => {
 		const result = await selected.invoke({} as never, '{"name":"create_note",');
 		expect(JSON.parse(result as string)).toMatchObject({
 			failure: 'Invalid use_tool input.',
-			recovery: expect.stringContaining('do not JSON-stringify the payload')
+			recovery: expect.stringContaining('exact search_tools name')
 		});
+	});
+
+	it('does not park an approval on a payload that cannot pass the tool schema', async () => {
+		const selected = indirectToolFor('approval_required', 'use_tool');
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{ name: 'save_note', payload: {} } as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('still parks an approval on a mutation whose payload is complete', async () => {
+		const selected = indirectToolFor('approval_required', 'use_tool');
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{
+					name: 'save_note',
+					payload: { noteId: crypto.randomUUID(), markdown: '# Notes' }
+				} as never,
+				'call-1'
+			)
+		).toBe(true);
+	});
+
+	it('escalates to the direct tool after repeated identical empty payloads', async () => {
+		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const envelope = JSON.stringify({ name: 'create_note', payload: {} });
+		await selected.invoke({} as never, envelope);
+		await selected.invoke({} as never, envelope);
+		const third = await selected.invoke({} as never, envelope);
+		expect(third).toMatchObject({
+			recovery: expect.stringContaining('Stop calling use_tool for "create_note"')
+		});
+	});
+
+	it('offers a failed tool directly so the escalation has somewhere to send the model', async () => {
+		const available = registry('auto_accept');
+		const tools = available.agentTools();
+		const useTool = tools.find((candidate) => candidate.name === 'use_tool') as FunctionTool;
+		await useTool.invoke({} as never, JSON.stringify({ name: 'create_note', payload: {} }));
+		expect(await enabledToolNames(tools)).toContain('create_note');
 	});
 
 	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
