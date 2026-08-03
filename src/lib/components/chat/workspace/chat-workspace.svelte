@@ -27,7 +27,7 @@
 	);
 </script>
 
-<main class="flex h-full min-h-dvh flex-col bg-background md:min-h-0">
+<main class="flex min-h-0 flex-1 flex-col bg-background">
 	<header class="flex min-h-14 items-center border-b border-border px-4 md:px-6">
 		<Breadcrumb.Root>
 			<Breadcrumb.List>
@@ -56,7 +56,7 @@
 			<AgentSettingsPopover {agentModels} />
 		</div>
 	</header>
-	<div class="mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 py-4 md:px-8">
+	<div class="safe-panel-bottom mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 pt-4 md:px-8">
 		<ChatPanel
 			{shell}
 			{sessions}
