@@ -3,6 +3,7 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { getNote } from '$lib/remote/notes/notes.remote';
+	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -37,6 +38,30 @@
 	let baselineError = $state(false);
 	let expanded = $state(false);
 
+	/** An update_todo call names its subject by id alone; resolve it to a title. */
+	const todoSubjectId = $derived(
+		tool.name === 'update_todo' && typeof tool.arguments.todoId === 'string'
+			? tool.arguments.todoId
+			: undefined
+	);
+	let todoTitle = $state<string | undefined>(undefined);
+
+	$effect(() => {
+		const id = todoSubjectId;
+		if (!id) return;
+		let cancelled = false;
+		void getTodo(id)
+			.then((todo) => {
+				if (!cancelled) todoTitle = todo.title;
+			})
+			.catch(() => {
+				/* a missing title degrades to the detail lines, as before */
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
 	$effect(() => {
 		const id = noteId;
 		if (!id) return;
@@ -61,6 +86,7 @@
 	const preview = $derived(approvalPreview(tool.name, tool.arguments, baseline));
 	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
 	const fields = $derived(approvalFields(tool.arguments, shell));
+	const subject = $derived(fields.headline ?? todoTitle);
 	const consequence = $derived(approvalConsequence(tool.name));
 
 	/** Long string payloads are prose the model wrote, so they read as prose. */
@@ -100,12 +126,27 @@
 			<p class="text-sm text-muted-foreground">No visible note changes.</p>
 		{/if}
 	{:else}
-		{#if fields.headline}
-			<p class="text-sm">{fields.headline}</p>
+		{#if subject}
+			<p class="text-sm">{subject}</p>
 		{/if}
 		{#each fields.details as detail (detail)}
 			<p class="text-sm text-muted-foreground">{detail}</p>
 		{/each}
+		{@const items = fields.items ?? []}
+		{@const shown = compact ? items.slice(0, 5) : items}
+		{#each shown as item, index (index)}
+			<div class={shown.length > 1 ? 'border-l-2 border-border pl-2' : ''}>
+				{#if item.headline}
+					<p class="text-sm">{item.headline}</p>
+				{/if}
+				{#each item.details as detail (detail)}
+					<p class="text-sm text-muted-foreground">{detail}</p>
+				{/each}
+			</div>
+		{/each}
+		{#if compact && items.length > shown.length}
+			<p class="text-sm text-muted-foreground">…and {items.length - shown.length} more</p>
+		{/if}
 		{#each proseFields as field (field.key)}
 			<div>
 				<p class="provenance-caption">{field.key}</p>

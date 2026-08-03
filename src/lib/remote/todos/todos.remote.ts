@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
-import type { TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
+import type { TodoId, TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
 
 /** The board's shareable URL filters; the title search stays client-only, so the PDF
     reflects the server-side filters rather than the search box. */
@@ -18,6 +18,13 @@ export const exportBoardPdf = query(
 			.exportBoardPdf(requestActor(), input as TodoListFilter);
 	}
 );
+
+export const getTodo = query(z.string().uuid(), async (todoId) => {
+	const view = await AppFactory.controllers()
+		.todos()
+		.get(requestActor(), { todoId: todoId as TodoId });
+	return view.todo;
+});
 
 export const updateTodo = command(
 	z
