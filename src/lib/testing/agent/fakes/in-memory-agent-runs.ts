@@ -107,11 +107,14 @@ export class InMemoryAgentRunPersistence
 		patch: Partial<AgentRun> = {}
 	): Promise<AgentRun | undefined> {
 		const fromStatuses = Array.isArray(from) ? from : [from];
+		// Every offered predecessor is checked, not just the one the run happens to
+		// be in, matching the database repository: a caller that names an illegal
+		// `from` must fail here too, whatever the row currently says.
+		for (const status of fromStatuses) assertAgentRunTransition(status, to);
 		const run = this.runs.find(
 			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
 		);
 		if (!run) return undefined;
-		assertAgentRunTransition(run.status, to);
 		const updated = {
 			...run,
 			...patch,

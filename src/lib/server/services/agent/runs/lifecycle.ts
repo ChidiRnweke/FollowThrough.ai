@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import { AgentProviderFailure } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentEvent,
@@ -166,28 +167,80 @@ export class AgentRunLifecycle {
 			throw new Error('The agent provider ended without a durable outcome');
 		} catch (error) {
 			if (signal.aborted) {
-				await this.finishCancellation(run);
+				await this.finishCancellation(run.id);
 				return 'cancelled';
 			}
 			throw error;
 		}
 	}
 
-	async finishCancellation(run: AgentRun): Promise<void> {
-		await this.deps.transactions.run(async () => {
-			await this.deps.decisions.clearPending(run.id);
-			await this.deps.events.append(run.id, 1, {
-				type: 'cancelled',
-				runId: run.id,
-				message: 'Generation stopped'
-			});
-			await this.deps.runs.transition(run.id, ['running', 'cancelling'], 'cancelled', {
+	/**
+	 * Settles a run the user asked to stop. `cancelling` is the only legal
+	 * predecessor of `cancelled`, and the caller commits that write before
+	 * aborting, so by the time this runs the row is already parked there.
+	 * Returns undefined when the run settled on its own first.
+	 */
+	async finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined> {
+		const cancelled = await this.deps.transactions.run(async () => {
+			// The compare-and-set leads so a run that completed in the same instant
+			// is left alone rather than gaining an orphan `cancelled` event.
+			const settled = await this.deps.runs.transition(runId, 'cancelling', 'cancelled', {
 				pendingDecisions: [],
 				finishedAt: new Date().toISOString() as DateTime,
 				failure: 'The request was cancelled'
 			});
+			if (!settled) return undefined;
+			await this.deps.decisions.clearPending(runId);
+			await this.deps.events.append(runId, 1, {
+				type: 'cancelled',
+				runId,
+				message: 'Generation stopped'
+			});
+			return settled;
 		});
-		this.deps.eventBus.notify(run.id);
+		if (cancelled) this.deps.eventBus.notify(runId);
+		return cancelled;
+	}
+
+	/**
+	 * Settles a run whose background execution threw. Without this a crashed run
+	 * stays `running` forever, holding the conversation's single active-run slot
+	 * and keeping its event stream open.
+	 */
+	async failRun(runId: AgentRunId, error: unknown): Promise<void> {
+		try {
+			const code = error instanceof AgentProviderFailure ? error.providerCode : 'INTERNAL';
+			const message = error instanceof Error ? error.message : String(error);
+			const failed = await this.deps.transactions.run(async () => {
+				const settled = await this.deps.runs.transition(runId, 'running', 'failed', {
+					pendingDecisions: [],
+					finishedAt: new Date().toISOString() as DateTime,
+					failure: message,
+					providerErrorCode: code
+				});
+				if (!settled) return undefined;
+				await this.deps.events.append(runId, 1, {
+					type: 'failed',
+					runId,
+					code,
+					message,
+					// Nothing re-queues a run on its own, so the client must show the
+					// failure and offer the explicit retry rather than keep waiting.
+					retryable: false
+				});
+				return settled;
+			});
+			if (failed) {
+				this.deps.eventBus.notify(runId);
+				return;
+			}
+			// Not `running`: either the user asked to stop and the run is parked in
+			// `cancelling`, or it already settled. Both are handled by the no-op
+			// compare-and-set below.
+			await this.finishCancellation(runId);
+		} catch (settlementError) {
+			console.error(`[agent-run] Could not settle failed run ${runId}:`, settlementError);
+		}
 	}
 
 	private async prepare(runId: AgentRunId): Promise<AgentRun | undefined> {

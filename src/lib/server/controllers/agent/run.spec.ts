@@ -20,7 +20,43 @@ const noopExecutor: AgentRunLifecycle = {
 	finishCancellation: async () => undefined
 } as unknown as AgentRunLifecycle;
 
-const setup = () => {
+/**
+ * Keeps its run registered as in-flight — `execute` never settles — so a cancel
+ * finds a live abort controller the way it does mid-stream.
+ */
+const streamingExecutor = () => {
+	const signals: AbortSignal[] = [];
+	let started: () => void;
+	const running = new Promise<void>((resolve) => (started = resolve));
+	return {
+		signals,
+		running,
+		make: (runs: InMemoryAgentRunPersistence) =>
+			({
+				execute: async (runId: AgentRunId, signal: AbortSignal) => {
+					signals.push(signal);
+					await runs.transition(runId, 'queued', 'running');
+					started();
+					return new Promise<never>(() => {});
+				},
+				finishCancellation: async () => undefined
+			}) as unknown as AgentRunLifecycle
+	};
+};
+
+/**
+ * Parks its run on an approval and then settles it the way the real lifecycle
+ * does, for a cancel that finds nothing in flight to abort.
+ */
+const parkedExecutor = (runs: InMemoryAgentRunPersistence): AgentRunLifecycle =>
+	({
+		execute: async () => 'awaiting_approval',
+		finishCancellation: (runId: AgentRunId) => runs.transition(runId, 'cancelling', 'cancelled')
+	}) as unknown as AgentRunLifecycle;
+
+const setup = (
+	makeExecutor: (runs: InMemoryAgentRunPersistence) => AgentRunLifecycle = () => noopExecutor
+) => {
 	const runs = new InMemoryAgentRunPersistence();
 	const conversations = new InMemoryConversationRepository((runId) =>
 		runs.runs.some((run) => run.id === runId)
@@ -48,7 +84,7 @@ const setup = () => {
 		transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 		defaultModel: 'openai/test-model',
 		defaultVisionModel: 'openai/test-vision-model',
-		executor: noopExecutor
+		executor: makeExecutor(runs)
 	});
 	return { controller, conversations, runs, sessions };
 };
@@ -257,6 +293,42 @@ describe('durable agent lifecycle commands', () => {
 			requestId: '10000000-0000-4000-8000-000000000006',
 			input: 'Stop before start'
 		});
+		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		expect(snapshot.run.status).toBe('cancelled');
+	});
+
+	it('aborts the in-flight execution of a running run', async () => {
+		const streaming = streamingExecutor();
+		const { controller } = setup(streaming.make);
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-00000000000c',
+			input: 'Stop mid-stream'
+		});
+		await streaming.running;
+		await controller.cancel(testActor(), receipt.runId);
+		expect(streaming.signals.at(-1)?.aborted).toBe(true);
+	});
+
+	it('marks a running run as cancelling while the executor settles it', async () => {
+		const streaming = streamingExecutor();
+		const { controller } = setup(streaming.make);
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-00000000000d',
+			input: 'Stop mid-stream'
+		});
+		await streaming.running;
+		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		expect(snapshot.run.status).toBe('cancelling');
+	});
+
+	it('cancels a run parked on an approval with nothing left to abort', async () => {
+		const { controller, runs } = setup(parkedExecutor);
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-00000000000e',
+			input: 'Park then stop'
+		});
+		const original = runs.runs[0]!;
+		runs.runs[0] = { ...original, status: 'awaiting_approval' };
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
 		expect(snapshot.run.status).toBe('cancelled');
 	});

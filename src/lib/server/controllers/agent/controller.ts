@@ -397,19 +397,28 @@ export class Agent implements AgentController {
 	}
 
 	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const run = await this.dependencies.runs.requestCancellation(actor, runId, now());
-			// Abort in-process execution immediately
-			const controller = activeRuns.get(runId);
-			if (controller) controller.abort();
-			if (run.status === 'cancelled')
-				await this.dependencies.events.append(run.id, 0, {
+		const run = await this.dependencies.transactionRunner.run(async () => {
+			const requested = await this.dependencies.runs.requestCancellation(actor, runId, now());
+			if (requested.status === 'cancelled')
+				await this.dependencies.events.append(requested.id, 0, {
 					type: 'cancelled',
-					runId: run.id,
+					runId: requested.id,
 					message: 'The request was cancelled before it started'
 				});
-			return this.snapshot(actor, run);
+			return requested;
 		});
+		// The abort waits for the commit above: the executor settles the run out of
+		// `cancelling`, which has to be durable before it can read it.
+		const controller = activeRuns.get(runId);
+		if (controller) {
+			controller.abort();
+			return this.snapshot(actor, run);
+		}
+		// No in-process execution to abort. A run parked on an approval, or one
+		// started by another process, would otherwise sit in `cancelling` forever.
+		if (run.status !== 'cancelling') return this.snapshot(actor, run);
+		const cancelled = await this.dependencies.executor.finishCancellation(runId);
+		return this.snapshot(actor, cancelled ?? run);
 	}
 
 	async retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {
@@ -469,6 +478,9 @@ export class Agent implements AgentController {
 		this.dependencies.executor.execute(runId, controller.signal).then(cleanup, (error) => {
 			cleanup();
 			console.error(`[agent-run] Background execution failed for ${runId}:`, error);
+			// Without this the run stays `running` forever, holding the
+			// conversation's single active-run slot and its open event stream.
+			void this.dependencies.executor.failRun(runId, error);
 		});
 	}
 

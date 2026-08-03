@@ -99,6 +99,56 @@ class DecidingTransport extends FakeAgentRunTransport {
 	}
 }
 
+/**
+ * Streams without ever settling, so a test can stop the turn mid-flight and
+ * then deliver the server's `cancelled` event by hand.
+ */
+class StoppableTransport implements AgentRunTransport {
+	cancelled: AgentRunId[] = [];
+	private emit?: (event: AgentEvent, cursor: number) => void;
+	async submit() {
+		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
+	}
+	async get(): Promise<AgentRunSnapshot> {
+		throw new Error('Unexpected reconciliation');
+	}
+	async decideMany(): Promise<AgentRunSnapshot> {
+		throw new Error('Unexpected decision');
+	}
+	async cancel(id: AgentRunId): Promise<AgentRunSnapshot> {
+		this.cancelled.push(id);
+		return {
+			run: { id: runId, status: 'cancelling', conversationId },
+			pendingDecisions: []
+		} as unknown as AgentRunSnapshot;
+	}
+	async retry(): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
+		throw new Error('Unexpected retry');
+	}
+	async getSession(): Promise<Awaited<ReturnType<AgentRunTransport['getSession']>>> {
+		throw new Error('Unexpected hydration');
+	}
+	deliver(event: AgentEvent): void {
+		this.emit?.(event, 9);
+	}
+	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {
+		this.emit = (event, cursor) =>
+			input.onEvent({
+				cursor: String(cursor),
+				runId,
+				attempt: 1,
+				event,
+				createdAt: new Date()
+			} satisfies AgentRunEventRecord);
+		queueMicrotask(() => {
+			input.onOpen();
+			this.emit!({ type: 'run_started', runId, attempt: 1 }, 1);
+			this.emit!({ type: 'text_delta', text: 'Working on it' }, 2);
+		});
+		return { close() {} };
+	}
+}
+
 class FailingTransport extends FakeAgentRunTransport {
 	override async decideMany(): Promise<AgentRunSnapshot> {
 		throw new Error('offline');
@@ -243,5 +293,41 @@ describe('chat event projection', () => {
 			{ type: 'text_delta', text: 'The answer.' }
 		]);
 		expect(entryText(reply)).toBe('The answer.');
+	});
+});
+
+describe('stopping a streaming turn', () => {
+	const streaming = async () => {
+		const transport = new StoppableTransport();
+		const store = new ChatStore(transport, new MemoryStorage());
+		await store.send({ prompt: 'take your time' });
+		await Promise.resolve();
+		return { transport, store, reply: store.entries.at(-1)! };
+	};
+
+	it('asks the server to cancel the active run', async () => {
+		const { transport, store } = await streaming();
+		await store.stop();
+		expect(transport.cancelled).toEqual([runId]);
+	});
+
+	it('shows the turn as cancelling while the server settles it', async () => {
+		const { store, reply } = await streaming();
+		await store.stop();
+		expect(reply.status).toBe('cancelling');
+	});
+
+	it('settles the turn when the cancelled event arrives', async () => {
+		const { transport, store, reply } = await streaming();
+		await store.stop();
+		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
+		expect(reply.status).toBe('cancelled');
+	});
+
+	it('keeps the partial output the turn had already streamed', async () => {
+		const { transport, store, reply } = await streaming();
+		await store.stop();
+		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
+		expect(entryText(reply)).toBe('Working on it');
 	});
 });
