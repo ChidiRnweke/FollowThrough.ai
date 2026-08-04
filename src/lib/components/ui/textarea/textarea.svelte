@@ -15,12 +15,15 @@
 	bind:this={ref}
 	data-slot={dataSlot}
 	class={cn(
-		// The resting `bg-input/30` is scoped to dark, as upstream shadcn has it.
-		// Unconditionally it laid a faint olive wash over the light palette's near-paper
-		// background, which gave an empty field almost no edge and made a resting 1px
-		// caret easy to lose. Focus is the exception — it gets a full teal wash in both
-		// themes, matching the ::selection accent.
-		'border-input text-foreground dark:bg-input/30 focus-visible:border-primary focus-visible:ring-primary/30 focus-visible:bg-primary/12 dark:focus-visible:bg-brand/20 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 resize-none rounded-xl border px-3 py-3 text-base transition-colors focus-visible:ring-[3px] aria-invalid:ring-[3px] md:text-sm placeholder:text-muted-foreground flex field-sizing-content min-h-16 w-full outline-none disabled:cursor-not-allowed disabled:opacity-50',
+		// Light mode fills with `bg-background` rather than going transparent: a field has
+		// to read as a control on every surface, and the panels it sits in are a step off
+		// paper. Dark keeps upstream's `bg-input/30`.
+		// Focus is a teal border and a teal wash, both painted inside the border box —
+		// nothing outward, because an outward ring gets shaved by any clipping ancestor
+		// (a ScrollArea viewport, say) and reads as a lopsided glow. `--brand` rather than
+		// `--primary`: they are the same teal in light, but dark lifts brand to stay teal
+		// where primary goes muddy.
+		'border-input text-foreground bg-background dark:bg-input/30 focus-visible:border-brand focus-visible:bg-brand/12 dark:focus-visible:bg-brand/20 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 resize-none rounded-xl border px-3 py-3 text-base transition-colors md:text-sm placeholder:text-muted-foreground flex field-sizing-content min-h-16 w-full outline-none disabled:cursor-not-allowed disabled:opacity-50',
 		className
 	)}
 	bind:value

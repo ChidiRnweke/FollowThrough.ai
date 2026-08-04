@@ -132,14 +132,21 @@
 							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
 						/>
 					{:else if renderedMode === 'todo-detail'}
+						<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
+						     rather than reserving space, so a full-width field underneath it
+						     loses its border to the track. -->
 						<ScrollArea class="h-full">
-							<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
+							<div class="pr-3">
+								<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
+							</div>
 						</ScrollArea>
 					{:else if renderedMode === 'project-memory'}
 						<MemoryPanel />
 					{:else if renderedMode === 'suggestions'}
 						<ScrollArea class="h-full">
-							<SuggestionsPanel />
+							<div class="pr-3">
+								<SuggestionsPanel />
+							</div>
 						</ScrollArea>
 					{/if}
 				</ErrorBoundary>

@@ -552,6 +552,20 @@
 /* Split-note geometry lives here so component markup remains declarative.
    The ratio custom property is the only runtime input. */
 @layer components {
+	/* `@tailwindcss/forms` paints its own focus state on every native control: a blue
+	   1px ring (an outward box-shadow) plus a blue border. Our fields own their focus
+	   treatment, and the plugin's ring is drawn outside the border box, so any clipping
+	   ancestor — a ScrollArea viewport, say — shaves it and leaves a lopsided blue edge.
+	   Neutralised here rather than in @layer base, which the plugin's own base rules are
+	   emitted after and would win at equal specificity. Utilities still win over this, so
+	   a field that genuinely wants a ring can ask for one. */
+	input:focus,
+	textarea:focus,
+	select:focus {
+		box-shadow: none;
+		border-color: var(--input);
+	}
+
 	.workspace-panes {
 		--workspace-secondary-ratio: 0.5;
 		container-type: inline-size;

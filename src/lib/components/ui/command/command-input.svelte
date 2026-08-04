@@ -17,7 +17,7 @@
 		<!--
 			No `data-slot` here. It reaches the `<input>` through bits-ui's child props and used to
 			land on top of `input-group-control`, which is the attribute the group's whole focus
-			recipe selects on — so the teal border, halo and wash never fired for any Command field.
+			recipe selects on — so the teal focus border never fired for any Command field.
 			Nothing selects a `command-input` slot; the wrapper above is the hook.
 		-->
 		<CommandPrimitive.Input

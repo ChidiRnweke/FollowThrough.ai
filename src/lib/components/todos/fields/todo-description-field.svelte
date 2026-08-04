@@ -148,8 +148,11 @@
 			: 'Markdown supported. Paste or drop a screenshot to attach it.'}
 	</p>
 {:else}
+	<!-- Resting metrics match the Textarea it swaps for — same fill, border, radius and
+	     padding — so entering edit mode moves nothing and an empty description still reads
+	     as a field rather than as a gap. -->
 	<div
-		class="prose prose-sm min-h-9 max-w-none cursor-text break-words rounded-md px-2 py-1.5 text-sm hover:bg-muted/40 dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:cursor-zoom-in prose-img:rounded-md prose-img:border prose-img:border-border"
+		class="prose prose-sm min-h-24 max-w-none cursor-text break-words rounded-xl border border-input bg-background px-3 py-3 text-sm hover:border-brand/40 dark:bg-input/30 dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:cursor-zoom-in prose-img:rounded-md prose-img:border prose-img:border-border"
 		role="button"
 		tabindex="0"
 		aria-label="Todo description"

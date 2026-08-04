@@ -19,13 +19,14 @@
 		...restProps
 	}: Props = $props();
 
-	// The resting `bg-input/30` stays scoped to dark, as upstream shadcn has it:
-	// unconditionally it washed the light palette's near-paper background, leaving an
-	// empty field almost edgeless. Focus is the exception — it gets a full teal wash in
-	// both themes (solid teal border, 3px halo, visible tint), matching the ::selection
-	// accent so the live field reads as live rather than as dirty gray. `text-foreground`
-	// pins the caret, which is `currentColor` by default and otherwise follows any
-	// ancestor `text-*` class.
+	// Light mode fills with `bg-background` rather than going transparent: a field has to
+	// read as a control on every surface, and the panels it sits in are a step off paper.
+	// Dark keeps upstream's `bg-input/30`. Focus is a teal border and a teal wash, both
+	// inside the border box — an outward ring paints past it, so any clipping ancestor
+	// shaves it on one axis and leaves a lopsided glow. `--brand` rather than `--primary`:
+	// same teal in light, but dark lifts brand to stay teal where primary goes muddy.
+	// `text-foreground` pins the caret, which is `currentColor` by default and otherwise
+	// follows any ancestor `text-*` class.
 </script>
 
 {#if type === 'file'}
@@ -33,7 +34,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'dark:bg-input/30 border-input text-foreground focus-visible:border-primary focus-visible:ring-primary/30 focus-visible:bg-primary/12 dark:focus-visible:bg-brand/20 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 h-9 rounded-4xl border px-3 py-1 text-base transition-colors file:h-7 file:text-sm file:font-medium focus-visible:ring-[3px] aria-invalid:ring-[3px] md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+			'bg-background dark:bg-input/30 border-input text-foreground focus-visible:border-brand focus-visible:bg-brand/12 dark:focus-visible:bg-brand/20 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 h-9 rounded-4xl border px-3 py-1 text-base transition-colors file:h-7 file:text-sm file:font-medium md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
 			className
 		)}
 		type="file"
@@ -46,7 +47,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'dark:bg-input/30 border-input text-foreground focus-visible:border-primary focus-visible:ring-primary/30 focus-visible:bg-primary/12 dark:focus-visible:bg-brand/20 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 h-9 rounded-4xl border px-3 py-1 text-base transition-colors file:h-7 file:text-sm file:font-medium focus-visible:ring-[3px] aria-invalid:ring-[3px] md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+			'bg-background dark:bg-input/30 border-input text-foreground focus-visible:border-brand focus-visible:bg-brand/12 dark:focus-visible:bg-brand/20 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 h-9 rounded-4xl border px-3 py-1 text-base transition-colors file:h-7 file:text-sm file:font-medium md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
 			className
 		)}
 		{type}
