@@ -15,6 +15,8 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-followthrough}
       PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-followthrough}
       PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
+      # Platform key: debug records stay out of Loki unless the deployer opts in.
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     labels:
       caddy: notes.chidinweke.be
       caddy.reverse_proxy: '{{upstreams 3000}}'
@@ -43,6 +45,7 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_WORKER_SERVICE_NAME:-followthrough-worker}
       PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-followthrough}
       PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     networks:
       - postgres-network
       - rustfs-network
