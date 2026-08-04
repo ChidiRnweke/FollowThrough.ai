@@ -359,6 +359,17 @@ const selection = z.object({
 	to: z.number().int().nonnegative(),
 	text: z.string()
 });
+/** One anchored replacement in a note or skill body. */
+const noteEdit = z.object({
+	oldText: z.string().min(1),
+	newText: z.string(),
+	replaceAll: z.boolean().optional()
+});
+/** Shared by edit_note and edit_skill, so their preflight gates validate the same shape. */
+const noteEdits = z.object({
+	noteId: id,
+	edits: z.array(noteEdit).min(1).max(20)
+});
 interface RegistryContext {
 	readonly provenanceId: ProvenanceId;
 	readonly input: RunAgentInput;
@@ -376,6 +387,28 @@ export interface AgentToolDefinition {
 	readonly classification: 'read' | 'proposal' | 'mutation';
 	readonly parameters: z.ZodObject;
 	readonly execute: (input: Record<string, unknown>) => Promise<unknown>;
+	/**
+	 * Optional gate consulted by the approval boundary, never by the tool itself.
+	 *
+	 * When a mutation would otherwise be parked for approval in approval-required
+	 * mode, preflight decides whether the call can even succeed before the run
+	 * stops to ask the user. A call that is doomed — edit anchors that match
+	 * nothing in the note, a body that cannot parse — must NOT park: parking
+	 * costs a fresh trace, a replayed transcript and another billed turn, and
+	 * hands the model back the same dead end after the user approves. So a
+	 * preflight returning false sends the call straight to `execute`, which
+	 * returns its structured failure inside the same turn for the model to
+	 * recover from (re-read, re-anchor, or fall back to save_note).
+	 *
+	 * Rules for implementers:
+	 * - It runs only when the boundary would otherwise engage: never in
+	 *   auto-accept mode and never for read/proposal calls, so a rejected gate
+	 *   costs no extra reads.
+	 * - It must be dry — read and patch in memory, never write.
+	 * - Keep it consistent with `execute`: same read, same serializer, same
+	 *   patch, so the gate and the outcome cannot disagree.
+	 */
+	readonly preflight?: (input: Record<string, unknown>) => Promise<boolean>;
 }
 
 type Definition = AgentToolDefinition;
@@ -495,8 +528,10 @@ export class AgentTools {
 			// A payload that cannot pass the target's schema can only fail, so it must
 			// not park the run: asking the user to approve a doomed call costs a whole
 			// resume — a fresh trace, a replayed transcript and another billed turn —
-			// and hands the model back the same dead end. Let it fail in `execute`
-			// instead, which returns the recovery inside this turn.
+			// and hands the model back the same dead end. The same holds for a
+			// schema-valid call the target's own preflight gate rejects, such as a note
+			// edit whose anchors match nothing. Let it fail in `execute` instead, which
+			// returns the recovery inside this turn.
 			needsApproval: async (_context, input) => {
 				const envelope = useToolEnvelopeSchema.safeParse(input);
 				if (!envelope.success) return false;
@@ -504,7 +539,11 @@ export class AgentTools {
 				if (target?.classification !== 'mutation' || this.mode !== 'approval_required')
 					return false;
 				const resolved = resolveUseToolPayload(envelope.data);
-				return resolved.ok && target.parameters.safeParse(resolved.payload).success;
+				return (
+					resolved.ok &&
+					target.parameters.safeParse(resolved.payload).success &&
+					(!target.preflight || (await target.preflight(resolved.payload)))
+				);
 			},
 			errorFunction: (_context, error) =>
 				JSON.stringify(
@@ -563,13 +602,25 @@ export class AgentTools {
 		definition: Definition,
 		options: { isEnabled?: () => boolean } = {}
 	): Tool<unknown> {
+		// Captured so the approval callback below can narrow it: property narrowing
+		// does not survive into a nested closure.
+		const gate = definition.preflight;
 		return tool({
 			name: definition.name,
 			description: definition.description,
 			parameters: z.toJSONSchema(definition.parameters) as never,
 			strict: false,
 			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
-			needsApproval: definition.classification === 'mutation' && this.mode === 'approval_required',
+			// The approval boundary consults the tool's preflight gate before parking:
+			// a mutation that can only fail is not paused for the user — it executes
+			// in-turn and returns its failure to the model instead. See
+			// `AgentToolDefinition.preflight` for the rules implementers must follow.
+			needsApproval: gate
+				? async (_context, input) =>
+						definition.classification === 'mutation' &&
+						this.mode === 'approval_required' &&
+						(await gate(input))
+				: definition.classification === 'mutation' && this.mode === 'approval_required',
 			errorFunction: (_context, error) =>
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
 			execute: async (input, _runContext, details) => {
@@ -597,12 +648,14 @@ export class AgentTools {
 			description: string,
 			classification: Definition['classification'],
 			parameters: T,
-			execute: (input: z.infer<T>) => Promise<unknown>
+			execute: (input: z.infer<T>) => Promise<unknown>,
+			preflight?: (input: z.infer<T>) => Promise<boolean>
 		): Definition => ({
 			name,
 			description,
 			classification,
 			parameters,
+			...(preflight ? { preflight: preflight as Definition['preflight'] } : {}),
 			execute: async (input) => {
 				const parsed = parameters.parse(input);
 				const result = await execute(parsed);
@@ -758,19 +811,7 @@ export class AgentTools {
 				'edit_note',
 				toolDescription('edit_note'),
 				'mutation',
-				z.object({
-					noteId: id,
-					edits: z
-						.array(
-							z.object({
-								oldText: z.string().min(1),
-								newText: z.string(),
-								replaceAll: z.boolean().optional()
-							})
-						)
-						.min(1)
-						.max(20)
-				}),
+				noteEdits,
 				async (input) => {
 					const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 					const before = noteMarkdownFromContent(current.note.document);
@@ -795,6 +836,15 @@ export class AgentTools {
 						appliedEdits: patched.appliedEdits,
 						matchedTexts: patched.matchedTexts
 					};
+				},
+				async (input) => {
+					const parsed = noteEdits.safeParse(input);
+					if (!parsed.success) return false;
+					const current = await factory.notes().get(actor, {
+						noteId: parsed.data.noteId as NoteId
+					});
+					return applyNotePatch(noteMarkdownFromContent(current.note.document), parsed.data.edits)
+						.ok;
 				}
 			),
 			define(
@@ -1019,19 +1069,7 @@ export class AgentTools {
 				'edit_skill',
 				toolDescription('edit_skill'),
 				'mutation',
-				z.object({
-					noteId: id,
-					edits: z
-						.array(
-							z.object({
-								oldText: z.string().min(1),
-								newText: z.string(),
-								replaceAll: z.boolean().optional()
-							})
-						)
-						.min(1)
-						.max(20)
-				}),
+				noteEdits,
 				async (input) => {
 					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
 					if (view.skill.note.kind !== 'skill')
@@ -1057,6 +1095,16 @@ export class AgentTools {
 						appliedEdits: patched.appliedEdits,
 						matchedTexts: patched.matchedTexts
 					};
+				},
+				async (input) => {
+					const parsed = noteEdits.safeParse(input);
+					if (!parsed.success) return false;
+					const view = await factory.skills().get(actor, { noteId: parsed.data.noteId as NoteId });
+					if (view.skill.note.kind !== 'skill') return false;
+					return applyNotePatch(
+						noteMarkdownFromContent(view.skill.note.document),
+						parsed.data.edits
+					).ok;
 				}
 			),
 			define(

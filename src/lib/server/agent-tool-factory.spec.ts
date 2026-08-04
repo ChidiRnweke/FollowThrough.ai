@@ -3,6 +3,7 @@ import type { FunctionTool } from '@openai/agents';
 import type { ControllerFactory } from '$lib/server/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { noteEtag } from '$lib/models/notes';
+import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	noteBuilder,
 	testActor,
@@ -17,8 +18,11 @@ import {
 	type ToolAccessPolicy
 } from './agent-tool-factory';
 
-const registry = (mode: 'approval_required' | 'auto_accept') =>
-	new AgentTools({} as ControllerFactory, testActor(), mode, {
+const registry = (
+	mode: 'approval_required' | 'auto_accept',
+	options: { factory?: ControllerFactory } = {}
+) =>
+	new AgentTools(options.factory ?? ({} as ControllerFactory), testActor(), mode, {
 		provenanceId: testProvenanceId(),
 		input: { prompt: 'Help' },
 		model: 'openai/gpt-5.6'
@@ -1306,6 +1310,135 @@ describe('Agent tool coverage invariants', () => {
 			})
 		);
 		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
+	});
+});
+
+describe('Doomed note edits never reach the approval boundary', () => {
+	const noteWithBody = (markdown: string, kind: 'note' | 'skill' = 'note') =>
+		noteBuilder({
+			id: crypto.randomUUID() as never,
+			kind,
+			title: 'Knowledge layer',
+			document: noteContentFromMarkdown(markdown).document,
+			plainText: noteContentFromMarkdown(markdown).plainText
+		});
+
+	const notesFactory = (note: ReturnType<typeof noteBuilder>) =>
+		({
+			notes: () => ({
+				get: async () => ({ note })
+			})
+		}) as unknown as ControllerFactory;
+
+	const skillsFactory = (note: ReturnType<typeof noteBuilder>) =>
+		({
+			skills: () => ({
+				get: async () => ({ skill: { note, name: note.title } })
+			})
+		}) as unknown as ControllerFactory;
+
+	const directTool = (name: 'edit_note' | 'edit_skill', note: ReturnType<typeof noteBuilder>) =>
+		registry('approval_required', {
+			factory: name === 'edit_note' ? notesFactory(note) : skillsFactory(note)
+		})
+			.tools()
+			.find((candidate) => candidate.name === name) as FunctionTool;
+
+	const edits = (noteId: string, oldText: string, newText = 'replacement') => ({
+		noteId,
+		edits: [{ oldText, newText }]
+	});
+
+	// Invariant: the user is only ever asked to approve a note-body edit that can
+	// actually apply. A doomed edit must fail in-turn for the model to recover
+	// from, not park the run and cost a fresh trace and replayed transcript.
+
+	it('still parks an approval on an edit_note whose oldText exists in the note', async () => {
+		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
+		const selected = directTool('edit_note', note);
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				edits(note.id, 'Replace this sentence.') as never,
+				'call-1'
+			)
+		).toBe(true);
+	});
+
+	it('does not park an approval on an edit_note whose oldText is absent from the note', async () => {
+		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
+		const selected = directTool('edit_note', note);
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				edits(note.id, 'This sentence is not in the note.') as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('does not park an approval on an edit_skill whose oldText is absent from the skill', async () => {
+		const skill = noteWithBody('Number every finding.', 'skill');
+		const selected = directTool('edit_skill', skill);
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				edits(skill.id, 'This sentence is not in the skill.') as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('does not park an approval on a schema-valid but doomed edit_note via use_tool', async () => {
+		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
+		const selected = indirectToolFor('approval_required', 'use_tool', {
+			factory: notesFactory(note)
+		});
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{
+					name: 'edit_note',
+					payload: edits(note.id, 'This sentence is not in the note.')
+				} as never,
+				'call-1'
+			)
+		).toBe(false);
+	});
+
+	it('still parks an approval on an applying edit_note via use_tool', async () => {
+		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
+		const selected = indirectToolFor('approval_required', 'use_tool', {
+			factory: notesFactory(note)
+		});
+		expect(
+			await selected.needsApproval(
+				{} as never,
+				{ name: 'edit_note', payload: edits(note.id, 'Replace this sentence.') } as never,
+				'call-1'
+			)
+		).toBe(true);
+	});
+
+	it('skips the preflight read entirely when no approval boundary exists', async () => {
+		let reads = 0;
+		const factory = {
+			notes: () => ({
+				get: async () => {
+					reads += 1;
+					return { note: noteWithBody('# Knowledge layer') };
+				}
+			})
+		} as unknown as ControllerFactory;
+		const selected = registry('auto_accept', { factory })
+			.tools()
+			.find((candidate) => candidate.name === 'edit_note') as FunctionTool;
+		const parks = await selected.needsApproval(
+			{} as never,
+			edits(crypto.randomUUID(), 'anything') as never,
+			'call-1'
+		);
+		expect({ parks, reads }).toEqual({ parks: false, reads: 0 });
 	});
 });
 
