@@ -21,6 +21,7 @@ import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
@@ -134,6 +135,10 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			events: runEvents,
 			conversations,
 			eventBus,
+			activeRuns: {
+				register: registerActiveRun,
+				release: releaseActiveRun
+			},
 			defaultModel: normalizeLanguageModelId(input.defaultModel)
 		}),
 		executor: new AgentRunLifecycle({

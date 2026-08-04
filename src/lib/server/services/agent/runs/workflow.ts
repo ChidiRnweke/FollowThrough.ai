@@ -11,7 +11,6 @@ import type {
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunEventRepository, AgentRunRepository } from '$lib/server/repositories/agent';
-import { registerActiveRun, releaseActiveRun } from './active-runs';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -26,11 +25,18 @@ interface AgentEventBus {
 	notify(runId: AgentRunId): void;
 }
 
+/** The in-process handle for a run executing in this process, so cancellation can abort it. */
+export interface ActiveRunRegistry {
+	register(runId: AgentRunId): AbortController;
+	release(runId: AgentRunId): void;
+}
+
 export interface WorkflowRunnerDependencies {
 	readonly runs: AgentRunRepository;
 	readonly events: AgentRunEventRepository;
 	readonly conversations: WorkflowConversationRecorder;
 	readonly eventBus: AgentEventBus;
+	readonly activeRuns: ActiveRunRegistry;
 	/** Deployment fallback for actions that expose no model choice of their own. */
 	readonly defaultModel: string;
 }
@@ -120,7 +126,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		model: string,
 		task: WorkflowRunTask<Result>
 	): Promise<void> {
-		const controller = registerActiveRun(runId);
+		const controller = this.dependencies.activeRuns.register(runId);
 		try {
 			await this.append(runId, { type: 'run_started', runId, attempt: 1 });
 			const result = await task.run(controller.signal);
@@ -135,7 +141,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 			if (controller.signal.aborted) await this.settleCancelled(runId);
 			else await this.settleFailed(runId, error);
 		} finally {
-			releaseActiveRun(runId);
+			this.dependencies.activeRuns.release(runId);
 		}
 	}
 
