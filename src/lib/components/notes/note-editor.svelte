@@ -71,7 +71,7 @@
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
 	/** Long enough for the wash to finish; short enough that a second update can follow. */
-	const SHIMMER_DURATION = 1000;
+	const SHIMMER_DURATION = 3000;
 	const shimmerKey = new PluginKey('note-block-shimmer');
 
 	const runningCopy: Record<NoteAiAction, string> = {
