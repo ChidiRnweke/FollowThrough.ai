@@ -29,6 +29,20 @@ class FakeController implements FakeControllerContract {
 	async _helper(): Promise<string> {
 		return 'internal';
 	}
+
+	/** Mirrors `Agent.freezeInput`: a sync helper public methods call without `await`. */
+	private freezeLike(input: string): string {
+		return `frozen:${input}`;
+	}
+
+	async submitLike(input: string): Promise<string> {
+		const frozen = this.freezeLike(input);
+		return frozen;
+	}
+
+	syncThrower(): string {
+		throw new ValidationError('sync domain failure');
+	}
 }
 
 const recordingLogger = (entries: RecordedEntry[]) => ({
@@ -151,5 +165,50 @@ describe('instrumentedController', () => {
 		await wrapped._helper();
 
 		expect(entries).toHaveLength(0);
+	});
+
+	test('passes synchronous methods through with their contract intact', () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			recordingLogger([])
+		);
+
+		const result = (wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
+
+		expect(result).toBe('frozen:note');
+	});
+
+	test('keeps a synchronous throw synchronous instead of becoming a rejection', () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			recordingLogger([])
+		);
+
+		expect(() => wrapped.syncThrower()).toThrow(ValidationError);
+	});
+
+	test('writes no log records for synchronous methods', () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			recordingLogger(entries)
+		);
+
+		(wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
+
+		expect(entries).toHaveLength(0);
+	});
+
+	test('lets a public method use its synchronous helpers, as submit does freezeInput', async () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			recordingLogger([])
+		);
+
+		expect(await wrapped.submitLike('note')).toBe('frozen:note');
 	});
 });
