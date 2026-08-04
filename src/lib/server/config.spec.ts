@@ -194,6 +194,14 @@ describe('platform environment merging', () => {
 		});
 	});
 
+	// Log verbosity is deployment policy: dev .env files carry LOG_LEVEL, and the
+	// secrets backend must never get a vote.
+	test('the log level is copied from the file environment', () => {
+		expect(mergePlatformEnvironment({}, { LOG_LEVEL: 'debug' })).toEqual({
+			LOG_LEVEL: 'debug'
+		});
+	});
+
 	test('application keys are left to the secrets backend', () => {
 		expect(mergePlatformEnvironment({}, { DATABASE_URL: 'postgresql://file' })).toEqual({});
 	});

@@ -37,7 +37,7 @@ class ManualClock implements SchedulerClock {
 	}
 }
 
-const silent = { error: () => {} };
+const silent = { error: () => {}, info: () => {} };
 
 const countingTask = (name = 'counter'): ScheduledTask & { runs: number } => ({
 	name,

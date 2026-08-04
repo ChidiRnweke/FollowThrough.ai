@@ -26,6 +26,87 @@ import {
 const TRACER_NAME = 'followthrough';
 const WORKFLOW_CONTEXT_KEY = createContextKey('followthrough.workflow');
 
+/**
+ * Log verbosity is deployment policy, not configuration the secrets backend can
+ * supply: LOG_LEVEL reaches the process like the OTEL_* platform keys. Unset
+ * means debug in dev (you want the noise while iterating), info in prod (debug
+ * records stay out of Loki until someone opts in) and error under vitest (the
+ * suite would drown in operation chatter otherwise).
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LOG_LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+
+export const resolveLogLevel = (
+	env: Record<string, string | undefined> = process.env
+): LogLevel => {
+	const configured = env.LOG_LEVEL?.trim().toLowerCase();
+	if (
+		configured === 'debug' ||
+		configured === 'info' ||
+		configured === 'warn' ||
+		configured === 'error'
+	)
+		return configured;
+	if (env.NODE_ENV === 'production') return 'info';
+	if (env.NODE_ENV === 'test') return 'error';
+	return 'debug';
+};
+
+/** True when a record at `level` should be emitted under the resolved level. */
+export const logLevelEnabled = (
+	level: LogLevel,
+	env: Record<string, string | undefined> = process.env
+): boolean => LOG_LEVEL_ORDER[level] >= LOG_LEVEL_ORDER[resolveLogLevel(env)];
+
+/**
+ * Attached images ride through controller arguments as base64 data URLs; logging
+ * one verbatim would bury the record. Same treatment as the span exporter's
+ * elision in scripts/otel-instrumentation.js — copied, not imported, because the
+ * preload runs before the app and cannot share modules with src.
+ */
+const BASE64_DATA_URL = /data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+const MAX_SUMMARY_CHARS = 500;
+
+/**
+ * One-line rendering of an argument or result for a log record: JSON, capped,
+ * base64 elided. Summaries, never raw payloads — privacy and record size.
+ */
+export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS): string => {
+	let rendered: string;
+	if (value instanceof Error) rendered = `${value.name}: ${value.message}`;
+	else {
+		try {
+			rendered = JSON.stringify(value) ?? String(value);
+		} catch {
+			rendered = '[unserializable]';
+		}
+	}
+	rendered = rendered.replace(
+		BASE64_DATA_URL,
+		(match) => `${match.slice(0, 64)}…<base64 elided, ${match.length} chars>`
+	);
+	if (rendered.length > maxChars)
+		return `${rendered.slice(0, maxChars)}…<truncated, ${rendered.length} chars>`;
+	return rendered;
+};
+
+const INVALID_TRACE_ID = '00000000000000000000000000000000';
+
+/**
+ * W3C `traceparent` of the currently active span, or `undefined` when no valid
+ * span is active (telemetry off, or outside any span). Used to carry the caller's
+ * trace into work that outlives the active context — e.g. an agent run queued by
+ * this request but executed after the transaction commits.
+ */
+export const activeTraceparent = (): string | undefined => {
+	const span = trace.getSpan(context.active());
+	if (!span) return undefined;
+	const { traceId } = span.spanContext();
+	if (traceId === INVALID_TRACE_ID) return undefined;
+	return toTraceparent(span);
+};
+
 export interface WorkflowTraceContext {
 	readonly input?: string;
 	readonly inputMimeType?: MimeType;
@@ -82,9 +163,13 @@ const workflowContext = (span: Span, params: WorkflowTraceContext): Context => {
 };
 
 /**
- * Creates one detached root for a complete product workflow. All downstream
- * operations and auto-instrumented provider calls must execute inside `body`
- * so Phoenix receives one coherent trace.
+ * Creates the root span for a complete product workflow — or, when already
+ * inside a workflow or operation, a child span, so the caller's trace stays
+ * whole. It detaches only when the active context carries no workflow marker
+ * (e.g. a bare auto-instrumented HTTP request): parenting to that filtered
+ * span would show up in Phoenix as a broken root. All downstream operations
+ * and auto-instrumented provider calls must execute inside `body` so Phoenix
+ * receives one coherent trace.
  */
 export async function traceWorkflow<T>(
 	name: string,
@@ -92,9 +177,14 @@ export async function traceWorkflow<T>(
 	body: () => Promise<T>,
 	describeOutput?: (result: T) => string
 ): Promise<T> {
+	const active = context.active();
+	const parent = active.getValue(WORKFLOW_CONTEXT_KEY) ? active : ROOT_CONTEXT;
 	const span = trace
 		.getTracer(TRACER_NAME)
-		.startSpan(name, { attributes: spanAttributes(params) }, ROOT_CONTEXT);
+		.startSpan(name, { attributes: spanAttributes(params) }, parent);
+	const debug = logLevelEnabled('debug');
+	const startedAt = performance.now();
+	if (debug) console.debug('[operation] started:', name);
 	try {
 		const result = await context.with(workflowContext(span, params), body);
 		const output = describeOutput?.(result);
@@ -107,6 +197,10 @@ export async function traceWorkflow<T>(
 			);
 		}
 		span.setStatus({ code: SpanStatusCode.OK });
+		if (debug)
+			console.debug(
+				`[operation] completed: ${name} in ${Math.round(performance.now() - startedAt)}ms`
+			);
 		return result;
 	} catch (error) {
 		recordError(span, error);
@@ -118,7 +212,10 @@ export async function traceWorkflow<T>(
 
 /**
  * Creates an operation under the active workflow. If called outside a workflow,
- * it becomes a safe root rather than retaining a filtered HTTP parent.
+ * it becomes a safe root rather than retaining a filtered HTTP parent. The
+ * operation marks its own context as a workflow context, so observers nested
+ * beneath it (including controller calls made by agent tools) compose into the
+ * same trace instead of forking detached roots.
  */
 export async function traceOperation<T>(
 	name: string,
@@ -134,7 +231,10 @@ export async function traceOperation<T>(
 	const span = trace
 		.getTracer(TRACER_NAME)
 		.startSpan(name, { attributes: spanAttributes(params) }, parent);
-	const operationContext = trace.setSpan(parent, span);
+	const operationContext = trace.setSpan(parent, span).setValue(WORKFLOW_CONTEXT_KEY, true);
+	const debug = logLevelEnabled('debug');
+	const startedAt = performance.now();
+	if (debug) console.debug('[operation] started:', name);
 	try {
 		const result = await context.with(operationContext, body);
 		const output = describeOutput?.(result);
@@ -149,6 +249,10 @@ export async function traceOperation<T>(
 		const attributes = describeAttributes?.(result);
 		if (attributes) span.setAttributes(attributes);
 		span.setStatus({ code: SpanStatusCode.OK });
+		if (debug)
+			console.debug(
+				`[operation] completed: ${name} in ${Math.round(performance.now() - startedAt)}ms`
+			);
 		return result;
 	} catch (error) {
 		recordError(span, error);
@@ -184,9 +288,11 @@ export interface AgentTurnSpanParams {
 	readonly userId?: string;
 	readonly runId?: string;
 	/**
-	 * W3C traceparent of the turn that started this run. A run resumed after an
-	 * approval passes it back so its turn hangs off the original root instead of
-	 * opening a second trace for the same user request.
+	 * W3C traceparent of the operation that started this run. Seeded onto the run
+	 * at submit time so the first turn joins the requesting trace, and carried
+	 * across an approval park so the resumed turn hangs off the original root
+	 * instead of opening a second trace for the same user request. When absent,
+	 * the turn joins an active workflow context if there is one, else roots.
 	 */
 	readonly parentTraceparent?: string;
 	/** Receives this turn's own traceparent, so the caller can persist it for a resume. */
@@ -239,9 +345,12 @@ export async function* traceAgentTurn<T>(
 		},
 		tags: ['agent', 'turn']
 	};
+	const active = context.active();
 	const parent = params.parentTraceparent
 		? fromTraceparent(params.parentTraceparent)
-		: ROOT_CONTEXT;
+		: active.getValue(WORKFLOW_CONTEXT_KEY)
+			? active
+			: ROOT_CONTEXT;
 	const span = trace
 		.getTracer(TRACER_NAME)
 		.startSpan('agent.turn', { attributes: spanAttributes(workflowParams) }, parent);

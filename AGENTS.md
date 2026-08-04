@@ -21,6 +21,12 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
 4. Classify the method in the `AgentToolCoverage` map in `src/lib/server/agent-tool-factory.ts`.
    The map is total over each controller's methods; a missing entry is a type error.
 
+Boundary logging and tracing are automatic: `ProductionControllerFactory` wraps every
+controller with `instrumentedController` (one `domain.method` span, info before / debug
+after / warn on `DomainError` / error otherwise, all carrying the span's trace id). Do not
+add boundary logs at call sites; log at `debug` inside services for detail. `LOG_LEVEL`
+(platform key, never a secret) gates debug records — debug in dev, info in prod.
+
 ## Layering rules the audits enforce
 
 - Each `src/lib/models/<domain>/` domain is self-contained: no imports of sibling files in the

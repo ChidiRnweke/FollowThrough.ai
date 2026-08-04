@@ -35,6 +35,7 @@ import { Suggestions, type SuggestionsDependencies } from './controllers/suggest
 import { Todos, type TodosDependencies } from './controllers/todos/controller';
 import { Workspace, type WorkspaceDependencies } from './controllers/workspace/controller';
 import type { ControllerFactory } from './controller-factory';
+import { instrumentedController } from './controllers/instrumentation';
 
 export interface ProductionControllerDependencies {
 	workspace: WorkspaceDependencies;
@@ -61,65 +62,73 @@ export interface ProductionControllerDependencies {
 
 export class ProductionControllerFactory implements ControllerFactory {
 	constructor(private readonly dependencies: ProductionControllerDependencies) {}
+	// Every controller is wrapped at construction: one `domain.method` span plus
+	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
 	workspace() {
-		return new Workspace(this.dependencies.workspace);
+		return instrumentedController('workspace', new Workspace(this.dependencies.workspace));
 	}
 	projects() {
-		return new Projects(this.dependencies.projects);
+		return instrumentedController('projects', new Projects(this.dependencies.projects));
 	}
 	notes() {
-		return new Notes(this.dependencies.notes);
+		return instrumentedController('notes', new Notes(this.dependencies.notes));
 	}
 	todos() {
-		return new Todos(this.dependencies.todos);
+		return instrumentedController('todos', new Todos(this.dependencies.todos));
 	}
 	relationships() {
-		return new Relationships(this.dependencies.relationships);
+		return instrumentedController('relationships', new Relationships(this.dependencies.relationships));
 	}
 	references() {
-		return new References(this.dependencies.references);
+		return instrumentedController('references', new References(this.dependencies.references));
 	}
 	diagrams() {
-		return new Diagrams(this.dependencies.diagrams);
+		return instrumentedController('diagrams', new Diagrams(this.dependencies.diagrams));
 	}
 	suggestions() {
-		return new Suggestions(this.dependencies.suggestions);
+		return instrumentedController('suggestions', new Suggestions(this.dependencies.suggestions));
 	}
 	skills() {
-		return new Skills(this.dependencies.skills);
+		return instrumentedController('skills', new Skills(this.dependencies.skills));
 	}
 	agent() {
-		return new Agent(this.dependencies.agent);
+		return instrumentedController('agent', new Agent(this.dependencies.agent));
 	}
 	agentSettings() {
-		return new AgentSettings(this.dependencies.agentSettings);
+		return instrumentedController('agentSettings', new AgentSettings(this.dependencies.agentSettings));
 	}
 	apiTokens() {
-		return new ApiTokens(this.dependencies.apiTokens);
+		return instrumentedController('apiTokens', new ApiTokens(this.dependencies.apiTokens));
 	}
 	toolPreferences() {
-		return new ToolPreferences(this.dependencies.toolPreferences);
+		return instrumentedController(
+			'toolPreferences',
+			new ToolPreferences(this.dependencies.toolPreferences)
+		);
 	}
 	attachments() {
-		return new Attachments(this.dependencies.attachments);
+		return instrumentedController('attachments', new Attachments(this.dependencies.attachments));
 	}
 	deliverables() {
-		return new Deliverables(this.dependencies.deliverables);
+		return instrumentedController('deliverables', new Deliverables(this.dependencies.deliverables));
 	}
 	trustPolicies() {
-		return new TrustPolicies(this.dependencies.trustPolicies);
+		return instrumentedController('trustPolicies', new TrustPolicies(this.dependencies.trustPolicies));
 	}
 	memory() {
-		return new Memory(this.dependencies.memory);
+		return instrumentedController('memory', new Memory(this.dependencies.memory));
 	}
 	retrieval() {
-		return new Retrieval(this.dependencies.retrieval);
+		return instrumentedController('retrieval', new Retrieval(this.dependencies.retrieval));
 	}
 	inlineSuggestions() {
-		return new InlineSuggestions(this.dependencies.inlineSuggestions);
+		return instrumentedController(
+			'inlineSuggestions',
+			new InlineSuggestions(this.dependencies.inlineSuggestions)
+		);
 	}
 	feedback() {
-		return new Feedback(this.dependencies.feedback);
+		return instrumentedController('feedback', new Feedback(this.dependencies.feedback));
 	}
 	// Composes the notes and projects controllers rather than taking repositories of its
 	// own: an import is a batch of ordinary creates, and going through the controllers

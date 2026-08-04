@@ -165,6 +165,9 @@ const PLATFORM_KEYS = new Set<string>([
 	   512K default. It has to be in the process environment before `node build` starts:
 	   the Dockerfile sets it, docker-compose.prod.yml can override it. */
 	'BODY_SIZE_LIMIT',
+	/* Log verbosity is deployment policy (dev wants debug, prod wants info), never
+	   an application secret. Read once by resolveLogLevel in services/telemetry. */
+	'LOG_LEVEL',
 	...BOOTSTRAP_KEYS
 ]);
 

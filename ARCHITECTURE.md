@@ -94,6 +94,23 @@ names, enum values, migration history, shadcn aliases, or user-visible behavior.
 `server/db/schema/index.ts` file is a registry only; repositories import capability schema modules
 directly.
 
+## Observability
+
+One trace id spans a user operation end to end. `ProductionControllerFactory` wraps every
+controller method through `instrumentedController` (a `domain.method` operation span plus
+info-before / debug-after logs, warn on domain errors, error otherwise), and agent runs are
+seeded at submit/retry time with the requesting span's W3C traceparent, so `agent.turn` and
+its LLM/tool spans join the request's trace instead of opening a detached one. Spans composed
+through `traceWorkflow`/`traceOperation` nest under the active workflow; only the bare
+auto-instrumented HTTP request context (filtered out of Phoenix) triggers a fresh root.
+
+Logging stays plain `console.*` at call sites. The preload bridge in
+`scripts/otel-instrumentation.js` ships every record to the collector with the active span's
+trace and span ids attached, and `scripts/log-record.js` lifts tags, exception chains and
+domain-error codes into queryable attributes. Debug records are gated by the `LOG_LEVEL`
+platform key (never a secret): debug in dev, info in prod. Boundary logging lives in the
+factory wrapper alone — controllers and routes must not hand-place their own.
+
 ## Verification
 
 `pnpm test:architecture` runs the topology audit, test-quality audit, and the locally pinned Chisel

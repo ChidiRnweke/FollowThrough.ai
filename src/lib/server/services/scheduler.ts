@@ -24,7 +24,7 @@ export interface SchedulerClock {
 
 export interface SchedulerOptions {
 	readonly clock?: SchedulerClock;
-	readonly logger?: Pick<Console, 'error'>;
+	readonly logger?: Pick<Console, 'error' | 'info'>;
 	/** Run every task once immediately instead of waiting out the first interval. */
 	readonly runOnStart?: boolean;
 }
@@ -57,8 +57,15 @@ export const startScheduler = (
 
 	const tick = async (task: ScheduledTask): Promise<void> => {
 		await tracer.startActiveSpan(`worker.${task.name}`, async (span) => {
+			const startedAt = performance.now();
+			// Info, not debug: ticks are the worker's whole story, and in prod debug
+			// records are gated off (LOG_LEVEL), which would leave it silent.
+			logger.info(`[worker] ${task.name} started`);
 			try {
 				await task.run();
+				logger.info(
+					`[worker] ${task.name} finished in ${Math.round(performance.now() - startedAt)}ms`
+				);
 			} catch (error) {
 				span.setStatus({ code: SpanStatusCode.ERROR });
 				span.recordException(error instanceof Error ? error : new Error(String(error)));
