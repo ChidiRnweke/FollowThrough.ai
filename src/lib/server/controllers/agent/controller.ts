@@ -93,6 +93,9 @@ interface AgentSessionRepository {
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
+/** Grace period the executor gets to settle a cancelled run before the backstop does it. */
+const CANCELLATION_GRACE_MS = 10_000;
+
 class DuplicateSubmission extends Error {}
 
 /**
@@ -420,12 +423,32 @@ export class Agent implements AgentController {
 		});
 		// The abort waits for the commit above: the executor settles the run out of
 		// `cancelling`, which has to be durable before it can read it.
-		if (abortActiveRun(runId)) return this.snapshot(actor, run);
+		if (abortActiveRun(runId)) {
+			this.settleCancellationAfterGrace(runId);
+			return this.snapshot(actor, run);
+		}
 		// No in-process execution to abort. A run parked on an approval, or one
 		// started by another process, would otherwise sit in `cancelling` forever.
 		if (run.status !== 'cancelling') return this.snapshot(actor, run);
 		const cancelled = await this.dependencies.executor.finishCancellation(runId);
 		return this.snapshot(actor, cancelled ?? run);
+	}
+
+	/**
+	 * `cancelling` must be transient even when the execution never unwinds: a hung
+	 * provider call, or a tool doing local work the signal cannot reach, would
+	 * otherwise park the row forever. The executor settling first makes this a
+	 * no-op compare-and-set, so the cancelled event is still appended exactly once.
+	 */
+	private settleCancellationAfterGrace(runId: AgentRunId): void {
+		const timer = setTimeout(() => {
+			this.dependencies.executor
+				.finishCancellation(runId)
+				.catch((error) =>
+					console.error(`[agent-run] Could not settle cancelled run ${runId}:`, error)
+				);
+		}, CANCELLATION_GRACE_MS);
+		timer.unref();
 	}
 
 	async retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {

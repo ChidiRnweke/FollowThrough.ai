@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -331,6 +331,97 @@ describe('durable agent lifecycle commands', () => {
 		runs.runs[0] = { ...original, status: 'awaiting_approval' };
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
 		expect(snapshot.run.status).toBe('cancelled');
+	});
+
+	describe('the cancellation backstop', () => {
+		const settle = async (runs: InMemoryAgentRunPersistence, runId: AgentRunId) => {
+			const settled = await runs.transition(runId, 'cancelling', 'cancelled');
+			if (settled)
+				await runs.append(runId, 1, { type: 'cancelled', runId, message: 'Generation stopped' });
+		};
+
+		/**
+		 * Its `execute` hangs forever even after the abort — the hung-provider case
+		 * that used to park the row in `cancelling` for good.
+		 */
+		const hangingExecutor = () => {
+			let started: () => void;
+			const running = new Promise<void>((resolve) => (started = resolve));
+			return {
+				running,
+				make: (runs: InMemoryAgentRunPersistence) =>
+					({
+						execute: async (runId: AgentRunId) => {
+							await runs.transition(runId, 'queued', 'running');
+							started();
+							return new Promise<never>(() => {});
+						},
+						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
+					}) as unknown as AgentRunLifecycle
+			};
+		};
+
+		/** The well-behaved executor: the abort unwinds it and it settles itself. */
+		const settlingExecutor = () => {
+			let started: () => void;
+			const running = new Promise<void>((resolve) => (started = resolve));
+			return {
+				running,
+				make: (runs: InMemoryAgentRunPersistence) =>
+					({
+						execute: async (runId: AgentRunId, signal: AbortSignal) => {
+							await runs.transition(runId, 'queued', 'running');
+							started();
+							await new Promise<void>((resolve) =>
+								signal.addEventListener('abort', () => resolve(), { once: true })
+							);
+							await settle(runs, runId);
+							return 'cancelled';
+						},
+						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
+					}) as unknown as AgentRunLifecycle
+			};
+		};
+
+		it('settles the run when the executor never unwinds', async () => {
+			vi.useFakeTimers();
+			try {
+				const hanging = hangingExecutor();
+				const { controller, runs } = setup(hanging.make);
+				const receipt = await controller.submit(testActor(), {
+					requestId: '10000000-0000-4000-8000-00000000000f',
+					input: 'Hang forever'
+				});
+				await hanging.running;
+				await controller.cancel(testActor(), receipt.runId);
+				await vi.advanceTimersByTimeAsync(10_000);
+				expect(runs.runs.find((run) => run.id === receipt.runId)?.status).toBe('cancelled');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('appends exactly one cancelled event when the executor beats the backstop', async () => {
+			vi.useFakeTimers();
+			try {
+				const settling = settlingExecutor();
+				const { controller, runs } = setup(settling.make);
+				const receipt = await controller.submit(testActor(), {
+					requestId: '10000000-0000-4000-8000-000000000010',
+					input: 'Settle promptly'
+				});
+				await settling.running;
+				await controller.cancel(testActor(), receipt.runId);
+				await vi.advanceTimersByTimeAsync(10_000);
+				expect(
+					runs.events.filter(
+						(record) => record.runId === receipt.runId && record.event.type === 'cancelled'
+					).length
+				).toBe(1);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 
 	it('requeues an approval decision on the same run', async () => {

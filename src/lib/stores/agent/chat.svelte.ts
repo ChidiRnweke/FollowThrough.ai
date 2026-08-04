@@ -392,14 +392,23 @@ export class ChatStore {
 
 	async stop(): Promise<void> {
 		if (!this.runId) return;
+		const runId = this.runId;
 		const reply = this.activeReply;
 		if (reply) reply.status = 'cancelling';
 		this.runStatus = 'cancelling';
 		try {
-			const snapshot = await this.transport.cancel(this.runId);
+			const snapshot = await this.transport.cancel(runId);
 			if (reply) this.reconcileSnapshot(reply, snapshot);
 		} catch {
-			if (reply) reply.error = 'Cancellation has not been confirmed yet.';
+			// The cancel may still have landed server-side, so ask before giving up:
+			// `cancelling` gates the composer and must never be a resting state here.
+			try {
+				const snapshot = await this.transport.get(runId);
+				if (reply) this.reconcileSnapshot(reply, snapshot);
+			} catch {
+				if (reply) reply.error = 'Cancellation has not been confirmed yet.';
+				this.runStatus = undefined;
+			}
 		}
 	}
 

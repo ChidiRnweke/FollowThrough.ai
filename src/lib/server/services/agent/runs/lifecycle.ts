@@ -96,22 +96,22 @@ export class AgentRunLifecycle {
 	constructor(private readonly deps: AgentRunExecutorDependencies) {}
 
 	async execute(runId: AgentRunId, signal: AbortSignal): Promise<AgentRunExecutionOutcome> {
-		const run = await this.prepare(runId);
-		if (!run) return 'cancelled';
-		const actor: ActorContext = { userId: run.userId };
-		const request = run.inputSnapshot as unknown as RunAgentInput;
-		const decisions = await this.deps.decisions.loadUnconsumed(run.id);
-		const successfulMutations = new Map<string, string>();
-		const toolExecutor: AgentToolExecutor = {
-			execute: async (input, action) => {
-				const output = await action();
-				if (input.classification === 'mutation')
-					successfulMutations.set(input.callId, input.toolName);
-				return output;
-			}
-		};
-		let lastEvent: AgentRunEventRecord | undefined;
 		try {
+			const run = await this.prepare(runId);
+			if (!run) return 'cancelled';
+			const actor: ActorContext = { userId: run.userId };
+			const request = run.inputSnapshot as unknown as RunAgentInput;
+			const decisions = await this.deps.decisions.loadUnconsumed(run.id);
+			const successfulMutations = new Map<string, string>();
+			const toolExecutor: AgentToolExecutor = {
+				execute: async (input, action) => {
+					const output = await action();
+					if (input.classification === 'mutation')
+						successfulMutations.set(input.callId, input.toolName);
+					return output;
+				}
+			};
+			let lastEvent: AgentRunEventRecord | undefined;
 			for await (const update of this.deps.runner.execute({
 				actor,
 				run,
@@ -121,6 +121,12 @@ export class AgentRunLifecycle {
 				signal,
 				toolExecutor
 			})) {
+				// A runner that swallows the abort and keeps yielding still settles
+				// here, at the next boundary, instead of wedging in `cancelling`.
+				if (signal.aborted) {
+					await this.finishCancellation(run.id);
+					return 'cancelled';
+				}
 				if (update.type === 'event') {
 					lastEvent = await this.persistEvent(run, actor, update.event);
 					if (update.event.type === 'tool_completed' && !update.event.failure) {
@@ -136,11 +142,12 @@ export class AgentRunLifecycle {
 					continue;
 				}
 				if (update.type === 'approval_checkpoint') {
+					let parked: AgentRun | undefined;
 					await this.deps.transactions.run(async () => {
 						await this.deps.sessions.replace(run.conversationId, update.sessionItems);
 						for (const decision of decisions)
 							await this.deps.decisions.consume(run.id, decision.callId, new Date());
-						await this.deps.runs.transition(run.id, 'running', 'awaiting_approval', {
+						parked = await this.deps.runs.transition(run.id, 'running', 'awaiting_approval', {
 							serializedState: update.serializedState,
 							// Carried across the park so the resumed turn joins this run's
 							// trace rather than opening a second one for the same request.
@@ -149,6 +156,12 @@ export class AgentRunLifecycle {
 							updatedAt: new Date().toISOString() as DateTime
 						});
 					});
+					// The park lost the race with a cancellation: the row is `cancelling`,
+					// so settle it rather than report a park that never happened.
+					if (!parked) {
+						await this.finishCancellation(run.id);
+						return 'cancelled';
+					}
 					// Every other durable transition notifies; without this one a
 					// subscriber waiting on the run reaching a terminal status never
 					// learns it parked, because the preceding `approval_required`
@@ -156,21 +169,30 @@ export class AgentRunLifecycle {
 					this.deps.eventBus.notify(run.id);
 					return 'awaiting_approval';
 				}
-				await this.complete(
+				const settled = await this.complete(
 					run,
 					actor,
 					update.sessionItems,
 					lastEvent?.cursor,
 					decisions.map((decision) => decision.callId)
 				);
+				// Same race as the park above: completion arrived after the row was
+				// already `cancelling`, so the cancel wins.
+				if (!settled) {
+					await this.finishCancellation(run.id);
+					return 'cancelled';
+				}
 				return 'completed';
 			}
 			throw new Error('The agent provider ended without a durable outcome');
 		} catch (error) {
-			if (signal.aborted) {
-				await this.finishCancellation(run.id);
-				return 'cancelled';
-			}
+			// A cancel that lands mid-prepare turns the snapshot write into an
+			// illegal `cancelling → running` update, and the abort can lag the
+			// commit that parked the row. Either way the run is settling, not
+			// failing; `finishCancellation` no-ops for any other status, so a
+			// settled row is what distinguishes the race from a real failure.
+			const settled = await this.finishCancellation(runId);
+			if (signal.aborted || settled) return 'cancelled';
 			throw error;
 		}
 	}
@@ -310,8 +332,8 @@ export class AgentRunLifecycle {
 		sessionItems: readonly Readonly<Record<string, unknown>>[],
 		eventCursor?: string,
 		decisionCallIds: readonly string[] = []
-	): Promise<void> {
-		await this.deps.transactions.run(async () => {
+	): Promise<boolean> {
+		const settled = await this.deps.transactions.run(async () => {
 			await this.deps.sessions.replace(run.conversationId, sessionItems);
 			for (const callId of decisionCallIds)
 				await this.deps.decisions.consume(run.id, callId, new Date());
@@ -323,13 +345,14 @@ export class AgentRunLifecycle {
 				run.model,
 				{ runId: run.id, ...(eventCursor ? { eventCursor } : {}) }
 			);
-			await this.deps.runs.transition(run.id, 'running', 'completed', {
+			return this.deps.runs.transition(run.id, 'running', 'completed', {
 				serializedState: undefined,
 				pendingDecisions: [],
 				finishedAt: new Date().toISOString() as DateTime
 			});
 		});
-		this.deps.eventBus.notify(run.id);
+		if (settled) this.deps.eventBus.notify(run.id);
+		return settled !== undefined;
 	}
 
 	private toolActivity(event: AgentEvent): ToolActivity | undefined {

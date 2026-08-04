@@ -43,7 +43,10 @@ const throwingRunner = (error: unknown) => ({
 });
 
 const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecutionUpdate> }>(
-	runner: T
+	runner: T,
+	options?: {
+		readonly contextBuilder?: { build(): Promise<Readonly<Record<string, unknown>>> };
+	}
 ) => {
 	const runs = new InMemoryAgentRunPersistence();
 	const sessions = new InMemoryAgentSessionRepository();
@@ -71,7 +74,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		decisions: runs,
 		sessions,
 		transactions: new InMemoryTransactionRunner([runs, sessions]),
-		contextBuilder: { build: async () => ({ seeded: true }) },
+		contextBuilder: options?.contextBuilder ?? { build: async () => ({ seeded: true }) },
 		provenance: {
 			record: async () => {
 				throw new Error('Unexpected provenance record');
@@ -132,6 +135,99 @@ describe('stopping a running agent run', () => {
 	});
 });
 
+describe('a cancellation the provider stream never unwinds', () => {
+	/**
+	 * Swallows the abort and keeps streaming, the way a hung provider call or a
+	 * tool doing local work does: the signal fires but nothing throws.
+	 */
+	const swallowingRunner = () => {
+		let entered: () => void;
+		const started = new Promise<void>((resolve) => (entered = resolve));
+		return {
+			started,
+			execute: async function* (input: { readonly signal: AbortSignal }) {
+				entered();
+				await new Promise<void>((resolve) => {
+					if (input.signal.aborted) return resolve();
+					input.signal.addEventListener('abort', () => resolve(), { once: true });
+				});
+				yield {
+					type: 'event',
+					event: { type: 'text_delta', text: 'still going' }
+				} as AgentExecutionUpdate;
+			}
+		};
+	};
+
+	it('settles at the next stream boundary', async () => {
+		const context = setup(swallowingRunner());
+		const controller = new AbortController();
+		const execution = context.lifecycle.execute(testRunId, controller.signal);
+		await context.runner.started;
+		await requestCancellation(context.runs);
+		controller.abort();
+		await execution;
+		expect(currentRun(context.runs).status).toBe('cancelled');
+	});
+});
+
+describe('a cancellation that races the end of a run', () => {
+	/** Holds its final update until the test releases it, so the cancel lands first. */
+	const finishingRunner = (final: AgentExecutionUpdate) => {
+		let release: () => void;
+		const finishing = new Promise<void>((resolve) => (release = resolve));
+		return {
+			release: () => release(),
+			// eslint-disable-next-line require-yield
+			execute: async function* () {
+				await finishing;
+				yield final;
+			}
+		};
+	};
+
+	const untilRunning = async (runs: InMemoryAgentRunPersistence) => {
+		while (currentRun(runs).status !== 'running') await Promise.resolve();
+	};
+
+	it('wins against a completion that lands after it', async () => {
+		const runner = finishingRunner({ type: 'completed', sessionItems: [] });
+		const context = setup(runner);
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await untilRunning(context.runs);
+		await requestCancellation(context.runs);
+		runner.release();
+		await execution;
+		expect(currentRun(context.runs).status).toBe('cancelled');
+	});
+
+	it('wins against an approval park that lands after it', async () => {
+		const runner = finishingRunner({
+			type: 'approval_checkpoint',
+			serializedState: 'parked',
+			pendingDecisions: [],
+			sessionItems: []
+		});
+		const context = setup(runner);
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await untilRunning(context.runs);
+		await requestCancellation(context.runs);
+		runner.release();
+		await execution;
+		expect(currentRun(context.runs).status).toBe('cancelled');
+	});
+
+	it('reports the cancelled outcome, not the one it raced', async () => {
+		const runner = finishingRunner({ type: 'completed', sessionItems: [] });
+		const context = setup(runner);
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await untilRunning(context.runs);
+		await requestCancellation(context.runs);
+		runner.release();
+		expect(await execution).toBe('cancelled');
+	});
+});
+
 describe('finishing a cancellation out of band', () => {
 	it('settles a run parked in cancelling', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
@@ -155,6 +251,64 @@ describe('finishing a cancellation out of band', () => {
 		await runs.transition(testRunId, 'running', 'completed');
 		await lifecycle.finishCancellation(testRunId);
 		expect(runs.events.some((record) => record.event.type === 'cancelled')).toBe(false);
+	});
+
+	it('appends exactly one cancelled event when two settlers race', async () => {
+		const { lifecycle, runs } = setup(abortingRunner());
+		await runs.transition(testRunId, 'queued', 'running');
+		await requestCancellation(runs);
+		await Promise.all([
+			lifecycle.finishCancellation(testRunId),
+			lifecycle.finishCancellation(testRunId)
+		]);
+		expect(runs.events.filter((record) => record.event.type === 'cancelled').length).toBe(1);
+	});
+});
+
+describe('a cancellation that races preparation', () => {
+	/**
+	 * Freezes the context build so the cancel can land after the run reached
+	 * `running` but before the snapshot write — the window where the write reads
+	 * as an illegal `cancelling → running` update. The signal is never aborted:
+	 * settlement must not depend on abort timing.
+	 */
+	const racingSetup = () => {
+		let entered: () => void;
+		let release: () => void;
+		const building = new Promise<void>((resolve) => (entered = resolve));
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const context = setup(abortingRunner(), {
+			contextBuilder: {
+				build: async () => {
+					entered();
+					await gate;
+					return { seeded: true };
+				}
+			}
+		});
+		// An empty snapshot forces prepare to write one, which is the write the
+		// cancel races.
+		context.runs.runs[0] = { ...context.runs.runs[0]!, contextSnapshot: {} };
+		return { ...context, building, release: () => release() };
+	};
+
+	it('settles as cancelled instead of failing the run', async () => {
+		const context = racingSetup();
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await context.building;
+		await requestCancellation(context.runs);
+		context.release();
+		await execution;
+		expect(currentRun(context.runs).status).toBe('cancelled');
+	});
+
+	it('reports the cancelled outcome to the caller', async () => {
+		const context = racingSetup();
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await context.building;
+		await requestCancellation(context.runs);
+		context.release();
+		expect(await execution).toBe('cancelled');
 	});
 });
 

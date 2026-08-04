@@ -155,6 +155,23 @@ class FailingTransport extends FakeAgentRunTransport {
 	}
 }
 
+/**
+ * Rejects the cancel request itself, then answers reconciliation with a
+ * snapshot — or, with none given, rejects that too (fully offline).
+ */
+class UnconfirmedCancelTransport extends StoppableTransport {
+	constructor(private readonly snapshot?: AgentRunSnapshot) {
+		super();
+	}
+	override async cancel(): Promise<AgentRunSnapshot> {
+		throw new Error('offline');
+	}
+	override async get(): Promise<AgentRunSnapshot> {
+		if (!this.snapshot) throw new Error('offline');
+		return this.snapshot;
+	}
+}
+
 class HydratingTransport extends FakeAgentRunTransport {
 	constructor(
 		private readonly session: Awaited<ReturnType<AgentRunTransport['getSession']>>
@@ -340,6 +357,38 @@ describe('stopping a streaming turn', () => {
 		await store.stop();
 		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
 		expect(entryText(reply)).toBe('Working on it');
+	});
+});
+
+describe('a stop the server never confirms', () => {
+	const unconfirmed = async (snapshot?: AgentRunSnapshot) => {
+		const transport = new UnconfirmedCancelTransport(snapshot);
+		const store = new ChatStore(transport, new MemoryStorage());
+		await store.send({ prompt: 'take your time' });
+		await Promise.resolve();
+		return { store, reply: store.entries.at(-1)! };
+	};
+
+	it('reconciles the settled run when the cancel request failed', async () => {
+		const { store } = await unconfirmed({
+			run: { id: runId, status: 'cancelled', conversationId },
+			pendingDecisions: []
+		} as unknown as AgentRunSnapshot);
+		await store.stop();
+		expect(store.isStreaming).toBe(false);
+	});
+
+	it('releases the composer when cancellation cannot be confirmed at all', async () => {
+		const { store } = await unconfirmed();
+		await store.stop();
+		expect(store.isStreaming).toBe(false);
+	});
+
+	it('lets the next message through once the composer is released', async () => {
+		const { store } = await unconfirmed();
+		await store.stop();
+		await store.send({ prompt: 'try again' });
+		expect(store.entries.filter((entry) => entry.role === 'user').length).toBe(2);
 	});
 });
 
