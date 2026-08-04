@@ -97,7 +97,6 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	DB_USER: 'followthrough',
 	LOCAL_USER_ID: '00000000-0000-4000-8000-000000000001',
 	ORIGIN: 'http://localhost:5173',
-	BODY_SIZE_LIMIT: '52428800',
 	OPENROUTER_BASE_URL: 'https://openrouter.ai/api/v1',
 	OPENROUTER_DEFAULT_MODEL: 'openai/gpt-5.6',
 	OPENROUTER_RECOMMENDED_MODELS: 'openai/gpt-5.6,anthropic/claude-sonnet-4.5',
@@ -161,6 +160,11 @@ const PLATFORM_KEYS = new Set<string>([
 	'NODE_ENV',
 	'CI',
 	'GIT_COMMIT',
+	/* adapter-node reads BODY_SIZE_LIMIT at module load, before hooks.server.ts can run
+	   hydrateEnvironment(), so a hydrated value is always too late and the adapter keeps its
+	   512K default. It has to be in the process environment before `node build` starts:
+	   the Dockerfile sets it, docker-compose.prod.yml can override it. */
+	'BODY_SIZE_LIMIT',
 	...BOOTSTRAP_KEYS
 ]);
 

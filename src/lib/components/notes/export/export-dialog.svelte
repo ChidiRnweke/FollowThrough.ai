@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
-	import type { ExportSettings } from '$lib/models/deliverables';
-	import { defaultExportSettings } from '$lib/models/deliverables';
+	import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
+	import { defaultExportSettings, svgViewBoxSize } from '$lib/models/deliverables';
 	import { mode } from 'mode-watcher';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -193,15 +193,25 @@
 		}
 	}
 
-	/** Render every mermaid block so the server can embed diagrams (SVG + PNG raster). */
+	/**
+	 * Render every mermaid block so the server can embed diagrams.
+	 *
+	 * The PNG raster is what both formats embed, so it is all that normally travels, together
+	 * with the viewBox size it should be displayed at. The full SVG markup goes along only for
+	 * a diagram that failed to rasterize, where the PDF still has an SVG path to fall back to —
+	 * sending both for every diagram doubled the request body and pushed diagram-heavy exports
+	 * past the server's body size limit.
+	 */
 	async function renderDiagrams(): Promise<{
 		svgs: Record<string, string>;
 		pngs: Record<string, string>;
+		sizes: Record<string, DiagramSize>;
 	}> {
 		const sources = mermaidSources;
-		if (sources.length === 0) return { svgs: {}, pngs: {} };
+		if (sources.length === 0) return { svgs: {}, pngs: {}, sizes: {} };
 		const svgs: Record<string, string> = {};
 		const pngs: Record<string, string> = {};
+		const sizes: Record<string, DiagramSize> = {};
 		// Diagrams follow the export's own palette, never the reader's colour mode: the
 		// document lands somewhere we do not control, and a dark-mode render is unusable
 		// on paper. Defaults to light for the same reason.
@@ -217,9 +227,11 @@
 					// computed styles are read from.
 					const markup = sanitizeMermaidSvg(inlineSvgStyles(svg));
 					const hash = await sha256hex(source);
-					svgs[hash] = markup;
+					const size = svgViewBoxSize(markup);
+					if (size) sizes[hash] = size;
 					const png = await rasterizeSvg(markup);
 					if (png) pngs[hash] = png;
+					else svgs[hash] = markup;
 				} catch {
 					// A diagram that fails to render falls back to its source in the document.
 				}
@@ -227,7 +239,7 @@
 		} finally {
 			initializeMermaid(mode.current === 'dark');
 		}
-		return { svgs, pngs };
+		return { svgs, pngs, sizes };
 	}
 
 	async function preview(): Promise<void> {
@@ -236,14 +248,15 @@
 		busy = true;
 		error = '';
 		try {
-			const { svgs: diagramSvgs, pngs: diagramPngs } = await renderDiagrams();
+			const { svgs: diagramSvgs, pngs: diagramPngs, sizes: diagramSizes } = await renderDiagrams();
 			const output = await previewDocument({
 				projectId,
 				noteIds: defaultNoteIds,
 				title: trimmed,
 				settings,
 				diagramSvgs,
-				diagramPngs
+				diagramPngs,
+				diagramSizes
 			});
 			const bytes = Uint8Array.from(atob(output.data), (character) => character.charCodeAt(0));
 			clearPreview();
@@ -263,7 +276,7 @@
 		busy = true;
 		error = '';
 		try {
-			const { svgs: diagramSvgs, pngs: diagramPngs } = await renderDiagrams();
+			const { svgs: diagramSvgs, pngs: diagramPngs, sizes: diagramSizes } = await renderDiagrams();
 			const output = await generateDocument({
 				projectId,
 				noteIds: defaultNoteIds,
@@ -271,7 +284,8 @@
 				format,
 				settings,
 				diagramSvgs,
-				diagramPngs
+				diagramPngs,
+				diagramSizes
 			});
 			result = { url: output.downloadUrl, artifactId: output.artifact.id };
 		} catch (e) {

@@ -186,6 +186,14 @@ describe('platform environment merging', () => {
 		).toEqual({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317' });
 	});
 
+	// adapter-node has already read BODY_SIZE_LIMIT by the time hydration runs, so the only
+	// way a configured value reaches it is through the process environment.
+	test('the adapter body size limit is copied from the file environment', () => {
+		expect(mergePlatformEnvironment({}, { BODY_SIZE_LIMIT: '52428800' })).toEqual({
+			BODY_SIZE_LIMIT: '52428800'
+		});
+	});
+
 	test('application keys are left to the secrets backend', () => {
 		expect(mergePlatformEnvironment({}, { DATABASE_URL: 'postgresql://file' })).toEqual({});
 	});

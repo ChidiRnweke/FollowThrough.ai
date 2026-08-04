@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ProseMirrorDocument } from '$lib/models/notes';
+import { svgViewBoxSize } from '$lib/models/deliverables';
 
 /**
  * Helpers shared by the PDF and DOCX generators: mermaid source hashing, SVG
@@ -10,14 +11,8 @@ import type { ProseMirrorDocument } from '$lib/models/notes';
 export const mermaidSourceHash = (source: string): string =>
 	createHash('sha256').update(source, 'utf8').digest('hex');
 
-/** Natural size of an SVG, from its viewBox. */
-export function svgDimensions(svg: string): { width: number; height: number } | undefined {
-	const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
-	if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) {
-		return { width: viewBox[2]!, height: viewBox[3]! };
-	}
-	return undefined;
-}
+/** Natural size of an SVG, from its viewBox. The parse is shared with the browser. */
+export const svgDimensions = svgViewBoxSize;
 
 const IMAGE_FETCH_TIMEOUT_MS = 8000;
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;

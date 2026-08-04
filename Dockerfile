@@ -28,6 +28,10 @@ RUN pnpm build
 FROM node:22-alpine AS runtime
 
 ENV NODE_ENV=production
+# adapter-node freezes this at module load, before any application configuration is
+# hydrated, so it can only be set here. Diagram-heavy document exports post the
+# browser-rendered rasters inline and blow straight past the 512K default.
+ENV BODY_SIZE_LIMIT=52428800
 WORKDIR /app
 
 COPY --from=prod-deps /app/node_modules ./node_modules

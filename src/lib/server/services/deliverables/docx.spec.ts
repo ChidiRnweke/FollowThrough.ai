@@ -328,6 +328,23 @@ describe('Docx export parity with PDF', () => {
 		expect(zip.readAsText('word/document.xml')).toContain('<w:drawing>');
 	});
 
+	// The browser sends the viewBox as numbers and keeps its markup, so the SVG is normally
+	// absent. Without the size the raster's own 1x1 pixels would drive the extent.
+	it('sizes a diagram from the supplied size when no SVG was sent', async () => {
+		const withDiagram: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
+		};
+		const hash = mermaidSourceHash(DIAGRAM_SOURCE);
+		const zip = await zipFor({
+			notes: [{ title: 'Note', document: withDiagram }],
+			diagramPngs: { [hash]: TINY_PNG },
+			diagramSizes: { [hash]: { width: 120, height: 60 } }
+		});
+		// docx converts pixels to EMU at 9525 per pixel: 120 x 60 px.
+		expect(zip.readAsText('word/document.xml')).toContain('cx="1143000" cy="571500"');
+	});
+
 	it('keeps the diagram source as code when no render was supplied (1/2)', async () => {
 		const withDiagram: ProseMirrorDocument = {
 			type: 'doc',

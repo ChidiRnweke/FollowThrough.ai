@@ -9,6 +9,8 @@ services:
       INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
       INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT}
       INFISICAL_URL: ${INFISICAL_URL}
+      # Overrides the image default; must be in the environment before node starts.
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-52428800}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel_collector:4317}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-followthrough}
       PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-followthrough}

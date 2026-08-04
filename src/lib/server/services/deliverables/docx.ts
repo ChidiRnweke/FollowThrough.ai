@@ -20,7 +20,12 @@ import {
 	type IHeaderOptions,
 	type ISectionOptions
 } from 'docx';
-import type { ExportSettings, ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type {
+	DiagramRenders,
+	DiagramSize,
+	ExportSettings,
+	ExtractedTemplateStyles
+} from '$lib/models/deliverables';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
@@ -30,16 +35,12 @@ import {
 	svgDimensions
 } from '$lib/server/repositories/deliverables/export-images';
 
-export interface GenerateDocxInput {
+export interface GenerateDocxInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
 	readonly title: string;
 	/** Template-extracted styles; when present they win over `settings` (explicit choice). */
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
-	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 hex of the diagram source. */
-	readonly diagramSvgs?: Record<string, string>;
-	/** PNG rasters of the same diagrams, keyed identically; Word gets the raster. */
-	readonly diagramPngs?: Record<string, string>;
 }
 
 const HEADING_LEVELS = [
@@ -86,6 +87,7 @@ interface DocxContext {
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagramSvgs: Readonly<Record<string, string>>;
 	readonly diagramPngs: Readonly<Record<string, string>>;
+	readonly diagramSizes: Readonly<Record<string, DiagramSize>>;
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
 	readonly blockquoteDepth: number;
@@ -371,9 +373,13 @@ function mermaidBlock(node: Record<string, unknown>, ctx: DocxContext): Paragrap
 	if (png) {
 		const parsed = parseDataUrl(png);
 		if (parsed) {
-			// The PNG is rasterized at 2x; the SVG viewBox is the intended display size.
+			// The PNG is rasterized at 2x; the SVG viewBox is the intended display size. The
+			// browser normally sends that size directly and keeps its markup; the parse from
+			// markup stays as the path for callers that still ship the SVG.
 			const dimensions =
-				svgDimensions(ctx.diagramSvgs[hash] ?? '') ?? rasterDimensions(parsed.buffer);
+				ctx.diagramSizes[hash] ??
+				svgDimensions(ctx.diagramSvgs[hash] ?? '') ??
+				rasterDimensions(parsed.buffer);
 			let width = dimensions?.width ?? ctx.contentWidthPx;
 			let height = dimensions?.height ?? width * 0.6;
 			if (width > ctx.contentWidthPx) {
@@ -536,6 +542,7 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 		images,
 		diagramSvgs: input.diagramSvgs ?? {},
 		diagramPngs: input.diagramPngs ?? {},
+		diagramSizes: input.diagramSizes ?? {},
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,

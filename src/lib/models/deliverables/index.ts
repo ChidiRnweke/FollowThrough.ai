@@ -122,26 +122,57 @@ export const defaultExportSettings: ExportSettings = {
 	diagramTheme: { base: 'light' }
 };
 
-export interface GenerateDocumentInput {
+/** Intended display size of a diagram, in SVG user units. */
+export interface DiagramSize {
+	readonly width: number;
+	readonly height: number;
+}
+
+/**
+ * Natural size of an SVG, from its viewBox.
+ *
+ * Lives here rather than beside either generator because both sides of the export need it:
+ * the browser reads it off its own render to send `diagramSizes`, and the server falls back
+ * to it for any caller that still ships the full markup.
+ */
+export function svgViewBoxSize(svg: string): DiagramSize | undefined {
+	const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
+	if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) {
+		return { width: viewBox[2]!, height: viewBox[3]! };
+	}
+	return undefined;
+}
+
+/**
+ * Browser-rendered diagrams travelling with an export request, keyed by SHA-256 of the
+ * diagram source.
+ *
+ * The raster is the reference rendering that both formats embed, and it is the only thing
+ * normally sent: `diagramSizes` carries the viewBox the raster should be displayed at, and
+ * `diagramSvgs` is populated only for diagrams the browser failed to rasterize, where the PDF
+ * still has an SVG path to fall back to. Sending both for every diagram doubled the request
+ * body for no gain.
+ */
+export interface DiagramRenders {
+	readonly diagramSvgs?: Record<string, string>;
+	readonly diagramPngs?: Record<string, string>;
+	readonly diagramSizes?: Record<string, DiagramSize>;
+}
+
+export interface GenerateDocumentInput extends DiagramRenders {
 	readonly projectId: ProjectId;
 	readonly noteIds: NoteId[];
 	readonly title: string;
 	readonly format: 'docx' | 'pdf';
 	readonly templateId?: TemplateId;
 	readonly settings?: ExportSettings;
-	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 of the diagram source. */
-	readonly diagramSvgs?: Record<string, string>;
-	/** PNG rasters of the same diagrams, keyed identically; DOCX embeds the raster. */
-	readonly diagramPngs?: Record<string, string>;
 }
 
-export interface PreviewDocumentInput {
+export interface PreviewDocumentInput extends DiagramRenders {
 	readonly projectId: ProjectId;
 	readonly noteIds: NoteId[];
 	readonly title: string;
 	readonly settings?: ExportSettings;
-	readonly diagramSvgs?: Record<string, string>;
-	readonly diagramPngs?: Record<string, string>;
 }
 
 export interface PreviewDocumentOutput {

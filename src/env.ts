@@ -26,7 +26,10 @@ export const variables = defineEnvVars({
 	LOCAL_USER_ID: { description: 'Single-user installation actor UUID.', schema: optionalString },
 	ORIGIN: { description: 'Canonical public application origin.', schema: optionalString },
 	BODY_SIZE_LIMIT: {
-		description: 'Adapter-node request body size limit in bytes.',
+		description:
+			'Adapter-node request body size limit in bytes. A platform key: the adapter reads it ' +
+			'at module load, so it must be in the process environment before the server starts and ' +
+			'can never be hydrated from the secrets backend.',
 		schema: optionalString
 	},
 	OPENROUTER_API_KEY: {

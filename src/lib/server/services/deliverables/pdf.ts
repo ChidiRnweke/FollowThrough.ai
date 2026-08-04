@@ -1,7 +1,11 @@
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
-import type { ExportSettings, ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type {
+	DiagramRenders,
+	ExportSettings,
+	ExtractedTemplateStyles
+} from '$lib/models/deliverables';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
@@ -137,15 +141,16 @@ const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
 const LINK_COLOR = '#1d4ed8';
 
-export interface GeneratePdfInput {
+/**
+ * `diagramSizes` is accepted but unused: pdfmake's `fit` box already scales the raster to the
+ * content width without upscaling, so the PDF never needs the intended display size the way
+ * the DOCX export does.
+ */
+export interface GeneratePdfInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
-	/** Mermaid SVGs pre-rendered by the browser, keyed by SHA-256 hex of the diagram source. */
-	readonly diagramSvgs?: Record<string, string>;
-	/** PNG rasters of the same diagrams, keyed identically; preferred over the SVGs. */
-	readonly diagramPngs?: Record<string, string>;
 }
 
 function collectText(node: Record<string, unknown>): string {
