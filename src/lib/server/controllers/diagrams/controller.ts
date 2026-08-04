@@ -32,6 +32,8 @@ import type {
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
+import type { AgentRunReceipt } from '$lib/models/agent';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
@@ -50,7 +52,8 @@ export interface DiagramsController {
 	 */
 	generateMermaid(
 		actor: ActorContext,
-		input: GenerateMermaidDiagramInput
+		input: GenerateMermaidDiagramInput,
+		signal?: AbortSignal
 	): Promise<GenerateMermaidDiagramOutput>;
 	/**
 	 * Revise an existing Mermaid diagram by instruction: re-render its SVG, re-extract
@@ -66,7 +69,8 @@ export interface DiagramsController {
 	/** Revise an inline Mermaid diagram in a note's document (one never promoted to a standalone diagram). */
 	reviseInlineMermaid(
 		actor: ActorContext,
-		input: ReviseInlineMermaidInput
+		input: ReviseInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput>;
 	/**
 	 * Convert an inline Mermaid diagram into a draw.io draft and create a suggestion,
@@ -74,7 +78,8 @@ export interface DiagramsController {
 	 */
 	convertInlineMermaid(
 		actor: ActorContext,
-		input: ConvertInlineMermaidInput
+		input: ConvertInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput>;
 	/**
 	 * Fetch a draw.io diagram for editing.
@@ -95,6 +100,29 @@ export interface DiagramsController {
 	 * @throws UnsupportedDiagramOperationError if the source is not Mermaid.
 	 */
 	promote(actor: ActorContext, input: PromoteDiagramInput): Promise<PromoteDiagramOutput>;
+	/**
+	 * Start {@link generateMermaid} as a cancellable run and return once the run is
+	 * durable, long before the diagram exists.
+	 *
+	 * The editor's AI actions used to be one awaited request, which left a refresh
+	 * with no way back to work still in flight and the user with no way to stop it.
+	 * The receipt names the run to attach to, and its result arrives as a
+	 * `workflow_result` event on that run's stream.
+	 */
+	startGenerateMermaid(
+		actor: ActorContext,
+		input: GenerateMermaidDiagramInput
+	): Promise<AgentRunReceipt>;
+	/** Start {@link reviseInlineMermaid} as a cancellable run. See {@link startGenerateMermaid}. */
+	startReviseInlineMermaid(
+		actor: ActorContext,
+		input: ReviseInlineMermaidInput
+	): Promise<AgentRunReceipt>;
+	/** Start {@link convertInlineMermaid} as a cancellable run. See {@link startGenerateMermaid}. */
+	startConvertInlineMermaid(
+		actor: ActorContext,
+		input: ConvertInlineMermaidInput
+	): Promise<AgentRunReceipt>;
 }
 
 export interface DiagramsDependencies {
@@ -115,6 +143,7 @@ export interface DiagramsDependencies {
 	diagramWriter: DiagramWriter;
 	diagramIndexer: DiagramIndexer;
 	drawioCreator: DrawioDiagramCreator;
+	workflowRunner: WorkflowRunStarter;
 }
 
 export class Diagrams implements DiagramsController {
@@ -122,10 +151,11 @@ export class Diagrams implements DiagramsController {
 
 	generateMermaid(
 		actor: ActorContext,
-		input: GenerateMermaidDiagramInput
+		input: GenerateMermaidDiagramInput,
+		signal?: AbortSignal
 	): Promise<GenerateMermaidDiagramOutput> {
 		return this.dependencies.mermaidCreator
-			.create(actor, input.selection, input.instruction)
+			.create(actor, input.selection, input.instruction, signal)
 			.then(({ provenanceId: agentProvenanceId, ...diagram }) =>
 				this.dependencies.transactionRunner.run(async () => {
 					const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
@@ -154,17 +184,55 @@ export class Diagrams implements DiagramsController {
 
 	reviseInlineMermaid(
 		actor: ActorContext,
-		input: ReviseInlineMermaidInput
+		input: ReviseInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput> {
-		return this.dependencies.inlineMermaidReviser.reviseInline(actor, input);
+		return this.dependencies.inlineMermaidReviser.reviseInline(actor, input, signal);
+	}
+
+	startGenerateMermaid(
+		actor: ActorContext,
+		input: GenerateMermaidDiagramInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'diagram',
+			noteId: input.selection.noteId,
+			title: 'Generate Mermaid diagram',
+			run: (signal) => this.generateMermaid(actor, input, signal)
+		});
+	}
+
+	startReviseInlineMermaid(
+		actor: ActorContext,
+		input: ReviseInlineMermaidInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'revise',
+			noteId: input.noteId,
+			title: 'Revise Mermaid diagram',
+			run: (signal) => this.reviseInlineMermaid(actor, input, signal)
+		});
+	}
+
+	startConvertInlineMermaid(
+		actor: ActorContext,
+		input: ConvertInlineMermaidInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'convert',
+			noteId: input.noteId,
+			title: 'Convert Mermaid to draw.io',
+			run: (signal) => this.convertInlineMermaid(actor, input, signal)
+		});
 	}
 
 	convertInlineMermaid(
 		actor: ActorContext,
-		input: ConvertInlineMermaidInput
+		input: ConvertInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput> {
 		return this.dependencies.inlineMermaidToDrawioConverter
-			.convertInline(actor, input)
+			.convertInline(actor, input, signal)
 			.then(({ provenanceId: agentProvenanceId, ...draft }) =>
 				this.dependencies.transactionRunner.run(async () => {
 					const provenanceId =

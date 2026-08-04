@@ -9,6 +9,8 @@ import type {
 } from '$lib/server/services/references/contracts';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { AgentRunReceipt } from '$lib/models/agent';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
 
 /**
  * Application boundary for reference suggestions: given a text selection, find and rank
@@ -21,6 +23,15 @@ export interface ReferencesController {
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
 	): Promise<FindReferencesOutput>;
+	/**
+	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
+	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
+	 * still collects the suggestions.
+	 */
+	startSuggestFromSelection(
+		actor: ActorContext,
+		input: FindReferencesInput
+	): Promise<AgentRunReceipt>;
 }
 
 export interface ReferencesDependencies {
@@ -30,10 +41,23 @@ export interface ReferencesDependencies {
 	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
+	workflowRunner: WorkflowRunStarter;
 }
 
 export class References implements ReferencesController {
 	constructor(private readonly dependencies: ReferencesDependencies) {}
+
+	startSuggestFromSelection(
+		actor: ActorContext,
+		input: FindReferencesInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'reference',
+			noteId: input.selection.noteId,
+			title: 'Find references',
+			run: (signal) => this.suggestFromSelection(actor, input, { signal })
+		});
+	}
 
 	suggestFromSelection(
 		actor: ActorContext,

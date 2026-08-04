@@ -10,6 +10,8 @@ import type { NoteId, TextSelection } from '$lib/models/notes';
 
 export interface ReferenceSearchOptions {
 	readonly model?: string;
+	/** Aborts the web-search call when the user cancels the run it belongs to. */
+	readonly signal?: AbortSignal;
 }
 
 export interface ReferenceFinder {

@@ -5,6 +5,8 @@ import type { LinkFinder } from '$lib/server/services/relationships/contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { AgentRunReceipt } from '$lib/models/agent';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes
@@ -14,8 +16,18 @@ import type { SuggestionCreator } from '$lib/server/services/suggestions/contrac
 export interface RelationshipsController {
 	suggestFromSelection(
 		actor: ActorContext,
-		input: RelateSelectionInput
+		input: RelateSelectionInput,
+		signal?: AbortSignal
 	): Promise<RelateSelectionOutput>;
+	/**
+	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
+	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
+	 * still collects the suggestions.
+	 */
+	startSuggestFromSelection(
+		actor: ActorContext,
+		input: RelateSelectionInput
+	): Promise<AgentRunReceipt>;
 }
 
 export interface RelationshipsDependencies {
@@ -24,18 +36,32 @@ export interface RelationshipsDependencies {
 	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
+	workflowRunner: WorkflowRunStarter;
 }
 
 export class Relationships implements RelationshipsController {
 	constructor(private readonly dependencies: RelationshipsDependencies) {}
 
-	suggestFromSelection(
+	startSuggestFromSelection(
 		actor: ActorContext,
 		input: RelateSelectionInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'relate',
+			noteId: input.selection.noteId,
+			title: 'Relate selection',
+			run: (signal) => this.suggestFromSelection(actor, input, signal)
+		});
+	}
+
+	suggestFromSelection(
+		actor: ActorContext,
+		input: RelateSelectionInput,
+		signal?: AbortSignal
 	): Promise<RelateSelectionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
-			const candidates = await this.dependencies.linkFinder.find(actor, input.selection);
+			const candidates = await this.dependencies.linkFinder.find(actor, input.selection, signal);
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
 				producerKind: 'pipeline',
 				producerName: 'Relate',

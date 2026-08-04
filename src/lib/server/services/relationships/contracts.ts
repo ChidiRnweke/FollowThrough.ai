@@ -9,7 +9,11 @@ import type {
 import type { Note, NoteId, NoteRelationship, TextSelection } from '$lib/models/notes';
 
 export interface LinkFinder {
-	find(actor: ActorContext, selection: TextSelection): Promise<readonly LinkCandidate[]>;
+	find(
+		actor: ActorContext,
+		selection: TextSelection,
+		signal?: AbortSignal
+	): Promise<readonly LinkCandidate[]>;
 }
 export interface RelationshipClassification {
 	readonly kind: RelationshipKind;
@@ -17,10 +21,18 @@ export interface RelationshipClassification {
 	readonly confidence: number;
 }
 export interface RelationshipClassifier {
-	classify(sourceText: string, targetText: string): Promise<RelationshipClassification>;
+	classify(
+		sourceText: string,
+		targetText: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification>;
 }
 export interface StructuredRelationshipClient {
-	classify(sourceText: string, targetText: string): Promise<RelationshipClassification | undefined>;
+	classify(
+		sourceText: string,
+		targetText: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification | undefined>;
 }
 export interface RelationshipCreator {
 	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;

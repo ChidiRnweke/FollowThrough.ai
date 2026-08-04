@@ -15,6 +15,7 @@
 	import Columns2 from '@lucide/svelte/icons/columns-2';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Shapes from '@lucide/svelte/icons/shapes';
 	import X from '@lucide/svelte/icons/x';
@@ -42,6 +43,7 @@
 				renderedPngDataUrl?: string
 			) => Promise<{ readonly source: string; readonly title?: string }>;
 			onConvert?: (source: string, instruction?: string) => Promise<string>;
+			onCancel?: (kind: 'revise' | 'convert') => void;
 			onReview?: (reference: string) => void;
 			onDismiss?: (reference: string) => Promise<void>;
 		}
@@ -519,13 +521,17 @@
 							<p class="text-xs text-muted-foreground">Ctrl/⌘+Enter to revise</p>
 						{/if}
 					</div>
-					<Button
-						disabled={!revisionInstruction.trim() || isRevising}
-						onclick={() => void reviseWithAi()}
-					>
-						{#if isRevising}<LoaderCircle class="animate-spin" />{/if}
-						Revise
-					</Button>
+					{#if isRevising}
+						<ActionProgress
+							icon={Sparkles}
+							label="Revising the diagram"
+							oncancel={options.onCancel ? () => options.onCancel?.('revise') : undefined}
+						/>
+					{:else}
+						<Button disabled={!revisionInstruction.trim()} onclick={() => void reviseWithAi()}>
+							Revise
+						</Button>
+					{/if}
 				</div>
 			{/if}
 
@@ -744,18 +750,22 @@
 					<div
 						class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/preview:opacity-100 transition-opacity"
 					>
-						{#if options.onConvert && !pendingDrawioSuggestionId}
+						{#if isConverting}
+							<ActionProgress
+								icon={Shapes}
+								label="Converting to draw.io"
+								class="rounded-md border border-border bg-popover"
+								oncancel={options.onCancel ? () => options.onCancel?.('convert') : undefined}
+							/>
+						{:else if options.onConvert && !pendingDrawioSuggestionId}
 							<Tooltip tooltip="Convert to draw.io">
 								<Button
 									size="icon-sm"
 									variant="ghost"
-									disabled={isConverting}
 									onclick={() => void convertToDrawio()}
 									aria-label="Convert to draw.io"
 								>
-									{#if isConverting}<LoaderCircle class="animate-spin" />{:else}<Shapes
-											class="text-muted-foreground"
-										/>{/if}
+									<Shapes class="text-muted-foreground" />
 								</Button>
 							</Tooltip>
 						{/if}

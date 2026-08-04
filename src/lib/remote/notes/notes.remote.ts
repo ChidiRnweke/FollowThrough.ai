@@ -119,19 +119,19 @@ export const listNoteSyncInventory = query(
 export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllers()
 		.todos()
-		.extractPromises(requestActor(), input as ExtractPromisesInput);
+		.startExtractPromises(requestActor(), input as ExtractPromisesInput);
 });
 
 export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllers()
 		.relationships()
-		.suggestFromSelection(requestActor(), input as RelateSelectionInput);
+		.startSuggestFromSelection(requestActor(), input as RelateSelectionInput);
 });
 
 export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllers()
 		.references()
-		.suggestFromSelection(requestActor(), input as never);
+		.startSuggestFromSelection(requestActor(), input as never);
 });
 
 export const generateDiagram = command(
@@ -139,7 +139,7 @@ export const generateDiagram = command(
 	async (input) => {
 		return AppFactory.controllers()
 			.diagrams()
-			.generateMermaid(requestActor(), input as GenerateMermaidDiagramInput);
+			.startGenerateMermaid(requestActor(), input as GenerateMermaidDiagramInput);
 	}
 );
 
@@ -151,13 +151,9 @@ export const reviseDiagram = command(
 		renderedPngDataUrl: z.string().max(14_000_000).optional()
 	}),
 	async (input) => {
-		try {
-			return await AppFactory.controllers()
-				.diagrams()
-				.reviseInlineMermaid(requestActor(), input as ReviseInlineMermaidInput);
-		} catch (e) {
-			return { error: e instanceof Error ? e.message : 'Diagram revision failed.' };
-		}
+		return AppFactory.controllers()
+			.diagrams()
+			.startReviseInlineMermaid(requestActor(), input as ReviseInlineMermaidInput);
 	}
 );
 
@@ -170,7 +166,7 @@ export const convertDiagram = command(
 	async (input) => {
 		return AppFactory.controllers()
 			.diagrams()
-			.convertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
+			.startConvertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
 	}
 );
 

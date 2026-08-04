@@ -314,14 +314,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions,
 			noteReader: notes,
 			transactionRunner,
-			boardPdfExporter: deliverables.boardPdfExporter
+			boardPdfExporter: deliverables.boardPdfExporter,
+			workflowRunner: agentCapability.workflowRunner
 		},
 		relationships: {
 			anchorCreator: notes,
 			linkFinder,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
-			transactionRunner
+			transactionRunner,
+			workflowRunner: agentCapability.workflowRunner
 		},
 		references: {
 			anchorCreator: notes,
@@ -329,7 +331,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceRanker: references,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
-			transactionRunner
+			transactionRunner,
+			workflowRunner: agentCapability.workflowRunner
 		},
 		diagrams: {
 			anchorCreator: notes,
@@ -348,7 +351,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioTextExtractor: diagramCapability.textExtractor,
 			diagramWriter: diagrams,
 			diagramIndexer,
-			drawioCreator: diagramAgent
+			drawioCreator: diagramAgent,
+			workflowRunner: agentCapability.workflowRunner
 		},
 		suggestions: {
 			suggestionLister,

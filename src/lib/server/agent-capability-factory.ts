@@ -28,6 +28,7 @@ import {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
+import { WorkflowRunner } from '$lib/server/services/agent/runs/workflow';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
@@ -73,6 +74,8 @@ export interface AgentCapability {
 	readonly context: AgentContext;
 	readonly executor: AgentRunLifecycle;
 	readonly eventBus: AgentEvents;
+	/** Runs the editor's note actions as cancellable, resumable agent runs. */
+	readonly workflowRunner: WorkflowRunner;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -126,6 +129,13 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		runDecisions,
 		sessions,
 		context,
+		workflowRunner: new WorkflowRunner({
+			runs,
+			events: runEvents,
+			conversations,
+			eventBus,
+			defaultModel: normalizeLanguageModelId(input.defaultModel)
+		}),
 		executor: new AgentRunLifecycle({
 			runs,
 			events: runEvents,

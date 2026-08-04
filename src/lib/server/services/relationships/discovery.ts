@@ -22,11 +22,19 @@ export interface RelationshipClassification {
 }
 
 export interface IRelationshipDiscovery {
-	classify(sourceText: string, targetText: string): Promise<RelationshipClassification>;
+	classify(
+		sourceText: string,
+		targetText: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification>;
 }
 
 interface RelationshipLanguageModelPort {
-	classify(sourceText: string, targetText: string): Promise<RelationshipClassification | undefined>;
+	classify(
+		sourceText: string,
+		targetText: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification | undefined>;
 }
 
 interface LanguageModelClientOptions {
@@ -78,21 +86,25 @@ export class RelationshipLanguageModel implements RelationshipLanguageModelPort 
 
 	async classify(
 		sourceText: string,
-		targetText: string
+		targetText: string,
+		signal?: AbortSignal
 	): Promise<RelationshipClassification | undefined> {
 		const input = `SOURCE:\n${sourceText}\n\nTARGET:\n${targetText}`;
 		return this.observer.run(
 			'relationship.classify',
 			{ input, metadata: { model: this.model } },
 			async () => {
-				const completion = await this.client.chat.completions.parse({
-					model: this.model,
-					messages: [
-						{ role: 'system', content: SYSTEM_PROMPT },
-						{ role: 'user', content: input }
-					],
-					response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
-				});
+				const completion = await this.client.chat.completions.parse(
+					{
+						model: this.model,
+						messages: [
+							{ role: 'system', content: SYSTEM_PROMPT },
+							{ role: 'user', content: input }
+						],
+						response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
+					},
+					signal ? { signal } : undefined
+				);
 				return completion.choices[0]?.message.parsed ?? undefined;
 			},
 			(result) => JSON.stringify(result)
@@ -152,10 +164,14 @@ export class RelationshipDiscovery implements IRelationshipDiscovery {
 		this.fallback = options.fallback ?? new RelationshipRules();
 	}
 
-	async classify(sourceText: string, targetText: string): Promise<RelationshipClassification> {
-		if (!this.client) return this.fallback.classify(sourceText, targetText);
+	async classify(
+		sourceText: string,
+		targetText: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification> {
+		if (!this.client) return this.fallback.classify(sourceText, targetText, signal);
 		try {
-			const result = await this.client.classify(sourceText, targetText);
+			const result = await this.client.classify(sourceText, targetText, signal);
 			if (!result)
 				throw new InvalidGeneratedContentError(
 					'The model returned no structured relationship output'

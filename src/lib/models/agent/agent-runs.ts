@@ -7,6 +7,7 @@ interface PendingAgentDecision {
 	readonly toolName: string;
 	readonly arguments: Readonly<Record<string, unknown>>;
 }
+type NoteActionKind = 'promises' | 'relate' | 'reference' | 'diagram' | 'revise' | 'convert';
 type AgentEvent =
 	| {
 			readonly type: 'run_queued';
@@ -41,6 +42,9 @@ type AgentEvent =
 	// every domain-owned suggestion variant without importing another model.
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	| { readonly type: 'suggestion'; readonly suggestion: any }
+	// The outcome of a note action, replayed from the log by a client that
+	// reconnected after a refresh. Opaque here for the same reason as above.
+	| { readonly type: 'workflow_result'; readonly action: NoteActionKind; readonly result: unknown }
 	| {
 			readonly type: 'failed';
 			readonly runId?: AgentRunId;

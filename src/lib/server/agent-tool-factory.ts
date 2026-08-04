@@ -162,10 +162,17 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
-		extractPromises: { kind: 'proposal' }
+		extractPromises: { kind: 'proposal' },
+		startExtractPromises: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
 	},
-	relationships: { suggestFromSelection: { kind: 'proposal' } },
-	references: { suggestFromSelection: { kind: 'proposal' } },
+	relationships: {
+		suggestFromSelection: { kind: 'proposal' },
+		startSuggestFromSelection: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+	},
+	references: {
+		suggestFromSelection: { kind: 'proposal' },
+		startSuggestFromSelection: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+	},
 	diagrams: {
 		generateMermaid: { kind: 'proposal' },
 		reviseMermaid: { kind: 'mutation' },
@@ -179,7 +186,10 @@ export const agentToolCoverage = {
 		},
 		getDrawio: { kind: 'excluded', reason: 'The draw.io editor uses a note-scoped route.' },
 		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
-		promote: { kind: 'proposal' }
+		promote: { kind: 'proposal' },
+		startGenerateMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' },
+		startReviseInlineMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' },
+		startConvertInlineMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
 	},
 	suggestions: {
 		list: { kind: 'read' },

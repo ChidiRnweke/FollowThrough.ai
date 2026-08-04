@@ -62,6 +62,8 @@ export interface EdraEditorProps {
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
 	onConvertMermaid?: (source: string, instruction?: string) => Promise<string>;
+	/** Stops a diagram revision or conversion the user started from a mermaid node. */
+	onCancelMermaid?: (kind: 'revise' | 'convert') => void;
 	onReviewDrawio?: (reference: string) => void;
 	onDismissDrawio?: (reference: string) => Promise<void>;
 	getDrawioDiagram?: (reference: string) => DrawioReferenceView | undefined;
@@ -108,6 +110,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			Mermaid(MermaidComp).configure({
 				onRevise: props?.onReviseMermaid,
 				onConvert: props?.onConvertMermaid,
+				onCancel: props?.onCancelMermaid,
 				onReview: props?.onReviewDrawio,
 				onDismiss: props?.onDismissDrawio
 			}),

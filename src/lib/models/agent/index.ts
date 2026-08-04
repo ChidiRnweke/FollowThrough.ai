@@ -307,9 +307,11 @@ export interface AgentRun {
 	readonly provenanceId?: ProvenanceId;
 	readonly serializedState?: string;
 	/**
-	 * W3C traceparent of the first turn's root span. Every later execution of this
-	 * run — each approval resume — continues that trace instead of minting a new
-	 * root, so one user request stays one trace in Phoenix.
+	 * W3C traceparent the next turn of this run should parent to. Seeded at
+	 * submit/retry time with the requesting operation's span so the first turn
+	 * joins the request's trace; refreshed with the turn's own root whenever the
+	 * run parks for approval, so every resume continues that trace instead of
+	 * minting a new root. One user request stays one trace in Phoenix.
 	 */
 	readonly traceparent?: string;
 	readonly pendingDecisions: readonly PendingAgentDecision[];
@@ -569,6 +571,9 @@ export interface SubmitAgentRunInput {
 	readonly retryUserOrdinal?: number;
 }
 
+/** The selection-driven note actions that run as their own cancellable workflow run. */
+export type NoteActionKind = 'promises' | 'relate' | 'reference' | 'diagram' | 'revise' | 'convert';
+
 export type AgentEvent =
 	| {
 			readonly type: 'run_queued';
@@ -600,6 +605,17 @@ export type AgentEvent =
 			readonly arguments: Readonly<Record<string, unknown>>;
 	  }
 	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
+	/**
+	 * The whole outcome of a note action, carried in the event log so a client
+	 * that reconnects after a refresh finishes the action from the replay alone.
+	 * Suggestion-backed actions could be re-read from their tables, but a Mermaid
+	 * revision is only ever a value in flight — this is what makes it resumable.
+	 */
+	| {
+			readonly type: 'workflow_result';
+			readonly action: NoteActionKind;
+			readonly result: unknown;
+	  }
 	| {
 			readonly type: 'failed';
 			readonly runId?: AgentRunId;

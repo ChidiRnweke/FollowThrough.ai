@@ -33,6 +33,8 @@ import type {
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
+import type { AgentRunReceipt } from '$lib/models/agent';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction
@@ -69,7 +71,17 @@ export interface TodosController {
 	 * rest stay pending for review. Returns both the created suggestions and any todos
 	 * auto-created from them.
 	 */
-	extractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<ExtractPromisesOutput>;
+	extractPromises(
+		actor: ActorContext,
+		input: ExtractPromisesInput,
+		signal?: AbortSignal
+	): Promise<ExtractPromisesOutput>;
+	/**
+	 * Start {@link extractPromises} as a cancellable run, returning once the run is
+	 * durable rather than once the extraction is done. Its result arrives as a
+	 * `workflow_result` event, so a client that refreshes mid-run can still collect it.
+	 */
+	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt>;
 }
 export interface TodosDependencies {
 	todoLister: TodoLister;
@@ -88,6 +100,7 @@ export interface TodosDependencies {
 	noteReader: NoteReader;
 	transactionRunner: TransactionRunner;
 	boardPdfExporter: BoardPdfExporter;
+	workflowRunner: WorkflowRunStarter;
 }
 export class Todos implements TodosController {
 	constructor(private readonly dependencies: TodosDependencies) {}
@@ -153,16 +166,32 @@ export class Todos implements TodosController {
 		await this.dependencies.todoReader.get(actor, todoId);
 		await this.dependencies.todoDeleter.softDelete(actor, todoId);
 	}
-	async extractPromises(
+	startExtractPromises(
 		actor: ActorContext,
 		input: ExtractPromisesInput
+	): Promise<AgentRunReceipt> {
+		return this.dependencies.workflowRunner.start(actor, {
+			action: 'promises',
+			noteId: input.selection.noteId,
+			title: 'Extract promises',
+			run: (signal) => this.extractPromises(actor, input, signal)
+		});
+	}
+	async extractPromises(
+		actor: ActorContext,
+		input: ExtractPromisesInput,
+		signal?: AbortSignal
 	): Promise<ExtractPromisesOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const [anchor, note] = await Promise.all([
 				this.dependencies.anchorCreator.create(actor, input.selection),
 				this.dependencies.noteReader.get(actor, input.selection.noteId)
 			]);
-			const candidates = await this.dependencies.promiseExtractor.extract(actor, input.selection);
+			const candidates = await this.dependencies.promiseExtractor.extract(
+				actor,
+				input.selection,
+				signal
+			);
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
 				producerKind: 'pipeline',
 				producerName: 'Extract Promises',

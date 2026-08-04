@@ -22,6 +22,8 @@ const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
 
 export interface ReferenceSearchOptions {
 	readonly model?: string;
+	/** Aborts the web-search call when the user cancels the run it belongs to. */
+	readonly signal?: AbortSignal;
 }
 
 export interface IWebReferenceResearch {
@@ -183,19 +185,22 @@ export class ReferenceResearch implements IWebReferenceResearch {
 			'reference.search',
 			{ input: selectionText, metadata: { model }, tags: ['reference', 'web-search'] },
 			async () => {
-				const response = await this.client.responses.create({
-					model,
-					tools: [
-						openRouterWebSearchTool(
-							webSearchOptionsFromEnvironment(process.env),
-							REFERENCE_WEB_SEARCH_DEFAULTS
-						) as never
-					],
-					input: [
-						{ role: 'system', content: REFERENCE_PROMPT },
-						{ role: 'user', content: selectionText }
-					]
-				});
+				const response = await this.client.responses.create(
+					{
+						model,
+						tools: [
+							openRouterWebSearchTool(
+								webSearchOptionsFromEnvironment(process.env),
+								REFERENCE_WEB_SEARCH_DEFAULTS
+							) as never
+						],
+						input: [
+							{ role: 'system', content: REFERENCE_PROMPT },
+							{ role: 'user', content: selectionText }
+						]
+					},
+					options.signal ? { signal: options.signal } : undefined
+				);
 				return referenceCandidatesFrom(
 					response.output as unknown as readonly OpenRouterOutputItem[],
 					selectionText

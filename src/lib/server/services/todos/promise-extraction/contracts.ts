@@ -3,7 +3,11 @@ import type { PromiseCandidate } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
 
 export interface PromiseExtractor {
-	extract(actor: ActorContext, selection: TextSelection): Promise<readonly PromiseCandidate[]>;
+	extract(
+		actor: ActorContext,
+		selection: TextSelection,
+		signal?: AbortSignal
+	): Promise<readonly PromiseCandidate[]>;
 }
 export interface StructuredPromiseResult {
 	readonly action: string;
@@ -15,5 +19,5 @@ export interface StructuredPromiseResult {
 	readonly confidence: number;
 }
 export interface StructuredPromiseClient {
-	extract(text: string): Promise<readonly StructuredPromiseResult[] | undefined>;
+	extract(text: string, signal?: AbortSignal): Promise<readonly StructuredPromiseResult[] | undefined>;
 }

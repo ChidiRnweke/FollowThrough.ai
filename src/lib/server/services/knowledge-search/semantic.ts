@@ -38,7 +38,8 @@ interface LinkFinder {
 interface RelationshipClassifier {
 	classify(
 		sourceText: string,
-		targetText: string
+		targetText: string,
+		signal?: AbortSignal
 	): Promise<{
 		readonly kind: RelationshipKind;
 		readonly justification: string;
@@ -107,7 +108,11 @@ export class ProjectScopedLinkFinder implements LinkFinder {
 		private readonly classifier: RelationshipClassifier = new HeuristicRelationshipClassifier()
 	) {}
 
-	async find(actor: ActorContext, selection: TextSelection): Promise<readonly LinkCandidate[]> {
+	async find(
+		actor: ActorContext,
+		selection: TextSelection,
+		signal?: AbortSignal
+	): Promise<readonly LinkCandidate[]> {
 		const note = await this.noteReader.get(actor, selection.noteId);
 		const matches = await this.searcher.search(actor, selection.text, 12, note.projectId);
 		const unique = new Map<NoteId, SearchMatch>();
@@ -120,7 +125,8 @@ export class ProjectScopedLinkFinder implements LinkFinder {
 			[...unique.entries()].slice(0, 5).map(async ([targetNoteId, match]) => {
 				const classification = await this.classifier.classify(
 					selection.text,
-					match.document.content
+					match.document.content,
+					signal
 				);
 				return {
 					targetNoteId,

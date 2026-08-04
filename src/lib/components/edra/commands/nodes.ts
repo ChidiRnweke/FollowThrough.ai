@@ -212,6 +212,8 @@ export interface MermaidOptions {
 		instruction: string
 	) => Promise<{ readonly source: string; readonly title?: string }>;
 	onConvert?: (source: string, instruction?: string) => Promise<string>;
+	/** Stops a revision or conversion that is still running on the server. */
+	onCancel?: (kind: 'revise' | 'convert') => void;
 	onReview?: (reference: string) => void;
 	onDismiss?: (reference: string) => Promise<void>;
 }

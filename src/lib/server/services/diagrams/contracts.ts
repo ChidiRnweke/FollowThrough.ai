@@ -25,7 +25,8 @@ export interface MermaidDiagramCreator {
 	create(
 		actor: ActorContext,
 		selection: TextSelection,
-		instruction?: string
+		instruction?: string,
+		signal?: AbortSignal
 	): Promise<MermaidDiagramDraft>;
 }
 export interface MermaidDiagramReviser {
@@ -38,11 +39,16 @@ export interface MermaidDiagramReviser {
 export interface InlineMermaidReviser {
 	reviseInline(
 		actor: ActorContext,
-		input: ReviseInlineMermaidInput
+		input: ReviseInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput>;
 }
 export interface InlineMermaidToDrawioConverter {
-	convertInline(actor: ActorContext, input: ConvertInlineMermaidInput): Promise<DrawioDiagramDraft>;
+	convertInline(
+		actor: ActorContext,
+		input: ConvertInlineMermaidInput,
+		signal?: AbortSignal
+	): Promise<DrawioDiagramDraft>;
 }
 export interface MermaidDiagramRenderer {
 	render(source: string): Promise<string>;

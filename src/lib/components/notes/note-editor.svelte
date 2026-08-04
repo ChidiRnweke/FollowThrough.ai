@@ -62,6 +62,7 @@
 		selectionPlainText
 	} from '$lib/components/edra/commands/clipboard-payload';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import { uploadNoteAttachment } from './attachment-upload';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
@@ -118,7 +119,10 @@
 		onconvertMermaid,
 		onrejectDrawio,
 		diagrams = [],
-		activeAction
+		activeAction,
+		actionCancelling = false,
+		oncancelaction,
+		oncancelmermaid
 	}: {
 		noteId: NoteId;
 		revision: number;
@@ -145,6 +149,11 @@
 		diagrams?: readonly Diagram[];
 		/** The AI selection action running against this note, if any. */
 		activeAction?: NoteAiAction;
+		/** True once its cancellation was requested but the run has not settled. */
+		actionCancelling?: boolean;
+		oncancelaction?: () => void;
+		/** Stops a revision or conversion started from a mermaid node in this note. */
+		oncancelmermaid?: (kind: 'revise' | 'convert') => void;
 	} = $props();
 
 	let initialized = false;
@@ -213,6 +222,7 @@
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
 			onConvertMermaid: async (source, instruction) =>
 				(await onconvertMermaid(source, instruction)).id,
+			onCancelMermaid: (kind) => oncancelmermaid?.(kind),
 			onReviewDrawio: (reference) => {
 				const candidate = perNote?.suggestions.items.find(
 					(item) => item.suggestion.id === reference
@@ -555,6 +565,34 @@
 			.run();
 	}
 
+	/**
+	 * Swap one mermaid node's source for a revised one, matched by its current text.
+	 *
+	 * The live revision path applies the result inside the node view that asked for
+	 * it. This is for the other path: after a refresh that node view is a fresh
+	 * component with no memory of the request, so the source it had when the
+	 * revision started is the only handle left on it. Returns whether a node matched.
+	 */
+	export function replaceMermaid(previousSource: string, source: string): boolean {
+		if (!editor) return false;
+		let target: number | undefined;
+		editor.state.doc.descendants((node, pos) => {
+			if (target !== undefined) return false;
+			if (node.type.name === 'mermaid' && node.textContent === previousSource) target = pos;
+			return true;
+		});
+		if (target === undefined) return false;
+		editor
+			.chain()
+			.focus()
+			.insertContentAt(
+				{ from: target, to: target + (editor.state.doc.nodeAt(target)?.nodeSize ?? 0) },
+				{ type: 'mermaid', content: source ? [{ type: 'text', text: source }] : [] }
+			)
+			.run();
+		return true;
+	}
+
 	export function completeDrawioConversion(suggestionId: SuggestionId, diagramId: DiagramId): void {
 		if (!editor) throw new Error('The editor is not ready.');
 		const completed = completePendingConversion(
@@ -618,21 +656,12 @@
 						class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 					>
 						{#if activeAction}
-							{@const Icon = runningIcon[activeAction]}
-							<!-- The row of actions becomes the one that is running, in the same
-						     box at the same place: the answer to "did my click land?" belongs
-						     where the click happened. -->
-							<div
-								class="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground"
-								role="status"
-								aria-live="polite"
-							>
-								<Icon class="size-4" />
-								{runningCopy[activeAction]}
-								<span class="chat-thinking-dots" aria-hidden="true">
-									<span></span><span></span><span></span>
-								</span>
-							</div>
+							<ActionProgress
+								icon={runningIcon[activeAction]}
+								label={runningCopy[activeAction]}
+								cancelling={actionCancelling}
+								oncancel={oncancelaction}
+							/>
 						{:else}
 							{#if onask}
 								<!--

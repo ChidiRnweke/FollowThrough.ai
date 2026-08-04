@@ -37,7 +37,11 @@ const createLanguageModelClient = (
 	});
 
 export interface PromiseExtractor {
-	extract(actor: ActorContext, selection: TextSelection): Promise<readonly PromiseCandidate[]>;
+	extract(
+		actor: ActorContext,
+		selection: TextSelection,
+		signal?: AbortSignal
+	): Promise<readonly PromiseCandidate[]>;
 }
 
 export interface StructuredPromiseResult {
@@ -51,7 +55,7 @@ export interface StructuredPromiseResult {
 }
 
 export interface StructuredPromiseClient {
-	extract(text: string): Promise<readonly StructuredPromiseResult[] | undefined>;
+	extract(text: string, signal?: AbortSignal): Promise<readonly StructuredPromiseResult[] | undefined>;
 }
 
 const PromiseExtraction = z.object({
@@ -90,19 +94,25 @@ export class PromiseClassification implements StructuredPromiseClient {
 		this.observer = options.observer ?? directObserver;
 	}
 
-	async extract(text: string): Promise<readonly StructuredPromiseResult[] | undefined> {
+	async extract(
+		text: string,
+		signal?: AbortSignal
+	): Promise<readonly StructuredPromiseResult[] | undefined> {
 		return this.observer.run(
 			'promise.extract',
 			{ input: text, metadata: { model: this.model } },
 			async () => {
-				const completion = await this.client.chat.completions.parse({
-					model: this.model,
-					messages: [
-						{ role: 'system', content: SYSTEM_PROMPT },
-						{ role: 'user', content: text }
-					],
-					response_format: zodResponseFormat(PromiseExtraction, 'promise_extraction')
-				});
+				const completion = await this.client.chat.completions.parse(
+					{
+						model: this.model,
+						messages: [
+							{ role: 'system', content: SYSTEM_PROMPT },
+							{ role: 'user', content: text }
+						],
+						response_format: zodResponseFormat(PromiseExtraction, 'promise_extraction')
+					},
+					signal ? { signal } : undefined
+				);
 				return completion.choices[0]?.message.parsed?.promises;
 			},
 			(result) => JSON.stringify(result)
@@ -137,11 +147,12 @@ export class PromiseDiscovery implements PromiseExtractor {
 
 	async extract(
 		actor: ActorContext,
-		selection: TextSelection
+		selection: TextSelection,
+		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
-		if (!this.client) return this.fallback.extract(actor, selection);
+		if (!this.client) return this.fallback.extract(actor, selection, signal);
 		try {
-			const promises = await this.client.extract(selection.text);
+			const promises = await this.client.extract(selection.text, signal);
 			if (!promises)
 				throw new InvalidGeneratedContentError('The model returned no structured promise output');
 			return promises.map((promise) => ({

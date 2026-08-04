@@ -32,7 +32,13 @@ import {
 	resolveVisionModel
 } from '$lib/server/services/agent/runs/preferences';
 import type { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import {
+	abortActiveRun,
+	registerActiveRun,
+	releaseActiveRun
+} from '$lib/server/services/agent/runs/active-runs';
 import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
+import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 interface AgentRunRepository {
@@ -235,8 +241,6 @@ export interface AgentDependencies {
 	executor: AgentRunLifecycle;
 }
 
-const activeRuns = new Map<AgentRunId, AbortController>();
-
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
 export class Agent implements AgentController {
 	constructor(private readonly dependencies: AgentDependencies) {}
@@ -298,6 +302,10 @@ export class Agent implements AgentController {
 				// Settled only now, because it depends on the chat model, which is not
 				// known until the conversation has been resolved.
 				const finalInput = await this.withImageReader(runInput, model, conversation, preferences);
+				// Seeds the run with the requesting operation's span, so the first
+				// turn joins this request's trace even though execution starts
+				// after this transaction commits. Approval parks refresh it.
+				const submittedTraceparent = activeTraceparent();
 				const run: AgentRun = {
 					id: crypto.randomUUID() as AgentRunId,
 					userId: actor.userId,
@@ -309,6 +317,7 @@ export class Agent implements AgentController {
 					pendingDecisions: [],
 					contextSnapshot: {},
 					inputSnapshot: finalInput as unknown as Readonly<Record<string, unknown>>,
+					...(submittedTraceparent ? { traceparent: submittedTraceparent } : {}),
 					definitionVersion: 2,
 					createdAt: submittedAt,
 					updatedAt: submittedAt
@@ -411,11 +420,7 @@ export class Agent implements AgentController {
 		});
 		// The abort waits for the commit above: the executor settles the run out of
 		// `cancelling`, which has to be durable before it can read it.
-		const controller = activeRuns.get(runId);
-		if (controller) {
-			controller.abort();
-			return this.snapshot(actor, run);
-		}
+		if (abortActiveRun(runId)) return this.snapshot(actor, run);
 		// No in-process execution to abort. A run parked on an approval, or one
 		// started by another process, would otherwise sit in `cancelling` forever.
 		if (run.status !== 'cancelling') return this.snapshot(actor, run);
@@ -432,6 +437,8 @@ export class Agent implements AgentController {
 				if (!isTerminalAgentRunStatus(original.status) || original.status === 'completed')
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
+				// Joins the retry request's trace, same as a fresh submit.
+				const retryTraceparent = activeTraceparent();
 				const retry: AgentRun = {
 					id: crypto.randomUUID() as AgentRunId,
 					userId: original.userId,
@@ -444,6 +451,7 @@ export class Agent implements AgentController {
 					contextSnapshot: {},
 					inputSnapshot: original.inputSnapshot,
 					retryOfRunId: original.id,
+					...(retryTraceparent ? { traceparent: retryTraceparent } : {}),
 					definitionVersion: 2,
 					createdAt: submittedAt,
 					updatedAt: submittedAt
@@ -474,9 +482,8 @@ export class Agent implements AgentController {
 	}
 
 	executeInBackground(runId: AgentRunId): void {
-		const controller = new AbortController();
-		activeRuns.set(runId, controller);
-		const cleanup = () => activeRuns.delete(runId);
+		const controller = registerActiveRun(runId);
+		const cleanup = () => releaseActiveRun(runId);
 		this.dependencies.executor.execute(runId, controller.signal).then(cleanup, (error) => {
 			cleanup();
 			console.error(`[agent-run] Background execution failed for ${runId}:`, error);

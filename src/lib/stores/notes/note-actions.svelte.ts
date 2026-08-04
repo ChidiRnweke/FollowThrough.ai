@@ -1,14 +1,7 @@
-import type { ExtractPromisesOutput } from '$lib/models/todos';
-import type {
-	ConvertInlineMermaidOutput,
-	DrawioDiagram,
-	GenerateMermaidDiagramOutput,
-	ReviseInlineMermaidOutput
-} from '$lib/models/diagrams';
+import type { AgentRunReceipt } from '$lib/models/agent';
+import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
-import type { FindReferencesOutput } from '$lib/models/references';
 import type { Note, SaveNoteOutput, TextSelection } from '$lib/models/notes';
-import type { RelateSelectionOutput } from '$lib/models/relationships';
 import {
 	saveNote,
 	extractPromises,
@@ -43,52 +36,41 @@ class NoteActionsStore {
 		}
 	}
 
-	extractPromises(selection: TextSelection): Promise<ExtractPromisesOutput | undefined> {
-		return this.call<ExtractPromisesOutput>(() => extractPromises({ selection }), { run: true });
+	extractPromises(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(() => extractPromises({ selection }));
 	}
-	relate(selection: TextSelection): Promise<RelateSelectionOutput | undefined> {
-		return this.call<RelateSelectionOutput>(() => relateNote({ selection }), { run: true });
+	relate(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(() => relateNote({ selection }));
 	}
-	findReferences(selection: TextSelection): Promise<FindReferencesOutput | undefined> {
-		return this.call<FindReferencesOutput>(() => findReferences({ selection }), { run: true });
+	findReferences(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(() => findReferences({ selection }));
 	}
-	generateDiagram(selection: TextSelection): Promise<GenerateMermaidDiagramOutput | undefined> {
-		return this.call<GenerateMermaidDiagramOutput>(() => generateDiagram({ selection }), {
-			run: true
-		});
+	generateDiagram(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(() => generateDiagram({ selection }));
 	}
-	async reviseDiagram(
+	reviseDiagram(
 		noteId: Note['id'],
 		source: string,
 		instruction: string,
 		renderedPngDataUrl?: string
-	): Promise<ReviseInlineMermaidOutput | undefined> {
-		const result = await this.call<ReviseInlineMermaidOutput>(
+	): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(
 			() =>
 				reviseDiagram({
 					noteId,
 					source,
 					instruction,
 					renderedPngDataUrl
-				}) as Promise<ReviseInlineMermaidOutput>,
-			{ run: true }
+				}) as Promise<AgentRunReceipt>
 		);
-		if (result && 'error' in result) {
-			this.lastError = result.error as string;
-			return undefined;
-		}
-		return result;
 	}
 
 	convertDiagram(
 		noteId: Note['id'],
 		source: string,
 		instruction?: string
-	): Promise<ConvertInlineMermaidOutput | undefined> {
-		return this.call<ConvertInlineMermaidOutput>(
-			() => convertDiagram({ noteId, source, instruction }),
-			{ run: true }
-		);
+	): Promise<AgentRunReceipt | undefined> {
+		return this.call<AgentRunReceipt>(() => convertDiagram({ noteId, source, instruction }));
 	}
 
 	async acceptDrawio(

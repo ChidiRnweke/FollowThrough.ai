@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { DiagramSuggestion, DrawioDiagram } from '$lib/models/diagrams';
+	import type {
+		ConvertInlineMermaidOutput,
+		DiagramSuggestion,
+		DrawioDiagram,
+		GenerateMermaidDiagramOutput,
+		ReviseInlineMermaidOutput
+	} from '$lib/models/diagrams';
+	import type { ExtractPromisesOutput } from '$lib/models/todos';
+	import type { FindReferencesOutput } from '$lib/models/references';
+	import type { RelateSelectionOutput } from '$lib/models/relationships';
 	import type { NoteId, NoteView, TextSelection, VersionedNote } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
@@ -13,6 +22,10 @@
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { noteActions } from '$lib/stores/notes/note-actions.svelte';
+	import {
+		noteActionRunsFor,
+		type NoteActionContext
+	} from '$lib/stores/notes/note-action-runs.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { suggestionToView } from '$lib/stores/suggestions/suggestion-view';
@@ -68,9 +81,11 @@
 	let syncReady = $state(false);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
-	// Pane-local rather than `noteActions.running`: that store is a module
-	// singleton, so in a split it reports the sibling pane's work as this note's.
-	let activeAction = $state<NoteAiAction | undefined>(undefined);
+	// Keyed by note id rather than shared: in a split, the sibling pane's work must
+	// not show up as this note's.
+	const actionRuns = noteActionRunsFor(view.note.id);
+	const activeAction = $derived(actionRuns.activeSelectionAction?.action as NoteAiAction | undefined);
+	const cancellingAction = $derived(actionRuns.activeSelectionAction?.cancelling ?? false);
 	let publishing = $state(false);
 	let reconciling = false;
 	let editVersion = 0;
@@ -108,6 +123,10 @@
 
 	onMount(() => {
 		let cancelled = false;
+		// Registered before hydrating: a run that finished while the tab was away
+		// delivers its result the moment the stream reattaches.
+		registerActionHandlers();
+		actionRuns.hydrate();
 		const stopListening = noteSync.listenForReconnect();
 		void noteSync.initialize({ note: view.note, etag: view.etag }).then((local) => {
 			if (cancelled) return;
@@ -132,6 +151,7 @@
 		return () => {
 			cancelled = true;
 			stopListening();
+			actionRuns.detach();
 			noteSync.reset();
 		};
 	});
@@ -366,88 +386,108 @@
 			if (!capturedSelection) toast.error('Select some text first.');
 			return;
 		}
-		// Held until every path below has settled, so the editor's status line and
-		// the wash over the selection are released together with the result.
-		activeAction = action;
-		try {
-			await runSelectionAction(action, capturedSelection, insertAt);
-		} finally {
-			activeAction = undefined;
+		if (action === 'diagram' && insertAt === undefined) {
+			toast.error('Select some text first.');
+			return;
 		}
+		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
+		const selection = { ...capturedSelection, revision: note.currentRevision };
+		const receipt =
+			action === 'promises'
+				? await noteActions.extractPromises(selection)
+				: action === 'relate'
+					? await noteActions.relate(selection)
+					: action === 'reference'
+						? await noteActions.findReferences(selection)
+						: await noteActions.generateDiagram(selection);
+		if (!receipt) {
+			toast.error(noteActions.lastError ?? 'The action could not be started. Try again.');
+			return;
+		}
+		// The insertion point is captured now: the selection may move or clear
+		// while the diagram is generated, and a refresh loses it entirely.
+		const outcome = await actionRuns.track(receipt, {
+			action,
+			...(insertAt === undefined ? {} : { context: { insertAt } })
+		});
+		if (outcome.status === 'failed')
+			toast.error(outcome.message ?? 'The action failed. Try again.');
 	}
 
-	async function runSelectionAction(
-		action: NoteAiAction,
-		captured: TextSelection,
-		insertAt?: number
-	): Promise<void> {
-		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
-		const selection = { ...captured, revision: note.currentRevision };
-		let added: number;
-		if (action === 'promises') {
-			const output = await noteActions.extractPromises(selection);
-			if (!output) {
-				toast.error('Extract Promises failed. Try again.');
-				return;
-			}
+	/**
+	 * What to do with each action's result, registered once rather than written at
+	 * the call site: after a refresh the call site is gone, and the replayed result
+	 * still has to land in the same place.
+	 */
+	function registerActionHandlers(): void {
+		actionRuns.on('promises', async (result) => {
+			const output = result as ExtractPromisesOutput;
 			suggestionTray.add(
 				output.suggestions.map((s) => suggestionToView(s, 'extract_promises', noteRef))
 			);
-			added = output.suggestions.filter((s) => s.status === 'proposed').length;
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
 				await refreshView();
 			}
-		} else if (action === 'relate') {
-			const output = await noteActions.relate(selection);
-			if (!output) {
-				toast.error('Relate failed. Try again.');
-				return;
-			}
+			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
+		});
+		actionRuns.on('relate', (result) => {
+			const output = result as RelateSelectionOutput;
 			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'relate', noteRef)));
-			added = output.suggestions.filter((s) => s.status === 'proposed').length;
-		} else if (action === 'reference') {
-			const output = await noteActions.findReferences(selection);
-			if (!output) {
-				toast.error('Reference failed. Try again.');
-				return;
-			}
+			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
+		});
+		actionRuns.on('reference', async (result) => {
+			const output = result as FindReferencesOutput;
 			if (output.outcome === 'nothing_relevant') {
 				toast.info('Nothing sufficiently relevant found.');
 				return;
 			}
 			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'reference', noteRef)));
-			added = output.suggestions.filter((s) => s.status === 'proposed').length;
 			await refreshView();
-		} else {
-			// Capture the insertion point before the request; the selection may
-			// change or clear while the diagram is generated.
+			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
+		});
+		actionRuns.on('diagram', async (result, context) => {
+			const output = result as GenerateMermaidDiagramOutput;
+			if (output.suggestion.kind !== 'diagram') return;
+			const insertAt = insertionPoint(context);
 			if (insertAt === undefined) {
-				toast.error('Select some text first.');
+				toast.error('The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.');
+				suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 				return;
 			}
-			const output = await noteActions.generateDiagram(selection);
-			if (!output) {
-				toast.error(noteActions.lastError ?? 'Diagram generation failed. Try again.');
+			editorRef?.insertMermaid(insertAt, output.suggestion.payload.source);
+			markDirty();
+			const view = suggestionToView(output.suggestion, 'agent', noteRef);
+			suggestionTray.add([view]);
+			await suggestionTray.decide(view.suggestion.id, 'accept');
+			toast.success('Diagram inserted — undo with Ctrl+Z');
+		});
+		actionRuns.on('convert', (result) => {
+			const output = result as ConvertInlineMermaidOutput;
+			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
-			}
-			if (output.suggestion.kind === 'diagram') {
-				editorRef?.insertMermaid(insertAt, output.suggestion.payload.source);
-				markDirty();
-				const view = suggestionToView(output.suggestion, 'agent', noteRef);
-				suggestionTray.add([view]);
-				await suggestionTray.decide(view.suggestion.id, 'accept');
-				toast.success('Diagram inserted — undo with Ctrl+Z');
-			}
-			return;
-		}
-		if (added > 0) {
+			suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
+			toast.success('draw.io conversion ready to review');
+		});
+		actionRuns.on('revise', (result, context) => {
+			const output = result as ReviseInlineMermaidOutput;
+			const previous = typeof context.source === 'string' ? context.source : undefined;
+			// On the live path the Mermaid node view applies this itself from the
+			// promise; this branch is the one a refresh leaves behind.
+			if (previous && editorRef?.replaceMermaid(previous, output.source))
+				toast.success('Diagram revised — undo with Ctrl+Z');
+		});
+	}
+
+	const insertionPoint = (context: NoteActionContext): number | undefined =>
+		typeof context.insertAt === 'number' ? context.insertAt : undefined;
+
+	function reportAdded(added: number): void {
+		if (added > 0)
 			toast.success(
 				`${added} suggestion${added === 1 ? '' : 's'} added — accept or dismiss ${added === 1 ? 'it' : 'them'} in the note`
 			);
-		} else {
-			toast.info('No suggestions found.');
-		}
+		else toast.info('No suggestions found.');
 	}
 
 	async function reviseMermaid(
@@ -457,31 +497,36 @@
 	): Promise<{ readonly source: string; readonly title?: string }> {
 		if (!(await ensureSynchronized('Sync the note before revising its diagram.')))
 			throw new Error('Sync the note before revising its diagram.');
-		const output = await noteActions.reviseDiagram(
+		const receipt = await noteActions.reviseDiagram(
 			note.id,
 			source,
 			instruction,
 			renderedPngDataUrl
 		);
-		if (!output) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
+		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
+		// `source` travels as context so a refresh can still find the node this
+		// revision belongs to and apply it there.
+		const outcome = await actionRuns.track(receipt, { action: 'revise', context: { source } });
+		if (outcome.status === 'cancelled') throw new Error('Diagram revision cancelled.');
+		if (outcome.status !== 'completed')
+			throw new Error(outcome.message ?? 'Diagram revision failed. Try again.');
 		toast.success('Diagram revised — undo with Ctrl+Z');
-		return output;
+		return outcome.result as ReviseInlineMermaidOutput;
 	}
 
 	async function convertMermaid(source: string, instruction?: string): Promise<DiagramSuggestion> {
 		if (!(await ensureSynchronized('Sync the note before converting its diagram.')))
 			throw new Error('Sync the note before converting its diagram.');
-		const output = await noteActions.convertDiagram(note.id, source, instruction);
-		if (
-			!output ||
-			output.suggestion.kind !== 'diagram' ||
-			output.suggestion.payload.kind !== 'drawio'
-		)
-			throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
-		const suggestion = output.suggestion;
-		suggestionTray.add([suggestionToView(suggestion, 'agent', noteRef)]);
-		toast.success('draw.io conversion ready to review');
-		return suggestion;
+		const receipt = await noteActions.convertDiagram(note.id, source, instruction);
+		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
+		const outcome = await actionRuns.track(receipt, { action: 'convert', context: { source } });
+		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
+		if (outcome.status !== 'completed')
+			throw new Error(outcome.message ?? 'Diagram conversion failed. Try again.');
+		const output = outcome.result as ConvertInlineMermaidOutput;
+		if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
+			throw new Error('Diagram conversion failed. Try again.');
+		return output.suggestion;
 	}
 
 	async function acceptDrawio(
@@ -718,6 +763,15 @@
 			{perNote}
 			onchange={markDirty}
 			{activeAction}
+			actionCancelling={cancellingAction}
+			oncancelaction={() => {
+				const run = actionRuns.activeSelectionAction;
+				if (run) void actionRuns.cancel(run.runId);
+			}}
+			oncancelmermaid={(kind) => {
+				const run = actionRuns.find(kind);
+				if (run) void actionRuns.cancel(run.runId);
+			}}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}
 			onask={(prompt) => askSelection(prompt)}

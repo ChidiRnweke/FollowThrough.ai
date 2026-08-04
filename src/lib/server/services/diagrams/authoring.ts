@@ -260,6 +260,8 @@ interface DiagramTask {
 	readonly source?: string;
 	readonly instruction?: string;
 	readonly renderedPngDataUrl?: string;
+	/** Aborts the model call when the user cancels the run this task belongs to. */
+	readonly signal?: AbortSignal;
 }
 
 export const assertRenderedPng = (dataUrl: string | undefined): void => {
@@ -292,26 +294,30 @@ export class DiagramAuthoring {
 	create(
 		actor: ActorContext,
 		selection: TextSelection,
-		instruction?: string
+		instruction?: string,
+		signal?: AbortSignal
 	): Promise<MermaidDiagramDraft> {
 		return this.execute(actor, {
 			operation: 'generate',
 			noteId: selection.noteId,
 			selection,
-			instruction
+			instruction,
+			signal
 		});
 	}
 
 	async revise(
 		actor: ActorContext,
 		diagram: MermaidDiagram,
-		instruction: string
+		instruction: string,
+		signal?: AbortSignal
 	): Promise<MermaidDiagram> {
 		const draft = await this.execute(actor, {
 			operation: 'revise',
 			noteId: diagram.noteId,
 			source: diagram.source,
-			instruction
+			instruction,
+			signal
 		});
 		return {
 			...diagram,
@@ -324,21 +330,24 @@ export class DiagramAuthoring {
 
 	async reviseInline(
 		actor: ActorContext,
-		input: ReviseInlineMermaidInput
+		input: ReviseInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput> {
 		const draft = await this.execute(actor, {
 			operation: 'revise',
 			noteId: input.noteId,
 			source: input.source,
 			instruction: input.instruction,
-			renderedPngDataUrl: input.renderedPngDataUrl
+			renderedPngDataUrl: input.renderedPngDataUrl,
+			signal
 		});
 		return { source: draft.source, ...(draft.title ? { title: draft.title } : {}) };
 	}
 
 	async convertInline(
 		actor: ActorContext,
-		input: ConvertInlineMermaidInput
+		input: ConvertInlineMermaidInput,
+		signal?: AbortSignal
 	): Promise<{
 		title: string;
 		source: string;
@@ -348,17 +357,23 @@ export class DiagramAuthoring {
 			operation: 'convert',
 			noteId: input.noteId,
 			source: input.source,
-			instruction: input.instruction
+			instruction: input.instruction,
+			signal
 		});
 		if (!draft.title) throw new ValidationError('The Diagram Agent did not submit a title.');
 		return { ...draft, title: draft.title };
 	}
 
-	async createFromMermaid(actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram> {
-		const draft = await this.convertInline(actor, {
-			noteId: diagram.noteId,
-			source: diagram.source
-		});
+	async createFromMermaid(
+		actor: ActorContext,
+		diagram: MermaidDiagram,
+		signal?: AbortSignal
+	): Promise<DrawioDiagram> {
+		const draft = await this.convertInline(
+			actor,
+			{ noteId: diagram.noteId, source: diagram.source },
+			signal
+		);
 		const timestamp = now();
 		return {
 			id: crypto.randomUUID() as DiagramId,
@@ -520,10 +535,14 @@ export class DiagramAuthoring {
 						: input.prompt;
 					const stream = await runner.run(agent, providerInput as never, {
 						stream: true,
-						maxTurns: 12
+						maxTurns: 12,
+						...(task.signal ? { signal: task.signal } : {})
 					});
 					const mapper = this.dependencies.createToolEventMapper();
 					for await (const event of stream) {
+						// The provider settles the stream on abort, but a tool call already
+						// in flight can still deliver events; stop recording them.
+						task.signal?.throwIfAborted();
 						const toolEvent = mapper.map(event);
 						if (toolEvent?.type === 'tool_started')
 							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {

@@ -11,6 +11,7 @@ import {
 	InMemoryReferencePipeline
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemoryWorkflowRunner } from '$lib/testing/agent/fakes/in-memory-workflow-runner';
 import {
 	noteBuilder,
 	testActor,
@@ -56,7 +57,8 @@ const setup = () => {
 			linkFinder: links,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
-			transactionRunner
+			transactionRunner,
+			workflowRunner: new InMemoryWorkflowRunner()
 		}),
 		reference: new References({
 			anchorCreator: content,
@@ -64,7 +66,8 @@ const setup = () => {
 			referenceRanker: references,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
-			transactionRunner
+			transactionRunner,
+			workflowRunner: new InMemoryWorkflowRunner()
 		})
 	};
 };
