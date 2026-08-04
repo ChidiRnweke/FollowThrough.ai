@@ -62,6 +62,15 @@
   stable variants, but a wrapper that fights a shadcn base class is the wrong tool: the document
   title once applied a display-size utility to a shadcn `Input` whose own `md:text-sm` won, and it
   shipped at caption size. Where a control needs to escape its base scale, write the bare element.
+- **Hairlines are inset rings; scroll content keeps a gutter.** A structural hairline is a
+  `ring-inset ring-1` box-shadow (`Card.Root`, kanban columns), never an outward `ring-1` or
+  `border` unless the element deliberately reads as in-flow. Anything painted outside the border
+  box — an outward ring, a focus halo, a shadow — is shaved wherever a scrollport clips at the
+  edge, which shows up as a card missing its left/right hairlines or a lopsided focus glow inside
+  a `ScrollArea`. Content that can touch a scrollport's edge must keep an inset gutter ≥ the
+  overlay scrollbar's width (~10px), because the bits-ui scrollbar overlays the viewport rather
+  than reserving space; see the `pr-3` chat-thread/right-panel gutters and the pane content's
+  `padding-block-end`.
 - Focus indicators, AA contrast, 44px touch targets for primary controls, reduced motion, and keyboard access are required.
 
 ### Interaction states

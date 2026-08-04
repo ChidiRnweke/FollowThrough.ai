@@ -106,8 +106,11 @@
 <div class={entries.length === 0 ? 'pb-8' : ''}>
 	<AgentContextBar {shell} {activeProjectId} {activeNoteId} compact={entries.length > 0} />
 </div>
-<ScrollArea class="min-h-0 flex-1 pr-2 " bind:viewportRef={viewport}>
-	<div class="flex min-h-full flex-col gap-3">
+<ScrollArea class="min-h-0 flex-1" bind:viewportRef={viewport}>
+	<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
+	     rather than reserving space, so a full-width approval or suggestion card
+	     underneath it loses its hairline to the track. -->
+	<div class="flex min-h-full flex-col gap-3 pr-3">
 		{#if entries.length === 0}
 			<ChatStarters
 				hasNote={activeNoteId !== undefined}

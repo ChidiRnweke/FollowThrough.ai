@@ -700,7 +700,11 @@
 		display: flex;
 		min-width: 100%;
 		min-height: 100%;
+		/* The bottom inset is the horizontal scrollbar's: the pane scrolls in both
+		   axes, and the overlay bar shaves the note's last line when a wide diagram
+		   or table mounts it. */
 		padding-inline: 1rem;
+		padding-block-end: 0.75rem;
 	}
 
 	@container (min-width: 40rem) {

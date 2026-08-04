@@ -130,7 +130,7 @@
 		<!-- Tinted tray holding default cards — the same layering recipe as the
 		     docked right panel (bg-sidebar + ring hairline). -->
 		<section
-			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-1 overflow-hidden rounded-xl bg-sidebar p-2 ring-1 ring-foreground/10 2xl:w-auto 2xl:min-w-0"
+			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-1 overflow-hidden rounded-xl bg-sidebar p-2 ring-inset ring-1 ring-foreground/10 2xl:w-auto 2xl:min-w-0"
 		>
 			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
 				{#if status === 'done'}
