@@ -1,10 +1,11 @@
 import type { AcceptSuggestionOutput, Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateReferenceInput, ReferenceId } from '$lib/models/references';
+import type { CreateReferenceInput, ExternalReference, ReferenceId } from '$lib/models/references';
 import type { CreateRelationshipInput, RelationshipId } from '$lib/models/relationships';
 import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
-import type { MemoryChangePayload, MemoryEntry } from '$lib/models/memory';
+import type { NoteRelationship } from '$lib/models/notes';
+import type { MemoryChangePayload, MemoryEntry, MemorySuggestion } from '$lib/models/memory';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { InvalidTransitionError } from '$lib/errors';
 
@@ -18,7 +19,7 @@ interface RelationshipCreator {
 	create(
 		actor: ActorContext,
 		input: CreateRelationshipInput
-	): Promise<import('$lib/models/notes').NoteRelationship>;
+	): Promise<NoteRelationship>;
 }
 interface RelationshipDeleter {
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void>;
@@ -27,7 +28,7 @@ interface ReferenceCreator {
 	create(
 		actor: ActorContext,
 		input: CreateReferenceInput
-	): Promise<import('$lib/models/references').ExternalReference>;
+	): Promise<ExternalReference>;
 }
 interface ReferenceDeleter {
 	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void>;
@@ -46,7 +47,7 @@ interface MemoryChangeApplier {
 	): Promise<MemoryEntry>;
 	revert(
 		actor: ActorContext,
-		suggestion: import('$lib/models/memory').MemorySuggestion
+		suggestion: MemorySuggestion
 	): Promise<void>;
 }
 interface DrawioContent {

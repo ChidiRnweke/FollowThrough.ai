@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
-import type { ArtifactId, GenerateDocumentInput, TemplateId } from '$lib/models/deliverables';
+import type {
+	ArtifactId,
+	GenerateDocumentInput,
+	PreviewDocumentInput,
+	TemplateId
+} from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 
 export const initiateTemplateUpload = command(
@@ -50,6 +55,10 @@ const exportSettingsSchema = z.object({
 	includeTitle: z.boolean().optional()
 });
 
+const diagramSizesSchema = z
+	.record(z.string(), z.object({ width: z.number().positive(), height: z.number().positive() }))
+	.optional();
+
 export const generateDocument = command(
 	z.object({
 		projectId: z.string().uuid(),
@@ -59,7 +68,8 @@ export const generateDocument = command(
 		templateId: z.string().uuid().optional(),
 		settings: exportSettingsSchema.optional(),
 		diagramSvgs: z.record(z.string(), z.string()).optional(),
-		diagramPngs: z.record(z.string(), z.string()).optional()
+		diagramPngs: z.record(z.string(), z.string()).optional(),
+		diagramSizes: diagramSizesSchema
 	}),
 	async (input) =>
 		AppFactory.controllers()
@@ -74,14 +84,15 @@ export const previewDocument = command(
 		title: z.string().min(1),
 		settings: exportSettingsSchema.optional(),
 		diagramSvgs: z.record(z.string(), z.string()).optional(),
-		diagramPngs: z.record(z.string(), z.string()).optional()
+		diagramPngs: z.record(z.string(), z.string()).optional(),
+		diagramSizes: diagramSizesSchema
 	}),
 	async (input) =>
 		AppFactory.controllers()
 			.deliverables()
 			.previewDocument(
 				requestActor(),
-				input as import('$lib/models/deliverables').PreviewDocumentInput
+				input as PreviewDocumentInput
 			)
 );
 

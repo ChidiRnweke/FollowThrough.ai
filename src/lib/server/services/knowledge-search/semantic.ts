@@ -1,6 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { LinkCandidate } from '$lib/models/relationships';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { LinkCandidate, RelationshipKind } from '$lib/models/relationships';
+import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchMatch } from '$lib/models/knowledge-search';
 import { InvalidGeneratedContentError } from '$lib/errors';
@@ -40,13 +40,13 @@ interface RelationshipClassifier {
 		sourceText: string,
 		targetText: string
 	): Promise<{
-		readonly kind: import('$lib/models/relationships').RelationshipKind;
+		readonly kind: RelationshipKind;
 		readonly justification: string;
 		readonly confidence: number;
 	}>;
 }
 interface NoteReader {
-	get(actor: ActorContext, noteId: NoteId): Promise<import('$lib/models/notes').Note>;
+	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
 
 export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {

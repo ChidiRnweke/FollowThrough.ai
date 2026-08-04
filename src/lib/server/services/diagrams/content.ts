@@ -1,6 +1,11 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import type { Diagram, MermaidDiagram } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	MermaidDiagram,
+	ReviseInlineMermaidInput,
+	ReviseInlineMermaidOutput
+} from '$lib/models/diagrams';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
@@ -38,8 +43,8 @@ export class DiagramContent {
 
 	async reviseInline(
 		_actor: ActorContext,
-		input: import('$lib/models/diagrams').ReviseInlineMermaidInput
-	): Promise<import('$lib/models/diagrams').ReviseInlineMermaidOutput> {
+		input: ReviseInlineMermaidInput
+	): Promise<ReviseInlineMermaidOutput> {
 		void _actor;
 		return { source: `${input.source}\n%% ${input.instruction}` };
 	}

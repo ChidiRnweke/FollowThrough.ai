@@ -130,7 +130,7 @@ export class DocumentTemplates {
 		const template = await this.templateRepo.findById(actor, templateId);
 		if (!template) throw new NotFoundError('Template not found');
 		if (template.extractedStyles)
-			return template.extractedStyles as unknown as import('$lib/models/deliverables').ExtractedTemplateStyles;
+			return template.extractedStyles as unknown as ExtractedTemplateStyles;
 		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
 		return this.styleExtractor(Buffer.from(buffer));
 	}

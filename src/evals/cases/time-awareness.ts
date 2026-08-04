@@ -1,6 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
-import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase, type AgentRunResult } from '../lab/run-case';
 import {
@@ -288,7 +288,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			const now = new Date();
 			const cutoff = new Date(
 				now.getTime() - 30 * DAY_MS
-			).toISOString() as import('$lib/models/workspace').DateTime;
+			).toISOString() as DateTime;
 			const workspace = await seedWorkspace(lab, temporalNotesWorkspace());
 			const actor = workspace.actor;
 

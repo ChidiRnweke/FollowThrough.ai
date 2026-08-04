@@ -6,6 +6,7 @@ import type {
 	ConversationId,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
+import type { getSession } from '$lib/remote/agent/chat.remote';
 
 export interface AgentRunEventConnection {
 	close(): void;
@@ -25,7 +26,7 @@ export interface AgentRunTransport {
 	retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
 	getSession(
 		conversationId: ConversationId
-	): Promise<Awaited<ReturnType<typeof import('$lib/remote/agent/chat.remote').getSession>>>;
+	): Promise<Awaited<ReturnType<typeof getSession>>>;
 	openEvents(input: {
 		runId: AgentRunId;
 		after: string;

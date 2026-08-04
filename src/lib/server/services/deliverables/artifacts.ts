@@ -3,6 +3,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
 	ArtifactId,
+	DiagramRenders,
 	ListArtifactsOutput,
 	ListArtifactsParams,
 	ExportSettings,
@@ -40,22 +41,25 @@ interface ProvenanceRecorder {
 interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
-interface GenerateDocxInput {
+interface GenerateDocxInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
-	readonly diagramSvgs?: Record<string, string>;
-	readonly diagramPngs?: Record<string, string>;
 }
-interface GeneratePdfInput {
+interface GeneratePdfInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
-	readonly diagramSvgs?: Record<string, string>;
-	readonly diagramPngs?: Record<string, string>;
 }
+
+/** Absent render maps are left off entirely, so the generators' own defaults stay in charge. */
+const diagramRenders = (input: DiagramRenders): DiagramRenders => ({
+	...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
+	...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {}),
+	...(input.diagramSizes ? { diagramSizes: input.diagramSizes } : {})
+});
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -117,15 +121,14 @@ export class ArtifactLibrary {
 			notes,
 			title: input.title,
 			settings,
-			...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
-			...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
+			...diagramRenders(input)
 		});
 	}
 
 	private async loadNotes(
 		actor: ActorContext,
 		noteIds: readonly NoteId[]
-	): Promise<{ title: string; document: import('$lib/models/notes').ProseMirrorDocument }[]> {
+	): Promise<{ title: string; document: ProseMirrorDocument }[]> {
 		return Promise.all(
 			noteIds.map(async (noteId) => {
 				const note = await this.noteReader.get(actor, noteId);
@@ -149,7 +152,7 @@ export class ArtifactLibrary {
 			const template = await this.templateRepo.findById(actor, input.templateId);
 			if (template?.extractedStyles) {
 				extractedStyles =
-					template.extractedStyles as unknown as import('$lib/models/deliverables').ExtractedTemplateStyles;
+					template.extractedStyles as unknown as ExtractedTemplateStyles;
 			}
 		}
 
@@ -160,8 +163,7 @@ export class ArtifactLibrary {
 				...(extractedStyles ? { styles: extractedStyles } : {}),
 				title: input.title,
 				settings,
-				...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
-				...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
+				...diagramRenders(input)
 			});
 		} else {
 			buffer = await this.pdfGenerator({
@@ -169,8 +171,7 @@ export class ArtifactLibrary {
 				title: input.title,
 				styles: extractedStyles,
 				settings,
-				...(input.diagramSvgs ? { diagramSvgs: input.diagramSvgs } : {}),
-				...(input.diagramPngs ? { diagramPngs: input.diagramPngs } : {})
+				...diagramRenders(input)
 			});
 		}
 

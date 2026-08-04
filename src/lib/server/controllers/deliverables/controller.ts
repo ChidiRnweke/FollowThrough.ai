@@ -1,5 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
+	Artifact,
 	ArtifactId,
 	ExportSettings,
 	GenerateDocumentInput,
@@ -11,7 +12,7 @@ import type {
 	PreviewDocumentOutput,
 	TemplateId
 } from '$lib/models/deliverables';
-import type { ProjectId } from '$lib/models/projects';
+import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
 import type {
 	ArtifactDeleter,
 	ArtifactLister,
@@ -63,7 +64,7 @@ export interface DeliverablesController {
 	listTemplates(
 		actor: ActorContext,
 		projectId: ProjectId
-	): Promise<readonly import('$lib/models/projects').ProjectTemplate[]>;
+	): Promise<readonly ProjectTemplate[]>;
 	/** Permanently remove a template. */
 	deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void>;
 	/**
@@ -99,7 +100,7 @@ export interface DeliverablesController {
 	getArtifact(
 		actor: ActorContext,
 		artifactId: ArtifactId
-	): Promise<import('$lib/models/deliverables').Artifact | undefined>;
+	): Promise<Artifact | undefined>;
 	/** Return a presigned URL that streams an artifact's file bytes. */
 	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	/** Permanently delete an artifact. */

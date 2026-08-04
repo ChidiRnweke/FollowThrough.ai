@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import type { Database } from '$lib/server/db';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 
@@ -24,7 +25,7 @@ interface MigrationJournal {
  */
 export async function createPGliteDatabase(): Promise<{
 	database: Database;
-	transactionRunner: import('$lib/server/repositories/workspace').TransactionRunner;
+	transactionRunner: TransactionRunner;
 	close: () => Promise<void>;
 }> {
 	const client = new PGlite({ extensions: { vector } });

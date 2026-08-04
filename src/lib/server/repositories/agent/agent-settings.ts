@@ -22,7 +22,7 @@ export interface AgentSessionRepository {
 	pop(actor: ActorContext, conversationId: ConversationId): Promise<AgentSessionItem | undefined>;
 	clear(actor: ActorContext, conversationId: ConversationId): Promise<void>;
 	replace(
-		conversationId: import('$lib/models/agent').ConversationId,
+		conversationId: ConversationId,
 		items: readonly Readonly<Record<string, unknown>>[]
 	): Promise<void>;
 }

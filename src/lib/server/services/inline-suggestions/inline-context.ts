@@ -7,6 +7,7 @@ import type {
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
+import type { ProjectId } from '$lib/models/projects';
 import { getEncoding } from 'js-tiktoken';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 interface OperationObserver {
@@ -27,7 +28,7 @@ interface KnowledgeSearcher {
 		actor: ActorContext,
 		query: string,
 		limit?: number,
-		projectId?: import('$lib/models/projects').ProjectId,
+		projectId?: ProjectId,
 		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]>;
 }

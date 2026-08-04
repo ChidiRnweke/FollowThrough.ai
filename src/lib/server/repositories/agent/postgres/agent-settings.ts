@@ -488,7 +488,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 	}
 
 	async replace(
-		conversationId: import('$lib/models/agent').ConversationId,
+		conversationId: ConversationId,
 		items: readonly Readonly<Record<string, unknown>>[]
 	): Promise<void> {
 		await this.database.transaction(async (transaction) => {

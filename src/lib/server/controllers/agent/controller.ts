@@ -17,6 +17,7 @@ import type {
 	RunAgentInput,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import { isTerminalAgentRunStatus } from '$lib/models/agent';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -527,7 +528,7 @@ export class Agent implements AgentController {
 		const contextNoteId =
 			input.appContext?.workbench?.focusedNoteId ??
 			(input.appContext?.activeResource?.kind === 'note'
-				? (input.appContext.activeResource.id as import('$lib/models/notes').NoteId)
+				? (input.appContext.activeResource.id as NoteId)
 				: undefined);
 		const overriddenProjectId =
 			input.projectId && contextProjectId && input.projectId !== contextProjectId

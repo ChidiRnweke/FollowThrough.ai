@@ -6,6 +6,7 @@ import type { DateTime } from '$lib/models/workspace';
 import type { DiagramKind } from '$lib/models/diagrams';
 import type { MemoryChangePayload } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId, SourceAnchorId } from '$lib/models/provenance';
 import type {
 	Suggestion,
@@ -197,8 +198,8 @@ export class SuggestionInbox {
 
 	private payloadBelongsToNote(
 		proposal: SuggestionProposal,
-		noteId: import('$lib/models/notes').NoteId,
-		projectId: import('$lib/models/projects').ProjectId
+		noteId: NoteId,
+		projectId: ProjectId
 	): boolean {
 		switch (proposal.kind) {
 			case 'todo':

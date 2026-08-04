@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
+	AgentModel,
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
@@ -18,6 +19,7 @@ import type {
 } from '$lib/models/agent';
 import type {
 	ConvertInlineMermaidInput,
+	DiagramId,
 	DrawioDiagram,
 	MermaidDiagram,
 	ReviseInlineMermaidInput,
@@ -234,7 +236,7 @@ export interface DiagramAgentDependencies {
 	readonly contextBuilder: AgentContextBuilder;
 	readonly conversations: ConversationJournal;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
-	readonly models: { list(): Promise<readonly import('$lib/models/agent').AgentModel[]> };
+	readonly models: { list(): Promise<readonly AgentModel[]> };
 	readonly runs: AgentRunStore;
 	readonly provenance: {
 		record(
@@ -340,7 +342,7 @@ export class DiagramAuthoring {
 	): Promise<{
 		title: string;
 		source: string;
-		provenanceId?: import('$lib/models/provenance').ProvenanceId;
+		provenanceId?: ProvenanceId;
 	}> {
 		const draft = await this.execute(actor, {
 			operation: 'convert',
@@ -359,7 +361,7 @@ export class DiagramAuthoring {
 		});
 		const timestamp = now();
 		return {
-			id: crypto.randomUUID() as import('$lib/models/diagrams').DiagramId,
+			id: crypto.randomUUID() as DiagramId,
 			userId: actor.userId,
 			noteId: diagram.noteId,
 			kind: 'drawio',

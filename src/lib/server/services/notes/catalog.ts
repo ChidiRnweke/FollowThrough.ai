@@ -10,7 +10,7 @@ import type {
 } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
-import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
+import type { Provenance, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
 import { findProseMirrorDocumentIssue } from '$lib/models/notes';
 import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
@@ -104,7 +104,7 @@ export class NoteCatalog {
 	async record(
 		actor: ActorContext,
 		note: Note,
-		provenance?: import('$lib/models/provenance').Provenance
+		provenance?: Provenance
 	): Promise<void> {
 		await this.get(actor, note.id);
 		const revision: NoteRevision = {
