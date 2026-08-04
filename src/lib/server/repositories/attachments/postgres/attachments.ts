@@ -9,6 +9,7 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 import { NotFoundError } from '$lib/errors';
 import type {
 	AttachmentRepository,
@@ -153,6 +154,41 @@ export class AttachmentRecords implements AttachmentRepository {
 						eq(schema.attachments.projectId, projectId),
 						eq(schema.attachments.userId, actor.userId),
 						sql`${schema.attachments.noteId} is null`
+					)
+				)
+				.orderBy(asc(schema.attachments.path))
+		).map(({ attachment, version }) => toView(attachment, version));
+	}
+
+	async linkToTodo(actor: ActorContext, id: Attachment['id'], todoId: TodoId): Promise<void> {
+		// Guarded by the actor's ownership of the attachment; the todo itself is
+		// reached through the same user's project, and the foreign key rejects a
+		// todo that does not exist.
+		const owned = await this.findById(actor, id);
+		if (!owned) throw new NotFoundError('Attachment was not found');
+		await this.database
+			.insert(schema.todoAttachments)
+			.values({ todoId, attachmentId: id })
+			.onConflictDoNothing();
+	}
+
+	async listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
+		return (
+			await this.database
+				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+				.from(schema.todoAttachments)
+				.innerJoin(
+					schema.attachments,
+					eq(schema.attachments.id, schema.todoAttachments.attachmentId)
+				)
+				.innerJoin(
+					schema.attachmentVersions,
+					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
+				)
+				.where(
+					and(
+						eq(schema.todoAttachments.todoId, todoId),
+						eq(schema.attachments.userId, actor.userId)
 					)
 				)
 				.orderBy(asc(schema.attachments.path))

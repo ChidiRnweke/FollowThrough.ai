@@ -7,6 +7,7 @@ import type {
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 
 /** An upload reservation together with the owner needed to scope its removal. */
 export interface OwnedAttachmentUpload {
@@ -24,6 +25,13 @@ export interface AttachmentRepository {
 	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void>;
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
 	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
+	/**
+	 * Record that a todo's description references an already-finalized attachment.
+	 * The attachment stays project-owned; this only adds the todo link, so linking
+	 * the same attachment twice is a no-op rather than an error.
+	 */
+	linkToTodo(actor: ActorContext, id: Attachment['id'], todoId: TodoId): Promise<void>;
+	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
 	findById(actor: ActorContext, id: Attachment['id']): Promise<AttachmentView | undefined>;
 	findByPath(
 		actor: ActorContext,

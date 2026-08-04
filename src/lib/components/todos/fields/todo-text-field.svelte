@@ -16,7 +16,7 @@
 	}: {
 		todoId: TodoId;
 		value?: string;
-		field: 'title' | 'description' | 'waitingOn';
+		field: 'title' | 'waitingOn';
 		multiline?: boolean;
 		label: string;
 		id?: string;
@@ -27,7 +27,7 @@
 	let draft = $state(initialValue());
 	async function commit(): Promise<void> {
 		if (draft === saved) return;
-		const next = field === 'description' || field === 'waitingOn' ? draft.trim() || null : draft;
+		const next = field === 'waitingOn' ? draft.trim() || null : draft;
 		if (await todoUpdates.updateTodo(todoId, { [field]: next })) saved = draft;
 		else {
 			draft = saved;

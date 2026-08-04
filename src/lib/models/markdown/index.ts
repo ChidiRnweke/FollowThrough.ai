@@ -11,10 +11,12 @@ export type RenderedMarkdown = { ok: true; html: string } | { ok: false; raw: st
 
 // Dedicated instance: Tiptap's Markdown extension registers tokenizer-only
 // extensions (e.g. inlineMath) on the global marked singleton, which would
-// make marked.parse throw on chat messages containing "$...$" pairs.
-const chatMarked = new Marked({ breaks: true, gfm: true });
+// make marked.parse throw on text containing "$...$" pairs.
+const renderer = new Marked({ breaks: true, gfm: true });
 
 /**
+ * Renders user- or model-authored markdown to sanitized HTML.
+ *
  * Chat text arrives a chunk at a time, and a half-received chunk is regularly
  * unparseable. Catching here rather than at an error boundary is what makes that
  * self-healing: the next chunk re-runs this and renders normally, where a
@@ -23,7 +25,7 @@ const chatMarked = new Marked({ breaks: true, gfm: true });
  *
  * `parser` exists so tests can supply an instance that reproduces a real crash.
  */
-export function renderChatMarkdown(text: string, parser: Marked = chatMarked): RenderedMarkdown {
+export function renderMarkdown(text: string, parser: Marked = renderer): RenderedMarkdown {
 	if (!text.trim()) return { ok: true, html: '' };
 	try {
 		const rendered = parser.parse(text, { async: false });

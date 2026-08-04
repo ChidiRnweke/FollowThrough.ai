@@ -3,5 +3,6 @@ export {
 	attachmentUploads,
 	attachmentVersions,
 	noteRevisionAttachments,
-	projects
+	projects,
+	todoAttachments
 } from './registry';

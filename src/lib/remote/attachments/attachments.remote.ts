@@ -5,6 +5,7 @@ import { requestActor } from '$lib/server/request-actor-factory';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 
 const id = z.string().uuid();
 const path = z.string().min(1).max(512);
@@ -61,6 +62,27 @@ export const completeAttachmentUpload = command(z.object({ uploadId: id }), asyn
 	await refreshRequestedLists();
 	return view;
 });
+
+/**
+ * Completes a screenshot pasted into a todo description. Separate from
+ * {@link completeAttachmentUpload} because it also records the todo link; the
+ * attachment itself is initiated through the ordinary project-owner branch, so
+ * `initiateAttachmentUpload` needs no todo-specific shape.
+ */
+export const completeTodoScreenshotUpload = command(
+	z.object({ uploadId: id, todoId: id }),
+	async (input) => {
+		const view = await AppFactory.controllers()
+			.attachments()
+			.completeForTodo(
+				requestActor(),
+				input.uploadId as AttachmentUploadId,
+				input.todoId as TodoId
+			);
+		await refreshRequestedLists();
+		return view;
+	}
+);
 
 export const retryAttachment = command(z.object({ attachmentId: id }), async (input) => {
 	const view = await AppFactory.controllers()

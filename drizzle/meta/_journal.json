@@ -253,6 +253,13 @@
       "when": 1785780031557,
       "tag": "0035_legal_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785863862028,
+      "tag": "0036_bumpy_triton",
+      "breakpoints": true
     }
   ]
 }

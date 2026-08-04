@@ -5,6 +5,7 @@
 	import { FtExternal as ExternalLink } from '$lib/components/icons';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 	import TodoTextField from '../fields/todo-text-field.svelte';
+	import TodoDescriptionField from '../fields/todo-description-field.svelte';
 	import TodoStatusField from '../fields/todo-status-field.svelte';
 	import TodoPriorityField from '../fields/todo-priority-field.svelte';
 	import TodoDueDateField from '../fields/todo-due-date-field.svelte';
@@ -57,14 +58,14 @@
 					/>{/key}
 			</Field.Field>
 			<Field.Field>
-				<Field.FieldLabel for="todo-description">Description</Field.FieldLabel>
-				{#key `${view.todo.id}-description-${view.todo.updatedAt}`}<TodoTextField
+				<!-- No `for`: outside edit mode the description is rendered markdown, not
+				     a form control, so there is nothing for a label to point at. -->
+				<Field.FieldLabel>Description</Field.FieldLabel>
+				{#key `${view.todo.id}-description-${view.todo.updatedAt}`}<TodoDescriptionField
 						id="todo-description"
 						todoId={view.todo.id}
+						projectId={view.todo.projectId}
 						value={view.todo.description}
-						field="description"
-						label="Todo description"
-						multiline
 					/>{/key}
 			</Field.Field>
 		</Field.FieldGroup>

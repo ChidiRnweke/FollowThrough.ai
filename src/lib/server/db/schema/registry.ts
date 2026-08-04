@@ -507,6 +507,29 @@ export const noteRevisionAttachments = pgTable(
 	(table) => [primaryKey({ columns: [table.noteRevisionId, table.path] })]
 );
 
+/**
+ * Which attachments a todo's description references. The attachment itself stays
+ * project-owned, so a screenshot is still a project file; this table only records
+ * that a todo points at it. A join table rather than a nullable `attachments.todo_id`
+ * keeps every ownership column non-null.
+ */
+export const todoAttachments = pgTable(
+	'todo_attachments',
+	{
+		todoId: uuid('todo_id')
+			.notNull()
+			.references(() => todos.id, { onDelete: 'cascade' }),
+		attachmentId: uuid('attachment_id')
+			.notNull()
+			.references(() => attachments.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		primaryKey({ columns: [table.todoId, table.attachmentId] }),
+		index('todo_attachments_attachment_idx').on(table.attachmentId)
+	]
+);
+
 export const attachmentUploads = pgTable(
 	'attachment_uploads',
 	{

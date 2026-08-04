@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import DiffViewer from './diff-viewer.svelte';
-	import { renderChatMarkdown } from './chat-markdown';
+	import { renderMarkdown } from '$lib/models/markdown';
 
 	let { content }: { content: string } = $props();
 	let mounted = $state(false);
@@ -38,14 +38,14 @@
 		<!--
 			The boundary is per segment, not per message: one unrenderable segment
 			must not cost the reader the rest of the turn. It catches what the
-			try/catch in `renderChatMarkdown` cannot — a malformed diff, or the
+			try/catch in `renderMarkdown` cannot — a malformed diff, or the
 			`{@html}` insertion itself.
 		-->
 		<ErrorBoundary label="part of this message" source={segment.content}>
 			{#if segment.type === 'diff'}
 				<DiffViewer diffText={segment.content} />
 			{:else}
-				{@const rendered = renderChatMarkdown(segment.content)}
+				{@const rendered = renderMarkdown(segment.content)}
 				{#if rendered.ok}
 					{#if rendered.html}
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify above. -->

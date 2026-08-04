@@ -11,6 +11,7 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -221,6 +222,14 @@ export class AttachmentLibrary {
 
 	listForProject(actor: ActorContext, projectId: ProjectId) {
 		return this.attachments.listForProject(actor, projectId);
+	}
+
+	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
+		return this.attachments.linkToTodo(actor, attachmentId, todoId);
+	}
+
+	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
+		return this.attachments.listForTodo(actor, todoId);
 	}
 
 	async downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }> {

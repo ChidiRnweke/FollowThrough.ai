@@ -100,6 +100,12 @@ class StubAttachmentRepository implements AttachmentRepository {
 	listForProject(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
 	}
+	linkToTodo(): Promise<void> {
+		throw new Error('not used');
+	}
+	listForTodo(): Promise<readonly AttachmentView[]> {
+		throw new Error('not used');
+	}
 	findById(): Promise<AttachmentView | undefined> {
 		throw new Error('not used');
 	}

@@ -2,6 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { TodoId } from '$lib/models/todos';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
 
@@ -36,8 +37,24 @@ export interface AttachmentsController {
 		actor: ActorContext,
 		uploadId: AttachmentUploadId
 	): ReturnType<AttachmentManager['complete']>;
+	/**
+	 * Finalize an upload and, in the same transaction, record that a todo's
+	 * description references it.
+	 *
+	 * The link is committed with the attachment rather than through a follow-up
+	 * call, so a screenshot is never observable as a project file that no todo
+	 * claims — the description's image link and the recorded ownership always
+	 * agree.
+	 */
+	completeForTodo(
+		actor: ActorContext,
+		uploadId: AttachmentUploadId,
+		todoId: TodoId
+	): ReturnType<AttachmentManager['complete']>;
 	/** List the attachments attached to a note, in display order. */
 	list(actor: ActorContext, noteId: NoteId): ReturnType<AttachmentManager['list']>;
+	/** List the attachments a todo's description references, in display order. */
+	listForTodo(actor: ActorContext, todoId: TodoId): ReturnType<AttachmentManager['listForTodo']>;
 	/** List every attachment in a project regardless of which note owns it, for project-wide browsing. */
 	listForProject(
 		actor: ActorContext,
@@ -95,8 +112,27 @@ export class Attachments implements AttachmentsController {
 		this.dependencies.attachments.startProcessing(actor, attachment);
 		return attachment;
 	}
+	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
+		return this.completeForTodoAndStart(actor, uploadId, todoId);
+	}
+	private async completeForTodoAndStart(
+		actor: ActorContext,
+		uploadId: AttachmentUploadId,
+		todoId: TodoId
+	) {
+		const attachment = await this.dependencies.transactionRunner.run(async () => {
+			const completed = await this.dependencies.attachments.complete(actor, uploadId);
+			await this.dependencies.attachments.linkToTodo(actor, completed.attachment.id, todoId);
+			return completed;
+		});
+		this.dependencies.attachments.startProcessing(actor, attachment);
+		return attachment;
+	}
 	list(actor: ActorContext, noteId: NoteId) {
 		return this.dependencies.attachments.list(actor, noteId);
+	}
+	listForTodo(actor: ActorContext, todoId: TodoId) {
+		return this.dependencies.attachments.listForTodo(actor, todoId);
 	}
 	listForProject(actor: ActorContext, projectId: ProjectId) {
 		return this.dependencies.attachments.listForProject(actor, projectId);

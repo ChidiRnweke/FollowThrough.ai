@@ -214,10 +214,16 @@ export const agentToolCoverage = {
 	attachments: {
 		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
 		complete: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
+		completeForTodo: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
 		list: { kind: 'read' },
 		listForProject: {
 			kind: 'excluded',
 			reason: 'Project attachments enter agent context through semantic retrieval.'
+		},
+		listForTodo: {
+			kind: 'excluded',
+			reason:
+				'Todo screenshots enter agent context through the description text and semantic retrieval.'
 		},
 		download: { kind: 'excluded', reason: 'Signed URLs are only returned to the user interface.' },
 		downloadById: {
