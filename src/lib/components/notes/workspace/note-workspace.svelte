@@ -83,7 +83,7 @@
 	let saveFailed = $state(false);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
-	const actionRuns = noteActionRunsFor(view.note.id);
+	const actionRuns = noteActionRunsFor(untrack(() => view.note.id));
 	const activeAction = $derived(
 		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
 	);
