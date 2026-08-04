@@ -84,7 +84,9 @@
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
 	const actionRuns = noteActionRunsFor(view.note.id);
-	const activeAction = $derived(actionRuns.activeSelectionAction?.action as NoteAiAction | undefined);
+	const activeAction = $derived(
+		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
+	);
 	const cancellingAction = $derived(actionRuns.activeSelectionAction?.cancelling ?? false);
 	let publishing = $state(false);
 	let reconciling = false;
@@ -186,8 +188,11 @@
 		void noteSync
 			.initialize({ note: view.note, etag: view.etag })
 			.then((local) => {
+				// The document being replaced, so the editor can shimmer exactly the
+				// blocks the external (agent) revision changed and leave the rest still.
+				const previous = note.document;
 				note = { ...local };
-				editorRef?.replaceDocument(local.document);
+				editorRef?.replaceDocument(local.document, previous);
 			})
 			.finally(() => {
 				reconciling = false;
@@ -451,7 +456,9 @@
 			if (output.suggestion.kind !== 'diagram') return;
 			const insertAt = insertionPoint(context);
 			if (insertAt === undefined) {
-				toast.error('The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.');
+				toast.error(
+					'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
+				);
 				suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 				return;
 			}

@@ -141,6 +141,93 @@
 	}
 }
 
+/* A block the agent just changed briefly re-renders: a subtle teal wash, one
+   narrow sweep left to right, and the changed text fading in — clipped to the
+   block, resolving back to the normal surface. Applied transiently to the live
+   editor DOM by `note-editor`, never persisted into the note document. */
+.note-block-shimmer {
+	position: relative;
+	overflow: hidden;
+	border-radius: 4px;
+}
+
+.note-block-shimmer::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-color: color-mix(in oklab, var(--color-brand) 12%, transparent);
+	opacity: 0;
+	pointer-events: none;
+	animation: note-shimmer-wash 850ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.note-block-shimmer::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 32%;
+	pointer-events: none;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		color-mix(in oklab, var(--color-brand) 14%, transparent),
+		transparent
+	);
+	transform: translateX(-120%);
+	animation: note-shimmer-sweep 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.note-block-shimmer :is(p, h1, h2, h3, h4, li, pre) {
+	animation: note-shimmer-text-fade 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes note-shimmer-wash {
+	0% {
+		opacity: 0;
+	}
+	25% {
+		opacity: 0.12;
+	}
+	60% {
+		opacity: 0.06;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes note-shimmer-sweep {
+	from {
+		transform: translateX(-120%);
+	}
+	to {
+		transform: translateX(420%);
+	}
+}
+
+@keyframes note-shimmer-text-fade {
+	from {
+		opacity: 0.35;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.note-block-shimmer::before,
+	.note-block-shimmer::after {
+		display: none;
+	}
+
+	.note-block-shimmer :is(p, h1, h2, h3, h4, li, pre) {
+		animation: none;
+	}
+}
+
 .dark {
 	--background: oklch(0.153 0.006 107.1);
 	--foreground: oklch(0.988 0.003 106.5);

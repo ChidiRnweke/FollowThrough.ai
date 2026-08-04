@@ -2,6 +2,8 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
+	import { Plugin, PluginKey } from '@tiptap/pm/state';
+	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
 	import type {
 		NoteId,
@@ -9,6 +11,7 @@
 		ProseMirrorDocument,
 		TextSelection
 	} from '$lib/models/notes';
+	import { changedTopLevelBlockIndices } from '$lib/models/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
@@ -67,6 +70,9 @@
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
+	/** Long enough for the wash to finish; short enough that a second update can follow. */
+	const SHIMMER_DURATION = 1000;
+	const shimmerKey = new PluginKey('note-block-shimmer');
 
 	const runningCopy: Record<NoteAiAction, string> = {
 		promises: 'Reading for commitments',
@@ -158,6 +164,8 @@
 
 	let initialized = false;
 	let hydrated = $state(false);
+	/** Guards the shimmer teardown: only the latest replacement removes its decoration. */
+	let shimmerGeneration = 0;
 	let activeLink = $state<
 		{ readonly group: ResolvedReferenceLinkGroup; readonly anchor: HTMLAnchorElement } | undefined
 	>();
@@ -530,6 +538,57 @@
 		});
 	});
 
+	/**
+	 * Briefly re-render the blocks an external revision changed. Applied as a
+	 * ProseMirror node decoration — a class on each changed block — so it rides
+	 * the editor's own DOM rendering rather than fighting it, and survives any
+	 * rebuild. Transient: the decoration is removed after `SHIMMER_DURATION`,
+	 * and a refresh never passes a previous document, so a note that is merely
+	 * reopened shows nothing.
+	 */
+	function shimmerChangedBlocks(
+		previousDocument: ProseMirrorDocument,
+		nextDocument: ProseMirrorDocument
+	): void {
+		if (!editor) return;
+		const indices = changedTopLevelBlockIndices(previousDocument, nextDocument);
+		if (indices.length === 0) return;
+		const positions: number[] = [];
+		editor.state.doc.forEach((_node, offset, index) => {
+			if (indices.includes(index)) positions.push(offset);
+		});
+		if (positions.length === 0) return;
+		const plugin = new Plugin({
+			key: shimmerKey,
+			props: {
+				decorations(state) {
+					const decorations: Decoration[] = [];
+					for (const pos of positions) {
+						const node = state.doc.nodeAt(pos);
+						if (node)
+							decorations.push(
+								Decoration.node(pos, pos + node.nodeSize, { class: 'note-block-shimmer' })
+							);
+					}
+					return DecorationSet.create(state.doc, decorations);
+				}
+			}
+		});
+		const generation = shimmerGeneration + 1;
+		shimmerGeneration = generation;
+		editor.view.updateState(
+			editor.state.reconfigure({ plugins: [...editor.state.plugins, plugin] })
+		);
+		window.setTimeout(() => {
+			if (editor && shimmerGeneration === generation)
+				editor.view.updateState(
+					editor.state.reconfigure({
+						plugins: editor.state.plugins.filter((p) => p.spec.key !== shimmerKey)
+					})
+				);
+		}, SHIMMER_DURATION);
+	}
+
 	export function getDocument(): ProseMirrorDocument {
 		return (editor?.getJSON() ?? { type: 'doc', content: [] }) as unknown as ProseMirrorDocument;
 	}
@@ -538,11 +597,15 @@
 		return editor?.getText({ blockSeparator: '\n\n' }) ?? '';
 	}
 
-	export function replaceDocument(nextDocument: ProseMirrorDocument): void {
+	export function replaceDocument(
+		nextDocument: ProseMirrorDocument,
+		previousDocument?: ProseMirrorDocument
+	): void {
 		if (!editor) return;
 		initialized = false;
 		editor.commands.setContent(nextDocument as never);
 		initialized = true;
+		if (previousDocument) shimmerChangedBlocks(previousDocument, nextDocument);
 	}
 
 	export function focusStart(): void {

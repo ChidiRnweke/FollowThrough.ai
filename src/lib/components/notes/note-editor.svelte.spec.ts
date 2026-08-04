@@ -292,3 +292,77 @@ describe('Note editor keyboard integration', () => {
 		}
 	);
 });
+
+describe('Agent-updated block shimmer', () => {
+	/** Wait (a few frames) for the decoration to be rendered as a class. */
+	const untilShimmered = async (container: HTMLElement): Promise<HTMLElement[]> => {
+		for (let frame = 0; frame < 60; frame += 1) {
+			const found = [...container.querySelectorAll<HTMLElement>('.note-block-shimmer')];
+			if (found.length > 0) return found;
+			await new Promise((resolve) => requestAnimationFrame(resolve));
+		}
+		return [];
+	};
+
+	it('applies the shimmer only to the block whose text changed', async () => {
+		const before = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'old' }] }
+		) as ProseMirrorDocument;
+		const after = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'edited' }] }
+		) as ProseMirrorDocument;
+		const screen = render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			revision: 1,
+			document: before,
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined
+		});
+		// Let the editor's view settle into the document (EditorContent mounts it
+		// after first render) so the shimmer targets the element the user sees.
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+		screen.component.replaceDocument(after, before);
+
+		const shimmered = (await untilShimmered(screen.container)).map(
+			(element) => element.textContent
+		);
+
+		expect(shimmered).toEqual(['edited']);
+	});
+
+	it('leaves a replace without a previous document untouched', async () => {
+		const before = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'old' }] }
+		) as ProseMirrorDocument;
+		const after = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'edited' }] }
+		) as ProseMirrorDocument;
+		const screen = render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			revision: 1,
+			document: before,
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined
+		});
+		screen.component.replaceDocument(after);
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+
+		const shimmered = (await untilShimmered(screen.container)).length;
+
+		expect(shimmered).toBe(0);
+	});
+});
