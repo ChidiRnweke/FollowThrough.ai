@@ -234,14 +234,16 @@
 			<div class="flex flex-col gap-2">
 				<div class="flex items-baseline justify-between gap-3">
 					<span class="eyebrow">Documents · {selectedEntries.length} selected</span>
-					<button
+					<Button
 						type="button"
-						class="provenance-caption hover:underline"
+						variant="link"
+						size="xs"
+						class="provenance-caption h-auto p-0"
 						disabled={busy}
 						onclick={toggleAll}
 					>
 						{allSelected ? 'Select none' : 'Select all'}
-					</button>
+					</Button>
 				</div>
 				<!-- Bled past the measure so the rows read as one continuous list, with an
 				     inset gutter on the right because the scrollbar overlays the content. -->
