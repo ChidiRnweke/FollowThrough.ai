@@ -2,7 +2,7 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
-	import { Plugin, PluginKey } from '@tiptap/pm/state';
+	import { Plugin, PluginKey, TextSelection as PmTextSelection } from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
 	import type { AgentRunId } from '$lib/models/agent';
@@ -21,7 +21,7 @@
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { Editor, PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import BubbleMenu from '$lib/components/edra/BubbleMenu.svelte';
@@ -78,8 +78,8 @@
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
-	/** Long enough for the wash to finish; short enough that a second update can follow. */
-	const SHIMMER_DURATION = 3000;
+	/** Long enough for the ripple to finish; short enough that a second update can follow. */
+	const SHIMMER_DURATION = 4500;
 	const shimmerKey = new PluginKey('note-block-shimmer');
 
 	const runningCopy: Record<NoteAiAction, string> = {
@@ -546,6 +546,19 @@
 			if (selection) perNote?.selection.set(selection);
 			else perNote?.selection.clear();
 		});
+		// Clicking away deselects. The bubble menu only re-evaluates its visibility
+		// on a selection or document change, so a blur without a transaction would
+		// leave the stale bar floating over nothing; collapsing the selection both
+		// matches what the author sees and forces the menu to re-evaluate. Skipped
+		// while an action runs, because the running status rides the same menu.
+		editor.on('blur', () => {
+			if (activeAction !== undefined || editor.isDestroyed) return;
+			const { doc, selection } = editor.state;
+			if (selection.empty) return;
+			editor.view.dispatch(
+				editor.view.state.tr.setSelection(PmTextSelection.create(doc, selection.from))
+			);
+		});
 		hydrated = true;
 		return retainActiveLink;
 	});
@@ -618,7 +631,11 @@
 	}
 
 	export function getDocument(): ProseMirrorDocument {
-		return (editor?.getJSON() ?? { type: 'doc', content: [] }) as unknown as ProseMirrorDocument;
+		return editor?.state.doc.toJSON() as ProseMirrorDocument;
+	}
+
+	export function getEditor(): Editor | undefined {
+		return editor;
 	}
 
 	export function getPlainText(): string {

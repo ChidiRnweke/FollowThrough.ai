@@ -141,25 +141,23 @@
 	}
 }
 
-/* A block the agent just changed briefly re-renders: a subtle teal wash, one
-   narrow sweep left to right, and the changed text fading in — clipped to the
-   block, resolving back to the normal surface. Applied transiently to the live
-   editor DOM by `note-editor`, never persisted into the note document. */
+/* A block the agent just changed briefly re-renders: the text draws in left to
+   right as a ripple passes, a teal highlight band riding the wave, clipped to
+   the block and resolving back to the normal surface. Applied transiently to
+   the live editor DOM by `note-editor`, never persisted into the note document. */
 .note-block-shimmer {
 	position: relative;
 	overflow: hidden;
 	border-radius: 4px;
-}
-
-.note-block-shimmer::before {
-	content: '';
-	position: absolute;
-	inset: 0;
-	border-radius: inherit;
-	background-color: color-mix(in oklab, var(--color-brand) 12%, transparent);
-	opacity: 0;
-	pointer-events: none;
-	animation: note-shimmer-wash 2550ms cubic-bezier(0.22, 1, 0.36, 1);
+	/* The ink reveal: mask starts off to the right (hidden) and settles fully
+	   opaque at the end, so the changed text appears with the ripple and stays. */
+	-webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
+	mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
+	-webkit-mask-size: 300% 100%;
+	mask-size: 300% 100%;
+	-webkit-mask-position: 100% 0;
+	mask-position: 100% 0;
+	animation: note-shimmer-ripple 3500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .note-block-shimmer::after {
@@ -173,29 +171,17 @@
 	background: linear-gradient(
 		90deg,
 		transparent,
-		color-mix(in oklab, var(--color-brand) 14%, transparent),
+		color-mix(in oklab, var(--color-brand) 16%, transparent),
 		transparent
 	);
 	transform: translateX(-120%);
-	animation: note-shimmer-sweep 2100ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: note-shimmer-sweep 3500ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.note-block-shimmer :is(p, h1, h2, h3, h4, li, pre) {
-	animation: note-shimmer-text-fade 720ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes note-shimmer-wash {
-	0% {
-		opacity: 0;
-	}
-	25% {
-		opacity: 0.12;
-	}
-	60% {
-		opacity: 0.06;
-	}
-	100% {
-		opacity: 0;
+@keyframes note-shimmer-ripple {
+	to {
+		-webkit-mask-position: 0% 0;
+		mask-position: 0% 0;
 	}
 }
 
@@ -208,23 +194,14 @@
 	}
 }
 
-@keyframes note-shimmer-text-fade {
-	from {
-		opacity: 0.35;
-	}
-	to {
-		opacity: 1;
-	}
-}
-
 @media (prefers-reduced-motion: reduce) {
-	.note-block-shimmer::before,
+	.note-block-shimmer {
+		-webkit-mask-image: none;
+		mask-image: none;
+	}
+
 	.note-block-shimmer::after {
 		display: none;
-	}
-
-	.note-block-shimmer :is(p, h1, h2, h3, h4, li, pre) {
-		animation: none;
 	}
 }
 
