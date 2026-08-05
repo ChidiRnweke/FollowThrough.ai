@@ -130,7 +130,14 @@
 .tiptap h1,
 .tiptap h2 {
 	margin-top: 1rem;
-	margin-bottom: 0.5rem;
+	/* A title is double-spaced from the body that follows it: the heading's own
+	   bottom margin plus the paragraph's top margin reads as a full blank line,
+	   twice the paragraph-to-paragraph gap. */
+	margin-bottom: 1.5rem;
+}
+
+.tiptap h2 {
+	margin-bottom: 1.25rem;
 }
 
 .tiptap h1 {
