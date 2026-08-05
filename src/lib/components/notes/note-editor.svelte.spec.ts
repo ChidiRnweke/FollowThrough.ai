@@ -375,7 +375,7 @@ describe('Diagram insert point tracking', () => {
 			document: documentWith({
 				type: 'paragraph',
 				content: [{ type: 'text', text: 'Hello world.' }]
-			}),
+			}) as ProseMirrorDocument,
 			onreviseMermaid: async (source) => ({ source }),
 			onconvertMermaid: async () => {
 				throw new Error('Not used by this test');
@@ -419,7 +419,7 @@ describe('Diagram insert point tracking', () => {
 	it('keeps the run store informed of the moved insert point', async () => {
 		const moved: Array<[string, number]> = [];
 		const screen = renderEditor({
-			onInsertionPointMoved: (runId, position) => void moved.push([runId, position])
+			onInsertionPointMoved: (runId: string, position: number) => void moved.push([runId, position])
 		});
 		await untilMounted();
 		screen.component.holdInsertionPoint('run-1', 7);
@@ -427,5 +427,66 @@ describe('Diagram insert point tracking', () => {
 		await userEvent.keyboard('Well, ');
 
 		expect(moved.at(-1)).toEqual(['run-1', 13]);
+	});
+});
+
+describe('Deselect on editor blur', () => {
+	const renderEditor = (props: Record<string, unknown> = {}) =>
+		render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			revision: 1,
+			document: documentWith({
+				type: 'paragraph',
+				content: [{ type: 'text', text: 'Hello world.' }]
+			}) as ProseMirrorDocument,
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined,
+			...props
+		});
+
+	const untilMounted = async () => {
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+	};
+
+	const selectHello = async (screen: ReturnType<typeof render>) => {
+		const editor = screen.component.getEditor();
+		if (!editor) throw new Error('The editor never mounted.');
+		// Real interaction establishes DOM focus, which programmatic focus() does not
+		// reliably get in this environment (the blur handler checks activeAction only,
+		// but the interaction here must stick for the blur event to fire later).
+		const editable = screen.container.querySelector<HTMLElement>('[contenteditable="true"]');
+		if (editable) await userEvent.click(editable);
+		editor.view.dispatch(
+			editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1, 2))
+		);
+	};
+
+	const blurEditor = (screen: ReturnType<typeof render>) => {
+		screen.container.querySelector<HTMLElement>('[contenteditable="true"]')?.blur();
+	};
+
+	it('collapses the selection when the editor loses focus', async () => {
+		const screen = renderEditor();
+		await untilMounted();
+		await selectHello(screen);
+		blurEditor(screen);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(screen.component.getEditor()?.state.selection.empty).toBe(true);
+	});
+
+	it('keeps the selection while an action is running', async () => {
+		const screen = renderEditor({ activeAction: 'diagram' });
+		await untilMounted();
+		await selectHello(screen);
+		blurEditor(screen);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(screen.component.getEditor()?.state.selection.empty).toBe(false);
 	});
 });
