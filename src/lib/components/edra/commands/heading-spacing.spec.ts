@@ -61,81 +61,17 @@ const table = () => ({
 
 const mermaidSource = 'graph LR\n  A --> B';
 
-describe('heading Enter around heavy block nodes', () => {
-	it('inserts a paragraph after a title that is followed by a mermaid node', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [heading('Title'), mermaid(mermaidSource)]
-		});
-		editor.commands.setTextSelection(7); // end of "Title"
+const diagramTextOf = (editor: Editor): string | undefined =>
+	docJSON(editor).content?.find((block) => block.type === 'mermaid')?.content?.[0]?.text;
 
-		pressEnter(editor);
+/** The block that sits directly before the mermaid node. */
+const blockBeforeMermaid = (editor: Editor): string | undefined => {
+	const blocks = docJSON(editor).content ?? [];
+	const mermaidIndex = blocks.findIndex((block) => block.type === 'mermaid');
+	return mermaidIndex > 0 ? blocks[mermaidIndex - 1]?.type : undefined;
+};
 
-		// heading, new paragraph, mermaid, StarterKit's trailing paragraph.
-		expect(blockTypes(editor)).toEqual(['heading-1', 'paragraph', 'mermaid', 'paragraph']);
-		editor.destroy();
-	});
-
-	// Regression: the mermaid's source lives inside its node, so splitting the
-	// heading must never reach into the diagram node and rewrite its text.
-	it('leaves the mermaid source untouched when Enter is pressed at the end of the title', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [heading('Title'), mermaid(mermaidSource)]
-		});
-		editor.commands.setTextSelection(7);
-
-		pressEnter(editor);
-
-		const blocks = docJSON(editor).content ?? [];
-		const diagram = blocks.find((block) => block.type === 'mermaid');
-		expect(diagram?.content?.[0]?.text).toBe(mermaidSource);
-		editor.destroy();
-	});
-
-	it('inserts a paragraph after a title that is followed by a table', () => {
-		const editor = createEditor({ type: 'doc', content: [heading('Title'), table()] });
-		editor.commands.setTextSelection(7);
-
-		pressEnter(editor);
-
-		expect(blockTypes(editor)).toEqual(['heading-1', 'paragraph', 'table', 'paragraph']);
-		editor.destroy();
-	});
-
-	it('inserts a paragraph before a title that follows a mermaid node', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [mermaid(mermaidSource), heading('Title')]
-		});
-		// Start of the heading's content: the first character of "Title".
-		editor.commands.setTextSelection(2 + mermaidSource.length + 1);
-
-		pressEnter(editor);
-
-		expect(blockTypes(editor)).toEqual(['mermaid', 'paragraph', 'heading-1', 'paragraph']);
-		editor.destroy();
-	});
-
-	// Regression: the paragraph split off before the title must land between
-	// the diagram and the heading, never inside the mermaid node.
-	it('leaves the mermaid source untouched when Enter is pressed at the start of the title', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [mermaid(mermaidSource), heading('Title')]
-		});
-		editor.commands.setTextSelection(2 + mermaidSource.length + 1);
-
-		pressEnter(editor);
-
-		const blocks = docJSON(editor).content ?? [];
-		const diagram = blocks.find((block) => block.type === 'mermaid');
-		expect(diagram?.content?.[0]?.text).toBe(mermaidSource);
-		editor.destroy();
-	});
-});
-
-describe('heading spacing on document load', () => {
+describe('heading spacing on load', () => {
 	// Regression: a note written by the agent can place a title directly above
 	// a diagram or table; the editor must separate them without being asked.
 	it('inserts a paragraph between a title and a following mermaid on load', () => {
@@ -157,6 +93,19 @@ describe('heading spacing on document load', () => {
 		editor.destroy();
 	});
 
+	it('inserts a paragraph between a mermaid and a following title on load', () => {
+		const editor = createEditor({ type: 'doc', content: [] });
+		editor.commands.setContent({
+			type: 'doc',
+			content: [mermaid(mermaidSource), heading('Title')]
+		});
+
+		expect(blockTypes(editor)).toEqual(['mermaid', 'paragraph', 'heading-1', 'paragraph']);
+		editor.destroy();
+	});
+
+	// Regression: the paragraph lands between the heading and the diagram, so
+	// the diagram's source must be untouched by the spacing.
 	it('keeps the mermaid source intact while spacing it from the title', () => {
 		const editor = createEditor({ type: 'doc', content: [] });
 		editor.commands.setContent({
@@ -164,9 +113,86 @@ describe('heading spacing on document load', () => {
 			content: [heading('Title'), mermaid(mermaidSource)]
 		});
 
+		expect(diagramTextOf(editor)).toBe(mermaidSource);
+		editor.destroy();
+	});
+
+	it('spaces a diagram pasted after a title as well', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), { type: 'paragraph' }]
+		});
+		editor.commands.insertContentAt(editor.state.doc.content.size, mermaid(mermaidSource));
+
+		expect(blockBeforeMermaid(editor)).toBe('paragraph');
+		editor.destroy();
+	});
+});
+
+describe('heading Enter around block nodes', () => {
+	// Regression: a split at the first character used to convert the title
+	// itself into a paragraph, so there was no way to open an intro above it.
+	it('inserts a paragraph before a title when Enter is pressed at its start', () => {
+		const editor = createEditor({ type: 'doc', content: [heading('Title')] });
+		editor.commands.setTextSelection(1); // start of "Title"
+
+		pressEnter(editor);
+
+		expect(blockTypes(editor)).toEqual(['paragraph', 'heading-1', 'paragraph']);
+		editor.destroy();
+	});
+
+	// Regression: Enter at the end of a title that sits above a diagram must
+	// leave a paragraph between them — the split may never reach into the
+	// diagram's own node.
+	it('leaves the mermaid source untouched when Enter is pressed at the end of the title', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), mermaid(mermaidSource)]
+		});
+		editor.commands.setTextSelection(6); // end of "Title", inside the heading
+
+		pressEnter(editor);
+
+		expect(diagramTextOf(editor)).toBe(mermaidSource);
+		editor.destroy();
+	});
+
+	it('keeps a paragraph between the title and a following mermaid after Enter', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), mermaid(mermaidSource)]
+		});
+		editor.commands.setTextSelection(6);
+
+		pressEnter(editor);
+
+		expect(blockBeforeMermaid(editor)).toBe('paragraph');
+		editor.destroy();
+	});
+
+	it('keeps a paragraph between the title and a following table after Enter', () => {
+		const editor = createEditor({ type: 'doc', content: [heading('Title'), table()] });
+		editor.commands.setTextSelection(6);
+
+		pressEnter(editor);
+
 		const blocks = docJSON(editor).content ?? [];
-		const diagram = blocks.find((block) => block.type === 'mermaid');
-		expect(diagram?.content?.[0]?.text).toBe(mermaidSource);
+		const tableIndex = blocks.findIndex((block) => block.type === 'table');
+		expect(blocks[tableIndex - 1]?.type).toBe('paragraph');
+		editor.destroy();
+	});
+
+	it('leaves the mermaid source untouched when Enter is pressed mid-title', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), mermaid(mermaidSource)]
+		});
+		editor.commands.setTextSelection(4);
+
+		pressEnter(editor);
+
+		expect(diagramTextOf(editor)).toBe(mermaidSource);
 		editor.destroy();
 	});
 });
