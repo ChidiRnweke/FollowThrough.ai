@@ -32,6 +32,7 @@ export { default as FtFolderBoard } from './ft-folder-board.svelte';
 export { default as FtFolderOpen } from './ft-folder-open.svelte';
 export { default as FtFolderPlus } from './ft-folder-plus.svelte';
 export { default as FtGrip } from './ft-grip.svelte';
+export { default as FtHistory } from './ft-history.svelte';
 export { default as FtInfo } from './ft-info.svelte';
 export { default as FtLink } from './ft-link.svelte';
 export { default as FtLoader } from './ft-loader.svelte';

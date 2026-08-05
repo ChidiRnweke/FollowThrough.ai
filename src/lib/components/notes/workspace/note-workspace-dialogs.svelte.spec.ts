@@ -42,7 +42,10 @@ const base = {
 	reviewingSuggestion: null,
 	onUseRemote: async () => undefined,
 	onKeepLocal: async () => undefined,
-	onAcceptDrawio: async () => undefined
+	onAcceptDrawio: async () => undefined,
+	historyRevisions: [],
+	onSelectRevision: () => undefined,
+	onRestoreRevision: async () => undefined
 };
 
 describe('NoteWorkspaceDialogs conflict resolution', () => {

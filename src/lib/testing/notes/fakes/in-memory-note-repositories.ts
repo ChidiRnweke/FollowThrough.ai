@@ -28,6 +28,17 @@ export class InMemoryNoteRepository implements NoteRepository {
 		);
 	}
 
+	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
+		return this.notes
+			.filter(
+				(note) =>
+					note.userId === actor.userId &&
+					note.archivedAt &&
+					(projectId === undefined || note.projectId === projectId)
+			)
+			.sort((left, right) => (right.archivedAt ?? '').localeCompare(left.archivedAt ?? ''));
+	}
+
 	async countSiblings(
 		actor: ActorContext,
 		projectId: ProjectId,
@@ -92,6 +103,20 @@ export class InMemoryNoteRepository implements NoteRepository {
 	async listRevisions(_actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
 		void _actor;
 		return this.revisions.filter((revision) => revision.noteId === noteId);
+	}
+
+	async pruneRevisions(_actor: ActorContext, noteId: NoteId, keepNewest: number): Promise<void> {
+		void _actor;
+		const kept = new Set(
+			this.revisions
+				.filter((revision) => revision.noteId === noteId)
+				.sort((left, right) => right.revision - left.revision)
+				.slice(0, keepNewest)
+				.map((revision) => revision.id)
+		);
+		this.revisions = this.revisions.filter(
+			(revision) => revision.noteId !== noteId || kept.has(revision.id)
+		);
 	}
 
 	async restoreAttachmentSnapshot(

@@ -11,7 +11,15 @@
 	import type { ExtractPromisesOutput } from '$lib/models/todos';
 	import type { FindReferencesOutput } from '$lib/models/references';
 	import type { RelateSelectionOutput } from '$lib/models/relationships';
-	import type { NoteId, NoteView, TextSelection, VersionedNote } from '$lib/models/notes';
+	import type {
+		NoteId,
+		NoteRevision,
+		NoteRevisionId,
+		NoteRevisionSummary,
+		NoteView,
+		TextSelection,
+		VersionedNote
+	} from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { noteEtag } from '$lib/models/notes';
@@ -39,7 +47,13 @@
 	import { FtSuggestion as Lightbulb } from '$lib/components/icons';
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
-	import { publishNote, discardNoteDraft } from '$lib/remote/notes/notes.remote';
+	import {
+		publishNote,
+		discardNoteDraft,
+		listNoteRevisions,
+		getNoteRevision,
+		restoreNoteRevision
+	} from '$lib/remote/notes/notes.remote';
 
 	let {
 		view,
@@ -74,6 +88,11 @@
 
 	let exportOpen = $state(false);
 	let conflictOpen = $state(false);
+	let historyOpen = $state(false);
+	let historyLoading = $state(false);
+	let historyRevisions = $state<readonly NoteRevisionSummary[]>([]);
+	let historySelectedId = $state<NoteRevisionId | undefined>(undefined);
+	let historySelected = $state<NoteRevision | undefined>(undefined);
 	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
 	let reviewDialogOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
@@ -373,12 +392,13 @@
 	}
 
 	async function archive(): Promise<void> {
-		if (!(await ensureSynchronized('Sync the note before archiving it.'))) return;
+		if (!(await ensureSynchronized('Sync the note before deleting it.'))) return;
 		const output = await projectActions.archiveNote(note.id);
 		if (!output) {
-			toast.error('Could not archive the note. Try again.');
+			toast.error('Could not delete the note. Try again.');
 			return;
 		}
+		toast.success('Moved to trash');
 		await goto(`/projects/${note.projectId}`);
 	}
 
@@ -689,6 +709,59 @@
 		}
 	}
 
+	/**
+	 * Loads the history and preselects the published snapshot, so opening it from the
+	 * "Unpublished changes" hint lands directly on the draft-versus-published comparison
+	 * the reader asked for. Falls back to the newest snapshot when nothing is published.
+	 */
+	async function openHistory(): Promise<void> {
+		historyOpen = true;
+		historyLoading = true;
+		try {
+			const { revisions } = await listNoteRevisions(note.id);
+			historyRevisions = revisions;
+			const preferred = revisions.find((revision) => revision.isPublished) ?? revisions.at(0);
+			if (!preferred) return;
+			historySelectedId = preferred.id;
+			historySelected = (await getNoteRevision({ noteId: note.id, revisionId: preferred.id }))
+				.revision;
+		} catch {
+			toast.error('Could not load the version history. Try again.');
+		} finally {
+			historyLoading = false;
+		}
+	}
+
+	async function selectRevision(revisionId: NoteRevisionId): Promise<void> {
+		historyLoading = true;
+		historySelected = undefined;
+		try {
+			historySelected = (await getNoteRevision({ noteId: note.id, revisionId })).revision;
+		} catch {
+			toast.error('Could not load that version. Try again.');
+		} finally {
+			historyLoading = false;
+		}
+	}
+
+	async function restoreRevision(revisionId: NoteRevisionId): Promise<void> {
+		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return;
+		try {
+			const output = (await restoreNoteRevision({
+				noteId: note.id,
+				revisionId
+			})) as VersionedNote;
+			const local = await noteSync.initialize(output);
+			note = { ...local };
+			editorRef?.replaceDocument(local.document);
+			dirty = false;
+			toast.success('Restored that version');
+			await refreshView();
+		} catch {
+			toast.error('Could not restore that version. Try again.');
+		}
+	}
+
 	async function discardDraft(): Promise<void> {
 		if (note.publishedRevision === 0) return;
 		if (dirty) await save();
@@ -749,6 +822,7 @@
 			if (confirm('Discard all changes since last publish?')) void discardDraft();
 		}}
 		onarchive={() => void archive()}
+		onhistory={() => void openHistory()}
 	/>
 
 	{#if view.backlinks.length > 0 || pendingCount > 0}
@@ -818,11 +892,18 @@
 		bind:exportOpen
 		bind:conflictOpen
 		bind:reviewDialogOpen
+		bind:historyOpen
+		bind:historySelectedId
+		{historyRevisions}
+		{historySelected}
+		{historyLoading}
 		{note}
 		conflictRecord={noteSync.record}
 		{reviewingSuggestion}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
+		onSelectRevision={(revisionId) => void selectRevision(revisionId)}
+		onRestoreRevision={restoreRevision}
 		onAcceptDrawio={async (output) => {
 			const suggestion = reviewingSuggestion;
 			if (!suggestion) return;

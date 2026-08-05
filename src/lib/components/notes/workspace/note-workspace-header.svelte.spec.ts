@@ -69,7 +69,8 @@ const props = {
 	ontogglepin: () => undefined,
 	onmove: () => undefined,
 	ondiscard: () => undefined,
-	onarchive: () => undefined
+	onarchive: () => undefined,
+	onhistory: () => undefined
 };
 
 describe('NoteWorkspaceHeader actions', () => {

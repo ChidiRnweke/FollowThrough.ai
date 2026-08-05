@@ -5,5 +5,7 @@ export { default as ImportNotesDialog } from './import-notes-dialog.svelte';
 export { default as NoteConflictDialog } from './note-conflict-dialog.svelte';
 export { default as NoteEditor } from './note-editor.svelte';
 export { default as NoteSyncStatus } from './note-sync-status.svelte';
+export { default as NoteTrashList } from './note-trash-list.svelte';
+export { default as NoteVersionHistory } from './note-version-history.svelte';
 export { default as NoteTitleInlineInput } from './note-title-inline-input.svelte';
 export { default as NoteWorkspace } from './workspace/note-workspace.svelte';

@@ -1,5 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId, NoteRevision, TextSelection } from '$lib/models/notes';
+import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
 import {
 	ExternalServiceError,
@@ -9,6 +10,7 @@ import {
 	ValidationError
 } from '$lib/errors';
 import type {
+	NoteAttachmentRestorer,
 	NoteEditor,
 	NoteIndexer,
 	NotePublisher,
@@ -25,7 +27,7 @@ import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/dom
 
 interface ContentSnapshot {
 	notes: Note[];
-	revisions: Note[];
+	recordedRevisions: NoteRevision[];
 	anchors: SourceAnchor[];
 	indexedNoteIds: NoteId[];
 }
@@ -38,6 +40,7 @@ export class InMemoryNoteContent
 		NotePublisher,
 		NoteRevisionRecorder,
 		NoteRevisionReader,
+		NoteAttachmentRestorer,
 		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
@@ -52,7 +55,8 @@ export class InMemoryNoteContent
 	}
 
 	notes: Note[] = [];
-	revisions: Note[] = [];
+	/** Snapshots taken by `record`, oldest first — named apart from the `revisions` reader. */
+	recordedRevisions: NoteRevision[] = [];
 	anchors: SourceAnchor[] = [];
 	indexedNoteIds: NoteId[] = [];
 	failIndex = false;
@@ -114,27 +118,66 @@ export class InMemoryNoteContent
 	async record(_actor: ActorContext, note: Note): Promise<void> {
 		void _actor;
 		if (
-			!this.revisions.some(
-				(revision) => revision.id === note.id && revision.currentRevision === note.currentRevision
+			this.recordedRevisions.some(
+				(revision) => revision.noteId === note.id && revision.revision === note.currentRevision
 			)
 		)
-			this.revisions.push(structuredClone(note));
+			return;
+		this.recordedRevisions.push(
+			structuredClone({
+				id: `${note.id}:r${note.currentRevision}` as NoteRevision['id'],
+				noteId: note.id,
+				revision: note.currentRevision,
+				title: note.title,
+				document: note.document,
+				plainText: note.plainText,
+				createdAt: note.updatedAt
+			})
+		);
+		// Mirrors the real catalog: history is bounded, so a spec that publishes past the
+		// limit sees the same eviction production would.
+		const kept = this.recordedRevisions
+			.filter((revision) => revision.noteId === note.id)
+			.sort((left, right) => right.revision - left.revision)
+			.slice(0, NOTE_REVISION_HISTORY_LIMIT);
+		this.recordedRevisions = this.recordedRevisions.filter(
+			(revision) => revision.noteId !== note.id || kept.includes(revision)
+		);
 	}
 
 	async latestRevision(_actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined> {
 		void _actor;
-		const matching = this.revisions.filter((r) => r.id === noteId);
-		if (matching.length === 0) return undefined;
-		const latest = matching[matching.length - 1]!;
-		return {
-			id: latest.id as unknown as NoteRevision['id'],
-			noteId: latest.id,
-			revision: latest.currentRevision,
-			title: latest.title,
-			document: latest.document,
-			plainText: latest.plainText,
-			createdAt: latest.updatedAt
-		};
+		const matching = this.recordedRevisions.filter((revision) => revision.noteId === noteId);
+		return matching[matching.length - 1];
+	}
+
+	async revisions(_actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
+		void _actor;
+		return this.recordedRevisions.filter((revision) => revision.noteId === noteId).reverse();
+	}
+
+	async revisionById(
+		_actor: ActorContext,
+		noteId: NoteId,
+		revisionId: NoteRevision['id']
+	): Promise<NoteRevision | undefined> {
+		void _actor;
+		return this.recordedRevisions.find(
+			(revision) => revision.noteId === noteId && revision.id === revisionId
+		);
+	}
+
+	/** Records what a rollback restored, so a spec can assert the snapshot's files came back. */
+	restoredAttachmentRevisionIds: NoteRevision['id'][] = [];
+
+	async restoreAttachments(
+		_actor: ActorContext,
+		_noteId: NoteId,
+		revisionId: NoteRevision['id']
+	): Promise<void> {
+		void _actor;
+		void _noteId;
+		this.restoredAttachmentRevisionIds.push(revisionId);
 	}
 
 	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
@@ -164,7 +207,7 @@ export class InMemoryNoteContent
 	snapshot(): unknown {
 		return structuredClone({
 			notes: this.notes,
-			revisions: this.revisions,
+			recordedRevisions: this.recordedRevisions,
 			anchors: this.anchors,
 			indexedNoteIds: this.indexedNoteIds
 		} satisfies ContentSnapshot);
@@ -173,7 +216,7 @@ export class InMemoryNoteContent
 	restore(snapshot: unknown): void {
 		const state = snapshot as ContentSnapshot;
 		this.notes = state.notes;
-		this.revisions = state.revisions;
+		this.recordedRevisions = state.recordedRevisions;
 		this.anchors = state.anchors;
 		this.indexedNoteIds = state.indexedNoteIds;
 	}

@@ -26,6 +26,12 @@ describe('Postgres schema contracts', () => {
 		>`select indexdef from pg_indexes where indexname = 'projects_user_name_unique'`;
 		expect(rows[0]?.indexdef.toLowerCase()).toContain('where (archived_at is null)');
 	});
+	it('indexes the trash listing, the one query that seeks archived notes', async () => {
+		const rows = await context.client<
+			{ indexdef: string }[]
+		>`select indexdef from pg_indexes where indexname = 'notes_user_archived_idx'`;
+		expect(rows[0]?.indexdef.toLowerCase()).toContain('archived_at');
+	});
 	it('installs an HNSW index for semantic retrieval', async () => {
 		const rows = await context.client<
 			{ indexdef: string }[]

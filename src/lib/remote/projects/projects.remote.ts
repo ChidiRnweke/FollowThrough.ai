@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command } from '$app/server';
+import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
 import type {
@@ -9,7 +9,13 @@ import type {
 	CreateFolderInput,
 	MoveProjectEntryInput
 } from '$lib/models/projects';
-import type { CreateNoteInput, RenameNoteInput, ArchiveNoteInput } from '$lib/models/notes';
+import type {
+	CreateNoteInput,
+	RenameNoteInput,
+	ArchiveNoteInput,
+	ListNoteTrashInput,
+	RestoreNoteInput
+} from '$lib/models/notes';
 import type { CreateSkillInput } from '$lib/models/skills';
 
 export const createProject = command(z.object({ name: z.string().min(1) }), async (input) => {
@@ -87,6 +93,21 @@ export const archiveNote = command(z.object({ noteId: z.string().uuid() }), asyn
 		.notes()
 		.archive(requestActor(), input as ArchiveNoteInput);
 });
+
+export const restoreNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
+	return AppFactory.controllers()
+		.notes()
+		.restore(requestActor(), input as RestoreNoteInput);
+});
+
+export const listNoteTrash = query(
+	z.object({ projectId: z.string().uuid().optional() }),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.listTrash(requestActor(), input as ListNoteTrashInput);
+	}
+);
 
 export const createSkill = command(
 	z.object({

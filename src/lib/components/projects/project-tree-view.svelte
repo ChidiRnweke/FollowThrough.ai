@@ -160,7 +160,8 @@
 		</Menu.SubContent>
 	</Menu.Sub>
 	<Menu.Separator />
-	<Menu.Item variant="destructive" onclick={() => void archiveEntry(entry)}>Archive</Menu.Item>
+	<Menu.Item variant="destructive" onclick={() => void archiveEntry(entry)}>Move to trash</Menu.Item
+	>
 {/snippet}
 
 {#snippet inlineCreateRow(

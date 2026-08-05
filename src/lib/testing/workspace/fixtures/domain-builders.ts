@@ -1,7 +1,7 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
 import type { MemoryEntry, MemoryEntryId, MemorySuggestion } from '$lib/models/memory';
-import type { Note, NoteId } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -20,6 +20,7 @@ export const testTodoId = (value = 1): TodoId => id(5, value) as TodoId;
 export const testProvenanceId = (value = 1): ProvenanceId => id(6, value) as ProvenanceId;
 export const testAnchorId = (value = 1): SourceAnchorId => id(7, value) as SourceAnchorId;
 export const testMemoryEntryId = (value = 1): MemoryEntryId => id(8, value) as MemoryEntryId;
+export const testNoteRevisionId = (value = 1): NoteRevisionId => id(9, value) as NoteRevisionId;
 
 export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	id: testProjectId(),
@@ -44,6 +45,17 @@ export const noteBuilder = (overrides: Partial<Note> = {}): Note => ({
 	isPinned: false,
 	createdAt: testNow,
 	updatedAt: testNow,
+	...overrides
+});
+
+export const noteRevisionBuilder = (overrides: Partial<NoteRevision> = {}): NoteRevision => ({
+	id: testNoteRevisionId(),
+	noteId: testNoteId(),
+	revision: 1,
+	title: 'Architecture note',
+	document: { type: 'doc', content: [] },
+	plainText: '',
+	createdAt: testNow,
 	...overrides
 });
 

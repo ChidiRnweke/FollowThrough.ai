@@ -16,6 +16,8 @@
 		FtExport as FileOutput,
 		FtPublish as ArrowUpFromLine,
 		FtUndo as Undo2,
+		FtHistory as History,
+		FtTrash as Trash,
 		FtSuggestion as Suggestion,
 		FtDocument as FileText,
 		FtClose as X
@@ -49,7 +51,8 @@
 		ontogglepin,
 		onmove,
 		ondiscard,
-		onarchive
+		onarchive,
+		onhistory
 	}: {
 		shell: ShellContext;
 		note: Note;
@@ -77,6 +80,8 @@
 		onmove: (parentId?: NoteId) => void;
 		ondiscard: () => void;
 		onarchive: () => void;
+		/** Opens the version history, which doubles as the draft-versus-published comparison. */
+		onhistory: () => void;
 	} = $props();
 </script>
 
@@ -142,9 +147,18 @@
 				>Unsaved changes</span
 			>
 		{:else if hasUnpublishedChanges}
-			<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
-				>Unpublished changes</span
-			>
+			<span class="flex min-w-0 flex-1 items-center gap-1 sm:flex-none">
+				<span class="text-xs text-muted-foreground" aria-live="polite">Unpublished changes</span>
+				{#if note.publishedRevision > 0}
+					<Button
+						variant="link"
+						size="sm"
+						class="h-auto p-0 text-xs"
+						onclick={onhistory}
+						aria-label="View changes since the last published version">View changes</Button
+					>
+				{/if}
+			</span>
 		{:else}
 			{@render syncStatus()}
 		{/if}
@@ -238,12 +252,15 @@
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
+					<DropdownMenu.Item onclick={onhistory}
+						><History data-icon="inline-start" />Version history</DropdownMenu.Item
+					>
 					<DropdownMenu.Item
 						disabled={note.publishedRevision === 0 || !hasUnpublishedChanges}
 						onclick={ondiscard}><Undo2 data-icon="inline-start" />Discard changes</DropdownMenu.Item
 					>
 					<DropdownMenu.Item variant="destructive" onclick={onarchive}
-						>Archive note</DropdownMenu.Item
+						><Trash data-icon="inline-start" />Move to trash</DropdownMenu.Item
 					>
 				</DropdownMenu.Group>
 			</DropdownMenu.Content>

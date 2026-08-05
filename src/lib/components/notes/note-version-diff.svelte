@@ -7,11 +7,14 @@
 		base,
 		candidate,
 		label,
+		caption = 'Changes from the version this edit started from',
 		compact = false
 	}: {
 		base: string;
 		candidate: string;
 		label: string;
+		/** What the two sides are, in the reader's terms. Every caller compares a different pair. */
+		caption?: string;
 		compact?: boolean;
 	} = $props();
 
@@ -61,7 +64,7 @@
 </script>
 
 <section class="flex min-h-0 flex-col gap-2" aria-label={label}>
-	<p class="text-xs text-muted-foreground">Changes from the version this edit started from</p>
+	<p class="text-xs text-muted-foreground">{caption}</p>
 	<pre
 		class={cn(
 			'overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-xs leading-relaxed',

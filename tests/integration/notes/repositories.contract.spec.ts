@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Note, NoteId } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { actor, context, now, seedNote } from '../database-harness';
@@ -102,6 +102,50 @@ describe('Postgres note repository invariants', () => {
 			2
 		);
 		expect(updated).toBeUndefined();
+	});
+	it('lists a trashed note in the trash', async () => {
+		const { owner, note } = await seedNote('184');
+		const repository = new NoteRecords(context.db);
+		await repository.update(owner, { ...note, archivedAt: now });
+		expect((await repository.listTrashed(owner)).map((entry) => entry.id)).toContain(note.id);
+	});
+	it('keeps active notes out of the trash', async () => {
+		const { owner, note } = await seedNote('185');
+		expect(
+			(await new NoteRecords(context.db).listTrashed(owner)).map((entry) => entry.id)
+		).not.toContain(note.id);
+	});
+	// The project itself is what was discarded; restoring one note into it would
+	// strand the note somewhere the reader cannot navigate to.
+	it('hides a trashed note whose project was archived', async () => {
+		const { owner, project, note } = await seedNote('186');
+		const repository = new NoteRecords(context.db);
+		await repository.update(owner, { ...note, archivedAt: now });
+		await new ProjectRecords(context.db).archive(owner, project.id);
+		expect(await repository.listTrashed(owner)).toEqual([]);
+	});
+	it('does not reveal another actor’s trash', async () => {
+		const { owner, note } = await seedNote('187');
+		await new NoteRecords(context.db).update(owner, { ...note, archivedAt: now });
+		expect(await new NoteRecords(context.db).listTrashed(actor('188'))).toEqual([]);
+	});
+	it('prunes a note’s history down to the newest snapshots', async () => {
+		const { owner, note } = await seedNote('189');
+		const repository = new NoteRecords(context.db);
+		for (let revision = 1; revision <= 5; revision += 1)
+			await repository.insertRevision(owner, {
+				id: `50000000-0000-4000-8000-${String(revision).padStart(12, '0')}` as NoteRevisionId,
+				noteId: note.id,
+				revision,
+				title: `Snapshot ${revision}`,
+				document: { type: 'doc', content: [] },
+				plainText: '',
+				createdAt: now
+			});
+		await repository.pruneRevisions(owner, note.id, 2);
+		expect((await repository.listRevisions(owner, note.id)).map((entry) => entry.revision)).toEqual(
+			[4, 5]
+		);
 	});
 	it('allows exactly one concurrent note update from the same revision', async () => {
 		const { owner, note } = await seedNote('183');

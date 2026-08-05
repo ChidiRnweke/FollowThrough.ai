@@ -6,8 +6,18 @@ import type {
 	CreateNoteOutput,
 	DiscardNoteDraftInput,
 	DiscardNoteDraftOutput,
+	GetNoteRevisionInput,
+	GetNoteRevisionOutput,
 	GetNoteViewInput,
 	ListNoteDocumentsInput,
+	ListNoteRevisionsInput,
+	ListNoteRevisionsOutput,
+	ListNoteTrashInput,
+	ListNoteTrashOutput,
+	RestoreNoteInput,
+	RestoreNoteOutput,
+	RestoreNoteRevisionInput,
+	RestoreNoteRevisionOutput,
 	NoteDocument,
 	NoteView,
 	NoteSyncInventoryEntry,
@@ -49,11 +59,13 @@ import type {
 import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
 import type {
 	NoteArchiver,
+	NoteAttachmentRestorer,
 	NoteEditor,
 	NoteIndexer,
 	NotePublisher,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
+	NoteTrashReader,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
 
@@ -135,6 +147,43 @@ export interface NotesController {
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput>;
 	/** Archive a note and re-index it so archived notes drop out of search results. */
 	archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput>;
+	/**
+	 * Bring an archived note back and re-index it so it is findable again.
+	 *
+	 * @throws ValidationError if the note is not archived.
+	 */
+	restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput>;
+	/** List the archived notes a reader can still bring back, most recently archived first. */
+	listTrash(actor: ActorContext, input: ListNoteTrashInput): Promise<ListNoteTrashOutput>;
+	/**
+	 * List the note's kept snapshots, newest first, marking the one currently published.
+	 *
+	 * Bodies are omitted; {@link getRevision} fetches one at a time, because a history list
+	 * of a long note would otherwise ship twenty full documents to render a sidebar.
+	 */
+	listRevisions(
+		actor: ActorContext,
+		input: ListNoteRevisionsInput
+	): Promise<ListNoteRevisionsOutput>;
+	/**
+	 * Read one snapshot in full, so a reader can diff it against the note as it stands.
+	 *
+	 * @throws NotFoundError if the revision does not belong to the note or has been pruned.
+	 */
+	getRevision(actor: ActorContext, input: GetNoteRevisionInput): Promise<GetNoteRevisionOutput>;
+	/**
+	 * Roll the note back to a snapshot by copying it forward as a new current revision,
+	 * restoring the attachments that snapshot was taken with.
+	 *
+	 * History stays append-only: nothing between the snapshot and now is rewritten, so the
+	 * rollback is itself undoable from the same list.
+	 *
+	 * @throws NotFoundError if the revision does not belong to the note or has been pruned.
+	 */
+	restoreRevision(
+		actor: ActorContext,
+		input: RestoreNoteRevisionInput
+	): Promise<RestoreNoteRevisionOutput>;
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
@@ -153,9 +202,11 @@ export interface NotesDependencies {
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
 	noteArchiver: NoteArchiver;
+	noteTrashReader: NoteTrashReader;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;
+	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
@@ -299,7 +350,8 @@ export class Notes implements NotesController {
 				...current,
 				title: input.title
 			});
-			await this.dependencies.revisionRecorder.record(actor, note);
+			// Deliberately no revision: history is bounded, and a title correction should not
+			// evict a snapshot of the body somebody may still want back.
 			await this.dependencies.noteIndexer.index(actor, note);
 			return { note };
 		});
@@ -309,6 +361,79 @@ export class Notes implements NotesController {
 			const note = await this.dependencies.noteArchiver.archive(actor, input.noteId);
 			await this.dependencies.noteIndexer.index(actor, note);
 			return { note };
+		});
+	}
+	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const note = await this.dependencies.noteArchiver.restore(actor, input.noteId);
+			await this.dependencies.noteIndexer.index(actor, note);
+			return { note };
+		});
+	}
+	async listTrash(actor: ActorContext, input: ListNoteTrashInput): Promise<ListNoteTrashOutput> {
+		return { notes: await this.dependencies.noteTrashReader.listTrashed(actor, input.projectId) };
+	}
+	async listRevisions(
+		actor: ActorContext,
+		input: ListNoteRevisionsInput
+	): Promise<ListNoteRevisionsOutput> {
+		const [note, revisions] = await Promise.all([
+			this.dependencies.noteReader.get(actor, input.noteId),
+			this.dependencies.revisionReader.revisions(actor, input.noteId)
+		]);
+		return {
+			revisions: revisions.map((revision) => ({
+				id: revision.id,
+				revision: revision.revision,
+				title: revision.title,
+				createdAt: revision.createdAt,
+				isPublished: revision.revision === note.publishedRevision
+			}))
+		};
+	}
+	async getRevision(
+		actor: ActorContext,
+		input: GetNoteRevisionInput
+	): Promise<GetNoteRevisionOutput> {
+		const revision = await this.dependencies.revisionReader.revisionById(
+			actor,
+			input.noteId,
+			input.revisionId
+		);
+		if (!revision)
+			throw new NotFoundError('That version of the note is no longer available', {
+				noteId: input.noteId,
+				revisionId: input.revisionId
+			});
+		return { revision };
+	}
+	async restoreRevision(
+		actor: ActorContext,
+		input: RestoreNoteRevisionInput
+	): Promise<RestoreNoteRevisionOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const [note, revision] = await Promise.all([
+				this.dependencies.noteReader.get(actor, input.noteId),
+				this.dependencies.revisionReader.revisionById(actor, input.noteId, input.revisionId)
+			]);
+			if (!revision)
+				throw new NotFoundError('That version of the note is no longer available', {
+					noteId: input.noteId,
+					revisionId: input.revisionId
+				});
+			const restored = await this.dependencies.noteEditor.save(actor, {
+				...note,
+				title: revision.title,
+				document: revision.document,
+				plainText: revision.plainText
+			});
+			await this.dependencies.attachmentRestorer.restoreAttachments(
+				actor,
+				input.noteId,
+				input.revisionId
+			);
+			await this.dependencies.noteIndexer.index(actor, restored);
+			return { note: restored, etag: noteEtag(restored) };
 		});
 	}
 }

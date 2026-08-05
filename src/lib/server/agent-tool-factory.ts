@@ -140,7 +140,15 @@ export const agentToolCoverage = {
 			reason: 'Sync inventory is reserved for browser reconciliation.'
 		},
 		rename: { kind: 'mutation' },
-		archive: { kind: 'mutation' }
+		archive: { kind: 'mutation' },
+		restore: { kind: 'mutation' },
+		listTrash: { kind: 'read' },
+		listRevisions: { kind: 'read' },
+		getRevision: {
+			kind: 'excluded',
+			reason: 'Diff rendering detail; the agent reads note content with get_note.'
+		},
+		restoreRevision: { kind: 'mutation' }
 	},
 	todos: {
 		list: { kind: 'read' },
@@ -893,6 +901,34 @@ export class AgentTools {
 				'mutation',
 				z.object({ noteId: id }),
 				(input) => factory.notes().archive(actor, input as never)
+			),
+			define(
+				'restore_note',
+				toolDescription('restore_note'),
+				'mutation',
+				z.object({ noteId: id }),
+				(input) => factory.notes().restore(actor, input as never)
+			),
+			define(
+				'list_trashed_notes',
+				toolDescription('list_trashed_notes'),
+				'read',
+				z.object({ projectId: id.optional() }),
+				(input) => factory.notes().listTrash(actor, input as never)
+			),
+			define(
+				'list_note_versions',
+				toolDescription('list_note_versions'),
+				'read',
+				z.object({ noteId: id }),
+				(input) => factory.notes().listRevisions(actor, input as never)
+			),
+			define(
+				'restore_note_version',
+				toolDescription('restore_note_version'),
+				'mutation',
+				z.object({ noteId: id, revisionId: id }),
+				(input) => factory.notes().restoreRevision(actor, input as never)
 			),
 			define(
 				'publish_note',

@@ -10,9 +10,11 @@ import type {
 	ReviseInlineMermaidInput
 } from '$lib/models/diagrams';
 import type {
+	GetNoteRevisionInput,
 	ListNoteSyncInventoryInput,
 	PublishNoteInput,
 	DiscardNoteDraftInput,
+	RestoreNoteRevisionInput,
 	SyncNoteInput
 } from '$lib/models/notes';
 import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
@@ -113,6 +115,30 @@ export const discardNoteDraft = command(
 		return AppFactory.controllers()
 			.notes()
 			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
+	}
+);
+
+export const listNoteRevisions = query(z.string().uuid(), async (noteId) => {
+	return AppFactory.controllers()
+		.notes()
+		.listRevisions(requestActor(), { noteId: noteId as NoteId });
+});
+
+export const getNoteRevision = query(
+	z.object({ noteId: z.string().uuid(), revisionId: z.string().uuid() }),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.getRevision(requestActor(), input as GetNoteRevisionInput);
+	}
+);
+
+export const restoreNoteRevision = command(
+	z.object({ noteId: z.string().uuid(), revisionId: z.string().uuid() }),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.restoreRevision(requestActor(), input as RestoreNoteRevisionInput);
 	}
 );
 

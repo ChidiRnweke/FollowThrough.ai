@@ -491,6 +491,86 @@ export interface ArchiveNoteOutput {
 	readonly note: Note;
 }
 
+export interface RestoreNoteInput {
+	readonly noteId: NoteId;
+}
+
+export interface RestoreNoteOutput {
+	readonly note: Note;
+}
+
+export interface ListNoteTrashInput {
+	readonly projectId?: ProjectId;
+}
+
+/** A note in the trash. `archivedAt` is what put it there, so unlike on {@link NoteSummary} it is always present. */
+export interface TrashedNote extends Omit<NoteSummary, 'archivedAt'> {
+	readonly archivedAt: DateTime;
+	/** Carried so the global trash page can name each note's project without a second read. */
+	readonly projectName: string;
+}
+
+export interface ListNoteTrashOutput {
+	readonly notes: readonly TrashedNote[];
+}
+
+/**
+ * How many published snapshots a note keeps. Beyond this the oldest are pruned, so
+ * history costs a bounded amount per note however long it lives.
+ */
+export const NOTE_REVISION_HISTORY_LIMIT = 20;
+
+export interface ListNoteRevisionsInput {
+	readonly noteId: NoteId;
+}
+
+/**
+ * One entry in the history list. Deliberately without the document: twenty snapshots of a
+ * long note is a lot of payload to render a sidebar, so bodies are fetched one at a time
+ * through {@link GetNoteRevisionInput} as the reader selects them.
+ */
+export interface NoteRevisionSummary {
+	readonly id: NoteRevisionId;
+	readonly revision: number;
+	readonly title: string;
+	readonly createdAt: DateTime;
+	/** True for the snapshot the note's `publishedRevision` currently points at. */
+	readonly isPublished: boolean;
+}
+
+export interface ListNoteRevisionsOutput {
+	readonly revisions: readonly NoteRevisionSummary[];
+}
+
+export interface GetNoteRevisionInput {
+	readonly noteId: NoteId;
+	readonly revisionId: NoteRevisionId;
+}
+
+export interface GetNoteRevisionOutput {
+	readonly revision: NoteRevision;
+}
+
+export interface RestoreNoteRevisionInput {
+	readonly noteId: NoteId;
+	readonly revisionId: NoteRevisionId;
+}
+
+export interface RestoreNoteRevisionOutput {
+	readonly note: Note;
+	readonly etag: NoteEtag;
+}
+
+/**
+ * The text a note or one of its snapshots contributes to a diff.
+ *
+ * Shared so the history dialog and the draft-versus-published view feed the diff the same
+ * shape — a title change has to read as a changed first line in both, or the two views
+ * disagree about what changed.
+ */
+export const noteRevisionText = (version: Pick<Note, 'title' | 'plainText'>): string =>
+	`${version.title}\n\n${version.plainText}`;
+
 export * from './prosemirror';
 
 export * from './note-patch';

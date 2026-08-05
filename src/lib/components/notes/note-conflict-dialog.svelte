@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { Note, NoteSyncRecord } from '$lib/models/notes';
+	import type { NoteSyncRecord } from '$lib/models/notes';
+	import { noteRevisionText } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Spinner } from '$lib/components/ui/spinner';
@@ -19,8 +20,6 @@
 	} = $props();
 
 	let resolving = $state<'remote' | 'local' | undefined>(undefined);
-
-	const comparisonText = (note: Note): string => `${note.title}\n\n${note.plainText}`;
 
 	async function resolve(choice: 'remote' | 'local'): Promise<void> {
 		resolving = choice;
@@ -54,15 +53,15 @@
 			</Tabs.List>
 			<Tabs.Content value="local">
 				<NoteVersionDiff
-					base={comparisonText(record.base.note)}
-					candidate={comparisonText(record.local)}
+					base={noteRevisionText(record.base.note)}
+					candidate={noteRevisionText(record.local)}
 					label="Your changes"
 				/>
 			</Tabs.Content>
 			<Tabs.Content value="remote">
 				<NoteVersionDiff
-					base={comparisonText(record.base.note)}
-					candidate={comparisonText(record.remote?.note ?? record.base.note)}
+					base={noteRevisionText(record.base.note)}
+					candidate={noteRevisionText(record.remote?.note ?? record.base.note)}
 					label="Latest saved version"
 				/>
 			</Tabs.Content>

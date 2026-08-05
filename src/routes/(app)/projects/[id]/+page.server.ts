@@ -8,12 +8,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 
-	const [view, todosResult, memoryResult, artifactsResult, attachments] = await Promise.all([
+	const [view, todosResult, memoryResult, artifactsResult, attachments, trash] = await Promise.all([
 		factory.projects().get(actor, { projectId }),
 		factory.todos().list(actor, { projectId, status: 'open' }),
 		factory.memory().list(actor, { projectId }),
 		factory.deliverables().listArtifacts(actor, projectId),
-		factory.attachments().listForProject(actor, projectId)
+		factory.attachments().listForProject(actor, projectId),
+		factory.notes().listTrash(actor, { projectId })
 	]);
 
 	// Overdue is a clock comparison, so it happens here rather than in a $derived.
@@ -26,6 +27,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		view,
+		trashed: trash.notes,
 		overdueTodoCount,
 		// The documents list renders relative timestamps. Both the SSR pass and
 		// hydration format against this one instant so their markup matches.

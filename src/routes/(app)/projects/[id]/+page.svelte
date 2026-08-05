@@ -122,6 +122,7 @@
 		<ProjectOverview
 			view={data.view}
 			counts={data.counts}
+			trashed={data.trashed}
 			overdueTodoCount={data.overdueTodoCount}
 			tipSeed={data.tipSeed}
 			renderedAt={data.renderedAt}

@@ -4,7 +4,8 @@ import type {
 	ArchiveNoteOutput,
 	CreateNoteOutput,
 	NoteId,
-	RenameNoteOutput
+	RenameNoteOutput,
+	RestoreNoteOutput
 } from '$lib/models/notes';
 import type {
 	CreateFolderOutput,
@@ -23,6 +24,7 @@ import {
 	createNote,
 	renameNote,
 	archiveNote,
+	restoreNote,
 	createSkill
 } from '$lib/remote/projects/projects.remote';
 
@@ -73,6 +75,8 @@ class ProjectActionsStore {
 		this.withInvalidation<RenameNoteOutput>(() => renameNote({ noteId, title }));
 	archiveNote = (noteId: NoteId) =>
 		this.withInvalidation<ArchiveNoteOutput>(() => archiveNote({ noteId }));
+	restoreNote = (noteId: NoteId) =>
+		this.withInvalidation<RestoreNoteOutput>(() => restoreNote({ noteId }));
 }
 
 export const projectActions = new ProjectActionsStore();

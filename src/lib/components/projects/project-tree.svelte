@@ -302,12 +302,13 @@
 			toast.error(
 				failureMessage(
 					entry.kind === 'folder'
-						? 'Could not archive the folder. Empty it first.'
-						: 'Could not archive it. Try again.'
+						? 'Could not delete the folder. Empty it first.'
+						: 'Could not delete it. Try again.'
 				)
 			);
 			return;
 		}
+		toast.success('Moved to trash');
 		if (activeNoteId === entry.id) await goto('/today');
 	}
 

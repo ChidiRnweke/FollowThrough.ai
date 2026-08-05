@@ -4,8 +4,10 @@ import type {
 	Note,
 	NoteId,
 	NoteRevision,
+	NoteRevisionId,
 	NoteSummary,
-	TextSelection
+	TextSelection,
+	TrashedNote
 } from '$lib/models/notes';
 import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
@@ -30,6 +32,23 @@ export interface NoteRevisionRecorder {
 }
 export interface NoteRevisionReader {
 	latestRevision(actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined>;
+	/** Every kept snapshot of a note, newest first. */
+	revisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
+	revisionById(
+		actor: ActorContext,
+		noteId: NoteId,
+		revisionId: NoteRevisionId
+	): Promise<NoteRevision | undefined>;
+}
+export interface NoteAttachmentRestorer {
+	restoreAttachments(
+		actor: ActorContext,
+		noteId: NoteId,
+		revisionId: NoteRevisionId
+	): Promise<void>;
+}
+export interface NoteTrashReader {
+	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly TrashedNote[]>;
 }
 export interface NotePublisher {
 	markPublished(actor: ActorContext, noteId: NoteId): Promise<Note>;

@@ -1,11 +1,11 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId, NoteRevision } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
-import { NotFoundError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/notes';
 import { toAnchor, toNote, toRevision } from '$lib/server/db/mappers';
@@ -50,6 +50,23 @@ export class NoteRecords implements NoteRepository {
 					// position and a timestamp, and without it the tree comes back in a
 					// different order on each load.
 					.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt), asc(schema.notes.id))
+			).map((row) => toNote(row.note))
+		);
+	}
+
+	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
+		const conditions = [eq(schema.notes.userId, actor.userId), isNotNull(schema.notes.archivedAt)];
+		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
+		return (
+			(
+				await this.database
+					.select({ note: schema.notes })
+					.from(schema.notes)
+					.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+					// Notes in an archived project stay out of the trash: the project itself is the
+					// thing that was discarded, and restoring one note into it would strand the note.
+					.where(and(...conditions, isNull(schema.projects.archivedAt)))
+					.orderBy(desc(schema.notes.archivedAt), asc(schema.notes.id))
 			).map((row) => toNote(row.note))
 		);
 	}
@@ -201,6 +218,24 @@ export class NoteRecords implements NoteRepository {
 				.where(eq(schema.noteRevisions.noteId, noteId))
 				.orderBy(asc(schema.noteRevisions.revision))
 		).map(toRevision);
+	}
+
+	async pruneRevisions(actor: ActorContext, noteId: NoteId, keepNewest: number): Promise<void> {
+		if (keepNewest < 1) throw new ValidationError('At least one revision must be kept');
+		if (!(await this.findById(actor, noteId))) throw new NotFoundError('Note was not found');
+		const kept = this.database
+			.select({ id: schema.noteRevisions.id })
+			.from(schema.noteRevisions)
+			.where(eq(schema.noteRevisions.noteId, noteId))
+			.orderBy(desc(schema.noteRevisions.revision))
+			.limit(keepNewest);
+		// The snapshot's attachment rows go with it: note_revision_attachments cascades
+		// on note_revision_id.
+		await this.database
+			.delete(schema.noteRevisions)
+			.where(
+				and(eq(schema.noteRevisions.noteId, noteId), notInArray(schema.noteRevisions.id, kept))
+			);
 	}
 
 	async restoreAttachmentSnapshot(

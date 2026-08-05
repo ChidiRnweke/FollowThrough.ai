@@ -5,6 +5,7 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import {
 	anchorBuilder,
 	noteBuilder,
+	noteRevisionBuilder,
 	testActor,
 	testAnchorId,
 	testNoteId
@@ -47,16 +48,16 @@ describe('Note revision invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.save(testActor(), { note: { ...note, plainText: 'Changed' } });
-		expect(content.revisions).toHaveLength(0);
+		expect(content.recordedRevisions).toHaveLength(0);
 	});
 
 	it('does not duplicate an existing snapshot for a no-op save', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		content.revisions = [note];
+		content.recordedRevisions = [noteRevisionBuilder({ revision: note.currentRevision })];
 		await controller.save(testActor(), { note });
-		expect(content.revisions).toHaveLength(1);
+		expect(content.recordedRevisions).toHaveLength(1);
 	});
 
 	it('rejects a stale revision', async () => {
@@ -170,7 +171,7 @@ describe('Note save transaction invariants', () => {
 		} catch {
 			// The restored revision collection is the invariant under test.
 		}
-		expect(content.revisions).toEqual([]);
+		expect(content.recordedRevisions).toEqual([]);
 	});
 
 	it('does not expose another user’s note through save', async () => {
@@ -201,7 +202,7 @@ describe('Note publish invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
-		expect(content.revisions).toHaveLength(1);
+		expect(content.recordedRevisions).toHaveLength(1);
 	});
 
 	it('creates a revision snapshot on publish (2/2)', async () => {
@@ -209,7 +210,7 @@ describe('Note publish invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
-		expect(content.revisions[0]?.currentRevision).toBe(note.currentRevision);
+		expect(content.recordedRevisions[0]?.revision).toBe(note.currentRevision);
 	});
 
 	it('sets publishedRevision to currentRevision on the note (1/2)', async () => {

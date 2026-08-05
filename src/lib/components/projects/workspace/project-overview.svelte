@@ -1,12 +1,10 @@
 <script lang="ts">
-	import type {
-		GetProjectOutput,
-		ProjectExportEntry,
-		ProjectTreeNode
-	} from '$lib/models/projects';
+	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/models/projects';
-	import type { NoteId, NoteSummary } from '$lib/models/notes';
+	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import NoteTrashList from '../../notes/note-trash-list.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import { toast } from 'svelte-sonner';
@@ -44,6 +42,7 @@
 	let {
 		view,
 		counts,
+		trashed = [],
 		overdueTodoCount = 0,
 		tipSeed = 0,
 		renderedAt,
@@ -53,6 +52,8 @@
 	}: {
 		view: GetProjectOutput;
 		counts: ProjectCounts;
+		/** This project's deleted notes, so they can be brought back from where they were lost. */
+		trashed?: readonly TrashedNote[];
 		overdueTodoCount?: number;
 		// Comes from the loader so SSR and hydration pick the same tips.
 		tipSeed?: number;
@@ -133,7 +134,14 @@
 
 	async function archiveEntry(id: NoteId): Promise<void> {
 		const output = await projectActions.archiveNote(id);
-		if (!output) toast.error('Could not archive. Try again.');
+		if (!output) toast.error(projectActions.lastError ?? 'Could not delete. Try again.');
+		else toast.success('Moved to trash');
+	}
+
+	async function restoreEntry(id: NoteId): Promise<void> {
+		const output = await projectActions.restoreNote(id);
+		if (!output) toast.error(projectActions.lastError ?? 'Could not restore. Try again.');
+		else toast.success('Restored');
 	}
 </script>
 
@@ -268,7 +276,7 @@
 						Rename
 					</DropdownMenu.Item>
 					<DropdownMenu.Item variant="destructive" onclick={() => void archiveEntry(node.entry.id)}>
-						Archive
+						Move to trash
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -347,6 +355,36 @@
 			{/each}
 		</ul>
 	</section>
+{/if}
+
+<!--
+	Collapsed, and absent entirely when the trash is empty: a project that has never
+	deleted anything should not carry a permanent reminder that deleting is possible.
+-->
+{#if trashed.length > 0}
+	<Collapsible.Root class="pt-6">
+		<Collapsible.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="ghost"
+					size="sm"
+					class="eyebrow h-auto gap-1.5 px-0 hover:bg-transparent hover:text-foreground"
+				>
+					<ChevronRight
+						class="size-3.5 transition-transform data-[state=open]:rotate-90"
+						data-state={props['data-state']}
+					/>
+					Trash · {trashed.length}
+				</Button>
+			{/snippet}
+		</Collapsible.Trigger>
+		<Collapsible.Content>
+			<div class="pt-2">
+				<NoteTrashList notes={trashed} showProject={false} onrestore={restoreEntry} />
+			</div>
+		</Collapsible.Content>
+	</Collapsible.Root>
 {/if}
 
 <NameDialog

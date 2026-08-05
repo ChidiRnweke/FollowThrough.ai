@@ -13,6 +13,8 @@ const toolToDomain: Record<string, (() => void) | undefined> = {
 	discard_note_draft: invalidateAll,
 	rename_note: invalidateAll,
 	archive_note: invalidateAll,
+	restore_note: invalidateAll,
+	restore_note_version: invalidateAll,
 	create_todo: invalidateAll,
 	update_todo: invalidateAll,
 	accept_suggestion: invalidateAll,

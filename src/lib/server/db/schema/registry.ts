@@ -205,6 +205,9 @@ export const notes = pgTable(
 		index('notes_project_parent_position_idx').on(table.projectId, table.parentId, table.position),
 		index('notes_parent_idx').on(table.parentId),
 		index('notes_user_kind_idx').on(table.userId, table.kind),
+		// Serves the trash listing, which is the one query that seeks archived rows
+		// rather than filtering them out.
+		index('notes_user_archived_idx').on(table.userId, table.archivedAt),
 		uniqueIndex('notes_user_built_in_key_unique')
 			.on(table.userId, table.builtInKey)
 			.where(sql`${table.builtInKey} is not null`)
@@ -259,8 +262,9 @@ export const provenance = pgTable(
 	(table) => [index('provenance_user_created_idx').on(table.userId, table.createdAt)]
 );
 
-// Immutable snapshots. The service creates one only at meaningful save boundaries
-// (explicit save, accepted AI edit, or autosave debounce), not on every keystroke.
+// Immutable snapshots. The service creates one only when a note is published, never
+// on a keystroke or an autosave, and prunes to the newest NOTE_REVISION_HISTORY_LIMIT
+// so a long-lived note's history stays bounded.
 export const noteRevisions = pgTable(
 	'note_revisions',
 	{

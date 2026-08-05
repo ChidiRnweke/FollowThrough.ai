@@ -16,7 +16,11 @@ const labels: Readonly<Record<string, string>> = {
 	discard_note_draft: 'Discard note draft',
 	create_note: 'Create note',
 	rename_note: 'Rename note',
-	archive_note: 'Archive note',
+	archive_note: 'Move note to trash',
+	restore_note: 'Restore note',
+	list_trashed_notes: 'Read trash',
+	list_note_versions: 'Read note history',
+	restore_note_version: 'Restore note version',
 	create_project: 'Create project',
 	rename_project: 'Rename project',
 	archive_project: 'Archive project',
@@ -29,7 +33,11 @@ const labels: Readonly<Record<string, string>> = {
 const completedLabels: Readonly<Record<string, string>> = {
 	create_note: 'Created note',
 	rename_note: 'Renamed note',
-	archive_note: 'Archived note',
+	archive_note: 'Moved note to trash',
+	restore_note: 'Restored note',
+	list_trashed_notes: 'Read trash',
+	list_note_versions: 'Read note history',
+	restore_note_version: 'Restored note version',
 	create_project: 'Created project',
 	rename_project: 'Renamed project',
 	archive_project: 'Archived project',
@@ -57,7 +65,10 @@ const noteScopedTools = new Set([
 	'publish_note',
 	'discard_note_draft',
 	'rename_note',
-	'archive_note'
+	'archive_note',
+	'restore_note',
+	'list_note_versions',
+	'restore_note_version'
 ]);
 
 /**
@@ -101,6 +112,8 @@ const writeTools = new Set([
 	'create_note',
 	'rename_note',
 	'archive_note',
+	'restore_note',
+	'restore_note_version',
 	'create_project',
 	'rename_project',
 	'archive_project',
@@ -120,7 +133,9 @@ export const isWriteTool = (name: string): boolean => writeTools.has(name);
  * every one of them trains the user to skip the line that matters.
  */
 const consequences: Readonly<Record<string, string>> = {
-	archive_note: 'Archiving hides the note from the workspace. You can restore it later.',
+	archive_note: 'This moves the note to the trash. You can restore it later.',
+	restore_note_version:
+		'This replaces the note’s current content. The version it replaces stays in the history.',
 	archive_project: 'Archiving hides the project and everything in it. You can restore it later.',
 	delete_artifact: 'This removes the artifact permanently.',
 	discard_note_draft: 'Unpublished changes in this draft are lost.',

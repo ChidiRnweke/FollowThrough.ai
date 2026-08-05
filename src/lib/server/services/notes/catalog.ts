@@ -11,8 +11,9 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
 import type { Provenance, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
+import type { TrashedNote } from '$lib/models/notes';
 import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
-import { findProseMirrorDocumentIssue } from '$lib/models/notes';
+import { NOTE_REVISION_HISTORY_LIMIT, findProseMirrorDocumentIssue } from '$lib/models/notes';
 import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
@@ -98,7 +99,48 @@ export class NoteCatalog {
 		if (!note.archivedAt) throw new ValidationError('The note is not archived');
 		const { archivedAt, ...rest } = note;
 		void archivedAt;
-		return this.notes.update(actor, { ...rest, updatedAt: now() });
+		// A note trashed inside a folder that was trashed after it would come back
+		// parented to something invisible, so it would restore into nowhere. Reattach it
+		// to the project root instead of leaving it stranded.
+		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
+		const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
+		if (!orphaned) return this.notes.update(actor, { ...rest, updatedAt: now() });
+		const { parentId, ...detached } = rest;
+		void parentId;
+		return this.notes.update(actor, {
+			...detached,
+			position: await this.notes.countSiblings(actor, note.projectId, undefined),
+			updatedAt: now()
+		});
+	}
+
+	async listTrashed(
+		actor: ActorContext,
+		projectId?: Note['projectId']
+	): Promise<readonly TrashedNote[]> {
+		const [trashed, projects] = await Promise.all([
+			this.notes.listTrashed(actor, projectId),
+			this.projects.listActive(actor)
+		]);
+		const names = new Map(projects.map((project) => [project.id, project.name]));
+		// Projected field by field rather than spread: a trash row needs none of the
+		// document, and a list of them would otherwise carry every note's full body.
+		return trashed
+			.filter((note) => note.kind !== 'skill')
+			.map((note) => ({
+				id: note.id,
+				projectId: note.projectId,
+				parentId: note.parentId,
+				kind: note.kind,
+				position: note.position,
+				title: note.title,
+				isPinned: note.isPinned,
+				currentRevision: note.currentRevision,
+				createdAt: note.createdAt,
+				updatedAt: note.updatedAt,
+				archivedAt: note.archivedAt as DateTime,
+				projectName: names.get(note.projectId) ?? DEFAULT_PROJECT_NAME
+			}));
 	}
 
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {
@@ -114,12 +156,42 @@ export class NoteCatalog {
 			createdAt: now()
 		};
 		await this.notes.insertRevision(actor, revision);
+		await this.notes.pruneRevisions(actor, note.id, NOTE_REVISION_HISTORY_LIMIT);
 	}
 
 	async latestRevision(actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined> {
 		await this.get(actor, noteId);
 		const revisions = await this.notes.listRevisions(actor, noteId);
 		return revisions.length > 0 ? revisions[revisions.length - 1] : undefined;
+	}
+
+	async revisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
+		await this.get(actor, noteId);
+		// The repository orders ascending; history reads newest first.
+		return [...(await this.notes.listRevisions(actor, noteId))].reverse();
+	}
+
+	async revisionById(
+		actor: ActorContext,
+		noteId: NoteId,
+		revisionId: NoteRevisionId
+	): Promise<NoteRevision | undefined> {
+		await this.get(actor, noteId);
+		const revisions = await this.notes.listRevisions(actor, noteId);
+		return revisions.find((revision) => revision.id === revisionId);
+	}
+
+	/**
+	 * Point the note's attachments back at the versions a snapshot was taken with, so a
+	 * rolled-back document does not render against files that moved on without it.
+	 */
+	async restoreAttachments(
+		actor: ActorContext,
+		noteId: NoteId,
+		revisionId: NoteRevisionId
+	): Promise<void> {
+		await this.get(actor, noteId);
+		await this.notes.restoreAttachmentSnapshot(actor, revisionId, noteId);
 	}
 
 	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
@@ -235,7 +307,9 @@ export type NoteEditor = Pick<NoteCatalog, 'save'>;
 export type NoteArchiver = Pick<NoteCatalog, 'archive' | 'restore'>;
 export type NotePublisher = Pick<NoteCatalog, 'markPublished'>;
 export type NoteRevisionRecorder = Pick<NoteCatalog, 'record'>;
-export type NoteRevisionReader = Pick<NoteCatalog, 'latestRevision'>;
+export type NoteRevisionReader = Pick<NoteCatalog, 'latestRevision' | 'revisions' | 'revisionById'>;
+export type NoteTrashReader = Pick<NoteCatalog, 'listTrashed'>;
+export type NoteAttachmentRestorer = Pick<NoteCatalog, 'restoreAttachments'>;
 export interface SelectionAnchorCreator {
 	create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor>;
 }

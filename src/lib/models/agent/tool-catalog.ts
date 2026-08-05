@@ -104,7 +104,25 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	},
 	{
 		name: 'archive_note',
-		description: 'Archive a note.'
+		description: 'Move a note to the trash. It stays restorable with restore_note.'
+	},
+	{
+		name: 'restore_note',
+		description: 'Bring a note back from the trash.'
+	},
+	{
+		name: 'list_trashed_notes',
+		description: 'List the notes in the trash, most recently discarded first.'
+	},
+	{
+		name: 'list_note_versions',
+		description:
+			"List a note's published version history, newest first, marking the current published version. Use restore_note_version to roll one back."
+	},
+	{
+		name: 'restore_note_version',
+		description:
+			'Roll a note back to one of its published versions, copied forward as a new revision so the rollback is itself undoable.'
 	},
 	{
 		name: 'publish_note',

@@ -45,11 +45,13 @@ describe('Note rename invariants', () => {
 		expect(result.note.currentRevision).toBe(2);
 	});
 
-	it('records a revision snapshot on rename', async () => {
+	// A rename is not a publication. History is capped, so letting title edits take slots
+	// would quietly evict body snapshots the reader may still want back.
+	it('does not record a revision snapshot on rename', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await controller.rename(testActor(), { noteId: testNoteId(), title: 'Renamed' });
-		expect(content.revisions.map((revision) => revision.title)).toEqual(['Renamed']);
+		expect(content.recordedRevisions).toEqual([]);
 	});
 
 	it('rejects an empty title', async () => {

@@ -17,6 +17,7 @@
 		FtSearch as Search,
 		FtSettings as Settings,
 		FtTheme as SunMoon,
+		FtTrash as Trash,
 		FtProfile as UserRound,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
@@ -44,6 +45,7 @@
 
 	const secondaryItems = $derived([
 		{ href: '/skills', label: 'Skills', icon: Wrench, badge: 0 },
+		{ href: '/trash', label: 'Trash', icon: Trash, badge: 0 },
 		{ href: '/profile', label: 'Profile', icon: UserRound, badge: 0 },
 		{ href: '/settings', label: 'Settings', icon: Settings, badge: 0 }
 	]);

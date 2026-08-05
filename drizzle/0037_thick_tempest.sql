@@ -1,0 +1,1 @@
+CREATE INDEX "notes_user_archived_idx" ON "notes" USING btree ("user_id","archived_at");
