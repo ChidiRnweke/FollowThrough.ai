@@ -4,10 +4,8 @@
 	import { captureNote } from '$lib/remote/notes/notes.remote';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
-	let {
-		target = 'Inbox',
-		focusOnMount = false
-	}: { target?: string; focusOnMount?: boolean } = $props();
+	let { target = 'Inbox', focusOnMount = false }: { target?: string; focusOnMount?: boolean } =
+		$props();
 </script>
 
 <Form {...captureNote}>

@@ -91,10 +91,7 @@ export class RelationshipGraph {
 			});
 		}
 	}
-	async findForNote(
-		actor: ActorContext,
-		noteId: NoteId
-	): Promise<readonly NoteRelationship[]> {
+	async findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]> {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.relationships.listForNote(actor, noteId);
 	}

@@ -168,6 +168,43 @@ export interface GenerateDocumentInput extends DiagramRenders {
 	readonly settings?: ExportSettings;
 }
 
+/**
+ * One note's place inside a bundle: `path` is folder-relative and extension-less, so a note
+ * two folders down the exported subtree arrives as `Interviews/Round two/Notes`.
+ */
+export interface BundleEntryInput {
+	readonly noteId: NoteId;
+	readonly path: string;
+}
+
+/**
+ * A zip holding one document per note.
+ *
+ * Deliberately not an `Artifact`: an artifact is a single traceable deliverable that
+ * `regenerate` can reproduce from its `format` alone, and neither is true of a bundle. A
+ * bundle is a download, so it is written under a `bundles/` key and handed back as a
+ * presigned URL without a row of its own.
+ */
+export interface GenerateBundleInput extends DiagramRenders {
+	readonly projectId: ProjectId;
+	readonly entries: readonly BundleEntryInput[];
+	/** Names the zip; the documents inside are named by their notes. */
+	readonly title: string;
+	/** Format of every document inside the zip. */
+	readonly format: 'docx' | 'pdf';
+	readonly templateId?: TemplateId;
+	readonly settings?: ExportSettings;
+}
+
+export interface GenerateBundleOutput {
+	readonly downloadUrl: string;
+	readonly fileCount: number;
+	readonly byteSize: number;
+}
+
+/** Upper bound on one bundle, enforced server-side and mirrored by the export dialog. */
+export const MAX_BUNDLE_ENTRIES = 50;
+
 export interface PreviewDocumentInput extends DiagramRenders {
 	readonly projectId: ProjectId;
 	readonly noteIds: NoteId[];

@@ -17,7 +17,10 @@ A memory entry is a short piece of text with an optional type (**fact**, **decis
 
 Keep entries short. Memory is not where long-form knowledge goes: it's a recently-updated-first list of facts, and anything document-shaped belongs in a note instead.
 
-<Screenshot id="project-context" alt="A project overview with Memory listed under what the agent works from." />
+<Screenshot
+	id="project-context"
+	alt="A project overview with Memory listed under what the agent works from."
+/>
 
 ## Control what the agent can see
 
@@ -27,7 +30,8 @@ Every project entry carries a **Share with agents** checkbox, on by default. Unc
 
 The agent never writes memory directly. When it notices something worth remembering (a decision made in chat, something you reveal about how you work), it calls the `propose_memory_change` tool with an operation (**add**, **update**, or **remove**), the content, and usually a justification. That creates a suggestion, which is where the trust model kicks in.
 
-<Mermaid source={`
+<Mermaid
+	source={`
 flowchart LR
     A[Agent notices<br/>something durable] --> B[propose_memory_change]
     B --> C{Trust policy}
@@ -35,7 +39,8 @@ flowchart LR
     D -->|you accept| E[Change applied<br/>to memory]
     D -->|you dismiss| F[Memory unchanged]
     C -->|auto-accept on,<br/>confidence met| E
-`} />
+`}
+/>
 
 Find pending proposals in a **Suggested by the agent** section above the **Remembered** list on the same page. Each one shows its operation, the proposed content, and the agent's justification when it gave one.
 

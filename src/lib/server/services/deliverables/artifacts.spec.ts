@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { ActorContext } from '$lib/models/identity';
+import type { AttachmentId } from '$lib/models/attachments';
 import type { ArtifactId, ExportSettings } from '$lib/models/deliverables';
 import { defaultExportSettings } from '$lib/models/deliverables';
+import type { ImageSourceResolver } from '$lib/server/repositories/deliverables/export-images';
 import { ArtifactLibrary } from './artifacts';
+import { packZip } from './bundle';
 import {
 	InMemoryArtifactRepository,
 	InMemoryAttachmentStorage,
@@ -23,7 +29,13 @@ const settings = (overrides: Partial<ExportSettings> = {}): ExportSettings => ({
 	...overrides
 });
 
-const setup = () => {
+const setup = (
+	attachmentDownloader: {
+		downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }>;
+	} = {
+		downloadById: async () => ({ url: 'https://storage.test/presigned' })
+	}
+) => {
 	const artifacts = new InMemoryArtifactRepository();
 	const storage = new InMemoryAttachmentStorage();
 	const notes = new InMemoryNoteContent();
@@ -39,7 +51,9 @@ const setup = () => {
 		notes,
 		templates,
 		new InMemoryTransactionRunner([artifacts, storage, provenance]),
-		exportSettings
+		exportSettings,
+		attachmentDownloader,
+		packZip
 	);
 	return { service, artifacts, storage, notes, exportSettings };
 };
@@ -179,5 +193,61 @@ describe('artifact generation behavior', () => {
 			format: 'pdf',
 			sources: [testNoteId()]
 		});
+	});
+});
+
+describe('attachment image resolution during export', () => {
+	const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+	it('resolves an app-owned attachment URL to a data URL via the actor downloader', async () => {
+		const server = createServer((_req, res) => {
+			res.writeHead(200, { 'content-type': 'image/png' });
+			res.end(PNG_BYTES);
+		});
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+		try {
+			const port = (server.address() as AddressInfo).port;
+			const downloader = {
+				downloadById: async (_actor: ActorContext, id: AttachmentId) =>
+					id === 'a1'
+						? { url: `http://127.0.0.1:${port}/pic.png` }
+						: { url: 'http://127.0.0.1:9/nope.png' }
+			};
+			let captured: ImageSourceResolver | undefined;
+			const notes = new InMemoryNoteContent();
+			notes.notes = [noteBuilder()];
+			const artifacts = new InMemoryArtifactRepository();
+			const storage = new InMemoryAttachmentStorage();
+			const provenance = new InMemoryProvenanceRecorder();
+			const service = new ArtifactLibrary(
+				artifacts,
+				storage,
+				async (input) => {
+					captured = input.imageResolver;
+					return Buffer.from('docx');
+				},
+				async () => Buffer.from('pdf'),
+				provenance,
+				notes,
+				new InMemoryTemplateRepository(),
+				new InMemoryTransactionRunner([artifacts, storage, provenance]),
+				new InMemoryExportSettingsRepository(),
+				downloader,
+				packZip
+			);
+			await service.generate(testActor(), {
+				projectId: testProjectId(),
+				noteIds: [testNoteId()],
+				title: 'Export with image',
+				format: 'docx'
+			});
+			expect(await captured?.('/api/attachments/a1/content')).toBe(
+				`data:image/png;base64,${PNG_BYTES.toString('base64')}`
+			);
+		} finally {
+			await new Promise<void>((resolve, reject) =>
+				server.close((error) => (error ? reject(error) : resolve()))
+			);
+		}
 	});
 });

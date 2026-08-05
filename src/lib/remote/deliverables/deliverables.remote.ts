@@ -2,13 +2,16 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
+import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
 import type {
 	ArtifactId,
+	GenerateBundleInput,
 	GenerateDocumentInput,
 	PreviewDocumentInput,
 	TemplateId
 } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
+import type { NoteId } from '$lib/models/notes';
 
 export const initiateTemplateUpload = command(
 	z.object({
@@ -77,6 +80,31 @@ export const generateDocument = command(
 			.generateDocument(requestActor(), input as GenerateDocumentInput)
 );
 
+export const generateBundle = command(
+	z.object({
+		projectId: z.string().uuid(),
+		entries: z
+			.array(z.object({ noteId: z.string().uuid(), path: z.string().min(1).max(400) }))
+			.min(1)
+			.max(MAX_BUNDLE_ENTRIES),
+		title: z.string().min(1),
+		format: z.enum(['docx', 'pdf']),
+		templateId: z.string().uuid().optional(),
+		settings: exportSettingsSchema.optional(),
+		diagramSvgs: z.record(z.string(), z.string()).optional(),
+		diagramPngs: z.record(z.string(), z.string()).optional(),
+		diagramSizes: diagramSizesSchema
+	}),
+	async (input) =>
+		AppFactory.controllers()
+			.deliverables()
+			.generateBundle(requestActor(), {
+				...input,
+				projectId: input.projectId as ProjectId,
+				entries: input.entries.map((entry) => ({ ...entry, noteId: entry.noteId as NoteId }))
+			} as GenerateBundleInput)
+);
+
 export const previewDocument = command(
 	z.object({
 		projectId: z.string().uuid(),
@@ -90,10 +118,7 @@ export const previewDocument = command(
 	async (input) =>
 		AppFactory.controllers()
 			.deliverables()
-			.previewDocument(
-				requestActor(),
-				input as PreviewDocumentInput
-			)
+			.previewDocument(requestActor(), input as PreviewDocumentInput)
 );
 
 export const getExportSettings = query(z.string().uuid(), async (projectId) =>

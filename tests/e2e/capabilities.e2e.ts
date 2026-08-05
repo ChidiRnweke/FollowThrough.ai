@@ -10,11 +10,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const pageErrors: string[] = [];
 
-const visit = async (
-	page: Page,
-	pathname: string,
-	heading: RegExp | string
-): Promise<void> => {
+const visit = async (page: Page, pathname: string, heading: RegExp | string): Promise<void> => {
 	await page.goto(pathname);
 	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 };

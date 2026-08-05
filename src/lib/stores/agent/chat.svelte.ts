@@ -126,7 +126,12 @@ const restoredImages = (value: unknown): ChatPart[] => {
 				typeof (item as Record<string, unknown>).dataUrl === 'string' &&
 				typeof (item as Record<string, unknown>).name === 'string'
 		)
-		.map((item) => ({ kind: 'image' as const, id: item.id, dataUrl: item.dataUrl, name: item.name }));
+		.map((item) => ({
+			kind: 'image' as const,
+			id: item.id,
+			dataUrl: item.dataUrl,
+			name: item.name
+		}));
 };
 
 const applyToolActivity = (entry: ChatEntry, incoming: ChatToolActivity): void => {

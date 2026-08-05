@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Database } from '$lib/server/db';
 import { createSuggestionsCapability } from './suggestions-capability-factory';
 import type { Suggestion } from '$lib/models/suggestions';
-import {
-	suggestionBuilder,
-	testActor
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { suggestionBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 // The factories only store the db handle; SQL runs on method calls, so a bare
 // cast is enough to prove composition wiring without a database.

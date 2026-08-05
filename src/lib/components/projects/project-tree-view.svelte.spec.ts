@@ -32,9 +32,9 @@ describe('ProjectTreeView', () => {
 	it('renders the project and its notes', async () => {
 		const screen = await render(ProjectTreeViewFixture, { projects: [project], notes: [note] });
 		const titles = ['FollowThrough', 'Reviewed draft'].map((title) => screen.getByText(title));
-		expect((await Promise.all(titles.map((locator) => locator.all()))).every((found) => found.length > 0)).toBe(
-			true
-		);
+		expect(
+			(await Promise.all(titles.map((locator) => locator.all()))).every((found) => found.length > 0)
+		).toBe(true);
 	});
 
 	it('opens a note through onopen', async () => {

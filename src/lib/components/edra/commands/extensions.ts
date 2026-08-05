@@ -19,6 +19,7 @@ import { TableCell } from './table-cell.js';
 import { TableHeader } from './table-header.js';
 import { TableRow } from './table-row.js';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { HeadingSpacing } from './heading-spacing.js';
 import { Markdown } from '@tiptap/markdown';
 import { Marked } from 'marked';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
@@ -128,24 +129,59 @@ export default [
 	// fails the chain — which is why the shortcut must not relay the chain's
 	// return value: a false here would let the core Enter binding run as well
 	// and insert a second block.
+	//
+	// The start and end of a title are inserted directly rather than split:
+	// `splitBlock` next to an atom or a table drops the new block on the far side
+	// of the heavy node (the paragraph lands after the mermaid, not between it
+	// and the title), and a split at the very first position converts the title
+	// itself into a paragraph. An explicit insert at the heading's boundary is
+	// deterministic and never reaches into a following diagram's source.
 	Heading.extend({
 		addKeyboardShortcuts() {
 			return {
 				...this.parent?.(),
 				Enter: ({ editor }) => {
-					if (!editor.isActive('heading')) return false;
 					const { $head, empty } = editor.state.selection;
-					if (empty && $head.parent.content.size === 0) {
-						return editor.chain().setParagraph().run();
+					if (editor.isActive('heading')) {
+						if (empty && $head.parent.content.size === 0) {
+							return editor.chain().setParagraph().run();
+						}
+						if (empty && $head.parentOffset === $head.parent.content.size) {
+							// Position after the heading block: `$head.after()` would point
+							// at the caret's own text-node depth, i.e. inside the heading.
+							const after = $head.pos - $head.parentOffset + $head.parent.nodeSize - 1;
+							editor.chain().insertContentAt(after, { type: 'paragraph' }).run();
+							return true;
+						}
+						if (empty && $head.parentOffset === 0) {
+							// Position before the heading block, so the title survives.
+							const before = $head.pos - $head.parentOffset - 1;
+							editor.chain().insertContentAt(before, { type: 'paragraph' }).run();
+							return true;
+						}
+						editor.chain().splitBlock().setParagraph().run();
+						return true;
 					}
-					editor.chain().splitBlock().setParagraph().run();
-					return true;
+					// The very end of a heading's text resolves at doc level, so
+					// `isActive('heading')` is false there and the caret sits right
+					// after or before a heading node. Enter must still produce a
+					// paragraph at that boundary — and must not send it past a
+					// following diagram or table the way the default keymap does.
+					if (
+						empty &&
+						($head.nodeBefore?.type.name === 'heading' || $head.nodeAfter?.type.name === 'heading')
+					) {
+						editor.chain().insertContentAt($head.pos, { type: 'paragraph' }).run();
+						return true;
+					}
+					return false;
 				}
 			};
 		}
-	}).configure({
-		levels: [1, 2, 3, 4]
-	}),
+	}).configure({ levels: [1, 2, 3, 4] }),
+	// Keeps titles separated from diagrams and tables the moment they become
+	// adjacent (agent-written notes, a pasted heading, an inserted diagram).
+	HeadingSpacing,
 	Audio.configure({
 		inline: true,
 		HTMLAttributes: {

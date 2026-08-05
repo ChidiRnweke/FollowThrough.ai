@@ -5,13 +5,7 @@ import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagr
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { ReferenceRecords } from '$lib/server/repositories/references/postgres/references';
-import {
-	actor,
-	context,
-	now,
-	seedNote,
-	seedProvenance
-} from '../database-harness';
+import { actor, context, now, seedNote, seedProvenance } from '../database-harness';
 
 /**
  * Actor-scoping matrix for the single-assert repository contracts. Each test

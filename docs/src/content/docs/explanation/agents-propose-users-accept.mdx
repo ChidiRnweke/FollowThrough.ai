@@ -29,11 +29,14 @@ Changes that alter your work (editing a note, creating a todo, updating project 
 
 This is the default posture, and it is structural, not cosmetic: the `accept`, `reject`, and `revert` operations in the suggestions, todos, memory, and diagrams controllers exist precisely so no agent change can skip the review step. Some writes have no direct agent path at all: project memory, for instance, can only change through a `propose_memory_change` review.
 
-<Screenshot id="agent-tab" alt="An agent run in the project chat, with its proposed changes waiting for review." />
+<Screenshot
+	id="agent-tab"
+	alt="An agent run in the project chat, with its proposed changes waiting for review."
+/>
 
 ## Tier three: trust policies
 
-Some changes are safe enough to skip the human entirely. Trust policies encode rules like *extract-promises results are auto-accepted* or *memory additions are auto-accepted*. When a proposed change matches a policy, it is applied and accepted automatically; the suggestion still exists, marked as auto-accepted, so nothing happens invisibly.
+Some changes are safe enough to skip the human entirely. Trust policies encode rules like _extract-promises results are auto-accepted_ or _memory additions are auto-accepted_. When a proposed change matches a policy, it is applied and accepted automatically; the suggestion still exists, marked as auto-accepted, so nothing happens invisibly.
 
 Auto-acceptance is scoped and revocable. You can inspect every rule and change it: and the settings surface for tool enablement keeps the guard that prevents the agent from locking itself out of its own capabilities.
 

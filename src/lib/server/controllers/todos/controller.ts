@@ -166,10 +166,7 @@ export class Todos implements TodosController {
 		await this.dependencies.todoReader.get(actor, todoId);
 		await this.dependencies.todoDeleter.softDelete(actor, todoId);
 	}
-	startExtractPromises(
-		actor: ActorContext,
-		input: ExtractPromisesInput
-	): Promise<AgentRunReceipt> {
+	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt> {
 		return this.dependencies.workflowRunner.start(actor, {
 			action: 'promises',
 			noteId: input.selection.noteId,

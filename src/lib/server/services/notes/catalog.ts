@@ -101,11 +101,7 @@ export class NoteCatalog {
 		return this.notes.update(actor, { ...rest, updatedAt: now() });
 	}
 
-	async record(
-		actor: ActorContext,
-		note: Note,
-		provenance?: Provenance
-	): Promise<void> {
+	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {
 		await this.get(actor, note.id);
 		const revision: NoteRevision = {
 			id: crypto.randomUUID() as NoteRevisionId,

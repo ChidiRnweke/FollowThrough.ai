@@ -447,6 +447,23 @@ export interface GetNoteViewInput {
 	readonly noteId: NoteId;
 }
 
+/**
+ * Just enough of a note to render it: the bodies an export needs, without the backlinks,
+ * references, todos and suggestions that {@link NoteView} assembles.
+ */
+export interface NoteDocument {
+	readonly id: NoteId;
+	readonly title: string;
+	readonly document: ProseMirrorDocument;
+}
+
+export interface ListNoteDocumentsInput {
+	readonly noteIds: readonly NoteId[];
+}
+
+/** Upper bound on one batch, matching the export bundle's own cap. */
+export const MAX_NOTE_DOCUMENTS = 50;
+
 export interface CreateNoteInput {
 	readonly projectId?: ProjectId;
 	readonly title: string;

@@ -13,23 +13,15 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
 ## Where each piece lands
 
 <FileTree>
-- src/
-  - lib/
-    - models/skills/index.ts: types and branded IDs, a leaf module
-    - server/
-      - db/schema/registry.ts: Drizzle tables, re-exported from schema/skills.ts
-      - repositories/skills/
-        - skills.ts: the SkillRepository contract
-        - index.ts: barrel re-export
-        - postgres/skills.ts: SkillRecords, the Drizzle implementation
-      - services/skills/
-        - contracts.ts: role interfaces (SkillFinder, SkillCreator, …)
-        - library.ts: the implementation
-      - controllers/skills/controller.ts: SkillsController, the documented surface
-      - skills-capability-factory.ts: createSkillsCapability
-      - application.ts: composition root
-  - routes/…: pages that call the remote functions
-  - lib/remote/skills/skills.remote.ts: delivery boundary
+	- src/ - lib/ - models/skills/index.ts: types and branded IDs, a leaf module - server/ -
+	db/schema/registry.ts: Drizzle tables, re-exported from schema/skills.ts - repositories/skills/ -
+	skills.ts: the SkillRepository contract - index.ts: barrel re-export - postgres/skills.ts:
+	SkillRecords, the Drizzle implementation - services/skills/ - contracts.ts: role interfaces
+	(SkillFinder, SkillCreator, …) - library.ts: the implementation -
+	controllers/skills/controller.ts: SkillsController, the documented surface -
+	skills-capability-factory.ts: createSkillsCapability - application.ts: composition root -
+	routes/…: pages that call the remote functions - lib/remote/skills/skills.remote.ts: delivery
+	boundary
 </FileTree>
 
 ## The recipe
@@ -70,7 +62,7 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
 
 5. **Capability factory: `src/lib/server/<cap>-capability-factory.ts`**
 
-   Export exactly one `create<Capability>Capability` function. It takes the database plus the *other capabilities' repositories and services* it depends on, constructs this capability's repository and services, and returns them: nothing else. The real thing, from `src/lib/server/skills-capability-factory.ts:24`:
+   Export exactly one `create<Capability>Capability` function. It takes the database plus the _other capabilities' repositories and services_ it depends on, constructs this capability's repository and services, and returns them: nothing else. The real thing, from `src/lib/server/skills-capability-factory.ts:24`:
 
    ```ts
    export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {
@@ -86,7 +78,7 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
    };
    ```
 
-   Note what the factory does *not* do: it does not build the controller. Controllers are constructed per request by `ProductionControllerFactory` from the dependency object you wire in the next step.
+   Note what the factory does _not_ do: it does not build the controller. Controllers are constructed per request by `ProductionControllerFactory` from the dependency object you wire in the next step.
 
 6. **Compose: `src/lib/server/application.ts`**
 
@@ -107,16 +99,16 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
 
    <Mermaid
    	source={`
-   flowchart TB
-   	app["application.ts"] --> factory["createSkillsCapability()"]
-   	factory --> repo["SkillRecords: postgres adapter"]
-   	factory --> service["SkillLibrary: service"]
-   	app --> controllers["ProductionControllerFactory"]
-   	controllers --> controller["SkillsController"]
-   	service -. implements .-> contract["SkillRepository contract"]
-   	repo -. implements .-> contract
-   	controller -. depends on .-> service
-   `}
+flowchart TB
+	app["application.ts"] --> factory["createSkillsCapability()"]
+	factory --> repo["SkillRecords: postgres adapter"]
+	factory --> service["SkillLibrary: service"]
+	app --> controllers["ProductionControllerFactory"]
+	controllers --> controller["SkillsController"]
+	service -. implements .-> contract["SkillRepository contract"]
+	repo -. implements .-> contract
+	controller -. depends on .-> service
+`}
    />
 
 7. **Delivery boundary: `src/lib/remote/<cap>/` or a route**
@@ -139,7 +131,7 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
 
 8. **Document the public surface**
 
-   Every method on your `<Capability>Controller` interface needs a docstring that says *why*, not what: the docs build drops undocumented symbols from the reference silently. The standard and real examples are in [Writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/).
+   Every method on your `<Capability>Controller` interface needs a docstring that says _why_, not what: the docs build drops undocumented symbols from the reference silently. The standard and real examples are in [Writing API docstrings](/FollowThrough.ai/guides/write-api-docstrings/).
 
 </Steps>
 

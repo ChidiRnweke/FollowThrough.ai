@@ -173,9 +173,7 @@ class UnconfirmedCancelTransport extends StoppableTransport {
 }
 
 class HydratingTransport extends FakeAgentRunTransport {
-	constructor(
-		private readonly session: Awaited<ReturnType<AgentRunTransport['getSession']>>
-	) {
+	constructor(private readonly session: Awaited<ReturnType<AgentRunTransport['getSession']>>) {
 		super([]);
 	}
 	override async getSession(): Promise<Awaited<ReturnType<AgentRunTransport['getSession']>>> {

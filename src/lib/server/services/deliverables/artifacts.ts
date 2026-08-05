@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ActorContext } from '$lib/models/identity';
+import type { AttachmentId } from '$lib/models/attachments';
 import type {
 	Artifact,
 	ArtifactId,
@@ -8,6 +9,8 @@ import type {
 	ListArtifactsParams,
 	ExportSettings,
 	ExtractedTemplateStyles,
+	GenerateBundleInput,
+	GenerateBundleOutput,
 	GenerateDocumentInput,
 	PreviewDocumentInput
 } from '$lib/models/deliverables';
@@ -15,8 +18,13 @@ import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, ProseMirrorDocument } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { Provenance } from '$lib/models/provenance';
-import { defaultExportSettings } from '$lib/models/deliverables';
+import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
 import { NotFoundError, ValidationError } from '$lib/errors';
+import {
+	attachmentIdFromSrc,
+	fetchRemoteDataUrl,
+	type ImageSourceResolver
+} from '$lib/server/repositories/deliverables/export-images';
 import type {
 	ArtifactRepository,
 	ExportSettingsRepository,
@@ -32,6 +40,10 @@ interface ArtifactStorage {
 	): Promise<string>;
 	remove(objectKey: string): Promise<void>;
 }
+/** Mints a presigned download URL for an app-owned attachment, honoring the actor's access. */
+interface AttachmentDownloader {
+	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
+}
 interface ProvenanceRecorder {
 	record(
 		actor: ActorContext,
@@ -46,12 +58,18 @@ interface GenerateDocxInput extends DiagramRenders {
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
+	readonly imageResolver?: ImageSourceResolver;
 }
 interface GeneratePdfInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
+	readonly imageResolver?: ImageSourceResolver;
+}
+interface BundleFile {
+	readonly path: string;
+	readonly bytes: Uint8Array;
 }
 
 /** Absent render maps are left off entirely, so the generators' own defaults stay in charge. */
@@ -63,8 +81,16 @@ const diagramRenders = (input: DiagramRenders): DiagramRenders => ({
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
+const mediaTypeFor = (format: 'docx' | 'pdf'): string =>
+	format === 'docx'
+		? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+		: 'application/pdf';
+
+const safeFilename = (title: string, extension: string): string =>
+	`${title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'document'}.${extension}`;
+
 const downloadFilename = (artifact: Artifact): string =>
-	`${artifact.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'document'}.${artifact.format}`;
+	safeFilename(artifact.title, artifact.format);
 
 const validateSettings: (settings: ExportSettings) => ExportSettings = (
 	settings: ExportSettings
@@ -97,8 +123,32 @@ export class ArtifactLibrary {
 		private readonly noteReader: NoteReader,
 		private readonly templateRepo: TemplateRepository,
 		private readonly transactionRunner: TransactionRunner,
-		private readonly settingsRepo: ExportSettingsRepository
+		private readonly settingsRepo: ExportSettingsRepository,
+		private readonly attachmentDownloader: AttachmentDownloader,
+		private readonly zipPacker: (files: readonly BundleFile[]) => Buffer
 	) {}
+
+	/**
+	 * Resolver the generators use for app-owned image URLs: an attachment id is swapped
+	 * for a presigned download URL minted under the actor, then fetched as a data URL.
+	 * Unreachable or non-embeddable attachments resolve to nothing, so the image degrades
+	 * to a placeholder rather than failing the export.
+	 */
+	private imageResolver(actor: ActorContext): ImageSourceResolver {
+		return async (src) => {
+			const attachmentId = attachmentIdFromSrc(src);
+			if (!attachmentId) return undefined;
+			try {
+				const { url } = await this.attachmentDownloader.downloadById(
+					actor,
+					attachmentId as AttachmentId
+				);
+				return await fetchRemoteDataUrl(url);
+			} catch {
+				return undefined;
+			}
+		};
+	}
 
 	async getSettings(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings> {
 		return (await this.settingsRepo.find(actor, projectId)) ?? defaultExportSettings;
@@ -121,6 +171,7 @@ export class ArtifactLibrary {
 			notes,
 			title: input.title,
 			settings,
+			imageResolver: this.imageResolver(actor),
 			...diagramRenders(input)
 		});
 	}
@@ -138,6 +189,78 @@ export class ArtifactLibrary {
 		);
 	}
 
+	private async templateStyles(
+		actor: ActorContext,
+		templateId: GenerateDocumentInput['templateId']
+	): Promise<ExtractedTemplateStyles | undefined> {
+		if (!templateId) return undefined;
+		const template = await this.templateRepo.findById(actor, templateId);
+		if (!template?.extractedStyles) return undefined;
+		return template.extractedStyles as unknown as ExtractedTemplateStyles;
+	}
+
+	/** The one place a format picks its generator, so every export path renders alike. */
+	private async renderDocument(
+		input: (GenerateDocxInput | GeneratePdfInput) & { readonly format: 'docx' | 'pdf' }
+	): Promise<Buffer> {
+		const { format, ...rest } = input;
+		return format === 'docx' ? this.docxGenerator(rest) : this.pdfGenerator(rest);
+	}
+
+	/**
+	 * One document per note, zipped.
+	 *
+	 * Nothing is persisted: no artifact row, no provenance. A bundle is a download rather
+	 * than a tracked deliverable — `regenerate` could not reproduce one from a `format`
+	 * alone, and a folder of thirty notes would bury the artifact library. The zip lands
+	 * under `bundles/` so storage can expire it on its own schedule.
+	 *
+	 * Documents render one at a time: both generators are CPU-bound, and the entry cap is
+	 * what keeps the worst case bounded rather than a concurrency limit.
+	 */
+	async generateBundle(
+		actor: ActorContext,
+		input: GenerateBundleInput
+	): Promise<GenerateBundleOutput> {
+		if (input.entries.length === 0) throw new ValidationError('Select at least one document.');
+		if (input.entries.length > MAX_BUNDLE_ENTRIES) {
+			throw new ValidationError(`Export up to ${MAX_BUNDLE_ENTRIES} documents at a time.`);
+		}
+
+		const settings = input.settings
+			? validateSettings(input.settings)
+			: await this.getSettings(actor, input.projectId);
+		const extractedStyles = await this.templateStyles(actor, input.templateId);
+		const imageResolver = this.imageResolver(actor);
+
+		const files: BundleFile[] = [];
+		for (const entry of input.entries) {
+			const [note] = await this.loadNotes(actor, [entry.noteId]);
+			if (!note) throw new NotFoundError(`Note ${entry.noteId} not found`);
+			const bytes = await this.renderDocument({
+				notes: [note],
+				title: note.title,
+				format: input.format,
+				settings,
+				...(extractedStyles ? { styles: extractedStyles } : {}),
+				imageResolver,
+				...diagramRenders(input)
+			});
+			files.push({ path: `${entry.path}.${input.format}`, bytes });
+		}
+
+		const buffer = this.zipPacker(files);
+		const objectKey = `bundles/${actor.userId}/${randomUUID()}.zip`;
+		await this.storage.put(objectKey, buffer, 'application/zip');
+		const downloadUrl = await this.storage.createDownloadUrl(
+			objectKey,
+			3600,
+			safeFilename(input.title, 'zip')
+		);
+
+		return { downloadUrl, fileCount: files.length, byteSize: buffer.length };
+	}
+
 	async generate(
 		actor: ActorContext,
 		input: GenerateDocumentInput
@@ -147,41 +270,20 @@ export class ArtifactLibrary {
 			? validateSettings(input.settings)
 			: await this.getSettings(actor, input.projectId);
 
-		let extractedStyles;
-		if (input.templateId) {
-			const template = await this.templateRepo.findById(actor, input.templateId);
-			if (template?.extractedStyles) {
-				extractedStyles =
-					template.extractedStyles as unknown as ExtractedTemplateStyles;
-			}
-		}
-
-		let buffer: Buffer;
-		if (input.format === 'docx') {
-			buffer = await this.docxGenerator({
-				notes,
-				...(extractedStyles ? { styles: extractedStyles } : {}),
-				title: input.title,
-				settings,
-				...diagramRenders(input)
-			});
-		} else {
-			buffer = await this.pdfGenerator({
-				notes,
-				title: input.title,
-				styles: extractedStyles,
-				settings,
-				...diagramRenders(input)
-			});
-		}
+		const extractedStyles = await this.templateStyles(actor, input.templateId);
+		const buffer = await this.renderDocument({
+			notes,
+			title: input.title,
+			format: input.format,
+			settings,
+			...(extractedStyles ? { styles: extractedStyles } : {}),
+			imageResolver: this.imageResolver(actor),
+			...diagramRenders(input)
+		});
 
 		const artifactId = randomUUID() as ArtifactId;
 		const objectKey = `artifacts/${actor.userId}/${artifactId}.${input.format}`;
-		const mediaType =
-			input.format === 'docx'
-				? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-				: 'application/pdf';
-		await this.storage.put(objectKey, buffer, mediaType);
+		await this.storage.put(objectKey, buffer, mediaTypeFor(input.format));
 
 		const provenance = await this.provenanceRecorder.record(actor, {
 			producerKind: 'user',

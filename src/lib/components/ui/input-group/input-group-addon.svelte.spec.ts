@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import InputGroupAddonFixture from './input-group-addon.fixture.svelte';
 
-const focusedPlaceholder = () =>
-	(document.activeElement as HTMLInputElement | null)?.placeholder;
+const focusedPlaceholder = () => (document.activeElement as HTMLInputElement | null)?.placeholder;
 
 describe('InputGroupAddon focus ownership', () => {
 	it('focuses the owned input when a non-button addon is clicked', async () => {

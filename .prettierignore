@@ -4,6 +4,8 @@
 .svelte-kit/
 build/
 node_modules/
+docs/dist/
+docs/src/content/docs/reference/*-generated/
 drizzle/
 skills-lock.json
 package-lock.json

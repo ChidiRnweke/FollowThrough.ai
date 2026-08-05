@@ -126,6 +126,10 @@ export const agentToolCoverage = {
 	},
 	notes: {
 		get: { kind: 'read' },
+		listDocuments: {
+			kind: 'excluded',
+			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
+		},
 		create: { kind: 'mutation' },
 		save: { kind: 'mutation' },
 		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
@@ -163,15 +167,27 @@ export const agentToolCoverage = {
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
 		extractPromises: { kind: 'proposal' },
-		startExtractPromises: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+		startExtractPromises: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		}
 	},
 	relationships: {
 		suggestFromSelection: { kind: 'proposal' },
-		startSuggestFromSelection: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+		startSuggestFromSelection: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		}
 	},
 	references: {
 		suggestFromSelection: { kind: 'proposal' },
-		startSuggestFromSelection: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+		startSuggestFromSelection: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		}
 	},
 	diagrams: {
 		generateMermaid: { kind: 'proposal' },
@@ -187,9 +203,21 @@ export const agentToolCoverage = {
 		getDrawio: { kind: 'excluded', reason: 'The draw.io editor uses a note-scoped route.' },
 		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
 		promote: { kind: 'proposal' },
-		startGenerateMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' },
-		startReviseInlineMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' },
-		startConvertInlineMermaid: { kind: 'excluded', reason: 'The editor starts this as a cancellable run; the agent calls the synchronous method instead.' }
+		startGenerateMermaid: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		},
+		startReviseInlineMermaid: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		},
+		startConvertInlineMermaid: {
+			kind: 'excluded',
+			reason:
+				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		}
 	},
 	suggestions: {
 		list: { kind: 'read' },
@@ -257,6 +285,11 @@ export const agentToolCoverage = {
 			reason: 'Template management is a deliberate user action.'
 		},
 		generateDocument: { kind: 'mutation' },
+		generateBundle: {
+			kind: 'excluded',
+			reason:
+				'A zip download URL is only useful to a browser; the agent generates documents one at a time.'
+		},
 		previewDocument: {
 			kind: 'excluded',
 			reason: 'Preview is an interactive UI flow; the agent generates documents directly.'

@@ -1,9 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentRunReceipt, ConversationId } from '$lib/models/agent';
-import type {
-	WorkflowRunStarter,
-	WorkflowRunTask
-} from '$lib/server/services/agent/runs/workflow';
+import type { WorkflowRunStarter, WorkflowRunTask } from '$lib/server/services/agent/runs/workflow';
 
 /**
  * Starts note-action runs without a database or an event log.

@@ -3,6 +3,8 @@ import type {
 	Artifact,
 	ArtifactId,
 	ExportSettings,
+	GenerateBundleInput,
+	GenerateBundleOutput,
 	GenerateDocumentInput,
 	GenerateDocumentOutput,
 	GetArtifactDownloadOutput,
@@ -18,6 +20,7 @@ import type {
 	ArtifactLister,
 	ArtifactReader,
 	ArtifactRegenerator,
+	BundleGenerator,
 	DocumentGenerator,
 	DocumentPreviewer,
 	ExportSettingsReader,
@@ -61,10 +64,7 @@ export interface DeliverablesController {
 	/** Finalize a completed template upload and make the template usable for generation. */
 	completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void>;
 	/** List the templates available to a project, in display order. */
-	listTemplates(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly ProjectTemplate[]>;
+	listTemplates(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTemplate[]>;
 	/** Permanently remove a template. */
 	deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void>;
 	/**
@@ -77,6 +77,14 @@ export interface DeliverablesController {
 		actor: ActorContext,
 		input: GenerateDocumentInput
 	): Promise<GenerateDocumentOutput>;
+	/**
+	 * Generate one document per note and return them zipped.
+	 *
+	 * Deliberately outside the transaction that {@link generateDocument} runs in: a bundle
+	 * persists nothing, so there is no artifact record for a failure to leave half-written.
+	 * The zip is a download only — it does not appear in the artifact library.
+	 */
+	generateBundle(actor: ActorContext, input: GenerateBundleInput): Promise<GenerateBundleOutput>;
 	/**
 	 * Render a document for preview without persisting it, returning the rendered bytes
 	 * as base64 so the client can show them immediately. Intentionally side-effect free.
@@ -97,10 +105,7 @@ export interface DeliverablesController {
 		params?: ListArtifactsParams
 	): Promise<ListArtifactsOutput>;
 	/** Fetch an artifact's metadata, or `undefined` when it does not exist. */
-	getArtifact(
-		actor: ActorContext,
-		artifactId: ArtifactId
-	): Promise<Artifact | undefined>;
+	getArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<Artifact | undefined>;
 	/** Return a presigned URL that streams an artifact's file bytes. */
 	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	/** Permanently delete an artifact. */
@@ -118,6 +123,7 @@ export interface DeliverablesDependencies {
 	templateLister: TemplateLister;
 	templateDeleter: TemplateDeleter;
 	documentGenerator: DocumentGenerator;
+	bundleGenerator: BundleGenerator;
 	documentPreviewer: DocumentPreviewer;
 	exportSettingsReader: ExportSettingsReader;
 	exportSettingsWriter: ExportSettingsWriter;
@@ -163,6 +169,13 @@ export class Deliverables implements DeliverablesController {
 		return this.dependencies.transactionRunner.run(async () =>
 			this.dependencies.documentGenerator.generate(actor, input)
 		);
+	}
+
+	async generateBundle(
+		actor: ActorContext,
+		input: GenerateBundleInput
+	): Promise<GenerateBundleOutput> {
+		return this.dependencies.bundleGenerator.generateBundle(actor, input);
 	}
 
 	async previewDocument(

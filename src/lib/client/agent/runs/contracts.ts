@@ -24,9 +24,7 @@ export interface AgentRunTransport {
 	}): Promise<AgentRunSnapshot>;
 	cancel(runId: AgentRunId): Promise<AgentRunSnapshot>;
 	retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
-	getSession(
-		conversationId: ConversationId
-	): Promise<Awaited<ReturnType<typeof getSession>>>;
+	getSession(conversationId: ConversationId): Promise<Awaited<ReturnType<typeof getSession>>>;
 	openEvents(input: {
 		runId: AgentRunId;
 		after: string;

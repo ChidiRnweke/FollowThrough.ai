@@ -21,7 +21,10 @@ describe('filterTodosByTitle', () => {
 	});
 
 	it('matches titles case-insensitively by substring', () => {
-		const result = filterTodosByTitle([view('Ship the manifest'), view('Reply to review')], 'MANIFEST');
+		const result = filterTodosByTitle(
+			[view('Ship the manifest'), view('Reply to review')],
+			'MANIFEST'
+		);
 		expect(result.map((item) => item.todo.title)).toEqual(['Ship the manifest']);
 	});
 

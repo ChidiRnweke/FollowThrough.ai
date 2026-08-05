@@ -15,6 +15,7 @@ import type {
 	DiscardNoteDraftInput,
 	SyncNoteInput
 } from '$lib/models/notes';
+import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
 
@@ -64,6 +65,14 @@ export const getNote = query(z.string().uuid(), async (noteId) => {
 		.get(requestActor(), { noteId: noteId as NoteId });
 	return view.note;
 });
+
+export const listNoteDocuments = query(
+	z.array(z.string().uuid()).min(1).max(MAX_NOTE_DOCUMENTS),
+	async (noteIds) =>
+		AppFactory.controllers()
+			.notes()
+			.listDocuments(requestActor(), { noteIds: noteIds as NoteId[] })
+);
 
 export const getNoteView = query(z.string().uuid(), async (noteId) => {
 	return AppFactory.controllers()

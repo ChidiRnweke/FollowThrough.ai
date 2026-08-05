@@ -580,6 +580,25 @@
 	}
 }
 
+/* The same row contract without the lift, for dense rows whose whole job is being
+   picked — a multi-select list, where a surface that moves under the pointer between
+   the decision and the click costs the user the row they aimed at. Same reason menu
+   and command rows stay still. */
+@utility row-quiet {
+	cursor: pointer;
+	transition-property: color, background-color;
+	transition-duration: var(--duration-micro);
+	transition-timing-function: var(--ease-standard);
+	&:hover {
+		background-color: var(--color-accent);
+		color: var(--color-accent-foreground);
+	}
+	&:focus-within {
+		background-color: var(--color-accent);
+		color: var(--color-accent-foreground);
+	}
+}
+
 /* The hover lift is motion, so it is opted out of entirely rather than merely
    un-transitioned — the base reduced-motion guard only collapses durations,
    which would turn the lift into a jump. Unlayered so it beats the utility. */

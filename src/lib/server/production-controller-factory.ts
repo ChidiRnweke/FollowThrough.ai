@@ -77,7 +77,10 @@ export class ProductionControllerFactory implements ControllerFactory {
 		return instrumentedController('todos', new Todos(this.dependencies.todos));
 	}
 	relationships() {
-		return instrumentedController('relationships', new Relationships(this.dependencies.relationships));
+		return instrumentedController(
+			'relationships',
+			new Relationships(this.dependencies.relationships)
+		);
 	}
 	references() {
 		return instrumentedController('references', new References(this.dependencies.references));
@@ -95,7 +98,10 @@ export class ProductionControllerFactory implements ControllerFactory {
 		return instrumentedController('agent', new Agent(this.dependencies.agent));
 	}
 	agentSettings() {
-		return instrumentedController('agentSettings', new AgentSettings(this.dependencies.agentSettings));
+		return instrumentedController(
+			'agentSettings',
+			new AgentSettings(this.dependencies.agentSettings)
+		);
 	}
 	apiTokens() {
 		return instrumentedController('apiTokens', new ApiTokens(this.dependencies.apiTokens));
@@ -113,7 +119,10 @@ export class ProductionControllerFactory implements ControllerFactory {
 		return instrumentedController('deliverables', new Deliverables(this.dependencies.deliverables));
 	}
 	trustPolicies() {
-		return instrumentedController('trustPolicies', new TrustPolicies(this.dependencies.trustPolicies));
+		return instrumentedController(
+			'trustPolicies',
+			new TrustPolicies(this.dependencies.trustPolicies)
+		);
 	}
 	memory() {
 		return instrumentedController('memory', new Memory(this.dependencies.memory));

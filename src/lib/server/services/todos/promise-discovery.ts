@@ -55,7 +55,10 @@ export interface StructuredPromiseResult {
 }
 
 export interface StructuredPromiseClient {
-	extract(text: string, signal?: AbortSignal): Promise<readonly StructuredPromiseResult[] | undefined>;
+	extract(
+		text: string,
+		signal?: AbortSignal
+	): Promise<readonly StructuredPromiseResult[] | undefined>;
 }
 
 const PromiseExtraction = z.object({

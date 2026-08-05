@@ -11,7 +11,8 @@ import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	collectImageSources,
 	fetchImages,
-	mermaidSourceHash
+	mermaidSourceHash,
+	type ImageSourceResolver
 } from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
@@ -151,6 +152,8 @@ export interface GeneratePdfInput extends DiagramRenders {
 	readonly title: string;
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
+	/** Resolves app-owned attachment image URLs through the actor; absent sources degrade. */
+	readonly imageResolver?: ImageSourceResolver;
 }
 
 function collectText(node: Record<string, unknown>): string {
@@ -510,7 +513,10 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 	const margin = Math.min(Math.max(settings.margin, 18), 144);
 	const contentWidth = A4_WIDTH - margin * 2;
 	const usableHeight = A4_HEIGHT - margin * 2 - 16;
-	const images = await fetchImages(notes.flatMap((note) => collectImageSources(note.document)));
+	const images = await fetchImages(
+		notes.flatMap((note) => collectImageSources(note.document)),
+		input.imageResolver
+	);
 	const bodyFont = FONT_FAMILIES[settings.fontFamily];
 	const context: ConversionContext = {
 		contentWidth,

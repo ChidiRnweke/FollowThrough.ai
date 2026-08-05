@@ -5,7 +5,7 @@ description: The docstring standard that keeps the generated API reference compl
 
 import { Aside } from '@astrojs/starlight/components';
 
-The API reference ([Models](/FollowThrough.ai/reference/models/), [Repositories](/FollowThrough.ai/reference/repositories/), [Services](/FollowThrough.ai/reference/services/), [Controllers](/FollowThrough.ai/reference/controllers/), [Capability factories](/FollowThrough.ai/reference/factories/)) is TypeDoc-generated from those five layers' sources, and the build runs with `excludeNotDocumented`: an undocumented public symbol does not warn, it vanishes. Write docstrings that say *why* a symbol exists and which invariants callers rely on, in as few words as that takes.
+The API reference ([Models](/FollowThrough.ai/reference/models/), [Repositories](/FollowThrough.ai/reference/repositories/), [Services](/FollowThrough.ai/reference/services/), [Controllers](/FollowThrough.ai/reference/controllers/), [Capability factories](/FollowThrough.ai/reference/factories/)) is TypeDoc-generated from those five layers' sources, and the build runs with `excludeNotDocumented`: an undocumented public symbol does not warn, it vanishes. Write docstrings that say _why_ a symbol exists and which invariants callers rely on, in as few words as that takes.
 
 ## Why the standard is enforced by deletion
 
@@ -17,7 +17,7 @@ The API reference ([Models](/FollowThrough.ai/reference/models/), [Repositories]
 - `src/lib/server/controllers/**/controller.ts` (Controllers)
 - `src/lib/server/**/*-factory.ts` (Capability factories)
 
-Every instance shares `excludeNotDocumented: true` for classes, interfaces, methods, properties, functions, and type aliases. TypeDoc drops any of those that lacks a doc comment. So adding an undocumented controller method, or a new exported model type, does not fail a build or annoy a reviewer: it simply never appears in the reference, and the public surface documented on this site silently diverges from the code. The docstring *is* the publishing step.
+Every instance shares `excludeNotDocumented: true` for classes, interfaces, methods, properties, functions, and type aliases. TypeDoc drops any of those that lacks a doc comment. So adding an undocumented controller method, or a new exported model type, does not fail a build or annoy a reviewer: it simply never appears in the reference, and the public surface documented on this site silently diverges from the code. The docstring _is_ the publishing step.
 
 <Aside type="caution">
 
@@ -29,11 +29,11 @@ Internal files (repository Postgres adapters, service implementations, spec file
 
 Three rules, in order of importance:
 
-**Say why, not what.** The name and signature already carry the *what*; TypeDoc renders them for free. A docstring that restates them is noise. Spend the words on what a reader cannot infer: why the method exists as a separate operation, what side effect it has, what it deliberately does not do.
+**Say why, not what.** The name and signature already carry the _what_; TypeDoc renders them for free. A docstring that restates them is noise. Spend the words on what a reader cannot infer: why the method exists as a separate operation, what side effect it has, what it deliberately does not do.
 
-**Capture the invariants callers rely on.** The most valuable docstrings document the guarantees and edge cases encoded in the code: the batch that is all-or-nothing, the idempotency key that makes retries safe, the read that is *not* side-effect-free. These are the facts a caller cannot guess from types, and the ones that break integrations when they change.
+**Capture the invariants callers rely on.** The most valuable docstrings document the guarantees and edge cases encoded in the code: the batch that is all-or-nothing, the idempotency key that makes retries safe, the read that is _not_ side-effect-free. These are the facts a caller cannot guess from types, and the ones that break integrations when they change.
 
-**Keep it short.** One summary sentence, a second paragraph only when the *why* needs it, and `@param` / `@returns` / `@throws` only where they add information the types don't. If you need more than a short paragraph, the complexity probably belongs in a subsystem page, not a docstring.
+**Keep it short.** One summary sentence, a second paragraph only when the _why_ needs it, and `@param` / `@returns` / `@throws` only where they add information the types don't. If you need more than a short paragraph, the complexity probably belongs in a subsystem page, not a docstring.
 
 ## Real examples
 
@@ -71,7 +71,7 @@ A caller who reached for this instead of `get` by name alone would write usage r
 decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
 ```
 
-The signature says the method batches decisions. Only the docstring tells you the batch is atomic, *why* it must be, and what throws when it is not.
+The signature says the method batches decisions. Only the docstring tells you the batch is atomic, _why_ it must be, and what throws when it is not.
 
 **Document the contract, not just the methods**: the interface-level comment on `SkillsController` (`src/lib/server/controllers/skills/controller.ts:27`):
 
@@ -118,6 +118,6 @@ If a method you just added is missing from `http://localhost:4321/FollowThrough.
 
 <Aside type="note">
 
-New capabilities: the docstring requirement is the last step of [Adding a capability](/FollowThrough.ai/guides/add-a-capability/), and the layering that decides *what* is public is explained in [Architecture](/FollowThrough.ai/explanation/architecture/).
+New capabilities: the docstring requirement is the last step of [Adding a capability](/FollowThrough.ai/guides/add-a-capability/), and the layering that decides _what_ is public is explained in [Architecture](/FollowThrough.ai/explanation/architecture/).
 
 </Aside>

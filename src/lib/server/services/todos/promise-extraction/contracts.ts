@@ -19,5 +19,8 @@ export interface StructuredPromiseResult {
 	readonly confidence: number;
 }
 export interface StructuredPromiseClient {
-	extract(text: string, signal?: AbortSignal): Promise<readonly StructuredPromiseResult[] | undefined>;
+	extract(
+		text: string,
+		signal?: AbortSignal
+	): Promise<readonly StructuredPromiseResult[] | undefined>;
 }

@@ -620,3 +620,77 @@ describe('Docx export parity with PDF', () => {
 		expect(xml).toContain('<w:ind w:left="720"/>');
 	});
 });
+
+describe('App-owned attachment images in an exported document', () => {
+	const withAttachmentImage = (src: string): ProseMirrorDocument => ({
+		type: 'doc',
+		content: [{ type: 'image', attrs: { src } }]
+	});
+
+	it('embeds an attachment image that the image resolver resolves to a data URL', async () => {
+		const zip = await zipFor({
+			notes: [{ title: 'Note', document: withAttachmentImage('/api/attachments/a1/content') }],
+			imageResolver: async (src) => (src === '/api/attachments/a1/content' ? TINY_PNG : undefined)
+		});
+		expect(zip.getEntries().some((entry) => entry.entryName.startsWith('word/media/'))).toBe(true);
+	});
+
+	it('degrades an attachment image when no resolver supplies its bytes', async () => {
+		const xml = (
+			await zipFor({
+				notes: [{ title: 'Note', document: withAttachmentImage('/api/attachments/a1/content') }]
+			})
+		).readAsText('word/document.xml');
+		expect(xml).toContain('[image unavailable]');
+	});
+});
+
+describe('Ordered-list numbering in an exported document', () => {
+	const listItem = (text: string) => ({
+		type: 'listItem',
+		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+	});
+
+	it('restarts numbering for each separate ordered list (1/2)', async () => {
+		const twoLists: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{ type: 'orderedList', content: [listItem('First')] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'between' }] },
+				{ type: 'orderedList', content: [listItem('Second')] }
+			]
+		};
+		const xml = (await zipFor({ notes: [{ title: 'Note', document: twoLists }] })).readAsText(
+			'word/document.xml'
+		);
+		expect(
+			new Set([...xml.matchAll(/<w:numId w:val="(\d+)"/g)].map((match) => match[1]!)).size
+		).toBe(2);
+	});
+
+	it('gives a nested ordered list its own numbering instance (2/2)', async () => {
+		const nested: ProseMirrorDocument = {
+			type: 'doc',
+			content: [
+				{
+					type: 'orderedList',
+					content: [
+						{
+							type: 'listItem',
+							content: [
+								{ type: 'paragraph', content: [{ type: 'text', text: 'Outer' }] },
+								{ type: 'orderedList', content: [listItem('Inner')] }
+							]
+						}
+					]
+				}
+			]
+		};
+		const xml = (await zipFor({ notes: [{ title: 'Note', document: nested }] })).readAsText(
+			'word/document.xml'
+		);
+		expect(
+			new Set([...xml.matchAll(/<w:numId w:val="(\d+)"/g)].map((match) => match[1]!)).size
+		).toBe(2);
+	});
+});

@@ -4,11 +4,12 @@ import NoteTitleInlineInput from './note-title-inline-input.svelte';
 
 type Screen = Awaited<ReturnType<typeof render>>;
 
-const titleField = (screen: Screen) =>
-	screen.getByRole('textbox', { name: 'Note title' });
+const titleField = (screen: Screen) => screen.getByRole('textbox', { name: 'Note title' });
 
 const pressKey = (screen: Screen, key: string): void => {
-	titleField(screen).element().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+	titleField(screen)
+		.element()
+		.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 };
 
 describe('NoteTitleInlineInput', () => {

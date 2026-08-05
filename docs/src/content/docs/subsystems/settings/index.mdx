@@ -13,7 +13,7 @@ Every knob the agent runs under (model choice, execution mode, web-search caps, 
 
 ## Why this subsystem exists
 
-Two writers, one truth: every setting can be changed from the settings page *and* by the agent itself: `update_agent_preferences`, `set_tool_enabled`, and `update_trust_policy` are ordinary agent tools. If validation lived in the UI, the agent path would bypass it; if it lived in both, the two would drift. So both paths land on the same controllers, and each limit is enforced exactly once, in `src/lib/server/controllers/agent/settings/controller.ts`.
+Two writers, one truth: every setting can be changed from the settings page _and_ by the agent itself: `update_agent_preferences`, `set_tool_enabled`, and `update_trust_policy` are ordinary agent tools. If validation lived in the UI, the agent path would bypass it; if it lived in both, the two would drift. So both paths land on the same controllers, and each limit is enforced exactly once, in `src/lib/server/controllers/agent/settings/controller.ts`.
 
 The second pressure is that deployments differ. A default model or search cap hard-coded in a service is wrong the moment an operator configures another one: so the resolution chain always ends at an environment value, and `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) is the complete list of keys services may hydrate.
 

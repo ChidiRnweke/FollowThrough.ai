@@ -75,15 +75,17 @@ const props = {
 describe('NoteWorkspaceHeader actions', () => {
 	it('keeps the Publish action available', async () => {
 		const screen = await render(NoteWorkspaceHeader, props);
-		expect(await screen.getByRole('button', { name: 'Publish note (Ctrl+S, S)' }).all()).not.toHaveLength(
-			0
-		);
+		expect(
+			await screen.getByRole('button', { name: 'Publish note (Ctrl+S, S)' }).all()
+		).not.toHaveLength(0);
 	});
 
 	it('exposes Export through the note-actions overflow menu', async () => {
 		const screen = await render(NoteWorkspaceHeader, props);
 		await screen.getByRole('button', { name: 'Note actions' }).click();
-		expect(await screen.getByRole('menuitem', { name: 'Export document' }).all()).not.toHaveLength(0);
+		expect(await screen.getByRole('menuitem', { name: 'Export document' }).all()).not.toHaveLength(
+			0
+		);
 	});
 
 	it('renders the inline Export button', async () => {

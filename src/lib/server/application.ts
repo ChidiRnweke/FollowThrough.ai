@@ -253,7 +253,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		provenance,
 		notes,
 		todos,
-		projects
+		projects,
+		attachmentDownloader: attachments
 	});
 	const templates = deliverables.templates;
 	const artifacts = deliverables.artifacts;
@@ -387,6 +388,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			templateLister: templates,
 			templateDeleter: templates,
 			documentGenerator: artifacts,
+			bundleGenerator: artifacts,
 			documentPreviewer: artifacts,
 			exportSettingsReader: artifacts,
 			exportSettingsWriter: artifacts,

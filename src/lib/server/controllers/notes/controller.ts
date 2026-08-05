@@ -7,6 +7,8 @@ import type {
 	DiscardNoteDraftInput,
 	DiscardNoteDraftOutput,
 	GetNoteViewInput,
+	ListNoteDocumentsInput,
+	NoteDocument,
 	NoteView,
 	NoteSyncInventoryEntry,
 	PublishNoteInput,
@@ -21,6 +23,7 @@ import type {
 	ListNoteSyncInventoryOutput
 } from '$lib/models/notes';
 import {
+	MAX_NOTE_DOCUMENTS,
 	collectNoteLinkTargets,
 	noteEtag,
 	noteMatchesEtag,
@@ -69,6 +72,20 @@ export interface NotesController {
 	 * The pieces are fetched in parallel because nothing depends on another's result.
 	 */
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
+	/**
+	 * Read the bodies of several notes at once, for a caller that renders documents rather
+	 * than a note screen — the export dialog, which needs every selected note's content in
+	 * the browser to rasterize its diagrams.
+	 *
+	 * Only the title and document travel; assembling a full {@link NoteView} per note would
+	 * fan out to six more readers each for nothing.
+	 *
+	 * @throws ValidationError if more notes are requested than one batch allows.
+	 */
+	listDocuments(
+		actor: ActorContext,
+		input: ListNoteDocumentsInput
+	): Promise<readonly NoteDocument[]>;
 	/** Create a new, empty note. */
 	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
 	/**
@@ -169,6 +186,21 @@ export class Notes implements NotesController {
 			todos: todoViews,
 			pendingSuggestions
 		};
+	}
+
+	async listDocuments(
+		actor: ActorContext,
+		input: ListNoteDocumentsInput
+	): Promise<readonly NoteDocument[]> {
+		if (input.noteIds.length > MAX_NOTE_DOCUMENTS) {
+			throw new ValidationError(`Read up to ${MAX_NOTE_DOCUMENTS} notes at a time.`);
+		}
+		return Promise.all(
+			input.noteIds.map(async (noteId) => {
+				const note = await this.dependencies.noteReader.get(actor, noteId);
+				return { id: note.id, title: note.title, document: note.document };
+			})
+		);
 	}
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput> {
 		return { note: await this.dependencies.noteCreator.create(actor, input) };

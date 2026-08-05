@@ -6,13 +6,13 @@ description: User-defined, versioned, pinnable instruction sets, stored as notes
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-A skill is a reusable instruction set the agent loads on cue. The instruction text lives in an ordinary note with `kind: 'skill'`; everything the agent uses to decide *whether* to load it (name, slug, description, trigger hints, enable flag) lives in a `skills` row keyed by that note's ID. The agent never sees full skill text up front: `AgentContext` packs summaries into a 16,000-character catalog in the system prompt, and the model pulls the full instructions with the locked `load_skill` tool, which records a usage row as a side effect. Versioning comes free from the notes subsystem, pinning is per project, and three built-in skills provision themselves on first listing.
+A skill is a reusable instruction set the agent loads on cue. The instruction text lives in an ordinary note with `kind: 'skill'`; everything the agent uses to decide _whether_ to load it (name, slug, description, trigger hints, enable flag) lives in a `skills` row keyed by that note's ID. The agent never sees full skill text up front: `AgentContext` packs summaries into a 16,000-character catalog in the system prompt, and the model pulls the full instructions with the locked `load_skill` tool, which records a usage row as a side effect. Versioning comes free from the notes subsystem, pinning is per project, and three built-in skills provision themselves on first listing.
 
 Skills are the user-facing half of how the agent grounds itself; see [using the agent](/FollowThrough.ai/using/the-agent/) for what loading a skill looks like from the chat side.
 
 ## Why this subsystem exists
 
-Two problems fall out of "let users write their own agent instructions." First, context is finite: a workspace can accumulate hundreds of skills, so the full text of every skill cannot go into every system prompt, which means discovery has to be cheap and loading has to be a deliberate act. Second, accountability: once the agent follows user-written instructions, you need to know *which* instructions shaped a given answer. The split design below (summaries always advertised, full text behind a tool call that writes a `skill_usages` row) answers both.
+Two problems fall out of "let users write their own agent instructions." First, context is finite: a workspace can accumulate hundreds of skills, so the full text of every skill cannot go into every system prompt, which means discovery has to be cheap and loading has to be a deliberate act. Second, accountability: once the agent follows user-written instructions, you need to know _which_ instructions shaped a given answer. The split design below (summaries always advertised, full text behind a tool call that writes a `skill_usages` row) answers both.
 
 ## Where things live
 
@@ -23,7 +23,10 @@ Two problems fall out of "let users write their own agent instructions." First, 
 
 The user-facing surface is small: `/skills` lists the catalog and `/skills/[id]` edits one skill, with SKILL.md import through the remote functions in `src/lib/remote/skills/skills.remote.ts`.
 
-<Screenshot id="skill-support" alt="The skills catalog, listing each skill with its description and enable state" />
+<Screenshot
+	id="skill-support"
+	alt="The skills catalog, listing each skill with its description and enable state"
+/>
 
 ## Storage: a note plus a metadata row
 
@@ -57,9 +60,9 @@ flowchart LR
 `SkillLibrary` (`library.ts`) holds the rules callers rely on:
 
 - **Creation converts a note.** `create` rejects folders, derives the slug from the name, and rejects a slug that collides with any of the user's other skills. A blank description becomes `Reusable instructions for {name}.`
-- **Selection distillation checks out the exact text.** `createFromSelection` rejects the input unless the selection's revision, offsets, and text all match the source note's *current* state, and the provenance record must already exist. The controller records the selection anchor and provenance first, in the same transaction (`controller.ts:125`), so every distilled skill carries a traceable lineage.
+- **Selection distillation checks out the exact text.** `createFromSelection` rejects the input unless the selection's revision, offsets, and text all match the source note's _current_ state, and the provenance record must already exist. The controller records the selection anchor and provenance first, in the same transaction (`controller.ts:125`), so every distilled skill carries a traceable lineage.
 - **Content edits and metadata edits are different operations.** `update` rejects a call that carries both `raw` SKILL.md and a structured manifest. A metadata-only update (name, description, trigger hints, enable flag) never touches the note's document or revision history: the body belongs to the note sync path. A manifest update rewrites the body and appends a new revision.
-- **History is append-only.** `restoreVersion` copies an old snapshot forward as a *new* current revision (and restores its attachment snapshot) instead of rewinding.
+- **History is append-only.** `restoreVersion` copies an old snapshot forward as a _new_ current revision (and restores its attachment snapshot) instead of rewinding.
 - **Pinning is per project.** A pinned skill leads the advertised catalog in that project and is never budget-dropped. Pin state resolves through the `project_skill_pins` join for the requested project.
 
 ## The agent tool catalog

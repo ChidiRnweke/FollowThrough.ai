@@ -8,7 +8,10 @@ import Screenshot from '../../../../components/screenshot.astro';
 
 Open a note and start typing. A note is a rich-text Markdown document inside a project, edited in a vendored TipTap editor: it autosaves two seconds after you stop typing, saves to your device first, and syncs when it can. Select any text to reach AI actions (ask about it, extract promises, find related notes, propose references, generate a diagram), and Mermaid diagrams render inline and convert to draw.io.
 
-<Screenshot id="note-view" alt="A note open in the editor, with backlink chips and the save status in the utility row" />
+<Screenshot
+	id="note-view"
+	alt="A note open in the editor, with backlink chips and the save status in the utility row"
+/>
 
 ## Edit the note
 
@@ -20,7 +23,7 @@ A save never changes a note's project or turns it into a folder (moving is its o
 
 You never have to press save for routine editing: the note autosaves two seconds after you stop typing, and Cmd/Ctrl+S saves immediately. Every save lands on your device first, then syncs to the server. Read the status in the utility row to know which state you're in:
 
-- **Saved, *time*:** device and server agree; the timestamp says how long ago.
+- **Saved, _time_:** device and server agree; the timestamp says how long ago.
 - **Syncing:** a save is in flight.
 - **Saved on device, retry sync:** you're offline or the server was unreachable. The note is safe locally and syncs on its own once the connection returns.
 - **Couldn't save, retry:** the last sync failed. Hover the status for the reason.

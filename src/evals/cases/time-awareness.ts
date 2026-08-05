@@ -286,9 +286,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 		},
 		async run(lab) {
 			const now = new Date();
-			const cutoff = new Date(
-				now.getTime() - 30 * DAY_MS
-			).toISOString() as DateTime;
+			const cutoff = new Date(now.getTime() - 30 * DAY_MS).toISOString() as DateTime;
 			const workspace = await seedWorkspace(lab, temporalNotesWorkspace());
 			const actor = workspace.actor;
 

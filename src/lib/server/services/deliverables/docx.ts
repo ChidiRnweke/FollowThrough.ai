@@ -32,7 +32,8 @@ import {
 	collectImageSources,
 	fetchImages,
 	mermaidSourceHash,
-	svgDimensions
+	svgDimensions,
+	type ImageSourceResolver
 } from '$lib/server/repositories/deliverables/export-images';
 
 export interface GenerateDocxInput extends DiagramRenders {
@@ -41,6 +42,8 @@ export interface GenerateDocxInput extends DiagramRenders {
 	/** Template-extracted styles; when present they win over `settings` (explicit choice). */
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
+	/** Resolves app-owned attachment image URLs through the actor; absent sources degrade. */
+	readonly imageResolver?: ImageSourceResolver;
 }
 
 const HEADING_LEVELS = [
@@ -93,6 +96,12 @@ interface DocxContext {
 	readonly blockquoteDepth: number;
 	/** Inside a table header cell: body runs render bold. */
 	readonly forceBold: boolean;
+	/**
+	 * Shared counter of ordered lists. Each list takes the next id so every one gets its
+	 * own concrete numbering instance — otherwise Word continues one counter across all
+	 * separate lists (1,2,3 … 4,5,6) instead of restarting each at 1.
+	 */
+	readonly orderedListInstances: { next: number };
 }
 
 function lineSpacing(settings: ExportSettings) {
@@ -448,6 +457,7 @@ function convertNode(
 		}
 		case 'bulletList':
 		case 'orderedList': {
+			const listInstance = type === 'orderedList' ? ctx.orderedListInstances.next++ : undefined;
 			for (const item of content) {
 				if (item.type !== 'listItem') continue;
 				const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
@@ -461,7 +471,13 @@ function convertNode(
 							new Paragraph({
 								...(type === 'bulletList'
 									? { bullet: { level: depth } }
-									: { numbering: { reference: 'default-numbering', level: depth } }),
+									: {
+											numbering: {
+												reference: 'default-numbering',
+												level: depth,
+												...(listInstance !== undefined ? { instance: listInstance } : {})
+											}
+										}),
 								spacing: lineSpacing(ctx.settings),
 								children: runs.length > 0 ? runs : [new TextRun({ text: '' })]
 							})
@@ -535,7 +551,10 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 	const { notes } = input;
 	const settings = input.settings ?? defaultExportSettings;
 	const styles = resolveStyles(input.styles, settings);
-	const images = await fetchImages(notes.flatMap((note) => collectImageSources(note.document)));
+	const images = await fetchImages(
+		notes.flatMap((note) => collectImageSources(note.document)),
+		input.imageResolver
+	);
 	const ctx: DocxContext = {
 		styles,
 		settings,
@@ -547,7 +566,8 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,
 		blockquoteDepth: 0,
-		forceBold: false
+		forceBold: false,
+		orderedListInstances: { next: 0 }
 	};
 	const allBlocks: (Paragraph | Table)[] = [];
 

@@ -20,7 +20,10 @@ export interface NoteActionRun extends StoredRun {
 }
 
 /** Applies a finished action. Called on live completion and on post-refresh replay alike. */
-export type NoteActionHandler = (result: unknown, context: NoteActionContext) => void | Promise<void>;
+export type NoteActionHandler = (
+	result: unknown,
+	context: NoteActionContext
+) => void | Promise<void>;
 
 export interface NoteActionOutcome {
 	readonly status: 'completed' | 'cancelled' | 'failed';

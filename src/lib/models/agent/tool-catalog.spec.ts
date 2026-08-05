@@ -15,9 +15,7 @@ describe('tool catalog', () => {
 
 	it('describes every first-class tool', () => {
 		expect(
-			FIRST_CLASS_TOOL_NAMES.every((name) =>
-				TOOL_DESCRIPTIONS.some((entry) => entry.name === name)
-			)
+			FIRST_CLASS_TOOL_NAMES.every((name) => TOOL_DESCRIPTIONS.some((entry) => entry.name === name))
 		).toBe(true);
 	});
 

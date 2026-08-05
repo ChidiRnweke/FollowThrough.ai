@@ -34,18 +34,22 @@ describe('ArtifactLibrary states', () => {
 	it('renders artifacts with their format badge', async () => {
 		const screen = await render(ArtifactLibrary, { data: data() });
 		const titles = ['Project brief', 'DOCX'].map((label) => screen.getByText(label));
-		expect((await Promise.all(titles.map((locator) => locator.all()))).every((found) => found.length > 0)).toBe(
-			true
-		);
+		expect(
+			(await Promise.all(titles.map((locator) => locator.all()))).every((found) => found.length > 0)
+		).toBe(true);
 	});
 
 	it('flags a stale artifact as source-changed', async () => {
-		const screen = await render(ArtifactLibrary, { data: data({ artifacts: [artifact({ stale: true })] }) });
+		const screen = await render(ArtifactLibrary, {
+			data: data({ artifacts: [artifact({ stale: true })] })
+		});
 		expect(await screen.getByText('Source changed').all()).not.toHaveLength(0);
 	});
 
 	it('shows the empty state without a selected project', async () => {
 		const screen = await render(ArtifactLibrary, { data: data({ selectedProjectId: null }) });
-		expect(await screen.getByText('Select a project to see its artifacts.').all()).not.toHaveLength(0);
+		expect(await screen.getByText('Select a project to see its artifacts.').all()).not.toHaveLength(
+			0
+		);
 	});
 });

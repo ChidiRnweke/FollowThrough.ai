@@ -2,10 +2,11 @@
 
 Context: big docs overhaul of the Starlight site in `docs/`. Done so far: theme aligned to
 DESIGN_SYSTEM.md, home page rebuilt (app hero + user/dev tile split), self-hosting guide, favicon
-+ TypeDoc `gitRevision: 'master'` + `categorizeByGroup: false` fixes, top-nav dropdowns
-(`docs/src/components/nav-extras.astro`), sidebar split into User/Developer documentation,
-pagination + sidebar font taming, and 9 subagent-written subsystem pages. **Nothing is committed
-yet** — all work is uncommitted in the working tree.
+
+- TypeDoc `gitRevision: 'master'` + `categorizeByGroup: false` fixes, top-nav dropdowns
+  (`docs/src/components/nav-extras.astro`), sidebar split into User/Developer documentation,
+  pagination + sidebar font taming, and 9 subagent-written subsystem pages. **Nothing is committed
+  yet** — all work is uncommitted in the working tree.
 
 ## 1. Fix broken cross-links between the new pages (highest risk)
 

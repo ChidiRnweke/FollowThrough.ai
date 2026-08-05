@@ -3,6 +3,8 @@ import type {
 	Artifact,
 	ArtifactId,
 	ExportSettings,
+	GenerateBundleInput,
+	GenerateBundleOutput,
 	GenerateDocumentInput,
 	PreviewDocumentInput,
 	ListArtifactsOutput,
@@ -15,6 +17,10 @@ export interface DocumentGenerator {
 		actor: ActorContext,
 		input: GenerateDocumentInput
 	): Promise<{ artifact: Artifact; downloadUrl: string }>;
+}
+
+export interface BundleGenerator {
+	generateBundle(actor: ActorContext, input: GenerateBundleInput): Promise<GenerateBundleOutput>;
 }
 
 export interface ArtifactLister {

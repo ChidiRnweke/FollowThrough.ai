@@ -20,7 +20,8 @@ Under the hood, the server checks the stored bytes against the size and checksum
 
 Every attachment shows a status badge that moves through a small pipeline:
 
-<Mermaid source={`
+<Mermaid
+	source={`
 flowchart LR
     U[Upload lands<br/>in object storage] --> Q[queued]
     Q --> P[processing]
@@ -29,7 +30,8 @@ flowchart LR
     P --> UN[unsupported<br/>no reader for this format]
     P --> F[failed<br/>processing errored]
     F -->|Retry| Q
-`} />
+`}
+/>
 
 - **queued:** the upload is stored and waiting to be processed.
 - **processing:** the file is being read right now.

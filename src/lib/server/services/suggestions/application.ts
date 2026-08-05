@@ -16,19 +16,13 @@ interface TodoDeleter {
 	softDelete(actor: ActorContext, todoId: TodoId): Promise<void>;
 }
 interface RelationshipCreator {
-	create(
-		actor: ActorContext,
-		input: CreateRelationshipInput
-	): Promise<NoteRelationship>;
+	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;
 }
 interface RelationshipDeleter {
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void>;
 }
 interface ReferenceCreator {
-	create(
-		actor: ActorContext,
-		input: CreateReferenceInput
-	): Promise<ExternalReference>;
+	create(actor: ActorContext, input: CreateReferenceInput): Promise<ExternalReference>;
 }
 interface ReferenceDeleter {
 	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void>;
@@ -45,10 +39,7 @@ interface MemoryChangeApplier {
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryEntry>;
-	revert(
-		actor: ActorContext,
-		suggestion: MemorySuggestion
-	): Promise<void>;
+	revert(actor: ActorContext, suggestion: MemorySuggestion): Promise<void>;
 }
 interface DrawioContent {
 	validate(source: string): string;
