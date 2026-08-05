@@ -7,14 +7,13 @@ import type {
 	ExtractedTemplateStyles
 } from '$lib/models/deliverables';
 import type { ProseMirrorDocument } from '$lib/models/notes';
-import { defaultExportSettings } from '$lib/models/deliverables';
+import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
 	fetchImages,
 	mermaidSourceHash,
 	type ImageSourceResolver
 } from '$lib/server/repositories/deliverables/export-images';
-import { headingSpacingPt } from './heading-spacing.js';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };

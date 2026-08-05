@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { headingSpacingPt } from './heading-spacing';
+import { headingSpacingPt } from './index';
 
 describe('headingSpacingPt', () => {
-	// Regression: the editor double-spaces a title from the body below it, and
+	// Regression: the editor double-spaces a title from the body around it, and
 	// the exported document must carry the same rhythm in its heading spacing.
 	it('gives an h1 a full blank line on either side', () => {
 		expect(headingSpacingPt(1)).toEqual({ before: 18, after: 18 });
