@@ -20,6 +20,7 @@ import { TableHeader } from './table-header.js';
 import { TableRow } from './table-row.js';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { HeadingSpacing } from './heading-spacing.js';
+import { OrderedListNumbering } from './ordered-list-numbering.js';
 import { Markdown } from '@tiptap/markdown';
 import { Marked } from 'marked';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
@@ -156,6 +157,9 @@ export default [
 	// Keeps titles separated from diagrams and tables the moment they become
 	// adjacent (agent-written notes, a pasted heading, an inserted diagram).
 	HeadingSpacing,
+	// Renumbers numbered lists when a deletion touches them, and merges two
+	// lists that a removed paragraph left adjacent.
+	OrderedListNumbering,
 	Audio.configure({
 		inline: true,
 		HTMLAttributes: {
