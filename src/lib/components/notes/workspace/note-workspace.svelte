@@ -410,7 +410,12 @@
 			return;
 		}
 		// The insertion point is captured now: the selection may move or clear
-		// while the diagram is generated, and a refresh loses it entirely.
+		// while the diagram is generated, and a refresh loses it entirely. The
+		// editor holds it and maps it through every edit the author makes in
+		// between, so the node lands where the text is when the run settles.
+		if (action === 'diagram' && insertAt !== undefined) {
+			editorRef?.holdInsertionPoint(receipt.runId, insertAt);
+		}
 		const outcome = await actionRuns.track(receipt, {
 			action,
 			...(insertAt === undefined ? {} : { context: { insertAt } })
@@ -451,18 +456,24 @@
 			await refreshView();
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
-		actionRuns.on('diagram', async (result, context) => {
+		actionRuns.on('diagram', async (result, context, runId) => {
 			const output = result as GenerateMermaidDiagramOutput;
 			if (output.suggestion.kind !== 'diagram') return;
-			const insertAt = insertionPoint(context);
-			if (insertAt === undefined) {
+			const live = editorRef?.consumeInsertionPoint(runId);
+			// The live mapped point wins; a refresh leaves no plugin state behind, so
+			// fall back to the persisted one, which the editor kept current as the
+			// author typed. 'lost' means the location was deleted while the run flew.
+			const insertAt = live === 'lost' ? undefined : (live ?? insertionPoint(context));
+			if (
+				insertAt === undefined ||
+				!editorRef?.insertMermaid(insertAt, output.suggestion.payload.source)
+			) {
 				toast.error(
 					'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
 				);
 				suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 				return;
 			}
-			editorRef?.insertMermaid(insertAt, output.suggestion.payload.source);
 			markDirty();
 			const view = suggestionToView(output.suggestion, 'agent', noteRef);
 			suggestionTray.add([view]);
@@ -771,6 +782,8 @@
 			onchange={markDirty}
 			{activeAction}
 			actionCancelling={cancellingAction}
+			onInsertionPointMoved={(runId, position) =>
+				actionRuns.updateContext(runId, { insertAt: position })}
 			oncancelaction={() => {
 				const run = actionRuns.activeSelectionAction;
 				if (run) void actionRuns.cancel(run.runId);

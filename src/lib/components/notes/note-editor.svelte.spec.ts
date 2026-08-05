@@ -366,3 +366,66 @@ describe('Agent-updated block shimmer', () => {
 		expect(shimmered).toBe(0);
 	});
 });
+
+describe('Diagram insert point tracking', () => {
+	const renderEditor = (props: Record<string, unknown> = {}) => {
+		const screen = render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			revision: 1,
+			document: documentWith({
+				type: 'paragraph',
+				content: [{ type: 'text', text: 'Hello world.' }]
+			}),
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined,
+			...props
+		});
+		return screen;
+	};
+
+	const untilMounted = async () => {
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+	};
+
+	it('refuses an insertion point outside the document', async () => {
+		const screen = renderEditor();
+		await untilMounted();
+
+		expect(screen.component.insertMermaid(99999, 'graph TD')).toBe(false);
+	});
+
+	it('maps a held insert point past typing and inserts there', async () => {
+		const screen = renderEditor();
+		await untilMounted();
+		screen.component.holdInsertionPoint('run-1', 7);
+		screen.component.focusStart();
+		await userEvent.keyboard('Well, ');
+		screen.component.insertMermaid(
+			screen.component.consumeInsertionPoint('run-1') as number,
+			'graph TD'
+		);
+		const document = screen.component.getDocument() as {
+			content?: readonly { type: string }[];
+		};
+
+		expect(document.content?.[1]?.type).toBe('mermaid');
+	});
+
+	it('keeps the run store informed of the moved insert point', async () => {
+		const moved: Array<[string, number]> = [];
+		const screen = renderEditor({
+			onInsertionPointMoved: (runId, position) => void moved.push([runId, position])
+		});
+		await untilMounted();
+		screen.component.holdInsertionPoint('run-1', 7);
+		screen.component.focusStart();
+		await userEvent.keyboard('Well, ');
+
+		expect(moved.at(-1)).toEqual(['run-1', 13]);
+	});
+});

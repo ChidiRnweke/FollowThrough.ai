@@ -5,6 +5,7 @@
 	import { Plugin, PluginKey } from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
+	import type { AgentRunId } from '$lib/models/agent';
 	import type {
 		NoteId,
 		NoteLinkTarget,
@@ -58,6 +59,13 @@
 		type ResolvedReferenceLinkGroup
 	} from './reference-link-plugin';
 	import { createSelectionActionPlugin, selectionActionKey } from './selection-action-plugin';
+	import {
+		createPendingInsertionsPlugin,
+		getPendingInsertion,
+		holdPendingInsertion,
+		pendingInsertionsKey,
+		releasePendingInsertion
+	} from './pending-insertions-plugin';
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -124,6 +132,7 @@
 		onreviseMermaid,
 		onconvertMermaid,
 		onrejectDrawio,
+		onInsertionPointMoved,
 		diagrams = [],
 		activeAction,
 		actionCancelling = false,
@@ -153,6 +162,8 @@
 		onconvertMermaid: (source: string, instruction?: string) => Promise<DiagramSuggestion>;
 		onrejectDrawio: (suggestionId: SuggestionId) => Promise<void>;
 		diagrams?: readonly Diagram[];
+		/** Each remap of a pending diagram's insert point, so the parent can persist it. */
+		onInsertionPointMoved?: (runId: AgentRunId, position: number) => void;
 		/** The AI selection action running against this note, if any. */
 		activeAction?: NoteAiAction;
 		/** True once its cancellation was requested but the run has not settled. */
@@ -473,6 +484,10 @@
 	let linkedReferencesSnapshot = untrack(() => linkedReferences);
 	let revisionSnapshot = untrack(() => revision);
 
+	// What the run store last saw for each pending insertion point, so the
+	// transaction listener only reports actual movement, not every keystroke.
+	let lastReportedInsertionPoint: Record<string, number> = {};
+
 	$effect(() => {
 		anchoredSnapshot = anchored;
 		linkedReferencesSnapshot = linkedReferences;
@@ -513,6 +528,19 @@
 			})
 		);
 		editor.registerPlugin(createSelectionActionPlugin());
+		editor.registerPlugin(createPendingInsertionsPlugin());
+		// Keep the run store's context on the mapped position, so a refresh while the
+		// author is still typing lands the diagram where the text is, not where it was.
+		editor.on('transaction', () => {
+			const points = pendingInsertionsKey.getState(editor.state);
+			if (!points) return;
+			for (const [runId, point] of Object.entries(points)) {
+				if (typeof point === 'number' && point !== lastReportedInsertionPoint[runId]) {
+					lastReportedInsertionPoint[runId] = point;
+					onInsertionPointMoved?.(runId as AgentRunId, point);
+				}
+			}
+		});
 		editor.on('selectionUpdate', () => {
 			const selection = readSelection();
 			if (selection) perNote?.selection.set(selection);
@@ -616,16 +644,44 @@
 		editor?.commands.focus('end');
 	}
 
-	/** Insert a mermaid diagram node at the given ProseMirror position. */
-	export function insertMermaid(at: number, source: string): void {
-		editor
-			?.chain()
-			.focus()
-			.insertContentAt(at, {
-				type: 'mermaid',
-				content: source ? [{ type: 'text', text: source }] : []
-			})
-			.run();
+	/** Records where a pending diagram run's node should be inserted. */
+	export function holdInsertionPoint(runId: string, at: number): void {
+		if (!editor) return;
+		editor.view.dispatch(holdPendingInsertion(editor.state.tr, runId, at));
+	}
+
+	/**
+	 * Where a pending diagram's node goes right now, and stops tracking it.
+	 * `'lost'` means the location was deleted or replaced while the run was in
+	 * flight; `undefined` means this editor never held it (e.g. after a refresh).
+	 */
+	export function consumeInsertionPoint(runId: string): number | 'lost' | undefined {
+		if (!editor) return undefined;
+		const point = getPendingInsertion(editor.state, runId);
+		editor.view.dispatch(releasePendingInsertion(editor.state.tr, runId));
+		return point;
+	}
+
+	/** Insert a mermaid diagram node at the given ProseMirror position, if it is valid. */
+	export function insertMermaid(at: number, source: string): boolean {
+		if (!editor) return false;
+		// The captured position can be stale (the author kept typing while the run
+		// was in flight): out of bounds positions throw on resolve, so bail out and
+		// let the caller fall back to the suggestion tray.
+		if (!Number.isFinite(at) || at < 0 || at > editor.state.doc.content.size) return false;
+		try {
+			editor
+				.chain()
+				.focus()
+				.insertContentAt(at, {
+					type: 'mermaid',
+					content: source ? [{ type: 'text', text: source }] : []
+				})
+				.run();
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	/**

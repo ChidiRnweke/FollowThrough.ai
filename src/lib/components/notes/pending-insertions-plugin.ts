@@ -43,7 +43,7 @@ export function createPendingInsertionsPlugin(): Plugin {
 					return rest;
 				}
 				if (!tr.docChanged) return previous;
-				const mapped: PendingInsertionPoints = {};
+				const mapped: Record<string, number | 'lost'> = {};
 				for (const [runId, point] of Object.entries(previous)) {
 					if (point === 'lost') {
 						mapped[runId] = 'lost';

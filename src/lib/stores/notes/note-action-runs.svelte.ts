@@ -22,7 +22,8 @@ export interface NoteActionRun extends StoredRun {
 /** Applies a finished action. Called on live completion and on post-refresh replay alike. */
 export type NoteActionHandler = (
 	result: unknown,
-	context: NoteActionContext
+	context: NoteActionContext,
+	runId: AgentRunId
 ) => void | Promise<void>;
 
 export interface NoteActionOutcome {
@@ -195,6 +196,18 @@ export class NoteActionRunsStore {
 		this.streams.clear();
 	}
 
+	/**
+	 * Merges a patch into a run's context and persists it. The diagram handler
+	 * uses this to keep the insertion point current as the author types, so a
+	 * refresh mid-run still lands the node where the text is.
+	 */
+	updateContext(runId: AgentRunId, patch: NoteActionContext): void {
+		this.entries = this.entries.map((entry) =>
+			entry.runId === runId ? { ...entry, context: { ...entry.context, ...patch } } : entry
+		);
+		this.persist();
+	}
+
 	private attach(entry: NoteActionRun): void {
 		this.streams.get(entry.runId)?.close();
 		const stream = this.transport.open(
@@ -215,7 +228,7 @@ export class NoteActionRunsStore {
 		if (event.type === 'workflow_result') {
 			const entry = this.entries.find((candidate) => candidate.runId === runId);
 			const handler = this.handlers.get(event.action);
-			if (handler) await handler(event.result, entry?.context ?? {});
+			if (handler) await handler(event.result, entry?.context ?? {}, entry?.runId ?? runId);
 			this.settle(runId, { status: 'completed', result: event.result });
 			return;
 		}

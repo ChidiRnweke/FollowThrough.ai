@@ -62,6 +62,17 @@ describe('NoteActionRunsStore', () => {
 		expect(contexts).toEqual([{ source: 'graph TD' }]);
 	});
 
+	it('persists a context patch so a refresh sees the moved insertion point', () => {
+		const { store, storage } = setup();
+		void start(store);
+		store.updateContext(runId, { insertAt: 13 });
+
+		const stored = (
+			storage.load() as readonly { runId: AgentRunId; context: { insertAt?: number } }[]
+		).find((run) => run.runId === runId);
+		expect(stored?.context.insertAt).toBe(13);
+	});
+
 	it('resolves the caller with the completed result', async () => {
 		const { store, transport } = setup();
 		const settled = start(store);
