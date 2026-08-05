@@ -13,7 +13,9 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
-	import { ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
+	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
+	import type { ProjectExportEntry } from '$lib/models/projects';
+	import { projectExportEntries } from '$lib/models/projects';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
@@ -24,6 +26,19 @@
 	let renameOpen = $state(false);
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
+	let exportOpen = $state(false);
+	let exportSourceTitle = $state('');
+	let exportEntries = $state<readonly ProjectExportEntry[]>([]);
+
+	// The whole project, folders preserved as folders inside the zip. A project with no
+	// notes in it gets no menu item rather than a dialog with nothing to offer.
+	const projectEntries = $derived(projectExportEntries(data.view.tree));
+
+	function startExport(sourceTitle: string, entries: readonly ProjectExportEntry[]): void {
+		exportSourceTitle = sourceTitle;
+		exportEntries = entries;
+		exportOpen = true;
+	}
 
 	async function createNote(title: string): Promise<void> {
 		const output = await projectActions.createNote(title, project.id);
@@ -87,6 +102,11 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
 					<DropdownMenu.Item onclick={() => (renameOpen = true)}>Rename project</DropdownMenu.Item>
+					{#if projectEntries.length > 0}
+						<DropdownMenu.Item onclick={() => startExport(project.name, projectEntries)}>
+							Export documents…
+						</DropdownMenu.Item>
+					{/if}
 					<DropdownMenu.Item onclick={() => (exportDefaultsOpen = true)}>
 						Export defaults…
 					</DropdownMenu.Item>
@@ -107,6 +127,7 @@
 			renderedAt={data.renderedAt}
 			oncreatenote={() => (newNoteOpen = true)}
 			onimport={() => (importOpen = true)}
+			onexport={startExport}
 		/>
 	</PageShell>
 {/key}
@@ -134,6 +155,12 @@
 	initialValue={project.name}
 	busy={projectActions.busy}
 	onsubmit={rename}
+/>
+<BulkExportDialog
+	bind:open={exportOpen}
+	projectId={project.id}
+	sourceTitle={exportSourceTitle}
+	entries={exportEntries}
 />
 <ExportSettingsDialog bind:open={exportDefaultsOpen} projectId={project.id} />
 <ImportNotesDialog bind:open={importOpen} projectId={project.id} destination={project.name} />

@@ -177,3 +177,5 @@ export interface ArchiveProjectInput {
 export interface ArchiveProjectOutput {
 	readonly project: Project;
 }
+
+export * from './export-entries';

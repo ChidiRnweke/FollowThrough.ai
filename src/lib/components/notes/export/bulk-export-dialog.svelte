@@ -1,19 +1,8 @@
-<script lang="ts" module>
-	/** A note offered for export, with the path it takes inside the zip. */
-	export interface BulkExportEntry {
-		readonly id: string;
-		readonly title: string;
-		/** Folder-relative and extension-less, e.g. `Interviews/Round two`. */
-		readonly path: string;
-		/** Folders below the exported one, for the picker's indentation. */
-		readonly depth: number;
-	}
-</script>
-
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
-	import { defaultExportSettings } from '$lib/models/deliverables';
+	import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
+	import type { ProjectExportEntry } from '$lib/models/projects';
 	import type { NoteDocument } from '$lib/models/notes';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -36,13 +25,14 @@
 	let {
 		open = $bindable(false),
 		projectId,
-		folderTitle = '',
+		sourceTitle = '',
 		entries = []
 	}: {
 		open?: boolean;
 		projectId: string;
-		folderTitle?: string;
-		entries?: readonly BulkExportEntry[];
+		/** The folder or project the documents come from — names the export and the zip. */
+		sourceTitle?: string;
+		entries?: readonly ProjectExportEntry[];
 	} = $props();
 
 	let title = $state('');
@@ -61,18 +51,22 @@
 	let documents = $state<readonly NoteDocument[]>([]);
 	let documentsLoad = $state<Promise<unknown> | null>(null);
 
+	// A whole project can hold more notes than one export takes, so the offer starts at the
+	// cap rather than selecting everything and failing on Generate.
+	const offered = $derived(entries.slice(0, MAX_BUNDLE_ENTRIES));
+
 	$effect(() => {
 		if (!open) return;
-		title = folderTitle;
+		title = sourceTitle;
 		format = 'pdf';
 		bundle = 'zip';
 		result = null;
 		error = '';
 		selected.clear();
-		for (const entry of entries) selected.add(entry.id);
+		for (const entry of offered) selected.add(entry.id);
 		void loadSettings();
 		documents = [];
-		documentsLoad = entries.length > 0 ? loadDocuments() : null;
+		documentsLoad = offered.length > 0 ? loadDocuments() : null;
 	});
 
 	async function loadSettings(): Promise<void> {
@@ -85,7 +79,7 @@
 
 	async function loadDocuments(): Promise<void> {
 		try {
-			documents = await listNoteDocuments(entries.map((entry) => entry.id));
+			documents = await listNoteDocuments(offered.map((entry) => entry.id));
 		} catch {
 			// The bodies are an optimization: without them diagrams fall back to their
 			// source text, which is worth an export rather than a blocked dialog.
@@ -94,7 +88,11 @@
 	}
 
 	const selectedEntries = $derived(entries.filter((entry) => selected.has(entry.id)));
-	const allSelected = $derived(entries.length > 0 && selectedEntries.length === entries.length);
+	const atCap = $derived(selectedEntries.length >= MAX_BUNDLE_ENTRIES);
+	const allSelected = $derived(
+		entries.length > 0 && (selectedEntries.length === entries.length || atCap)
+	);
+	const overCap = $derived(entries.length > MAX_BUNDLE_ENTRIES);
 
 	const mermaidSources = $derived(
 		mermaidSourcesIn(documents.filter((entry) => selected.has(entry.id)))
@@ -105,14 +103,16 @@
 	const indent = (depth: number): string =>
 		['pl-3', 'pl-8', 'pl-13', 'pl-18', 'pl-23'][depth] ?? 'pl-23';
 
+	// Selection stops at the cap rather than letting the picker reach a state Generate
+	// would refuse: the limit is stated once, above the list, and enforced silently here.
 	function toggle(id: string, checked: boolean): void {
-		if (checked) selected.add(id);
-		else selected.delete(id);
+		if (!checked) selected.delete(id);
+		else if (!atCap) selected.add(id);
 	}
 
 	function toggleAll(): void {
 		if (allSelected) selected.clear();
-		else for (const entry of entries) selected.add(entry.id);
+		else for (const entry of entries.slice(0, MAX_BUNDLE_ENTRIES)) selected.add(entry.id);
 	}
 
 	async function submit(event: SubmitEvent): Promise<void> {
@@ -166,7 +166,7 @@
 		<Dialog.Header>
 			<Dialog.Title>Export documents</Dialog.Title>
 			<Dialog.Description>
-				Take the notes in {folderTitle || 'this folder'} out as PDF or Word files.
+				Take the notes in {sourceTitle || 'this project'} out as PDF or Word files.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -245,6 +245,11 @@
 						{allSelected ? 'Select none' : 'Select all'}
 					</Button>
 				</div>
+				{#if overCap}
+					<p class="provenance-caption">
+						An export takes up to {MAX_BUNDLE_ENTRIES} documents at a time.
+					</p>
+				{/if}
 				<!-- Bled past the measure so the rows read as one continuous list, with an
 				     inset gutter on the right because the scrollbar overlays the content. -->
 				<ul
@@ -258,9 +263,9 @@
 								itself and leaves clicks on the control to the control.
 							-->
 							<Label
-								class="row-quiet {indent(
-									entry.depth
-								)} flex h-11 w-full items-center gap-2 pr-2 text-sm font-normal sm:h-9"
+								class="row-quiet {indent(entry.depth)} {atCap && !selected.has(entry.id)
+									? 'text-muted-foreground'
+									: ''} flex h-11 w-full items-center gap-2 pr-2 text-sm font-normal sm:h-9"
 								onclick={(event: MouseEvent) => {
 									if ((event.target as HTMLElement | null)?.closest('[role="checkbox"]')) return;
 									toggle(entry.id, !selected.has(entry.id));
@@ -269,7 +274,7 @@
 								<Checkbox
 									checked={selected.has(entry.id)}
 									onCheckedChange={(checked) => toggle(entry.id, checked === true)}
-									disabled={busy}
+									disabled={busy || (atCap && !selected.has(entry.id))}
 									aria-label={entry.title}
 								/>
 								<span class="min-w-0 flex-1 truncate">{entry.title}</span>

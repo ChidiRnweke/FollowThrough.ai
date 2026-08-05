@@ -1,5 +1,10 @@
 <script lang="ts">
-	import type { GetProjectOutput, ProjectTreeNode } from '$lib/models/projects';
+	import type {
+		GetProjectOutput,
+		ProjectExportEntry,
+		ProjectTreeNode
+	} from '$lib/models/projects';
+	import { projectExportEntries } from '$lib/models/projects';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
@@ -22,9 +27,6 @@
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import NameDialog from '../name-dialog.svelte';
-	import BulkExportDialog, {
-		type BulkExportEntry
-	} from '../../notes/export/bulk-export-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
 	import { pickTip } from '../resource-tips';
 	import { formatRelativeTime } from '../../shared/labels';
@@ -46,7 +48,8 @@
 		tipSeed = 0,
 		renderedAt,
 		oncreatenote,
-		onimport
+		onimport,
+		onexport
 	}: {
 		view: GetProjectOutput;
 		counts: ProjectCounts;
@@ -58,6 +61,8 @@
 		renderedAt: string;
 		oncreatenote?: () => void;
 		onimport?: () => void;
+		/** The export dialog lives on the page, beside the project's other dialogs. */
+		onexport?: (sourceTitle: string, entries: readonly ProjectExportEntry[]) => void;
 	} = $props();
 
 	const now = $derived(Date.parse(renderedAt));
@@ -108,40 +113,6 @@
 	// Folders have no page of their own, so the row opens in place — otherwise the
 	// nested notes counted in the heading are unreachable from here.
 	const expanded = new SvelteSet<NoteId>();
-
-	let exportOpen = $state(false);
-	let exportFolderTitle = $state('');
-	let exportEntries = $state<readonly BulkExportEntry[]>([]);
-
-	/**
-	 * The notes under a folder, flattened, each carrying the path it will take inside the
-	 * zip — the folder itself is the archive root, so its own name is not repeated in
-	 * every path. Folders contribute structure, never a file of their own.
-	 */
-	function exportableEntries(
-		nodes: readonly ProjectTreeNode[],
-		prefix: string,
-		depth: number
-	): BulkExportEntry[] {
-		return nodes.flatMap((node) =>
-			node.entry.kind === 'folder'
-				? exportableEntries(node.children, `${prefix}${node.entry.title}/`, depth + 1)
-				: [
-						{
-							id: node.entry.id,
-							title: node.entry.title,
-							path: `${prefix}${node.entry.title}`,
-							depth
-						}
-					]
-		);
-	}
-
-	function startExport(node: ProjectTreeNode): void {
-		exportFolderTitle = node.entry.title;
-		exportEntries = exportableEntries(node.children, '', 0);
-		exportOpen = true;
-	}
 
 	function toggleFolder(id: NoteId): void {
 		if (expanded.has(id)) expanded.delete(id);
@@ -286,8 +257,12 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
-					{#if isFolder && exportableEntries(node.children, '', 0).length > 0}
-						<DropdownMenu.Item onclick={() => startExport(node)}>Export…</DropdownMenu.Item>
+					{#if isFolder && projectExportEntries(node.children).length > 0}
+						<DropdownMenu.Item
+							onclick={() => onexport?.(node.entry.title, projectExportEntries(node.children))}
+						>
+							Export…
+						</DropdownMenu.Item>
 					{/if}
 					<DropdownMenu.Item onclick={() => startRename(node.entry.id, node.entry.title)}>
 						Rename
@@ -381,11 +356,4 @@
 	initialValue={renameEntryTitle}
 	busy={projectActions.busy}
 	onsubmit={renameEntrySubmit}
-/>
-
-<BulkExportDialog
-	bind:open={exportOpen}
-	projectId={project.id}
-	folderTitle={exportFolderTitle}
-	entries={exportEntries}
 />

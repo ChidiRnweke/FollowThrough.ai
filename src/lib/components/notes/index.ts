@@ -1,3 +1,4 @@
+export { default as BulkExportDialog } from './export/bulk-export-dialog.svelte';
 export { default as ExportSettingsDialog } from './export/export-settings-dialog.svelte';
 export { default as ExportSlider } from './export/export-slider.svelte';
 export { default as ImportNotesDialog } from './import-notes-dialog.svelte';
