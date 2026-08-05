@@ -59,6 +59,22 @@ const table = () => ({
 	]
 });
 
+const bulletList = (items: string[]) => ({
+	type: 'bulletList',
+	content: items.map((text) => ({
+		type: 'listItem',
+		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+	}))
+});
+
+const orderedList = (items: string[]) => ({
+	type: 'orderedList',
+	content: items.map((text) => ({
+		type: 'listItem',
+		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+	}))
+});
+
 const mermaidSource = 'graph LR\n  A --> B';
 
 const diagramTextOf = (editor: Editor): string | undefined =>
@@ -180,6 +196,39 @@ describe('heading Enter around block nodes', () => {
 		const blocks = docJSON(editor).content ?? [];
 		const tableIndex = blocks.findIndex((block) => block.type === 'table');
 		expect(blocks[tableIndex - 1]?.type).toBe('paragraph');
+		editor.destroy();
+	});
+
+	// Regression: `splitBlock` used to fail outright when the block after the
+	// title was a list, so a title above a bulleted list could not gain a blank
+	// line below it.
+	it('keeps a paragraph between the title and a following bulleted list after Enter', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), bulletList(['one', 'two'])]
+		});
+		editor.commands.setTextSelection(6);
+
+		pressEnter(editor);
+
+		const blocks = docJSON(editor).content ?? [];
+		const listIndex = blocks.findIndex((block) => block.type === 'bulletList');
+		expect(blocks[listIndex - 1]?.type).toBe('paragraph');
+		editor.destroy();
+	});
+
+	it('keeps a paragraph between the title and a following ordered list after Enter', () => {
+		const editor = createEditor({
+			type: 'doc',
+			content: [heading('Title'), orderedList(['one', 'two'])]
+		});
+		editor.commands.setTextSelection(6);
+
+		pressEnter(editor);
+
+		const blocks = docJSON(editor).content ?? [];
+		const listIndex = blocks.findIndex((block) => block.type === 'orderedList');
+		expect(blocks[listIndex - 1]?.type).toBe('paragraph');
 		editor.destroy();
 	});
 

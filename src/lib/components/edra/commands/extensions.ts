@@ -125,15 +125,14 @@ export default [
 	// Default Enter only exits a heading when the caret is at the very end; a
 	// mid-heading split keeps the tail a heading. Force every Enter inside a
 	// heading to land in a paragraph (Notion-style): an empty heading converts in
-	// place, otherwise split and convert the new block. At the end of a heading
-	// `splitBlock` already creates a paragraph, so `setParagraph` is a no-op that
-	// fails the chain — which is why the shortcut must not relay the chain's
-	// return value: a false here would let the core Enter binding run as well
-	// and insert a second block.
+	// place, otherwise split and convert the new block.
 	//
-	// The start of a title is handled directly: a split at the very first
-	// position converts the title itself into a paragraph, so the new block is
-	// inserted before the heading instead.
+	// The start and end of a title are inserted directly rather than split.
+	// `splitBlock` fails when the next block is not a paragraph — a title above
+	// a bulleted list, table or diagram could not gain a blank line below it —
+	// and a split at the very first position converts the title itself into a
+	// paragraph. An explicit insert at the heading's boundary is deterministic
+	// and never reaches into a following block's content.
 	Heading.extend({
 		addKeyboardShortcuts() {
 			return {
@@ -146,6 +145,12 @@ export default [
 					}
 					if (empty && $head.parentOffset === 0) {
 						editor.chain().insertContentAt($head.pos - 1, { type: 'paragraph' }).run();
+						return true;
+					}
+					if (empty && $head.parentOffset === $head.parent.content.size) {
+						// Position after the heading block, before whatever follows it.
+						const after = $head.pos - $head.parentOffset + $head.parent.nodeSize - 1;
+						editor.chain().insertContentAt(after, { type: 'paragraph' }).run();
 						return true;
 					}
 					editor.chain().splitBlock().setParagraph().run();

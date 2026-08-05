@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin } from '@tiptap/pm/state';
+import { ReplaceStep } from '@tiptap/pm/transform';
 
 /**
  * Keeps numbered lists continuously numbered when items disappear.
@@ -66,6 +67,9 @@ export const OrderedListNumbering = Extension.create({
 						const tr = transactions[i];
 						if (!tr.docChanged) continue;
 						for (const step of tr.steps) {
+							// Only ReplaceStep carries a deleted range; other steps
+							// (marks, attributes) leave content untouched.
+							if (!(step instanceof ReplaceStep)) continue;
 							if (step.from === step.to) continue;
 							let pos = tr.mapping.map(step.from);
 							for (let j = i + 1; j < transactions.length; j += 1) {
