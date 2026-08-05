@@ -35,6 +35,7 @@ import {
 	svgDimensions,
 	type ImageSourceResolver
 } from '$lib/server/repositories/deliverables/export-images';
+import { headingSpacingPt } from './heading-spacing.js';
 
 export interface GenerateDocxInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
@@ -427,9 +428,16 @@ function convertNode(
 			const level = Math.min((attrs.level as number) ?? 1, 6);
 			const text = collectText(node);
 			const h = headingFont(ctx.styles, level);
+			const spacing = headingSpacingPt(level);
 			results.push(
 				new Paragraph({
 					heading: HEADING_LEVELS[level - 1],
+					// A title is double-spaced from the body, mirroring the editor.
+					// DOCX spacing is in twips; section headings keep the Word
+					// style's own spacing.
+					...(spacing
+						? { spacing: { before: spacing.before * 20, after: spacing.after * 20 } }
+						: {}),
 					children: [
 						new TextRun({
 							text,

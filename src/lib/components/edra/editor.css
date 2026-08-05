@@ -129,14 +129,17 @@
 
 .tiptap h1,
 .tiptap h2 {
-	margin-top: 1rem;
-	/* A title is double-spaced from the body that follows it: the heading's own
-	   bottom margin plus the paragraph's top margin reads as a full blank line,
-	   twice the paragraph-to-paragraph gap. */
+	/* A title is double-spaced from the body around it — margin-y above and
+	   below: the heading's own margin plus the neighbouring paragraph's reads
+	   as a full blank line on both sides, twice the paragraph-to-paragraph gap.
+	   A title that opens the note keeps its top margin at zero via the
+	   `:first-child` rule above. */
+	margin-top: 1.5rem;
 	margin-bottom: 1.5rem;
 }
 
 .tiptap h2 {
+	margin-top: 1.25rem;
 	margin-bottom: 1.25rem;
 }
 

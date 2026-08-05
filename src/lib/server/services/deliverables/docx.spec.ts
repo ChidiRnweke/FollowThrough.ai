@@ -104,6 +104,35 @@ describe('Links in an exported document', () => {
 		expect(xml).not.toContain('<w:hyperlink');
 	});
 
+	// Regression: the editor double-spaces a title from the body below it; the
+	// exported document carries the same spacing (DOCX spacing is in twips).
+	it('double-spaces an h1 title in the document body', async () => {
+		const xml = await documentXml({
+			type: 'doc',
+			content: [
+				{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Title' }] },
+				{ type: 'paragraph', content: [{ type: 'text', text: 'Body.' }] }
+			]
+		});
+		expect(xml).toContain('<w:spacing w:after="360" w:before="360"/>');
+	});
+
+	it('gives an h2 title a slightly smaller double-space', async () => {
+		const xml = await documentXml({
+			type: 'doc',
+			content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section' }] }]
+		});
+		expect(xml).toContain('<w:spacing w:after="300" w:before="300"/>');
+	});
+
+	it('leaves deeper headings on the Word style spacing', async () => {
+		const xml = await documentXml({
+			type: 'doc',
+			content: [{ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Sub' }] }]
+		});
+		expect(xml).not.toContain('<w:spacing w:before=');
+	});
+
 	it('ignores a link mark carrying no href', async () => {
 		const xml = await documentXml(linked([{ type: 'link', attrs: {} }]));
 		expect(xml).not.toContain('<w:hyperlink');

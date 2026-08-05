@@ -14,6 +14,7 @@ import {
 	mermaidSourceHash,
 	type ImageSourceResolver
 } from '$lib/server/repositories/deliverables/export-images';
+import { headingSpacingPt } from './heading-spacing.js';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };
@@ -366,11 +367,14 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 		case 'heading': {
 			const level = Math.min((attrs.level as number) ?? 1, 6);
 			const sizes = [18, 16, 14, 13, 12, 11];
+			const spacing = headingSpacingPt(level);
 			return {
 				text: withFontRuns({ text: collectText(node) }, context.bodyFont),
 				fontSize: sizes[level - 1],
 				bold: true,
-				margin: [0, 10, 0, 5]
+				// A title is double-spaced from the body, mirroring the editor;
+				// section headings keep the tighter margin.
+				margin: spacing ? [0, spacing.before, 0, spacing.after] : [0, 10, 0, 5]
 			};
 		}
 		case 'paragraph': {
