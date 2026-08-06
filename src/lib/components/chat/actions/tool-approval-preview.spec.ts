@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { approvalPreview, targetNoteId } from './tool-approval-preview';
+import { approvalPreview, targetNoteId, type ApprovalPreview } from './tool-approval-preview';
+
+/** The body is a ProseMirror document now; reduce it back to text for an assertion. */
+const candidateText = (preview: ApprovalPreview): string => {
+	if (preview.kind !== 'note' || !preview.change.body) return '';
+	return (preview.change.body.candidate.content ?? [])
+		.map((block) => {
+			const text = block.content as readonly { text?: string }[] | undefined;
+			return (text ?? []).map((node) => node.text ?? '').join('');
+		})
+		.join('\n\n');
+};
 
 const note = () =>
 	noteBuilder({
@@ -41,7 +52,7 @@ describe('Previewing a pending note change', () => {
 			{ noteId: baseline.id, markdown: 'The cache is write-behind.\n\nRevisit in Q3.' },
 			baseline
 		);
-		expect(preview.kind === 'note' && preview.change.body?.candidate).toContain('write-behind');
+		expect(candidateText(preview)).toContain('write-behind');
 	});
 
 	it('diffs a targeted edit against the current note', () => {
@@ -51,7 +62,7 @@ describe('Previewing a pending note change', () => {
 			{ noteId: baseline.id, edits: [{ oldText: 'write-through', newText: 'write-behind' }] },
 			baseline
 		);
-		expect(preview.kind === 'note' && preview.change.body?.candidate).toContain('write-behind');
+		expect(candidateText(preview)).toContain('write-behind');
 	});
 
 	it('keeps untargeted prose in the previewed result', () => {
@@ -61,7 +72,7 @@ describe('Previewing a pending note change', () => {
 			{ noteId: baseline.id, edits: [{ oldText: 'write-through', newText: 'write-behind' }] },
 			baseline
 		);
-		expect(preview.kind === 'note' && preview.change.body?.candidate).toContain('Revisit in Q3.');
+		expect(candidateText(preview)).toContain('Revisit in Q3.');
 	});
 
 	/** Rejecting before approval beats approving and then being told it failed. */

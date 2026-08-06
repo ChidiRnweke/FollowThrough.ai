@@ -69,7 +69,7 @@
 	class="my-4 rounded-lg border border-border bg-background pb-4 dark:border-transparent dark:bg-muted/20"
 >
 	<div class="flex items-center mx-2 gap-2 justify-end print:justify-start" contenteditable="false">
-		{#if defaultLanguage.toLowerCase() === 'mermaid'}
+		{#if defaultLanguage.toLowerCase() === 'mermaid' && editor.isEditable}
 			<Tooltip tooltip="Convert to Mermaid Diagram">
 				<Button variant="ghost" size="icon-xs" class="print:hidden" onclick={convertToMermaid}>
 					<Sparkle />
@@ -126,7 +126,7 @@
 		<Button
 			variant="ghost"
 			size="icon-xs"
-			class="text-muted-foreground print:hidden"
+			class="text-muted-foreground print:hidden {editor.isEditable ? '' : 'hidden'}"
 			onclick={copyCode}
 		>
 			{#if isCopying}

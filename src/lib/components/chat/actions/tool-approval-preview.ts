@@ -21,7 +21,8 @@ export type ApprovalPreview =
 export interface NoteChange {
 	readonly title: string;
 	readonly titleChange?: { readonly from: string; readonly to: string };
-	readonly body?: { readonly base: string; readonly candidate: string };
+	/** Both sides as real documents, so the diff renders actual note content. */
+	readonly body?: { readonly base: Note['document']; readonly candidate: Note['document'] };
 	/** Reasons the edit will be rejected if approved, phrased for a person. */
 	readonly problems: readonly string[];
 	/** Changes with no diff to show, such as a pin or formatting-only edit. */
@@ -43,16 +44,20 @@ const candidateBody = (
 	name: string,
 	args: Readonly<Record<string, unknown>>,
 	baseline: Note
-): { plainText: string } | { problems: readonly string[] } => {
+): { document: Note['document']; plainText: string } | { problems: readonly string[] } => {
 	if (name === 'save_note') {
 		const markdown = typeof args.markdown === 'string' ? args.markdown : '';
 		const preview = previewNoteMarkdown(markdown);
-		return preview.ok ? { plainText: preview.plainText } : { problems: preview.problems };
+		return preview.ok
+			? { document: preview.document, plainText: preview.plainText }
+			: { problems: preview.problems };
 	}
 	const edits = Array.isArray(args.edits) ? (args.edits as NoteEdit[]) : [];
 	if (edits.length === 0) return { problems: ['This edit has no changes in it.'] };
 	const preview = previewNoteEdits(baseline, edits);
-	return preview.ok ? { plainText: preview.plainText } : { problems: preview.problems };
+	return preview.ok
+		? { document: preview.document, plainText: preview.plainText }
+		: { problems: preview.problems };
 };
 
 export const approvalPreview = (
@@ -79,7 +84,7 @@ export const approvalPreview = (
 			title: baseline.title || 'Untitled',
 			...(result.plainText === baseline.plainText
 				? {}
-				: { body: { base: baseline.plainText, candidate: result.plainText } }),
+				: { body: { base: baseline.document, candidate: result.document } }),
 			problems: [],
 			notices
 		}

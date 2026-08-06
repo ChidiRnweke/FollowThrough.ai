@@ -900,6 +900,8 @@
 		{note}
 		conflictRecord={noteSync.record}
 		{reviewingSuggestion}
+		{perNote}
+		diagrams={view.diagrams}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
 		onSelectRevision={(revisionId) => void selectRevision(revisionId)}

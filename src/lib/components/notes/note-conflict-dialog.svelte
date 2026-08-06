@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { NoteSyncRecord } from '$lib/models/notes';
-	import { noteRevisionText } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Spinner } from '$lib/components/ui/spinner';
@@ -37,7 +36,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="flex max-h-dvh flex-col sm:max-w-4xl">
+	<Dialog.Content class="dialog-fill flex flex-col sm:max-w-7xl">
 		<Dialog.Header>
 			<Dialog.Title>This note changed somewhere else</Dialog.Title>
 			<Dialog.Description>
@@ -46,23 +45,29 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<Tabs.Root value="local" class="min-h-0">
+		<Tabs.Root value="local" class="flex min-h-0 flex-1 flex-col">
 			<Tabs.List>
 				<Tabs.Trigger value="local">Your changes</Tabs.Trigger>
 				<Tabs.Trigger value="remote">Latest saved version</Tabs.Trigger>
 			</Tabs.List>
-			<Tabs.Content value="local">
+			<Tabs.Content value="local" class="min-h-0 flex-1 overflow-hidden">
 				<NoteVersionDiff
-					base={noteRevisionText(record.base.note)}
-					candidate={noteRevisionText(record.local)}
-					label="Your changes"
+					base={record.base.note.document}
+					candidate={record.local.document}
+					baseLabel="Shared base"
+					candidateLabel="Your changes"
+					baseTitle={record.base.note.title}
+					candidateTitle={record.local.title}
 				/>
 			</Tabs.Content>
-			<Tabs.Content value="remote">
+			<Tabs.Content value="remote" class="min-h-0 flex-1 overflow-hidden">
 				<NoteVersionDiff
-					base={noteRevisionText(record.base.note)}
-					candidate={noteRevisionText(record.remote?.note ?? record.base.note)}
-					label="Latest saved version"
+					base={record.base.note.document}
+					candidate={record.remote?.note.document ?? record.base.note.document}
+					baseLabel="Shared base"
+					candidateLabel="Latest saved version"
+					baseTitle={record.base.note.title}
+					candidateTitle={record.remote?.note.title ?? record.base.note.title}
 				/>
 			</Tabs.Content>
 		</Tabs.Root>

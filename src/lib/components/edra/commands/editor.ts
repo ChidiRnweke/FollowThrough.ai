@@ -50,6 +50,8 @@ const lowlight = createLowlight(all);
 
 export interface EdraEditorProps {
 	onUpdate?: () => void;
+	/** Read-only instances render the document with every node view but accept no edits. */
+	editable?: boolean;
 	ariaLabel?: string;
 	onFileUpload?: (file: File) => Promise<string>;
 	callAI?: (
@@ -91,6 +93,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 	// Self-referenced only from editor event handlers, which cannot fire during
 	// construction — and undefined-safe for SSR, where there is no editor at all.
 	const editor = useEditor({
+		editable: props?.editable ?? true,
 		extensions: [
 			...extensions,
 			...extraExtensions,

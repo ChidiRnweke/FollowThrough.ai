@@ -138,6 +138,21 @@ zone and center the voice line inside it.
 
 ## UX patterns
 
+- **Version history & conflict review:** A near-full-screen dialog (`dialog-fill`
+  height token, `sm:max-w-7xl`) containing a two-pane side-by-side comparison of
+  the same note at two points in time. Each pane renders the note faithfully
+  through the editor's own schema and node views in read-only mode, so diagrams,
+  code, callouts and todos look exactly as they do in the document. Changed
+  blocks are painted by a ProseMirror node decoration, not a parallel render:
+  removed reads as a destructive wash with strikethrough and a left accent, added
+  as the brand teal wash with a left accent, equal blocks unmarked. The note's
+  title heads each side, so a rename reads as a changed first line. The version
+  rail is a borderless divided list (`row-interactive`), never bordered rows in a
+  card; a row names its revision by date and publication state, never by a
+  version number or the note's own title, and carries the change summary for the
+  selected revision so it is stated once. Panes are labelled for what they are —
+  "Previous" against "Current draft" — never "the note now". The diff must never
+  be editable — a review surface changes nothing.
 - **Offline fallback:** When an uncached route cannot load, use a focused single-action status page
   with the product mark, a plain-language connection explanation, and one retry action. Do not
   imply that uncached server data or online-only mutations are available.

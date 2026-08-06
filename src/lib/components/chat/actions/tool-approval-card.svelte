@@ -115,7 +115,8 @@
 			<NoteVersionDiff
 				base={preview.change.body.base}
 				candidate={preview.change.body.candidate}
-				label="Proposed note changes"
+				baseLabel="Current note"
+				candidateLabel="Proposed change"
 				{compact}
 			/>
 		{/if}
@@ -210,7 +211,7 @@
 </Card.Root>
 
 <Dialog.Root bind:open={expanded}>
-	<Dialog.Content class="flex max-h-dvh flex-col sm:max-w-4xl">
+	<Dialog.Content class="dialog-fill flex flex-col sm:max-w-7xl">
 		<Dialog.Header>
 			<Dialog.Title>{friendlyToolLabel(tool.name)}</Dialog.Title>
 			<Dialog.Description>Review the change before approving it.</Dialog.Description>

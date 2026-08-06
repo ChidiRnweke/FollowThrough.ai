@@ -561,16 +561,6 @@ export interface RestoreNoteRevisionOutput {
 	readonly etag: NoteEtag;
 }
 
-/**
- * The text a note or one of its snapshots contributes to a diff.
- *
- * Shared so the history dialog and the draft-versus-published view feed the diff the same
- * shape — a title change has to read as a changed first line in both, or the two views
- * disagree about what changed.
- */
-export const noteRevisionText = (version: Pick<Note, 'title' | 'plainText'>): string =>
-	`${version.title}\n\n${version.plainText}`;
-
 export * from './prosemirror';
 
 export * from './note-patch';

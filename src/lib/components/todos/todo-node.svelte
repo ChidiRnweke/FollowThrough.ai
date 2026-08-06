@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
+	import { untrack } from 'svelte';
 	import type { TodoId } from '$lib/models/todos';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
@@ -12,6 +13,11 @@
 	import { formatDate, todayLocalDate } from '../shared/labels';
 
 	let { node, editor }: NodeViewProps = $props();
+
+	// The diff panes render notes read-only: the checkbox and title are chrome
+	// that must not mutate anything from a review surface. `isEditable` is fixed
+	// for the lifetime of a mounted node view, so it is read once.
+	const editable = untrack(() => editor.isEditable);
 
 	// TipTap's NodeViewProps types `editor` as the base TiptapEditor; our
 	// `perNote` slot lives on the subclass in `CoreEditor.ts`.  Cast through
@@ -37,12 +43,14 @@
 		>
 			<Checkbox
 				checked={done}
+				disabled={!editable}
 				aria-label={done ? 'Reopen todo' : 'Complete todo'}
 				onCheckedChange={(checked) =>
 					void todoUpdates.setStatus(view.todo.id, checked ? 'done' : 'open')}
 			/>
 			<Button
 				variant="link"
+				disabled={!editable}
 				class="h-auto p-0 font-normal text-foreground {done
 					? 'text-muted-foreground line-through'
 					: ''}"
@@ -59,9 +67,15 @@
 				</Badge>
 			{/if}
 		</span>
-	{:else}
+	{:else if perNote}
 		<span class="text-sm text-muted-foreground" contenteditable="false">
 			This todo is no longer available.
 		</span>
+	{:else}
+		<!-- A review pane (an agent's proposed edit, a conflict) renders the note
+		     without the per-note stores, so nothing can be looked up. The todo is
+		     not missing — it is just not resolvable here, and saying otherwise
+		     would read as an error on both sides of a diff. -->
+		<span class="text-sm text-muted-foreground" contenteditable="false">Linked todo</span>
 	{/if}
 </NodeViewWrapper>

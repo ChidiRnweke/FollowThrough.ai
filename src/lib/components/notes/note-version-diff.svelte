@@ -1,81 +1,105 @@
 <script lang="ts">
-	import { diffLines } from 'diff';
-	import { SvelteSet } from 'svelte/reactivity';
+	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
+	import type { Diagram } from '$lib/models/diagrams';
+	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/models/notes/note-diff';
+	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import { cn } from '$lib/utils';
+	import NoteDiffEditor from './note-diff-editor.svelte';
 
 	let {
 		base,
 		candidate,
-		label,
-		caption = 'Changes from the version this edit started from',
-		compact = false
+		baseLabel,
+		candidateLabel,
+		baseSublabel,
+		candidateSublabel,
+		baseTitle,
+		candidateTitle,
+		caption,
+		compact = false,
+		showCounts = true,
+		perNote,
+		diagrams,
+		noteId
 	}: {
-		base: string;
-		candidate: string;
-		label: string;
+		base: ProseMirrorDocument;
+		candidate: ProseMirrorDocument;
+		baseLabel: string;
+		candidateLabel: string;
+		baseSublabel?: string;
+		candidateSublabel?: string;
+		/**
+		 * The two sides' note titles. Supplied together, they head each document so a
+		 * rename reads as a changed first line; callers that show the title change
+		 * themselves leave them unset rather than saying it twice.
+		 */
+		baseTitle?: string;
+		candidateTitle?: string;
 		/** What the two sides are, in the reader's terms. Every caller compares a different pair. */
 		caption?: string;
 		compact?: boolean;
+		/** Off where the caller shows the summary somewhere better, e.g. beside the version. */
+		showCounts?: boolean;
+		perNote?: PerNoteEditorSlot;
+		diagrams?: readonly Diagram[];
+		noteId?: NoteId;
 	} = $props();
 
-	const allLinesFor = (before: string, after: string) =>
-		diffLines(before, after).flatMap((change) =>
-			change.value
-				.replace(/\n$/, '')
-				.split('\n')
-				.map((content) => ({
-					content,
-					type: change.added
-						? ('added' as const)
-						: change.removed
-							? ('removed' as const)
-							: ('context' as const)
-				}))
-		);
-
-	function linesFor(before: string, after: string) {
-		const lines = allLinesFor(before, after);
-		if (!compact) return lines;
-		const kept = new SvelteSet<number>();
-		for (const [index, line] of lines.entries()) {
-			if (line.type === 'context') continue;
-			kept.add(index);
-			if (index > 0) kept.add(index - 1);
-			if (index + 1 < lines.length) kept.add(index + 1);
-		}
-		const result: (typeof lines)[number][] = [];
-		let omitted = false;
-		for (const [index, line] of lines.entries()) {
-			if (kept.has(index)) {
-				if (omitted) result.push({ type: 'context', content: '…' });
-				result.push(line);
-				omitted = false;
-			} else omitted = true;
-		}
-		if (omitted) result.push({ type: 'context', content: '…' });
-		return result;
-	}
-
-	const lineClasses = {
-		added: 'bg-primary/10 text-primary',
-		removed: 'bg-destructive/10 text-destructive',
-		context: 'text-muted-foreground'
-	} as const;
+	const withTitles = $derived(baseTitle !== undefined && candidateTitle !== undefined);
+	const baseDocument = $derived(
+		withTitles ? (withTitleBlock(base, baseTitle ?? '') as ProseMirrorDocument) : base
+	);
+	const candidateDocument = $derived(
+		withTitles ? (withTitleBlock(candidate, candidateTitle ?? '') as ProseMirrorDocument) : candidate
+	);
+	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
+	const counts = $derived(countNoteDiff(diff));
 </script>
 
-<section class="flex min-h-0 flex-col gap-2" aria-label={label}>
-	<p class="text-xs text-muted-foreground">{caption}</p>
-	<pre
+<section
+	class="flex h-full min-h-0 flex-col"
+	aria-label={`${baseLabel} compared with ${candidateLabel}`}
+>
+	{#if caption || (showCounts && (counts.added || counts.removed))}
+		<div class="flex flex-wrap items-baseline gap-x-2 px-1">
+			{#if caption}
+				<p class="text-xs text-muted-foreground">{caption}</p>
+			{/if}
+			{#if showCounts && (counts.added || counts.removed)}
+				<p class="provenance-caption" aria-label="Change summary">
+					{counts.added} added · {counts.removed} removed
+				</p>
+			{/if}
+		</div>
+	{/if}
+	<div
 		class={cn(
-			'overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-xs leading-relaxed',
-			compact ? 'max-h-48' : 'max-h-96'
-		)}><code
-			>{#each linesFor(base, candidate) as line, index (`${line.type}-${index}`)}<span
-					class={cn('block px-2', lineClasses[line.type])}
-					><span aria-hidden="true"
-						>{line.type === 'added' ? '+' : line.type === 'removed' ? '−' : ' '}</span
-					>
-{line.content || ' '}</span
-				>{/each}</code
-		></pre>
+			'min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-border bg-background',
+			caption || (showCounts && (counts.added || counts.removed)) ? 'mt-2' : '',
+			compact ? 'mt-1.5 max-h-48 flex-none' : ''
+		)}
+	>
+		<div class="grid min-w-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+			<NoteDiffEditor
+				document={baseDocument}
+				kinds={diff.base}
+				label={baseLabel}
+				sublabel={baseSublabel}
+				{perNote}
+				{diagrams}
+				{noteId}
+				class="min-w-0 border-b border-border sm:border-b-0 sm:border-r sm:border-border"
+			/>
+			<NoteDiffEditor
+				document={candidateDocument}
+				kinds={diff.candidate}
+				label={candidateLabel}
+				sublabel={candidateSublabel}
+				{perNote}
+				{diagrams}
+				{noteId}
+				class="min-w-0"
+			/>
+		</div>
+	</div>
 </section>

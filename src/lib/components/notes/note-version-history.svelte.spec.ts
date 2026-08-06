@@ -2,13 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteVersionHistory from './note-version-history.svelte';
 import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
+import { formatRelativeTime } from '$lib/components/shared/labels';
 
 const noteId = '20000000-0000-4000-8000-000000000001' as NoteId;
 const revisionId = '70000000-0000-4000-8000-000000000001' as NoteRevision['id'];
 
-const note: Pick<Note, 'title' | 'plainText' | 'publishedRevision' | 'currentRevision'> = {
+const note: Pick<
+	Note,
+	'title' | 'plainText' | 'document' | 'publishedRevision' | 'currentRevision'
+> = {
 	title: 'Architecture note',
 	plainText: 'The rewritten body',
+	document: {
+		type: 'doc',
+		content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The rewritten body' }] }]
+	},
 	publishedRevision: 2,
 	currentRevision: 4
 };
@@ -40,9 +48,11 @@ const base = {
 };
 
 describe('NoteVersionHistory', () => {
-	it('lists each version', async () => {
+	// The dialog belongs to one note, so a row identifies its revision by when the
+	// snapshot was taken — a version number named nothing the reader could act on.
+	it('lists each version by when it was taken', async () => {
 		const screen = await render(NoteVersionHistory, base);
-		expect(await screen.getByText(/Version 2/).all()).not.toHaveLength(0);
+		expect(await screen.getByText(formatRelativeTime(summary.createdAt)).all()).not.toHaveLength(0);
 	});
 
 	it('marks the version the note is published at', async () => {
@@ -58,7 +68,9 @@ describe('NoteVersionHistory', () => {
 				picked.push(id);
 			}
 		});
-		await screen.getByRole('button', { name: /Version 2/ }).click();
+		await screen
+			.getByRole('button', { name: new RegExp(formatRelativeTime(summary.createdAt)) })
+			.click();
 		expect(picked).toEqual([revisionId]);
 	});
 
@@ -71,15 +83,15 @@ describe('NoteVersionHistory', () => {
 	// reads as "no changes" rather than "nothing picked".
 	it('withholds the restore action until a version is selected', async () => {
 		const screen = await render(NoteVersionHistory, base);
-		expect(await screen.getByRole('button', { name: 'Restore this version' }).all()).toHaveLength(
-			0
-		);
+		expect(
+			await screen.getByRole('button', { name: 'Restore previous version' }).all()
+		).toHaveLength(0);
 	});
 
 	it('offers to restore the selected version', async () => {
 		const screen = await render(NoteVersionHistory, { ...base, selected: revision });
 		expect(
-			await screen.getByRole('button', { name: 'Restore this version' }).all()
+			await screen.getByRole('button', { name: 'Restore previous version' }).all()
 		).not.toHaveLength(0);
 	});
 

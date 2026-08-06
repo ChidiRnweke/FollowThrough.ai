@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DiagramSuggestion } from '$lib/models/diagrams';
+	import type { Diagram, DiagramSuggestion } from '$lib/models/diagrams';
 	import type {
 		Note,
 		NoteRevision,
@@ -7,6 +7,7 @@
 		NoteRevisionSummary,
 		NoteSyncRecord
 	} from '$lib/models/notes';
+	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
@@ -24,6 +25,8 @@
 		note,
 		conflictRecord,
 		reviewingSuggestion,
+		perNote,
+		diagrams,
 		onUseRemote,
 		onKeepLocal,
 		onAcceptDrawio,
@@ -41,6 +44,9 @@
 		note: Note;
 		conflictRecord?: NoteSyncRecord;
 		reviewingSuggestion: DiagramSuggestion | null;
+		perNote?: PerNoteEditorSlot;
+		/** Passed through so the history panes render draw.io blocks as they look in the note. */
+		diagrams?: readonly Diagram[];
 		onUseRemote: () => Promise<void>;
 		onKeepLocal: () => Promise<void>;
 		onAcceptDrawio: (output: { readonly xml: string; readonly svg: string }) => Promise<void>;
@@ -56,6 +62,9 @@
 	revisions={historyRevisions}
 	selected={historySelected}
 	loading={historyLoading}
+	{perNote}
+	{diagrams}
+	noteId={note.id}
 	onselect={onSelectRevision}
 	onrestore={onRestoreRevision}
 />

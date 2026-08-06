@@ -30,8 +30,10 @@
 		<p class="min-w-0 flex-1 truncate text-sm font-medium">
 			{diagram?.title ?? 'draw.io diagram'}
 		</p>
+		<!-- A review pane renders the node without a diagram source, and nothing is on
+		     its way there: say what is true rather than waiting forever on "Loading…". -->
 		<span class="text-xs text-muted-foreground" role="status">
-			{diagram ? 'Saved' : 'Loading…'}
+			{diagram ? 'Saved' : 'Not shown here'}
 		</span>
 		{#if href}
 			<Button {href} variant="ghost" size="sm">

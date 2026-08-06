@@ -77,6 +77,10 @@
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	--note-content-width: 90ch;
+	/* Near-full-viewport modal for comparison surfaces: the panel stays centered
+	   but covers most of the screen, and geometry comes from the token so a long
+	   line or a wide diagram can never stretch it. */
+	--dialog-fill-height: min(calc(100dvh - 2rem), 60rem);
 }
 
 @keyframes chat-thinking-dot {
@@ -617,6 +621,13 @@
 	max-width: var(--note-content-width);
 }
 
+/* A comparison dialog that covers most of the viewport. Only the height is set
+   here — the centering classes on `Dialog.Content` stay, and the width comes from
+   the base classes plus a `sm:max-w-*` cap, so nothing fights the shadcn shell. */
+@utility dialog-fill {
+	height: var(--dialog-fill-height);
+}
+
 /* Named type scale — see DESIGN_SYSTEM.md "Type scale". App code uses these
    instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
    → body (sm) → section-title (base) → page-title (2xl). */
@@ -968,5 +979,31 @@
 	   accent; the current page segment stays foreground. */
 	[data-slot='breadcrumb-link'] {
 		color: var(--color-brand);
+	}
+
+	/* Read-only note comparison. Changed blocks are painted through a ProseMirror
+	   decoration that adds `diff-block` plus a side class, so the wash rides the
+	   editor's own DOM rather than a parallel render. Removed reads as destructive,
+	   added as the live teal — the same two accents the rest of the product uses. */
+	.note-diff-pane .tiptap .diff-block {
+		margin-inline: -1rem;
+		padding-inline: 1rem;
+		border-radius: 0.25rem;
+		box-shadow: inset 3px 0 0 0 var(--color-destructive);
+	}
+	.note-diff-pane .tiptap .diff-removed {
+		background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
+		text-decoration: line-through;
+		text-decoration-thickness: 1px;
+	}
+	.note-diff-pane .tiptap .diff-added {
+		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+		box-shadow: inset 3px 0 0 0 var(--color-brand);
+	}
+	.dark .note-diff-pane .tiptap .diff-removed {
+		background-color: color-mix(in oklab, var(--color-destructive) 12%, transparent);
+	}
+	.dark .note-diff-pane .tiptap .diff-added {
+		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
 	}
 }

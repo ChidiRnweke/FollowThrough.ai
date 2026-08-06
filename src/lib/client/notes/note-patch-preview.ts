@@ -11,7 +11,7 @@ import {
 } from '$lib/components/edra/commands/note-markdown';
 
 export type NotePatchPreview =
-	| { readonly ok: true; readonly plainText: string }
+	| { readonly ok: true; readonly document: Note['document']; readonly plainText: string }
 	| { readonly ok: false; readonly problems: readonly string[] };
 
 /**
@@ -21,13 +21,14 @@ export type NotePatchPreview =
  * without this there is nothing to diff against and the card falls back to dumping JSON.
  * Running the same pure patch the server will run means the preview cannot disagree with
  * the outcome — and a patch that will be rejected can be shown as rejected before the
- * user approves it.
+ * user approves it. The parsed document is what the diff renders, so the before/after
+ * comparison shows real note content, not flattened text.
  */
 export const previewNoteEdits = (note: Note, edits: readonly NoteEdit[]): NotePatchPreview => {
 	try {
 		const patched = applyNotePatch(noteMarkdownFromContent(note.document), edits);
 		if (!patched.ok) return { ok: false, problems: patched.failures.map(describeNotePatchFailure) };
-		return { ok: true, plainText: noteContentFromMarkdown(patched.markdown).plainText };
+		return { ok: true, ...noteContentFromMarkdown(patched.markdown) };
 	} catch (error) {
 		return {
 			ok: false,
@@ -39,7 +40,7 @@ export const previewNoteEdits = (note: Note, edits: readonly NoteEdit[]): NotePa
 /** The note body a whole-body save would produce, for the same before/after comparison. */
 export const previewNoteMarkdown = (markdown: string): NotePatchPreview => {
 	try {
-		return { ok: true, plainText: noteContentFromMarkdown(markdown).plainText };
+		return { ok: true, ...noteContentFromMarkdown(markdown) };
 	} catch (error) {
 		return {
 			ok: false,
