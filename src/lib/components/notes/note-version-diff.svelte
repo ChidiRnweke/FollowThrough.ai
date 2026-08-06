@@ -50,7 +50,9 @@
 		withTitles ? (withTitleBlock(base, baseTitle ?? '') as ProseMirrorDocument) : base
 	);
 	const candidateDocument = $derived(
-		withTitles ? (withTitleBlock(candidate, candidateTitle ?? '') as ProseMirrorDocument) : candidate
+		withTitles
+			? (withTitleBlock(candidate, candidateTitle ?? '') as ProseMirrorDocument)
+			: candidate
 	);
 	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
 	const counts = $derived(countNoteDiff(diff));

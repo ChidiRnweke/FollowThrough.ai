@@ -984,12 +984,13 @@
 	/* Read-only note comparison. Changed blocks are painted through a ProseMirror
 	   decoration that adds `diff-block` plus a side class, so the wash rides the
 	   editor's own DOM rather than a parallel render. Removed reads as destructive,
-	   added as the live teal — the same two accents the rest of the product uses. */
+	   added as the live teal — the same two accents the rest of the product uses.
+	   The wash alone carries it: an accent bar down every changed block turns a
+	   quiet document into a striped one. */
 	.note-diff-pane .tiptap .diff-block {
 		margin-inline: -1rem;
 		padding-inline: 1rem;
 		border-radius: 0.25rem;
-		box-shadow: inset 3px 0 0 0 var(--color-destructive);
 	}
 	.note-diff-pane .tiptap .diff-removed {
 		background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
@@ -998,7 +999,6 @@
 	}
 	.note-diff-pane .tiptap .diff-added {
 		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
-		box-shadow: inset 3px 0 0 0 var(--color-brand);
 	}
 	.dark .note-diff-pane .tiptap .diff-removed {
 		background-color: color-mix(in oklab, var(--color-destructive) 12%, transparent);

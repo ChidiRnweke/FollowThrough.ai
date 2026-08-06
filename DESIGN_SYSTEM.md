@@ -144,8 +144,9 @@ zone and center the voice line inside it.
   through the editor's own schema and node views in read-only mode, so diagrams,
   code, callouts and todos look exactly as they do in the document. Changed
   blocks are painted by a ProseMirror node decoration, not a parallel render:
-  removed reads as a destructive wash with strikethrough and a left accent, added
-  as the brand teal wash with a left accent, equal blocks unmarked. The note's
+  removed reads as a destructive wash with strikethrough, added as the brand teal
+  wash, equal blocks unmarked. The wash is the whole signal — no accent bars down
+  the side of changed blocks. The note's
   title heads each side, so a rename reads as a changed first line. The version
   rail is a borderless divided list (`row-interactive`), never bordered rows in a
   card; a row names its revision by date and publication state, never by a

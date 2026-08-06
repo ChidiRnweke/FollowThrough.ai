@@ -81,7 +81,8 @@
 	<Dialog.Content class="dialog-fill flex flex-col sm:max-w-7xl">
 		<Dialog.Header>
 			<Dialog.Title>Version history</Dialog.Title>
-			<Dialog.Description>Compare a previous publication with the current draft.</Dialog.Description>
+			<Dialog.Description>Compare a previous publication with the current draft.</Dialog.Description
+			>
 		</Dialog.Header>
 
 		{#if revisions.length === 0}
