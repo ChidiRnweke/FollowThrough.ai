@@ -4,6 +4,7 @@ import {
 	FtDocumentPlus as FilePlus,
 	FtChat as MessageSquare,
 	FtPanelLeft as PanelLeft,
+	FtSearch as SearchIcon,
 	FtSettings as Settings,
 	FtTheme as Sun
 } from '$lib/components/icons';
@@ -80,6 +81,16 @@ export const commandRegistry: readonly AppCommand[] = [
 			rightPanel.openChat();
 			await tick();
 			rightPanel.requestChatComposerFocus();
+		}
+	},
+	{
+		id: 'global-search',
+		label: 'Search all notes',
+		shortcut: '⌘⇧F',
+		icon: SearchIcon,
+		run() {
+			palette.close();
+			rightPanel.toggle('search');
 		}
 	},
 	{

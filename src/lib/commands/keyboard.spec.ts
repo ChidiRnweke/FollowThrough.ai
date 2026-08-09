@@ -98,6 +98,12 @@ describe('Direct shortcut invariants', () => {
 		expect(commands).toEqual(['focus-chat']);
 	});
 
+	it('Mod+Shift+F opens global note search', () => {
+		const { commands, handler } = setup();
+		handler.handle(keyboardEvent('f', 100, { ctrlKey: true, shiftKey: true }));
+		expect(commands).toEqual(['global-search']);
+	});
+
 	it('Mod+Alt+I no longer maps to a command', () => {
 		const { commands, handler } = setup();
 		handler.handle(keyboardEvent('i', 100, { ctrlKey: true, altKey: true }));

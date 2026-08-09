@@ -152,6 +152,19 @@
 							{/snippet}
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton
+							isActive={rightPanel.mode === 'search'}
+							tooltipContent="Search notes (⌘⇧F)"
+						>
+							{#snippet child({ props })}
+								<button {...props} type="button" onclick={() => rightPanel.toggle('search')}>
+									<Search class="size-4" />
+									<span>Search</span>
+								</button>
+							{/snippet}
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
 				</Sidebar.Menu>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>

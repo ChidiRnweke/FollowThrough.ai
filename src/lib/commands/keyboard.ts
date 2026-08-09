@@ -47,6 +47,11 @@ export class CommandKeyboardHandler {
 			this.commands.run('focus-chat');
 			return;
 		}
+		if (mod && event.shiftKey && isLetter(event, 'f')) {
+			event.preventDefault();
+			this.commands.run('global-search');
+			return;
+		}
 		if (mod && (event.key === ',' || event.code === 'Comma')) {
 			event.preventDefault();
 			this.commands.run('settings');
