@@ -25,6 +25,10 @@ const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
 // "still working" is simply one of its calls still running.
 const renderTurn = (tools: ChatToolActivity[]) => render(TurnActivity, { tools, shell });
 
+// The log hangs off the turn's last activity group, so only that group is given it.
+const renderTurnWithLog = (tools: ChatToolActivity[]) =>
+	render(TurnActivity, { tools, shell, showLog: true });
+
 describe('A settled turn reports the things it touched', () => {
 	it('reports one entry however many times it worked on the same note', async () => {
 		const screen = await renderTurn([call({}), call({}), call({ name: 'save_note' })]);
@@ -68,12 +72,12 @@ describe('A settled turn reports the things it touched', () => {
 
 describe('The call log is one door per turn', () => {
 	it('offers the log even for a turn whose every call was mechanism', async () => {
-		const screen = await renderTurn([call({ name: 'search_tools', arguments: {} })]);
+		const screen = await renderTurnWithLog([call({ name: 'search_tools', arguments: {} })]);
 		await expect.element(screen.getByRole('button', { name: '1 step' })).toBeInTheDocument();
 	});
 
 	it('says how many steps are behind it rather than announcing itself', async () => {
-		const screen = await renderTurn([
+		const screen = await renderTurnWithLog([
 			call({ name: 'search_tools', arguments: { query: 'save_note' } }),
 			call({ name: 'save_note' })
 		]);
@@ -81,12 +85,19 @@ describe('The call log is one door per turn', () => {
 	});
 
 	it('lists the calls the summary left out', async () => {
-		const screen = await renderTurn([
+		const screen = await renderTurnWithLog([
 			call({ name: 'search_tools', arguments: { query: 'save_note' } }),
 			call({ name: 'save_note' })
 		]);
 		await screen.getByRole('button', { name: '2 steps' }).click();
 		await expect.element(screen.getByText('2 steps, in the order they ran.')).toBeVisible();
+	});
+
+	it('leaves the other groups of a turn without a door of their own', async () => {
+		// A door per group put a "1 step" row beside every attempt the agent had already put
+		// right, each opening onto work the reader had no reason to see.
+		const screen = await renderTurn([call({ name: 'save_note' })]);
+		expect(await screen.getByRole('button', { name: /step/ }).all()).toHaveLength(0);
 	});
 });
 

@@ -25,6 +25,7 @@
 		tools,
 		turnTools,
 		shell,
+		showLog = false,
 		retryable = false,
 		onretry
 	}: {
@@ -32,6 +33,12 @@
 		/** Every call of the turn, so a failure put right later in it is not reported here. */
 		turnTools?: readonly ChatToolActivity[];
 		shell?: ShellContext;
+		/**
+		 * Whether this group carries the turn's log. Set on the last group only: the log is one
+		 * door per turn, not one per group — several "1 step" rows down a turn are doors onto
+		 * attempts the agent already put right, and say nothing on their way past.
+		 */
+		showLog?: boolean;
 		/** Whether the run this group belongs to can be run again. */
 		retryable?: boolean;
 		onretry?: () => void;
@@ -49,12 +56,10 @@
 		(settled ? activity.touched : turnSteps(tools, shell)).filter((row) => !row.failed)
 	);
 
-	/**
-	 * The log is worth a door only when it holds something the group did not already show —
-	 * the mechanism it hid, or a call that went wrong. A group whose every call is a row
-	 * above it would offer a door onto what the reader can already see.
-	 */
-	const hasHiddenSteps = $derived(activity.callCount > rows.length || activity.failures.length > 0);
+	/** Every call of the turn, which is what the log opens onto. */
+	const logged = $derived(turnTools ?? tools);
+	const stepCount = $derived(logged.length);
+	const hasLog = $derived(showLog && stepCount > 0);
 
 	let detailsOpen = $state(false);
 
@@ -127,7 +132,7 @@
 	<span class="shrink-0 text-muted-foreground">· {row.verb}</span>
 {/snippet}
 
-{#if rows.length > 0 || activity.failures.length > 0 || hasHiddenSteps}
+{#if rows.length > 0 || activity.failures.length > 0 || hasLog}
 	<!--
 		What the turn did, in the user's things rather than in calls. The log is the last row
 		of the same list rather than a caption below it, so it carries the same hover wash and
@@ -167,7 +172,7 @@
 					{/if}
 				</li>
 			{/each}
-			{#if hasHiddenSteps}
+			{#if hasLog}
 				<!-- The log joins the list rather than sitting under it as a caption: as bare
 				     ghost-button text, nothing said it could be clicked. It states its count
 				     instead of announcing itself. -->
@@ -179,8 +184,7 @@
 						onclick={() => (detailsOpen = true)}
 					>
 						<FtEllipsis class="size-3.5 shrink-0" />
-						<span class="min-w-0 truncate"
-							>{activity.callCount === 1 ? '1 step' : `${activity.callCount} steps`}</span
+						<span class="min-w-0 truncate">{stepCount === 1 ? '1 step' : `${stepCount} steps`}</span
 						>
 						<FtExternal
 							class="size-3 shrink-0 opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
@@ -191,5 +195,5 @@
 		</ul>
 	</div>
 
-	<TurnDetailsDialog bind:open={detailsOpen} {tools} {shell} />
+	<TurnDetailsDialog bind:open={detailsOpen} tools={logged} {shell} />
 {/if}

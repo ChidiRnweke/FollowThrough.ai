@@ -91,6 +91,13 @@
 		onjumptolatest: () => void;
 	} = $props();
 
+	/**
+	 * Which activity group carries the turn's log. One door per turn, hung off the last group
+	 * so it sits at the end of the work rather than repeating down it.
+	 */
+	const lastActivityIndex = (entry: ChatEntry): number =>
+		groupChatParts(entry.parts).findLastIndex((group) => group.kind === 'activity');
+
 	const focusAtEnd = (node: HTMLTextAreaElement): void => {
 		node.focus();
 		node.setSelectionRange(node.value.length, node.value.length);
@@ -182,9 +189,12 @@
 										onreject={() => onrejectapproval(entry, group.tools)}
 									/>
 								{:else if group.kind === 'activity'}
+									<!-- The log is the turn's, so it hangs off the last group and opens onto
+									     every call, not just that group's. -->
 									<TurnActivity
 										tools={group.tools}
 										turnTools={entryTools(entry)}
+										showLog={index === lastActivityIndex(entry)}
 										{shell}
 										retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
 										onretry={() => onretry(entry)}
