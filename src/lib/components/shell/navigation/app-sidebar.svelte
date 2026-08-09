@@ -69,9 +69,7 @@
 	// shell has already clawed width back off the sidebar to protect the content,
 	// so collapsing is the only room left to give.
 	const sidebar = useSidebar();
-	const spaceTight = $derived(
-		(workbench.splitActive || squeezed) && sidebar.state === 'expanded'
-	);
+	const spaceTight = $derived((workbench.splitActive || squeezed) && sidebar.state === 'expanded');
 
 	// The toggle lives in a context the command registry cannot read, so hand it over
 	// while this shell is mounted.
