@@ -15,6 +15,8 @@ import type {
 	PublishNoteInput,
 	DiscardNoteDraftInput,
 	RestoreNoteRevisionInput,
+	SearchNoteTextInput,
+	ReplaceNoteTextInput,
 	SyncNoteInput
 } from '$lib/models/notes';
 import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
@@ -148,6 +150,31 @@ export const listNoteSyncInventory = query(
 		return AppFactory.controllers()
 			.notes()
 			.listSyncInventory(requestActor(), input as ListNoteSyncInventoryInput);
+	}
+);
+
+const noteSearchSchema = z.object({
+	query: z.string().min(1).max(500),
+	regex: z.boolean(),
+	caseSensitive: z.boolean(),
+	projectId: z.string().uuid().optional()
+});
+
+export const searchNotes = query(noteSearchSchema, async (input) => {
+	return AppFactory.controllers()
+		.notes()
+		.searchText(requestActor(), input as SearchNoteTextInput);
+});
+
+export const replaceInNotes = command(
+	noteSearchSchema.extend({
+		replacement: z.string().max(2000),
+		noteIds: z.array(z.string().uuid()).min(1).max(200).optional()
+	}),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.replaceText(requestActor(), input as ReplaceNoteTextInput);
 	}
 );
 
