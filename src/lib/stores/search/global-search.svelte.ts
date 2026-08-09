@@ -1,8 +1,5 @@
-import type {
-	NoteId,
-	NoteSearchHit,
-	ReplaceNoteTextOutput
-} from '$lib/models/notes';
+import { SvelteSet } from 'svelte/reactivity';
+import type { NoteId, NoteSearchHit, ReplaceNoteTextOutput } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { replaceInNotes, searchNotes } from '$lib/remote/notes/notes.remote';
 
@@ -30,7 +27,7 @@ export class GlobalSearchStore {
 	searchError = $state<string | undefined>(undefined);
 	lastReplace = $state<ReplaceNoteTextOutput | undefined>(undefined);
 	/** Notes collapsed in the result list, by id. */
-	collapsedNoteIds = $state<ReadonlySet<NoteId>>(new Set());
+	collapsedNoteIds = new SvelteSet<NoteId>();
 
 	private requestSeq = 0;
 	private debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -84,10 +81,8 @@ export class GlobalSearchStore {
 	}
 
 	toggleCollapsed(noteId: NoteId): void {
-		const next = new Set(this.collapsedNoteIds);
-		if (next.has(noteId)) next.delete(noteId);
-		else next.add(noteId);
-		this.collapsedNoteIds = next;
+		if (this.collapsedNoteIds.has(noteId)) this.collapsedNoteIds.delete(noteId);
+		else this.collapsedNoteIds.add(noteId);
 	}
 
 	private async replace(scope: { noteIds?: NoteId[] }): Promise<void> {

@@ -201,9 +201,7 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 		if (!firstBlock) push(BLOCK_SEPARATOR);
 		firstBlock = false;
 		const textStart = length;
-		const children = Array.isArray(node.content)
-			? (node.content as Record<string, unknown>[])
-			: [];
+		const children = Array.isArray(node.content) ? (node.content as Record<string, unknown>[]) : [];
 		for (const child of children) walk(child, depth + 1);
 		if (depth === 0) blocks.push({ node, textStart, textEnd: length });
 	};
@@ -288,15 +286,11 @@ export const replaceInNoteDocument = (
 		const consumed = new Set(
 			layout.blocks
 				.filter((block) =>
-					matches.some(
-						(match) => match.start <= block.textStart && match.end >= block.textEnd
-					)
+					matches.some((match) => match.start <= block.textStart && match.end >= block.textEnd)
 				)
 				.map((block) => block.node)
 		);
-		clone.content = clone.content.filter(
-			(block) => !consumed.has(block) || hasContent(block)
-		);
+		clone.content = clone.content.filter((block) => !consumed.has(block) || hasContent(block));
 		if (clone.content.length === 0) clone.content = [{ ...EMPTY_PARAGRAPH }];
 	}
 

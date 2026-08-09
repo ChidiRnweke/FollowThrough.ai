@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import { Spinner } from '$lib/components/ui/spinner';
+	import { Toggle } from '$lib/components/ui/toggle';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import {
 		FtChevronDown as ChevronDown,
@@ -95,34 +96,30 @@
 					}}
 				/>
 				<div class="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-0.5">
-					<button
-						type="button"
-						class="tactile rounded px-1 font-mono text-xs {globalSearch.caseSensitive
-							? 'bg-accent text-primary'
-							: 'text-muted-foreground'}"
-						aria-label="Match case"
-						aria-pressed={globalSearch.caseSensitive}
-						onclick={() => {
-							globalSearch.caseSensitive = !globalSearch.caseSensitive;
+					<Toggle
+						size="sm"
+						class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"
+						pressed={globalSearch.caseSensitive}
+						onPressedChange={(pressed) => {
+							globalSearch.caseSensitive = pressed;
 							globalSearch.scheduleSearch();
 						}}
+						aria-label="Match case"
 					>
 						Aa
-					</button>
-					<button
-						type="button"
-						class="tactile rounded px-1 font-mono text-xs {globalSearch.regex
-							? 'bg-accent text-primary'
-							: 'text-muted-foreground'}"
-						aria-label="Use regular expression"
-						aria-pressed={globalSearch.regex}
-						onclick={() => {
-							globalSearch.regex = !globalSearch.regex;
+					</Toggle>
+					<Toggle
+						size="sm"
+						class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"
+						pressed={globalSearch.regex}
+						onPressedChange={(pressed) => {
+							globalSearch.regex = pressed;
 							globalSearch.scheduleSearch();
 						}}
+						aria-label="Use regular expression"
 					>
 						.*
-					</button>
+					</Toggle>
 				</div>
 			</div>
 		</div>
@@ -198,8 +195,7 @@
 			</div>
 		{:else if globalSearch.query === ''}
 			<p class="pl-7 text-xs text-muted-foreground">
-				Search across every note's title and text. Toggle <span class="font-mono">.*</span> for
-				regex.
+				Search across every note's title and text. Toggle <span class="font-mono">.*</span> for regex.
 			</p>
 		{:else if globalSearch.hits.length === 0}
 			<p class="pl-7 text-xs text-muted-foreground">No results for “{globalSearch.query}”.</p>
@@ -216,9 +212,9 @@
 					{@const count = hit.titleMatches.length + hit.matches.length}
 					<li>
 						<div class="row-quiet flex items-center gap-1 rounded-md px-2 py-1">
-							<button
-								type="button"
-								class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+							<Button
+								variant="ghost"
+								class="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 rounded-none px-0 py-0 text-left hover:bg-transparent hover:text-current"
 								aria-expanded={!collapsed}
 								onclick={() => globalSearch.toggleCollapsed(hit.noteId)}
 							>
@@ -234,7 +230,7 @@
 											>{:else}{segment.text}{/if}
 									{/each}
 								</span>
-							</button>
+							</Button>
 							{#if globalSearch.replaceOpen && hit.matches.length > 0}
 								<Tip text="Replace in this note">
 									{#snippet children({ props })}
@@ -261,15 +257,15 @@
 							<ul>
 								{#each hit.matches as match (match.start)}
 									<li>
-										<button
-											type="button"
-											class="row-interactive block w-full truncate rounded-md py-1 pr-2 pl-9 text-left text-xs text-muted-foreground"
+										<Button
+											variant="ghost"
+											class="row-interactive block h-auto w-full truncate justify-start rounded-md py-1 pr-2 pl-9 text-left text-xs font-normal text-muted-foreground hover:bg-accent hover:text-current"
 											onclick={() => void workbench.openTab(hit.noteId)}
 										>
 											{inline(match.snippet.before)}<mark class="search-hit"
 												>{inline(match.snippet.hit)}</mark
 											>{inline(match.snippet.after)}
-										</button>
+										</Button>
 									</li>
 								{/each}
 							</ul>
