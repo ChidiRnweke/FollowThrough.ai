@@ -11,6 +11,10 @@ import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-app
  *
  * `empty` means there is nothing worth a block; the row renders no Result section at all
  * rather than a line that says "no result", which is noise on every read the agent does.
+ *
+ * The bar is what a person would want to know, not what came back on the wire. An etag, a
+ * revision number and an internal tool name are all faithful and all useless, and a note the
+ * row already links to does not need its body echoed underneath.
  */
 export interface ToolResultSummary {
 	/** What came back, counted or named, on its own line. */

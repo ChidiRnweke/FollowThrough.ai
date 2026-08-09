@@ -209,9 +209,11 @@ test.describe('inline agent approvals', () => {
 		await panel.locator('#chat-composer').fill('Create a reviewed draft');
 		await panel.getByLabel('Send message').click();
 		await panel.getByRole('button', { name: 'Review in full' }).click();
-		const review = page.getByRole('dialog', { name: 'Create note' });
+		// The review is named after the note it would create, not after the call that
+		// would create it: the reader decides on the content, not on the verb.
+		const review = page.getByRole('dialog', { name: 'Reviewed draft' });
 		await expect(review).toBeVisible();
-		await expect(review.getByText('Reviewed draft')).toBeVisible();
+		await expect(review.getByText('Create note', { exact: false })).toBeVisible();
 	});
 
 	test('returns a rejection to the same visible conversation', async ({ page }) => {

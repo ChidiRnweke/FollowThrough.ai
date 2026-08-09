@@ -34,9 +34,20 @@
 			.map(([key, value]) => ({ key, text: value as string }))
 	);
 
+	/**
+	 * The subject is already on the row, so the disclosure does not say it again — a panel
+	 * that opens to repeat the line above it teaches the reader not to open the next one.
+	 */
+	const sentHeadline = $derived(sent.headline === parts.subject ? undefined : sent.headline);
+	const sentDetails = $derived(
+		parts.subject
+			? sent.details.filter((detail) => !detail.endsWith(`: ${parts.subject}`))
+			: sent.details
+	);
+
 	const hasSent = $derived(
-		Boolean(sent.headline || sent.location) ||
-			sent.details.length > 0 ||
+		Boolean(sentHeadline || sent.location) ||
+			sentDetails.length > 0 ||
 			(sent.items?.length ?? 0) > 0 ||
 			prose.length > 0
 	);
@@ -125,10 +136,10 @@
 			{#if hasSent}
 				<div class="flex flex-col gap-1">
 					<p class="eyebrow">Sent</p>
-					{#if sent.headline}
-						<p class="break-words text-foreground">{sent.headline}</p>
+					{#if sentHeadline}
+						<p class="break-words text-foreground">{sentHeadline}</p>
 					{/if}
-					{#each sent.details as detail (detail)}
+					{#each sentDetails as detail (detail)}
 						<p class="break-words">{detail}</p>
 					{/each}
 					{#each sent.items ?? [] as item, index (index)}
