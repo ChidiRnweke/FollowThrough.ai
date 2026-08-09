@@ -448,3 +448,68 @@ describe('restoring a conversation', () => {
 		expect(store.entries.at(0)?.parts).toEqual([{ kind: 'text', text: 'Hi' }]);
 	});
 });
+
+describe('a reopened turn reads as it happened', () => {
+	const runId = '40000000-0000-4000-8000-0000000000ff';
+	let nextId = 0;
+	const stored = (
+		role: 'user' | 'assistant' | 'tool',
+		content: Readonly<Record<string, unknown>>,
+		eventCursor?: string
+	) => ({
+		id: `50000000-0000-4000-8000-00000000000${++nextId}`,
+		conversationId,
+		role,
+		content,
+		...(role === 'user' ? {} : { runId }),
+		...(eventCursor ? { eventCursor } : {}),
+		createdAt: new Date().toISOString()
+	});
+
+	/**
+	 * The journal writes tool activity as each call settles and the agent's own output when
+	 * the run completes, so the stored order is not the order things happened. Cursors are.
+	 */
+	const reopened = async () => {
+		const session = {
+			conversation: { id: conversationId },
+			messages: [
+				stored('user', { type: 'text', text: 'shorten this note' }),
+				stored('tool', { callId: 'c1', name: 'get_note', input: {}, status: 'succeeded' }, '2'),
+				stored('tool', { callId: 'c2', name: 'save_note', input: {}, status: 'succeeded' }, '5'),
+				stored('assistant', { type: 'reasoning', text: 'It has five bullets.' }, '1'),
+				stored('assistant', { type: 'text', text: 'Reading it first.' }, '3'),
+				stored('assistant', { type: 'text', text: 'Done.' }, '6')
+			]
+		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+		const store = new ChatStore(
+			'test-session',
+			new HydratingTransport(session),
+			new MemoryStorage()
+		);
+		store.conversationId = conversationId;
+		await store.hydrate();
+		return store;
+	};
+
+	it('keeps the agent thinking, which used to be dropped on reopening', async () => {
+		const store = await reopened();
+		expect(store.entries.at(1)?.parts.some((part) => part.kind === 'reasoning')).toBe(true);
+	});
+
+	it('puts the turn back in the order the events arrived', async () => {
+		const store = await reopened();
+		expect(store.entries.at(1)?.parts.map((part) => part.kind)).toEqual([
+			'reasoning',
+			'tool',
+			'text',
+			'tool',
+			'text'
+		]);
+	});
+
+	it('reads one turn as one turn, however many messages it was written as', async () => {
+		const store = await reopened();
+		expect(store.entries.filter((entry) => entry.role === 'assistant')).toHaveLength(1);
+	});
+});

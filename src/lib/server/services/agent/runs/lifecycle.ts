@@ -72,6 +72,13 @@ interface ConversationJournal {
 		model?: string,
 		provenance?: { readonly runId: AgentRunId; readonly eventCursor?: string }
 	): Promise<void>;
+	recordAssistantReasoning(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: { readonly runId: AgentRunId; readonly eventCursor?: string }
+	): Promise<void>;
 }
 interface AgentEventBus {
 	notify(runId: AgentRunId): void;
@@ -173,7 +180,6 @@ export class AgentRunLifecycle {
 					run,
 					actor,
 					update.sessionItems,
-					lastEvent?.cursor,
 					decisions.map((decision) => decision.callId)
 				);
 				// Same race as the park above: completion arrived after the row was
@@ -330,21 +336,35 @@ export class AgentRunLifecycle {
 		run: AgentRun,
 		actor: ActorContext,
 		sessionItems: readonly Readonly<Record<string, unknown>>[],
-		eventCursor?: string,
 		decisionCallIds: readonly string[] = []
 	): Promise<boolean> {
 		const settled = await this.deps.transactions.run(async () => {
 			await this.deps.sessions.replace(run.conversationId, sessionItems);
 			for (const callId of decisionCallIds)
 				await this.deps.decisions.consume(run.id, callId, new Date());
-			const text = await this.deps.events.reconstructText(run.id, 1);
-			await this.deps.conversations.recordAssistantText(
-				actor,
-				run.conversationId,
-				text,
-				run.model,
-				{ runId: run.id, ...(eventCursor ? { eventCursor } : {}) }
-			);
+			// One message per contiguous run of output, each carrying the cursor it began at.
+			// Written as a single blob it could only be replayed after every tool call, which
+			// is why a reopened conversation read as "all the work, then all the words".
+			const segments = await this.deps.events.reconstructOutput(run.id, 1);
+			for (const segment of segments) {
+				const provenance = { runId: run.id, eventCursor: segment.cursor };
+				if (segment.kind === 'reasoning')
+					await this.deps.conversations.recordAssistantReasoning(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
+				else
+					await this.deps.conversations.recordAssistantText(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
+			}
 			return this.deps.runs.transition(run.id, 'running', 'completed', {
 				serializedState: undefined,
 				pendingDecisions: [],

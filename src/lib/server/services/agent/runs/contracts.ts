@@ -150,6 +150,16 @@ export interface ConversationJournal extends ConversationRecorder {
 			readonly eventCursor?: string;
 		}
 	): Promise<void>;
+	recordAssistantReasoning(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
 	recordToolActivity(
 		actor: ActorContext,
 		conversationId: ConversationId,

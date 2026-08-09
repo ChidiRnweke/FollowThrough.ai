@@ -9,6 +9,8 @@ import type {
 	ConversationId
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
+import type { OutputSegment } from '$lib/server/repositories/agent';
+import { segmentOutput } from '$lib/server/repositories/agent';
 import { assertAgentRunTransition } from '$lib/models/agent';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
@@ -200,15 +202,10 @@ export class InMemoryAgentRunPersistence
 		return this.events.filter((event) => event.runId === runId).at(-1)?.cursor ?? '0';
 	}
 
-	async reconstructText(runId: AgentRunId, attempt: number): Promise<string> {
-		return this.events
-			.filter((record) => record.runId === runId && record.attempt === attempt)
-			.map((record) => record.event)
-			.filter((event): event is Extract<AgentEvent, { type: 'text_delta' }> =>
-				Boolean(event.type === 'text_delta')
-			)
-			.map((event) => event.text)
-			.join('');
+	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
+		return segmentOutput(
+			this.events.filter((record) => record.runId === runId && record.attempt === attempt)
+		);
 	}
 
 	async record(

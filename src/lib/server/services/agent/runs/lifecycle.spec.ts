@@ -82,7 +82,8 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		},
 		conversations: {
 			recordToolActivity: async () => undefined,
-			recordAssistantText: async () => undefined
+			recordAssistantText: async () => undefined,
+			recordAssistantReasoning: async () => undefined
 		},
 		runner: runner as never,
 		eventBus: { notify: (runId) => notified.push(runId) }

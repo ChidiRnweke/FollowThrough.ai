@@ -49,8 +49,51 @@ export interface AgentRunEventRepository {
 		after: string
 	): Promise<readonly AgentRunEventRecord[]>;
 	latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string>;
-	reconstructText(runId: AgentRunId, attempt: number): Promise<string>;
+	reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]>;
 }
+
+/**
+ * A contiguous run of one kind of output, with the cursor it began at.
+ *
+ * A turn is not "some tools, then a paragraph": the agent thinks, acts, speaks, acts again.
+ * Reconstructing it as one string threw that order away, so a reopened conversation showed
+ * every tool call before everything the agent said, and its reasoning not at all. Segments
+ * keep the shape of what happened, and the cursor is what lets the persisted messages be put
+ * back in the order the events arrived.
+ */
+export interface OutputSegment {
+	readonly kind: 'text' | 'reasoning';
+	readonly text: string;
+	readonly cursor: string;
+}
+
+/**
+ * Fold an ordered event log into those segments. Shared by every implementation of the
+ * repository so a fake and Postgres cannot disagree about what a turn looked like.
+ */
+export const segmentOutput = (
+	records: readonly { readonly cursor: string; readonly event: AgentEvent }[]
+): readonly OutputSegment[] => {
+	const segments: { kind: 'text' | 'reasoning'; text: string; cursor: string }[] = [];
+	// `open` is what makes this faithful rather than merely grouped: anything else in the
+	// stream — a tool call above all — closes the current run. Merged across a call, a
+	// sentence spoken after the work would carry the cursor from before it and be replayed
+	// ahead of the work it describes.
+	let open: (typeof segments)[number] | undefined;
+	for (const { cursor, event } of records) {
+		if (event.type !== 'text_delta' && event.type !== 'reasoning_delta') {
+			open = undefined;
+			continue;
+		}
+		const kind = event.type === 'text_delta' ? 'text' : 'reasoning';
+		if (open?.kind === kind) open.text += event.text;
+		else {
+			open = { kind, text: event.text, cursor };
+			segments.push(open);
+		}
+	}
+	return segments.filter((segment) => segment.text.length > 0);
+};
 
 /** Approvals and rejections for parked tool calls, recorded before the run requeues so a decision is never lost between the click and the resume. */
 export interface AgentRunDecisionRepository {

@@ -188,6 +188,31 @@ export class ConversationArchive {
 		);
 	}
 
+	/**
+	 * The agent's own thinking, kept apart from what it said. Reasoning was streamed and then
+	 * dropped on the floor, so reopening a conversation lost it entirely — the reader saw
+	 * conclusions with the working erased.
+	 */
+	async recordAssistantReasoning(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void> {
+		await this.append(
+			actor,
+			conversationId,
+			'assistant',
+			{ type: 'reasoning', text },
+			model,
+			provenance
+		);
+	}
+
 	async recordToolActivity(
 		actor: ActorContext,
 		conversationId: ConversationId,

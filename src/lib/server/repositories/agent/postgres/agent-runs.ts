@@ -9,8 +9,10 @@ import type {
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
-	AgentRunEventRepository
+	AgentRunEventRepository,
+	OutputSegment
 } from '$lib/server/repositories/agent';
+import { segmentOutput } from '$lib/server/repositories/agent';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
 
@@ -75,21 +77,20 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return BigInt(row?.cursor ?? 0).toString();
 	}
 
-	async reconstructText(runId: AgentRunId, attempt: number): Promise<string> {
+	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
 		const rows = await this.database
-			.select({ event: schema.agentRunEvents.event })
+			.select({ cursor: schema.agentRunEvents.cursor, event: schema.agentRunEvents.event })
 			.from(schema.agentRunEvents)
 			.where(
 				and(eq(schema.agentRunEvents.runId, runId), eq(schema.agentRunEvents.attempt, attempt))
 			)
 			.orderBy(asc(schema.agentRunEvents.cursor));
-		return rows
-			.map(({ event }) => event as unknown as AgentEvent)
-			.filter((event): event is Extract<AgentEvent, { type: 'text_delta' }> =>
-				Boolean(event.type === 'text_delta')
-			)
-			.map((event) => event.text)
-			.join('');
+		return segmentOutput(
+			rows.map(({ cursor, event }) => ({
+				cursor: String(cursor),
+				event: event as unknown as AgentEvent
+			}))
+		);
 	}
 }
 

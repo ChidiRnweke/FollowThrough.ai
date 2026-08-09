@@ -5,6 +5,7 @@ import type {
 	AgentRunSnapshot,
 	AgentRunStatus,
 	ConversationId,
+	Message,
 	RunAgentInput
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -153,6 +154,100 @@ const restoredImages = (value: unknown): ChatPart[] => {
 		}));
 };
 
+const restoredTool = (message: Message): ChatToolActivity => {
+	const content = message.content;
+	return unwrapToolCall({
+		callId: String(content.callId ?? ''),
+		name: String(content.name ?? 'tool'),
+		arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
+		...(message.runId ? { runId: message.runId } : {}),
+		...(content.output !== null && content.output !== undefined ? { output: content.output } : {}),
+		...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
+		status: String(content.status ?? 'succeeded') as ChatToolStatus
+	});
+};
+
+/** Where a message sat in its run's event stream. Messages without one keep their order. */
+const cursorOf = (message: Message): number =>
+	message.eventCursor === undefined ? Number.MAX_SAFE_INTEGER : Number(message.eventCursor);
+
+const partsOfTurn = (messages: readonly Message[]): ChatPart[] => {
+	const tools: ChatToolActivity[] = [];
+	const parts: ChatPart[] = [];
+	// Sorted by cursor, because a turn's messages are not written in the order they happened:
+	// tool activity is journalled as each call settles, while the agent's own output is
+	// written when the run completes. Read back by insertion order, every turn looked like
+	// all of the work followed by all of the words.
+	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
+		if (message.role === 'tool') {
+			const tool = restoredTool(message);
+			if (reconcileToolActivity(tools, tool)) continue;
+			tools.push(tool);
+			parts.push({ kind: 'tool', tool });
+			continue;
+		}
+		const text = typeof message.content.text === 'string' ? message.content.text : '';
+		if (!text) continue;
+		parts.push(
+			message.content.type === 'reasoning' ? { kind: 'reasoning', text } : { kind: 'text', text }
+		);
+	}
+	return parts;
+};
+
+/**
+ * A stored conversation, back as turns.
+ *
+ * One entry per turn rather than one per stored message: an assistant turn is now written as
+ * several messages — a thought, a tool call, an answer — and each becoming its own entry
+ * would caption the same turn "Agent" three times over.
+ */
+const restoreEntries = (messages: readonly Message[]): ChatEntry[] => {
+	const entries: ChatEntry[] = [];
+	let turn: { runId?: string; messages: Message[] } | undefined;
+
+	const flush = (): void => {
+		if (!turn?.messages.length) return;
+		const first = turn.messages[0] as Message;
+		entries.push({
+			id: first.id,
+			role: 'assistant',
+			parts: partsOfTurn(turn.messages),
+			suggestions: [],
+			status: 'completed',
+			...(turn.runId ? { runId: turn.runId as ChatEntry['runId'] } : {})
+		});
+		turn = undefined;
+	};
+
+	for (const message of messages) {
+		if (message.role === 'user') {
+			flush();
+			const text = typeof message.content.text === 'string' ? message.content.text : '';
+			entries.push({
+				id: message.id,
+				role: 'user',
+				parts: [
+					...(text ? [{ kind: 'text' as const, text }] : []),
+					...restoredImages(message.content.images)
+				],
+				suggestions: [],
+				status: 'completed',
+				...(message.runId ? { runId: message.runId } : {})
+			});
+			continue;
+		}
+		// A run boundary starts a new turn; messages without one join whatever is open, which
+		// is how conversations written before runs were journalled still read as turns.
+		if (turn && message.runId && turn.runId && message.runId !== turn.runId) flush();
+		if (!turn) turn = { ...(message.runId ? { runId: message.runId } : {}), messages: [] };
+		else if (!turn.runId && message.runId) turn.runId = message.runId;
+		turn.messages.push(message);
+	}
+	flush();
+	return entries;
+};
+
 const applyToolActivity = (entry: ChatEntry, raw: ChatToolActivity): void => {
 	const incoming = unwrapToolCall(raw);
 	if (!reconcileToolActivity(entryTools(entry), incoming))
@@ -236,42 +331,7 @@ export class ChatStore {
 		const conversationId = this.conversationId;
 		try {
 			const data = await this.transport.getSession(conversationId);
-			const entries: ChatEntry[] = [];
-			let pendingTools: ChatToolActivity[] = [];
-			for (const message of data.messages) {
-				if (message.role === 'tool') {
-					const content = message.content;
-					const incoming: ChatToolActivity = unwrapToolCall({
-						callId: String(content.callId ?? ''),
-						name: String(content.name ?? 'tool'),
-						arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
-						...(message.runId ? { runId: message.runId } : {}),
-						...(content.output !== null ? { output: content.output } : {}),
-						...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
-						status: String(content.status ?? 'succeeded') as ChatToolStatus
-					});
-					if (!reconcileToolActivity(pendingTools, incoming)) pendingTools.push(incoming);
-					continue;
-				}
-				const text = typeof message.content.text === 'string' ? message.content.text : '';
-				const images = message.role === 'user' ? restoredImages(message.content.images) : [];
-				entries.push({
-					id: message.id,
-					role: message.role,
-					parts: [
-						...(message.role === 'assistant'
-							? pendingTools.map((tool): ChatPart => ({ kind: 'tool', tool }))
-							: []),
-						...(text ? [{ kind: 'text' as const, text }] : []),
-						...images
-					],
-					suggestions: [],
-					status: 'completed',
-					...(message.runId ? { runId: message.runId } : {})
-				});
-				if (message.role === 'assistant') pendingTools = [];
-			}
-			this.entries = entries;
+			this.entries = restoreEntries(data.messages);
 			if (data.latestRun) {
 				const snapshot = data.latestRun;
 				let reply = this.entries.findLast(
@@ -281,7 +341,7 @@ export class ChatStore {
 					this.entries.push({
 						id: crypto.randomUUID(),
 						role: 'assistant',
-						parts: pendingTools.map((tool) => ({ kind: 'tool', tool })),
+						parts: [],
 						suggestions: [],
 						status: 'waiting',
 						runId: snapshot.run.id
