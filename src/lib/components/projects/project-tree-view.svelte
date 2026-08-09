@@ -250,7 +250,13 @@
 						{#if isFolder}
 							<Tip text={entry.title} side="right" delayDuration={700}>
 								{#snippet children({ props: tip })}
-									<Sidebar.MenuSubButton class="w-full">
+									<!-- `justify-start` and `font-normal` undo two `buttonVariants` base
+									     styles that the sidebar classes have no counterpart for, so
+									     tailwind-merge leaves them standing: a folder row would otherwise
+									     centre its own label while every sibling note row is flush left,
+									     and sit a weight heavier. Both are corrected here rather than on
+									     the Button so the sidebar's own class wins the merge. -->
+									<Sidebar.MenuSubButton class="w-full justify-start font-normal">
 										{#snippet child({ props })}
 											<Button
 												variant="ghost"

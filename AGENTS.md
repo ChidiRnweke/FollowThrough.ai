@@ -9,6 +9,66 @@ For UI design decisions (tokens, style, components) and UX patterns, see @DESIGN
 Run `pnpm test:architecture` after structural or test changes. Its project-specific topology and
 test-quality audits supplement Chisel; do not silence one checker to satisfy another.
 
+`node` is not on `PATH` by default — prepend the nvm bin directory before any `pnpm` script.
+
+## Seeing the running app
+
+Auth stays enabled in dev, so an unauthenticated request to any `(app)` route `303`s to
+`/auth/login`. **You do not need Authentik to look at the UI.** `tests/auth.setup.ts` mints a
+session row straight into Postgres for the local user and caches the token in
+`tests/.auth/state.json`; `pnpm test:e2e` and `pnpm dev:e2e` both run it. Once that file exists,
+reuse the token directly:
+
+```bash
+TOK=$(python3 -c "import json;print(json.load(open('tests/.auth/state.json'))['cookies'][0]['value'])")
+curl -s -H "Cookie: session=$TOK" http://127.0.0.1:5173/today
+```
+
+Delete `tests/.auth/state.json` to force a fresh token. This is the fastest way to check
+server-rendered output — cookie-driven shell state, redirects, `+page.server.ts` exports that
+`svelte-check` cannot see — without a browser. Add cookies to the same header to exercise
+persisted UI preferences (`sidebar_state`, `sidebar_width`).
+
+## Where things live
+
+`src/lib/` is split by role, and the audits enforce the direction of imports between them:
+
+| Directory                      | Holds                                                                   |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `models/<domain>/`             | Pure types and logic shared by client and server. No I/O, no framework. |
+| `server/services/<domain>/`    | Server-only logic against repositories.                                 |
+| `server/controllers/<domain>/` | Orchestration across services; the only cross-service seam.             |
+| `remote/<domain>/`             | Zod-validated `query`/`command` — the sole UI→server entry point.       |
+| `stores/<area>/`               | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
+| `client/<area>/`               | Browser-only helpers: IndexedDB repositories, sync, drag payloads.      |
+| `hooks/`                       | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
+| `components/ui/`               | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
+| `components/<feature>/`        | App components. `components/shell/` is the app chrome.                  |
+| `testing/`                     | `InMemory*` fakes; never reach for a mocking library instead.           |
+
+Two locations are easy to miss:
+
+- **All design tokens and app-level component CSS live in `src/routes/layout.css`**, not beside the
+  components they style — including the workspace pane geometry and the sidebar shell rules.
+  `components.json` points shadcn at this same file.
+- **The app shell is `src/routes/(app)/+layout.svelte`**: a three-column flex row of
+  `AppSidebar` | `Sidebar.Inset` | `RightPanel`. It is the only place that can see all three at
+  once, so cross-column decisions (space budgets, which surface owns a gesture) belong there rather
+  than inside any one column.
+
+## Tailwind class merging in slotted primitives
+
+`cn()` is `clsx` + `tailwind-merge`: on conflicting utilities the **last** class wins. Every
+primitive appends its caller's `class` last, so a caller can always override.
+
+The trap is the reverse case — a `<Button>` passed into another primitive's `child` snippet. The
+receiving primitive's classes arrive as Button's `className` and therefore win, but only for
+utilities that actually conflict. Anything in `buttonVariants` **base** with no counterpart
+survives: `justify-center`, `font-medium`, `inline-flex`, `whitespace-nowrap`. A folder row in the
+project tree once centred its own label this way while every sibling row sat flush left. When
+slotting a Button into a sidebar/menu primitive, neutralise those explicitly on the _outer_
+primitive's `class`.
+
 ## Adding a controller capability
 
 A new controller method needs all of these, or `svelte-check` / the audits fail:
