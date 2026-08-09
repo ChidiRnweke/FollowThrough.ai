@@ -1,5 +1,5 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -26,6 +26,25 @@ export class InMemoryNoteRepository implements NoteRepository {
 				!note.archivedAt &&
 				(projectId === undefined || note.projectId === projectId)
 		);
+	}
+
+	async listSearchable(
+		actor: ActorContext,
+		projectId?: ProjectId
+	): Promise<readonly NoteSearchTarget[]> {
+		return this.notes
+			.filter(
+				(note) =>
+					note.userId === actor.userId &&
+					!note.archivedAt &&
+					(projectId === undefined || note.projectId === projectId)
+			)
+			.map((note) => ({
+				id: note.id,
+				projectId: note.projectId,
+				title: note.title,
+				plainText: note.plainText
+			}));
 	}
 
 	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {

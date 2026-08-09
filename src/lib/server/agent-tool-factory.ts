@@ -139,6 +139,14 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Sync inventory is reserved for browser reconciliation.'
 		},
+		searchText: {
+			kind: 'excluded',
+			reason: 'Global text search is a UI surface; the agent finds notes with search_knowledge.'
+		},
+		replaceText: {
+			kind: 'excluded',
+			reason: 'Bulk replace is a UI surface; the agent edits a note with edit_note.'
+		},
 		rename: { kind: 'mutation' },
 		archive: { kind: 'mutation' },
 		restore: { kind: 'mutation' },

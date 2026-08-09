@@ -423,6 +423,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		notes: {
 			noteReader: notes,
 			noteTreeReader: notes,
+			noteTextSearcher: notes,
 			noteCreator: notes,
 			relationshipFinder: relationships,
 			backlinkViewAssembler: relationships,

@@ -5,6 +5,7 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
+	NoteSearchTarget,
 	NoteSummary,
 	TextSelection
 } from '$lib/models/notes';
@@ -37,6 +38,17 @@ export class NoteCatalog {
 	async list(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteSummary[]> {
 		const notes = await this.notes.listActive(actor, projectId);
 		return notes.filter((note) => note.kind !== 'skill');
+	}
+
+	/**
+	 * The searchable projection of the active notes, skills included: global text search
+	 * covers everything the user can open, unlike the tree listing above.
+	 */
+	listSearchable(
+		actor: ActorContext,
+		projectId?: Note['projectId']
+	): Promise<readonly NoteSearchTarget[]> {
+		return this.notes.listSearchable(actor, projectId);
 	}
 
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<Note>;
@@ -353,6 +365,7 @@ export class NoteCatalog {
 export type NoteCreator = Pick<NoteCatalog, 'create'>;
 export type NoteReader = Pick<NoteCatalog, 'get'>;
 export type NoteTreeReader = Pick<NoteCatalog, 'list'>;
+export type NoteTextSearcher = Pick<NoteCatalog, 'listSearchable'>;
 export type NoteEditor = Pick<NoteCatalog, 'save'>;
 export type NoteArchiver = Pick<NoteCatalog, 'archive' | 'restore'>;
 export type NotePublisher = Pick<NoteCatalog, 'markPublished'>;

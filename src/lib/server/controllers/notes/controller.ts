@@ -23,6 +23,7 @@ import type {
 	RestoreNoteRevisionInput,
 	RestoreNoteRevisionOutput,
 	NoteDocument,
+	NoteSearchOptions,
 	NoteView,
 	NoteSyncInventoryEntry,
 	PublishNoteInput,
@@ -31,6 +32,10 @@ import type {
 	RenameNoteOutput,
 	SaveNoteInput,
 	SaveNoteOutput,
+	SearchNoteTextInput,
+	SearchNoteTextOutput,
+	ReplaceNoteTextInput,
+	ReplaceNoteTextOutput,
 	SyncNoteInput,
 	SyncNoteOutput,
 	ListNoteSyncInventoryInput,
@@ -38,10 +43,13 @@ import type {
 } from '$lib/models/notes';
 import {
 	MAX_NOTE_DOCUMENTS,
+	buildNoteSearchPattern,
 	collectNoteLinkTargets,
 	noteEtag,
 	noteMatchesEtag,
-	noteSyncContentEquals
+	noteSyncContentEquals,
+	replaceInNoteDocument,
+	searchNoteTargets
 } from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
@@ -51,7 +59,7 @@ import type {
 	RelationshipFinder
 } from '$lib/server/services/relationships/contracts';
 import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
-import type { NoteCreator, NoteReader, NoteTreeReader } from '$lib/server/services/notes/contracts';
+import type { NoteCreator, NoteReader, NoteTextSearcher, NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type {
 	ReferenceLister,
 	ReferenceViewAssembler
@@ -148,6 +156,25 @@ export interface NotesController {
 		actor: ActorContext,
 		input: ListNoteSyncInventoryInput
 	): Promise<ListNoteSyncInventoryOutput>;
+	/**
+	 * Exact or regex search across the title and plain text of every active note,
+	 * optionally scoped to one project. Title matches are reported for display but are
+	 * not replaceable — {@link replaceText} rewrites document bodies only.
+	 *
+	 * @throws ValidationError if the query is empty or the regex is invalid.
+	 */
+	searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput>;
+	/**
+	 * Replace every match of the query across the matching notes' documents, saving each
+	 * through the regular save path so anchor repair, link reconciliation and re-indexing
+	 * run as they would for a hand edit.
+	 *
+	 * The search is re-run server-side against current state rather than trusting client
+	 * offsets, so a stale result list can only shrink what gets replaced, never corrupt it.
+	 *
+	 * @throws ValidationError if the query is empty or the regex is invalid.
+	 */
+	replaceText(actor: ActorContext, input: ReplaceNoteTextInput): Promise<ReplaceNoteTextOutput>;
 	/** Change a note's title, recording a revision and re-indexing in the same transaction. */
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput>;
 	/** Archive a note and re-index it so archived notes drop out of search results. */
@@ -206,6 +233,7 @@ export interface NotesController {
 export interface NotesDependencies {
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
+	noteTextSearcher: NoteTextSearcher;
 	noteCreator: NoteCreator;
 	relationshipFinder: RelationshipFinder;
 	backlinkViewAssembler: BacklinkViewAssembler;
@@ -229,6 +257,15 @@ export interface NotesDependencies {
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
+
+/** Both text-search entry points reject a pattern they cannot run before touching any state. */
+const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
+	if (buildNoteSearchPattern(query, options) !== undefined) return;
+	throw new ValidationError(
+		options.regex ? 'The search pattern is not a valid regular expression' : 'A search query is required'
+	);
+};
+
 export class Notes implements NotesController {
 	constructor(private readonly dependencies: NotesDependencies) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView> {
@@ -360,6 +397,38 @@ export class Notes implements NotesController {
 				updatedAt: note.updatedAt
 			}));
 		return { entries };
+	}
+	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
+		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
+		assertValidSearch(input.query, options);
+		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
+		return { hits: searchNoteTargets(targets, input.query, options) };
+	}
+	async replaceText(actor: ActorContext, input: ReplaceNoteTextInput): Promise<ReplaceNoteTextOutput> {
+		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
+		assertValidSearch(input.query, options);
+		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
+		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
+		const hits = searchNoteTargets(
+			scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
+			input.query,
+			options
+		);
+		let replacedNotes = 0;
+		let replacedMatches = 0;
+		for (const hit of hits) {
+			// Title matches are display-only: replace rewrites document bodies, never titles.
+			if (hit.matches.length === 0) continue;
+			const note = await this.dependencies.noteReader.get(actor, hit.noteId);
+			const result = replaceInNoteDocument(note.document, input.query, input.replacement, options);
+			if (result === undefined) continue;
+			await this.save(actor, {
+				note: { ...note, document: result.document, plainText: result.plainText }
+			});
+			replacedNotes += 1;
+			replacedMatches += result.replaced;
+		}
+		return { replacedNotes, replacedMatches };
 	}
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {

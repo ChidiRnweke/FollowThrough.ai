@@ -5,6 +5,7 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
+	NoteSearchTarget,
 	NoteSummary,
 	TextSelection,
 	TrashedNote
@@ -19,6 +20,10 @@ export interface NoteReader {
 }
 export interface NoteTreeReader {
 	list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
+}
+/** The read behind global text search: the searchable projection of every active note. */
+export interface NoteTextSearcher {
+	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
 }
 export interface NoteEditor {
 	save(actor: ActorContext, note: Note): Promise<Note>;

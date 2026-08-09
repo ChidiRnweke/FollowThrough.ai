@@ -295,3 +295,56 @@ export const replaceInNoteDocument = (
 		replaced: matches.length
 	};
 };
+
+/** The columns a text search needs — a note's document body never travels for search. */
+export interface NoteSearchTarget {
+	readonly id: NoteId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly plainText: string;
+}
+
+/** Assembles the hits for a set of search targets, dropping notes with no match at all. */
+export const searchNoteTargets = (
+	targets: readonly NoteSearchTarget[],
+	query: string,
+	options: NoteSearchOptions
+): NoteSearchHit[] => {
+	const hits: NoteSearchHit[] = [];
+	for (const target of targets) {
+		const titleMatches = searchNoteText(target.title, query, options);
+		const matches = searchNoteText(target.plainText, query, options);
+		if (titleMatches.length === 0 && matches.length === 0) continue;
+		hits.push({
+			noteId: target.id,
+			projectId: target.projectId,
+			title: target.title,
+			titleMatches,
+			matches
+		});
+	}
+	return hits;
+};
+
+export interface SearchNoteTextInput {
+	readonly query: string;
+	readonly regex: boolean;
+	readonly caseSensitive: boolean;
+	/** Scope the search to one project; omit it to search every active note. */
+	readonly projectId?: ProjectId;
+}
+
+export interface SearchNoteTextOutput {
+	readonly hits: readonly NoteSearchHit[];
+}
+
+export interface ReplaceNoteTextInput extends SearchNoteTextInput {
+	readonly replacement: string;
+	/** Replace only in these notes; omit to replace in every note the search hits. */
+	readonly noteIds?: readonly NoteId[];
+}
+
+export interface ReplaceNoteTextOutput {
+	readonly replacedNotes: number;
+	readonly replacedMatches: number;
+}

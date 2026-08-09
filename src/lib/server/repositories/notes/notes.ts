@@ -1,11 +1,16 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 /** `updateIfRevision` is the compare-and-swap write the sync protocol depends on: a stale expected revision fails instead of overwriting. */
 export interface NoteRepository {
 	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
 	findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined>;
 	listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
+	/**
+	 * The search projection of {@link listActive}: only the columns exact text search
+	 * reads, so a global search never ships every note's document body out of the database.
+	 */
+	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
 	/** The complement of {@link listActive}: notes in the trash, most recently discarded first. */
 	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
 	countSiblings(actor: ActorContext, projectId: ProjectId, parentId?: NoteId): Promise<number>;

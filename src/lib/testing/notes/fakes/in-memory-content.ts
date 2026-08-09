@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevision, NoteSearchTarget, TextSelection } from '$lib/models/notes';
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
 import {
@@ -15,6 +15,7 @@ import type {
 	NoteIndexer,
 	NotePublisher,
 	NoteReader,
+	NoteTextSearcher,
 	NoteTreeReader,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
@@ -36,6 +37,7 @@ export class InMemoryNoteContent
 	implements
 		NoteReader,
 		NoteTreeReader,
+		NoteTextSearcher,
 		NoteEditor,
 		NotePublisher,
 		NoteRevisionRecorder,
@@ -77,6 +79,18 @@ export class InMemoryNoteContent
 				!note.archivedAt &&
 				(projectId === undefined || note.projectId === projectId)
 		);
+	}
+
+	async listSearchable(
+		actor: ActorContext,
+		projectId?: Note['projectId']
+	): Promise<readonly NoteSearchTarget[]> {
+		return (await this.list(actor, projectId)).map((note) => ({
+			id: note.id,
+			projectId: note.projectId,
+			title: note.title,
+			plainText: note.plainText
+		}));
 	}
 
 	async create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {

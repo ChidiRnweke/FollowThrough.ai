@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision } from '$lib/models/notes';
+import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -52,6 +52,31 @@ export class NoteRecords implements NoteRepository {
 					.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt), asc(schema.notes.id))
 			).map((row) => toNote(row.note))
 		);
+	}
+
+	async listSearchable(
+		actor: ActorContext,
+		projectId?: ProjectId
+	): Promise<readonly NoteSearchTarget[]> {
+		const conditions = [eq(schema.notes.userId, actor.userId), isNull(schema.notes.archivedAt)];
+		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
+		const rows = await this.database
+			.select({
+				id: schema.notes.id,
+				projectId: schema.notes.projectId,
+				title: schema.notes.title,
+				plainText: schema.notes.plainText
+			})
+			.from(schema.notes)
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+			.where(and(...conditions, isNull(schema.projects.archivedAt)))
+			.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt), asc(schema.notes.id));
+		return rows.map((row) => ({
+			id: row.id as NoteId,
+			projectId: row.projectId as ProjectId,
+			title: row.title,
+			plainText: row.plainText
+		}));
 	}
 
 	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
