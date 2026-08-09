@@ -66,6 +66,26 @@ describe('A recoverable failure is the headline', () => {
 	});
 });
 
+describe('Transport bookkeeping is not a result', () => {
+	it('drops the etag a note read comes back with', () => {
+		expect(
+			summariseToolResult({ title: 'Runtime notes', etag: 'note:99691b75:r14' }).lines
+		).toEqual(['Title: Runtime notes']);
+	});
+
+	it('counts the tools a search found rather than naming them', () => {
+		expect(
+			summariseToolResult([{ name: 'create_note' }, { name: 'save_note' }], 'search_tools').headline
+		).toBe('Found 2 tools it can use');
+	});
+
+	it('never lists the internal names a tool search returned', () => {
+		expect(
+			summariseToolResult([{ name: 'create_note' }, { name: 'save_note' }], 'search_tools').lines
+		).toEqual([]);
+	});
+});
+
 describe('Records read as labelled fields', () => {
 	it('labels a returned field in the reader terms', () => {
 		expect(summariseToolResult({ title: 'Runtime notes' }).lines).toEqual(['Title: Runtime notes']);

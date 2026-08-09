@@ -39,7 +39,11 @@ describe('Parallel approvals are reviewed as one bundle', () => {
 
 	it('leaves a call that already ran out of the bundle', () => {
 		const groups = groupChatParts([toolPart('a', 'succeeded'), toolPart('b', 'approval_required')]);
-		expect(groups.map((group) => group.kind)).toEqual(['part', 'approvals']);
+		expect(groups.map((group) => group.kind)).toEqual(['approvals']);
+	});
+
+	it('drops a settled call from the flow, which reports it once for the whole turn', () => {
+		expect(groupChatParts([toolPart('a', 'succeeded')])).toEqual([]);
 	});
 
 	it('passes prose and reasoning through untouched', () => {

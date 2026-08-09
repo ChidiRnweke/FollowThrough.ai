@@ -31,6 +31,14 @@ export interface ToolResultSummary {
 /** Longer than this is prose the model or the note wrote, not a field value. */
 const PROSE_LENGTH = 120;
 
+/**
+ * Transport bookkeeping. `Etag: note:99691b75…:r14` is faithful and useless — it names a
+ * revision the reader cannot act on, in a syntax that is not theirs.
+ */
+const noise = new Set(['etag', 'revision', 'version', 'cursor', 'checksum', 'callid', 'runid']);
+
+const isNoise = (key: string): boolean => noise.has(key.toLowerCase());
+
 const ITEM_CAP = 5;
 
 const EMPTY: ToolResultSummary = { lines: [], empty: true };
@@ -84,7 +92,7 @@ const fromRecord = (record: Record<string, unknown>): ToolResultSummary => {
 	if (failed) return failed;
 
 	const entries = Object.entries(record).filter(
-		([key, value]) => readable(value) && !isIdentifierArgument(key, value)
+		([key, value]) => readable(value) && !isIdentifierArgument(key, value) && !isNoise(key)
 	);
 	const prose = entries.find(
 		([, value]) => typeof value === 'string' && value.length > PROSE_LENGTH
@@ -106,7 +114,22 @@ const fromRecord = (record: Record<string, unknown>): ToolResultSummary => {
 	};
 };
 
-export function summariseToolResult(output: unknown): ToolResultSummary {
+/**
+ * A tool search returns internal tool names. Listing them puts `create_note`, `archive_note`
+ * in front of someone who asked for a shorter note — the count is the whole of what they
+ * could want from it, and only in the log.
+ */
+const toolSearchSummary = (output: unknown): ToolResultSummary => {
+	const found = Array.isArray(output) ? output.length : 0;
+	return {
+		headline: found === 1 ? 'Found 1 tool it can use' : `Found ${found} tools it can use`,
+		lines: [],
+		empty: false
+	};
+};
+
+export function summariseToolResult(output: unknown, toolName?: string): ToolResultSummary {
+	if (toolName === 'search_tools') return toolSearchSummary(output);
 	if (output === undefined || output === null) return EMPTY;
 	if (typeof output === 'string') {
 		const text = output.trim();

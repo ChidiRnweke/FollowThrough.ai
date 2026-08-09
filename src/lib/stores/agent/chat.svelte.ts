@@ -126,7 +126,8 @@ export const entryText = (entry: ChatEntry): string =>
 		.map((part) => part.text)
 		.join('\n');
 
-const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
+/** Every tool call of one turn, in call order — what the turn's activity summary reads. */
+export const entryTools = (entry: ChatEntry): ChatToolActivity[] =>
 	entry.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
 
 /**

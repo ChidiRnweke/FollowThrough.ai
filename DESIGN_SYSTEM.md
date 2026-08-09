@@ -218,6 +218,22 @@ zone and center the voice line inside it.
 - **Chat:** Conversational pattern. The contextual right panel stays inline at `2xl` and opens as a Sheet below `2xl`; durable links use full-page `/chats/new` and `/chats/[id]` routes.
 - Show no more than five recent chats in the panel. Full history belongs on `/chats`, with project/note origin visible in both locations.
 - A submitted turn renders immediate three-dot activity, then human-readable tool or streaming state. Stop, retry, failure, and cancellation are explicit and announced accessibly.
+- **A turn reports the things it touched, not the calls it made.** Running, its steps arrive in
+  order so the reader can watch it work; settled, they fold into one entry per note, todo or
+  project, carrying the strongest verb that befell it — a note read three times and then edited
+  reads `edited`, once. The entry is the affordance: it opens where that kind of thing opens
+  (a note in a workbench tab, a todo at its route), and never by taking over the panel it was
+  clicked in. Something the agent just created is openable too; its id arrives in the result
+  rather than the arguments, and dropping it makes everything the agent makes for you
+  unreachable from the moment it says it made it.
+  - Mechanism the agent needs to orient itself — tool searches, wrapper envelopes, workspace
+    context, preference reads — never earns an entry, and a failure a later call put right is a
+    retry, not news. One instruction once produced four rows of which three were the agent
+    correcting itself.
+  - The full call log, with arguments, results and raw payloads, is **one door per turn**, never
+    one per call. A log in the reading path teaches the reader to skip the space the approval
+    also lives in. Results are stated in the reader's terms or not at all: an etag, a revision,
+    and an internal tool name are all faithful and all useless.
 - User messages expose copy and edit-in-composer actions; assistant messages expose copy and retry when eligible. Retrying never duplicates the visible user turn.
 - Conversation origin is fixed on its first turn and distinct from context chips added later. Full-page chats link back through project/note breadcrumbs.
 - Auto-scroll only while the reader is at the latest turn; preserve their position when they scroll upward.
@@ -277,6 +293,9 @@ zone and center the voice line inside it.
 - Do not render reference-specific background highlights, left-border callouts, or a separate bibliography below notes.
 - Do not accept draw.io conversions from the general Suggestions inbox, render exported SVG as application HTML, enable iframe autosave, or add diagram revision/history chrome to the current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token, duplicate a prompt during retry, or hide chat entirely on mobile.
+- Do not render a settled tool call as its own row in the transcript, give each call its own
+  disclosure, or echo a tool's payload back at the reader. The turn reports what it touched;
+  the calls live behind the turn's details.
 
 ## Agent context and transition UX
 

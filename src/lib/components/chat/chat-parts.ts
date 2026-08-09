@@ -16,10 +16,15 @@ const isPendingApproval = (part: ChatPart): part is { kind: 'tool'; tool: ChatTo
 /**
  * Only *consecutive* pending approvals bundle: anything the model said or did between two
  * calls means they belong to different moments, and merging them would misrepresent the turn.
+ *
+ * Settled tool calls are dropped here entirely: they are reported once for the whole turn, as
+ * the things they touched, rather than in flow as the calls they were. Pending approvals stay
+ * — they are a decision the reader owes an answer to, not a record of one.
  */
 export function groupChatParts(parts: readonly ChatPart[]): ChatPartGroup[] {
 	const groups: ChatPartGroup[] = [];
 	for (const part of parts) {
+		if (part.kind === 'tool' && !isPendingApproval(part)) continue;
 		if (!isPendingApproval(part)) {
 			groups.push({ kind: 'part', part });
 			continue;

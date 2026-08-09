@@ -10,7 +10,7 @@
 	import { FtCopy as Copy, FtEdit as Pencil, FtRefresh as RotateCcw } from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
-	import { entryText } from '$lib/stores/agent/chat.svelte';
+	import { entryText, entryTools } from '$lib/stores/agent/chat.svelte';
 	import { SuggestionCard } from '$lib/components/suggestions';
 	import { AgentContextBar } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -19,7 +19,7 @@
 	import ChatActivity from '../chat-activity.svelte';
 	import ChatStarters from '../chat-starters.svelte';
 	import ToolApprovalGroup from '../actions/tool-approval-group.svelte';
-	import ToolRow from '../actions/tool-row.svelte';
+	import TurnActivity from '../actions/turn-activity.svelte';
 	import { chatPartGroupKey, groupChatParts } from '../chat-parts';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ImageLightbox from '../image-lightbox.svelte';
@@ -193,11 +193,26 @@
 												text={part.text}
 												streaming={entry.status === 'streaming'}
 											/>{/if}
-									{:else}
-										<ToolRow tool={part.tool} {shell} />
 									{/if}
 								{/if}
 							{/each}
+							<!--
+								What the turn did comes once, at its end, in the things it touched — not
+								in flow as the calls it made. A call log between the question and the
+								answer teaches the reader to skip the space the approval also lives in.
+							-->
+							{#if entry.role === 'assistant'}
+								{@const tools = entryTools(entry)}
+								{#if tools.length > 0}
+									<TurnActivity
+										{tools}
+										{shell}
+										settled={entry.status === 'completed' ||
+											entry.status === 'failed' ||
+											entry.status === 'cancelled'}
+									/>
+								{/if}
+							{/if}
 							{#if entry.role === 'assistant' && entry.status === 'queued'}
 								<ChatActivity label={entry.error ?? 'Queued'} />
 							{:else if entry.role === 'assistant' && entry.status === 'waiting'}

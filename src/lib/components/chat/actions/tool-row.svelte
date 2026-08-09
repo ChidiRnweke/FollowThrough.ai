@@ -21,7 +21,7 @@
 
 	const parts = $derived(toolStatusParts(tool, shell));
 	const sent = $derived(approvalFields(tool.arguments, shell));
-	const result = $derived(summariseToolResult(tool.output));
+	const result = $derived(summariseToolResult(tool.output, tool.name));
 
 	/**
 	 * The long string arguments — a whole note body, most often. As a "Content: …" line they

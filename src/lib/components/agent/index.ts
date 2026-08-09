@@ -11,3 +11,4 @@ export {
 	toolStatusParts
 } from './actions/tool-presentation';
 export { summariseToolResult } from './actions/tool-result';
+export { turnActivity, turnSteps, type TouchedThing } from './actions/turn-activity';
