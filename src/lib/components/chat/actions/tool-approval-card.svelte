@@ -136,7 +136,7 @@
 		{@const items = fields.items ?? []}
 		{@const shown = compact ? items.slice(0, 5) : items}
 		{#each shown as item, index (index)}
-			<div class={shown.length > 1 ? 'border-l-2 border-border pl-2' : ''}>
+			<div class="flex flex-col gap-0.5 {shown.length > 1 ? 'border-l-2 border-border pl-2' : ''}">
 				{#if item.headline}
 					<p class="text-sm">{item.headline}</p>
 				{/if}
@@ -149,13 +149,14 @@
 			<p class="text-sm text-muted-foreground">…and {items.length - shown.length} more</p>
 		{/if}
 		{#each proseFields as field (field.key)}
-			<div>
+			<div class="flex flex-col gap-1">
 				<p class="provenance-caption">{field.key}</p>
 				<ChatMarkdown content={field.text} />
 			</div>
 		{/each}
 		{#if fields.location}
-			<p class="provenance-caption">{fields.location}</p>
+			<!-- Provenance is about the whole change, so it sits a step away from it. -->
+			<p class="provenance-caption pt-1">{fields.location}</p>
 		{/if}
 	{/if}
 {/snippet}
@@ -187,7 +188,9 @@
 			</Button>
 		</Card.Action>
 	</Card.Header>
-	<Card.Content class="space-y-1.5 px-4">
+	<!-- 8px between the things the preview lists; the 6px it used to use said the
+	     same about a title and its value as about a diff and a warning. -->
+	<Card.Content class="space-y-2 px-4">
 		{#if loadingNote}
 			<p class="text-sm text-muted-foreground">Loading the current note…</p>
 		{:else if baselineError}
@@ -203,7 +206,7 @@
 		{/if}
 	</Card.Content>
 	{#if showFooter}
-		<Card.Footer class="gap-2 px-4">
+		<Card.Footer class="gap-2 px-4 pt-1">
 			<Button size="sm" disabled={busy} onclick={onapprove}>Approve</Button>
 			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject</Button>
 		</Card.Footer>

@@ -57,7 +57,13 @@
 </script>
 
 <div class="flex h-full w-full min-w-0 flex-1 flex-col" data-chat-pane={sessionKey}>
-	<header class="flex min-h-10 shrink-0 items-center gap-2 pb-2">
+	<!--
+		The header shares the transcript's measure rather than spanning the pane, so
+		the title sits over the conversation it names instead of drifting out to the
+		pane edge. 16px beneath it: chrome is a different kind of thing from content,
+		but a closer one than two turns are to each other.
+	-->
+	<header class="mx-auto flex min-h-10 w-full max-w-3xl shrink-0 items-center gap-2 pb-4">
 		<h2 class="truncate text-sm font-medium">{title}</h2>
 		<div class="ml-auto flex items-center gap-1">
 			<AgentSettingsPopover {agentModels} {chat} />
