@@ -71,36 +71,82 @@ const noteScopedTools = new Set([
 	'restore_note_version'
 ]);
 
+/** Tools whose `query` argument is what the row is about. */
+const querySubjectTools = new Set(['search', 'search_note', 'search_tools', 'find_references']);
+
+const stringArgument = (
+	arguments_: Readonly<Record<string, unknown>>,
+	key: string
+): string | undefined => {
+	const value = arguments_[key];
+	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+};
+
+/**
+ * A row's label says what happened; its subject says what it happened to, and the subject is
+ * the only part the reader can act on. They are returned apart so the row can make the
+ * subject a control — concatenated into one sentence, a note title is unclickable prose.
+ *
+ * `noteId` is set only when the note resolves in the tree, i.e. only when opening it in a tab
+ * can actually succeed.
+ */
+export interface ToolStatusParts {
+	readonly label: string;
+	readonly subject?: string;
+	readonly noteId?: string;
+	/** True while the call is still in flight, so the row can show progress. */
+	readonly pending: boolean;
+	readonly failed: boolean;
+}
+
 /**
  * The shell is optional because the note tree may not be loaded, and a note may be missing
- * from it (archived, or outside the tree) — in which case the row keeps the plain label
- * rather than showing a placeholder for a name nobody can read.
+ * from it (archived, or outside the tree) — in which case the subject falls back to whatever
+ * the call itself names, and to nothing rather than a placeholder for a name nobody can read.
  */
-export function toolStatusLabel(tool: ChatToolActivity, shell?: ShellContext): string {
-	const title = noteScopedTools.has(tool.name)
+export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): ToolStatusParts {
+	const resolvedNote = noteScopedTools.has(tool.name)
 		? noteTitle(shell, tool.arguments.noteId)
 		: undefined;
-	const named = (label: string): string => (title ? `${label} · ${title}` : label);
+	const subject =
+		resolvedNote ??
+		(querySubjectTools.has(tool.name) ? stringArgument(tool.arguments, 'query') : undefined) ??
+		stringArgument(tool.arguments, 'title') ??
+		stringArgument(tool.arguments, 'name');
+	const noteId = resolvedNote ? (tool.arguments.noteId as string) : undefined;
+	const parts = (label: string): ToolStatusParts => ({
+		label,
+		...(subject ? { subject } : {}),
+		...(noteId ? { noteId } : {}),
+		pending: tool.status === 'running',
+		failed: tool.status === 'failed' || tool.status === 'rejected'
+	});
 
-	if (tool.status === 'running') return `${named(friendlyToolLabel(tool.name))}…`;
 	if (tool.status === 'rejected')
-		return named(
+		return parts(
 			noteBodyTools.has(tool.name)
 				? 'Note change rejected'
 				: `${friendlyToolLabel(tool.name)} rejected`
 		);
 	if (tool.status === 'failed')
-		return named(
+		return parts(
 			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${friendlyToolLabel(tool.name)} failed`
 		);
 	if (tool.status === 'succeeded') {
-		if (tool.name === 'save_note') return named('Saved note');
-		if (tool.name === 'edit_note') return named('Edited note');
-		if (tool.name === 'publish_note') return named('Published note');
-		if (tool.name === 'discard_note_draft') return named('Discarded note draft');
-		return named(completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`);
+		if (tool.name === 'save_note') return parts('Saved note');
+		if (tool.name === 'edit_note') return parts('Edited note');
+		if (tool.name === 'publish_note') return parts('Published note');
+		if (tool.name === 'discard_note_draft') return parts('Discarded note draft');
+		return parts(completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`);
 	}
-	return named(friendlyToolLabel(tool.name));
+	return parts(friendlyToolLabel(tool.name));
+}
+
+/** The same thing as one string, for the places that cannot render the subject apart. */
+export function toolStatusLabel(tool: ChatToolActivity, shell?: ShellContext): string {
+	const { label, subject, pending } = toolStatusParts(tool, shell);
+	const named = subject ? `${label} · ${subject}` : label;
+	return pending ? `${named}…` : named;
 }
 
 /** Tools that change something the user owns, as opposed to just reading it. */

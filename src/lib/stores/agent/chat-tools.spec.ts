@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reconcileToolActivity, type ChatToolActivity } from './chat-tools';
+import { reconcileToolActivity, unwrapToolCall, type ChatToolActivity } from './chat-tools';
 
 const runningTool = (callId = 'call-1'): ChatToolActivity => ({
 	callId,
@@ -59,5 +59,66 @@ describe('chat tool activity reconciliation', () => {
 			status: 'succeeded'
 		});
 		expect(tools[0]?.status).toBe('succeeded');
+	});
+
+	it('keeps the unwrapped name when the wrapper reports the outcome', () => {
+		const tools: ChatToolActivity[] = [
+			{ callId: 'call-1', name: 'save_note', arguments: { noteId: 'note-1' }, status: 'running' }
+		];
+		reconcileToolActivity(tools, {
+			callId: 'call-1',
+			name: 'use_tool',
+			arguments: {},
+			status: 'succeeded'
+		});
+		expect(tools[0]?.name).toBe('save_note');
+	});
+});
+
+const envelope = (args: Record<string, unknown>): ChatToolActivity => ({
+	callId: 'call-1',
+	name: 'use_tool',
+	arguments: args,
+	status: 'running'
+});
+
+describe('use_tool unwrapping', () => {
+	it('names the dispatched tool rather than the wrapper', () => {
+		expect(unwrapToolCall(envelope({ name: 'save_note', payload: { noteId: 'note-1' } })).name).toBe(
+			'save_note'
+		);
+	});
+
+	it('lifts the nested payload to the call arguments', () => {
+		expect(
+			unwrapToolCall(envelope({ name: 'save_note', payload: { noteId: 'note-1' } })).arguments
+		).toEqual({ noteId: 'note-1' });
+	});
+
+	it('accepts arguments sent as a flat object', () => {
+		expect(
+			unwrapToolCall(envelope({ name: 'get_note', arguments: { noteId: 'note-2' } })).arguments
+		).toEqual({ noteId: 'note-2' });
+	});
+
+	it('accepts arguments sent as a JSON string', () => {
+		expect(
+			unwrapToolCall(envelope({ name: 'get_note', arguments: '{"noteId":"note-3"}' })).arguments
+		).toEqual({ noteId: 'note-3' });
+	});
+
+	it('drops an unparseable argument string rather than showing it as a field', () => {
+		expect(unwrapToolCall(envelope({ name: 'get_note', arguments: 'not json' })).arguments).toEqual(
+			{}
+		);
+	});
+
+	it('leaves an envelope that names no tool as it arrived', () => {
+		expect(unwrapToolCall(envelope({ payload: { noteId: 'note-1' } })).name).toBe('use_tool');
+	});
+
+	it('leaves an ordinary call untouched', () => {
+		const call = runningTool();
+		expect(unwrapToolCall(call)).toBe(call);
 	});
 });

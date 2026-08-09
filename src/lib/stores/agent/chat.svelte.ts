@@ -17,7 +17,12 @@ import type {
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
-import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
+import {
+	reconcileToolActivity,
+	unwrapToolCall,
+	type ChatToolActivity,
+	type ChatToolStatus
+} from './chat-tools';
 import { suggestionToView } from '../suggestions/suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
@@ -147,7 +152,8 @@ const restoredImages = (value: unknown): ChatPart[] => {
 		}));
 };
 
-const applyToolActivity = (entry: ChatEntry, incoming: ChatToolActivity): void => {
+const applyToolActivity = (entry: ChatEntry, raw: ChatToolActivity): void => {
+	const incoming = unwrapToolCall(raw);
 	if (!reconcileToolActivity(entryTools(entry), incoming))
 		entry.parts.push({ kind: 'tool', tool: incoming });
 };
@@ -234,7 +240,7 @@ export class ChatStore {
 			for (const message of data.messages) {
 				if (message.role === 'tool') {
 					const content = message.content;
-					const incoming: ChatToolActivity = {
+					const incoming: ChatToolActivity = unwrapToolCall({
 						callId: String(content.callId ?? ''),
 						name: String(content.name ?? 'tool'),
 						arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
@@ -242,7 +248,7 @@ export class ChatStore {
 						...(content.output !== null ? { output: content.output } : {}),
 						...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
 						status: String(content.status ?? 'succeeded') as ChatToolStatus
-					};
+					});
 					if (!reconcileToolActivity(pendingTools, incoming)) pendingTools.push(incoming);
 					continue;
 				}

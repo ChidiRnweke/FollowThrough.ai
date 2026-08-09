@@ -4,7 +4,8 @@ import {
 	approvalConsequence,
 	isWriteTool,
 	toolDetailLines,
-	toolStatusLabel
+	toolStatusLabel,
+	toolStatusParts
 } from './tool-presentation';
 
 const tool = (name: string, status: 'succeeded' | 'failed' | 'rejected') => ({
@@ -62,6 +63,43 @@ describe('A read names the note it read', () => {
 		expect(
 			toolStatusLabel({ ...tool('create_project', 'succeeded'), arguments: { noteId } }, shell)
 		).toBe('Created project');
+	});
+
+	it('offers the note id so the row can open it', () => {
+		expect(toolStatusParts(read('succeeded'), shell).noteId).toBe(noteId);
+	});
+
+	it('withholds the note id when the note is not in the tree', () => {
+		expect(
+			toolStatusParts(read('succeeded'), { noteTree: [] } as unknown as ShellContext).noteId
+		).toBeUndefined();
+	});
+});
+
+describe('The subject is what the reader recognises', () => {
+	it('names the note a create is about before it exists in the tree', () => {
+		expect(
+			toolStatusParts({ ...tool('create_note', 'succeeded'), arguments: { title: 'Runtime' } })
+				.subject
+		).toBe('Runtime');
+	});
+
+	it('names what a search looked for', () => {
+		expect(
+			toolStatusParts({ ...tool('search', 'succeeded'), arguments: { query: 'agent skills' } })
+				.subject
+		).toBe('agent skills');
+	});
+
+	it('offers no note to open for a subject that is not a note', () => {
+		expect(
+			toolStatusParts({ ...tool('search', 'succeeded'), arguments: { query: 'agent skills' } })
+				.noteId
+		).toBeUndefined();
+	});
+
+	it('marks a rejected call as failed so the row can say so in colour', () => {
+		expect(toolStatusParts(tool('save_note', 'rejected')).failed).toBe(true);
 	});
 });
 
