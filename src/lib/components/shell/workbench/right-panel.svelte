@@ -10,7 +10,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { FtPlus as Plus, FtClose as X } from '$lib/components/icons';
 	import AgentSettingsPopover from '../../agent/preferences/agent-settings-popover.svelte';
-	import { chat } from '$lib/stores/agent/chat.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -61,6 +61,10 @@
 	// responsive class of its own, so leaving it mounted behind the docked aside
 	// dimmed and blurred the whole app on desktop.
 	const docked = new IsDockedPanel();
+	// Re-resolves when "New chat" swaps the key, which is what re-keys the panel
+	// onto a fresh transcript. `resident` rather than `for`: the panel's hold is
+	// taken once, by the store itself, and must not be bumped per read.
+	const chatSession = $derived(chatRegistry.resident(rightPanel.chatSessionKey));
 	// Keep the last visible mode rendered while the close animation runs.
 	let renderedMode = $state<Exclude<typeof rightPanel.mode, 'closed'>>('chat');
 	$effect(() => {
@@ -69,7 +73,7 @@
 </script>
 
 {#snippet chatHeaderActions()}
-	<AgentSettingsPopover {agentModels} />
+	<AgentSettingsPopover {agentModels} chat={chatSession} />
 	<Tip text="New chat">
 		{#snippet children({ props })}
 			<Button
@@ -77,7 +81,7 @@
 				variant="ghost"
 				size="icon-sm"
 				aria-label="New chat"
-				onclick={() => chat.clear()}
+				onclick={() => rightPanel.newChat()}
 			>
 				<Plus data-icon />
 			</Button>
@@ -127,6 +131,7 @@
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
 					{#if renderedMode === 'chat'}
 						<ChatPanel
+							chat={chatSession}
 							{shell}
 							{sessions}
 							{activeNoteId}
@@ -192,6 +197,7 @@
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
 					{#if renderedMode === 'chat'}
 						<ChatPanel
+							chat={chatSession}
 							{shell}
 							{sessions}
 							{activeNoteId}

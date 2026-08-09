@@ -25,8 +25,21 @@ import { SvelteSet } from 'svelte/reactivity';
 
 export type { ChatToolActivity } from './chat-tools';
 
-const STORAGE_KEY = 'followthrough.agent.conversation';
+const STORAGE_KEY_PREFIX = 'followthrough.agent.conversation';
 const browser = typeof window !== 'undefined';
+
+/**
+ * Identifies one chat session for its whole life.
+ *
+ * Minted on the client, because a new chat has no `ConversationId` until the
+ * server assigns one on first submit. Re-keying the session at that moment
+ * would have to rewrite the registry entry, the storage keys, the tab id and
+ * the URL mid-run, so the key is fixed and the conversation id is recorded
+ * alongside it instead.
+ */
+export type ChatSessionKey = string;
+
+export const mintChatSessionKey = (): ChatSessionKey => crypto.randomUUID();
 const activeStatuses: readonly AgentRunStatus[] = [
 	'queued',
 	'running',
@@ -58,10 +71,10 @@ interface PersistedConversationChoices {
 	executionModeOverride?: AgentExecutionMode;
 }
 
-const persistedConversation = (): PersistedConversationChoices => {
+const persistedConversation = (key: string): PersistedConversationChoices => {
 	if (!browser) return {};
 	try {
-		return JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}') as PersistedConversationChoices;
+		return JSON.parse(sessionStorage.getItem(key) ?? '{}') as PersistedConversationChoices;
 	} catch {
 		return {};
 	}
@@ -177,12 +190,15 @@ export class ChatStore {
 	private hydratedConversationId?: ConversationId;
 	private eventConnection?: AgentRunEventConnection;
 	private activeReply?: ChatEntry;
-	private observers = 0;
+	private readonly storageKey: string;
 
 	constructor(
+		readonly sessionKey: ChatSessionKey,
 		private readonly transport: AgentRunTransport = new RemoteAgentRunTransport(),
-		private readonly storage: AgentRunClientStorage = new SessionAgentRunStorage()
-	) {}
+		private readonly storage: AgentRunClientStorage = new SessionAgentRunStorage(sessionKey)
+	) {
+		this.storageKey = `${STORAGE_KEY_PREFIX}.${sessionKey}`;
+	}
 
 	get isStreaming(): boolean {
 		return this.runStatus !== undefined && activeStatuses.includes(this.runStatus);
@@ -190,7 +206,7 @@ export class ChatStore {
 
 	initialize(defaultMode: AgentExecutionMode): void {
 		if (this.initialized) return;
-		const persisted = persistedConversation();
+		const persisted = persistedConversation(this.storageKey);
 		this.conversationId = persisted.conversationId;
 		this.modelOverride = persisted.modelOverride ?? null;
 		this.visionModelOverride = persisted.visionModelOverride ?? null;
@@ -205,14 +221,6 @@ export class ChatStore {
 	 */
 	stage(request: ChatHandoff): void {
 		this.staged = request;
-	}
-
-	observe(): () => void {
-		this.observers += 1;
-		return () => {
-			this.observers = Math.max(0, this.observers - 1);
-			if (this.observers === 0) this.detach();
-		};
 	}
 
 	async hydrate(): Promise<void> {
@@ -294,7 +302,7 @@ export class ChatStore {
 	persistConversationChoices(): void {
 		if (!browser || !this.initialized) return;
 		sessionStorage.setItem(
-			STORAGE_KEY,
+			this.storageKey,
 			JSON.stringify({
 				conversationId: this.conversationId,
 				modelOverride: this.modelOverride,
@@ -527,7 +535,7 @@ export class ChatStore {
 		this.attempt = 0;
 		this.activeReply = undefined;
 		this.storage.clear();
-		if (browser) sessionStorage.removeItem(STORAGE_KEY);
+		if (browser) sessionStorage.removeItem(this.storageKey);
 	}
 
 	async switchToConversation(id: ConversationId): Promise<void> {
@@ -681,5 +689,3 @@ export class ChatStore {
 		});
 	}
 }
-
-export const chat = new ChatStore();

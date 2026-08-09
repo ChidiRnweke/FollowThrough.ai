@@ -9,7 +9,12 @@
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
-	import { chat, entryText, type ChatEntry, type ContextChip } from '$lib/stores/agent/chat.svelte';
+	import {
+		entryText,
+		type ChatEntry,
+		type ChatStore,
+		type ContextChip
+	} from '$lib/stores/agent/chat.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -17,6 +22,10 @@
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { invalidateAll } from '$app/navigation';
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
+	import {
+		chatRegistry,
+		MAX_CONCURRENT_STREAMS
+	} from '$lib/stores/agent/registries/chat-registry.svelte';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
 	import {
@@ -30,6 +39,7 @@
 	} from './mentions';
 
 	let {
+		chat,
 		shell,
 		sessions,
 		activeNoteId,
@@ -40,6 +50,12 @@
 		agentAvailable,
 		registerComposerFocus
 	}: {
+		/**
+		 * The session this panel shows. Passed in rather than imported: several
+		 * conversations run at once, each with its own store, and a module
+		 * singleton would make every mounted panel share one transcript.
+		 */
+		chat: ChatStore;
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
@@ -52,7 +68,8 @@
 	} = $props();
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
-		const release = chat.observe();
+		// No `observe()` here any more: the registry's refcount is the same
+		// mechanism, and whoever acquired this store owns detaching it.
 		const releaseComposerFocus = registerComposerFocus?.(() => textareaRef?.focus());
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) chat.clear();
@@ -61,10 +78,7 @@
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else prompt = sessionStorage.getItem(draftKey()) ?? '';
-		return () => {
-			release();
-			releaseComposerFocus?.();
-		};
+		return () => releaseComposerFocus?.();
 	});
 
 	// An invocation point elsewhere in the app wrote a prompt while this panel was
@@ -142,7 +156,10 @@
 	}
 	let followingLatest = $state(true);
 	let showJumpToLatest = $state(false);
-	const draftKey = (): string => `followthrough.chat.draft.${chat.conversationId ?? 'new'}`;
+	// Keyed by session, not conversation: the id only arrives once the first
+	// message is sent, so a conversation-keyed draft moved out from under the
+	// user mid-compose.
+	const draftKey = (): string => `followthrough.chat.draft.${chat.sessionKey}`;
 
 	function saveDraft(): void {
 		if (typeof sessionStorage === 'undefined') return;
@@ -287,6 +304,10 @@
 	async function send(): Promise<void> {
 		const text = prompt.trim();
 		if ((!text && !selectedImages.length) || chat.isStreaming) return;
+		if (chatRegistry.atStreamLimit()) {
+			toast.error(`Only ${MAX_CONCURRENT_STREAMS} chats can run at once. Wait for one to finish.`);
+			return;
+		}
 		const sentImages = selectedImages;
 		prompt = '';
 		selectedImages = [];

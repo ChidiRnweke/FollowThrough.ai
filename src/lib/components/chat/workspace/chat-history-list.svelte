@@ -15,7 +15,7 @@
 	import { NameDialog } from '$lib/components/projects';
 	import { deleteSession, renameSession } from '$lib/remote/agent/chat.remote';
 	import { toast } from 'svelte-sonner';
-	import { chat } from '$lib/stores/agent/chat.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 
 	let {
@@ -72,15 +72,18 @@
 
 	async function remove(): Promise<void> {
 		if (!selected) return;
-		if (chat.isStreaming && chat.conversationId === selected.id) {
+		// Any open surface may be showing this conversation, not just this one, so
+		// ask the registry rather than a single store.
+		const open = chatRegistry.sessionForConversation(selected.id);
+		if (open?.isStreaming) {
 			toast.error('Stop the active generation before deleting this chat.');
 			return;
 		}
 		busy = true;
 		try {
 			await deleteSession({ conversationId: selected.id });
-			if (chat.conversationId === selected.id) {
-				chat.clear();
+			if (open) {
+				open.clear();
 				if (location.pathname === `/chats/${selected.id}`) await goto('/chats/new');
 			}
 			await invalidateAll();

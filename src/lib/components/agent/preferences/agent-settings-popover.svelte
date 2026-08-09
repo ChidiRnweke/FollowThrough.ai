@@ -5,10 +5,12 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtSettings as Settings } from '$lib/components/icons';
-	import { chat } from '$lib/stores/agent/chat.svelte';
+	import type { ChatStore } from '$lib/stores/agent/chat.svelte';
 	import ModelPicker from './model-picker.svelte';
 
-	let { agentModels }: { agentModels: readonly AgentModel[] } = $props();
+	// Model choices are per conversation, so the popover edits the session it was
+	// opened from rather than a global the whole app shares.
+	let { agentModels, chat }: { agentModels: readonly AgentModel[]; chat: ChatStore } = $props();
 	const effectiveChatModel = $derived(
 		agentModels.find((model) => model.id === chat.modelOverride) ??
 			agentModels.find((model) => model.recommended)

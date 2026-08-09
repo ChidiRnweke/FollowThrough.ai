@@ -1,7 +1,7 @@
 import { goto } from '$app/navigation';
 import type { TodoView } from '$lib/models/todos';
 import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
-import { chat } from '$lib/stores/agent/chat.svelte';
+import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 import { stageChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
 import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 
@@ -52,7 +52,9 @@ export const createAskAgent =
 export const askAgent = createAskAgent({
 	panelFits: dockedPanelFits,
 	openChat: (trigger) => rightPanel.openChat(trigger),
-	stage: (request) => chat.stage(request),
+	// `peek`, not `for`: staging a prompt reads the panel's session, it does not
+	// take a reference to it. The panel's own hold is what keeps it alive.
+	stage: (request) => chatRegistry.peek(rightPanel.chatSessionKey)?.stage(request),
 	handoff: stageChatHandoff,
 	navigate: (href) => void goto(href)
 });

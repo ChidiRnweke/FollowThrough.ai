@@ -189,7 +189,11 @@ const streamedEvents: AgentEvent[] = [
 ];
 
 const sendWith = async (events: AgentEvent[]) => {
-	const store = new ChatStore(new FakeAgentRunTransport(events), new MemoryStorage());
+	const store = new ChatStore(
+		'test-session',
+		new FakeAgentRunTransport(events),
+		new MemoryStorage()
+	);
 	await store.send({ prompt: 'look this up' });
 	await Promise.resolve();
 	return { store, reply: store.entries.at(-1)! };
@@ -218,7 +222,11 @@ describe('chat event projection', () => {
 	});
 
 	it('notifies reactive observers when the streamed reply completes', async () => {
-		const store = new ChatStore(new FakeAgentRunTransport(streamedEvents), new MemoryStorage());
+		const store = new ChatStore(
+			'test-session',
+			new FakeAgentRunTransport(streamedEvents),
+			new MemoryStorage()
+		);
 		const seen: (string | undefined)[] = [];
 		const stop = $effect.root(() => {
 			$effect(() => {
@@ -265,6 +273,7 @@ describe('chat event projection', () => {
 	it('answers every parked call in one decision', async () => {
 		const decided: { callIds: readonly string[]; decision: string }[] = [];
 		const store = new ChatStore(
+			'test-session',
 			new DecidingTransport(
 				[
 					{
@@ -299,6 +308,7 @@ describe('chat event projection', () => {
 
 	it('leaves a failed decision visible on every card it covered', async () => {
 		const store = new ChatStore(
+			'test-session',
 			new FailingTransport([
 				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
 				{ type: 'approval_required', runId, callId: 'call-b', name: 'archive_note', arguments: {} }
@@ -325,7 +335,7 @@ describe('chat event projection', () => {
 describe('stopping a streaming turn', () => {
 	const streaming = async () => {
 		const transport = new StoppableTransport();
-		const store = new ChatStore(transport, new MemoryStorage());
+		const store = new ChatStore('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { transport, store, reply: store.entries.at(-1)! };
@@ -361,7 +371,7 @@ describe('stopping a streaming turn', () => {
 describe('a stop the server never confirms', () => {
 	const unconfirmed = async (snapshot?: AgentRunSnapshot) => {
 		const transport = new UnconfirmedCancelTransport(snapshot);
-		const store = new ChatStore(transport, new MemoryStorage());
+		const store = new ChatStore('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { store, reply: store.entries.at(-1)! };
@@ -404,7 +414,11 @@ describe('restoring a conversation', () => {
 				}
 			]
 		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
-		const store = new ChatStore(new HydratingTransport(session), new MemoryStorage());
+		const store = new ChatStore(
+			'test-session',
+			new HydratingTransport(session),
+			new MemoryStorage()
+		);
 		store.conversationId = conversationId;
 		await store.hydrate();
 		return store;

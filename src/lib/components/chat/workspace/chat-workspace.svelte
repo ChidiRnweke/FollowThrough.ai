@@ -4,6 +4,9 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import ChatPanel from './chat-panel.svelte';
 	import { AgentSettingsPopover } from '$lib/components/agent';
+	import { onDestroy, untrack } from 'svelte';
+	import { ChatStore } from '$lib/stores/agent/chat.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 
 	let {
 		shell,
@@ -20,6 +23,27 @@
 		agentModels: readonly AgentModel[];
 		agentAvailable: boolean;
 	} = $props();
+
+	const browser = typeof window !== 'undefined';
+
+	/**
+	 * This page's session. Reusing the key an already-open surface holds for the
+	 * same conversation matters: two stores against one conversation would both
+	 * submit runs to it, and the server's active-run uniqueness index rejects
+	 * whichever lands second.
+	 */
+	const sessionKey = untrack(
+		() =>
+			(conversation ? chatRegistry.keyForConversation(conversation.id) : undefined) ??
+			chatRegistry.mint()
+	);
+	// Registry references are a browser concern. The registry is a module-level
+	// map shared by every SSR request, so holding a freshly-minted key there
+	// would leak one entry per render.
+	const chat = untrack(() => (browser ? chatRegistry.for(sessionKey) : new ChatStore(sessionKey)));
+	onDestroy(() => {
+		if (browser) chatRegistry.release(sessionKey);
+	});
 
 	const note = $derived(shell.noteTree.find((entry) => entry.id === conversation?.contextNoteId));
 	const project = $derived(
@@ -53,11 +77,12 @@
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
 		<div class="ml-auto">
-			<AgentSettingsPopover {agentModels} />
+			<AgentSettingsPopover {agentModels} {chat} />
 		</div>
 	</header>
 	<div class="safe-panel-bottom mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 pt-4 md:px-8">
 		<ChatPanel
+			{chat}
 			{shell}
 			{sessions}
 			{agentPreferences}
