@@ -43,10 +43,21 @@ describe('Searching note text', () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('ship it, then ship it again')];
 		const result = await controller.searchText(testActor(), search);
-		expect(result.hits[0]?.matches).toEqual([
+		expect(result.hits[0]?.matches).toMatchObject([
 			{ start: 0, end: 4, text: 'ship' },
 			{ start: 14, end: 18, text: 'ship' }
 		]);
+	});
+
+	it('attaches a display snippet to each content match', async () => {
+		const { content, controller } = setup();
+		content.notes = [noteWithText('ship it, then ship it again')];
+		const result = await controller.searchText(testActor(), search);
+		expect(result.hits[0]?.matches[0]?.snippet).toEqual({
+			before: '',
+			hit: 'ship',
+			after: ' it, then ship it again'
+		});
 	});
 
 	it('finds title matches alongside content matches', async () => {

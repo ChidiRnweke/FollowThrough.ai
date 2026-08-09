@@ -34,13 +34,25 @@ export interface NoteTextMatch {
 	readonly text: string;
 }
 
+/** A display window around a content match, so results render without shipping whole notes. */
+export interface NoteSearchSnippet {
+	readonly before: string;
+	readonly hit: string;
+	readonly after: string;
+}
+
+/** A content match paired with the snippet a result row renders. */
+export interface NoteSearchContentMatch extends NoteTextMatch {
+	readonly snippet: NoteSearchSnippet;
+}
+
 /** One note's worth of hits: content matches are offsets into `plainText`, title matches into `title`. */
 export interface NoteSearchHit {
 	readonly noteId: NoteId;
 	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly titleMatches: readonly NoteTextMatch[];
-	readonly matches: readonly NoteTextMatch[];
+	readonly matches: readonly NoteSearchContentMatch[];
 }
 
 /** Matches per note are capped so a pathological query (`a` on a long note) stays a bounded payload. */
@@ -109,7 +121,7 @@ export const noteSearchSnippet = (
 	text: string,
 	match: NoteTextMatch,
 	contextChars = 60
-): { readonly before: string; readonly hit: string; readonly after: string } => ({
+): NoteSearchSnippet => ({
 	before: text.slice(Math.max(0, match.start - contextChars), match.start),
 	hit: text.slice(match.start, match.end),
 	after: text.slice(match.end, match.end + contextChars)
@@ -313,7 +325,10 @@ export const searchNoteTargets = (
 	const hits: NoteSearchHit[] = [];
 	for (const target of targets) {
 		const titleMatches = searchNoteText(target.title, query, options);
-		const matches = searchNoteText(target.plainText, query, options);
+		const matches = searchNoteText(target.plainText, query, options).map((match) => ({
+			...match,
+			snippet: noteSearchSnippet(target.plainText, match)
+		}));
 		if (titleMatches.length === 0 && matches.length === 0) continue;
 		hits.push({
 			noteId: target.id,
