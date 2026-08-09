@@ -24,14 +24,19 @@
 </script>
 
 {#if bundled}
-	<div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2">
-		<p class="px-1 text-xs font-medium text-muted-foreground">
-			{tools.length} actions need approval
+	<!--
+		Spacing holds the bundle together, not a tray: a bordered box around bordered cards was
+		the nested-rectangle failure the surface rule exists to prevent. 24px between the
+		changes, because each is a different thing to weigh, and one action row answering all.
+	-->
+	<div class="my-2 flex flex-col gap-6 border-y border-brand/40 py-4">
+		<p class="text-xs font-medium text-muted-foreground">
+			{tools.length} changes need your approval
 		</p>
 		{#each tools as tool (tool.callId)}
-			<ToolApprovalCard {tool} {shell} showFooter={false} {onapprove} {onreject} />
+			<ToolApprovalCard {tool} {shell} showFooter={false} framed={false} {onapprove} {onreject} />
 		{/each}
-		<div class="flex gap-2 px-1 pb-1">
+		<div class="flex gap-2">
 			<Button size="sm" disabled={busy} onclick={onapprove}>Approve all ({tools.length})</Button>
 			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject all</Button>
 		</div>

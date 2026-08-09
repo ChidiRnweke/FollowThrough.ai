@@ -39,11 +39,26 @@ describe('Parallel approvals are reviewed as one bundle', () => {
 
 	it('leaves a call that already ran out of the bundle', () => {
 		const groups = groupChatParts([toolPart('a', 'succeeded'), toolPart('b', 'approval_required')]);
-		expect(groups.map((group) => group.kind)).toEqual(['approvals']);
+		expect(groups.map((group) => group.kind)).toEqual(['activity', 'approvals']);
 	});
 
-	it('drops a settled call from the flow, which reports it once for the whole turn', () => {
-		expect(groupChatParts([toolPart('a', 'succeeded')])).toEqual([]);
+	it('folds consecutive settled calls into one run of activity', () => {
+		const groups = groupChatParts([toolPart('a', 'succeeded'), toolPart('b', 'succeeded')]);
+		expect(groups).toHaveLength(1);
+	});
+
+	it('keeps activity apart when the model spoke between two calls', () => {
+		const groups = groupChatParts([
+			toolPart('a', 'succeeded'),
+			text('Now I will file it.'),
+			toolPart('b', 'succeeded')
+		]);
+		expect(groups.map((group) => group.kind)).toEqual(['activity', 'part', 'activity']);
+	});
+
+	it('renders work where it happened rather than at the end of the turn', () => {
+		const groups = groupChatParts([toolPart('a', 'succeeded'), text('Done.')]);
+		expect(groups.map((group) => group.kind)).toEqual(['activity', 'part']);
 	});
 
 	it('passes prose and reasoning through untouched', () => {

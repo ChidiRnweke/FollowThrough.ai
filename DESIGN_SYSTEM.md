@@ -232,8 +232,23 @@ zone and center the voice line inside it.
     correcting itself.
   - The full call log, with arguments, results and raw payloads, is **one door per turn**, never
     one per call. A log in the reading path teaches the reader to skip the space the approval
-    also lives in. Results are stated in the reader's terms or not at all: an etag, a revision,
-    and an internal tool name are all faithful and all useless.
+    also lives in. The door is the last row of the same list, so it carries the same hover wash
+    and states its count rather than announcing itself; a bare "Details" caption below a list
+    does not read as a control. Results are stated in the reader's terms or not at all: an etag,
+    a revision, and an internal tool name are all faithful and all useless.
+- **An approval is a flat block, never a card.** The panel is already a surface — the same
+  reason the thread gives the agent no bubble — so a card here nested three same-weight
+  rectangles inside a 384px column. The region is marked by a pair of teal hairlines and 8px of
+  air outside them: a pending approval is the live thing on screen, which is what the accent is
+  for, and a rule costs one line where a box costs four edges. It leads with the action and its
+  subject on one line, so the first thing read says what is about to happen to which thing, then
+  the change itself. A bundle draws one region around all of its changes, not one each.
+  - The inline change preview carries no frame and no pane label, and renders a step down in
+    scale from the review dialog it links to: faithful rendering is the dialog's contract, and a
+    note opening on an H1 arrives at display size and shouts over the turn it belongs to.
+  - Never label content that sits directly beneath it. "Proposed change" over the only thing on
+    screen, and `Sent`/`Result` eyebrows over a call's own arguments, are captions for a picture
+    that is right there.
 - User messages expose copy and edit-in-composer actions; assistant messages expose copy and retry when eligible. Retrying never duplicates the visible user turn.
 - Conversation origin is fixed on its first turn and distinct from context chips added later. Full-page chats link back through project/note breadcrumbs.
 - Auto-scroll only while the reader is at the latest turn; preserve their position when they scroll upward.
@@ -296,6 +311,8 @@ zone and center the voice line inside it.
 - Do not render a settled tool call as its own row in the transcript, give each call its own
   disclosure, or echo a tool's payload back at the reader. The turn reports what it touched;
   the calls live behind the turn's details.
+- Do not wrap an approval, or the change preview inside it, in a card. Do not repeat the change
+  awaiting approval in the turn's touched list — it is already on screen in full.
 
 ## Agent context and transition UX
 

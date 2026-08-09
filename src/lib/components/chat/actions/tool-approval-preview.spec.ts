@@ -123,9 +123,27 @@ describe('Previewing a pending note change', () => {
 		});
 	});
 
-	it('waits for the current note rather than guessing a diff', () => {
-		expect(
-			approvalPreview('save_note', { noteId: crypto.randomUUID(), markdown: '# x' }, undefined)
-		).toMatchObject({ kind: 'arguments' });
+	it('shows what would be written even when the current note cannot be loaded', () => {
+		const preview = approvalPreview(
+			'save_note',
+			{ noteId: crypto.randomUUID(), markdown: '# x' },
+			undefined
+		);
+		expect(preview.kind === 'note' && Boolean(preview.change.body)).toBe(true);
+	});
+
+	it('says it could not compare, rather than marking every line as new', () => {
+		const preview = approvalPreview(
+			'save_note',
+			{ noteId: crypto.randomUUID(), markdown: '# x' },
+			undefined
+		);
+		expect(preview.kind === 'note' && preview.change.comparable).toBe(false);
+	});
+
+	it('still summarises the arguments for a tool that is not a note change', () => {
+		expect(approvalPreview('create_todo', { title: 'Renew certs' }, undefined)).toMatchObject({
+			kind: 'arguments'
+		});
 	});
 });

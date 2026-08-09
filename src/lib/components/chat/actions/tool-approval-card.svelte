@@ -6,7 +6,6 @@
 	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtExternal as Expand } from '$lib/components/icons';
@@ -23,14 +22,17 @@
 		onapprove,
 		onreject,
 		showFooter = true,
+		framed = true,
 		busy = false
 	}: {
 		tool: ChatToolActivity;
 		shell?: ShellContext;
 		onapprove: () => void;
 		onreject: () => void;
-		/** False inside a bundle, where one footer answers every card at once. */
+		/** False inside a bundle, where one footer answers every change at once. */
 		showFooter?: boolean;
+		/** False inside a bundle, where the group draws one region around them all. */
+		framed?: boolean;
 		busy?: boolean;
 	} = $props();
 
@@ -94,11 +96,24 @@
 
 	/**
 	 * With a subject to lead on, the tool's own name becomes the subtitle; without one there
-	 * is nothing else to head the card with, so it takes the title back rather than leaving
-	 * the card unnamed.
+	 * is nothing else to head the block with, so it takes the title back rather than leaving
+	 * the change unnamed.
+	 *
+	 * The action and its subject share one line. Split across two, the pair read as a note
+	 * that happened to be mentioned; together they say what is about to happen to which
+	 * thing, which is the whole question being asked.
 	 */
-	const heading = $derived(subject ?? friendlyToolLabel(tool.name));
+	const heading = $derived(
+		subject ? `${friendlyToolLabel(tool.name)} · ${subject}` : friendlyToolLabel(tool.name)
+	);
 	const action = $derived(subject ? friendlyToolLabel(tool.name) : undefined);
+
+	/**
+	 * A second line only where it adds something. The consequence of an archive or a version
+	 * restore is not visible in the change itself; the tool's own name is, in the title
+	 * directly above.
+	 */
+	const caption = $derived(consequence);
 
 	/** Long string payloads are prose the model wrote, so they read as prose. */
 	const proseFields = $derived(
@@ -127,7 +142,8 @@
 				candidate={preview.change.body.candidate}
 				baseLabel="Current note"
 				candidateLabel="Proposed change"
-				layout={compact ? 'candidate' : 'split'}
+				layout={compact ? (preview.change.comparable ? 'stacked' : 'candidate') : 'split'}
+				frame={compact ? 'bare' : 'box'}
 				{compact}
 			/>
 		{/if}
@@ -180,60 +196,57 @@
 {/snippet}
 
 <!--
-	The card leads with what is changing, not with the word "Approve": the buttons already
-	say that, and the most prominent line in a review is worth more than a restatement of
-	the question. The action is the subtitle, because a reader who recognises the note
-	decides differently than one who only knows a verb was called.
+	Flat, with no rectangle of its own — the panel is already a surface, which is why the
+	thread gives the agent no bubble either, and a card here made three nested outlines in a
+	384px column. What marks the region instead is a pair of teal hairlines and the air
+	around them: a pending approval is the live thing on the screen, which is exactly what
+	the accent is for, and a rule costs one line where a box costs four edges.
+
+	It leads with the action and its subject on one line, so the first thing read says what
+	is about to happen to which thing. The ladder inside: 4px binds the title to its caption,
+	8px to the change, 24px to the actions.
 -->
-<Card.Root class="gap-3 py-4">
-	<Card.Header class="px-4">
-		<Card.Title class="truncate text-sm font-medium">{heading}</Card.Title>
-		{#if action}
-			<Card.Description>{action}</Card.Description>
-		{/if}
-		<Card.Action>
-			<Tip text="Review in full">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-xs"
-						aria-label="Review in full"
-						onclick={() => (expanded = true)}
-					>
-						<Expand class="size-3.5" />
-					</Button>
-				{/snippet}
-			</Tip>
-		</Card.Action>
-	</Card.Header>
-	<!-- 8px between the things the preview lists; the 6px it used to use said the
-	     same about a title and its value as about a diff and a warning. -->
-	<Card.Content class="space-y-2 px-4">
-		{#if consequence}
-			<p class="text-sm text-muted-foreground">{consequence}</p>
-		{/if}
-		{#if loadingNote}
-			<p class="text-sm text-muted-foreground">Loading the current note…</p>
-		{:else if baselineError}
-			<p class="text-sm text-muted-foreground">
-				The current note could not be loaded for comparison.
-			</p>
-		{:else}
-			<!-- Approve/Reject live outside this, in the footer: a preview that fails
-			     must not strand a pending tool call with no way to answer it. -->
-			<ErrorBoundary label="this change preview" {fallback}>
+<div class="flex flex-col gap-2 {framed ? 'my-2 border-y border-brand/40 py-4' : ''}">
+	<div class="flex min-w-0 items-baseline gap-2">
+		<p class="min-w-0 flex-1 truncate text-sm font-medium">{heading}</p>
+		<Tip text="Review in full">
+			{#snippet children({ props })}
+				<Button
+					{...props}
+					variant="ghost"
+					size="icon-xs"
+					class="-my-1 shrink-0"
+					aria-label="Review in full"
+					onclick={() => (expanded = true)}
+				>
+					<Expand class="size-3.5" />
+				</Button>
+			{/snippet}
+		</Tip>
+	</div>
+	{#if caption}
+		<!-- Bound to the subject as one unit, so the pair reads before the change does. -->
+		<p class="-mt-1 text-sm text-muted-foreground">{caption}</p>
+	{/if}
+	{#if loadingNote}
+		<p class="text-sm text-muted-foreground">Loading the current note…</p>
+	{:else}
+		<!-- A baseline that failed to load is not a reason to show nothing: the preview falls
+		     back to the body that would be written, and says so. Approve/Reject live outside
+		     this, so a preview that fails cannot strand a pending call with no way to answer. -->
+		<ErrorBoundary label="this change preview" {fallback}>
+			<div class="flex flex-col gap-2">
 				{@render changeBody(true)}
-			</ErrorBoundary>
-		{/if}
-	</Card.Content>
+			</div>
+		</ErrorBoundary>
+	{/if}
 	{#if showFooter}
-		<Card.Footer class="gap-2 px-4 pt-1">
+		<div class="mt-4 flex gap-2">
 			<Button size="sm" disabled={busy} onclick={onapprove}>Approve</Button>
 			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject</Button>
-		</Card.Footer>
+		</div>
 	{/if}
-</Card.Root>
+</div>
 
 <Dialog.Root bind:open={expanded}>
 	<Dialog.Content class="dialog-fill flex flex-col sm:max-w-7xl">

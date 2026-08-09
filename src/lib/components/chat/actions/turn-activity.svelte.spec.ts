@@ -21,8 +21,9 @@ const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
 	...over
 });
 
-const renderTurn = (tools: ChatToolActivity[], settled = true) =>
-	render(TurnActivity, { tools, shell, settled });
+// A group settles on its own: it is a run of consecutive calls, not the whole turn, so
+// "still working" is simply one of its calls still running.
+const renderTurn = (tools: ChatToolActivity[]) => render(TurnActivity, { tools, shell });
 
 describe('A settled turn reports the things it touched', () => {
 	it('reports one entry however many times it worked on the same note', async () => {
@@ -66,9 +67,17 @@ describe('A settled turn reports the things it touched', () => {
 });
 
 describe('The call log is one door per turn', () => {
-	it('offers details even for a turn whose every call was mechanism', async () => {
+	it('offers the log even for a turn whose every call was mechanism', async () => {
 		const screen = await renderTurn([call({ name: 'search_tools', arguments: {} })]);
-		await expect.element(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument();
+		await expect.element(screen.getByRole('button', { name: '1 step' })).toBeInTheDocument();
+	});
+
+	it('says how many steps are behind it rather than announcing itself', async () => {
+		const screen = await renderTurn([
+			call({ name: 'search_tools', arguments: { query: 'save_note' } }),
+			call({ name: 'save_note' })
+		]);
+		await expect.element(screen.getByRole('button', { name: '2 steps' })).toBeInTheDocument();
 	});
 
 	it('lists the calls the summary left out', async () => {
@@ -76,14 +85,51 @@ describe('The call log is one door per turn', () => {
 			call({ name: 'search_tools', arguments: { query: 'save_note' } }),
 			call({ name: 'save_note' })
 		]);
-		await screen.getByRole('button', { name: 'Details' }).click();
+		await screen.getByRole('button', { name: '2 steps' }).click();
 		await expect.element(screen.getByText('2 steps, in the order they ran.')).toBeVisible();
 	});
 });
 
-describe('A running turn shows the steps as they arrive', () => {
-	it('keeps every step while the turn is still working', async () => {
-		const screen = await renderTurn([call({}), call({ name: 'save_note' })], false);
+describe('A running group shows the steps as they arrive', () => {
+	it('keeps every step while one of its calls is still running', async () => {
+		const screen = await renderTurn([call({}), call({ name: 'save_note', status: 'running' })]);
 		expect(await screen.getByText('Infrastructure').all()).toHaveLength(2);
+	});
+});
+
+describe('A failure says what, why and what next', () => {
+	const failed = () => [
+		call({
+			name: 'save_note',
+			status: 'failed',
+			failure: 'Edit 1: oldText was not found. Read the note again and quote it exactly.'
+		})
+	];
+
+	it('names the thing it failed on', async () => {
+		const screen = await renderTurn(failed());
+		await expect.element(screen.getByText(/Infrastructure/)).toBeVisible();
+	});
+
+	it('explains the cause in the reader terms rather than the run own words', async () => {
+		const screen = await renderTurn(failed());
+		await expect
+			.element(screen.getByText(/The text it meant to change was not where it expected/))
+			.toBeVisible();
+	});
+
+	it('keeps the run own words out of the transcript', async () => {
+		const screen = await renderTurn(failed());
+		expect(await screen.getByText(/oldText/).all()).toHaveLength(0);
+	});
+
+	it('offers the way out when the run can be retried', async () => {
+		const screen = await render(TurnActivity, {
+			tools: failed(),
+			shell,
+			retryable: true,
+			onretry: () => {}
+		});
+		await expect.element(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
 	});
 });

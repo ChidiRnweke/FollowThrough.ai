@@ -32,8 +32,12 @@ export interface TouchedThing {
 
 export interface TurnActivity {
 	readonly touched: readonly TouchedThing[];
-	/** Failures nothing later made good, stated once each. */
-	readonly failures: readonly string[];
+	/**
+	 * Calls that failed and that nothing later made good. The whole activity is returned
+	 * rather than its message, so the failure can be stated as what happened to which thing
+	 * instead of as the sentence the run happened to produce.
+	 */
+	readonly failures: readonly ChatToolActivity[];
 	/** Every call the turn made, mechanism included — what the details door is for. */
 	readonly callCount: number;
 }
@@ -180,6 +184,9 @@ export function turnSteps(
 	const steps: TouchedThing[] = [];
 	for (const tool of tools) {
 		if (mechanismTools.has(tool.name)) continue;
+		// A call parked on approval is already on screen in full, as the change the reader is
+		// being asked to decide on. Listing it again underneath says the same thing twice.
+		if (tool.status === 'approval_required') continue;
 		const subject = subjects[tool.name];
 		if (!subject) continue;
 		const id = identify(tool, subject);
@@ -190,7 +197,7 @@ export function turnSteps(
 			title: name ?? placeholder[subject.kind],
 			named: name !== undefined,
 			verb: subject.verb,
-			pending: tool.status === 'running' || tool.status === 'approval_required',
+			pending: tool.status === 'running',
 			failed: tool.status === 'failed' || tool.status === 'rejected'
 		});
 	}
@@ -255,7 +262,11 @@ export function turnActivity(
 			});
 			return !recovered.has(key);
 		})
-		.map((tool) => tool.failure);
+		// One sentence per distinct failure: a call retried verbatim twice failed once as far
+		// as the reader is concerned.
+		.filter(
+			(tool, index, all) => all.findIndex((other) => other.failure === tool.failure) === index
+		);
 
-	return { touched, failures: [...new Set(failures)], callCount: tools.length };
+	return { touched, failures, callCount: tools.length };
 }

@@ -89,7 +89,7 @@ describe('A failure is news only when nothing put it right', () => {
 			[call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })],
 			shell
 		);
-		expect(activity.failures).toEqual(['The note was locked.']);
+		expect(activity.failures.map((tool) => tool.failure)).toEqual(['The note was locked.']);
 	});
 
 	it('marks the entry itself as failed so the row can say so', () => {
@@ -137,5 +137,11 @@ describe('A running turn shows its steps as they arrive', () => {
 
 	it('marks the call in flight as pending', () => {
 		expect(turnSteps([call({ status: 'running' })], shell)[0]?.pending).toBe(true);
+	});
+
+	it('leaves a change awaiting approval to the approval, which shows it in full', () => {
+		expect(turnSteps([call({ name: 'save_note', status: 'approval_required' })], shell)).toEqual(
+			[]
+		);
 	});
 });

@@ -134,8 +134,9 @@
 			{/if}
 
 			{#if hasSent}
+				<!-- No "Sent" label: the row above already says which call this is, and a
+				     heading for the thing directly beneath it is chrome. -->
 				<div class="flex flex-col gap-1">
-					<p class="eyebrow">Sent</p>
 					{#if sentHeadline}
 						<p class="break-words text-foreground">{sentHeadline}</p>
 					{/if}
@@ -168,8 +169,9 @@
 			{/if}
 
 			{#if !result.empty && !tool.failure}
+				<!-- What came back follows what went out, a step apart. It needs no heading
+				     either: a result reads as a result. -->
 				<div class="flex flex-col gap-1">
-					<p class="eyebrow">Result</p>
 					{#if result.headline}
 						<p class="break-words text-foreground">{result.headline}</p>
 					{/if}

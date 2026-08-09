@@ -23,6 +23,13 @@ export interface NoteChange {
 	readonly titleChange?: { readonly from: string; readonly to: string };
 	/** Both sides as real documents, so the diff renders actual note content. */
 	readonly body?: { readonly base: Note['document']; readonly candidate: Note['document'] };
+	/**
+	 * False when the baseline could not be loaded and `base` is a stand-in. The change is
+	 * still shown — approving what you cannot see is the worse failure — but there is
+	 * nothing to compare it against, so the card shows one side rather than a diff against
+	 * an empty document, which would mark every line as added.
+	 */
+	readonly comparable: boolean;
 	/** Reasons the edit will be rejected if approved, phrased for a person. */
 	readonly problems: readonly string[];
 	/** Changes with no diff to show, such as a pin or formatting-only edit. */
@@ -60,18 +67,48 @@ const candidateBody = (
 		: { problems: preview.problems };
 };
 
+const EMPTY_DOCUMENT = { type: 'doc', content: [] } as unknown as Note['document'];
+
+/**
+ * A whole-body save with no baseline to compare against. Falling through to the argument
+ * card rendered *nothing at all* — `proseFields` skips note-body tools on purpose — so the
+ * user was asked to approve a body they could not see. Showing one side is the honest
+ * answer: it cannot say what changes, but it can always say what will be written.
+ */
+const uncomparableSave = (args: Readonly<Record<string, unknown>>): ApprovalPreview | undefined => {
+	const markdown = typeof args.markdown === 'string' ? args.markdown : undefined;
+	if (markdown === undefined) return undefined;
+	const preview = previewNoteMarkdown(markdown);
+	if (!preview.ok)
+		return {
+			kind: 'note',
+			change: { title: 'Note', problems: preview.problems, notices: [], comparable: false }
+		};
+	return {
+		kind: 'note',
+		change: {
+			title: 'Note',
+			body: { base: EMPTY_DOCUMENT, candidate: preview.document },
+			comparable: false,
+			problems: [],
+			notices: ['The current version could not be loaded, so this is what would be saved.']
+		}
+	};
+};
+
 export const approvalPreview = (
 	name: string,
 	args: Readonly<Record<string, unknown>>,
 	baseline: Note | undefined
 ): ApprovalPreview => {
-	if (!NOTE_BODY_TOOLS.has(name) || !baseline) return { kind: 'arguments' };
+	if (!NOTE_BODY_TOOLS.has(name)) return { kind: 'arguments' };
+	if (!baseline) return uncomparableSave(args) ?? { kind: 'arguments' };
 
 	const result = candidateBody(name, args, baseline);
 	if ('problems' in result)
 		return {
 			kind: 'note',
-			change: { title: baseline.title, problems: result.problems, notices: [] }
+			change: { title: baseline.title, problems: result.problems, notices: [], comparable: true }
 		};
 
 	const notices: string[] = [];
@@ -85,6 +122,7 @@ export const approvalPreview = (
 			...(result.plainText === baseline.plainText
 				? {}
 				: { body: { base: baseline.document, candidate: result.document } }),
+			comparable: true,
 			problems: [],
 			notices
 		}

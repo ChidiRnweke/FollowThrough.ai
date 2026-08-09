@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import {
 		FtDocument,
+		FtEllipsis,
 		FtExternal,
 		FtFolder,
 		FtLoader,
@@ -18,22 +19,39 @@
 	} from '$lib/components/icons';
 	import { turnActivity, turnSteps, type TouchedThing } from '$lib/components/agent';
 	import TurnDetailsDialog from './turn-details-dialog.svelte';
+	import TurnFailure from './turn-failure.svelte';
 
 	let {
 		tools,
 		shell,
-		settled
+		retryable = false,
+		onretry
 	}: {
 		tools: readonly ChatToolActivity[];
 		shell?: ShellContext;
-		/** False while the turn is still working, when the point is watching it happen. */
-		settled: boolean;
+		/** Whether the run this group belongs to can be run again. */
+		retryable?: boolean;
+		onretry?: () => void;
 	} = $props();
 
 	const activity = $derived(turnActivity(tools, shell));
-	// Running, the steps arrive one by one in the order they happened; settled, they fold
-	// into the things they were about. A list of calls is only interesting while it grows.
-	const rows = $derived(settled ? activity.touched : turnSteps(tools, shell));
+	// A group is a run of consecutive calls, so it settles on its own rather than with the
+	// turn. Running, its steps arrive one by one in the order they happened; settled, they
+	// fold into the things they were about — a list of calls is only interesting as it grows.
+	const settled = $derived(!tools.some((tool) => tool.status === 'running'));
+	// A thing that failed is stated once, by the failure below, which says what went wrong
+	// and what to do about it. A red row above saying the same name is the duplication all
+	// over again.
+	const rows = $derived(
+		(settled ? activity.touched : turnSteps(tools, shell)).filter((row) => !row.failed)
+	);
+
+	/**
+	 * The log is worth a door only when it holds something the group did not already show —
+	 * the mechanism it hid, or a call that went wrong. A group whose every call is a row
+	 * above it would offer a door onto what the reader can already see.
+	 */
+	const hasHiddenSteps = $derived(activity.callCount > rows.length || activity.failures.length > 0);
 
 	let detailsOpen = $state(false);
 
@@ -100,62 +118,74 @@
 	{:else}
 		<Icon class="size-3.5 shrink-0 text-muted-foreground" />
 	{/if}
-	<span class="min-w-0 flex-1 truncate {row.failed ? 'text-destructive' : ''}">{titleOf(row)}</span>
-	<span class="shrink-0 text-muted-foreground">{row.verb}</span>
+	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
+	     entries scan as the columns of a table that has no other rows. -->
+	<span class="min-w-0 truncate {row.failed ? 'text-destructive' : ''}">{titleOf(row)}</span>
+	<span class="shrink-0 text-muted-foreground">· {row.verb}</span>
 {/snippet}
 
-{#if rows.length > 0 || activity.failures.length > 0 || activity.callCount > 0}
+{#if rows.length > 0 || activity.failures.length > 0 || hasHiddenSteps}
 	<!--
-		What the turn did, in the user's things rather than in calls. 4px binds the rows to
-		each other; 8px separates them from the door to the log, which is a different kind of
-		thing. No dividers: two or three rows inside a turn are not a page list, and hairlines
-		here would outweigh the transcript they sit in.
+		What the turn did, in the user's things rather than in calls. The log is the last row
+		of the same list rather than a caption below it, so it carries the same hover wash and
+		reads as the same kind of clickable thing. No dividers: two or three rows inside a turn
+		are not a page list, and hairlines here would outweigh the transcript they sit in.
 	-->
 	<div class="flex flex-col gap-2">
-		{#each activity.failures as failure (failure)}
-			<p class="text-xs text-destructive" role="alert">{failure}</p>
+		<!-- What went wrong leads: it is the one thing here that might need something from the
+		     reader. The record of what did work, and the door to the evidence, follow. -->
+		{#each activity.failures as failed (failed.callId)}
+			<TurnFailure tool={failed} {shell} {retryable} {onretry} />
 		{/each}
 
-		{#if rows.length > 0}
-			<ul class="flex flex-col">
-				{#each rows as row, index (`${row.kind}-${row.id ?? row.title}-${index}`)}
-					<li>
-						{#if row.id}
-							<!-- `justify-start` and `font-normal` are neutralised explicitly: the
-							     variant's centring and weight have no counterpart here and would
-							     otherwise survive into a row that has to read as a list item. -->
-							<Button
-								variant="ghost"
-								size="sm"
-								class="group/touched h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal"
-								onclick={() => open(row)}
-							>
-								{@render rowBody(row)}
-								<FtExternal
-									class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
-								/>
-							</Button>
-						{:else}
-							<!-- Nothing to open, so nothing that looks like it opens. -->
-							<div class="flex w-full items-center gap-2 px-2 py-1.5 text-xs">
-								{@render rowBody(row)}
-							</div>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-		{/if}
-
-		{#if activity.callCount > 0}
-			<Button
-				variant="ghost"
-				size="xs"
-				class="self-start text-muted-foreground"
-				onclick={() => (detailsOpen = true)}
-			>
-				Details
-			</Button>
-		{/if}
+		<ul class="flex flex-col">
+			{#each rows as row, index (`${row.kind}-${row.id ?? row.title}-${index}`)}
+				<li>
+					{#if row.id}
+						<!-- `justify-start` and `font-normal` are neutralised explicitly: the
+						     variant's centring and weight have no counterpart here and would
+						     otherwise survive into a row that has to read as a list item. -->
+						<Button
+							variant="ghost"
+							size="sm"
+							class="group/touched h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal"
+							onclick={() => open(row)}
+						>
+							{@render rowBody(row)}
+							<FtExternal
+								class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
+							/>
+						</Button>
+					{:else}
+						<!-- Nothing to open, so nothing that looks like it opens. -->
+						<div class="flex w-full items-center gap-2 px-2 py-1.5 text-xs">
+							{@render rowBody(row)}
+						</div>
+					{/if}
+				</li>
+			{/each}
+			{#if hasHiddenSteps}
+				<!-- The log joins the list rather than sitting under it as a caption: as bare
+				     ghost-button text, nothing said it could be clicked. It states its count
+				     instead of announcing itself. -->
+				<li>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="group/touched h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal text-muted-foreground"
+						onclick={() => (detailsOpen = true)}
+					>
+						<FtEllipsis class="size-3.5 shrink-0" />
+						<span class="min-w-0 truncate"
+							>{activity.callCount === 1 ? '1 step' : `${activity.callCount} steps`}</span
+						>
+						<FtExternal
+							class="size-3 shrink-0 opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
+						/>
+					</Button>
+				</li>
+			{/if}
+		</ul>
 	</div>
 
 	<TurnDetailsDialog bind:open={detailsOpen} {tools} {shell} />

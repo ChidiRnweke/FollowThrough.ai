@@ -128,6 +128,32 @@ const toolSearchSummary = (output: unknown): ToolResultSummary => {
 	};
 };
 
+/**
+ * Why a call failed, in the reader's language.
+ *
+ * The messages the run produces are written for the model — "oldText appears 3 times. Quote
+ * more surrounding text to make it unique, or set replaceAll." — and shown verbatim they ask
+ * the reader to debug a tool call they never made. These map the shapes that actually occur
+ * onto what happened to *their* note. Anything unrecognised falls through unchanged: the
+ * server's own words beat a paraphrase that might be wrong.
+ */
+export function explainToolFailure(failure: string): string {
+	const text = failure.toLowerCase();
+	if (text.includes('oldtext was not found') || text.includes('oldtext appears'))
+		return 'The text it meant to change was not where it expected. The note may have moved on since it read it.';
+	if (text.includes('oldtext is empty') || text.includes('nothing to change'))
+		return 'The edit it wrote had nothing in it to apply.';
+	if (text.includes('revision') || text.includes('conflict') || text.includes('stale'))
+		return 'The note changed while the agent was writing, so its version is out of date.';
+	if (text.includes('not found') || text.includes('no longer exists'))
+		return 'What it was working on could not be found. It may have been moved or deleted.';
+	if (text.includes('forbidden') || text.includes('not allowed') || text.includes('permission'))
+		return 'It does not have access to that.';
+	if (text.includes('timed out') || text.includes('timeout'))
+		return 'It took too long to respond and the step was abandoned.';
+	return failure;
+}
+
 export function summariseToolResult(output: unknown, toolName?: string): ToolResultSummary {
 	if (toolName === 'search_tools') return toolSearchSummary(output);
 	if (output === undefined || output === null) return EMPTY;

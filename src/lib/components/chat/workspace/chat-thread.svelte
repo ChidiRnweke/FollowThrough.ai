@@ -7,10 +7,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import { FtCopy as Copy, FtEdit as Pencil, FtRefresh as RotateCcw } from '$lib/components/icons';
+	import {
+		FtCopy as Copy,
+		FtEdit as Pencil,
+		FtRefresh as RotateCcw,
+		FtWarning as Warning
+	} from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
-	import { entryText, entryTools } from '$lib/stores/agent/chat.svelte';
+	import { entryText } from '$lib/stores/agent/chat.svelte';
 	import { SuggestionCard } from '$lib/components/suggestions';
 	import { AgentContextBar } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -176,6 +181,13 @@
 										onapprove={() => onapprove(entry, group.tools)}
 										onreject={() => onrejectapproval(entry, group.tools)}
 									/>
+								{:else if group.kind === 'activity'}
+									<TurnActivity
+										tools={group.tools}
+										{shell}
+										retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
+										onretry={() => onretry(entry)}
+									/>
 								{:else}
 									{@const part = group.part}
 									{#if part.kind === 'text'}
@@ -196,23 +208,6 @@
 									{/if}
 								{/if}
 							{/each}
-							<!--
-								What the turn did comes once, at its end, in the things it touched — not
-								in flow as the calls it made. A call log between the question and the
-								answer teaches the reader to skip the space the approval also lives in.
-							-->
-							{#if entry.role === 'assistant'}
-								{@const tools = entryTools(entry)}
-								{#if tools.length > 0}
-									<TurnActivity
-										{tools}
-										{shell}
-										settled={entry.status === 'completed' ||
-											entry.status === 'failed' ||
-											entry.status === 'cancelled'}
-									/>
-								{/if}
-							{/if}
 							{#if entry.role === 'assistant' && entry.status === 'queued'}
 								<ChatActivity label={entry.error ?? 'Queued'} />
 							{:else if entry.role === 'assistant' && entry.status === 'waiting'}
@@ -225,8 +220,11 @@
 							{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
 								<ChatActivity label="Cancellation requested" />
 							{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
-								<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
-									<span
+								<!-- The run itself ended badly, as opposed to one call inside it: same
+								     shape, stated for the turn. -->
+								<div class="flex items-start gap-2 text-xs" role="alert">
+									<Warning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
+									<span class="text-destructive"
 										>{entry.error ??
 											(entry.status === 'cancelled'
 												? 'Generation stopped'
