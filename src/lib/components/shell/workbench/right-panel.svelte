@@ -117,7 +117,9 @@
 				</div>
 			</header>
 			<Separator />
-			<div class="min-h-0 flex-1 p-4">
+			<!-- `safe-panel-bottom` matches the mobile sheet and the full-page route, which
+			     both already have it; without it the composer sat flush on the panel edge. -->
+			<div class="safe-panel-bottom min-h-0 flex-1 overflow-hidden px-4 pt-4">
 				<!--
 					The boundary starts here, below the header: a panel that fails must
 					still be closable, so the close button above stays outside it.

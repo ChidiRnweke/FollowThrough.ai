@@ -435,9 +435,9 @@
 	}
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-2">
+<div class="flex h-full min-h-0 flex-col">
 	{#if !agentAvailable}
-		<div class="rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
+		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
 			Agent chat is disabled. Configure <code class="font-mono text-xs">OPENROUTER_API_KEY</code> to enable
 			it.
 		</div>
@@ -474,31 +474,35 @@
 			false}
 		onjumptolatest={jumpToLatest}
 	/>
-	<ChatComposer
-		bind:prompt
-		bind:textareaRef
-		{autoChip}
-		chips={chat.chips}
-		{mentionCandidates}
-		{highlighted}
-		{selectedImages}
-		{agentAvailable}
-		isStreaming={chat.isStreaming}
-		connection={chat.connection}
-		executionMode={chat.executionModeOverride}
-		onremovechip={(chip, automatic) => {
-			if (automatic) chat.autoChipDismissedFor = chip.id;
-			else unpick(chip);
-		}}
-		onpick={pick}
-		onhighlight={(index) => (highlighted = index)}
-		onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
-		onfiles={(files) => void addImages(files)}
-		onkeydown={handleKeydown}
-		oninput={handleInput}
-		onpaste={pasteImages}
-		ontoggleexecutionmode={toggleExecutionMode}
-		onsend={() => void send()}
-		onstop={() => void chat.stop()}
-	/>
+	<!-- 24px: the composer is a different kind of thing from the transcript above it,
+	     and the gap is what says so. At the old 8px the two read as one cramped stack. -->
+	<div class="shrink-0 pt-6">
+		<ChatComposer
+			bind:prompt
+			bind:textareaRef
+			{autoChip}
+			chips={chat.chips}
+			{mentionCandidates}
+			{highlighted}
+			{selectedImages}
+			{agentAvailable}
+			isStreaming={chat.isStreaming}
+			connection={chat.connection}
+			executionMode={chat.executionModeOverride}
+			onremovechip={(chip, automatic) => {
+				if (automatic) chat.autoChipDismissedFor = chip.id;
+				else unpick(chip);
+			}}
+			onpick={pick}
+			onhighlight={(index) => (highlighted = index)}
+			onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
+			onfiles={(files) => void addImages(files)}
+			onkeydown={handleKeydown}
+			oninput={handleInput}
+			onpaste={pasteImages}
+			ontoggleexecutionmode={toggleExecutionMode}
+			onsend={() => void send()}
+			onstop={() => void chat.stop()}
+		/>
+	</div>
 </div>

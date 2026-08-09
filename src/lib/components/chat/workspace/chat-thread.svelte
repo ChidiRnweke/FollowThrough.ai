@@ -103,198 +103,241 @@
 	};
 </script>
 
-<div class={entries.length === 0 ? 'pb-8' : ''}>
-	<AgentContextBar {shell} {activeProjectId} {activeNoteId} compact={entries.length > 0} />
-</div>
-<ScrollArea class="min-h-0 flex-1" bind:viewportRef={viewport}>
-	<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
-	     rather than reserving space, so a full-width approval or suggestion card
-	     underneath it loses its hairline to the track. -->
-	<div class="flex min-h-full flex-col gap-3 pr-3">
-		{#if entries.length === 0}
-			<ChatStarters
-				hasNote={activeNoteId !== undefined}
-				hasProject={activeProjectId !== undefined}
-				onpick={onstarter}
-			/>
-			{#if showHistory && sessions.length > 0}
-				<div class="pt-14">
-					<ChatHistoryList
-						{sessions}
-						{shell}
-						limit={3}
-						density="compact"
-						onselect={onswitchconversation}
-					/>
-				</div>
+<!--
+	The thread owns the spacing ladder DESIGN_SYSTEM asks for: 4px binds a turn's
+	caption to the turn, 8px separates the parts within it, and 24px separates one
+	turn from the next. The old flat `gap-3`/`gap-1.5` pair said nothing about which
+	gaps meant "same thing" and which meant "next thing".
+
+	`max-w-3xl` never binds in the 384px docked panel and centres the transcript on a
+	full-width page or pane, so one component reads correctly at both widths.
+-->
+<div class="relative flex min-h-0 flex-1 flex-col">
+	{#if entries.length > 0}
+		<div class="shrink-0 pb-4">
+			<AgentContextBar {shell} {activeProjectId} {activeNoteId} compact />
+		</div>
+	{/if}
+	<ScrollArea class="min-h-0 flex-1" bind:viewportRef={viewport}>
+		<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
+		     rather than reserving space, so a full-width approval or suggestion card
+		     underneath it loses its hairline to the track. -->
+		<div class="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pr-3">
+			{#if entries.length === 0}
+				<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
+				<ChatStarters
+					hasNote={activeNoteId !== undefined}
+					hasProject={activeProjectId !== undefined}
+					onpick={onstarter}
+				/>
+				{#if showHistory && sessions.length > 0}
+					<div class="pt-8">
+						<ChatHistoryList
+							{sessions}
+							{shell}
+							limit={3}
+							density="compact"
+							onselect={onswitchconversation}
+						/>
+					</div>
+				{/if}
 			{/if}
-		{/if}
-		{#each entries as entry (entry.id)}
-			<ErrorBoundary label="this turn" class="my-0">
-				<div class="group/turn flex flex-col gap-1.5">
-					<p class="provenance-caption">{entry.role === 'user' ? 'You' : 'Agent'}</p>
-					{#if editingId === entry.id}
-						<div class="flex flex-col gap-1.5">
-							<Textarea
-								bind:value={editDraft}
-								rows={2}
-								class="min-h-16 resize-none"
-								aria-label="Edit question"
-								onkeydown={(event) => oneditkeydown(event, entry)}
-								{@attach focusAtEnd}
-							/>
-							<div class="flex items-center gap-1.5">
-								<Button size="xs" onclick={() => onresubmit(entry, editDraft)}>Resubmit</Button>
-								<Button variant="ghost" size="xs" onclick={oncanceledit}>Cancel</Button>
-								<span class="text-xs text-muted-foreground"
-									>Replaces everything below this question.</span
-								>
-							</div>
-						</div>
-					{/if}
-					{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
-						{#if group.kind === 'approvals'}
-							<ToolApprovalGroup
-								tools={group.tools}
-								{shell}
-								busy={deciding}
-								onapprove={() => onapprove(entry, group.tools)}
-								onreject={() => onrejectapproval(entry, group.tools)}
-							/>
-						{:else}
-							{@const part = group.part}
-							{#if part.kind === 'text'}
-								{#if part.text && editingId !== entry.id}<ChatMarkdown content={part.text} />{/if}
-							{:else if part.kind === 'image'}
-								<ImageLightbox
-									src={part.dataUrl}
-									alt={part.name}
-									class="max-h-48 max-w-64 rounded-md object-contain"
+			{#each entries as entry (entry.id)}
+				{@const isUser = entry.role === 'user'}
+				<ErrorBoundary label="this turn" class="my-0">
+					<div class="group/turn flex flex-col">
+						<p class="provenance-caption mb-1">{isUser ? 'You' : 'Agent'}</p>
+						<!--
+							The question is a surface and the answer is the page. A wash on the user
+							turn is enough to tell them apart at a glance without giving the agent a
+							bubble, which would put a second surface inside a panel that already is
+							one. Flat, per the ornament rule — no border, no shadow.
+						-->
+						<div
+							class="flex flex-col gap-2 {isUser
+								? 'self-start rounded-xl bg-muted/50 px-3 py-2'
+								: ''}"
+						>
+							{#if editingId === entry.id}
+								<div class="flex flex-col gap-1.5">
+									<Textarea
+										bind:value={editDraft}
+										rows={2}
+										class="min-h-16 resize-none"
+										aria-label="Edit question"
+										onkeydown={(event) => oneditkeydown(event, entry)}
+										{@attach focusAtEnd}
+									/>
+									<div class="flex items-center gap-1.5">
+										<Button size="xs" onclick={() => onresubmit(entry, editDraft)}>Resubmit</Button>
+										<Button variant="ghost" size="xs" onclick={oncanceledit}>Cancel</Button>
+										<span class="text-xs text-muted-foreground"
+											>Replaces everything below this question.</span
+										>
+									</div>
+								</div>
+							{/if}
+							{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
+								{#if group.kind === 'approvals'}
+									<ToolApprovalGroup
+										tools={group.tools}
+										{shell}
+										busy={deciding}
+										onapprove={() => onapprove(entry, group.tools)}
+										onreject={() => onrejectapproval(entry, group.tools)}
+									/>
+								{:else}
+									{@const part = group.part}
+									{#if part.kind === 'text'}
+										{#if part.text && editingId !== entry.id}<ChatMarkdown
+												content={part.text}
+											/>{/if}
+									{:else if part.kind === 'image'}
+										<ImageLightbox
+											src={part.dataUrl}
+											alt={part.name}
+											class="max-h-48 max-w-64 rounded-md object-contain"
+										/>
+									{:else if part.kind === 'reasoning'}
+										{#if part.text}<ChatReasoning
+												text={part.text}
+												streaming={entry.status === 'streaming'}
+											/>{/if}
+									{:else}
+										{@const tool = part.tool}
+										<Collapsible.Root>
+											<Collapsible.Trigger>
+												{#snippet child({ props })}
+													<Button
+														{...props}
+														variant="ghost"
+														size="sm"
+														class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
+															tool.name
+														)
+															? 'text-foreground'
+															: 'text-muted-foreground'}"
+													>
+														<ChevronRight
+															class="size-3.5 transition-transform duration-(--duration-micro)"
+														/>
+														{#if tool.status === 'running'}<LoaderCircle
+																class="size-3.5 animate-spin"
+															/>{/if}
+														{toolStatusLabel(tool, shell)}
+													</Button>
+												{/snippet}
+											</Collapsible.Trigger>
+											<Collapsible.Content>
+												<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
+													{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
+														<li class="break-words">{line}</li>
+													{/each}
+												</ul>
+											</Collapsible.Content>
+										</Collapsible.Root>
+									{/if}
+								{/if}
+							{/each}
+							{#if entry.role === 'assistant' && entry.status === 'queued'}
+								<ChatActivity label={entry.error ?? 'Queued'} />
+							{:else if entry.role === 'assistant' && entry.status === 'waiting'}
+								<ChatActivity />
+							{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
+								<ChatActivity
+									label="Agent is working"
+									toolActive={entry.parts.some((part) => part.kind === 'tool')}
 								/>
-							{:else if part.kind === 'reasoning'}
-								{#if part.text}<ChatReasoning
-										text={part.text}
-										streaming={entry.status === 'streaming'}
-									/>{/if}
-							{:else}
-								{@const tool = part.tool}
-								<Collapsible.Root>
-									<Collapsible.Trigger>
-										{#snippet child({ props })}
+							{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
+								<ChatActivity label="Cancellation requested" />
+							{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
+								<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
+									<span
+										>{entry.error ??
+											(entry.status === 'cancelled'
+												? 'Generation stopped'
+												: 'The run failed.')}</span
+									>
+									{#if entry.status === 'failed' && entry.retryable && entry.runId}
+										<Button variant="outline" size="xs" onclick={() => onretry(entry)}>
+											<RotateCcw data-icon="inline-start" /> Retry
+										</Button>
+									{/if}
+								</div>
+							{/if}
+						</div>
+						{#if editingId !== entry.id && entryText(entry)}
+							<div
+								class="mt-2 flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
+							>
+								<Tip text="Copy">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon-xs"
+											aria-label="Copy message"
+											onclick={() => oncopy(entry)}><Copy /></Button
+										>
+									{/snippet}
+								</Tip>
+								{#if entry.role === 'user'}
+									<Tip text="Edit and resubmit">
+										{#snippet children({ props })}
 											<Button
 												{...props}
 												variant="ghost"
-												size="sm"
-												class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
-													tool.name
-												)
-													? 'text-foreground'
-													: 'text-muted-foreground'}"
+												size="icon-xs"
+												aria-label="Edit and resubmit question"
+												disabled={isStreaming}
+												onclick={() => onstartediting(entry)}><Pencil /></Button
 											>
-												<ChevronRight
-													class="size-3.5 transition-transform duration-(--duration-micro)"
-												/>
-												{#if tool.status === 'running'}<LoaderCircle
-														class="size-3.5 animate-spin"
-													/>{/if}
-												{toolStatusLabel(tool, shell)}
-											</Button>
 										{/snippet}
-									</Collapsible.Trigger>
-									<Collapsible.Content>
-										<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
-											{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
-												<li class="break-words">{line}</li>
-											{/each}
-										</ul>
-									</Collapsible.Content>
-								</Collapsible.Root>
-							{/if}
+									</Tip>
+								{:else if entry.status === 'completed'}
+									<Tip text="Ask again">
+										{#snippet children({ props })}
+											<Button
+												{...props}
+												variant="ghost"
+												size="icon-xs"
+												aria-label="Ask again"
+												disabled={isStreaming}
+												onclick={() => onaskagain(entry)}><RotateCcw /></Button
+											>
+										{/snippet}
+									</Tip>
+								{/if}
+							</div>
 						{/if}
-					{/each}
-					{#if entry.role === 'assistant' && entry.status === 'queued'}
-						<ChatActivity label={entry.error ?? 'Queued'} />
-					{:else if entry.role === 'assistant' && entry.status === 'waiting'}
-						<ChatActivity />
-					{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
-						<ChatActivity
-							label="Agent is working"
-							toolActive={entry.parts.some((part) => part.kind === 'tool')}
-						/>
-					{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
-						<ChatActivity label="Cancellation requested" />
-					{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
-						<div class="flex items-center gap-2 text-xs text-destructive" role="alert">
-							<span
-								>{entry.error ??
-									(entry.status === 'cancelled' ? 'Generation stopped' : 'The run failed.')}</span
-							>
-							{#if entry.status === 'failed' && entry.retryable && entry.runId}
-								<Button variant="outline" size="xs" onclick={() => onretry(entry)}>
-									<RotateCcw data-icon="inline-start" /> Retry
-								</Button>
-							{/if}
-						</div>
-					{/if}
-					{#if editingId !== entry.id && entryText(entry)}
-						<div
-							class="flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
-						>
-							<Tip text="Copy">
-								{#snippet children({ props })}
-									<Button
-										{...props}
-										variant="ghost"
-										size="icon-xs"
-										aria-label="Copy message"
-										onclick={() => oncopy(entry)}><Copy /></Button
-									>
-								{/snippet}
-							</Tip>
-							{#if entry.role === 'user'}
-								<Tip text="Edit and resubmit">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon-xs"
-											aria-label="Edit and resubmit question"
-											disabled={isStreaming}
-											onclick={() => onstartediting(entry)}><Pencil /></Button
-										>
-									{/snippet}
-								</Tip>
-							{:else if entry.status === 'completed'}
-								<Tip text="Ask again">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon-xs"
-											aria-label="Ask again"
-											disabled={isStreaming}
-											onclick={() => onaskagain(entry)}><RotateCcw /></Button
-										>
-									{/snippet}
-								</Tip>
-							{/if}
-						</div>
-					{/if}
-					{#each entry.suggestions as view (view.suggestion.id)}
-						<SuggestionCard
-							{view}
-							busy={onsuggestionbusy(view.suggestion.id)}
-							onaccept={(id) => onsuggestion(id, 'accept')}
-							onreject={(id) => onsuggestion(id, 'reject')}
-						/>
-					{/each}
-				</div>
-			</ErrorBoundary>
-		{/each}
-	</div>
-</ScrollArea>
-{#if showJumpToLatest}
-	<Button variant="outline" size="sm" class="self-end" onclick={onjumptolatest}
-		>Jump to latest</Button
-	>
-{/if}
+						{#if entry.suggestions.length > 0}
+							<div class="mt-2 flex flex-col gap-2">
+								{#each entry.suggestions as view (view.suggestion.id)}
+									<SuggestionCard
+										{view}
+										busy={onsuggestionbusy(view.suggestion.id)}
+										onaccept={(id) => onsuggestion(id, 'accept')}
+										onreject={(id) => onsuggestion(id, 'reject')}
+									/>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</ErrorBoundary>
+			{/each}
+		</div>
+	</ScrollArea>
+	<!-- An overlay, not a flow element: as a sibling in the column it pushed the
+	     composer down the moment it appeared, which moved the send button out from
+	     under the pointer. -->
+	{#if showJumpToLatest}
+		<div class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+			<Button
+				variant="outline"
+				size="sm"
+				class="pointer-events-auto bg-background"
+				onclick={onjumptolatest}>Jump to latest</Button
+			>
+		</div>
+	{/if}
+</div>
