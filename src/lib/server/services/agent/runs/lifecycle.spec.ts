@@ -51,6 +51,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 	const runs = new InMemoryAgentRunPersistence();
 	const sessions = new InMemoryAgentSessionRepository();
 	const notified: AgentRunId[] = [];
+	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const run: AgentRun = {
 		id: testRunId,
 		userId: testActor().userId,
@@ -82,13 +83,17 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		},
 		conversations: {
 			recordToolActivity: async () => undefined,
-			recordAssistantText: async () => undefined,
-			recordAssistantReasoning: async () => undefined
+			recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
+				journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
+			},
+			recordAssistantReasoning: async (_actor, _conversationId, text, _model, provenance) => {
+				journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
+			}
 		},
 		runner: runner as never,
 		eventBus: { notify: (runId) => notified.push(runId) }
 	});
-	return { lifecycle, runs, notified, runner };
+	return { lifecycle, runs, notified, runner, journalled };
 };
 
 /** Runs a turn to the point where the provider is streaming, then stops it. */
@@ -362,5 +367,55 @@ describe('settling a run whose execution threw', () => {
 		await runs.transition(testRunId, 'running', 'completed');
 		await lifecycle.failRun(testRunId, error);
 		expect(currentRun(runs).status).toBe('completed');
+	});
+});
+
+/**
+ * A turn that thinks, speaks, works, then speaks again. What is journalled decides what a
+ * reopened conversation can show, and for a long time it could show neither the thinking nor
+ * the order.
+ */
+const talkativeRunner = () => ({
+	execute: async function* (): AsyncIterable<AgentExecutionUpdate> {
+		yield { type: 'event', event: { type: 'reasoning_delta', text: 'It has five bullets.' } };
+		yield { type: 'event', event: { type: 'text_delta', text: 'Reading it first.' } };
+		yield {
+			type: 'event',
+			event: { type: 'tool_started', callId: 'c1', name: 'get_note', arguments: {} }
+		};
+		yield { type: 'event', event: { type: 'tool_completed', callId: 'c1', name: 'get_note' } };
+		yield { type: 'event', event: { type: 'text_delta', text: 'Done.' } };
+		yield { type: 'completed', sessionItems: [] };
+	} as never
+});
+
+const completeTalkativeTurn = async () => {
+	const context = setup(talkativeRunner() as never);
+	await context.lifecycle.execute(testRunId, new AbortController().signal);
+	return context;
+};
+
+describe('what a finished turn leaves behind to be reopened', () => {
+	it('writes the agent thinking down, which nothing used to', async () => {
+		const { journalled } = await completeTalkativeTurn();
+		expect(journalled.some((entry) => entry.kind === 'reasoning')).toBe(true);
+	});
+
+	it('keeps speech either side of a tool call apart', async () => {
+		const { journalled } = await completeTalkativeTurn();
+		expect(journalled.filter((entry) => entry.kind === 'text').map((entry) => entry.text)).toEqual([
+			'Reading it first.',
+			'Done.'
+		]);
+	});
+
+	it('stamps each with where it began, so the turn can be put back in order', async () => {
+		const { journalled } = await completeTalkativeTurn();
+		expect(journalled.every((entry) => entry.cursor !== undefined)).toBe(true);
+	});
+
+	it('does not collapse the turn onto one cursor, which put every word after every call', async () => {
+		const { journalled } = await completeTalkativeTurn();
+		expect(new Set(journalled.map((entry) => entry.cursor)).size).toBe(journalled.length);
 	});
 });
