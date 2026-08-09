@@ -15,7 +15,7 @@
 	} from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
-	import { entryText } from '$lib/stores/agent/chat.svelte';
+	import { entryText, entryTools } from '$lib/stores/agent/chat.svelte';
 	import { SuggestionCard } from '$lib/components/suggestions';
 	import { AgentContextBar } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -184,6 +184,7 @@
 								{:else if group.kind === 'activity'}
 									<TurnActivity
 										tools={group.tools}
+										turnTools={entryTools(entry)}
 										{shell}
 										retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
 										onretry={() => onretry(entry)}

@@ -846,10 +846,15 @@ export const messages = pgTable(
 	},
 	(table) => [
 		index('messages_conversation_created_idx').on(table.conversationId, table.createdAt),
-		uniqueIndex('messages_event_cursor_unique').on(table.eventCursor),
-		uniqueIndex('messages_assistant_run_unique')
-			.on(table.runId)
-			.where(sql`${table.role} = 'assistant' and ${table.runId} is not null`)
+		// A turn is written as one message per contiguous run of output — a thought, an
+		// answer, another answer after a tool call — so a run owns several assistant rows,
+		// not one. The old one-row-per-run unique index is what forced the whole turn into a
+		// single message stamped with its last cursor, which is why a reopened conversation
+		// replayed every tool call before everything the agent said.
+		//
+		// The cursor index is what keeps completion idempotent in its place: a segment is
+		// identified by where it began, so re-running a completion cannot duplicate a turn.
+		uniqueIndex('messages_event_cursor_unique').on(table.eventCursor)
 	]
 );
 

@@ -1,0 +1,1 @@
+DROP INDEX "messages_assistant_run_unique";

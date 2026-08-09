@@ -23,18 +23,21 @@
 
 	let {
 		tools,
+		turnTools,
 		shell,
 		retryable = false,
 		onretry
 	}: {
 		tools: readonly ChatToolActivity[];
+		/** Every call of the turn, so a failure put right later in it is not reported here. */
+		turnTools?: readonly ChatToolActivity[];
 		shell?: ShellContext;
 		/** Whether the run this group belongs to can be run again. */
 		retryable?: boolean;
 		onretry?: () => void;
 	} = $props();
 
-	const activity = $derived(turnActivity(tools, shell));
+	const activity = $derived(turnActivity(tools, shell, turnTools ?? tools));
 	// A group is a run of consecutive calls, so it settles on its own rather than with the
 	// turn. Running, its steps arrive one by one in the order they happened; settled, they
 	// fold into the things they were about — a list of calls is only interesting as it grows.

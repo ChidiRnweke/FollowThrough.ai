@@ -212,7 +212,15 @@ const identityOf = (thing: TouchedThing): string => `${thing.kind}:${thing.id ??
 
 export function turnActivity(
 	tools: readonly ChatToolActivity[],
-	shell?: ShellContext
+	shell?: ShellContext,
+	/**
+	 * Every call of the turn, when `tools` is only a slice of it. Whether a failure was put
+	 * right is a question about the turn, not about the run of calls it happened in: the
+	 * agent typically says something between the attempt that failed and the one that
+	 * worked, which splits them into different groups. Judged group by group, a save that
+	 * eventually succeeded still reported two failures.
+	 */
+	turnTools: readonly ChatToolActivity[] = tools
 ): TurnActivity {
 	const order: string[] = [];
 	const byIdentity = new Map<string, TouchedThing>();
@@ -239,9 +247,14 @@ export function turnActivity(
 	}
 
 	const touched = order.map((key) => byIdentity.get(key) as TouchedThing);
-	const recovered = new Set(
-		touched.filter((thing) => !thing.failed).map((thing) => identityOf(thing))
+	const succeeded = turnTools.filter(
+		(tool) => tool.status === 'succeeded' && !mechanismTools.has(tool.name)
 	);
+	const recovered = new Set(turnSteps(succeeded, shell).map((step) => identityOf(step)));
+	// A call whose payload was malformed never names its subject, so identity cannot match it
+	// against the retry that worked. The tool it was trying to be is the only handle left, and
+	// a turn that later saved the note did not fail to save the note.
+	const recoveredNames = new Set(succeeded.map((tool) => tool.name));
 
 	// A failure earns a sentence only when nothing later put it right. The wrapper rejection
 	// that precedes a successful save is the agent correcting itself mid-turn.
@@ -251,9 +264,10 @@ export function turnActivity(
 			const subject = subjects[tool.name];
 			if (!subject) return true;
 			const id = identify(tool, subject);
+			if (!id) return !recoveredNames.has(tool.name);
 			const key = identityOf({
 				kind: subject.kind,
-				...(id ? { id } : {}),
+				id,
 				title: nameOf(tool, subject, id, shell) ?? placeholder[subject.kind],
 				named: false,
 				verb: subject.verb,

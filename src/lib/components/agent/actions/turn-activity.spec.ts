@@ -84,6 +84,24 @@ describe('A failure is news only when nothing put it right', () => {
 		expect(activity.failures).toEqual([]);
 	});
 
+	it('says nothing about a failure the agent put right after speaking in between', () => {
+		const failed = call({ name: 'save_note', status: 'failed', failure: 'Not callable.' });
+		const succeeded = call({ name: 'save_note' });
+		// The two attempts land in different groups because the agent spoke between them; the
+		// question of whether it was put right belongs to the turn.
+		expect(turnActivity([failed], shell, [failed, succeeded]).failures).toEqual([]);
+	});
+
+	it('says nothing about a malformed attempt the agent then got right', () => {
+		// A rejected payload names no note, so only the tool it was trying to be identifies it.
+		const malformed = {
+			...call({ name: 'save_note', status: 'failed', failure: 'Invalid payload.' }),
+			arguments: {}
+		};
+		const succeeded = call({ name: 'save_note' });
+		expect(turnActivity([malformed], shell, [malformed, succeeded]).failures).toEqual([]);
+	});
+
 	it('reports a failure that stood', () => {
 		const activity = turnActivity(
 			[call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })],
