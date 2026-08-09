@@ -871,6 +871,16 @@
 		background-color: color-mix(in oklab, var(--color-primary) 9%, transparent);
 		transition: background-color var(--duration-micro) var(--ease-standard);
 	}
+
+	/* Global search hits. Same teal wash recipe as the suggestion anchors, but
+	   stronger: the hit is the whole point of a search result row. */
+	.search-hit {
+		border-radius: 2px;
+		background-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
+	}
+	.dark .search-hit {
+		background-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+	}
 	.suggestion-anchor:hover {
 		background-color: color-mix(in oklab, var(--color-primary) 18%, transparent);
 	}
@@ -986,9 +996,13 @@
 	   added as the live teal — the same two accents the rest of the product uses.
 	   The wash alone carries it: an accent bar down every changed block turns a
 	   quiet document into a striped one. */
+	/* The wash bleeds to the pane's own gutter so a changed block reads as a full-width
+	   band rather than a floating rectangle. A pane with no gutter sets the bleed to
+	   zero — pulled outward inside a scrollport, the wash is simply clipped away and the
+	   change goes unmarked. */
 	.note-diff-pane .tiptap .diff-block {
-		margin-inline: -1rem;
-		padding-inline: 1rem;
+		margin-inline: calc(var(--note-diff-bleed, 1rem) * -1);
+		padding-inline: var(--note-diff-bleed, 1rem);
 		border-radius: 0.25rem;
 	}
 	.note-diff-pane .tiptap .diff-removed {
@@ -1005,4 +1019,37 @@
 	.dark .note-diff-pane .tiptap .diff-added {
 		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
 	}
+}
+
+/* An inline preview of a change, in a 384px column beside a conversation. The editor
+   renders a note faithfully, which is right in the review dialog and wrong here: a note
+   opening on an H1 arrives at display size and shouts over the turn it belongs to. Scale
+   is the only thing that changes — the document, its node views and its change washes are
+   the ones the dialog shows.
+
+   Unlayered, like the reduced-motion block above: `editor.css` is imported by the editor
+   component and so is itself unlayered, and an unlayered rule beats every layered one no
+   matter how specific. */
+.note-diff-pane[data-compact] {
+	--note-diff-bleed: 0px;
+}
+/* The editable surface stretches to its pane by default, which under a `max-h` preview
+   reserves the full height whatever the change is — a three-line edit sat above two
+   blank lines of nothing. */
+.note-diff-pane[data-compact] .tiptap {
+	min-height: 0;
+}
+.note-diff-pane[data-compact] .tiptap :is(h1, h2, h3, h4, h5, h6) {
+	margin-block: 0.5rem;
+	letter-spacing: normal;
+}
+.note-diff-pane[data-compact] .tiptap h1 {
+	font-size: 1rem;
+	line-height: 1.5rem;
+	font-weight: 600;
+}
+.note-diff-pane[data-compact] .tiptap :is(h2, h3, h4, h5, h6) {
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	font-weight: 600;
 }
