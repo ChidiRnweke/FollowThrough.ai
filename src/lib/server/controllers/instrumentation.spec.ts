@@ -1,6 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { trace } from '@opentelemetry/api';
+import {
+	BasicTracerProvider,
+	InMemorySpanExporter,
+	SimpleSpanProcessor
+} from '@opentelemetry/sdk-trace-base';
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 import { ValidationError } from '$lib/errors';
 import { instrumentedController } from '$lib/server/controllers/instrumentation';
+import { traceOperation } from '$lib/server/services/telemetry';
 
 type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };
 
@@ -210,5 +218,41 @@ describe('instrumentedController', () => {
 		);
 
 		expect(await wrapped.submitLike('note')).toBe('frozen:note');
+	});
+});
+
+describe('controller-boundary span routing', () => {
+	let exporter: InMemorySpanExporter;
+	let provider: BasicTracerProvider;
+
+	beforeAll(() => {
+		exporter = new InMemorySpanExporter();
+		provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
+		trace.setGlobalTracerProvider(provider);
+	});
+
+	beforeEach(() => {
+		exporter.reset();
+	});
+
+	afterAll(async () => {
+		await provider.shutdown();
+		trace.disable();
+	});
+
+	test('does not stamp openinference.span.kind on controller-boundary spans', async () => {
+		const wrapped = instrumentedController('fake', new FakeController('hello'), recordingLogger([]));
+
+		await wrapped.get({ userId: 'u1' }, 'n1');
+
+		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'fake.get');
+		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBeUndefined();
+	});
+
+	test('still stamps CHAIN on ordinary operation spans', async () => {
+		await traceOperation('workflow.op', {}, async () => 'done');
+
+		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'workflow.op');
+		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBe('CHAIN');
 	});
 });

@@ -111,7 +111,15 @@ export interface WorkflowTraceContext {
 	readonly input?: string;
 	readonly inputMimeType?: MimeType;
 	readonly outputMimeType?: MimeType;
-	readonly kind?: OpenInferenceSpanKind;
+	/**
+	 * OpenInference span kind. Omitted spans default to CHAIN and are routed to
+	 * Phoenix by the collector; pass `null` to skip the kind entirely so the
+	 * collector's `filter/openinference` drops the span from Phoenix while it
+	 * still flows to the traces (Tempo) pipeline — used by controller-boundary
+	 * instrumentation, whose spans exist to carry a trace id for the logs, not
+	 * to show up in Phoenix.
+	 */
+	readonly kind?: OpenInferenceSpanKind | null;
 	readonly sessionId?: string;
 	readonly userId?: string;
 	readonly metadata?: Readonly<Record<string, unknown>>;
@@ -140,7 +148,9 @@ const recordError = (span: Span, error: unknown): void => {
 };
 
 const spanAttributes = (params: WorkflowTraceContext): Attributes => ({
-	[SemanticConventions.OPENINFERENCE_SPAN_KIND]: params.kind ?? OpenInferenceSpanKind.CHAIN,
+	...(params.kind === null
+		? {}
+		: { [SemanticConventions.OPENINFERENCE_SPAN_KIND]: params.kind ?? OpenInferenceSpanKind.CHAIN }),
 	...getInputAttributes(
 		params.input === undefined
 			? undefined

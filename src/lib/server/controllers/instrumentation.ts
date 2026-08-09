@@ -44,7 +44,11 @@ export const instrumentedController = <T extends object>(
 			const result = Reflect.apply(method, controller, args);
 			if (!result || typeof (result as Promise<unknown>).then !== 'function') return result;
 			const pending = result as Promise<unknown>;
-			return traceOperation(`${domain}.${name}`, {}, async () => {
+			// `kind: null` leaves the span without `openinference.span.kind`, so the
+			// collector's filter/openinference keeps these operation spans out of
+			// Phoenix — they exist to carry the trace id the boundary logs inherit,
+			// not to surface as LLM tracing. They still reach the traces pipeline.
+			return traceOperation(`${domain}.${name}`, { kind: null }, async () => {
 				const [actor, ...rest] = args;
 				const userId =
 					typeof actor === 'object' && actor !== null && 'userId' in actor
