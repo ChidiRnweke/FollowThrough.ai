@@ -8,7 +8,8 @@ import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
  * rather than a branded type: a note tab's id stays the bare uuid it always
  * was, so every URL already in a user's history, every persisted
  * `WorkspaceRecord` in IndexedDB, and every `data-project-tab` selector keeps
- * working with no migration. Only chat tabs carry a prefix.
+ * working with no migration. Only chat tabs carry a prefix; the single search
+ * tab is the bare literal `search`, which no uuid can collide with.
  *
  * The safety lives in these helpers rather than in the type. Branding `TabId`
  * would buy nothing at runtime and would force a cast on nearly every line of
@@ -18,9 +19,17 @@ export type TabId = string;
 
 export type TabRef =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
-	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey };
+	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey }
+	| { readonly kind: 'search' };
 
 const CHAT_PREFIX = 'chat:';
+
+/**
+ * The one search tab's id. Unlike a chat there is never more than one global
+ * search — its state lives in the `globalSearch` store, not behind a key — so
+ * the tab id is a bare literal, the way a note tab is a bare uuid.
+ */
+export const SEARCH_TAB_ID = 'search';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,6 +39,8 @@ export const noteTab = (noteId: NoteId): TabId => noteId;
 
 export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${sessionKey}`;
 
+export const searchTab = (): TabId => SEARCH_TAB_ID;
+
 /**
  * Reads a tab id, or `undefined` when it is neither a note uuid nor a chat
  * reference. Callers treat `undefined` as "drop this tab silently", which is
@@ -37,6 +48,7 @@ export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${s
  */
 export function parseTabId(raw: string): TabRef | undefined {
 	const trimmed = raw.trim();
+	if (trimmed === SEARCH_TAB_ID) return { kind: 'search' };
 	if (trimmed.startsWith(CHAT_PREFIX)) {
 		const sessionKey = trimmed.slice(CHAT_PREFIX.length);
 		return isUuid(sessionKey) ? { kind: 'chat', sessionKey } : undefined;
@@ -45,6 +57,8 @@ export function parseTabId(raw: string): TabRef | undefined {
 }
 
 export const isChatTab = (id: TabId): boolean => parseTabId(id)?.kind === 'chat';
+
+export const isSearchTab = (id: TabId): boolean => parseTabId(id)?.kind === 'search';
 
 export const isNoteTab = (id: TabId): boolean => parseTabId(id)?.kind === 'note';
 

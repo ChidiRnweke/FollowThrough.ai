@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
-import { chatKeyOf, chatTab, isChatTab, isNoteTab, noteIdOf, noteTab, parseTabId } from './tab-ref';
+import { chatKeyOf, chatTab, isChatTab, isNoteTab, isSearchTab, noteIdOf, noteTab, parseTabId, searchTab } from './tab-ref';
 
 const NOTE = '11111111-1111-4111-8111-111111111111' as NoteId;
 const SESSION = '22222222-2222-4222-8222-222222222222';
@@ -20,6 +20,22 @@ describe('tab identity', () => {
 
 	it('reads a prefixed id as a chat tab', () => {
 		expect(parseTabId(chatTab(SESSION))).toEqual({ kind: 'chat', sessionKey: SESSION });
+	});
+
+	it('reads the bare literal as the search tab', () => {
+		expect(parseTabId(searchTab())).toEqual({ kind: 'search' });
+	});
+
+	it('recognises the search tab', () => {
+		expect(isSearchTab(searchTab())).toBe(true);
+	});
+
+	it('does not mistake a note tab for the search tab', () => {
+		expect(isSearchTab(NOTE)).toBe(false);
+	});
+
+	it('gives no note for the search tab, so note consumers degrade instead of missing', () => {
+		expect(noteIdOf(searchTab())).toBeUndefined();
 	});
 
 	it('rejects an id that is neither', () => {

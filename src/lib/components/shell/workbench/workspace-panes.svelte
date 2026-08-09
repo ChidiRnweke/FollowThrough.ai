@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatKeyOf, isChatTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { chatKeyOf, isChatTab, isSearchTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
 	import type { NoteView } from '$lib/models/notes';
@@ -58,6 +58,7 @@
 
 	function noteTitle(tabId: TabId | undefined): string {
 		if (!tabId) return 'Note';
+		if (isSearchTab(tabId)) return 'Search';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;

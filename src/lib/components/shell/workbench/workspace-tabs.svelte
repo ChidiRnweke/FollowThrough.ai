@@ -20,7 +20,7 @@
 		readActiveTabDrag,
 		writeTabDrag
 	} from '$lib/client/workbench/tab-drag';
-	import { chatKeyOf, isChatTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { chatKeyOf, isChatTab, isSearchTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import type { Conversation } from '$lib/models/agent';
 
@@ -45,6 +45,7 @@
 		shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 
 	const titleOf = (tabId: TabId): string => {
+		if (isSearchTab(tabId)) return 'Search notes';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
@@ -53,8 +54,9 @@
 		return shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.title ?? 'Untitled';
 	};
 
-	/** Groups are keyed by string, not `ProjectId`, so chats can have one too. */
+	/** Groups are keyed by string, not `ProjectId`, so chats and search can have one too. */
 	const CHATS_GROUP = 'chats';
+	const SEARCH_GROUP = 'search';
 
 	// Plain Maps: reactivity comes from `shell` and `workbench.openTabs`, and a
 	// SvelteMap here would be read and written inside its own derivation.
@@ -66,9 +68,14 @@
 		const buckets = new Map<ProjectId, TabId[]>();
 		/* eslint-enable svelte/prefer-svelte-reactivity */
 		const chatTabs: TabId[] = [];
+		const searchTabs: TabId[] = [];
 		for (const id of workbench.openTabs) {
 			if (isChatTab(id)) {
 				chatTabs.push(id);
+				continue;
+			}
+			if (isSearchTab(id)) {
+				searchTabs.push(id);
 				continue;
 			}
 			const projectId = projectOf(id);
@@ -84,12 +91,18 @@
 			projectName: projectName.get(projectId) ?? 'Project',
 			tabs: buckets.get(projectId) ?? []
 		}));
-		// Chats lead the strip: they belong to no project, and the old
+		// Chats and search lead the strip: they belong to no project, and the old
 		// group-by-project loop skipped anything without one — which is why a chat
 		// tab was invisible before it had a bucket of its own.
-		return chatTabs.length > 0
-			? [{ projectId: CHATS_GROUP, projectName: 'Chats', tabs: chatTabs }, ...projectGroups]
-			: projectGroups;
+		return [
+			...(searchTabs.length > 0
+				? [{ projectId: SEARCH_GROUP, projectName: 'Search', tabs: searchTabs }]
+				: []),
+			...(chatTabs.length > 0
+				? [{ projectId: CHATS_GROUP, projectName: 'Chats', tabs: chatTabs }]
+				: []),
+			...projectGroups
+		];
 	});
 
 	// Project groups the user has folded away.  Pinned tabs stay visible even
@@ -112,7 +125,9 @@
 	// (Today, Todos, …) so the working set survives; the "you are here"
 	// highlight must not — only colour a tab while actually on its route.
 	const onNoteRoute = $derived(
-		page.url.pathname.startsWith('/notes/') || page.url.pathname.startsWith('/chats/')
+		page.url.pathname.startsWith('/notes/') ||
+			page.url.pathname.startsWith('/chats/') ||
+			page.url.pathname.startsWith('/search')
 	);
 	let noteDragOver = $state(false);
 

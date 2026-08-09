@@ -5,6 +5,7 @@
 	import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';
+	import GlobalSearchPanel from '$lib/components/search/global-search-panel.svelte';
 
 	let {
 		tabId,
@@ -46,6 +47,10 @@
 		{agentAvailable}
 		{onCloseSplit}
 	/>
+{:else if ref?.kind === 'search'}
+	<div class="h-full overflow-hidden p-4">
+		<GlobalSearchPanel projects={shell.projects} />
+	</div>
 {:else if ref?.kind === 'note'}
 	<NotePane noteId={ref.noteId} {shell} {inlineSuggestionsEnabled} {initialView} {onCloseSplit} />
 {/if}

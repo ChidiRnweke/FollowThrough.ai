@@ -535,3 +535,28 @@ describe('chat tabs in the workbench URL', () => {
 		expect(closeTabInState(state, chat)).toEqual({ focusedNoteId: id(1), openTabs: [id(1)] });
 	});
 });
+
+describe('the search tab in the workbench URL', () => {
+	it('reads a search-focused URL from ?focus= on the /search host', () => {
+		expect(parse('/search', `tabs=${id(1)},search&focus=search`)?.focusedNoteId).toBe('search');
+	});
+
+	it('treats /search without ?focus= as no workbench at all', () => {
+		expect(parse('/search', `tabs=${id(1)}`)).toBeUndefined();
+	});
+
+	it('ignores a ?focus= naming a note on the /search host', () => {
+		expect(parse('/search', `focus=${id(1)}`)).toBeUndefined();
+	});
+
+	it('serialises a search-focused state onto the /search path', () => {
+		const url = serializeWorkbenchUrl({ focusedNoteId: 'search', openTabs: [id(1), 'search'] });
+		expect(url).toBe(`/search?tabs=${id(1)},search&focus=search`);
+	});
+
+	it('round-trips a search-focused URL through parse', () => {
+		const state = { focusedNoteId: 'search', openTabs: [id(1), 'search'] };
+		const [path, query] = serializeWorkbenchUrl(state).split('?');
+		expect(parse(path, query)).toEqual(state);
+	});
+});

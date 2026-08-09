@@ -45,6 +45,7 @@
 		if (page.url.pathname.startsWith('/todos/')) return 'Todo';
 		if (page.url.pathname.startsWith('/todos')) return 'Todos';
 		if (page.url.pathname.startsWith('/chats')) return 'Chat';
+		if (page.url.pathname.startsWith('/search')) return 'Search';
 		if (page.url.pathname.startsWith('/notes/')) {
 			const noteId = page.url.pathname.split('/')[2];
 			return data.shell.noteTree.find((note) => note.id === noteId)?.title ?? 'Note';

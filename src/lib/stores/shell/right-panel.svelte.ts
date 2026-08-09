@@ -3,7 +3,7 @@ import type { TodoView } from '$lib/models/todos';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 
-export type RightPanelMode = 'closed' | 'chat' | 'todo-detail' | 'project-memory' | 'suggestions';
+export type RightPanelMode = 'closed' | 'chat' | 'todo-detail' | 'project-memory' | 'suggestions' | 'search';
 
 export class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
@@ -72,6 +72,9 @@ export class RightPanelStore {
 	}
 	openSuggestions(): void {
 		this.mode = 'suggestions';
+	}
+	openSearch(): void {
+		this.mode = 'search';
 	}
 	toggle(mode: RightPanelMode): void {
 		this.mode = this.mode === mode ? 'closed' : mode;

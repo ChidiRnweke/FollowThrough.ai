@@ -10,7 +10,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab } from '$lib/stores/workbench/tab-ref';
+	import { chatTab, searchTab } from '$lib/stores/workbench/tab-ref';
 	import AgentSettingsPopover from '../../agent/preferences/agent-settings-popover.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
@@ -20,6 +20,7 @@
 	import MemoryPanel from '../../memory/workspace/memory-panel.svelte';
 	import SuggestionsPanel from '../../suggestions/workspace/suggestions-panel.svelte';
 	import TodoDetailPanel from '../../todos/workspace/todo-detail-panel.svelte';
+	import GlobalSearchPanel from '../../search/global-search-panel.svelte';
 
 	let {
 		shell,
@@ -48,6 +49,7 @@
 		'todo-detail': 'Todo',
 		'project-memory': 'Project memory',
 		suggestions: 'Suggestions',
+		search: 'Search',
 		closed: ''
 	} as const;
 
@@ -177,6 +179,14 @@
 								<SuggestionsPanel />
 							</div>
 						</ScrollArea>
+					{:else if renderedMode === 'search'}
+						<GlobalSearchPanel
+							projects={shell?.projects ?? []}
+							onMoveToCanvas={() => {
+								void workbench.openTab(searchTab());
+								rightPanel.close();
+							}}
+						/>
 					{/if}
 				</ErrorBoundary>
 			</div>
@@ -230,6 +240,14 @@
 						<MemoryPanel />
 					{:else if renderedMode === 'suggestions'}
 						<SuggestionsPanel />
+					{:else if renderedMode === 'search'}
+						<GlobalSearchPanel
+							projects={shell?.projects ?? []}
+							onMoveToCanvas={() => {
+								void workbench.openTab(searchTab());
+								rightPanel.close();
+							}}
+						/>
 					{/if}
 				</ErrorBoundary>
 			</div>

@@ -1,4 +1,4 @@
-import { chatKeyOf, parseTabId, type TabId } from './tab-ref';
+import { chatKeyOf, isSearchTab, parseTabId, type TabId } from './tab-ref';
 
 /**
  * Workbench URL model.
@@ -14,6 +14,7 @@ import { chatKeyOf, parseTabId, type TabId } from './tab-ref';
  *   /notes/<focused>?tabs=<id>,<id>,<id>&split=<id>
  *   /chats/<conversation>?tabs=<id>,<id>&focus=chat:<key>&split=<id>
  *   /chats/new?tabs=chat:<key>&focus=chat:<key>
+ *   /search?tabs=<id>,<id>&focus=search
  *
  * The focused tab is always also present in `?tabs=` (so the parameter
  * round-trips unambiguously).  The order of `?tabs=` is the visual tab order.
@@ -23,7 +24,8 @@ import { chatKeyOf, parseTabId, type TabId } from './tab-ref';
  * chat-focused URL cannot, because its pathname carries a *conversation* id
  * (or `new`) rather than the client-minted session key the tab is keyed by, so
  * it names the focused tab in `?focus=` instead.  `?focus=` is therefore
- * emitted only when a chat is focused.
+ * emitted only when a chat or the search tab is focused — the two tabs a
+ * pathname cannot name.
  *
  * `?split=<id>` optionally names a second tab that is rendered alongside the
  * focused pane for side-by-side reading.  The split pane is "context" — it
@@ -51,12 +53,18 @@ const isTabId = (value: string): boolean => parseTabId(value) !== undefined;
 
 /**
  * The focused tab a pathname names, or `undefined` when it is not a workbench
- * route. `/chats/*` defers to `?focus=`, since its pathname identifies the
- * conversation rather than the tab.
+ * route. `/chats/*` and `/search` defer to `?focus=`, since their pathnames
+ * identify the host surface rather than the tab.
  */
 function focusedFromPath(pathOnly: string, searchParams: URLSearchParams): TabId | undefined {
 	const noteMatch = /^\/notes\/([0-9a-f-]{36})\/?$/i.exec(pathOnly);
 	if (noteMatch) return isTabId(noteMatch[1]) ? noteMatch[1] : undefined;
+	if (/^\/search\/?$/.test(pathOnly)) {
+		const focusRaw = searchParams.get(FOCUS_PARAM);
+		if (!focusRaw || !isTabId(focusRaw)) return undefined;
+		// The search host never names a note; anything else parseable goes through.
+		return parseTabId(focusRaw)?.kind === 'note' ? undefined : focusRaw;
+	}
 	if (!/^\/chats\/(new|[0-9a-f-]{36})\/?$/i.test(pathOnly)) return undefined;
 	const focusRaw = searchParams.get(FOCUS_PARAM);
 	if (!focusRaw || chatKeyOf(focusRaw) === undefined) return undefined;
@@ -138,6 +146,12 @@ export function serializeWorkbenchUrl(
 		const conversationId = options.conversationOf?.(chatKey);
 		const query = params.length > 0 ? `?${params.join('&')}` : '';
 		return `/chats/${conversationId ?? 'new'}${query}`;
+	}
+	if (isSearchTab(state.focusedNoteId)) {
+		// Same trick as a chat: the `/search` pathname names the host, `?focus=` the tab.
+		params.push(`${FOCUS_PARAM}=${encodeURIComponent(state.focusedNoteId)}`);
+		const query = params.length > 0 ? `?${params.join('&')}` : '';
+		return `/search${query}`;
 	}
 	const query = params.length > 0 ? `?${params.join('&')}` : '';
 	return `/notes/${state.focusedNoteId}${query}`;
