@@ -221,4 +221,33 @@ describe('Postgres note repository invariants', () => {
 		]);
 		expect(results.filter(Boolean)).toHaveLength(1);
 	});
+	it('projects the searchable columns without the document body', async () => {
+		const { owner, note } = await seedNote('195');
+		const hits = await new NoteRecords(context.db).listSearchable(owner);
+		expect(hits.find((entry) => entry.id === note.id)).toEqual({
+			id: note.id,
+			projectId: note.projectId,
+			title: note.title,
+			plainText: note.plainText
+		});
+	});
+	it('keeps trashed notes out of the searchable projection', async () => {
+		const { owner, note } = await seedNote('196');
+		const repository = new NoteRecords(context.db);
+		await repository.update(owner, { ...note, archivedAt: now });
+		expect((await repository.listSearchable(owner)).map((entry) => entry.id)).not.toContain(
+			note.id
+		);
+	});
+	it('scopes the searchable projection to one project', async () => {
+		const { owner } = await seedNote('197');
+		const other = await seedNote('198', owner);
+		const hits = await new NoteRecords(context.db).listSearchable(owner, other.project.id);
+		expect(hits.map((entry) => entry.id)).toEqual([other.note.id]);
+	});
+	it('hides a searchable note when its project is archived', async () => {
+		const { owner, project, note } = await seedNote('199');
+		await new ProjectRecords(context.db).archive(owner, project.id);
+		expect(await new NoteRecords(context.db).listSearchable(owner)).toEqual([]);
+	});
 });

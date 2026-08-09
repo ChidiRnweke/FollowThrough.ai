@@ -51,6 +51,9 @@ export function readActiveTabDrag(
 	const ref = parseTabId(raw);
 	if (!ref) return undefined;
 	if (ref.kind === 'chat') return openTabs.includes(raw) ? raw : undefined;
+	// The search tab is a singleton surface: dropping it anywhere meaningful is
+	// just focusing it, which the strip already does on click.
+	if (ref.kind !== 'note') return undefined;
 	const note = noteTree.find((entry) => entry.id === ref.noteId);
 	return note?.kind === 'note' && !note.archivedAt ? raw : undefined;
 }

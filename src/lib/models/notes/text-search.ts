@@ -232,9 +232,8 @@ const EMPTY_PARAGRAPH: Record<string, unknown> = { type: 'paragraph' };
 /** Drops text nodes the replacement emptied; every other node keeps its shape. */
 const pruneEmptyTextNodes = (node: Record<string, unknown>): void => {
 	if (!Array.isArray(node.content)) return;
-	node.content = (node.content as Record<string, unknown>).filter(
-		(child) => !isTextNode(child) || child.text !== ''
-	);
+	const children = node.content as Record<string, unknown>[];
+	node.content = children.filter((child) => !isTextNode(child) || child.text !== '');
 	for (const child of node.content as Record<string, unknown>[]) pruneEmptyTextNodes(child);
 };
 
