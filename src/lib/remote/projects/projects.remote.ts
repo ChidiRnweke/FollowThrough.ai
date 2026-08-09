@@ -13,6 +13,8 @@ import type {
 	CreateNoteInput,
 	RenameNoteInput,
 	ArchiveNoteInput,
+	DeleteNoteForeverInput,
+	EmptyNoteTrashInput,
 	ListNoteTrashInput,
 	RestoreNoteInput
 } from '$lib/models/notes';
@@ -106,6 +108,21 @@ export const listNoteTrash = query(
 		return AppFactory.controllers()
 			.notes()
 			.listTrash(requestActor(), input as ListNoteTrashInput);
+	}
+);
+
+export const deleteNoteForever = command(z.object({ noteId: z.string().uuid() }), async (input) => {
+	return AppFactory.controllers()
+		.notes()
+		.deleteForever(requestActor(), input as DeleteNoteForeverInput);
+});
+
+export const emptyNoteTrash = command(
+	z.object({ projectId: z.string().uuid().optional() }),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.emptyTrash(requestActor(), input as EmptyNoteTrashInput);
 	}
 );
 

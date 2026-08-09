@@ -143,6 +143,20 @@
 		if (!output) toast.error(projectActions.lastError ?? 'Could not restore. Try again.');
 		else toast.success('Restored');
 	}
+
+	async function deleteEntryForever(id: NoteId): Promise<void> {
+		const output = await projectActions.deleteNoteForever(id);
+		if (!output) toast.error(projectActions.lastError ?? 'Could not delete. Try again.');
+		else toast.success('Deleted permanently');
+	}
+
+	async function emptyTrash(): Promise<void> {
+		// Scoped to this project: the panel only ever showed this project's trash, so
+		// emptying from here must not reach into another one.
+		const output = await projectActions.emptyNoteTrash(project.id);
+		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
+		else toast.success('Trash emptied');
+	}
 </script>
 
 <!--
@@ -381,7 +395,13 @@
 		</Collapsible.Trigger>
 		<Collapsible.Content>
 			<div class="pt-2">
-				<NoteTrashList notes={trashed} showProject={false} onrestore={restoreEntry} />
+				<NoteTrashList
+					notes={trashed}
+					showProject={false}
+					onrestore={restoreEntry}
+					ondelete={deleteEntryForever}
+					onempty={emptyTrash}
+				/>
 			</div>
 		</Collapsible.Content>
 	</Collapsible.Root>

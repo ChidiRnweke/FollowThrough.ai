@@ -437,6 +437,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteEditor: notes,
 			noteArchiver: notes,
 			noteTrashReader: notes,
+			notePurger: notes,
 			attachmentRestorer: notes,
 			notePublisher: notes,
 			revisionRecorder: notes,

@@ -499,6 +499,26 @@ export interface RestoreNoteOutput {
 	readonly note: Note;
 }
 
+export interface DeleteNoteForeverInput {
+	readonly noteId: NoteId;
+}
+
+/**
+ * The ids that were actually destroyed. A folder takes the trashed notes inside it with
+ * it, so this is not always the single id that was asked for.
+ */
+export interface DeleteNoteForeverOutput {
+	readonly deletedNoteIds: readonly NoteId[];
+}
+
+export interface EmptyNoteTrashInput {
+	readonly projectId?: ProjectId;
+}
+
+export interface EmptyNoteTrashOutput {
+	readonly deletedNoteIds: readonly NoteId[];
+}
+
 export interface ListNoteTrashInput {
 	readonly projectId?: ProjectId;
 }

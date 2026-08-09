@@ -46,6 +46,54 @@ describe('NoteTrashList', () => {
 		expect(await screen.getByText('The trash is empty').all()).not.toHaveLength(0);
 	});
 
+	// Permanent deletion is the one thing here that cannot be undone, so it never fires
+	// straight off the row's button.
+	it('asks before deleting a note for good', async () => {
+		const deleted: NoteId[] = [];
+		const screen = await render(NoteTrashList, {
+			notes: [trashed],
+			onrestore: noop,
+			ondelete: async (id) => {
+				deleted.push(id);
+			}
+		});
+		await screen.getByRole('button', { name: 'Delete Deleted draft forever' }).click();
+		expect(deleted).toEqual([]);
+	});
+
+	it('deletes a note through ondelete once confirmed', async () => {
+		const deleted: NoteId[] = [];
+		const screen = await render(NoteTrashList, {
+			notes: [trashed],
+			onrestore: noop,
+			ondelete: async (id) => {
+				deleted.push(id);
+			}
+		});
+		await screen.getByRole('button', { name: 'Delete Deleted draft forever' }).click();
+		await screen.getByRole('button', { name: 'Delete forever' }).click();
+		expect(deleted).toEqual([noteId]);
+	});
+
+	it('offers no permanent delete when the caller does not pass one', async () => {
+		const screen = await render(NoteTrashList, { notes: [trashed], onrestore: noop });
+		expect(await screen.getByRole('button', { name: /forever/ }).all()).toHaveLength(0);
+	});
+
+	it('empties the trash through onempty once confirmed', async () => {
+		let emptied = 0;
+		const screen = await render(NoteTrashList, {
+			notes: [trashed],
+			onrestore: noop,
+			onempty: async () => {
+				emptied += 1;
+			}
+		});
+		await screen.getByRole('button', { name: 'Empty trash' }).first().click();
+		await screen.getByRole('button', { name: 'Empty trash' }).last().click();
+		expect(emptied).toBe(1);
+	});
+
 	// Inside a project every row would repeat the same project name.
 	it('omits the project name when the caller suppresses it', async () => {
 		const screen = await render(NoteTrashList, {

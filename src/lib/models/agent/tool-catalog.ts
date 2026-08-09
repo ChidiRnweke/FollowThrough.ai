@@ -115,6 +115,16 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		description: 'List the notes in the trash, most recently discarded first.'
 	},
 	{
+		name: 'delete_note_forever',
+		description:
+			'Mutating tool. Permanently delete a note that is already in the trash, together with any trashed notes inside it if it is a folder. This cannot be undone and there is no way to recover the note afterwards, so confirm with the user first. To discard a note that is still active, use archive_note instead.'
+	},
+	{
+		name: 'empty_note_trash',
+		description:
+			'Mutating tool. Permanently delete every note in the trash, or only those of one project when projectId is given. This cannot be undone, so confirm with the user first. Call list_trashed_notes to show what would go.'
+	},
+	{
 		name: 'list_note_versions',
 		description:
 			"List a note's published version history, newest first, marking the current published version. Use restore_note_version to roll one back."

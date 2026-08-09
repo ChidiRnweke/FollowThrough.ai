@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
+import * as schema from '$lib/server/db/schema/registry';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { actor, context, now, seedNote } from '../database-harness';
@@ -146,6 +148,69 @@ describe('Postgres note repository invariants', () => {
 		expect((await repository.listRevisions(owner, note.id)).map((entry) => entry.revision)).toEqual(
 			[4, 5]
 		);
+	});
+	it('removes a hard-deleted note from the trash', async () => {
+		const { owner, note } = await seedNote('190');
+		const repository = new NoteRecords(context.db);
+		await repository.update(owner, { ...note, archivedAt: now });
+		await repository.delete(owner, note.id);
+		expect(await repository.findById(owner, note.id)).toBeUndefined();
+	});
+	it('does not let one actor hard-delete another actor’s note', async () => {
+		const { owner, note } = await seedNote('191');
+		const repository = new NoteRecords(context.db);
+		await repository.delete(actor('192'), note.id);
+		expect(await repository.findById(owner, note.id)).toEqual(note);
+	});
+	it('takes the note’s revisions with it', async () => {
+		const { owner, note } = await seedNote('193');
+		const repository = new NoteRecords(context.db);
+		await repository.insertRevision(owner, {
+			id: '50000000-0000-4000-8000-000000000193' as NoteRevisionId,
+			noteId: note.id,
+			revision: 1,
+			title: 'Snapshot',
+			document: { type: 'doc', content: [] },
+			plainText: '',
+			createdAt: now
+		});
+		await repository.delete(owner, note.id);
+		expect(await repository.listRevisions(owner, note.id)).toEqual([]);
+	});
+	// `note_revision_attachments.attachment_version_id` is `restrict`, so a note whose
+	// history snapshots an attachment is the case where a naive cascade would fail.
+	it('deletes a note whose history snapshots an attachment', async () => {
+		const { owner, project, note } = await seedNote('194');
+		const [attachment] = await context.db
+			.insert(schema.attachments)
+			.values({ userId: owner.userId, projectId: project.id, noteId: note.id, path: 'shot.png' })
+			.returning();
+		const [version] = await context.db
+			.insert(schema.attachmentVersions)
+			.values({
+				attachmentId: attachment!.id,
+				objectKey: 'attachments/194.png',
+				mediaType: 'image/png',
+				byteSize: 10,
+				checksumSha256: 'checksum-194'
+			})
+			.returning();
+		await context.db
+			.update(schema.attachments)
+			.set({ currentVersionId: version!.id })
+			.where(eq(schema.attachments.id, attachment!.id));
+		const repository = new NoteRecords(context.db);
+		await repository.insertRevision(owner, {
+			id: '50000000-0000-4000-8000-000000000194' as NoteRevisionId,
+			noteId: note.id,
+			revision: 1,
+			title: 'Snapshot',
+			document: { type: 'doc', content: [] },
+			plainText: '',
+			createdAt: now
+		});
+		await repository.delete(owner, note.id);
+		expect(await repository.findById(owner, note.id)).toBeUndefined();
 	});
 	it('allows exactly one concurrent note update from the same revision', async () => {
 		const { owner, note } = await seedNote('183');

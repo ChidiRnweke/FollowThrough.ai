@@ -3,6 +3,8 @@ import { isHttpError } from '@sveltejs/kit';
 import type {
 	ArchiveNoteOutput,
 	CreateNoteOutput,
+	DeleteNoteForeverOutput,
+	EmptyNoteTrashOutput,
 	NoteId,
 	RenameNoteOutput,
 	RestoreNoteOutput
@@ -25,6 +27,8 @@ import {
 	renameNote,
 	archiveNote,
 	restoreNote,
+	deleteNoteForever,
+	emptyNoteTrash,
 	createSkill
 } from '$lib/remote/projects/projects.remote';
 
@@ -77,6 +81,10 @@ class ProjectActionsStore {
 		this.withInvalidation<ArchiveNoteOutput>(() => archiveNote({ noteId }));
 	restoreNote = (noteId: NoteId) =>
 		this.withInvalidation<RestoreNoteOutput>(() => restoreNote({ noteId }));
+	deleteNoteForever = (noteId: NoteId) =>
+		this.withInvalidation<DeleteNoteForeverOutput>(() => deleteNoteForever({ noteId }));
+	emptyNoteTrash = (projectId?: ProjectId) =>
+		this.withInvalidation<EmptyNoteTrashOutput>(() => emptyNoteTrash({ projectId }));
 }
 
 export const projectActions = new ProjectActionsStore();

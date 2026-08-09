@@ -143,6 +143,56 @@ export class NoteCatalog {
 			}));
 	}
 
+	async deleteForever(actor: ActorContext, noteId: NoteId): Promise<readonly NoteId[]> {
+		const note = await this.get(actor, noteId);
+		if (!note.archivedAt)
+			throw new ValidationError('Only notes in the trash can be deleted permanently');
+		if (note.kind === 'skill')
+			throw new ValidationError('Skill notes are not deleted from the trash');
+		const trashed = await this.notes.listTrashed(actor, note.projectId);
+		return this.purge(actor, this.descendants(trashed, [noteId]));
+	}
+
+	async emptyTrash(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteId[]> {
+		const trashed = await this.notes.listTrashed(actor, projectId);
+		// Skills are filtered out of the trash listing, so they are not something the user
+		// can see they are about to destroy. Emptying the trash empties what is on screen.
+		const visible = trashed.filter((note) => note.kind !== 'skill');
+		return this.purge(
+			actor,
+			this.descendants(
+				trashed,
+				visible.map((note) => note.id)
+			)
+		);
+	}
+
+	/**
+	 * The trashed notes reachable from `roots` through `parentId`, deepest first. A trashed
+	 * folder is deleted with its contents: `notes.parent_id` is `set null` on delete, so
+	 * leaving them behind would silently move them to the project root instead.
+	 */
+	private descendants(trashed: readonly Note[], roots: readonly NoteId[]): readonly NoteId[] {
+		const visible = trashed.filter((note) => note.kind !== 'skill');
+		const ordered: NoteId[] = [];
+		const seen = new Set<NoteId>();
+		const walk = (id: NoteId): void => {
+			if (seen.has(id)) return;
+			seen.add(id);
+			for (const child of visible.filter((note) => note.parentId === id)) walk(child.id);
+			ordered.push(id);
+		};
+		for (const root of roots) walk(root);
+		return ordered;
+	}
+
+	private async purge(actor: ActorContext, ids: readonly NoteId[]): Promise<readonly NoteId[]> {
+		// Sequential rather than concurrent: the ids arrive children-first so that a folder
+		// is never removed while something still points at it.
+		for (const id of ids) await this.notes.delete(actor, id);
+		return ids;
+	}
+
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {
 		await this.get(actor, note.id);
 		const revision: NoteRevision = {

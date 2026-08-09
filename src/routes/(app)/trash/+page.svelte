@@ -12,6 +12,19 @@
 		if (!output) toast.error(projectActions.lastError ?? 'Could not restore the note. Try again.');
 		else toast.success('Restored');
 	}
+
+	async function remove(noteId: NoteId): Promise<void> {
+		const output = await projectActions.deleteNoteForever(noteId);
+		if (!output) toast.error(projectActions.lastError ?? 'Could not delete the note. Try again.');
+		// A folder takes its contents with it, so the count is what actually went.
+		else toast.success(output.deletedNoteIds.length === 1 ? 'Deleted' : 'Deleted permanently');
+	}
+
+	async function empty(): Promise<void> {
+		const output = await projectActions.emptyNoteTrash();
+		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
+		else toast.success('Trash emptied');
+	}
 </script>
 
 <PageShell
@@ -19,5 +32,5 @@
 	title="Trash"
 	description="Notes you have deleted, across every project. Nothing here is gone yet."
 >
-	<NoteTrashList notes={data.trashed} onrestore={restore} />
+	<NoteTrashList notes={data.trashed} onrestore={restore} ondelete={remove} onempty={empty} />
 </PageShell>

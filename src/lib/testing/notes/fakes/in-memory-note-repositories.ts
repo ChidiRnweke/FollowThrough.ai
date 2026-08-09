@@ -83,9 +83,12 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return note;
 	}
 
-	async delete(_actor: ActorContext, id: NoteId): Promise<void> {
-		void _actor;
+	async delete(actor: ActorContext, id: NoteId): Promise<void> {
+		const owned = this.notes.some((note) => note.id === id && note.userId === actor.userId);
+		if (!owned) return;
 		this.notes = this.notes.filter((note) => note.id !== id);
+		// Revisions cascade from the note in Postgres, so they cannot outlive it here either.
+		this.revisions = this.revisions.filter((revision) => revision.noteId !== id);
 	}
 
 	async insertRevision(_actor: ActorContext, revision: NoteRevision): Promise<NoteRevision> {

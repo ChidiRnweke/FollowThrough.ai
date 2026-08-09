@@ -14,6 +14,10 @@ import type {
 	ListNoteRevisionsOutput,
 	ListNoteTrashInput,
 	ListNoteTrashOutput,
+	DeleteNoteForeverInput,
+	DeleteNoteForeverOutput,
+	EmptyNoteTrashInput,
+	EmptyNoteTrashOutput,
 	RestoreNoteInput,
 	RestoreNoteOutput,
 	RestoreNoteRevisionInput,
@@ -63,6 +67,7 @@ import type {
 	NoteEditor,
 	NoteIndexer,
 	NotePublisher,
+	NotePurger,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	NoteTrashReader,
@@ -156,6 +161,18 @@ export interface NotesController {
 	/** List the archived notes a reader can still bring back, most recently archived first. */
 	listTrash(actor: ActorContext, input: ListNoteTrashInput): Promise<ListNoteTrashOutput>;
 	/**
+	 * Destroy an archived note for good, taking the archived notes inside a folder with it.
+	 * Unlike {@link archive} this cannot be undone.
+	 *
+	 * @throws ValidationError if the note is not archived.
+	 */
+	deleteForever(
+		actor: ActorContext,
+		input: DeleteNoteForeverInput
+	): Promise<DeleteNoteForeverOutput>;
+	/** Destroy every archived note the trash listing shows, optionally within one project. */
+	emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput>;
+	/**
 	 * List the note's kept snapshots, newest first, marking the one currently published.
 	 *
 	 * Bodies are omitted; {@link getRevision} fetches one at a time, because a history list
@@ -203,6 +220,7 @@ export interface NotesDependencies {
 	noteLinkReconciler: NoteLinkReconciler;
 	noteArchiver: NoteArchiver;
 	noteTrashReader: NoteTrashReader;
+	notePurger: NotePurger;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;
@@ -372,6 +390,21 @@ export class Notes implements NotesController {
 	}
 	async listTrash(actor: ActorContext, input: ListNoteTrashInput): Promise<ListNoteTrashOutput> {
 		return { notes: await this.dependencies.noteTrashReader.listTrashed(actor, input.projectId) };
+	}
+	async deleteForever(
+		actor: ActorContext,
+		input: DeleteNoteForeverInput
+	): Promise<DeleteNoteForeverOutput> {
+		// Transactional because a folder is several deletes: a half-purged folder would
+		// leave its contents at the project root with no way back to where they were.
+		return this.dependencies.transactionRunner.run(async () => ({
+			deletedNoteIds: await this.dependencies.notePurger.deleteForever(actor, input.noteId)
+		}));
+	}
+	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
+		return this.dependencies.transactionRunner.run(async () => ({
+			deletedNoteIds: await this.dependencies.notePurger.emptyTrash(actor, input.projectId)
+		}));
 	}
 	async listRevisions(
 		actor: ActorContext,

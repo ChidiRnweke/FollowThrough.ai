@@ -143,6 +143,8 @@ export const agentToolCoverage = {
 		archive: { kind: 'mutation' },
 		restore: { kind: 'mutation' },
 		listTrash: { kind: 'read' },
+		deleteForever: { kind: 'mutation' },
+		emptyTrash: { kind: 'mutation' },
 		listRevisions: { kind: 'read' },
 		getRevision: {
 			kind: 'excluded',
@@ -915,6 +917,20 @@ export class AgentTools {
 				'read',
 				z.object({ projectId: id.optional() }),
 				(input) => factory.notes().listTrash(actor, input as never)
+			),
+			define(
+				'delete_note_forever',
+				toolDescription('delete_note_forever'),
+				'mutation',
+				z.object({ noteId: id }),
+				(input) => factory.notes().deleteForever(actor, input as never)
+			),
+			define(
+				'empty_note_trash',
+				toolDescription('empty_note_trash'),
+				'mutation',
+				z.object({ projectId: id.optional() }),
+				(input) => factory.notes().emptyTrash(actor, input as never)
 			),
 			define(
 				'list_note_versions',
