@@ -586,3 +586,5 @@ export * from './prosemirror';
 export * from './note-patch';
 
 export * from './note-links';
+
+export * from './text-search';
