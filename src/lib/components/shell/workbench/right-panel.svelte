@@ -8,7 +8,9 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { FtPlus as Plus, FtClose as X } from '$lib/components/icons';
+	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { chatTab } from '$lib/stores/workbench/tab-ref';
 	import AgentSettingsPopover from '../../agent/preferences/agent-settings-popover.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
@@ -74,6 +76,24 @@
 
 {#snippet chatHeaderActions()}
 	<AgentSettingsPopover {agentModels} chat={chatSession} />
+	<!-- The same session key, so the transcript moves into the workbench rather
+	     than forking: the tab and the panel are two views of one conversation. -->
+	<Tip text="Open in workbench">
+		{#snippet children({ props })}
+			<Button
+				{...props}
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Open chat in workbench"
+				onclick={() => {
+					void workbench.openTab(chatTab(rightPanel.chatSessionKey));
+					rightPanel.close();
+				}}
+			>
+				<ExternalLink data-icon />
+			</Button>
+		{/snippet}
+	</Tip>
 	<Tip text="New chat">
 		{#snippet children({ props })}
 			<Button

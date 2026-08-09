@@ -63,7 +63,17 @@ const appContextSchema = z.object({
 				)
 				.max(2),
 			focusedNoteId: id.optional(),
-			otherVisibleNoteId: id.optional()
+			otherVisibleNoteId: id.optional(),
+			openChatTabs: z
+				.array(
+					z.object({
+						sessionKey: id,
+						conversationId: id.optional(),
+						title: z.string().max(500)
+					})
+				)
+				.max(20)
+				.optional()
 		})
 		.optional(),
 	selection: selectionSchema.extend({ text: z.string().max(12000) }).optional(),

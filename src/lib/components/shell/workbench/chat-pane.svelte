@@ -1,0 +1,84 @@
+<script lang="ts">
+	import { onDestroy, onMount, untrack } from 'svelte';
+	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { ShellContext } from '$lib/models/workspace';
+	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { ChatPanel } from '$lib/components/chat';
+	import { AgentSettingsPopover } from '$lib/components/agent';
+	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { FtClose as X } from '$lib/components/icons';
+
+	let {
+		sessionKey,
+		shell,
+		sessions,
+		agentPreferences,
+		agentModels,
+		agentAvailable,
+		onCloseSplit
+	}: {
+		sessionKey: ChatSessionKey;
+		shell: ShellContext;
+		sessions: readonly Conversation[];
+		agentPreferences: AgentPreferences;
+		agentModels: readonly AgentModel[];
+		agentAvailable: boolean;
+		onCloseSplit?: () => void;
+	} = $props();
+
+	// The same acquire-on-mount / release-on-destroy lifetime `note-pane.svelte`
+	// uses for its four note registries. `sessionKey` is stable: the pane is keyed
+	// by its tab id in `workspace-panes.svelte`.
+	const chat = untrack(() => chatRegistry.for(sessionKey));
+
+	const title = $derived(
+		sessions.find((entry) => entry.id === chat.conversationId)?.title ?? 'New chat'
+	);
+
+	// The pane tells the app context what it holds, the same inversion the note
+	// panes use — the agent's snapshot then names the chats open beside it.
+	// Registered in `onMount` like `note-pane.svelte`, so `sessionKey` is read
+	// where it is stable rather than captured during init.
+	let releaseContext: (() => void) | undefined;
+	onMount(() => {
+		releaseContext = appContext.registerChatPane(sessionKey, () => ({
+			title,
+			...(chat.conversationId ? { conversationId: chat.conversationId } : {})
+		}));
+	});
+
+	onDestroy(() => {
+		releaseContext?.();
+		chatRegistry.release(sessionKey);
+	});
+</script>
+
+<div class="flex h-full w-full min-w-0 flex-1 flex-col" data-chat-pane={sessionKey}>
+	<header class="flex min-h-10 shrink-0 items-center gap-2 pb-2">
+		<h2 class="truncate text-sm font-medium">{title}</h2>
+		<div class="ml-auto flex items-center gap-1">
+			<AgentSettingsPopover {agentModels} {chat} />
+			{#if onCloseSplit}
+				<Tip text="Close split view">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Close split view"
+							onclick={onCloseSplit}
+						>
+							<X />
+						</Button>
+					{/snippet}
+				</Tip>
+			{/if}
+		</div>
+	</header>
+	<div class="min-h-0 flex-1">
+		<ChatPanel {chat} {shell} {sessions} {agentPreferences} {agentAvailable} showHistory={false} />
+	</div>
+</div>

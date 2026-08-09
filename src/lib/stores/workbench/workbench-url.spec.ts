@@ -467,3 +467,71 @@ describe('openTabInState — split interactions', () => {
 		});
 	});
 });
+
+describe('chat tabs in the workbench URL', () => {
+	const SESSION = '33333333-3333-4333-8333-333333333333';
+	const CONVERSATION = '44444444-4444-4444-8444-444444444444';
+	const chat = `chat:${SESSION}`;
+
+	it('keeps a chat tab in ?tabs= alongside a note', () => {
+		expect(parse(`/notes/${id(1)}`, `tabs=${id(1)},${chat}`)?.openTabs).toEqual([id(1), chat]);
+	});
+
+	it('accepts a chat tab as the split pane', () => {
+		expect(parse(`/notes/${id(1)}`, `tabs=${id(1)},${chat}&split=${chat}`)?.splitNoteId).toBe(chat);
+	});
+
+	it('reads a chat-focused URL from ?focus=', () => {
+		expect(
+			parse(`/chats/${CONVERSATION}`, `tabs=${id(1)},${chat}&focus=${chat}`)?.focusedNoteId
+		).toBe(chat);
+	});
+
+	it('reads a chat-focused URL on the draft route', () => {
+		expect(parse('/chats/new', `tabs=${chat}&focus=${chat}`)?.focusedNoteId).toBe(chat);
+	});
+
+	it('treats a /chats URL without ?focus= as no workbench at all', () => {
+		expect(parse(`/chats/${CONVERSATION}`)).toBeUndefined();
+	});
+
+	it('ignores a ?focus= naming a note, which the pathname already carries', () => {
+		expect(parse(`/chats/${CONVERSATION}`, `focus=${id(1)}`)).toBeUndefined();
+	});
+
+	it('drops a garbage tab id rather than erroring', () => {
+		expect(parse(`/notes/${id(1)}`, `tabs=${id(1)},chat:nonsense`)?.openTabs).toEqual([id(1)]);
+	});
+
+	it('serialises a chat-focused state onto its conversation path', () => {
+		const url = serializeWorkbenchUrl(
+			{ focusedNoteId: chat, openTabs: [id(1), chat] },
+			{ conversationOf: () => CONVERSATION }
+		);
+		expect(url).toBe(
+			`/chats/${CONVERSATION}?tabs=${id(1)},chat%3A${SESSION}&focus=chat%3A${SESSION}`
+		);
+	});
+
+	it('serialises an unsent chat onto /chats/new', () => {
+		const url = serializeWorkbenchUrl({ focusedNoteId: chat, openTabs: [chat] });
+		expect(url).toBe(`/chats/new?focus=chat%3A${SESSION}`);
+	});
+
+	it('leaves a note-focused URL byte-identical to what it always was', () => {
+		const url = serializeWorkbenchUrl({ focusedNoteId: id(1), openTabs: [id(1), chat] });
+		expect(url).toBe(`/notes/${id(1)}?tabs=${id(1)},chat%3A${SESSION}`);
+	});
+
+	it('round-trips a chat-focused URL through parse', () => {
+		const state = { focusedNoteId: chat, openTabs: [id(1), chat], splitNoteId: id(1) };
+		const url = serializeWorkbenchUrl(state, { conversationOf: () => CONVERSATION });
+		const [path, query] = url.split('?');
+		expect(parse(path, query)).toEqual(state);
+	});
+
+	it('closes a chat tab like any other', () => {
+		const state = { focusedNoteId: chat, openTabs: [id(1), chat] };
+		expect(closeTabInState(state, chat)).toEqual({ focusedNoteId: id(1), openTabs: [id(1)] });
+	});
+});

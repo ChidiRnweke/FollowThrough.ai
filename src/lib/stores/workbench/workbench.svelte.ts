@@ -18,6 +18,7 @@ import {
 	setSplitInState,
 	type WorkbenchUrlState
 } from './workbench-url';
+import { noteIdOf, type TabId } from './tab-ref';
 
 /**
  * The store's window onto SvelteKit's router.  Injected rather than imported
@@ -65,14 +66,41 @@ const sveltekitRouter: WorkbenchRouter = {
  *     effect picks the change up on the next tick.
  */
 export class WorkbenchStore {
-	openTabs = $state<readonly NoteId[]>([]);
-	focusedNoteId = $state<NoteId | undefined>(undefined);
+	openTabs = $state<readonly TabId[]>([]);
+	/**
+	 * The focused tab. Named for history: it holds a {@link TabId}, which may be
+	 * a chat. Note-only consumers should read {@link focusedNoteId}, which is
+	 * `undefined` while a chat tab has focus.
+	 */
+	focusedTabId = $state<TabId | undefined>(undefined);
 	/** Pane that most recently received real user interaction; distinct from URL-primary focus. */
-	interactionFocusedNoteId = $state<NoteId | undefined>(undefined);
-	pinnedTabs = $state<readonly NoteId[]>([]);
+	interactionFocusedTabId = $state<TabId | undefined>(undefined);
+	pinnedTabs = $state<readonly TabId[]>([]);
 
 	/** Recently-focused tabs, most-recent first.  Used to pick a tab to focus when the active one closes. */
-	recentlyUsed = $state<readonly NoteId[]>([]);
+	recentlyUsed = $state<readonly TabId[]>([]);
+
+	/**
+	 * The focused tab when it is a note, `undefined` when it is a chat.
+	 *
+	 * Every note-shaped consumer — the sidebar highlight, the editor-selection
+	 * and suggestion-tray registries, the agent's app context — reads this, so a
+	 * focused chat tab degrades to "no note in focus" rather than being handed a
+	 * `chat:` id it would look up and miss.
+	 */
+	get focusedNoteId(): NoteId | undefined {
+		return noteIdOf(this.focusedTabId);
+	}
+
+	/** The interaction-focused tab when it is a note. */
+	get interactionFocusedNoteId(): NoteId | undefined {
+		return noteIdOf(this.interactionFocusedTabId);
+	}
+
+	/** The split tab when it is a note, `undefined` when a chat is split. */
+	get splitNoteId(): NoteId | undefined {
+		return noteIdOf(this.splitTabId);
+	}
 
 	/**
 	 * Whether the user has collapsed the global tab strip.  Display
@@ -89,7 +117,7 @@ export class WorkbenchStore {
 	 * persisted.  Always distinct from `focusedNoteId` (invariant: a note
 	 * can't be both primary and split).
 	 */
-	splitNoteId = $state<NoteId | undefined>(undefined);
+	splitTabId = $state<TabId | undefined>(undefined);
 
 	/**
 	 * Width of the secondary pane as a fraction of 1 (clamped 0.25–0.75).
@@ -98,6 +126,17 @@ export class WorkbenchStore {
 	 * cross-device synchronisation.  The URL never encodes the ratio.
 	 */
 	splitRatio = $state(0.5);
+
+	/**
+	 * The conversation a chat session is showing, used to build its `/chats/<id>`
+	 * pathname. Injected by the app layout rather than imported: the agent stores
+	 * already depend on this one through the app context, and importing them back
+	 * would close that loop at module-init time.
+	 *
+	 * Defaults to "no conversation yet", which serialises to `/chats/new` — the
+	 * right answer for a chat that has not been sent.
+	 */
+	conversationOf: (sessionKey: string) => string | undefined = () => undefined;
 
 	constructor(
 		private readonly router: WorkbenchRouter = sveltekitRouter,
@@ -190,9 +229,9 @@ export class WorkbenchStore {
 	 */
 	get splitActive(): boolean {
 		return (
-			this.splitNoteId !== undefined &&
-			this.splitNoteId !== this.focusedNoteId &&
-			this.openTabs.includes(this.splitNoteId)
+			this.splitTabId !== undefined &&
+			this.splitTabId !== this.focusedTabId &&
+			this.openTabs.includes(this.splitTabId)
 		);
 	}
 
@@ -201,9 +240,9 @@ export class WorkbenchStore {
 		return this.interactionFocusedNoteId ?? this.focusedNoteId;
 	}
 
-	setInteractionFocus(noteId: NoteId): void {
-		if (noteId === this.focusedNoteId || noteId === this.splitNoteId)
-			this.interactionFocusedNoteId = noteId;
+	setInteractionFocus(noteId: TabId): void {
+		if (noteId === this.focusedTabId || noteId === this.splitTabId)
+			this.interactionFocusedTabId = noteId;
 	}
 
 	/** The project id of the focused pane, resolved from the shell's tab tree on demand. */
@@ -282,10 +321,13 @@ export class WorkbenchStore {
 						: {})
 				};
 				this.restoring = true;
-				await this.router.goto(serializeWorkbenchUrl(restored), {
-					replaceState: true,
-					noScroll: true
-				});
+				await this.router.goto(
+					serializeWorkbenchUrl(restored, { conversationOf: this.conversationOf }),
+					{
+						replaceState: true,
+						noScroll: true
+					}
+				);
 				this.restoring = false;
 				void this.refreshActiveProjectId(shellProjectOf);
 				return;
@@ -315,21 +357,21 @@ export class WorkbenchStore {
 
 	private applyUrlState(urlState: WorkbenchUrlState): void {
 		if (
-			this.focusedNoteId === urlState.focusedNoteId &&
+			this.focusedTabId === urlState.focusedNoteId &&
 			this.openTabs.length === urlState.openTabs.length &&
 			this.openTabs.every((id, i) => id === urlState.openTabs[i]) &&
-			this.splitNoteId === urlState.splitNoteId
+			this.splitTabId === urlState.splitNoteId
 		)
 			return;
 		this.applyingFromUrl = true;
 		this.openTabs = urlState.openTabs;
-		this.focusedNoteId = urlState.focusedNoteId;
-		this.splitNoteId = urlState.splitNoteId;
+		this.focusedTabId = urlState.focusedNoteId;
+		this.splitTabId = urlState.splitNoteId;
 		if (
-			this.interactionFocusedNoteId !== urlState.focusedNoteId &&
-			this.interactionFocusedNoteId !== urlState.splitNoteId
+			this.interactionFocusedTabId !== urlState.focusedNoteId &&
+			this.interactionFocusedTabId !== urlState.splitNoteId
 		)
-			this.interactionFocusedNoteId = urlState.focusedNoteId;
+			this.interactionFocusedTabId = urlState.focusedNoteId;
 		// Only rebuild the MRU list when the focused tab isn't already at its head:
 		// the layout's `$effect` reads `recentlyUsed` (via `pruneClosedNotes`) and
 		// writes it here, so an unconditional new array is an effect feeding itself.
@@ -353,11 +395,11 @@ export class WorkbenchStore {
 
 	/** Returns the user's working set in URL-state form. */
 	private toUrlState(): WorkbenchUrlState | undefined {
-		if (!this.focusedNoteId || this.openTabs.length === 0) return undefined;
+		if (!this.focusedTabId || this.openTabs.length === 0) return undefined;
 		return {
-			focusedNoteId: this.focusedNoteId,
+			focusedNoteId: this.focusedTabId,
 			openTabs: this.openTabs,
-			...(this.splitNoteId ? { splitNoteId: this.splitNoteId } : {})
+			...(this.splitTabId ? { splitNoteId: this.splitTabId } : {})
 		};
 	}
 
@@ -365,13 +407,13 @@ export class WorkbenchStore {
 	 * Open a tab and focus it.  Pushes a new history entry (so the user can
 	 * Back to the previously focused tab).
 	 */
-	async openTab(noteId: NoteId): Promise<void> {
+	async openTab(noteId: TabId): Promise<void> {
 		const next = openTabInState(this.toUrlState(), noteId);
 		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
 	/** Focus an already-open tab.  Pushes a new history entry. */
-	async focusTab(noteId: NoteId): Promise<void> {
+	async focusTab(noteId: TabId): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) {
 			await this.openTab(noteId);
@@ -383,7 +425,7 @@ export class WorkbenchStore {
 	}
 
 	/** Close an open tab.  Pushes a new history entry; if the last tab is closed, redirects away from `/notes/*`. */
-	async closeTab(noteId: NoteId): Promise<void> {
+	async closeTab(noteId: TabId): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
 		const next = closeTabInState(current, noteId, { recentlyUsed: this.recentlyUsed });
@@ -404,7 +446,7 @@ export class WorkbenchStore {
 	 * Pushes a new history entry; if every tab is closed, redirects away from
 	 * `/notes/*`.
 	 */
-	async closeTabs(noteIds: readonly NoteId[]): Promise<void> {
+	async closeTabs(noteIds: readonly TabId[]): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
 		const next = closeTabsInState(current, noteIds, { recentlyUsed: this.recentlyUsed });
@@ -422,7 +464,7 @@ export class WorkbenchStore {
 	}
 
 	/** Reorder a tab relative to another.  Replaces the current URL so Back doesn't walk reorderings. */
-	async moveTab(from: NoteId, to: NoteId): Promise<void> {
+	async moveTab(from: TabId, to: TabId): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
 		const next = moveTabInState(current, from, to);
@@ -431,7 +473,7 @@ export class WorkbenchStore {
 	}
 
 	/** Add a tab without changing focus, split context, ordering, or strip visibility. */
-	async openTabInBackground(noteId: NoteId): Promise<void> {
+	async openTabInBackground(noteId: TabId): Promise<void> {
 		const current = this.toUrlState();
 		const next = addTabInBackgroundInState(current, noteId);
 		if (next === current) return;
@@ -445,7 +487,7 @@ export class WorkbenchStore {
 	 * tab stays open in the strip.  Pushes a new history entry so Back
 	 * restores the prior split state.
 	 */
-	async setSplit(noteId: NoteId | undefined): Promise<void> {
+	async setSplit(noteId: TabId | undefined): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
 		const next = setSplitInState(current, noteId);
@@ -454,7 +496,7 @@ export class WorkbenchStore {
 	}
 
 	/** Pin or unpin a tab.  Persists the change without touching the URL. */
-	togglePin(noteId: NoteId): void {
+	togglePin(noteId: TabId): void {
 		if (this.pinnedTabs.includes(noteId)) {
 			this.pinnedTabs = this.pinnedTabs.filter((id) => id !== noteId);
 		} else {
@@ -463,7 +505,7 @@ export class WorkbenchStore {
 		void this.persist();
 	}
 
-	isPinned(noteId: NoteId): boolean {
+	isPinned(noteId: TabId): boolean {
 		return this.pinnedTabs.includes(noteId);
 	}
 
@@ -483,30 +525,38 @@ export class WorkbenchStore {
 		if (this.pruning) return;
 		const current = this.toUrlState();
 		if (!current) return;
-		const remaining = current.openTabs.filter((id) => known.has(id));
+		// A chat tab is never in the note tree, so it must survive this on its own
+		// terms — matching on `known` alone would close every chat tab on the first
+		// navigation. Chats are closed explicitly instead, when their conversation
+		// is deleted.
+		const survives = (id: TabId): boolean => {
+			const noteId = noteIdOf(id);
+			return noteId === undefined || known.has(noteId);
+		};
+		const remaining = current.openTabs.filter(survives);
 		if (remaining.length === current.openTabs.length) return;
 		this.pruning = true;
 		try {
 			if (!this.isWorkbenchPath) {
-				await this.pruneInMemory(known, remaining);
+				await this.pruneInMemory(survives, remaining);
 				return;
 			}
 			if (remaining.length === 0) {
 				await this.clearToOverview({
-					pinnedTabs: this.pinnedTabs.filter((id) => known.has(id)),
-					recentlyUsed: this.recentlyUsed.filter((id) => known.has(id))
+					pinnedTabs: this.pinnedTabs.filter(survives),
+					recentlyUsed: this.recentlyUsed.filter(survives)
 				});
 				return;
 			}
 			const focused =
-				current.focusedNoteId && known.has(current.focusedNoteId)
+				current.focusedNoteId && survives(current.focusedNoteId)
 					? current.focusedNoteId
-					: (this.recentlyUsed.find((id) => known.has(id)) ?? remaining[0]);
+					: (this.recentlyUsed.find(survives) ?? remaining[0]);
 			// Drop the split if its note was pruned, or if it would collide with
 			// the new focused pane (invariant: split ≠ focused).
 			const split =
 				current.splitNoteId &&
-				known.has(current.splitNoteId) &&
+				survives(current.splitNoteId) &&
 				current.splitNoteId !== focused &&
 				remaining.includes(current.splitNoteId)
 					? current.splitNoteId
@@ -529,17 +579,17 @@ export class WorkbenchStore {
 	 * next `/notes/*` navigation serialises whatever survives here.
 	 */
 	private async pruneInMemory(
-		known: ReadonlySet<NoteId>,
-		remaining: readonly NoteId[]
+		survives: (id: TabId) => boolean,
+		remaining: readonly TabId[]
 	): Promise<void> {
 		this.openTabs = remaining;
-		this.pinnedTabs = this.pinnedTabs.filter((id) => known.has(id));
-		this.recentlyUsed = this.recentlyUsed.filter((id) => known.has(id));
-		if (this.splitNoteId && !known.has(this.splitNoteId)) this.splitNoteId = undefined;
-		if (this.interactionFocusedNoteId && !known.has(this.interactionFocusedNoteId))
-			this.interactionFocusedNoteId = undefined;
-		if (!this.focusedNoteId || !known.has(this.focusedNoteId))
-			this.focusedNoteId = this.recentlyUsed[0] ?? remaining[0];
+		this.pinnedTabs = this.pinnedTabs.filter(survives);
+		this.recentlyUsed = this.recentlyUsed.filter(survives);
+		if (this.splitTabId && !survives(this.splitTabId)) this.splitTabId = undefined;
+		if (this.interactionFocusedTabId && !survives(this.interactionFocusedTabId))
+			this.interactionFocusedTabId = undefined;
+		if (!this.focusedTabId || !survives(this.focusedTabId))
+			this.focusedTabId = this.recentlyUsed[0] ?? remaining[0];
 		await this.persist();
 	}
 
@@ -564,8 +614,8 @@ export class WorkbenchStore {
 	): Promise<void> {
 		this.applyingFromUrl = true;
 		this.openTabs = [];
-		this.focusedNoteId = undefined;
-		this.splitNoteId = undefined;
+		this.focusedTabId = undefined;
+		this.splitTabId = undefined;
 		try {
 			await this.persist({ openTabs: [], focusedNoteId: null, ...persistPatch });
 			await this.router.goto('/today', { replaceState: false });
@@ -578,7 +628,7 @@ export class WorkbenchStore {
 		next: WorkbenchUrlState,
 		options: { replace: boolean; invalidate: boolean }
 	): Promise<void> {
-		const url = serializeWorkbenchUrl(next);
+		const url = serializeWorkbenchUrl(next, { conversationOf: this.conversationOf });
 		await this.router.goto(url, { replaceState: options.replace, noScroll: true });
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
@@ -592,7 +642,7 @@ export class WorkbenchStore {
 		const record: WorkspaceRecord = {
 			id: 'current',
 			openTabs: override?.openTabs ?? this.openTabs,
-			focusedNoteId: override?.focusedNoteId ?? this.focusedNoteId ?? null,
+			focusedNoteId: override?.focusedNoteId ?? this.focusedTabId ?? null,
 			pinnedTabs: override?.pinnedTabs ?? this.pinnedTabs,
 			recentlyUsed: override?.recentlyUsed ?? this.recentlyUsed,
 			stripHidden: override?.stripHidden ?? this.stripHidden,

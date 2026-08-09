@@ -1,4 +1,4 @@
-import type { NoteId } from '$lib/models/notes';
+import type { TabId } from '$lib/stores/workbench/tab-ref';
 
 /**
  * Persisted workbench state.
@@ -15,11 +15,16 @@ import type { NoteId } from '$lib/models/notes';
  */
 export interface WorkspaceRecord {
 	readonly id: 'current';
-	readonly openTabs: readonly NoteId[];
-	readonly focusedNoteId: NoteId | null;
-	readonly pinnedTabs: readonly NoteId[];
+	/**
+	 * Tab ids, which a note tab spells as its bare uuid and a chat tab prefixes
+	 * with `chat:`. Records written before chat tabs existed hold plain uuids and
+	 * read back unchanged, so no version bump is needed.
+	 */
+	readonly openTabs: readonly TabId[];
+	readonly focusedNoteId: TabId | null;
+	readonly pinnedTabs: readonly TabId[];
 	/** LRU ordering of recently-focused tabs, most-recent first. */
-	readonly recentlyUsed: readonly NoteId[];
+	readonly recentlyUsed: readonly TabId[];
 	/** Whether the user has collapsed the global tab strip.  Display preference. */
 	readonly stripHidden: boolean;
 	/**

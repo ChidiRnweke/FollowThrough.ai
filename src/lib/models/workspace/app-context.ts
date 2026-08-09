@@ -73,6 +73,16 @@ export interface AppContextSnapshotV1 {
 		readonly visiblePanes: readonly PaneContext[];
 		readonly focusedNoteId?: NoteId;
 		readonly otherVisibleNoteId?: NoteId;
+		/**
+		 * Chat tabs open beside the notes. Additive and optional, so the snapshot
+		 * stays at version 1 and a client left open across a deploy still
+		 * validates in both directions.
+		 */
+		readonly openChatTabs?: readonly {
+			readonly sessionKey: string;
+			readonly conversationId?: string;
+			readonly title: string;
+		}[];
 	};
 	readonly selection?: TextSelection;
 	readonly recentInteractions: readonly SemanticInteraction[];

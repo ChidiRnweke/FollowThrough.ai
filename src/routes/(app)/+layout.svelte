@@ -7,6 +7,7 @@
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
@@ -36,6 +37,9 @@
 	);
 	const showProgressBar = $derived(isNavigating && !isWorkbenchInternal);
 	const isNoteWorkbench = $derived(page.url.pathname.startsWith('/notes/'));
+	// The pane host owns its own scrolling wherever it renders, which since chat
+	// became a tab kind includes `/chats/*` carrying a `?focus=chat:` tab.
+	const hostsWorkbenchPanes = $derived(isNoteWorkbench || workbench.isWorkbenchPath);
 	const currentScreen = $derived.by(() => {
 		if (page.url.pathname === '/today') return 'Today';
 		if (page.url.pathname.startsWith('/todos/')) return 'Todo';
@@ -66,6 +70,10 @@
 	);
 
 	onMount(() => {
+		// Injected rather than imported by the store: the agent stores reach back
+		// into the workbench through the app context, so importing them there would
+		// close an initialisation loop.
+		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
 		void workbench.hydrate(shellProjectOf);
 	});
 
@@ -160,7 +168,7 @@
 		bind:ref={insetRef}
 		class={cn(
 			'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
-			isNoteWorkbench ? 'overflow-hidden' : 'overflow-y-auto'
+			hostsWorkbenchPanes ? 'overflow-hidden' : 'overflow-y-auto'
 		)}
 		data-note-workbench={isNoteWorkbench ? '' : undefined}
 	>
@@ -200,6 +208,7 @@
 		{/if}
 		<WorkspaceTabs
 			shell={data.shell}
+			sessions={data.sessions}
 			hidden={workbench.stripHidden}
 			oncreateNote={() => void createNoteFromStrip()}
 			ontoggleHidden={() => workbench.toggleStripHidden()}

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import type { NoteId, NoteView } from '$lib/models/notes';
+	import { chatKeyOf, isChatTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { NoteView } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -11,28 +14,36 @@
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
-	import { hasInternalNoteDrag, readActiveNoteDrag } from '$lib/client/notes/note-drag';
+	import { hasInternalTabDrag, readActiveTabDrag } from '$lib/client/workbench/tab-drag';
 
 	let {
 		shell,
+		sessions,
+		agentPreferences,
+		agentModels,
+		agentAvailable,
 		focusedInitialView,
 		inlineSuggestionsEnabled = true
 	}: {
 		shell: ShellContext;
+		sessions: readonly Conversation[];
+		agentPreferences: AgentPreferences;
+		agentModels: readonly AgentModel[];
+		agentAvailable: boolean;
 		focusedInitialView?: NoteView;
 		inlineSuggestionsEnabled?: boolean;
 	} = $props();
 
-	const focusedNoteId = $derived(workbench.focusedNoteId);
+	const focusedNoteId = $derived(workbench.focusedTabId);
 	const openTabs = $derived(workbench.openTabs);
-	const splitNoteId = $derived(workbench.splitNoteId);
+	const splitNoteId = $derived(workbench.splitTabId);
 	const splitRatio = $derived(workbench.splitRatio);
 	const splitActive = $derived(workbench.splitActive);
 	const primaryTitle = $derived(noteTitle(focusedNoteId));
 	const secondaryTitle = $derived(noteTitle(splitNoteId));
 
 	let root: HTMLElement | null = $state(null);
-	let narrowPaneId = $state<NoteId | undefined>(untrack(() => focusedNoteId));
+	let narrowPaneId = $state<TabId | undefined>(untrack(() => focusedNoteId));
 
 	$effect(() => {
 		root?.style.setProperty('--workspace-secondary-ratio', String(splitRatio));
@@ -45,8 +56,14 @@
 		}
 	});
 
-	function noteTitle(noteId: NoteId | undefined): string {
-		if (!noteId) return 'Note';
+	function noteTitle(tabId: TabId | undefined): string {
+		if (!tabId) return 'Note';
+		const sessionKey = chatKeyOf(tabId);
+		if (sessionKey !== undefined) {
+			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
+			return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
+		}
+		const noteId = noteIdOf(tabId);
 		return shell.noteTree.find((entry) => entry.id === noteId)?.title ?? 'Untitled';
 	}
 
@@ -59,14 +76,14 @@
 	let dragCounter = 0;
 
 	function onDragEnter(event: DragEvent): void {
-		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		if (!hasInternalTabDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		dragCounter += 1;
 		dragOverActive = true;
 	}
 
 	function onDragOver(event: DragEvent): void {
-		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		if (!hasInternalTabDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
 	}
@@ -81,19 +98,22 @@
 	}
 
 	function onDrop(event: DragEvent): void {
-		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		if (!hasInternalTabDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		dragOverActive = false;
 		dragCounter = 0;
-		const noteId = readActiveNoteDrag(event.dataTransfer, shell.noteTree);
-		if (!noteId || noteId === focusedNoteId || noteId === splitNoteId) return;
-		narrowPaneId = noteId;
-		void workbench.setSplit(noteId);
+		const tabId = readActiveTabDrag(event.dataTransfer, shell.noteTree, openTabs);
+		if (!tabId || tabId === focusedNoteId || tabId === splitNoteId) return;
+		narrowPaneId = tabId;
+		void workbench.setSplit(tabId);
 	}
 
-	function markInteraction(noteId: NoteId): void {
-		workbench.setInteractionFocus(noteId);
-		appContext.recordFocus(noteId);
+	function markInteraction(tabId: TabId): void {
+		workbench.setInteractionFocus(tabId);
+		// The agent's focus history is a history of notes; a chat pane taking focus
+		// is not a note the agent should start reasoning about.
+		const noteId = noteIdOf(tabId);
+		if (noteId) appContext.recordFocus(noteId);
 	}
 </script>
 
@@ -124,8 +144,8 @@
 				value={narrowPaneId}
 				onValueChange={(value) => {
 					if (value) {
-						narrowPaneId = value as NoteId;
-						markInteraction(value as NoteId);
+						narrowPaneId = value;
+						markInteraction(value);
 					}
 				}}
 				aria-label="Visible split note"
@@ -169,17 +189,38 @@
 				onfocusin={() => markInteraction(noteId)}
 				onpointerdown={() => markInteraction(noteId)}
 			>
-				<ScrollArea orientation="both" class="h-full min-h-0 min-w-0">
-					<div class="workspace-pane-scroll-content">
-						<WorkspacePane
-							{noteId}
-							{shell}
-							{inlineSuggestionsEnabled}
-							initialView={noteId === focusedInitialView?.note.id ? focusedInitialView : undefined}
-							onCloseSplit={isSplit ? closeSplit : undefined}
-						/>
+				<!--
+					A note pane scrolls as a document, so the pane owns the scrollport.
+					A chat pane scrolls its own transcript and pins its composer, so it
+					takes the pane's full height instead — the sanctioned "independently
+					scrolling pane" case in DESIGN_SYSTEM's responsive contract. Wrapping
+					it in the document scroller collapsed it to content height and left
+					the composer floating mid-pane.
+				-->
+				{#snippet pane()}
+					<WorkspacePane
+						tabId={noteId}
+						{shell}
+						{sessions}
+						{agentPreferences}
+						{agentModels}
+						{agentAvailable}
+						{inlineSuggestionsEnabled}
+						initialView={noteId === focusedInitialView?.note.id ? focusedInitialView : undefined}
+						onCloseSplit={isSplit ? closeSplit : undefined}
+					/>
+				{/snippet}
+				{#if isChatTab(noteId)}
+					<div class="workspace-pane-scroll-content flex h-full min-h-0 flex-col">
+						{@render pane()}
 					</div>
-				</ScrollArea>
+				{:else}
+					<ScrollArea orientation="both" class="h-full min-h-0 min-w-0">
+						<div class="workspace-pane-scroll-content">
+							{@render pane()}
+						</div>
+					</ScrollArea>
+				{/if}
 			</div>
 		{/each}
 

@@ -8,6 +8,7 @@ import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { editorSelectionRegistry } from '../notes/registries/editor-selection-registry.svelte';
 import { workbench } from '../workbench/workbench.svelte';
+import { chatKeyOf, noteIdOf } from '../workbench/tab-ref';
 
 export function surfaceFor(
 	pathname: string,
@@ -43,11 +44,20 @@ export function surfaceFor(
 
 type PaneGetter = () => PaneContext | undefined;
 
+/** What a mounted chat pane reports about itself. */
+type ChatPaneGetter = () => { conversationId?: string; title: string };
+
 class AppContextStore {
 	private shell?: ShellContext;
 	private pathname = '/';
 	private search = '';
 	private panes = new Map<NoteId, PaneGetter>();
+	/**
+	 * Keyed by chat session. Registered by the pane rather than read from the
+	 * chat registry, because the chat stores already import this module — asking
+	 * them for their titles here would close that loop.
+	 */
+	private chatPanes = new Map<string, ChatPaneGetter>();
 	private interactions: SemanticInteraction[] = [];
 
 	configure(shell: ShellContext, url: URL): void {
@@ -59,6 +69,11 @@ class AppContextStore {
 	registerPane(noteId: NoteId, getter: PaneGetter): () => void {
 		this.panes.set(noteId, getter);
 		return () => this.panes.delete(noteId);
+	}
+
+	registerChatPane(sessionKey: string, getter: ChatPaneGetter): () => void {
+		this.chatPanes.set(sessionKey, getter);
+		return () => this.chatPanes.delete(sessionKey);
 	}
 
 	recordFocus(noteId: NoteId): void {
@@ -74,7 +89,14 @@ class AppContextStore {
 	capture(): AppContextSnapshotV1 {
 		const now = new Date();
 		const surface = surfaceFor(this.pathname, new URLSearchParams(this.search));
-		const inWorkbench = surface.kind === 'note_workbench' || surface.kind === 'diagram_editor';
+		// Derived from the workbench itself, not the surface kind: a focused chat
+		// tab puts the URL on `/chats/*`, whose surface is `chat`, and gating on
+		// the kind would drop the whole workbench block — silently starving the
+		// agent of the open tabs it is being asked about.
+		const inWorkbench =
+			surface.kind === 'note_workbench' ||
+			surface.kind === 'diagram_editor' ||
+			workbench.isWorkbenchPath;
 		const focusedNoteId = inWorkbench
 			? (workbench.interactionFocusedNoteId ?? workbench.focusedNoteId)
 			: undefined;
@@ -84,9 +106,21 @@ class AppContextStore {
 		const visiblePanes = visibleIds
 			.map((id) => this.panes.get(id)?.())
 			.filter((pane): pane is PaneContext => Boolean(pane));
-		const openTabs = workbench.openTabs.slice(0, 20).flatMap((noteId) => {
-			const note = this.shell?.noteTree.find((entry) => entry.id === noteId);
+		const openTabs = workbench.openTabs.slice(0, 20).flatMap((tabId) => {
+			const note = this.shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId));
 			return note ? [{ id: note.id, title: note.title, projectId: note.projectId }] : [];
+		});
+		const openChatTabs = workbench.openTabs.slice(0, 20).flatMap((tabId) => {
+			const sessionKey = chatKeyOf(tabId);
+			if (sessionKey === undefined) return [];
+			const reported = this.chatPanes.get(sessionKey)?.();
+			return [
+				{
+					sessionKey,
+					title: reported?.title ?? 'New chat',
+					...(reported?.conversationId ? { conversationId: reported.conversationId } : {})
+				}
+			];
 		});
 		const focusedNote = this.shell?.noteTree.find((entry) => entry.id === focusedNoteId);
 		const pathProjectId = this.pathname.startsWith('/projects/')
@@ -123,11 +157,12 @@ class AppContextStore {
 				: project
 					? { activeResource: { kind: 'project' as const, id: project.id, title: project.name } }
 					: {}),
-			...(inWorkbench && openTabs.length
+			...(inWorkbench && (openTabs.length || openChatTabs.length)
 				? {
 						workbench: {
 							openTabs,
 							visiblePanes,
+							...(openChatTabs.length ? { openChatTabs } : {}),
 							...(focusedNoteId ? { focusedNoteId } : {}),
 							...(visibleIds.length === 2
 								? { otherVisibleNoteId: visibleIds.find((id) => id !== focusedNoteId) }

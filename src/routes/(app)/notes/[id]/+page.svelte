@@ -7,6 +7,10 @@
 
 <WorkspacePanes
 	shell={data.shell}
+	sessions={data.sessions}
+	agentPreferences={data.agentPreferences}
+	agentModels={data.agentModels}
+	agentAvailable={data.agentAvailable}
 	focusedInitialView={data.focusedNoteView}
 	inlineSuggestionsEnabled={data.agentPreferences.inlineSuggestionsEnabled}
 />

@@ -56,7 +56,7 @@ const setup = (href: string, openTabs: readonly NoteId[], focused: NoteId) => {
 	const repository = new InMemoryWorkspaceRepository();
 	const store = new WorkbenchStore(router, repository);
 	store.openTabs = openTabs;
-	store.focusedNoteId = focused;
+	store.focusedTabId = focused;
 	return { router, repository, store };
 };
 

@@ -464,66 +464,73 @@
 		</div>
 	{/if}
 
-	<ChatThread
-		{shell}
-		{sessions}
-		{activeNoteId}
-		{activeProjectId}
-		{showHistory}
-		entries={chat.entries}
-		isStreaming={chat.isStreaming}
-		deciding={chat.deciding}
-		{editingId}
-		bind:editDraft
-		bind:viewport
-		{showJumpToLatest}
-		onswitchconversation={(id) => void chat.switchToConversation(id)}
-		onstarter={useStarter}
-		oneditkeydown={handleEditKeydown}
-		onresubmit={(entry, text) => void resubmit(entry, text)}
-		oncanceledit={cancelEditing}
-		onapprove={(entry, tools) => void chat.decideAll(entry, tools, 'approve')}
-		onrejectapproval={(entry, tools) => void chat.decideAll(entry, tools, 'reject')}
-		onretry={(entry) => void requestRetry(entry)}
-		oncopy={(entry) => void copyMessage(entry)}
-		onstartediting={startEditing}
-		onaskagain={askAgain}
-		onsuggestion={(id, decision) => void decide(id, decision)}
-		onsuggestionbusy={(id) =>
-			(workbench.focusedNoteId &&
-				suggestionTrayRegistry.peek(workbench.focusedNoteId)?.busyIds.includes(id)) ??
-			false}
-		onjumptolatest={jumpToLatest}
-	/>
-	<!-- 24px: the composer is a different kind of thing from the transcript above it,
-	     and the gap is what says so. At the old 8px the two read as one cramped stack. -->
-	<div class="shrink-0 pt-6">
-		<ChatComposer
-			bind:prompt
-			bind:textareaRef
-			{autoChip}
-			chips={chat.chips}
-			{mentionCandidates}
-			{highlighted}
-			{selectedImages}
-			{agentAvailable}
+	<!--
+		One measure for the whole column. `max-w-3xl` never binds in the 384px docked
+		panel and centres both the transcript and the composer on a full-width page or
+		pane, so the same component reads correctly at either width.
+	-->
+	<div class="mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col">
+		<ChatThread
+			{shell}
+			{sessions}
+			{activeNoteId}
+			{activeProjectId}
+			{showHistory}
+			entries={chat.entries}
 			isStreaming={chat.isStreaming}
-			connection={chat.connection}
-			executionMode={chat.executionModeOverride}
-			onremovechip={(chip, automatic) => {
-				if (automatic) chat.autoChipDismissedFor = chip.id;
-				else unpick(chip);
-			}}
-			onpick={pick}
-			onhighlight={(index) => (highlighted = index)}
-			onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
-			onfiles={(files) => void addImages(files)}
-			onkeydown={handleKeydown}
-			oninput={handleInput}
-			onpaste={pasteImages}
-			ontoggleexecutionmode={toggleExecutionMode}
-			onsend={() => void send()}
-			onstop={() => void chat.stop()}
+			deciding={chat.deciding}
+			{editingId}
+			bind:editDraft
+			bind:viewport
+			{showJumpToLatest}
+			onswitchconversation={(id) => void chat.switchToConversation(id)}
+			onstarter={useStarter}
+			oneditkeydown={handleEditKeydown}
+			onresubmit={(entry, text) => void resubmit(entry, text)}
+			oncanceledit={cancelEditing}
+			onapprove={(entry, tools) => void chat.decideAll(entry, tools, 'approve')}
+			onrejectapproval={(entry, tools) => void chat.decideAll(entry, tools, 'reject')}
+			onretry={(entry) => void requestRetry(entry)}
+			oncopy={(entry) => void copyMessage(entry)}
+			onstartediting={startEditing}
+			onaskagain={askAgain}
+			onsuggestion={(id, decision) => void decide(id, decision)}
+			onsuggestionbusy={(id) =>
+				(workbench.focusedNoteId &&
+					suggestionTrayRegistry.peek(workbench.focusedNoteId)?.busyIds.includes(id)) ??
+				false}
+			onjumptolatest={jumpToLatest}
 		/>
+		<!-- 24px: the composer is a different kind of thing from the transcript above it,
+	     and the gap is what says so. At the old 8px the two read as one cramped stack. -->
+		<div class="shrink-0 pt-6">
+			<ChatComposer
+				bind:prompt
+				bind:textareaRef
+				{autoChip}
+				chips={chat.chips}
+				{mentionCandidates}
+				{highlighted}
+				{selectedImages}
+				{agentAvailable}
+				isStreaming={chat.isStreaming}
+				connection={chat.connection}
+				executionMode={chat.executionModeOverride}
+				onremovechip={(chip, automatic) => {
+					if (automatic) chat.autoChipDismissedFor = chip.id;
+					else unpick(chip);
+				}}
+				onpick={pick}
+				onhighlight={(index) => (highlighted = index)}
+				onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}
+				onfiles={(files) => void addImages(files)}
+				onkeydown={handleKeydown}
+				oninput={handleInput}
+				onpaste={pasteImages}
+				ontoggleexecutionmode={toggleExecutionMode}
+				onsend={() => void send()}
+				onstop={() => void chat.stop()}
+			/>
+		</div>
 	</div>
 </div>

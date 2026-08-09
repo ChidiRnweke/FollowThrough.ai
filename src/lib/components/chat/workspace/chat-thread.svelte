@@ -109,8 +109,9 @@
 	turn from the next. The old flat `gap-3`/`gap-1.5` pair said nothing about which
 	gaps meant "same thing" and which meant "next thing".
 
-	`max-w-3xl` never binds in the 384px docked panel and centres the transcript on a
-	full-width page or pane, so one component reads correctly at both widths.
+	The reading measure is the panel's, not the thread's: `chat-panel.svelte` centres
+	the whole column so the transcript and the composer share one width. Capping the
+	thread alone left the composer spanning a wide pane under a narrow transcript.
 -->
 <div class="relative flex min-h-0 flex-1 flex-col">
 	{#if entries.length > 0}
@@ -122,7 +123,7 @@
 		<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
 		     rather than reserving space, so a full-width approval or suggestion card
 		     underneath it loses its hairline to the track. -->
-		<div class="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pr-3">
+		<div class="flex min-h-full flex-col gap-6 pr-3">
 			{#if entries.length === 0}
 				<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
 				<ChatStarters

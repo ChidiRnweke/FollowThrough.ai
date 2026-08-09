@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -17,18 +16,23 @@
 		FtPlus as Plus
 	} from '$lib/components/icons';
 	import {
-		hasInternalNoteDrag,
-		readActiveNoteDrag,
-		writeNoteDrag
-	} from '$lib/client/notes/note-drag';
+		hasInternalTabDrag,
+		readActiveTabDrag,
+		writeTabDrag
+	} from '$lib/client/workbench/tab-drag';
+	import { chatKeyOf, isChatTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import type { Conversation } from '$lib/models/agent';
 
 	let {
 		shell,
+		sessions,
 		hidden = false,
 		oncreateNote,
 		ontoggleHidden
 	}: {
 		shell: ShellContext;
+		sessions: readonly Conversation[];
 		/** Collapsed state — when true, the strip shrinks to 24px. */
 		hidden?: boolean;
 		/** One-click note creation (matches the sidebar's `+` affordance). */
@@ -37,11 +41,20 @@
 		ontoggleHidden?: () => void;
 	} = $props();
 
-	const projectOf = (noteId: NoteId): ProjectId | undefined =>
-		shell.noteTree.find((entry) => entry.id === noteId)?.projectId;
+	const projectOf = (tabId: TabId): ProjectId | undefined =>
+		shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 
-	const titleOf = (noteId: NoteId): string =>
-		shell.noteTree.find((entry) => entry.id === noteId)?.title ?? 'Untitled';
+	const titleOf = (tabId: TabId): string => {
+		const sessionKey = chatKeyOf(tabId);
+		if (sessionKey !== undefined) {
+			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
+			return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
+		}
+		return shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.title ?? 'Untitled';
+	};
+
+	/** Groups are keyed by string, not `ProjectId`, so chats can have one too. */
+	const CHATS_GROUP = 'chats';
 
 	// Plain Maps: reactivity comes from `shell` and `workbench.openTabs`, and a
 	// SvelteMap here would be read and written inside its own derivation.
@@ -50,9 +63,14 @@
 		const projectName = new Map<ProjectId, string>();
 		for (const project of shell.projects) projectName.set(project.id, project.name);
 		const order: ProjectId[] = [];
-		const buckets = new Map<ProjectId, NoteId[]>();
+		const buckets = new Map<ProjectId, TabId[]>();
 		/* eslint-enable svelte/prefer-svelte-reactivity */
+		const chatTabs: TabId[] = [];
 		for (const id of workbench.openTabs) {
+			if (isChatTab(id)) {
+				chatTabs.push(id);
+				continue;
+			}
 			const projectId = projectOf(id);
 			if (!projectId) continue;
 			if (!buckets.has(projectId)) {
@@ -61,23 +79,29 @@
 			}
 			buckets.get(projectId)!.push(id);
 		}
-		return order.map((projectId) => ({
-			projectId,
+		const projectGroups = order.map((projectId) => ({
+			projectId: projectId as string,
 			projectName: projectName.get(projectId) ?? 'Project',
 			tabs: buckets.get(projectId) ?? []
 		}));
+		// Chats lead the strip: they belong to no project, and the old
+		// group-by-project loop skipped anything without one — which is why a chat
+		// tab was invisible before it had a bucket of its own.
+		return chatTabs.length > 0
+			? [{ projectId: CHATS_GROUP, projectName: 'Chats', tabs: chatTabs }, ...projectGroups]
+			: projectGroups;
 	});
 
 	// Project groups the user has folded away.  Pinned tabs stay visible even
 	// inside a folded group.
-	let folded = new SvelteSet<ProjectId>();
+	let folded = new SvelteSet<string>();
 
-	function toggleFold(projectId: ProjectId): void {
+	function toggleFold(projectId: string): void {
 		if (folded.has(projectId)) folded.delete(projectId);
 		else folded.add(projectId);
 	}
 
-	function showTab(projectId: ProjectId, noteId: NoteId): boolean {
+	function showTab(projectId: string, noteId: TabId): boolean {
 		if (!folded.has(projectId)) return true;
 		return workbench.isPinned(noteId);
 	}
@@ -87,11 +111,13 @@
 	// The focused tab persists when the user navigates to a non-note route
 	// (Today, Todos, …) so the working set survives; the "you are here"
 	// highlight must not — only colour a tab while actually on its route.
-	const onNoteRoute = $derived(page.url.pathname.startsWith('/notes/'));
+	const onNoteRoute = $derived(
+		page.url.pathname.startsWith('/notes/') || page.url.pathname.startsWith('/chats/')
+	);
 	let noteDragOver = $state(false);
 
 	function onDragOver(event: DragEvent): void {
-		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		if (!hasInternalTabDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		noteDragOver = true;
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
@@ -105,12 +131,12 @@
 	}
 
 	function onDrop(event: DragEvent): void {
-		if (!hasInternalNoteDrag(event.dataTransfer)) return;
+		if (!hasInternalTabDrag(event.dataTransfer)) return;
 		event.preventDefault();
 		noteDragOver = false;
-		const noteId = readActiveNoteDrag(event.dataTransfer, shell.noteTree);
-		if (!noteId) return;
-		void workbench.openTabInBackground(noteId);
+		const tabId = readActiveTabDrag(event.dataTransfer, shell.noteTree, workbench.openTabs);
+		if (!tabId) return;
+		void workbench.openTabInBackground(tabId);
 	}
 
 	function horizontalPanelCollapse(node: HTMLElement) {
@@ -124,8 +150,8 @@
 	}
 
 	function hasVisiblePredecessor(
-		projectId: ProjectId,
-		tabs: readonly NoteId[],
+		projectId: string,
+		tabs: readonly TabId[],
 		index: number
 	): boolean {
 		return tabs.slice(0, index).some((noteId) => showTab(projectId, noteId));
@@ -226,10 +252,11 @@
 						</div>
 						{#each group.tabs as noteId, tabIndex (noteId)}
 							{@const tabVisible = showTab(group.projectId, noteId)}
-							{@const active = onNoteRoute && workbench.focusedNoteId === noteId}
+							{@const active = onNoteRoute && workbench.focusedTabId === noteId}
 							<div
 								class="flex shrink-0 overflow-hidden"
 								data-project-tab={noteId}
+								data-chat-tab={isChatTab(noteId) ? noteId : undefined}
 								data-collapsed={!tabVisible}
 								aria-hidden={!tabVisible}
 								inert={!tabVisible}
@@ -260,7 +287,7 @@
 														? 'bg-background font-medium text-foreground'
 														: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
 													ondragstart={(event) => {
-														if (event.dataTransfer) writeNoteDrag(event.dataTransfer, noteId);
+														if (event.dataTransfer) writeTabDrag(event.dataTransfer, noteId);
 													}}
 													onclick={() => void workbench.focusTab(noteId)}
 												>
