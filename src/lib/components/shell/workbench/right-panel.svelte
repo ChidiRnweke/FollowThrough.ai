@@ -54,6 +54,8 @@
 		chat: 'Let FollowThrough act'
 	} as const;
 
+	// The `w-96` below is mirrored by `RIGHT_PANEL_WIDTH_PX` in `$lib/models/workspace`,
+	// which the shell reserves out of the sidebar's width budget. Change both together.
 	const open = $derived(rightPanel.mode !== 'closed');
 	// Only one surface is ever mounted. The sheet's overlay is portaled and has no
 	// responsive class of its own, so leaving it mounted behind the docked aside

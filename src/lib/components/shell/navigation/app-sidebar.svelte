@@ -35,12 +35,15 @@
 		shell,
 		activePath,
 		activeNoteId,
-		loading = false
+		loading = false,
+		squeezed = false
 	}: {
 		shell: ShellContext;
 		activePath: string;
 		activeNoteId?: NoteId;
 		loading?: boolean;
+		/** The shell is rendering the sidebar narrower than the width the user chose. */
+		squeezed?: boolean;
 	} = $props();
 
 	const secondaryItems = $derived([
@@ -61,8 +64,14 @@
 	// out first.  Rather than adding another control, the trigger already here
 	// takes the accent and says what collapsing buys.  The `max-xl:` gate below
 	// keeps it muted on displays wide enough for a comfortable split.
+	//
+	// `squeezed` covers the case the cue was written for but could not see: the
+	// shell has already clawed width back off the sidebar to protect the content,
+	// so collapsing is the only room left to give.
 	const sidebar = useSidebar();
-	const spaceTight = $derived(workbench.splitActive && sidebar.state === 'expanded');
+	const spaceTight = $derived(
+		(workbench.splitActive || squeezed) && sidebar.state === 'expanded'
+	);
 
 	// The toggle lives in a context the command registry cannot read, so hand it over
 	// while this shell is mounted.

@@ -2,10 +2,11 @@
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { SIDEBAR_WIDTH_DEFAULT_PX } from '$lib/models/workspace';
 	import {
 		SIDEBAR_COOKIE_MAX_AGE,
 		SIDEBAR_COOKIE_NAME,
-		SIDEBAR_WIDTH,
+		SIDEBAR_WIDTH_COOKIE_NAME,
 		SIDEBAR_WIDTH_ICON
 	} from './constants.js';
 	import { setSidebar } from './context.svelte.js';
@@ -14,6 +15,8 @@
 		ref = $bindable(),
 		open = $bindable(true),
 		onOpenChange = () => {},
+		width = $bindable(SIDEBAR_WIDTH_DEFAULT_PX),
+		onWidthChange = () => {},
 		class: className,
 		style,
 		children,
@@ -21,6 +24,9 @@
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		open?: boolean;
 		onOpenChange?: (open: boolean) => void;
+		/** Rendered width in pixels. The owner may hand back less than `onWidthChange` asked for. */
+		width?: number;
+		onWidthChange?: (width: number) => void;
 	} = $props();
 
 	const sidebar = setSidebar({
@@ -31,6 +37,16 @@
 
 			// This sets the cookie to keep the sidebar state.
 			document.cookie = `${SIDEBAR_COOKIE_NAME}=${open}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+		},
+		width: () => width,
+		// The owner clamps against the shell's space budget, so `width` may come back
+		// smaller than asked. Persistence is deliberately split off `setWidth`: a drag
+		// calls it on every pointer move, and only the settled width earns a cookie.
+		setWidth: (value: number) => onWidthChange(value),
+		commitWidth: (value: number) => {
+			// Store what was *asked for*, not what fit, so a preference outlives
+			// whatever was crowding it at the time it was set.
+			document.cookie = `${SIDEBAR_WIDTH_COOKIE_NAME}=${Math.round(value)}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
 		}
 	});
 </script>
@@ -40,7 +56,8 @@
 <Tooltip.Provider delayDuration={0}>
 	<div
 		data-slot="sidebar-wrapper"
-		style="--sidebar-width: {SIDEBAR_WIDTH}; --sidebar-width-icon: {SIDEBAR_WIDTH_ICON}; {style}"
+		data-resizing={sidebar.resizing ? '' : undefined}
+		style="--sidebar-width: {width}px; --sidebar-width-icon: {SIDEBAR_WIDTH_ICON}; {style}"
 		class={cn(
 			'group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full',
 			className

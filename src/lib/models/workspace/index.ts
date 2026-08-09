@@ -226,3 +226,4 @@ export interface GetTodayViewInput {
 }
 
 export * from './app-context';
+export * from './sidebar-width';

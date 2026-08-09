@@ -18,6 +18,19 @@ export type SidebarStateProps = {
 	 * the sub-components and any `bind:` references.
 	 */
 	setOpen: (open: boolean) => void;
+
+	/** A getter returning the width in pixels the sidebar should currently render at. */
+	width: Getter<number>;
+
+	/**
+	 * Records a new *preferred* width in pixels. The caller decides how much of it
+	 * survives the shell's space budget, so this may render narrower than asked.
+	 * Called on every pointer move of a drag, so it must stay cheap.
+	 */
+	setWidth: (width: number) => void;
+
+	/** Persists a settled width. Called once when a drag ends, not while it runs. */
+	commitWidth: (width: number) => void;
 };
 
 class SidebarState {
@@ -25,11 +38,18 @@ class SidebarState {
 	open = $derived.by(() => this.props.open());
 	openMobile = $state(false);
 	setOpen: SidebarStateProps['setOpen'];
+	setWidth: SidebarStateProps['setWidth'];
+	commitWidth: SidebarStateProps['commitWidth'];
 	#isMobile: IsMobile;
 	state = $derived.by(() => (this.open ? 'expanded' : 'collapsed'));
+	width = $derived.by(() => this.props.width());
+	/** True for the duration of a rail drag, so the shell can suppress width transitions. */
+	resizing = $state(false);
 
 	constructor(props: SidebarStateProps) {
 		this.setOpen = props.setOpen;
+		this.setWidth = props.setWidth;
+		this.commitWidth = props.commitWidth;
 		this.#isMobile = new IsMobile();
 		this.props = props;
 	}
@@ -50,6 +70,14 @@ class SidebarState {
 
 	setOpenMobile = (value: boolean) => {
 		this.openMobile = value;
+	};
+
+	startResize = () => {
+		this.resizing = true;
+	};
+
+	endResize = () => {
+		this.resizing = false;
 	};
 
 	toggle = () => {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import type { NoteId } from '$lib/models/notes';
@@ -11,6 +11,9 @@
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { effectiveSidebarWidth } from '$lib/models/workspace';
+	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
+	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
@@ -110,6 +113,23 @@
 			ProjectId | undefined;
 	}
 
+	// The sidebar's width is the user's preference minus whatever else needs the row.
+	// This layout is the only place that can see all three columns at once, so it owns
+	// the budget: the preference persists untouched via cookie and is handed back in
+	// full the moment the chat panel closes or the split ends.
+	let innerWidth = $state(0);
+	// Seeded from the cookie once; after that the client owns the preference, the
+	// same one-way handoff `open={data.sidebarOpen}` already makes.
+	let preferredSidebarWidth = $state(untrack(() => data.sidebarWidth));
+	const dockedPanel = new IsDockedPanel();
+	const sidebarWidth = $derived(
+		effectiveSidebarWidth(preferredSidebarWidth, {
+			viewportWidth: innerWidth,
+			panelDocked: rightPanel.mode !== 'closed' && dockedPanel.current,
+			splitActive: workbench.splitActive
+		})
+	);
+
 	const keyboard = new CommandKeyboardHandler();
 	function onkeydown(event: KeyboardEvent): void {
 		keyboard.handle(event);
@@ -121,10 +141,12 @@
 	}
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} bind:innerWidth />
 
 <Sidebar.Provider
 	open={data.sidebarOpen}
+	width={sidebarWidth}
+	onWidthChange={(width) => (preferredSidebarWidth = width)}
 	class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
 >
 	<AppSidebar
@@ -132,6 +154,7 @@
 		activePath={page.url.pathname}
 		activeNoteId={highlightedNoteId}
 		loading={isNavigating}
+		squeezed={sidebarWidth < preferredSidebarWidth}
 	/>
 	<Sidebar.Inset
 		bind:ref={insetRef}

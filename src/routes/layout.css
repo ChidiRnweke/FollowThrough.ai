@@ -660,6 +660,20 @@
 		border-color: var(--input);
 	}
 
+	/* While the rail is being dragged the sidebar must track the pointer, not lag
+	   200ms behind it, so its width transitions are suppressed for the duration.
+	   The cursor and selection lock are on the wrapper because the pointer is
+	   captured and routinely travels well outside the 16px rail. */
+	[data-slot='sidebar-wrapper'][data-resizing] {
+		cursor: col-resize;
+		user-select: none;
+	}
+
+	[data-slot='sidebar-wrapper'][data-resizing] [data-slot='sidebar-gap'],
+	[data-slot='sidebar-wrapper'][data-resizing] [data-slot='sidebar-container'] {
+		transition: none;
+	}
+
 	.workspace-panes {
 		--workspace-secondary-ratio: 0.5;
 		container-type: inline-size;

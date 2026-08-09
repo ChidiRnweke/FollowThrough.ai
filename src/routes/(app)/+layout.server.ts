@@ -1,4 +1,6 @@
 import { AppFactory } from '$lib/server/app-factory';
+import { parseSidebarWidth } from '$lib/models/workspace';
+import { SIDEBAR_WIDTH_COOKIE_NAME } from '$lib/components/ui/sidebar/constants';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
@@ -41,6 +43,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 		agentPreferences,
 		agentModels,
 		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
-		sidebarOpen: cookies.get('sidebar_state') !== 'false'
+		sidebarOpen: cookies.get('sidebar_state') !== 'false',
+		sidebarWidth: parseSidebarWidth(cookies.get(SIDEBAR_WIDTH_COOKIE_NAME))
 	};
 };
