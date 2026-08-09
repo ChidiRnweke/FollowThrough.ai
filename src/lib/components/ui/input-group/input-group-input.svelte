@@ -14,7 +14,9 @@
 <!--
 	The focus state belongs to the group, which owns the pill's radius and border: the control
 	drops its own border and fill, which would otherwise paint a square patch inside the
-	rounded field.
+	rounded field. That includes the focus-visible wash — the group already paints
+	`bg-brand/12` across the whole pill, so a control that kept its own would double the
+	wash over the text area and leave the addon strip a lighter teal.
 
 	`data-slot` comes last on purpose. The group paints itself through
 	`has-[[data-slot=input-group-control]:focus-visible]`, so every one of those rules is dead if
@@ -23,7 +25,7 @@
 <Input
 	bind:ref
 	class={cn(
-		'rounded-none border-0 bg-transparent shadow-none dark:bg-transparent flex-1',
+		'rounded-none border-0 bg-transparent shadow-none dark:bg-transparent focus-visible:bg-transparent dark:focus-visible:bg-transparent flex-1',
 		className
 	)}
 	bind:value

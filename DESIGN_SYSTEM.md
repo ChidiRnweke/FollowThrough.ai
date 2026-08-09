@@ -14,6 +14,10 @@
   divided list (hairline dividers plus the `row-interactive` hover wash), never a bordered card
   wrapping bordered rows. Reserve a card for a surface holding heterogeneous content or its own
   actions. Nesting same-weight rectangles is the failure mode this rule exists to prevent.
+- **One fill per surface:** Light-mode fields and field-like triggers (`Input`, `Textarea`,
+  `InputGroup`, `Select` trigger, `Button variant="outline"`) fill with `bg-background`, so a
+  control never introduces a second background on the surface it sits on; the `bg-input/30`
+  fill is dark-mode-only. The border, not a fill contrast, marks the control in light mode.
 - **Product mark:** FollowThrough uses a flat teal tile with a continuous white F-to-check path.
   It replaces framework placeholder branding without adding gradients, shadows, or a broader
   ornament system.
