@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtExternal as Expand } from '$lib/components/icons';
 	import NoteVersionDiff from '../../notes/note-version-diff.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -86,8 +87,18 @@
 	const preview = $derived(approvalPreview(tool.name, tool.arguments, baseline));
 	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
 	const fields = $derived(approvalFields(tool.arguments, shell));
-	const subject = $derived(fields.headline ?? todoTitle);
+	const subject = $derived(
+		preview.kind === 'note' ? preview.change.title : (fields.headline ?? todoTitle)
+	);
 	const consequence = $derived(approvalConsequence(tool.name));
+
+	/**
+	 * With a subject to lead on, the tool's own name becomes the subtitle; without one there
+	 * is nothing else to head the card with, so it takes the title back rather than leaving
+	 * the card unnamed.
+	 */
+	const heading = $derived(subject ?? friendlyToolLabel(tool.name));
+	const action = $derived(subject ? friendlyToolLabel(tool.name) : undefined);
 
 	/** Long string payloads are prose the model wrote, so they read as prose. */
 	const proseFields = $derived(
@@ -101,7 +112,6 @@
 
 {#snippet changeBody(compact: boolean)}
 	{#if preview.kind === 'note'}
-		<p class="truncate text-sm font-medium">{preview.change.title}</p>
 		{#if preview.change.titleChange}
 			<p class="text-sm">
 				<span class="text-muted-foreground">Title:</span>
@@ -117,6 +127,7 @@
 				candidate={preview.change.body.candidate}
 				baseLabel="Current note"
 				candidateLabel="Proposed change"
+				layout={compact ? 'candidate' : 'split'}
 				{compact}
 			/>
 		{/if}
@@ -127,9 +138,6 @@
 			<p class="text-sm text-muted-foreground">No visible note changes.</p>
 		{/if}
 	{:else}
-		{#if subject}
-			<p class="text-sm">{subject}</p>
-		{/if}
 		{#each fields.details as detail (detail)}
 			<p class="text-sm text-muted-foreground">{detail}</p>
 		{/each}
@@ -171,26 +179,40 @@
 	</div>
 {/snippet}
 
-<Card.Root class="gap-2 py-3">
+<!--
+	The card leads with what is changing, not with the word "Approve": the buttons already
+	say that, and the most prominent line in a review is worth more than a restatement of
+	the question. The action is the subtitle, because a reader who recognises the note
+	decides differently than one who only knows a verb was called.
+-->
+<Card.Root class="gap-3 py-4">
 	<Card.Header class="px-4">
-		<Card.Title class="text-sm font-medium">Approve · {friendlyToolLabel(tool.name)}</Card.Title>
-		{#if consequence}
-			<Card.Description>{consequence}</Card.Description>
+		<Card.Title class="truncate text-sm font-medium">{heading}</Card.Title>
+		{#if action}
+			<Card.Description>{action}</Card.Description>
 		{/if}
 		<Card.Action>
-			<Button
-				variant="ghost"
-				size="icon-xs"
-				aria-label="Review in full"
-				onclick={() => (expanded = true)}
-			>
-				<Expand class="size-3.5" />
-			</Button>
+			<Tip text="Review in full">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-xs"
+						aria-label="Review in full"
+						onclick={() => (expanded = true)}
+					>
+						<Expand class="size-3.5" />
+					</Button>
+				{/snippet}
+			</Tip>
 		</Card.Action>
 	</Card.Header>
 	<!-- 8px between the things the preview lists; the 6px it used to use said the
 	     same about a title and its value as about a diff and a warning. -->
 	<Card.Content class="space-y-2 px-4">
+		{#if consequence}
+			<p class="text-sm text-muted-foreground">{consequence}</p>
+		{/if}
 		{#if loadingNote}
 			<p class="text-sm text-muted-foreground">Loading the current note…</p>
 		{:else if baselineError}
@@ -216,10 +238,14 @@
 <Dialog.Root bind:open={expanded}>
 	<Dialog.Content class="dialog-fill flex flex-col sm:max-w-7xl">
 		<Dialog.Header>
-			<Dialog.Title>{friendlyToolLabel(tool.name)}</Dialog.Title>
-			<Dialog.Description>Review the change before approving it.</Dialog.Description>
+			<Dialog.Title>{heading}</Dialog.Title>
+			<Dialog.Description>
+				{action ? `${action} · ` : ''}Review the change before approving it.
+			</Dialog.Description>
 		</Dialog.Header>
-		<div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+		<!-- The dialog exists to give the comparison the width the panel cannot: the diff
+		     takes the height rather than sitting capped in the middle of it. -->
+		<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
 			<ErrorBoundary label="this change preview" {fallback}>
 				{@render changeBody(false)}
 			</ErrorBoundary>
