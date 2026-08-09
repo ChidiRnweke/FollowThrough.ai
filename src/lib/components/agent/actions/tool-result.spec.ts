@@ -68,9 +68,7 @@ describe('A recoverable failure is the headline', () => {
 
 describe('Records read as labelled fields', () => {
 	it('labels a returned field in the reader terms', () => {
-		expect(summariseToolResult({ title: 'Runtime notes' }).lines).toEqual([
-			'Title: Runtime notes'
-		]);
+		expect(summariseToolResult({ title: 'Runtime notes' }).lines).toEqual(['Title: Runtime notes']);
 	});
 
 	it('keeps identifiers out of the fields a person reads', () => {

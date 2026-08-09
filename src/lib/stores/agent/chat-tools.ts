@@ -49,7 +49,9 @@ const envelopePayload = (args: Readonly<Record<string, unknown>>): Record<string
  * An envelope that names no tool is returned untouched: a malformed call must still show as
  * what it was rather than disappear behind a name nobody sent.
  */
-export const unwrapToolCall = <T extends { name: string; arguments: Readonly<Record<string, unknown>> }>(
+export const unwrapToolCall = <
+	T extends { name: string; arguments: Readonly<Record<string, unknown>> }
+>(
 	call: T
 ): T => {
 	if (call.name !== 'use_tool') return call;

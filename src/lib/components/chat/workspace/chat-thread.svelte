@@ -6,31 +6,20 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import {
-		FtChevronRight as ChevronRight,
-		FtLoader as LoaderCircle,
-		FtCopy as Copy,
-		FtEdit as Pencil,
-		FtRefresh as RotateCcw
-	} from '$lib/components/icons';
+	import { FtCopy as Copy, FtEdit as Pencil, FtRefresh as RotateCcw } from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
 	import { entryText } from '$lib/stores/agent/chat.svelte';
 	import { SuggestionCard } from '$lib/components/suggestions';
-	import {
-		AgentContextBar,
-		isWriteTool,
-		toolDetailLines,
-		toolStatusLabel
-	} from '$lib/components/agent';
+	import { AgentContextBar } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import ChatReasoning from '../chat-reasoning.svelte';
 	import ChatActivity from '../chat-activity.svelte';
 	import ChatStarters from '../chat-starters.svelte';
 	import ToolApprovalGroup from '../actions/tool-approval-group.svelte';
+	import ToolRow from '../actions/tool-row.svelte';
 	import { chatPartGroupKey, groupChatParts } from '../chat-parts';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ImageLightbox from '../image-lightbox.svelte';
@@ -205,38 +194,7 @@
 												streaming={entry.status === 'streaming'}
 											/>{/if}
 									{:else}
-										{@const tool = part.tool}
-										<Collapsible.Root>
-											<Collapsible.Trigger>
-												{#snippet child({ props })}
-													<Button
-														{...props}
-														variant="ghost"
-														size="sm"
-														class="h-7 gap-1 px-1.5 text-xs [&[data-state=open]>svg]:rotate-90 {isWriteTool(
-															tool.name
-														)
-															? 'text-foreground'
-															: 'text-muted-foreground'}"
-													>
-														<ChevronRight
-															class="size-3.5 transition-transform duration-(--duration-micro)"
-														/>
-														{#if tool.status === 'running'}<LoaderCircle
-																class="size-3.5 animate-spin"
-															/>{/if}
-														{toolStatusLabel(tool, shell)}
-													</Button>
-												{/snippet}
-											</Collapsible.Trigger>
-											<Collapsible.Content>
-												<ul class="flex flex-col gap-0.5 pl-6 text-xs text-muted-foreground">
-													{#each toolDetailLines(tool) as line, lineIndex (lineIndex)}
-														<li class="break-words">{line}</li>
-													{/each}
-												</ul>
-											</Collapsible.Content>
-										</Collapsible.Root>
+										<ToolRow tool={part.tool} {shell} />
 									{/if}
 								{/if}
 							{/each}

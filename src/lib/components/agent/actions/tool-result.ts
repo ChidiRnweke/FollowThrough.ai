@@ -50,7 +50,10 @@ const itemLine = (item: unknown): string | undefined => {
 
 const fromArray = (items: readonly unknown[]): ToolResultSummary => {
 	if (items.length === 0) return { headline: 'Nothing found', lines: [], empty: false };
-	const lines = items.slice(0, ITEM_CAP).map(itemLine).filter((line): line is string => !!line);
+	const lines = items
+		.slice(0, ITEM_CAP)
+		.map(itemLine)
+		.filter((line): line is string => !!line);
 	const hidden = items.length - lines.length;
 	return {
 		headline: items.length === 1 ? '1 result' : `${items.length} results`,
