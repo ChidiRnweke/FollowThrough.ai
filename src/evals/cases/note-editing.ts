@@ -192,5 +192,85 @@ export const noteEditingCases: readonly EvalCase[] = [
 			expect(changed, 'the tidy-up must actually change the note').toBe(true);
 			expect(preserved, 'a tidy-up must not drop untargeted facts').toBe(true);
 		}
+	},
+	{
+		id: 'note-surgical-edit-long-note',
+		name: 'makes a surgical edit on a long note without clobbering unrelated sections',
+		splits: [ARCHETYPES.toolCalling, ARCHETYPES.effect],
+		input: {
+			prompt: 'In my Long note, change the phrase "legacy scheduler" to "event-driven scheduler". Change nothing else.'
+		},
+		expected: {
+			requiredTools: ['edit_note'],
+			forbiddenTools: ['save_note'],
+			effect: 'targeted change, unrelated section survives'
+		},
+		metadata: {
+			observedAt: '2026-08-09',
+			note: 'Production regression: the agent used whole-document save_note for single localized changes (one run saved before even reading the note). On a long multi-section note a save_note rewrite silently drops untargeted sections.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Infra',
+						notes: [
+							{
+								title: 'Long note',
+								body: [
+									'# Scheduler design',
+									'The platform runs a legacy scheduler that wakes every five minutes.',
+									'# Cost governance',
+									'Every cluster carries a monthly cost ceiling of 4000 credits.',
+									'# Untouchable section',
+									'The answer to everything remains 42 and this line must survive any edit.'
+								].join('\n\n')
+							}
+						]
+					}
+				]
+			});
+			const noteId = workspace.noteIds.get('Long note');
+			if (!noteId) throw new Error('Long note was not seeded');
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				noteId
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 400)
+			});
+
+			const tools = scoreToolCalling(result, {
+				required: this.expected.requiredTools as string[],
+				forbidden: this.expected.forbiddenTools as string[]
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.toolCalling,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'edit_note' : 'wrong_tool',
+				explanation: tools.explanation
+			});
+
+			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const changed = view.note.plainText.includes('event-driven scheduler');
+			const preserved = view.note.plainText.includes('The answer to everything remains 42');
+			noteEffect(view.note.plainText, 'event-driven scheduler');
+			px.logAnnotation({
+				name: ARCHETYPES.effect,
+				score: changed && preserved ? 1 : 0,
+				label: changed && preserved ? 'surgical' : 'clobbered',
+				explanation: changed && preserved
+					? 'targeted change landed and the untouchable section survived'
+					: `changed=${changed}, unrelated section survived=${preserved}`
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+			expect(changed, 'the targeted phrase must change').toBe(true);
+			expect(preserved, 'the unrelated section must survive a surgical edit').toBe(true);
+		}
 	}
 ];

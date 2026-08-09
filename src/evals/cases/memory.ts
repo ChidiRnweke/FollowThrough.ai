@@ -237,5 +237,99 @@ export const memoryCases: readonly EvalCase[] = [
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
 			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
+	},
+	{
+		id: 'memory-proactive-embedded-fact',
+		name: 'proposes a memory when a durable fact arrives embedded in a task',
+		splits: [ARCHETYPES.memoryProactiveProposal],
+		input: {
+			prompt:
+				'For me, the knowledge layer is the gold standard for depth and breadth — I always want that standard applied to my reference docs. Update sections 2 through 13 of the reference architecture note to match.'
+		},
+		expected: { requiredTools: ['propose_memory_change'] },
+		metadata: {
+			observedAt: '2026-08-09',
+			note: 'Production regression: 51/51 sessions never called propose_memory_change even though users repeatedly stated durable work preferences mid-task ("the knowledge layer is the gold standard"). The existing capture case uses the explicit "For future reference:" cue; this variant hides the fact as the stated reason for a bulk task, which is how it actually arrived.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				response: result.finalResponse,
+				toolCalls: result.calledToolNames,
+				proposal: findCall(result, 'propose_memory_change')?.arguments
+			});
+
+			const verdict = scoreToolCalling(result, {
+				required: this.expected.requiredTools as string[]
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.memoryProactiveProposal,
+				score: verdict.passed ? 1 : 0,
+				label: verdict.passed ? 'proposed' : 'missed',
+				explanation: verdict.explanation
+			});
+
+			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'memory-task-read-before-dependent-work',
+		name: 'reads memory before work whose correct output depends on a stored preference',
+		splits: [ARCHETYPES.memoryTaskRead],
+		input: {
+			prompt:
+				'Rewrite the first paragraph of my Background note using my preferred spelling conventions.'
+		},
+		expected: { requiredTools: ['list_user_memory', 'list_project_memory'] },
+		metadata: {
+			observedAt: '2026-08-09',
+			note: 'Production regression: list_user_memory was called 0 times in 51 sessions. A stored spelling preference exists but is never read, so the rewrite cannot honour it.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, {
+				memories: [
+					'Spelling preference: always use British English (organisation, behaviour, colour).'
+				],
+				projects: [
+					{
+						name: 'Profile',
+						notes: [
+							{
+								title: 'Background',
+								body: 'This organisation specialises in behaviour-driven platform engineering and colour-coded dashboards.'
+							}
+						]
+					}
+				]
+			});
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				response: result.finalResponse,
+				toolCalls: result.calledToolNames
+			});
+
+			const verdict = scoreToolCalling(result, {
+				required: this.expected.requiredTools as string[]
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.memoryTaskRead,
+				score: verdict.passed ? 1 : 0,
+				label: verdict.passed ? 'read_memory' : 'guessed',
+				explanation: verdict.explanation
+			});
+
+			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
 	}
 ];

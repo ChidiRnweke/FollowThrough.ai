@@ -468,5 +468,99 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
 			expect(overlap.passed, overlap.explanation).toBe(true);
 		}
+	},
+	{
+		id: 'parallel-note-reads-same-tool',
+		name: 'reads several notes in parallel instead of one after the other',
+		splits: [ARCHETYPES.parallelExecution],
+		input: {
+			prompt:
+				'Compare what my three onboarding notes — "Access", "Runbooks" and "Observability" — each say about who requests data access, then tell me which is most detailed.'
+		},
+		expected: { minCalls: 3 },
+		metadata: {
+			observedAt: '2026-08-09',
+			note: 'Production regression: a bulk-document task issued 12+ get_note calls one after another. Three independent get_note reads must overlap in wall-clock time.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Work',
+						notes: [
+							{
+								title: 'Access',
+								body: 'Data access requests must be approved by the platform lead before provisioning.'
+							},
+							{
+								title: 'Runbooks',
+								body: 'Every service runbook documents the on-call rotation and the restart procedure.'
+							},
+							{
+								title: 'Observability',
+								body: 'Dashboards expose request latency and error rates per service and per team.'
+							}
+						]
+					}
+				]
+			});
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			logOutput(result);
+
+			const overlap = parallelSameTool(result, 'get_note', 3);
+			px.logAnnotation({
+				name: ARCHETYPES.parallelExecution,
+				score: overlap.passed ? 1 : 0,
+				label: overlap.passed ? 'parallel' : 'serial',
+				explanation: overlap.explanation
+			});
+
+			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
+			expect(overlap.passed, overlap.explanation).toBe(true);
+		}
 	}
 ];
+
+/**
+ * True when at least `minCalls` executions of the same tool name overlap in
+ * wall-clock time. Keyed per call id, because repeated same-name calls collapse
+ * to one entry in the name-keyed `executionIntervals` map.
+ */
+function parallelSameTool(
+	result: AgentRunResult,
+	toolName: string,
+	minCalls: number
+): { passed: boolean; explanation: string } {
+	const started = new Map<string, Date>();
+	const intervals: { name: string; start: Date; end: Date }[] = [];
+	for (const record of result.events) {
+		const { event, createdAt } = record;
+		if (event.type === 'tool_started') started.set(event.callId, createdAt);
+		if (event.type === 'tool_completed') {
+			const start = started.get(event.callId);
+			if (start) intervals.push({ name: event.name, start, end: createdAt });
+		}
+	}
+	const ofTool = intervals.filter((interval) => interval.name === toolName);
+	if (ofTool.length < minCalls)
+		return {
+			passed: false,
+			explanation: `only ${ofTool.length} ${toolName} call(s) completed; need ${minCalls}; called ${result.calledToolNames.join(', ')}`
+		};
+	for (let i = 0; i < ofTool.length; i++) {
+		for (let j = i + 1; j < ofTool.length; j++) {
+			const overlap =
+				Math.max(ofTool[i].start.getTime(), ofTool[j].start.getTime()) <
+				Math.min(ofTool[i].end.getTime(), ofTool[j].end.getTime());
+			if (overlap)
+				return {
+					passed: true,
+					explanation: `${ofTool.length} ${toolName} calls ran, two of them concurrently`
+				};
+		}
+	}
+	return { passed: false, explanation: `${ofTool.length} ${toolName} calls all ran serially` };
+}

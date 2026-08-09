@@ -74,5 +74,17 @@ export const ARCHETYPES = {
 	/** Does the agent use the system-rendered clock and creation-time filters correctly? */
 	timeAwareness: 'time_awareness',
 	/** Does the agent issue independent reads in parallel rather than serially? */
-	parallelExecution: 'parallel_execution'
+	parallelExecution: 'parallel_execution',
+	/** Does the agent propose a memory when a durable fact arrives embedded in a task, not prefixed as a memory? */
+	memoryProactiveProposal: 'memory_proactive_proposal',
+	/** Does the agent read memory when the task's correct output depends on a stored preference? */
+	memoryTaskRead: 'memory_task_read',
+	/** Does the agent load a relevant skill when its trigger hints match the task, without the user naming it? */
+	skillProactiveLoad: 'skill_proactive_load',
+	/** Does the agent actually land the requested effect instead of ending the turn in narration? */
+	taskCompletion: 'task_completion',
+	/** Does a terse "continue" resume the in-flight task rather than restart the reads? */
+	contextContinuity: 'context_continuity',
+	/** Does re-running an identical request avoid duplicating the side effects it already produced? */
+	reworkAvoidance: 'rework_avoidance'
 } as const;

@@ -404,5 +404,72 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			expect(tools.passed, tools.explanation).toBe(true);
 			expect(namesSkill, 'must answer from the catalog, naming a configured skill').toBe(true);
 		}
+	},
+	{
+		id: 'skill-proactive-load-on-trigger',
+		name: 'loads a skill whose trigger hints match the task even when the user never names it',
+		splits: [ARCHETYPES.skillProactiveLoad],
+		input: {
+			prompt: 'Draft a weekly status update for the Launch project into a new note.'
+		},
+		expected: { requiredTools: ['load_skill'], stamp: 'SKL-WEEKLY-ALPHA' },
+		metadata: {
+			observedAt: '2026-08-09',
+			note: 'Production regression: only 9 of 51 agent sessions loaded any skill. The "Weekly status update" skill is advertised in the system prompt with trigger hints that match this request, so the agent should load it without the user naming it.'
+		},
+		async run(lab) {
+			const { actor } = await seedWorkspace(lab, {
+				projects: [{ name: 'Launch' }],
+				skills: [
+					{
+						name: 'Weekly status update',
+						description: 'Formatting for weekly status notes',
+						triggerHints: ['weekly', 'status', 'update'],
+						body: [
+							'# Weekly Status Update Skill',
+							'',
+							'When active, structure the status note as:',
+							'1. Progress this week.',
+							'2. Blockers.',
+							'3. Next week plan.',
+							`4. End the note with the stamp: SKL-WEEKLY-ALPHA`
+						].join('\n'),
+						projectName: 'Launch'
+					}
+				]
+			});
+			const result = await runCase(lab, actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				response: result.finalResponse.slice(0, 400)
+			});
+
+			const tools = scoreToolCalling(result, {
+				required: this.expected.requiredTools as string[]
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.skillProactiveLoad,
+				score: tools.passed ? 1 : 0,
+				label: tools.passed ? 'loaded' : 'not_loaded',
+				explanation: tools.explanation
+			});
+
+			const follows = result.finalResponse.includes(this.expected.stamp as string);
+			px.logAnnotation({
+				name: ARCHETYPES.skillAdherence,
+				score: follows ? 1 : 0,
+				label: follows ? 'follows_skill' : 'ignored_skill',
+				explanation: follows
+					? 'response carries the skill-required stamp'
+					: 'response does not carry the skill-required stamp'
+			});
+
+			expect(result.status).toBe('completed');
+			expect(tools.passed, tools.explanation).toBe(true);
+		}
 	}
 ];

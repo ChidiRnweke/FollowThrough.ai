@@ -22,6 +22,7 @@ import { correctnessCases } from '../cases/correctness';
 import { multiTurnCorrectnessCases } from '../cases/multi-turn-correctness';
 import { inlineSuggestionCases } from '../cases/inline-suggestion';
 import { timeAwarenessCases, parallelExecutionCases } from '../cases/time-awareness';
+import { completionRegressionCases } from '../cases/completion';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
 let lab: Lab;
@@ -31,7 +32,14 @@ let lab: Lab;
 // citation), which is exactly the variance a canary should surface. Gate them a
 // notch below 1 so the trend is readable without a single-run flake killing CI.
 const acceptanceCriteria = Object.values(ARCHETYPES).map((archetype) =>
-	archetype === ARCHETYPES.timeAwareness || archetype === ARCHETYPES.parallelExecution
+	archetype === ARCHETYPES.timeAwareness ||
+	archetype === ARCHETYPES.parallelExecution ||
+	archetype === ARCHETYPES.memoryProactiveProposal ||
+	archetype === ARCHETYPES.memoryTaskRead ||
+	archetype === ARCHETYPES.skillProactiveLoad ||
+	archetype === ARCHETYPES.taskCompletion ||
+	archetype === ARCHETYPES.contextContinuity ||
+	archetype === ARCHETYPES.reworkAvoidance
 		? passRate(archetype, 0.8)
 		: passRate(archetype)
 );
@@ -65,7 +73,10 @@ const allCases = [
 	...inlineSuggestionCases,
 	// Time awareness and parallelism: new-feature behaviour, cheap single turns.
 	...timeAwarenessCases,
-	...parallelExecutionCases
+	...parallelExecutionCases,
+	// Production completion regressions: red canaries that reproduce observed
+	// failures (narration-only turns, "continue" restarts, duplicated writes).
+	...completionRegressionCases
 ];
 
 /**
