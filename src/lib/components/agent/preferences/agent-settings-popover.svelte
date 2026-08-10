@@ -11,6 +11,7 @@
 	// Model choices are per conversation, so the popover edits the session it was
 	// opened from rather than a global the whole app shares.
 	let { agentModels, chat }: { agentModels: readonly AgentModel[]; chat: ChatStore } = $props();
+	let open = $state(false);
 	const effectiveChatModel = $derived(
 		agentModels.find((model) => model.id === chat.modelOverride) ??
 			agentModels.find((model) => model.recommended)
@@ -24,7 +25,7 @@
 	Execution mode deliberately stays in the composer instead: it decides whether
 	the agent may write without asking, and that is not a preference to hide.
 -->
-<Popover.Root>
+<Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props: triggerProps })}
 			<Tip text="Agent settings">
@@ -35,7 +36,12 @@
 						size="icon-sm"
 						aria-label="Agent settings"
 					>
-						<Settings data-icon />
+						<Settings
+							data-icon
+							class="transition-transform duration-(--duration-micro) ease-(--ease-standard) {open
+								? 'rotate-90'
+								: 'rotate-0'}"
+						/>
 					</Button>
 				{/snippet}
 			</Tip>

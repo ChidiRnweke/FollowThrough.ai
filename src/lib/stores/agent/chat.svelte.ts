@@ -289,6 +289,8 @@ const appendReasoning = (entry: ChatEntry, text: string): void => {
 
 export class ChatStore {
 	entries = $state<ChatEntry[]>([]);
+	/** True while a conversation's transcript is being fetched, so the thread can show a skeleton. */
+	loading = $state(false);
 	conversationId = $state<ConversationId | undefined>(undefined);
 	modelOverride = $state<string | null>(null);
 	visionModelOverride = $state<string | null>(null);
@@ -350,6 +352,7 @@ export class ChatStore {
 		if (!browser || !this.conversationId || this.hydratedConversationId === this.conversationId)
 			return;
 		const conversationId = this.conversationId;
+		this.loading = true;
 		try {
 			const data = await this.transport.getSession(conversationId);
 			// The latest run is the only one that can still be waiting on the user: a
@@ -388,6 +391,8 @@ export class ChatStore {
 			this.hydratedConversationId = conversationId;
 		} catch {
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
+		} finally {
+			this.loading = false;
 		}
 	}
 
@@ -615,6 +620,7 @@ export class ChatStore {
 	clear(): void {
 		this.detach();
 		this.entries = [];
+		this.loading = false;
 		this.conversationId = undefined;
 		this.modelOverride = null;
 		this.visionModelOverride = null;

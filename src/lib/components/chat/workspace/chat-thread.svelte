@@ -27,6 +27,7 @@
 	import TurnActivity from '../actions/turn-activity.svelte';
 	import { chatPartGroupKey, groupChatParts } from '../chat-parts';
 	import ChatHistoryList from './chat-history-list.svelte';
+	import ChatThreadSkeleton from './chat-thread-skeleton.svelte';
 	import ImageLightbox from '../image-lightbox.svelte';
 	import { anchorSpacerHeight } from './thread-anchor';
 
@@ -38,6 +39,7 @@
 		activeProjectId,
 		showHistory,
 		entries,
+		loading,
 		isStreaming,
 		deciding,
 		editingId,
@@ -69,6 +71,7 @@
 		activeProjectId?: ProjectId;
 		showHistory: boolean;
 		entries: readonly ChatEntry[];
+		loading: boolean;
 		isStreaming: boolean;
 		deciding: boolean;
 		editingId?: string;
@@ -178,21 +181,33 @@
 		     underneath it loses its hairline to the track. -->
 		<div class="flex min-h-full flex-col gap-6 pr-3">
 			{#if entries.length === 0}
-				<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
-				<ChatStarters
-					hasNote={activeNoteId !== undefined}
-					hasProject={activeProjectId !== undefined}
-					onpick={onstarter}
-				/>
-				{#if showHistory && sessions.length > 0}
-					<div class="pt-8">
-						<ChatHistoryList
-							{sessions}
-							{shell}
-							limit={3}
-							density="compact"
-							onselect={onswitchconversation}
+				{#if loading}
+					<ChatThreadSkeleton />
+				{:else}
+					<!-- The empty state is the "new chat" surface, so it arrives the way
+					     search results do: a 1px rise and fade at the disclosure budget. It
+					     only plays on a fresh session — a loaded conversation goes through
+					     the skeleton above instead, so it never flashes under a thread. -->
+					<div
+						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) flex flex-col gap-6"
+					>
+						<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
+						<ChatStarters
+							hasNote={activeNoteId !== undefined}
+							hasProject={activeProjectId !== undefined}
+							onpick={onstarter}
 						/>
+						{#if showHistory && sessions.length > 0}
+							<div class="pt-8">
+								<ChatHistoryList
+									{sessions}
+									{shell}
+									limit={3}
+									density="compact"
+									onselect={onswitchconversation}
+								/>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			{/if}

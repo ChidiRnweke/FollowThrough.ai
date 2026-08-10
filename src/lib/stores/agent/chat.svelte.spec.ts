@@ -181,6 +181,24 @@ class HydratingTransport extends FakeAgentRunTransport {
 	}
 }
 
+/**
+ * Holds the transcript back until the test says otherwise, so the loading flag
+ * can be observed mid-flight rather than only after the fetch settles.
+ */
+class DeferredHydrationTransport extends FakeAgentRunTransport {
+	constructor() {
+		super([]);
+	}
+	resolve!: (session: Awaited<ReturnType<AgentRunTransport['getSession']>>) => void;
+	reject!: (reason: unknown) => void;
+	override getSession(): Promise<Awaited<ReturnType<AgentRunTransport['getSession']>>> {
+		return new Promise((resolve, reject) => {
+			this.resolve = resolve;
+			this.reject = reject;
+		});
+	}
+}
+
 const streamedEvents: AgentEvent[] = [
 	{ type: 'text_delta', text: 'Let me check. ' },
 	{ type: 'tool_started', callId: 'call-1', name: 'find_references', arguments: { query: 'x' } },
@@ -423,6 +441,42 @@ describe('restoring a conversation', () => {
 		await store.hydrate();
 		return store;
 	};
+
+	describe('the transcript loading flag', () => {
+		const emptySession = {
+			conversation: { id: conversationId },
+			messages: []
+		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+
+		it('is raised while the transcript is still in flight', () => {
+			const transport = new DeferredHydrationTransport();
+			const store = new ChatStore('test-session', transport, new MemoryStorage());
+			store.conversationId = conversationId;
+			void store.hydrate();
+			transport.resolve(emptySession);
+			expect(store.loading).toBe(true);
+		});
+
+		it('drops once the transcript arrives', async () => {
+			const transport = new DeferredHydrationTransport();
+			const store = new ChatStore('test-session', transport, new MemoryStorage());
+			store.conversationId = conversationId;
+			const hydration = store.hydrate();
+			transport.resolve(emptySession);
+			await hydration;
+			expect(store.loading).toBe(false);
+		});
+
+		it('drops when hydration fails too', async () => {
+			const transport = new DeferredHydrationTransport();
+			const store = new ChatStore('test-session', transport, new MemoryStorage());
+			store.conversationId = conversationId;
+			const hydration = store.hydrate();
+			transport.reject(new Error('offline'));
+			await hydration;
+			expect(store.loading).toBe(false);
+		});
+	});
 
 	it('restores pasted images after the text of the turn', async () => {
 		const store = await hydrateWith({

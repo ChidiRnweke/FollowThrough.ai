@@ -529,6 +529,7 @@
 			{activeProjectId}
 			{showHistory}
 			entries={chat.entries}
+			loading={chat.loading}
 			isStreaming={chat.isStreaming}
 			deciding={chat.deciding}
 			{editingId}
