@@ -512,4 +512,62 @@ describe('a reopened turn reads as it happened', () => {
 		const store = await reopened();
 		expect(store.entries.filter((entry) => entry.role === 'assistant')).toHaveLength(1);
 	});
+
+	/**
+	 * A run that died holding an approval leaves the question journalled as still pending,
+	 * because nothing later ever settled that call. Replayed as-is it put a live
+	 * Approve/Reject card back on screen for a run that could not answer it — and answering
+	 * it failed client-side only, so the card came back on every reload afterwards.
+	 */
+	/** Restore is the whole question here, so the live stream is left closed. */
+	class QuietHydratingTransport extends HydratingTransport {
+		override openEvents() {
+			return { close() {} };
+		}
+	}
+
+	const withParkedCall = async (latestRun?: Readonly<Record<string, unknown>>) => {
+		const session = {
+			conversation: { id: conversationId },
+			messages: [
+				stored('user', { type: 'text', text: 'change my default model' }),
+				stored(
+					'tool',
+					{
+						callId: 'c9',
+						name: 'update_agent_preferences',
+						input: { defaultModel: 'openai/gpt-5.6' },
+						status: 'approval_required'
+					},
+					'1'
+				)
+			],
+			...(latestRun ? { latestRun } : {})
+		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+		const store = new ChatStore(
+			'test-session',
+			new QuietHydratingTransport(session),
+			new MemoryStorage()
+		);
+		store.conversationId = conversationId;
+		await store.hydrate();
+		const parts = store.entries.at(1)?.parts ?? [];
+		return parts.find((part) => part.kind === 'tool');
+	};
+
+	it('abandons a parked call whose run is no longer waiting', async () => {
+		const part = await withParkedCall({
+			run: { id: runId, status: 'failed', failure: 'The agent run failed.' },
+			pendingDecisions: []
+		});
+		expect(part?.kind === 'tool' && part.tool.status).toBe('failed');
+	});
+
+	it('keeps the card live while its own run is still waiting on the answer', async () => {
+		const part = await withParkedCall({
+			run: { id: runId, status: 'awaiting_approval' },
+			pendingDecisions: []
+		});
+		expect(part?.kind === 'tool' && part.tool.status).toBe('approval_required');
+	});
 });

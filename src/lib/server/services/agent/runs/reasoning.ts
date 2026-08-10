@@ -329,6 +329,9 @@ const enabledToolNames = (
  * `Tool not found` — the production pattern where a request was retried until the
  * user gave up.
  *
+ * This covers the *transcript*; a run parked on an approval needs `parkedTools`
+ * below as well, because the call it is parked on is not in the transcript yet.
+ *
  * Historical `use_tool` envelopes are unwrapped so conversations that predate the
  * direct-dispatch surface keep working.
  */
@@ -362,6 +365,24 @@ const promotedInConversation = async (
 	}
 	return [...names];
 };
+
+/**
+ * The tools a resume is about to answer for. The SDK filters `tool_approval_item`
+ * out of session persistence, so the call a run parked on is in neither the
+ * transcript nor the session — and `RunState.fromString` resolves every serialized
+ * function call against `getAllTools`, which drops gated tools. A parked long-tail
+ * tool therefore deserialized to `Tool <name> not found` and *no* approval of it
+ * could ever be applied: the whole point of parking was defeated for exactly the
+ * mutations that are gated behind an approval.
+ *
+ * The names survive the park on the run row, which is why they are read from there
+ * rather than reconstructed. Filtering through the catalog is deliberate: a tool
+ * deselected in Settings since the park is genuinely gone, and that resume should
+ * fail through the interruption check below, which says so, rather than be handed a
+ * capability the user has withdrawn.
+ */
+const parkedTools = (run: AgentRun, catalog: ReadonlySet<string>): string[] =>
+	run.pendingDecisions.map((decision) => decision.toolName).filter((name) => catalog.has(name));
 
 export class AgentReasoning {
 	constructor(
@@ -444,7 +465,13 @@ export class AgentReasoning {
 		}
 		try {
 			const catalogNames = registry.catalog().map((tool) => tool.name);
-			const promoted = await promotedInConversation(session, new Set(catalogNames));
+			const catalog = new Set(catalogNames);
+			const promoted = [
+				...new Set([
+					...(await promotedInConversation(session, catalog)),
+					...parkedTools(run, catalog)
+				])
+			];
 			const tools = registry.agentTools(promoted);
 			// Only the tools the model can actually see this generation. The long tail
 			// is registered but gated, so passing every registered name here would

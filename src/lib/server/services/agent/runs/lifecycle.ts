@@ -213,12 +213,14 @@ export class AgentRunLifecycle {
 		const cancelled = await this.deps.transactions.run(async () => {
 			// The compare-and-set leads so a run that completed in the same instant
 			// is left alone rather than gaining an orphan `cancelled` event.
+			// `pendingDecisions` is cleared by `abandonPendingCalls` rather than here,
+			// which needs to read them off the settled row first.
 			const settled = await this.deps.runs.transition(runId, 'cancelling', 'cancelled', {
-				pendingDecisions: [],
 				finishedAt: new Date().toISOString() as DateTime,
 				failure: 'The request was cancelled'
 			});
 			if (!settled) return undefined;
+			await this.abandonPendingCalls(settled, 'The request was cancelled before you answered.');
 			await this.deps.decisions.clearPending(runId);
 			await this.deps.events.append(runId, 1, {
 				type: 'cancelled',
@@ -242,12 +244,12 @@ export class AgentRunLifecycle {
 			const message = error instanceof Error ? error.message : String(error);
 			const failed = await this.deps.transactions.run(async () => {
 				const settled = await this.deps.runs.transition(runId, 'running', 'failed', {
-					pendingDecisions: [],
 					finishedAt: new Date().toISOString() as DateTime,
 					failure: message,
 					providerErrorCode: code
 				});
 				if (!settled) return undefined;
+				await this.abandonPendingCalls(settled, 'The run ended before you answered this.');
 				await this.deps.events.append(runId, 1, {
 					type: 'failed',
 					runId,
@@ -311,6 +313,35 @@ export class AgentRunLifecycle {
 		this.deps.eventBus.notify(run.id);
 
 		return run;
+	}
+
+	/**
+	 * Settles the calls a run was parked on when the run itself ends without them being
+	 * answered. The journal is append-only, so a call's last written row is its status
+	 * forever: a run that died holding an approval left that row saying `approval_required`
+	 * and nothing ever contradicted it. Reopening the conversation then replayed a live
+	 * Approve/Reject card for a run that could not act on either answer.
+	 *
+	 * The actor comes off the run row rather than the caller, because the two paths into
+	 * here — a crash and a cancellation — both start from a run id alone.
+	 */
+	private async abandonPendingCalls(run: AgentRun, failure: string): Promise<void> {
+		if (run.pendingDecisions.length === 0) return;
+		const actor: ActorContext = { userId: run.userId };
+		for (const pending of run.pendingDecisions)
+			await this.deps.conversations.recordToolActivity(
+				actor,
+				run.conversationId,
+				{
+					callId: pending.callId,
+					name: pending.toolName,
+					input: pending.arguments,
+					failure,
+					status: 'failed'
+				},
+				{ runId: run.id }
+			);
+		await this.deps.runs.update(actor, { ...run, pendingDecisions: [] });
 	}
 
 	private async persistEvent(

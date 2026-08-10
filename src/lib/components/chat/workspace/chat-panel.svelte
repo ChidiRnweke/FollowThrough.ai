@@ -523,6 +523,7 @@
 	<div class="mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col">
 		<ChatThread
 			{shell}
+			preferences={agentPreferences}
 			{sessions}
 			{activeNoteId}
 			{activeProjectId}

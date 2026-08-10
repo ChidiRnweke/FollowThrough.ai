@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Conversation } from '$lib/models/agent';
+	import type { AgentPreferences, Conversation } from '$lib/models/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { SuggestionId } from '$lib/models/suggestions';
@@ -32,6 +32,7 @@
 
 	let {
 		shell,
+		preferences,
 		sessions,
 		activeNoteId,
 		activeProjectId,
@@ -61,6 +62,8 @@
 		onjumptolatest
 	}: {
 		shell?: ShellContext;
+		/** The settings in force, so an approval that changes them can show what they were. */
+		preferences?: AgentPreferences;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;
@@ -257,6 +260,7 @@
 										<ToolApprovalGroup
 											tools={group.tools}
 											{shell}
+											{preferences}
 											busy={deciding}
 											onapprove={() => onapprove(entry, group.tools)}
 											onreject={() => onrejectapproval(entry, group.tools)}

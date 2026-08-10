@@ -630,4 +630,43 @@ describe('Agent turn span lifecycle', () => {
 		}
 		expect(ended).toContain('agent');
 	});
+
+	// The call a run parks on is in neither the transcript nor the session — the SDK
+	// drops approval items before persisting — so without the run's own pending
+	// decisions the tool deserializes as gated-off and `RunState.fromString` throws
+	// `Tool <name> not found`. Every approval of a long-tail mutation failed this way.
+	it('promotes the tool a parked run is about to answer for', async () => {
+		const promotions: string[][] = [];
+		const recording = new AgentReasoning(
+			async () => ({
+				agentTools: (alreadyPromoted: readonly string[] = []) => {
+					promotions.push([...alreadyPromoted]);
+					return [approvalTool];
+				},
+				catalog: () => [{ name: 'save_note' }]
+			}),
+			sessions,
+			'test-key',
+			'https://openrouter.test/api/v1',
+			'http://localhost:5173',
+			new ApprovalFetch().fetch,
+			() => bufferedSession
+		);
+		const parked: AgentRun = {
+			...run,
+			pendingDecisions: [{ callId: 'call-approval', toolName: 'save_note', arguments: {} }]
+		};
+		const updates = recording.execute({
+			actor: testActor(),
+			run: parked,
+			request: { prompt: 'Save this note' },
+			context: parked.contextSnapshot!,
+			signal: new AbortController().signal,
+			toolExecutor: { execute: async (_input, action) => action() }
+		});
+		for await (const update of updates) {
+			if (update.type === 'approval_checkpoint') break;
+		}
+		expect(promotions[0]).toContain('save_note');
+	});
 });

@@ -154,16 +154,34 @@ const restoredImages = (value: unknown): ChatPart[] => {
 		}));
 };
 
-const restoredTool = (message: Message): ChatToolActivity => {
+const ABANDONED_APPROVAL = 'This change was never carried out — the run ended before you answered.';
+
+/**
+ * A parked call is only still parked if its own run is still waiting. A conversation has at
+ * most one active run, so anything else journalled `approval_required` belongs to a run that
+ * died holding the question — and replaying it verbatim put a live Approve/Reject card back
+ * on screen for a run that could never answer it. Approving it failed client-side only,
+ * nothing was re-journalled, and the card returned on the next reload, for good.
+ *
+ * `failed` is already a status the thread renders — `toolDisclosure` leads with the failure —
+ * so this needs no new state and no rewrite of the rows already stored that way.
+ */
+const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivity => {
 	const content = message.content;
+	const status = String(content.status ?? 'succeeded') as ChatToolStatus;
+	const abandoned = status === 'approval_required' && message.runId !== awaitingRunId;
 	return unwrapToolCall({
 		callId: String(content.callId ?? ''),
 		name: String(content.name ?? 'tool'),
 		arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
 		...(message.runId ? { runId: message.runId } : {}),
 		...(content.output !== null && content.output !== undefined ? { output: content.output } : {}),
-		...(typeof content.failure === 'string' ? { failure: content.failure } : {}),
-		status: String(content.status ?? 'succeeded') as ChatToolStatus
+		...(typeof content.failure === 'string'
+			? { failure: content.failure }
+			: abandoned
+				? { failure: ABANDONED_APPROVAL }
+				: {}),
+		status: abandoned ? 'failed' : status
 	});
 };
 
@@ -171,7 +189,7 @@ const restoredTool = (message: Message): ChatToolActivity => {
 const cursorOf = (message: Message): number =>
 	message.eventCursor === undefined ? Number.MAX_SAFE_INTEGER : Number(message.eventCursor);
 
-const partsOfTurn = (messages: readonly Message[]): ChatPart[] => {
+const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): ChatPart[] => {
 	const tools: ChatToolActivity[] = [];
 	const parts: ChatPart[] = [];
 	// Sorted by cursor, because a turn's messages are not written in the order they happened:
@@ -180,7 +198,7 @@ const partsOfTurn = (messages: readonly Message[]): ChatPart[] => {
 	// all of the work followed by all of the words.
 	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
 		if (message.role === 'tool') {
-			const tool = restoredTool(message);
+			const tool = restoredTool(message, awaitingRunId);
 			if (reconcileToolActivity(tools, tool)) continue;
 			tools.push(tool);
 			parts.push({ kind: 'tool', tool });
@@ -201,8 +219,11 @@ const partsOfTurn = (messages: readonly Message[]): ChatPart[] => {
  * One entry per turn rather than one per stored message: an assistant turn is now written as
  * several messages — a thought, a tool call, an answer — and each becoming its own entry
  * would caption the same turn "Agent" three times over.
+ *
+ * `awaitingRunId` is the run, if any, that is genuinely parked on an approval; see
+ * `restoredTool` for why every other parked call is restored as abandoned.
  */
-const restoreEntries = (messages: readonly Message[]): ChatEntry[] => {
+const restoreEntries = (messages: readonly Message[], awaitingRunId?: string): ChatEntry[] => {
 	const entries: ChatEntry[] = [];
 	let turn: { runId?: string; messages: Message[] } | undefined;
 
@@ -212,7 +233,7 @@ const restoreEntries = (messages: readonly Message[]): ChatEntry[] => {
 		entries.push({
 			id: first.id,
 			role: 'assistant',
-			parts: partsOfTurn(turn.messages),
+			parts: partsOfTurn(turn.messages, awaitingRunId),
 			suggestions: [],
 			status: 'completed',
 			...(turn.runId ? { runId: turn.runId as ChatEntry['runId'] } : {})
@@ -331,7 +352,11 @@ export class ChatStore {
 		const conversationId = this.conversationId;
 		try {
 			const data = await this.transport.getSession(conversationId);
-			this.entries = restoreEntries(data.messages);
+			// The latest run is the only one that can still be waiting on the user: a
+			// conversation runs one at a time, so nothing older holds a live question.
+			const awaiting =
+				data.latestRun?.run.status === 'awaiting_approval' ? data.latestRun.run.id : undefined;
+			this.entries = restoreEntries(data.messages, awaiting);
 			if (data.latestRun) {
 				const snapshot = data.latestRun;
 				let reply = this.entries.findLast(

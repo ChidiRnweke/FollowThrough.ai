@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { AgentPreferences } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { Button } from '$lib/components/ui/button';
@@ -7,12 +8,14 @@
 	let {
 		tools,
 		shell,
+		preferences,
 		busy = false,
 		onapprove,
 		onreject
 	}: {
 		tools: readonly ChatToolActivity[];
 		shell?: ShellContext;
+		preferences?: AgentPreferences;
 		busy?: boolean;
 		onapprove: () => void;
 		onreject: () => void;
@@ -34,7 +37,15 @@
 			{tools.length} changes need your approval
 		</p>
 		{#each tools as tool (tool.callId)}
-			<ToolApprovalCard {tool} {shell} showFooter={false} framed={false} {onapprove} {onreject} />
+			<ToolApprovalCard
+				{tool}
+				{shell}
+				{preferences}
+				showFooter={false}
+				framed={false}
+				{onapprove}
+				{onreject}
+			/>
 		{/each}
 		<div class="flex gap-2">
 			<Button size="sm" disabled={busy} onclick={onapprove}>Approve all ({tools.length})</Button>
@@ -42,5 +53,5 @@
 		</div>
 	</div>
 {:else if tools[0]}
-	<ToolApprovalCard tool={tools[0]} {shell} {busy} {onapprove} {onreject} />
+	<ToolApprovalCard tool={tools[0]} {shell} {preferences} {busy} {onapprove} {onreject} />
 {/if}

@@ -110,3 +110,42 @@ describe('The review card names what an id-only call acts on', () => {
 		});
 	});
 });
+
+/**
+ * The dialog exists to give a change more room than the panel has. Offered for every call it
+ * opened a full-width modal onto one line — "Default model: openai/gpt-5.6" — which asked the
+ * user to open a window in order to learn nothing.
+ */
+describe('The review card only offers the room a change actually needs', () => {
+	const preferences = {
+		defaultModel: 'openai/gpt-5.6',
+		executionMode: 'approval_required',
+		inlineSuggestionsEnabled: true
+	} as unknown as Parameters<typeof ToolApprovalCard>[1]['preferences'];
+
+	const renderSettings = () =>
+		render(ToolApprovalCard, {
+			tool: pendingCall('update_agent_preferences', {
+				defaultModel: 'anthropic/claude-sonnet-4.5'
+			}),
+			shell,
+			preferences,
+			onapprove: () => {},
+			onreject: () => {}
+		});
+
+	it('offers no full review for a change with nothing held back', async () => {
+		const screen = await renderCard(pendingCall('archive_note', { noteId: NOTE_ID }));
+		expect(await screen.getByRole('button', { name: 'Review in full' }).all()).toHaveLength(0);
+	});
+
+	it('hands a settings change the control that makes it instead', async () => {
+		const screen = await renderSettings();
+		expect(await screen.getByRole('link', { name: 'Open settings' }).all()).toHaveLength(1);
+	});
+
+	it('states the model being replaced, which the arguments alone never said', async () => {
+		const screen = await renderSettings();
+		expect(await visible(screen, { previous: 'openai/gpt-5.6' })).toEqual({ previous: 1 });
+	});
+});

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/models/agent';
-import type { AgentExecutionUpdate, AgentRun, AgentRunId, ConversationId } from '$lib/models/agent';
+import type {
+	AgentExecutionUpdate,
+	AgentRun,
+	AgentRunId,
+	ConversationId,
+	ToolActivity
+} from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
@@ -46,12 +52,14 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 	runner: T,
 	options?: {
 		readonly contextBuilder?: { build(): Promise<Readonly<Record<string, unknown>>> };
+		readonly pendingDecisions?: AgentRun['pendingDecisions'];
 	}
 ) => {
 	const runs = new InMemoryAgentRunPersistence();
 	const sessions = new InMemoryAgentSessionRepository();
 	const notified: AgentRunId[] = [];
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
+	const toolRows: ToolActivity[] = [];
 	const run: AgentRun = {
 		id: testRunId,
 		userId: testActor().userId,
@@ -60,7 +68,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		executionMode: 'approval_required',
 		status: 'queued',
 		requestId: '30000000-0000-4000-8000-0000000000r1',
-		pendingDecisions: [],
+		pendingDecisions: options?.pendingDecisions ?? [],
 		provenanceId: testProvenanceId() as ProvenanceId,
 		contextSnapshot: { seeded: true },
 		inputSnapshot: { input: 'Do the thing' },
@@ -82,7 +90,9 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 			}
 		},
 		conversations: {
-			recordToolActivity: async () => undefined,
+			recordToolActivity: async (_actor, _conversationId, activity) => {
+				toolRows.push(activity);
+			},
 			recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
 				journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
 			},
@@ -93,7 +103,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		runner: runner as never,
 		eventBus: { notify: (runId) => notified.push(runId) }
 	});
-	return { lifecycle, runs, notified, runner, journalled };
+	return { lifecycle, runs, notified, runner, journalled, toolRows };
 };
 
 /** Runs a turn to the point where the provider is streaming, then stops it. */
@@ -367,6 +377,34 @@ describe('settling a run whose execution threw', () => {
 		await runs.transition(testRunId, 'running', 'completed');
 		await lifecycle.failRun(testRunId, error);
 		expect(currentRun(runs).status).toBe('completed');
+	});
+
+	/**
+	 * The journal is append-only, so a call's last written row is its status forever. A run
+	 * that died still holding an approval left that row saying `approval_required`, and a
+	 * reopened conversation replayed a live Approve/Reject card for a run that could act on
+	 * neither answer.
+	 */
+	const crashHoldingApproval = async () => {
+		const error = new Error('Provider exploded');
+		const context = setup(throwingRunner(error), {
+			pendingDecisions: [
+				{ callId: 'call-parked', toolName: 'update_agent_preferences', arguments: {} }
+			]
+		});
+		await context.runs.transition(testRunId, 'queued', 'running');
+		await context.lifecycle.failRun(testRunId, error);
+		return context;
+	};
+
+	it('settles the call a failing run was still parked on', async () => {
+		const { toolRows } = await crashHoldingApproval();
+		expect(toolRows.map((row) => row.status)).toEqual(['failed']);
+	});
+
+	it('clears the pending decision once it has been settled in the journal', async () => {
+		const { runs } = await crashHoldingApproval();
+		expect(currentRun(runs).pendingDecisions).toEqual([]);
 	});
 });
 

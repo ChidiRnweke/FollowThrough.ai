@@ -147,3 +147,48 @@ describe('Previewing a pending note change', () => {
 		});
 	});
 });
+
+/**
+ * "Default model: openai/gpt-5.6" cannot be approved on its own terms: it does not say
+ * whether that is a change at all, let alone from what. The card holds the preferences in
+ * force, so the question it asks can name both sides.
+ */
+describe('reviewing a change to the settings the agent runs under', () => {
+	const preferences = {
+		defaultModel: 'openai/gpt-5.6',
+		executionMode: 'approval_required',
+		inlineSuggestionsEnabled: true
+	} as unknown as Parameters<typeof approvalPreview>[3];
+
+	const settings = (args: Record<string, unknown>) =>
+		approvalPreview('update_agent_preferences', args, undefined, preferences);
+
+	it('states the model being replaced alongside the one replacing it', () => {
+		const preview = settings({ defaultModel: 'anthropic/claude-sonnet-4.5' });
+		expect(preview.kind === 'settings' && preview.change.changes).toEqual([
+			{ label: 'Default model', from: 'openai/gpt-5.6', to: 'anthropic/claude-sonnet-4.5' }
+		]);
+	});
+
+	it('says so rather than pointing an arrow at itself when nothing would move', () => {
+		const preview = settings({ defaultModel: 'openai/gpt-5.6' });
+		expect(preview.kind === 'settings' && preview.change.notice).toBeDefined();
+	});
+
+	it('drops the fields already holding the proposed value', () => {
+		const preview = settings({ defaultModel: 'openai/gpt-5.6', agentMaxTurns: 20 });
+		expect(preview.kind === 'settings' && preview.change.changes.map((c) => c.label)).toEqual([
+			'Agent max turns'
+		]);
+	});
+
+	it('links to the tab that owns the field, not the settings page in general', () => {
+		const preview = settings({ agentMaxTurns: 20 });
+		expect(preview.kind === 'settings' && preview.change.settingsHref).toBe('/settings?tab=agents');
+	});
+
+	it('states a value with no stored counterpart on its own', () => {
+		const preview = settings({ inlineModel: 'openai/gpt-5.6-mini' });
+		expect(preview.kind === 'settings' && preview.change.changes[0]?.from).toBeUndefined();
+	});
+});

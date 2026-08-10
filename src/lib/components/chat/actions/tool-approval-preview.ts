@@ -1,5 +1,8 @@
 import type { Note, NoteEdit, NoteId } from '$lib/models/notes';
+import type { AgentPreferences } from '$lib/models/agent';
+import type { FieldChange } from '$lib/components/agent';
 import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-patch-preview';
+import { argumentLabel } from './tool-approval-fields';
 
 /**
  * What an approval card should show for a pending tool call.
@@ -13,10 +16,81 @@ import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-pa
 /** Tools whose payload rewrites a note body, and so deserve a real before/after. */
 const NOTE_BODY_TOOLS = new Set(['save_note', 'edit_note']);
 
+/** The tool that rewrites the agent's own defaults, whose before-image the card already holds. */
+const PREFERENCES_TOOL = 'update_agent_preferences';
+
 export type ApprovalPreview =
 	| { readonly kind: 'note'; readonly change: NoteChange }
+	/**
+	 * A change to the agent's own settings. "Default model: openai/gpt-5.6" cannot be
+	 * approved on its own terms — it does not say whether that is a change at all, let
+	 * alone from what — and the card holds the current preferences already, so it can say.
+	 */
+	| { readonly kind: 'settings'; readonly change: SettingsChange }
 	/** Nothing note-shaped to diff — the card describes the arguments instead. */
 	| { readonly kind: 'arguments' };
+
+export interface SettingsChange {
+	/** The fields that actually move, as `from → to`. */
+	readonly changes: readonly FieldChange[];
+	/** The Settings tab that owns these fields, so the card can hand the user the real control. */
+	readonly settingsHref: string;
+	/** Set when every proposed value is already the stored one. */
+	readonly notice?: string;
+}
+
+/**
+ * Which Settings tab owns a preference. The split mirrors the two forms the page posts —
+ * `saveModelPreferences` and `saveAgentPreferences` — so the link lands on the control that
+ * sets the same field rather than on the page in general.
+ */
+const AGENT_TAB_FIELDS = new Set([
+	'webSearchEngine',
+	'webSearchMaxResults',
+	'webSearchMaxTotalResults',
+	'agentMaxTurns',
+	'executionMode'
+]);
+
+const settingsHref = (keys: readonly string[]): string =>
+	keys.length > 0 && keys.every((key) => AGENT_TAB_FIELDS.has(key))
+		? '/settings?tab=agents'
+		: '/settings?tab=models';
+
+/**
+ * The proposed settings against the ones in force. Fields already holding the proposed value
+ * are dropped rather than rendered as an arrow pointing at itself: a model that re-sends the
+ * whole preference record would otherwise bury the one field it means to move.
+ */
+const settingsChange = (
+	args: Readonly<Record<string, unknown>>,
+	baseline: AgentPreferences | undefined
+): SettingsChange => {
+	const proposed = Object.entries(args).filter(
+		([, value]) => value !== undefined && value !== null
+	);
+	const changes = proposed
+		.filter(([key, value]) => {
+			const current = baseline?.[key as keyof AgentPreferences];
+			return current === undefined || String(current) !== String(value);
+		})
+		.map(([key, value]) => {
+			const current = baseline?.[key as keyof AgentPreferences];
+			return {
+				label: argumentLabel(key),
+				...(current === undefined ? {} : { from: String(current) }),
+				to: String(value)
+			};
+		});
+	const href = settingsHref(proposed.map(([key]) => key));
+	if (proposed.length > 0 && changes.length === 0)
+		return {
+			changes: [],
+			settingsHref: href,
+			notice: 'These settings already have these values, so nothing would change.'
+		};
+	return { changes, settingsHref: href };
+};
 
 export interface NoteChange {
 	readonly title: string;
@@ -99,8 +173,11 @@ const uncomparableSave = (args: Readonly<Record<string, unknown>>): ApprovalPrev
 export const approvalPreview = (
 	name: string,
 	args: Readonly<Record<string, unknown>>,
-	baseline: Note | undefined
+	baseline: Note | undefined,
+	preferences?: AgentPreferences
 ): ApprovalPreview => {
+	if (name === PREFERENCES_TOOL)
+		return { kind: 'settings', change: settingsChange(args, preferences) };
 	if (!NOTE_BODY_TOOLS.has(name)) return { kind: 'arguments' };
 	if (!baseline) return uncomparableSave(args) ?? { kind: 'arguments' };
 
