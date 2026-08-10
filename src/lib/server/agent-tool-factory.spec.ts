@@ -893,20 +893,32 @@ describe('Agent tool coverage invariants', () => {
 	// model that answers an argument-free tool with "" — there is nothing to fill
 	// in — used to die on InvalidToolInputError without the tool ever running. One
 	// production trace spun through thirteen such calls and hit the token ceiling.
-	it('treats a blank call to an argument-free tool as an empty object', async () => {
+	const groundingFixture = () => {
+		let reached = false;
 		const factory = {
-			workspace: () => ({ getShellContext: async () => ({ projects: [], notes: [] }) })
+			workspace: () => ({
+				getShellContext: async () => {
+					reached = true;
+					return { projects: [], notes: [] };
+				}
+			})
 		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'get_workspace_context', { factory });
-		expect(String(await selected.invoke({} as never, ''))).not.toContain('failure');
+		return {
+			reached: () => reached,
+			tool: directToolFor('auto_accept', 'get_workspace_context', { factory })
+		};
+	};
+
+	it('treats a blank call to an argument-free tool as an empty object', async () => {
+		const fixture = groundingFixture();
+		await fixture.tool.invoke({} as never, '');
+		expect(fixture.reached()).toBe(true);
 	});
 
 	it('still rejects malformed non-empty arguments', async () => {
-		const factory = {
-			workspace: () => ({ getShellContext: async () => ({ projects: [], notes: [] }) })
-		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'get_workspace_context', { factory });
-		expect(String(await selected.invoke({} as never, '{"noteId":'))).toContain('failure');
+		const fixture = groundingFixture();
+		await fixture.tool.invoke({} as never, '{"noteId":');
+		expect(fixture.reached()).toBe(false);
 	});
 
 	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
@@ -1140,7 +1152,7 @@ describe('Agent tool coverage invariants', () => {
 			{} as never,
 			JSON.stringify({ noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] })
 		);
-		expect(String(result)).toContain('not a skill');
+		expect(result).toMatchObject({ failure: expect.stringContaining('not a skill') });
 	});
 
 	it('does not expose the agent controller recursively', () => {

@@ -84,9 +84,14 @@
 
 ## chat panel
 
-- sidebar surface tone. alignment+muted author label, NO colored bubbles
-- tool activity=collapsed muted rows, expandable
-- agent proposals=standard suggestion card inline, no chat variant
+- sidebar surface tone. user turn=right-aligned + muted wash, agent=flush left, no container. NO
+  colored bubbles. NO visible author labels — side carries it, sr-only restates it
+- turn reports things touched, not calls made. log door=ONE per turn, inline collapsible, NEVER a
+  dialog
+- disclosure is EARNED: a chevron only where something sits behind it the row cannot already say.
+  reads of one thing link out w/ no chevron; no generic args+result fallback bucket
+- animated-height disclosure @ --duration-disclosure (200ms), opt-in via chat-disclosure utility
+- agent proposals/approvals=flat block marked by teal hairlines, NEVER a card
 
 ## motion (expressive, budgeted)
 

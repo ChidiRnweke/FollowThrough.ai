@@ -112,6 +112,20 @@ An unlayered `prefers-reduced-motion` block opts the lift out entirely rather th
 un-transitioning it, since the base guard only collapses durations and would turn the lift into
 a jump.
 
+### Disclosure
+
+A row that opens onto its own detail grows into it, at `--duration-disclosure` (200ms) /
+`--ease-standard`. `--duration-micro` is a state change and reads as a snap once a block of
+content has to arrive with it; `--duration-panel` is the budget for a whole surface moving and
+is over the ceiling for something this small. `@utility chat-disclosure` in `layout.css` carries
+it, animating against the height the primitive measures before the state flips, so content below
+is pushed rather than jumped.
+
+It is opt-in rather than a blanket rule on the collapsible primitive: the project tree and the
+sidebar are built on the same one, and a tree whose every branch animates open is a slower tree,
+not a calmer one. The base reduced-motion guard collapses the duration and is the whole fallback
+needed — this is CSS, not a Svelte transition, so nothing escapes it.
+
 Inside the editor, `.tiptap` sets `cursor: text` for the whole editable surface, and
 `editor.css` walks it back for anything that is not text — block node views, images, media,
 diagrams — with nested `[contenteditable='true']` islands taking it back again. An I-beam over
