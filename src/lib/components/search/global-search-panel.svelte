@@ -223,13 +223,20 @@
 				icon={Search}
 				title="Search every note's title and text."
 				hint="Toggle .* for regex."
+				size="large"
+				label="Search"
 			/>
 		{:else if globalSearch.hits.length === 0 && globalSearch.searching}
 			<div class="flex items-center gap-2 text-xs text-muted-foreground">
 				<Spinner class="size-3.5" /> Searching…
 			</div>
 		{:else if globalSearch.hits.length === 0}
-			<EmptyState icon={Search} title="No results for “{globalSearch.query}”." />
+			<EmptyState
+				icon={Search}
+				title="No results for “{globalSearch.query}”."
+				size="large"
+				label="No results"
+			/>
 		{:else}
 			<!-- The count row doubles as the in-flight status: while a refinement is running
 			     the results stay on screen, dimmed, and the line becomes a spinner — a search

@@ -74,7 +74,7 @@
 </script>
 
 {#if notes.length === 0}
-	<EmptyState icon={FtTrash} title={emptyTitle} hint={emptyHint} />
+	<EmptyState icon={FtTrash} title={emptyTitle} hint={emptyHint} size="large" label="Empty trash" />
 {:else}
 	{#if onempty}
 		<div class="flex justify-end pb-2">
