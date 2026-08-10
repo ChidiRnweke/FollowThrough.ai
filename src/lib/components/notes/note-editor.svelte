@@ -80,14 +80,15 @@
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
+	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
+	import { SEARCH_TAB_ID } from '$lib/stores/workbench/tab-ref';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
 	/** Long enough for the ripple to finish; short enough that a second update can follow. */
 	const SHIMMER_DURATION = 4500;
 	const shimmerKey = new PluginKey('note-block-shimmer');
-	/** Long enough to spot the lit match; short enough that typing soon after reads clean. */
-	const REVEAL_DURATION = 2400;
 
 	const runningCopy: Record<NoteAiAction, string> = {
 		promises: 'Reading for commitments',
@@ -184,8 +185,8 @@
 	let hydrated = $state(false);
 	/** Guards the shimmer teardown: only the latest replacement removes its decoration. */
 	let shimmerGeneration = 0;
-	/** Same guard for the search-reveal decoration. */
-	let revealGeneration = 0;
+	/** Whether this editor is currently showing a search-reveal wash. */
+	let revealActive = $state(false);
 	let activeLink = $state<
 		{ readonly group: ResolvedReferenceLinkGroup; readonly anchor: HTMLAnchorElement } | undefined
 	>();
@@ -601,6 +602,22 @@
 		});
 	});
 
+	// The reveal wash stays as long as any search surface is open — the right panel in
+	// search mode or the workbench search tab, like Word's Find pane keeping its hits
+	// until the pane closes. Once none remains, release the decorations. `revealActive`
+	// is state so a reveal that lands after the panel has already closed is released on
+	// the next run rather than leaking.
+	$effect(() => {
+		if (!revealActive) return;
+		const searching = rightPanel.mode === 'search' || workbench.openTabs.includes(SEARCH_TAB_ID);
+		if (searching) return;
+		untrack(() => {
+			if (editor && !editor.isDestroyed)
+				editor.view.dispatch(editor.state.tr.setMeta(searchRevealKey, null));
+			revealActive = false;
+		});
+	});
+
 	// Rebuild highlights whenever the anchored suggestion set changes. The dispatch
 	// must stay untracked: it mutates editor state, which would re-trigger this effect.
 	$effect(() => {
@@ -701,8 +718,6 @@
 				// the primary decoration already covers it.
 				(other) => other.from !== range.from || other.to !== range.to
 			);
-		const generation = revealGeneration + 1;
-		revealGeneration = generation;
 		try {
 			editor.view.dispatch(
 				editor.state.tr.setMeta(searchRevealKey, { primary: range, others: otherRanges })
@@ -718,10 +733,10 @@
 			// still opened at the note, which is most of the promise.
 			return;
 		}
-		window.setTimeout(() => {
-			if (editor && !editor.isDestroyed && revealGeneration === generation)
-				editor.view.dispatch(editor.state.tr.setMeta(searchRevealKey, null));
-		}, REVEAL_DURATION);
+		// The wash stays while any search surface is open — the right panel's search mode
+		// or the workbench search tab, like Word's Find pane keeping its highlights until
+		// the pane closes. The release effect below clears it once none remains.
+		revealActive = true;
 	}
 
 	export function getDocument(): ProseMirrorDocument {
