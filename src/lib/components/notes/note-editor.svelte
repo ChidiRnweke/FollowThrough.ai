@@ -60,6 +60,7 @@
 	} from './reference-link-plugin';
 	import { createSelectionActionPlugin, selectionActionKey } from './selection-action-plugin';
 	import { createSearchRevealPlugin, searchRevealKey } from './search-reveal-plugin';
+	import type { SearchRevealRange } from './search-reveal-plugin';
 	import {
 		createPendingInsertionsPlugin,
 		getPendingInsertion,
@@ -78,6 +79,7 @@
 	import { uploadNoteAttachment } from './attachment-upload';
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
+	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
@@ -588,7 +590,7 @@
 					return;
 				}
 				const reveal = noteReveal.consume(noteId);
-				if (reveal) revealPlainTextRange(reveal.start, reveal.end, reveal.text);
+				if (reveal) revealPlainTextRange(reveal.start, reveal.end, reveal.text, reveal.others);
 			};
 			attempt(120);
 		});
@@ -662,26 +664,44 @@
 	}
 
 	/**
-	 * Search click-through: select the matched range, scroll it into view, and light it
-	 * with a transient inline decoration — a decoration, not a mark, so nothing about
-	 * the reveal is ever serialized into the document. The offsets describe the saved
-	 * plain text; when unsaved keystrokes have shifted them, the matched text itself is
-	 * the anchor, the same reconciliation `readSelection` uses.
+	 * Search click-through: select the clicked match, scroll it into view, and light every
+	 * match in the note with a transient inline decoration — a decoration, not a mark, so
+	 * nothing about the reveal is ever serialized into the document. The offsets describe
+	 * the saved plain text; when unsaved keystrokes have shifted them, the matched text
+	 * itself is the anchor, the same reconciliation `readSelection` uses.
 	 */
-	function revealPlainTextRange(start: number, end: number, text: string): void {
+	function revealPlainTextRange(
+		start: number,
+		end: number,
+		text: string,
+		others: readonly NoteRevealMatch[] = []
+	): void {
 		if (!editor) return;
 		const plainText = editor.getText({ blockSeparator: BLOCK_SEPARATOR });
-		let from = start;
-		if (plainText.slice(start, end) !== text) {
-			from = nearestTextOffset(plainText, text, start);
-			if (from < 0) return;
-		}
-		const range = plainTextRangeToPm(editor, from, from + text.length);
+		const anchorPmRange = (match: NoteRevealMatch): SearchRevealRange | undefined => {
+			let matchFrom = match.start;
+			if (plainText.slice(match.start, match.end) !== match.text) {
+				matchFrom = nearestTextOffset(plainText, match.text, match.start);
+				if (matchFrom < 0) return undefined;
+			}
+			return plainTextRangeToPm(editor, matchFrom, matchFrom + match.text.length);
+		};
+		const range = anchorPmRange({ start, end, text });
 		if (!range) return;
+		const otherRanges = others
+			.map(anchorPmRange)
+			.filter((other) => other !== undefined)
+			.filter(
+				// A repeated query word can re-anchor onto the clicked match itself;
+				// the primary decoration already covers it.
+				(other) => other.from !== range.from || other.to !== range.to
+			);
 		const generation = revealGeneration + 1;
 		revealGeneration = generation;
 		try {
-			editor.view.dispatch(editor.state.tr.setMeta(searchRevealKey, range));
+			editor.view.dispatch(
+				editor.state.tr.setMeta(searchRevealKey, { primary: range, others: otherRanges })
+			);
 			editor.chain().setTextSelection(range).scrollIntoView().run();
 		} catch {
 			// A range the live document cannot resolve is a miss, not an error: the tab

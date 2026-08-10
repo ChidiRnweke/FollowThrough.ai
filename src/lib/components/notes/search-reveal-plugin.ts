@@ -7,14 +7,23 @@ export interface SearchRevealRange {
 	readonly to: number;
 }
 
+/**
+ * The clicked match plus every other match in the note, so a click-through lights all
+ * of them while only the primary is selected and scrolled to.
+ */
+export interface SearchRevealRanges {
+	readonly primary: SearchRevealRange;
+	readonly others: readonly SearchRevealRange[];
+}
+
 export const searchRevealKey = new PluginKey<DecorationSet>('search-reveal');
 
 /**
- * Light the match a global-search click-through jumped to. A decoration, not a mark,
+ * Light the matches a global-search click-through jumped to. A decoration, not a mark,
  * so nothing about the reveal is ever serialized into the document.
  *
- * Set the range with `tr.setMeta(searchRevealKey, { from, to })` and release it with
- * `tr.setMeta(searchRevealKey, null)`. In between the set is mapped through document
+ * Set the ranges with `tr.setMeta(searchRevealKey, { primary, others })` and release them
+ * with `tr.setMeta(searchRevealKey, null)`. In between the set is mapped through document
  * changes, so the wash tracks the text if the author starts typing. Same mechanics as
  * the selection-action wash.
  */
@@ -24,12 +33,15 @@ export function createSearchRevealPlugin(): Plugin {
 		state: {
 			init: () => DecorationSet.empty,
 			apply: (tr, previous) => {
-				const meta = tr.getMeta(searchRevealKey) as SearchRevealRange | null | undefined;
+				const meta = tr.getMeta(searchRevealKey) as SearchRevealRanges | null | undefined;
 				if (meta === null) return DecorationSet.empty;
 				if (meta) {
-					return DecorationSet.create(tr.doc, [
-						Decoration.inline(meta.from, meta.to, { class: 'search-reveal' })
-					]);
+					return DecorationSet.create(
+						tr.doc,
+						[meta.primary, ...meta.others].map((range) =>
+							Decoration.inline(range.from, range.to, { class: 'search-reveal' })
+						)
+					);
 				}
 				return tr.docChanged ? previous.map(tr.mapping, tr.doc) : previous;
 			}

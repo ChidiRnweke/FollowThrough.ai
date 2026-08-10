@@ -9,13 +9,23 @@ const REVEAL_TTL_MS = 15_000;
  * is a transient intent, not shareable state. The note editor consumes the request for
  * its note id once it is ready, then clears it.
  */
-export interface NoteRevealRequest {
-	readonly noteId: NoteId;
-	/** Half-open `[start, end)` offsets into the note's `plainText`, as search reports them. */
+/** A matched range in a note's `plainText`, as search reports it. */
+export interface NoteRevealMatch {
+	/** Half-open `[start, end)` offsets into the note's `plainText`. */
 	readonly start: number;
 	readonly end: number;
 	/** The matched text, so the editor can re-anchor if unsaved edits shifted the offsets. */
 	readonly text: string;
+}
+
+export interface NoteRevealRequest {
+	readonly noteId: NoteId;
+	/** The clicked match: selected and scrolled to. Half-open `[start, end)` into `plainText`. */
+	readonly start: number;
+	readonly end: number;
+	readonly text: string;
+	/** The note's other matches: lit alongside the clicked one, never selected or scrolled to. */
+	readonly others: readonly NoteRevealMatch[];
 	readonly requestedAt: number;
 }
 

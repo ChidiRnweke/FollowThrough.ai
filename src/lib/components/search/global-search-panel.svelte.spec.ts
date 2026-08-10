@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { NoteId, NoteSearchContentMatch, NoteSearchHit } from '$lib/models/notes';
+import type { NoteSearchContentMatch, NoteSearchHit } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { globalSearch } from '$lib/stores/search/global-search.svelte';
 import GlobalSearchPanel from './global-search-panel.svelte';
 
-const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75' as NoteId;
+const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75' as NoteSearchHit['noteId'];
 
 const hit: NoteSearchHit = {
 	noteId: NOTE_ID,
@@ -106,14 +106,38 @@ describe('Result rows', () => {
 
 	it('requests a reveal for the clicked match', async () => {
 		seedResults();
-		const opened: [NoteId, NoteSearchContentMatch][] = [];
+		const opened: [NoteSearchHit, NoteSearchContentMatch][] = [];
 		const screen = await render(GlobalSearchPanel, {
-			onOpenMatch: (noteId: NoteId, match: NoteSearchContentMatch) => {
-				opened.push([noteId, match]);
+			onOpenMatch: (hit: NoteSearchHit, match: NoteSearchContentMatch) => {
+				opened.push([hit, match]);
 			}
 		});
 		await screen.getByRole('button', { name: 'then ship' }).click();
 		expect(opened[0]?.[1].start).toBe(20);
+	});
+
+	it('hands the click-through the whole hit, so every match can be lit', async () => {
+		seedResults();
+		const opened: [NoteSearchHit, NoteSearchContentMatch][] = [];
+		const screen = await render(GlobalSearchPanel, {
+			onOpenMatch: (hit: NoteSearchHit, match: NoteSearchContentMatch) => {
+				opened.push([hit, match]);
+			}
+		});
+		await screen.getByRole('button', { name: 'then ship' }).click();
+		expect(opened[0]?.[0].matches).toHaveLength(2);
+	});
+
+	it('jumps to the first match when the document title is clicked', async () => {
+		seedResults();
+		const opened: [NoteSearchHit, NoteSearchContentMatch][] = [];
+		const screen = await render(GlobalSearchPanel, {
+			onOpenMatch: (hit: NoteSearchHit, match: NoteSearchContentMatch) => {
+				opened.push([hit, match]);
+			}
+		});
+		await screen.getByRole('button', { name: 'Release plan', exact: true }).click();
+		expect(opened[0]?.[1].start).toBe(4);
 	});
 });
 
