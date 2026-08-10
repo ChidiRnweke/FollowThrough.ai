@@ -218,28 +218,49 @@
 	<!-- Results are a different kind of content than the controls, so they sit one
 		     ladder step past the group gap (32px, not 24px). -->
 	<div class="mt-2 min-h-0 flex-1 overflow-y-auto">
-		{#if globalSearch.searching}
-			<div class="flex items-center gap-2 text-xs text-muted-foreground">
-				<Spinner class="size-3.5" /> Searching…
-			</div>
-		{:else if globalSearch.query === ''}
+		{#if globalSearch.query === ''}
 			<EmptyState
 				icon={Search}
 				title="Search every note's title and text."
 				hint="Toggle .* for regex."
 			/>
+		{:else if globalSearch.hits.length === 0 && globalSearch.searching}
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<Spinner class="size-3.5" /> Searching…
+			</div>
 		{:else if globalSearch.hits.length === 0}
 			<EmptyState icon={Search} title="No results for “{globalSearch.query}”." />
 		{:else}
-			<p class="text-xs text-muted-foreground">
-				{globalSearch.totalMatches}
-				{globalSearch.totalMatches === 1 ? 'result' : 'results'} in
-				{globalSearch.hits.length}
-				{globalSearch.hits.length === 1 ? 'note' : 'notes'}
+			<!-- The count row doubles as the in-flight status: while a refinement is running
+			     the results stay on screen, dimmed, and the line becomes a spinner — a search
+			     never blinks the list away and then paints it back. -->
+			<p class="text-xs text-muted-foreground" role="status">
+				{#if globalSearch.searching}
+					<span class="flex items-center gap-2">
+						<Spinner class="size-3.5" /> Searching…
+					</span>
+				{:else}
+					{globalSearch.totalMatches}
+					{globalSearch.totalMatches === 1 ? 'result' : 'results'} in
+					{globalSearch.hits.length}
+					{globalSearch.hits.length === 1 ? 'note' : 'notes'}
+				{/if}
 			</p>
-			<!-- The gap between documents is the grouping signal: clearly wider than the
-			     snippet spacing inside one document, no dividers. -->
-			<ul class="mt-1 flex flex-col gap-3">
+			<!-- The dim lives on a wrapper so its micro-duration transition and the list's
+			     200ms entrance animation don't fight over one duration property. -->
+			<div
+				class="transition-opacity duration-(--duration-micro) {globalSearch.searching
+					? 'opacity-50'
+					: 'opacity-100'}"
+			>
+				{#key globalSearch.hits}
+					<!-- New results arrive as a 4px rise and fade at the disclosure budget; CSS,
+					     so the reduced-motion guard collapses it to 1ms. -->
+					<!-- The gap between documents is the grouping signal: clearly wider than the
+					     snippet spacing inside one document, no dividers. -->
+					<ul
+						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) mt-1 flex flex-col gap-3"
+					>
 				{#each globalSearch.hits as hit (hit.noteId)}
 					{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
 					{@const count = hit.titleMatches.length + hit.matches.length}
@@ -322,7 +343,9 @@
 						{/if}
 					</li>
 				{/each}
-			</ul>
+				</ul>
+			{/key}
+		</div>
 		{/if}
 	</div>
 </div>

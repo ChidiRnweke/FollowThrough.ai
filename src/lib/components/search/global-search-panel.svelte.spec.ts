@@ -141,6 +141,15 @@ describe('Result rows', () => {
 	});
 });
 
+describe('While a refinement searches', () => {
+	it('keeps the current results mounted rather than swapping them for the spinner', async () => {
+		seedResults();
+		globalSearch.searching = true;
+		const screen = await render(GlobalSearchPanel, {});
+		await expect.element(screen.getByText('2 matches')).toBeVisible();
+	});
+});
+
 describe('Empty states', () => {
 	it('invites a search when nothing has been typed', async () => {
 		const screen = await render(GlobalSearchPanel, {});
