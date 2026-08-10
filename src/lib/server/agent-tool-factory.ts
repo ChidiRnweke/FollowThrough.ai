@@ -36,14 +36,6 @@ import {
 import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import {
-	createUseToolAttempts,
-	invalidUseToolEnvelope,
-	invalidUseToolPayload,
-	resolveUseToolPayload,
-	unknownUseToolName,
-	useToolEnvelopeSchema
-} from './services/agent/runs/tool-recovery';
-import {
 	projectMemory,
 	projectNoteSummary,
 	projectNoteView,
@@ -464,10 +456,41 @@ export interface AgentToolDefinition {
 
 type Definition = AgentToolDefinition;
 
-const isInvalidToolInput = (
-	error: unknown
-): error is { readonly toolInvocation: Readonly<Record<string, unknown>> } =>
-	typeof error === 'object' && error !== null && 'toolInvocation' in error;
+/**
+ * True when a tool asks the model for nothing at all — the server resolves the
+ * actor and workspace from run context, so the only valid argument object is
+ * `{}`.
+ */
+const declaresNoFields = (schema: Record<string, unknown>): boolean => {
+	const properties = schema.properties;
+	const required = schema.required;
+	const hasProperties =
+		typeof properties === 'object' && properties !== null && Object.keys(properties).length > 0;
+	const hasRequired = Array.isArray(required) && required.length > 0;
+	return !hasProperties && !hasRequired;
+};
+
+/**
+ * The SDK parses a tool call's raw argument string with `JSON.parse` before our
+ * handler runs, so a model that answers an argument-free tool with `""` — there
+ * is nothing to fill in, after all — fails inside the SDK with
+ * `InvalidToolInputError` and never reaches the tool. A production run spun
+ * through thirteen consecutive workspace-grounding calls this way, growing the
+ * prompt each time, and died on the token ceiling.
+ *
+ * Only a blank string on a tool that declares no fields is repaired, and only to
+ * the `{}` the model meant. Malformed non-empty JSON still fails its normal
+ * validation, and tools that take arguments are untouched.
+ */
+const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
+	if (built.type !== 'function') return built;
+	const invoke = built.invoke.bind(built);
+	return {
+		...built,
+		invoke: (runContext, input, details) =>
+			invoke(runContext, input.trim().length === 0 ? '{}' : input, details)
+	};
+};
 
 export class AgentTools {
 	constructor(
@@ -512,29 +535,36 @@ export class AgentTools {
 
 	/**
 	 * Context-reducing surface for the agent. Frequently used grounding tools are
-	 * registered directly. `search_tools` discovers every long-tail capability and
-	 * `use_tool` dispatches it by exact name.
+	 * registered directly; `search_tools` discovers every long-tail capability and
+	 * promotes it to a direct, flat-schema tool.
+	 *
+	 * `alreadyPromoted` re-enables tools an earlier turn in the same conversation
+	 * discovered. Without it the promotion set is rebuilt empty on every user
+	 * message while the model's own transcript still shows it calling those tools
+	 * directly — so it repeats the call and gets `Tool not found`, which is exactly
+	 * the production failure where a request was retried six times and the edit
+	 * never landed.
 	 */
-	agentTools(): Tool<unknown>[] {
+	agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
 		const definitions = this.definitions();
 		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
-		const names = definitions.map((definition) => definition.name);
 		const firstClass = new Set(FIRST_CLASS_TOOL_NAMES);
 		const selected = FIRST_CLASS_TOOL_NAMES.map((name) => byName.get(name)).filter(
 			(definition): definition is Definition => definition !== undefined
 		);
 		const direct = selected.map((definition) => this.buildTool(definition));
-		const attempts = createUseToolAttempts();
 
-		// `use_tool` presents the tool's arguments as a free-form `payload` object,
-		// which `z.toJSONSchema` renders with no properties at all — the model is
-		// asked to fill a shape it was never shown, and several model families
-		// answer with an empty object forever. So every long-tail tool is also
-		// registered directly and gated behind `isEnabled`: once `search_tools`
-		// surfaces one, the next turn sees it as an ordinary flat tool with named,
-		// typed arguments, which is the shape models fill reliably. The SDK
-		// re-evaluates `isEnabled` per turn, so nothing has to be rebuilt mid-run.
-		const promoted = new Set<string>();
+		// Every long-tail tool is registered with its real flat schema but gated
+		// behind `isEnabled`. The SDK drops disabled function tools in
+		// `Agent.getAllTools` before serializing the request, so a gated tool costs
+		// no prompt tokens, and `isEnabled` is re-evaluated before every generation
+		// — so a tool `search_tools` promotes is callable on the very next one.
+		// That is what lets the whole catalog be directly callable without paying
+		// for the whole catalog, and it is why there is no `use_tool` envelope here:
+		// the envelope's free-form `payload` renders as a property-less JSON schema,
+		// so the model was asked to fill a shape it had never been shown, and
+		// several model families answered with an empty object forever.
+		const promoted = new Set<string>(alreadyPromoted);
 		const discoverable = definitions
 			.filter((definition) => !firstClass.has(definition.name))
 			.map((definition) =>
@@ -544,7 +574,7 @@ export class AgentTools {
 		const searchTools = tool({
 			name: 'search_tools',
 			description:
-				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema, and becomes callable by its own name as a top-level tool from your next message onward — prefer calling it that way, with its arguments as flat top-level fields.',
+				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.',
 			parameters: z.toJSONSchema(
 				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
 			) as never,
@@ -570,73 +600,7 @@ export class AgentTools {
 			}
 		});
 
-		const useTool = tool({
-			name: 'use_tool',
-			description:
-				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools, when that tool is not already callable directly. Put the tool\'s arguments under the "payload" field of {"name":"exact_name","payload":{...}}. For example, after search_tools returns edit_note, call use_tool with {"name":"edit_note","payload":{"noteId":"<the note\'s uuid>","edits":[{"oldText":"<exact text copied from get_note>","newText":"<replacement>"}]}}. If you cannot build that nested object, send the same fields as a JSON string in "arguments" instead.',
-			parameters: z.toJSONSchema(useToolEnvelopeSchema) as never,
-			strict: false,
-			// A payload that cannot pass the target's schema can only fail, so it must
-			// not park the run: asking the user to approve a doomed call costs a whole
-			// resume — a fresh trace, a replayed transcript and another billed turn —
-			// and hands the model back the same dead end. The same holds for a
-			// schema-valid call the target's own preflight gate rejects, such as a note
-			// edit whose anchors match nothing. Let it fail in `execute` instead, which
-			// returns the recovery inside this turn.
-			needsApproval: async (_context, input) => {
-				const envelope = useToolEnvelopeSchema.safeParse(input);
-				if (!envelope.success) return false;
-				const target = byName.get(envelope.data.name);
-				if (target?.classification !== 'mutation' || this.mode !== 'approval_required')
-					return false;
-				const resolved = resolveUseToolPayload(envelope.data);
-				return (
-					resolved.ok &&
-					target.parameters.safeParse(resolved.payload).success &&
-					(!target.preflight || (await target.preflight(resolved.payload)))
-				);
-			},
-			errorFunction: (_context, error) =>
-				JSON.stringify(
-					isInvalidToolInput(error)
-						? invalidUseToolEnvelope()
-						: { failure: error instanceof Error ? error.message : String(error) }
-				),
-			execute: async (input, _runContext, details) => {
-				const envelope = useToolEnvelopeSchema.safeParse(input);
-				if (!envelope.success) return invalidUseToolEnvelope(envelope.error);
-				const { name } = envelope.data;
-				const target = byName.get(name);
-				if (!target) return unknownUseToolName(name, names);
-				const resolved = resolveUseToolPayload(envelope.data);
-				const payload = resolved.ok ? resolved.payload : {};
-				const validation = target.parameters.safeParse(payload);
-				if (!validation.success) {
-					// The tool is offered directly from here on, so the escalated recovery
-					// has somewhere to send a model that keeps failing the envelope.
-					promoted.add(target.name);
-					return invalidUseToolPayload(
-						target.name,
-						validation.error,
-						z.toJSONSchema(target.parameters),
-						attempts.record(target.name, payload)
-					);
-				}
-				const parsed = validation.data as Record<string, unknown>;
-				if (!this.toolExecutor) return target.execute(parsed);
-				return this.toolExecutor.execute(
-					{
-						callId: String(details?.toolCall?.callId ?? ''),
-						toolName: target.name,
-						arguments: parsed,
-						classification: target.classification
-					},
-					() => target.execute(parsed)
-				);
-			}
-		});
-
-		return [...direct, ...discoverable, searchTools, useTool];
+		return [...direct, ...discoverable, searchTools];
 	}
 
 	/** Static name + description catalog, used by the tool retriever. */
@@ -656,10 +620,11 @@ export class AgentTools {
 		// Captured so the approval callback below can narrow it: property narrowing
 		// does not survive into a nested closure.
 		const gate = definition.preflight;
-		return tool({
+		const schema = z.toJSONSchema(definition.parameters);
+		const built = tool({
 			name: definition.name,
 			description: definition.description,
-			parameters: z.toJSONSchema(definition.parameters) as never,
+			parameters: schema as never,
 			strict: false,
 			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
 			// The approval boundary consults the tool's preflight gate before parking:
@@ -688,6 +653,7 @@ export class AgentTools {
 				);
 			}
 		});
+		return declaresNoFields(schema) ? withBlankInputTolerated(built) : built;
 	}
 
 	private buildDefinitions(): Definition[] {
@@ -1395,7 +1361,21 @@ export class AgentTools {
 					executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
 					inlineSuggestionsEnabled: z.boolean().optional()
 				}),
-				(input) => factory.agentSettings().updatePreferences(actor, input)
+				/**
+				 * The one write in the catalog that has to be asked for its own before-image.
+				 * Every other mutating tool hands back the record whole, so the chat can show
+				 * what a call did by reading the post-state against the arguments that set it —
+				 * but a preference is a bare scalar, and "Default model: claude-opus-5" does not
+				 * say whether that was a change or a restatement. Preferences are set rarely
+				 * enough that one extra read costs nothing, and guessing the previous value
+				 * client-side would mean reading it back *after* the write, which is the one
+				 * moment it is guaranteed to be wrong.
+				 */
+				async (input) => {
+					const previous = await factory.agentSettings().getPreferences(actor);
+					const updated = await factory.agentSettings().updatePreferences(actor, input);
+					return { ...updated, previous };
+				}
 			),
 			define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
 				factory.agentSettings().listModels(actor)

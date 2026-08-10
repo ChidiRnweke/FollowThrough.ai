@@ -46,33 +46,53 @@ describe('A row names the thing it touched', () => {
 	});
 });
 
-describe('An expanded row shows both halves of the call', () => {
-	const expanded = async (tool: ChatToolActivity) => {
-		const screen = await renderRow(tool);
-		await screen.getByRole('button', { name: /Read note/ }).click();
-		return screen;
-	};
-
-	it('shows what the call sent', async () => {
-		const screen = await expanded(call({ arguments: { noteId: NOTE_ID, query: 'rollout plan' } }));
-		await expect.element(screen.getByText('Search: rollout plan')).toBeVisible();
+describe('A disclosure is earned by having something behind it', () => {
+	// A chevron on every row was the problem: a settled `get_note` opened onto `Title:
+	// Infrastructure` under a row already reading `Read note · Infrastructure`, and a
+	// disclosure that pays out nothing teaches the reader not to open the next one.
+	it('gives a read of one thing no disclosure, because the row already says it', async () => {
+		const screen = await renderRow(call({}));
+		expect(await screen.getByRole('button', { name: /Read note/ }).all()).toHaveLength(0);
 	});
 
-	it('shows what the call returned', async () => {
-		const screen = await expanded(call({ output: [{ title: 'Runtime notes' }] }));
-		await expect.element(screen.getByText('1 result')).toBeVisible();
-	});
-
-	it('shows a failure instead of a result', async () => {
+	it('gives a read of many things a disclosure onto what came back', async () => {
 		const screen = await renderRow(
-			call({ status: 'failed', failure: 'The note was locked.', output: undefined })
+			call({ name: 'list_todos', arguments: {}, output: { todos: [{ title: 'Draft the RFC' }] } })
 		);
-		await screen.getByRole('button', { name: /Read note failed/ }).click();
-		await expect.element(screen.getByText('The note was locked.')).toBeVisible();
+		await screen.getByRole('button', { name: /List todos completed/ }).click();
+		await expect.element(screen.getByText('Draft the RFC')).toBeVisible();
 	});
 
-	it('keeps raw payloads behind an action rather than on the page', async () => {
-		const screen = await expanded(call({ output: [{ title: 'Runtime notes' }] }));
+	it('gives a write a disclosure onto what changed', async () => {
+		const screen = await renderRow(
+			call({ name: 'update_todo', arguments: { todoId: NOTE_ID, status: 'done' }, output: {} })
+		);
+		await screen.getByRole('button', { name: /Updated todo/ }).click();
+		await expect.element(screen.getByText('done', { exact: true })).toBeVisible();
+	});
+});
+
+describe('A failed call says what went wrong in the reader terms', () => {
+	it('explains the failure rather than repeating the run own sentence', async () => {
+		const screen = await renderRow(
+			call({
+				name: 'edit_note',
+				status: 'failed',
+				failure: 'oldText was not found in the note.',
+				output: undefined
+			})
+		);
+		await screen.getByRole('button', { name: /Note was not saved/ }).click();
+		await expect
+			.element(screen.getByText(/The text it meant to change was not where it expected/))
+			.toBeVisible();
+	});
+
+	it('keeps the raw payload behind an action rather than on the page', async () => {
+		const screen = await renderRow(
+			call({ name: 'list_todos', arguments: {}, output: { todos: [{ title: 'Runtime notes' }] } })
+		);
+		await screen.getByRole('button', { name: /List todos completed/ }).click();
 		await expect.element(screen.getByRole('button', { name: 'Copy raw' })).toBeInTheDocument();
 	});
 });

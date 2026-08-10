@@ -37,6 +37,7 @@ const toolNames = async (scope: ApiTokenScope): Promise<string[]> => {
 describe('MCP tool surface', () => {
 	it('advertises the first-class tools plus the two meta-tools', async () => {
 		expect(await toolNames('full')).toEqual([
+			'edit_note',
 			'get_note',
 			'get_workspace_context',
 			'list_project_memory',
@@ -44,6 +45,7 @@ describe('MCP tool surface', () => {
 			'list_user_memory',
 			'load_skill',
 			'propose_memory_change',
+			'save_note',
 			'search',
 			'search_note',
 			'search_tools',

@@ -8,9 +8,10 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { Button } from '$lib/components/ui/button';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 	import {
+		FtChevronRight,
 		FtDocument,
-		FtEllipsis,
 		FtExternal,
 		FtFolder,
 		FtLoader,
@@ -18,8 +19,9 @@
 		FtTodos
 	} from '$lib/components/icons';
 	import { turnActivity, turnSteps, type TouchedThing } from '$lib/components/agent';
-	import TurnDetailsDialog from './turn-details-dialog.svelte';
+	import ToolRow from './tool-row.svelte';
 	import TurnFailure from './turn-failure.svelte';
+	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
 
 	let {
 		tools,
@@ -61,7 +63,12 @@
 	const stepCount = $derived(logged.length);
 	const hasLog = $derived(showLog && stepCount > 0);
 
-	let detailsOpen = $state(false);
+	/**
+	 * State, never `$derived` of the run: a turn that is still streaming re-renders on every
+	 * delta, and a derived flag would throw away the reader's click each time — the same trap
+	 * `chat-reasoning.svelte` documents.
+	 */
+	let logOpen = $state(false);
 
 	/**
 	 * `update_todo` names its subject by id alone, so a resolved title is the difference
@@ -122,9 +129,9 @@
 {#snippet rowBody(row: TouchedThing)}
 	{@const Icon = icons[row.kind]}
 	{#if row.pending}
-		<FtLoader class="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
 	{:else}
-		<Icon class="size-3.5 shrink-0 text-muted-foreground" />
+		<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
 	{/if}
 	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
 	     entries scan as the columns of a table that has no other rows. -->
@@ -150,13 +157,13 @@
 			{#each rows as row, index (`${row.kind}-${row.id ?? row.title}-${index}`)}
 				<li>
 					{#if row.id}
-						<!-- `justify-start` and `font-normal` are neutralised explicitly: the
-						     variant's centring and weight have no counterpart here and would
-						     otherwise survive into a row that has to read as a list item. -->
+						<!-- `CHAT_ROW` neutralises the variant's centring and weight explicitly:
+						     they have no counterpart in a bare geometry class and would otherwise
+						     survive into a row that has to read as a list item. -->
 						<Button
 							variant="ghost"
 							size="sm"
-							class="group/touched h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal"
+							class="group/touched {CHAT_ROW}"
 							onclick={() => open(row)}
 						>
 							{@render rowBody(row)}
@@ -166,7 +173,7 @@
 						</Button>
 					{:else}
 						<!-- Nothing to open, so nothing that looks like it opens. -->
-						<div class="flex w-full items-center gap-2 px-2 py-1.5 text-xs">
+						<div class={CHAT_ROW}>
 							{@render rowBody(row)}
 						</div>
 					{/if}
@@ -175,25 +182,44 @@
 			{#if hasLog}
 				<!-- The log joins the list rather than sitting under it as a caption: as bare
 				     ghost-button text, nothing said it could be clicked. It states its count
-				     instead of announcing itself. -->
+				     instead of announcing itself.
+
+				     It opens in place. As a dialog it was a second surface for the one thing in
+				     the turn that is pure evidence — the reader lost the conversation to read
+				     what was said about it, and came back having to find their place again. A
+				     chevron says the same thing the external-link glyph used to, and tells the
+				     truth about where the content will appear. -->
 				<li>
-					<Button
-						variant="ghost"
-						size="sm"
-						class="group/touched h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal text-muted-foreground"
-						onclick={() => (detailsOpen = true)}
-					>
-						<FtEllipsis class="size-3.5 shrink-0" />
-						<span class="min-w-0 truncate">{stepCount === 1 ? '1 step' : `${stepCount} steps`}</span
-						>
-						<FtExternal
-							class="size-3 shrink-0 opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
-						/>
-					</Button>
+					<Collapsible.Root bind:open={logOpen}>
+						<Collapsible.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="sm"
+									class="group/touched {CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
+								>
+									<FtChevronRight
+										class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
+									/>
+									<span class="min-w-0 truncate"
+										>{stepCount === 1 ? '1 step' : `${stepCount} steps`}</span
+									>
+								</Button>
+							{/snippet}
+						</Collapsible.Trigger>
+						<Collapsible.Content class={CHAT_ROW_DETAIL}>
+							<!-- Indented under the door it opened from, so the calls read as belonging
+							     to it rather than as more rows of the touched list. -->
+							<div class="flex flex-col {CHAT_ROW_INDENT}">
+								{#each logged as tool, index (tool.callId || index)}
+									<ToolRow {tool} {shell} />
+								{/each}
+							</div>
+						</Collapsible.Content>
+					</Collapsible.Root>
 				</li>
 			{/if}
 		</ul>
 	</div>
-
-	<TurnDetailsDialog bind:open={detailsOpen} tools={logged} {shell} />
 {/if}

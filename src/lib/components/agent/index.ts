@@ -11,4 +11,13 @@ export {
 	toolStatusParts
 } from './actions/tool-presentation';
 export { explainToolFailure, summariseToolResult } from './actions/tool-result';
+export {
+	opensInPlace,
+	toolDisclosure,
+	toolFamily,
+	type EntityKind,
+	type EntityRef,
+	type FieldChange,
+	type ToolDisclosure
+} from './actions/tool-disclosure';
 export { turnActivity, turnSteps, type TouchedThing } from './actions/turn-activity';

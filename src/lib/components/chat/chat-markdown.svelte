@@ -31,8 +31,15 @@
 	});
 </script>
 
+<!--
+	Quoted material is the one thing in a turn that is not the agent's own voice, so it reads as
+	borrowed rather than as emphasis: the hairline rail and muted text already used for an
+	anchor quote in `suggestion-card.svelte` and `provenance-dot.svelte`. Typography's own
+	blockquote — heavier rail, italic, curly quotes bolted on — is decoration on prose that is
+	already set apart by position, and italics cost legibility at this size.
+-->
 <div
-	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto"
+	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-blockquote:border-l-2 prose-blockquote:border-border prose-blockquote:pl-2 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic [&_blockquote_p:first-of-type::before]:content-none [&_blockquote_p:last-of-type::after]:content-none"
 >
 	{#each segments as segment, index (index)}
 		<!--

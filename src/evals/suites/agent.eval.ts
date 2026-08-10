@@ -38,7 +38,6 @@ const acceptanceCriteria = Object.values(ARCHETYPES).map((archetype) =>
 	archetype === ARCHETYPES.memoryTaskRead ||
 	archetype === ARCHETYPES.skillProactiveLoad ||
 	archetype === ARCHETYPES.taskCompletion ||
-	archetype === ARCHETYPES.contextContinuity ||
 	archetype === ARCHETYPES.reworkAvoidance
 		? passRate(archetype, 0.8)
 		: passRate(archetype)
@@ -75,7 +74,7 @@ const allCases = [
 	...timeAwarenessCases,
 	...parallelExecutionCases,
 	// Production completion regressions: red canaries that reproduce observed
-	// failures (narration-only turns, "continue" restarts, duplicated writes).
+	// failures (narration-only turns, duplicated writes).
 	...completionRegressionCases
 ];
 

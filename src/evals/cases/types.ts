@@ -83,8 +83,6 @@ export const ARCHETYPES = {
 	skillProactiveLoad: 'skill_proactive_load',
 	/** Does the agent actually land the requested effect instead of ending the turn in narration? */
 	taskCompletion: 'task_completion',
-	/** Does a terse "continue" resume the in-flight task rather than restart the reads? */
-	contextContinuity: 'context_continuity',
 	/** Does re-running an identical request avoid duplicating the side effects it already produced? */
 	reworkAvoidance: 'rework_avoidance'
 } as const;

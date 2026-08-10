@@ -54,11 +54,14 @@ const enabledToolNames = async (tools: readonly { name: string }[]): Promise<str
 	return names;
 };
 
-const indirectToolFor = (
+const agentToolsFor = (
 	mode: 'approval_required' | 'auto_accept',
-	name: 'search_tools' | 'use_tool',
-	options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
-): FunctionTool =>
+	options: {
+		factory?: ControllerFactory;
+		retriever?: InMemoryToolRetriever;
+		promoted?: readonly string[];
+	} = {}
+) =>
 	new AgentTools(
 		options.factory ?? ({} as ControllerFactory),
 		testActor(),
@@ -70,9 +73,29 @@ const indirectToolFor = (
 		},
 		undefined,
 		options.retriever
-	)
-		.agentTools()
-		.find((candidate) => candidate.name === name) as FunctionTool;
+	).agentTools(options.promoted ?? []);
+
+const indirectToolFor = (
+	mode: 'approval_required' | 'auto_accept',
+	name: 'search_tools',
+	options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+): FunctionTool =>
+	agentToolsFor(mode, options).find((candidate) => candidate.name === name) as FunctionTool;
+
+/**
+ * A long-tail tool as the model sees it once `search_tools` has surfaced it: a
+ * direct tool taking its own flat arguments. First-class tools resolve the same
+ * way without needing the promotion, which is the point — there is one call
+ * shape, not two.
+ */
+const directToolFor = (
+	mode: 'approval_required' | 'auto_accept',
+	name: string,
+	options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+): FunctionTool =>
+	agentToolsFor(mode, { ...options, promoted: [name] }).find(
+		(candidate) => candidate.name === name
+	) as FunctionTool;
 
 describe('Agent tool coverage invariants', () => {
 	it('classifies every covered controller method', () => {
@@ -130,8 +153,9 @@ describe('Agent tool coverage invariants', () => {
 			'list_todos',
 			'load_skill',
 			'propose_memory_change',
-			'search_tools',
-			'use_tool'
+			'edit_note',
+			'save_note',
+			'search_tools'
 		]);
 	});
 
@@ -159,7 +183,9 @@ describe('Agent tool coverage invariants', () => {
 				'get_note',
 				'list_todos',
 				'load_skill',
-				'propose_memory_change'
+				'propose_memory_change',
+				'edit_note',
+				'save_note'
 			].filter((name) => names.has(name))
 		).toEqual([]);
 	});
@@ -228,12 +254,15 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(saveNote?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
 	});
 
-	it('keeps save_note searchable instead of offering it before it is discovered', async () => {
+	// Note writes are the app's most common mutation and every production
+	// "Tool not found" failure was one. Making them first-class removes the
+	// discovery round-trip that was losing the user's edit.
+	it('offers save_note directly instead of hiding it behind discovery', async () => {
 		const available = registry('auto_accept');
 		expect([
 			(await enabledToolNames(available.agentTools())).includes('save_note'),
 			available.catalog().some((candidate) => candidate.name === 'save_note')
-		]).toEqual([false, true]);
+		]).toEqual([true, false]);
 	});
 
 	it('advertises only noteId and edits for edit_note', () => {
@@ -243,12 +272,12 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(editNote?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
 	});
 
-	it('keeps edit_note searchable instead of offering it before it is discovered', async () => {
+	it('offers edit_note directly instead of hiding it behind discovery', async () => {
 		const available = registry('auto_accept');
 		expect([
 			(await enabledToolNames(available.agentTools())).includes('edit_note'),
 			available.catalog().some((candidate) => candidate.name === 'edit_note')
-		]).toEqual([false, true]);
+		]).toEqual([true, false]);
 	});
 
 	it('classifies edit_note as a mutation', () => {
@@ -549,36 +578,22 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
-		const selected = indirectToolFor('approval_required', 'use_tool');
+		const selected = directToolFor('approval_required', 'create_note');
 		expect(
-			await selected.needsApproval(
-				{} as never,
-				{ name: 'create_note', payload: { title: 'Decision log' } } as never,
-				'call-1'
-			)
+			await selected.needsApproval({} as never, { title: 'Decision log' } as never, 'call-1')
 		).toBe(true);
 	});
 
 	it('runs long-tail mutations without approval in auto-accept mode', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const selected = directToolFor('auto_accept', 'create_note');
 		expect(
-			await selected.needsApproval(
-				{} as never,
-				{ name: 'create_note', payload: { title: 'Decision log' } } as never,
-				'call-1'
-			)
+			await selected.needsApproval({} as never, { title: 'Decision log' } as never, 'call-1')
 		).toBe(false);
 	});
 
 	it('runs long-tail reads without approval', async () => {
-		const selected = indirectToolFor('approval_required', 'use_tool');
-		expect(
-			await selected.needsApproval(
-				{} as never,
-				{ name: 'list_projects', payload: {} } as never,
-				'call-1'
-			)
-		).toBe(false);
+		const selected = directToolFor('approval_required', 'list_projects');
+		expect(await selected.needsApproval({} as never, {} as never, 'call-1')).toBe(false);
 	});
 
 	it('threads the run provenanceId into load_skill even when the context omits it (1/2)', async () => {
@@ -680,11 +695,8 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({ name: 'list_projects', payload: {} })
-		);
+		const selected = directToolFor('auto_accept', 'list_projects', { factory });
+		const result = await selected.invoke({} as never, JSON.stringify({}));
 		expect(result).toEqual({
 			projects: [{ id: 'project-1', name: 'General', createdAt: '2026-01-01T00:00:00.000Z' }]
 		});
@@ -701,14 +713,11 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const result = await indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+		const result = await directToolFor('auto_accept', 'list_projects', { factory }).invoke(
 			{} as never,
 			JSON.stringify({
-				name: 'list_projects',
-				payload: {
-					createdAfter: '2026-02-01T00:00:00.000Z',
-					createdBefore: '2026-02-01T00:00:00.000Z'
-				}
+				createdAfter: '2026-02-01T00:00:00.000Z',
+				createdBefore: '2026-02-01T00:00:00.000Z'
 			})
 		);
 		expect(result).toEqual({
@@ -717,20 +726,17 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('rejects a reversed creation-time range', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const selected = directToolFor('auto_accept', 'list_projects');
 		const result = await selected.invoke(
 			{} as never,
 			JSON.stringify({
-				name: 'list_projects',
-				payload: {
-					createdAfter: '2026-02-01T00:00:00.000Z',
-					createdBefore: '2026-01-01T00:00:00.000Z'
-				}
+				createdAfter: '2026-02-01T00:00:00.000Z',
+				createdBefore: '2026-01-01T00:00:00.000Z'
 			})
 		);
-		expect(result).toMatchObject({
-			issues: [{ message: 'createdAfter must be before or equal to createdBefore' }]
-		});
+		// The direct path validates against the tool's own schema in the SDK, so the
+		// refusal reaches the model as a `failure` carrying the zod issues.
+		expect(String(result)).toContain('createdAfter must be before or equal to createdBefore');
 	});
 
 	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
@@ -744,19 +750,16 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const selected = directToolFor('auto_accept', 'create_todos', { factory });
 		const _result = await selected.invoke(
 			{} as never,
 			JSON.stringify({
-				name: 'create_todos',
-				payload: {
-					projectId,
-					todos: [
-						{ title: 'Renew TLS certificates', responsibility: 'mine' },
-						{ title: 'Book offsite flights', responsibility: 'mine' },
-						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-					]
-				}
+				projectId,
+				todos: [
+					{ title: 'Renew TLS certificates', responsibility: 'mine' },
+					{ title: 'Book offsite flights', responsibility: 'mine' },
+					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+				]
 			})
 		);
 		expect(calls).toHaveLength(3);
@@ -773,19 +776,16 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const selected = directToolFor('auto_accept', 'create_todos', { factory });
 		const _result = await selected.invoke(
 			{} as never,
 			JSON.stringify({
-				name: 'create_todos',
-				payload: {
-					projectId,
-					todos: [
-						{ title: 'Renew TLS certificates', responsibility: 'mine' },
-						{ title: 'Book offsite flights', responsibility: 'mine' },
-						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-					]
-				}
+				projectId,
+				todos: [
+					{ title: 'Renew TLS certificates', responsibility: 'mine' },
+					{ title: 'Book offsite flights', responsibility: 'mine' },
+					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+				]
 			})
 		);
 		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
@@ -802,19 +802,16 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const selected = directToolFor('auto_accept', 'create_todos', { factory });
 		const result = await selected.invoke(
 			{} as never,
 			JSON.stringify({
-				name: 'create_todos',
-				payload: {
-					projectId,
-					todos: [
-						{ title: 'Renew TLS certificates', responsibility: 'mine' },
-						{ title: 'Book offsite flights', responsibility: 'mine' },
-						{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-					]
-				}
+				projectId,
+				todos: [
+					{ title: 'Renew TLS certificates', responsibility: 'mine' },
+					{ title: 'Book offsite flights', responsibility: 'mine' },
+					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
+				]
 			})
 		);
 		expect(result).toEqual({
@@ -839,22 +836,17 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('rejects invalid create_todos payloads with a model-readable error', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
+		const selected = directToolFor('auto_accept', 'create_todos');
 		const projectId = crypto.randomUUID();
+		const results: string[] = [];
 		for (const payload of [
 			{ projectId, todos: [] },
 			{ projectId, todos: [{ responsibility: 'mine' }] },
 			{ projectId }
 		]) {
-			const result = await selected.invoke(
-				{} as never,
-				JSON.stringify({ name: 'create_todos', payload })
-			);
-			expect(result).toMatchObject({
-				failure: 'Invalid payload for "create_todos".',
-				input_schema: { type: 'object' }
-			});
+			results.push(String(await selected.invoke({} as never, JSON.stringify(payload))));
 		}
+		expect(results.every((result) => result.includes('failure'))).toBe(true);
 	});
 
 	it('keeps create_todos in the long-tail catalog, not the first-class tools (1/2)', () => {
@@ -867,112 +859,54 @@ describe('Agent tool coverage invariants', () => {
 		expect(await enabledToolNames(instance.agentTools())).not.toContain('create_todos');
 	});
 
-	it('does not execute a guessed long-tail tool name', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({ name: 'creat_note', payload: { title: 'Decision log' } })
-		);
-		expect(result).toMatchObject({
-			failure: expect.stringContaining('Did you mean'),
-			suggestions: expect.arrayContaining([{ name: 'create_note', invokeVia: 'use_tool' }])
-		});
-	});
-
-	it('returns every close long-tail tool name without executing one', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({ name: 'list_artifact', payload: {} })
-		);
-		expect(result).toMatchObject({
-			suggestions: [
-				{ name: 'list_artifacts', invokeVia: 'use_tool' },
-				{ name: 'get_artifact', invokeVia: 'use_tool' }
-			]
-		});
-	});
-
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({ name: 'create_note', payload: {} })
-		);
-		expect(result).toMatchObject({
-			failure: 'Invalid payload for "create_note".',
-			input_schema: { type: 'object' }
-		});
+		const selected = directToolFor('auto_accept', 'create_note');
+		const result = await selected.invoke({} as never, JSON.stringify({}));
+		expect(String(result)).toContain('failure');
 	});
 
-	it('guides a double-serialized arguments envelope without throwing', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				arguments: JSON.stringify({
-					name: 'create_note',
-					payload: { title: 'Decision log' }
-				})
-			})
-		);
-		expect(result).toMatchObject({
-			failure: 'Invalid use_tool input.',
-			recovery: expect.stringContaining('exact search_tools name')
-		});
+	it('keeps a searched tool callable in a later turn of the same conversation', async () => {
+		// The promotion set is rebuilt per user message. Seeding it from the
+		// conversation's earlier tool calls is what stops turn 2 from failing a call
+		// that turn 1 made successfully.
+		const laterTurn = agentToolsFor('auto_accept', { promoted: ['create_note'] });
+		expect(await enabledToolNames(laterTurn)).toContain('create_note');
 	});
 
-	it('guides syntactically invalid use_tool JSON without throwing', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const result = await selected.invoke({} as never, '{"name":"create_note",');
-		expect(JSON.parse(result as string)).toMatchObject({
-			failure: 'Invalid use_tool input.',
-			recovery: expect.stringContaining('exact search_tools name')
-		});
-	});
-
-	it('does not park an approval on a payload that cannot pass the tool schema', async () => {
-		const selected = indirectToolFor('approval_required', 'use_tool');
-		expect(
-			await selected.needsApproval(
-				{} as never,
-				{ name: 'save_note', payload: {} } as never,
-				'call-1'
-			)
-		).toBe(false);
-	});
-
+	// A payload that cannot pass the tool's schema no longer needs its own approval
+	// carve-out: the SDK validates against the flat schema before dispatch, so it
+	// never reaches the approval boundary. The remaining case — a schema-valid call
+	// that is still doomed, such as an edit whose anchors match nothing — is held
+	// by `preflight` and covered by the edit_note approval tests below.
 	it('still parks an approval on a mutation whose payload is complete', async () => {
-		const selected = indirectToolFor('approval_required', 'use_tool');
+		const selected = directToolFor('approval_required', 'save_note');
 		expect(
 			await selected.needsApproval(
 				{} as never,
-				{
-					name: 'save_note',
-					payload: { noteId: crypto.randomUUID(), markdown: '# Notes' }
-				} as never,
+				{ noteId: crypto.randomUUID(), markdown: '# Notes' } as never,
 				'call-1'
 			)
 		).toBe(true);
 	});
 
-	it('escalates to the direct tool after repeated identical empty payloads', async () => {
-		const selected = indirectToolFor('auto_accept', 'use_tool');
-		const envelope = JSON.stringify({ name: 'create_note', payload: {} });
-		await selected.invoke({} as never, envelope);
-		await selected.invoke({} as never, envelope);
-		const third = await selected.invoke({} as never, envelope);
-		expect(third).toMatchObject({
-			recovery: expect.stringContaining('Stop calling use_tool for "create_note"')
-		});
+	// The SDK JSON.parses a call's raw arguments before our handler runs, so a
+	// model that answers an argument-free tool with "" — there is nothing to fill
+	// in — used to die on InvalidToolInputError without the tool ever running. One
+	// production trace spun through thirteen such calls and hit the token ceiling.
+	it('treats a blank call to an argument-free tool as an empty object', async () => {
+		const factory = {
+			workspace: () => ({ getShellContext: async () => ({ projects: [], notes: [] }) })
+		} as unknown as ControllerFactory;
+		const selected = directToolFor('auto_accept', 'get_workspace_context', { factory });
+		expect(String(await selected.invoke({} as never, ''))).not.toContain('failure');
 	});
 
-	it('offers a failed tool directly so the escalation has somewhere to send the model', async () => {
-		const available = registry('auto_accept');
-		const tools = available.agentTools();
-		const useTool = tools.find((candidate) => candidate.name === 'use_tool') as FunctionTool;
-		await useTool.invoke({} as never, JSON.stringify({ name: 'create_note', payload: {} }));
-		expect(await enabledToolNames(tools)).toContain('create_note');
+	it('still rejects malformed non-empty arguments', async () => {
+		const factory = {
+			workspace: () => ({ getShellContext: async () => ({ projects: [], notes: [] }) })
+		} as unknown as ControllerFactory;
+		const selected = directToolFor('auto_accept', 'get_workspace_context', { factory });
+		expect(String(await selected.invoke({} as never, '{"noteId":'))).toContain('failure');
 	});
 
 	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
@@ -987,13 +921,10 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const selected = directToolFor('auto_accept', 'save_note', { factory });
 		const result = await selected.invoke(
 			{} as never,
-			JSON.stringify({
-				name: 'save_note',
-				payload: { noteId: current.id, markdown: '# Profile\n\n- Engineer' }
-			})
+			JSON.stringify({ noteId: current.id, markdown: '# Profile\n\n- Engineer' })
 		);
 		expect(result).toEqual({
 			noteId: current.id,
@@ -1019,13 +950,10 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = indirectToolFor('auto_accept', 'use_tool', { factory });
+		const selected = directToolFor('auto_accept', 'save_note', { factory });
 		await selected.invoke(
 			{} as never,
-			JSON.stringify({
-				name: 'save_note',
-				payload: { noteId: current.id, markdown: 'New **body**' }
-			})
+			JSON.stringify({ noteId: current.id, markdown: 'New **body**' })
 		);
 		expect({
 			id: saved?.id,
@@ -1080,9 +1008,9 @@ describe('Agent tool coverage invariants', () => {
 			})
 		} as unknown as ControllerFactory;
 		const invoke = (edits: unknown) =>
-			indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+			directToolFor('auto_accept', 'edit_note', { factory }).invoke(
 				{} as never,
-				JSON.stringify({ name: 'edit_note', payload: { noteId: current.id, edits } })
+				JSON.stringify({ noteId: current.id, edits })
 			);
 		return { current, invoke, saved: () => saved };
 	};
@@ -1154,9 +1082,9 @@ describe('Agent tool coverage invariants', () => {
 			})
 		} as unknown as ControllerFactory;
 		const invoke = (name: string, payload: unknown) =>
-			indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+			directToolFor('auto_accept', name, { factory }).invoke(
 				{} as never,
-				JSON.stringify({ name, payload })
+				JSON.stringify(payload)
 			);
 		return { current, invoke, saved: () => saved };
 	};
@@ -1208,14 +1136,11 @@ describe('Agent tool coverage invariants', () => {
 			}),
 			notes: () => ({ save: async () => ({ note: {}, etag: '', repairedAnchorIds: [] }) })
 		} as unknown as ControllerFactory;
-		const result = await indirectToolFor('auto_accept', 'use_tool', { factory }).invoke(
+		const result = await directToolFor('auto_accept', 'edit_skill', { factory }).invoke(
 			{} as never,
-			JSON.stringify({
-				name: 'edit_skill',
-				payload: { noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] }
-			})
+			JSON.stringify({ noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] })
 		);
-		expect(result).toMatchObject({ failure: expect.stringContaining('not a skill') });
+		expect(String(result)).toContain('not a skill');
 	});
 
 	it('does not expose the agent controller recursively', () => {
@@ -1389,32 +1314,29 @@ describe('Doomed note edits never reach the approval boundary', () => {
 		).toBe(false);
 	});
 
-	it('does not park an approval on a schema-valid but doomed edit_note via use_tool', async () => {
+	it('does not park an approval on a schema-valid but doomed edit_note', async () => {
 		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
-		const selected = indirectToolFor('approval_required', 'use_tool', {
+		const selected = directToolFor('approval_required', 'edit_note', {
 			factory: notesFactory(note)
 		});
 		expect(
 			await selected.needsApproval(
 				{} as never,
-				{
-					name: 'edit_note',
-					payload: edits(note.id, 'This sentence is not in the note.')
-				} as never,
+				edits(note.id, 'This sentence is not in the note.') as never,
 				'call-1'
 			)
 		).toBe(false);
 	});
 
-	it('still parks an approval on an applying edit_note via use_tool', async () => {
+	it('still parks an approval on an applying edit_note', async () => {
 		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
-		const selected = indirectToolFor('approval_required', 'use_tool', {
+		const selected = directToolFor('approval_required', 'edit_note', {
 			factory: notesFactory(note)
 		});
 		expect(
 			await selected.needsApproval(
 				{} as never,
-				{ name: 'edit_note', payload: edits(note.id, 'Replace this sentence.') } as never,
+				edits(note.id, 'Replace this sentence.') as never,
 				'call-1'
 			)
 		).toBe(true);
@@ -1497,14 +1419,11 @@ describe('Deselected tools', () => {
 		expect(LOCKED_TOOL_NAMES.filter((name) => !names.has(name))).toEqual([]);
 	});
 
-	it('refuses a deselected tool by name through use_tool', async () => {
-		const selected = without('archive_project')
-			.agentTools()
-			.find((candidate) => candidate.name === 'use_tool') as FunctionTool;
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({ name: 'archive_project', payload: {} })
-		);
-		expect((result as { failure?: string }).failure).toBeDefined();
+	// With no wrapper tool to dispatch by name, a deselected tool has to be absent
+	// from the surface itself — including when something claims it was already
+	// promoted, which must not resurrect a capability the user turned off.
+	it('never surfaces a deselected tool, even if it is claimed as promoted', async () => {
+		const surface = without('archive_project').agentTools(['archive_project']);
+		expect(surface.map((candidate) => candidate.name)).not.toContain('archive_project');
 	});
 });

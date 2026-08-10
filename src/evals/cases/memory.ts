@@ -280,16 +280,16 @@ export const memoryCases: readonly EvalCase[] = [
 	},
 	{
 		id: 'memory-task-read-before-dependent-work',
-		name: 'reads memory before work whose correct output depends on a stored preference',
+		name: 'applies an injected profile preference without rereading it',
 		splits: [ARCHETYPES.memoryTaskRead],
 		input: {
 			prompt:
 				'Rewrite the first paragraph of my Background note using my preferred spelling conventions.'
 		},
-		expected: { requiredTools: ['list_user_memory', 'list_project_memory'] },
+		expected: { spelling: 'british' },
 		metadata: {
 			observedAt: '2026-08-09',
-			note: 'Production regression: list_user_memory was called 0 times in 51 sessions. A stored spelling preference exists but is never read, so the rewrite cannot honour it.'
+			note: 'Reframed from a tool-call gate. Profile memory is injected into every system prompt by AgentRunContext, so requiring list_user_memory asserted a redundant read the context builder deliberately makes unnecessary — and the old version also required list_project_memory while seeding no project memory and passing no projectId, which made it unpassable. The note now seeds American spellings so only the stored preference can produce the British rewrite.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, {
@@ -302,7 +302,7 @@ export const memoryCases: readonly EvalCase[] = [
 						notes: [
 							{
 								title: 'Background',
-								body: 'This organisation specialises in behaviour-driven platform engineering and colour-coded dashboards.'
+								body: 'This organization specializes in behavior-driven platform engineering and color-coded dashboards.'
 							}
 						]
 					}
@@ -310,7 +310,8 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
+				mode: 'auto_accept',
+				projectId: workspace.projectIds.get('Profile')
 			});
 			px.logOutput({
 				model: result.model,
@@ -318,18 +319,102 @@ export const memoryCases: readonly EvalCase[] = [
 				toolCalls: result.calledToolNames
 			});
 
-			const verdict = scoreToolCalling(result, {
-				required: this.expected.requiredTools as string[]
-			});
+			const noteId = workspace.noteIds.get('Background')!;
+			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const body = view.note.plainText.toLowerCase();
+			const british = ['organisation', 'behaviour', 'colour'].filter((word) => body.includes(word));
+			const american = ['organization', 'behavior', 'color'].filter((word) => body.includes(word));
+			const applied = british.length === 3 && american.length === 0;
+
 			px.logAnnotation({
 				name: ARCHETYPES.memoryTaskRead,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'read_memory' : 'guessed',
-				explanation: verdict.explanation
+				score: applied ? 1 : 0,
+				label: applied ? 'applied_memory' : 'ignored_memory',
+				explanation: `British forms present: ${british.join(', ') || 'none'}; American forms remaining: ${american.join(', ') || 'none'}`
+			});
+			// Diagnostic only: the preference is already in the system prompt, so a
+			// list call is neither required nor forbidden — it is simply redundant.
+			px.logAnnotation({
+				name: 'redundant_memory_read',
+				score: result.calledToolNames.includes('list_user_memory') ? 0 : 1,
+				label: result.calledToolNames.includes('list_user_memory') ? 'reread' : 'used_injected',
+				explanation: `tools: ${result.calledToolNames.join(', ') || 'none'}`
 			});
 
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect(
+				{
+					status: result.status,
+					applied,
+					detail: `British: ${british.join(', ') || 'none'} / American left: ${american.join(', ') || 'none'}`
+				},
+				result.failure ?? 'the rewrite must apply the injected British-English preference'
+			).toEqual({
+				status: 'completed',
+				applied: true,
+				detail: 'British: organisation, behaviour, colour / American left: none'
+			});
+		}
+	},
+	{
+		id: 'memory-project-scoped-fetch',
+		name: 'fetches project memory when a project convention governs the output',
+		splits: [ARCHETYPES.memoryTaskRead],
+		input: {
+			prompt:
+				'Draft the acceptance criteria section for the Ledger Service release note, following our project conventions.'
+		},
+		expected: { convention: 'gherkin' },
+		metadata: {
+			observedAt: '2026-08-10',
+			note: 'Project memory is deliberately NOT injected into the system prompt (see AgentRunContext) — the agent must call list_project_memory when a project convention could govern the result. The convention is hidden: it exists only in project-scoped memory, so an agent that never fetches it cannot produce Gherkin.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Ledger Service',
+						memories: [
+							'Convention: every acceptance criterion is written in Gherkin, using Given/When/Then lines.'
+						],
+						notes: [
+							{
+								title: 'Release Note',
+								body: 'Ledger Service 2.4 introduces double-entry posting validation.'
+							}
+						]
+					}
+				]
+			});
+			const projectId = workspace.projectIds.get('Ledger Service');
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				projectId
+			});
+			px.logOutput({
+				model: result.model,
+				response: result.finalResponse,
+				toolCalls: result.calledToolNames
+			});
+
+			const noteId = workspace.noteIds.get('Release Note')!;
+			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const haystack = `${result.finalResponse}\n${view.note.plainText}`.toLowerCase();
+			const keywords = ['given', 'when', 'then'].filter((word) => haystack.includes(word));
+			const followed = keywords.length === 3;
+
+			px.logAnnotation({
+				name: ARCHETYPES.memoryTaskRead,
+				score: followed ? 1 : 0,
+				label: followed ? 'fetched_and_applied' : 'missed_convention',
+				explanation: `Gherkin keywords present: ${keywords.join(', ') || 'none'}; tools: ${result.calledToolNames.join(', ') || 'none'}`
+			});
+
+			expect(
+				{ status: result.status, followed },
+				result.failure ??
+					`the hidden project convention requires Given/When/Then; found ${keywords.join(', ') || 'none'} (tools: ${result.calledToolNames.join(', ') || 'none'})`
+			).toEqual({ status: 'completed', followed: true });
 		}
 	}
 ];

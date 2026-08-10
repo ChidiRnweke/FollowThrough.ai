@@ -144,170 +144,195 @@
 					</div>
 				{/if}
 			{/if}
-			{#each entries as entry (entry.id)}
-				{@const isUser = entry.role === 'user'}
-				<ErrorBoundary label="this turn" class="my-0">
-					<div class="group/turn flex flex-col">
-						<p class="provenance-caption mb-1">{isUser ? 'You' : 'Agent'}</p>
-						<!--
-							The question is a surface and the answer is the page. A wash on the user
-							turn is enough to tell them apart at a glance without giving the agent a
-							bubble, which would put a second surface inside a panel that already is
-							one. Flat, per the ornament rule — no border, no shadow.
+			<!--
+				`mt-auto` is what closes the gap over the composer. The scroll area takes every
+				pixel the composer does not, and a column that only stacks from the top leaves
+				the difference as dead space between the last turn and the input — worst on a
+				short conversation, which is every conversation at the point someone is deciding
+				whether to keep talking. Anchored to the bottom, a thread grows upward out of the
+				composer and the gap is never there to begin with.
+
+				`mt-auto` rather than `justify-end`: once the turns outgrow the viewport the
+				margin collapses to zero and normal scrolling takes over, where `justify-end`
+				would push the earliest turn out of the top of the scroll port and put it beyond
+				reach. The empty state keeps the top — it teaches, and belongs where reading
+				starts.
+			-->
+			<div class="mt-auto flex flex-col gap-6">
+				{#each entries as entry (entry.id)}
+					{@const isUser = entry.role === 'user'}
+					<ErrorBoundary label="this turn" class="my-0">
+						<div class="group/turn flex flex-col">
+							<!--
+							The question is a surface and the answer is the page. Side carries that
+							now: the question sits right against a wash, the answer runs flush left
+							with no bubble, which would put a second surface inside a panel that
+							already is one. Flat, per the ornament rule — no border, no shadow.
+
+							The captions that used to say it are gone, and a screen reader is told
+							none of this — position and fill are not announced — so the turn states
+							its speaker for one.
 						-->
-						<div
-							class="flex flex-col gap-2 {isUser
-								? 'self-start rounded-xl bg-muted/50 px-3 py-2'
-								: ''}"
-						>
-							{#if editingId === entry.id}
-								<div class="flex flex-col gap-1.5">
-									<Textarea
-										bind:value={editDraft}
-										rows={2}
-										class="min-h-16 resize-none"
-										aria-label="Edit question"
-										onkeydown={(event) => oneditkeydown(event, entry)}
-										{@attach focusAtEnd}
-									/>
-									<div class="flex items-center gap-1.5">
-										<Button size="xs" onclick={() => onresubmit(entry, editDraft)}>Resubmit</Button>
-										<Button variant="ghost" size="xs" onclick={oncanceledit}>Cancel</Button>
-										<span class="text-xs text-muted-foreground"
-											>Replaces everything below this question.</span
-										>
+							<span class="sr-only">{isUser ? 'You said' : 'The agent replied'}</span>
+							<div
+								class="flex flex-col gap-2 {isUser
+									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-muted/50 px-3 py-2'
+									: ''}"
+							>
+								{#if editingId === entry.id}
+									<div class="flex flex-col gap-1.5">
+										<Textarea
+											bind:value={editDraft}
+											rows={2}
+											class="min-h-16 resize-none"
+											aria-label="Edit question"
+											onkeydown={(event) => oneditkeydown(event, entry)}
+											{@attach focusAtEnd}
+										/>
+										<div class="flex items-center gap-1.5">
+											<Button size="xs" onclick={() => onresubmit(entry, editDraft)}
+												>Resubmit</Button
+											>
+											<Button variant="ghost" size="xs" onclick={oncanceledit}>Cancel</Button>
+											<span class="text-xs text-muted-foreground"
+												>Replaces everything below this question.</span
+											>
+										</div>
 									</div>
+								{/if}
+								{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
+									{#if group.kind === 'approvals'}
+										<ToolApprovalGroup
+											tools={group.tools}
+											{shell}
+											busy={deciding}
+											onapprove={() => onapprove(entry, group.tools)}
+											onreject={() => onrejectapproval(entry, group.tools)}
+										/>
+									{:else if group.kind === 'activity'}
+										<!-- The log is the turn's, so it hangs off the last group and opens onto
+									     every call, not just that group's. -->
+										<TurnActivity
+											tools={group.tools}
+											turnTools={entryTools(entry)}
+											showLog={index === lastActivityIndex(entry)}
+											{shell}
+											retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
+											onretry={() => onretry(entry)}
+										/>
+									{:else}
+										{@const part = group.part}
+										{#if part.kind === 'text'}
+											{#if part.text && editingId !== entry.id}<ChatMarkdown
+													content={part.text}
+												/>{/if}
+										{:else if part.kind === 'image'}
+											<ImageLightbox
+												src={part.dataUrl}
+												alt={part.name}
+												class="max-h-48 max-w-64 rounded-md object-contain"
+											/>
+										{:else if part.kind === 'reasoning'}
+											{#if part.text}<ChatReasoning
+													text={part.text}
+													streaming={entry.status === 'streaming'}
+												/>{/if}
+										{/if}
+									{/if}
+								{/each}
+								{#if entry.role === 'assistant' && entry.status === 'queued'}
+									<ChatActivity label={entry.error ?? 'Queued'} />
+								{:else if entry.role === 'assistant' && entry.status === 'waiting'}
+									<ChatActivity />
+								{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
+									<ChatActivity
+										label="Agent is working"
+										toolActive={entry.parts.some((part) => part.kind === 'tool')}
+									/>
+								{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
+									<ChatActivity label="Cancellation requested" />
+								{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
+									<!-- The run itself ended badly, as opposed to one call inside it: same
+								     shape, stated for the turn. -->
+									<div class="flex items-start gap-2 text-xs" role="alert">
+										<Warning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
+										<span class="text-destructive"
+											>{entry.error ??
+												(entry.status === 'cancelled'
+													? 'Generation stopped'
+													: 'The run failed.')}</span
+										>
+										{#if entry.status === 'failed' && entry.retryable && entry.runId}
+											<Button variant="outline" size="xs" onclick={() => onretry(entry)}>
+												<RotateCcw data-icon="inline-start" /> Retry
+											</Button>
+										{/if}
+									</div>
+								{/if}
+							</div>
+							{#if editingId !== entry.id && entryText(entry)}
+								<!-- The actions belong to the turn, so they sit on the turn's own side. -->
+								<div
+									class="mt-2 flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100 {isUser
+										? 'self-end'
+										: ''}"
+								>
+									<Tip text="Copy">
+										{#snippet children({ props })}
+											<Button
+												{...props}
+												variant="ghost"
+												size="icon-xs"
+												aria-label="Copy message"
+												onclick={() => oncopy(entry)}><Copy /></Button
+											>
+										{/snippet}
+									</Tip>
+									{#if entry.role === 'user'}
+										<Tip text="Edit and resubmit">
+											{#snippet children({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="icon-xs"
+													aria-label="Edit and resubmit question"
+													disabled={isStreaming}
+													onclick={() => onstartediting(entry)}><Pencil /></Button
+												>
+											{/snippet}
+										</Tip>
+									{:else if entry.status === 'completed'}
+										<Tip text="Ask again">
+											{#snippet children({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="icon-xs"
+													aria-label="Ask again"
+													disabled={isStreaming}
+													onclick={() => onaskagain(entry)}><RotateCcw /></Button
+												>
+											{/snippet}
+										</Tip>
+									{/if}
 								</div>
 							{/if}
-							{#each groupChatParts(entry.parts) as group, index (`${entry.id}-${chatPartGroupKey(group, index)}`)}
-								{#if group.kind === 'approvals'}
-									<ToolApprovalGroup
-										tools={group.tools}
-										{shell}
-										busy={deciding}
-										onapprove={() => onapprove(entry, group.tools)}
-										onreject={() => onrejectapproval(entry, group.tools)}
-									/>
-								{:else if group.kind === 'activity'}
-									<!-- The log is the turn's, so it hangs off the last group and opens onto
-									     every call, not just that group's. -->
-									<TurnActivity
-										tools={group.tools}
-										turnTools={entryTools(entry)}
-										showLog={index === lastActivityIndex(entry)}
-										{shell}
-										retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
-										onretry={() => onretry(entry)}
-									/>
-								{:else}
-									{@const part = group.part}
-									{#if part.kind === 'text'}
-										{#if part.text && editingId !== entry.id}<ChatMarkdown
-												content={part.text}
-											/>{/if}
-									{:else if part.kind === 'image'}
-										<ImageLightbox
-											src={part.dataUrl}
-											alt={part.name}
-											class="max-h-48 max-w-64 rounded-md object-contain"
+							{#if entry.suggestions.length > 0}
+								<div class="mt-2 flex flex-col gap-2">
+									{#each entry.suggestions as view (view.suggestion.id)}
+										<SuggestionCard
+											{view}
+											busy={onsuggestionbusy(view.suggestion.id)}
+											onaccept={(id) => onsuggestion(id, 'accept')}
+											onreject={(id) => onsuggestion(id, 'reject')}
 										/>
-									{:else if part.kind === 'reasoning'}
-										{#if part.text}<ChatReasoning
-												text={part.text}
-												streaming={entry.status === 'streaming'}
-											/>{/if}
-									{/if}
-								{/if}
-							{/each}
-							{#if entry.role === 'assistant' && entry.status === 'queued'}
-								<ChatActivity label={entry.error ?? 'Queued'} />
-							{:else if entry.role === 'assistant' && entry.status === 'waiting'}
-								<ChatActivity />
-							{:else if entry.role === 'assistant' && entry.status === 'streaming' && !entry.parts.some((part) => part.kind === 'text')}
-								<ChatActivity
-									label="Agent is working"
-									toolActive={entry.parts.some((part) => part.kind === 'tool')}
-								/>
-							{:else if entry.role === 'assistant' && entry.status === 'cancelling'}
-								<ChatActivity label="Cancellation requested" />
-							{:else if entry.role === 'assistant' && (entry.status === 'failed' || entry.status === 'cancelled')}
-								<!-- The run itself ended badly, as opposed to one call inside it: same
-								     shape, stated for the turn. -->
-								<div class="flex items-start gap-2 text-xs" role="alert">
-									<Warning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
-									<span class="text-destructive"
-										>{entry.error ??
-											(entry.status === 'cancelled'
-												? 'Generation stopped'
-												: 'The run failed.')}</span
-									>
-									{#if entry.status === 'failed' && entry.retryable && entry.runId}
-										<Button variant="outline" size="xs" onclick={() => onretry(entry)}>
-											<RotateCcw data-icon="inline-start" /> Retry
-										</Button>
-									{/if}
+									{/each}
 								</div>
 							{/if}
 						</div>
-						{#if editingId !== entry.id && entryText(entry)}
-							<div
-								class="mt-2 flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100"
-							>
-								<Tip text="Copy">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon-xs"
-											aria-label="Copy message"
-											onclick={() => oncopy(entry)}><Copy /></Button
-										>
-									{/snippet}
-								</Tip>
-								{#if entry.role === 'user'}
-									<Tip text="Edit and resubmit">
-										{#snippet children({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="icon-xs"
-												aria-label="Edit and resubmit question"
-												disabled={isStreaming}
-												onclick={() => onstartediting(entry)}><Pencil /></Button
-											>
-										{/snippet}
-									</Tip>
-								{:else if entry.status === 'completed'}
-									<Tip text="Ask again">
-										{#snippet children({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="icon-xs"
-												aria-label="Ask again"
-												disabled={isStreaming}
-												onclick={() => onaskagain(entry)}><RotateCcw /></Button
-											>
-										{/snippet}
-									</Tip>
-								{/if}
-							</div>
-						{/if}
-						{#if entry.suggestions.length > 0}
-							<div class="mt-2 flex flex-col gap-2">
-								{#each entry.suggestions as view (view.suggestion.id)}
-									<SuggestionCard
-										{view}
-										busy={onsuggestionbusy(view.suggestion.id)}
-										onaccept={(id) => onsuggestion(id, 'accept')}
-										onreject={(id) => onsuggestion(id, 'reject')}
-									/>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</ErrorBoundary>
-			{/each}
+					</ErrorBoundary>
+				{/each}
+			</div>
 		</div>
 	</ScrollArea>
 	<!-- An overlay, not a flow element: as a sibling in the column it pushed the

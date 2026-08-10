@@ -2,7 +2,7 @@ import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
-import { findCall, scoreToolCalling } from '../assertions/tool-calls';
+import { findCall } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -10,11 +10,15 @@ import { ARCHETYPES, type EvalCase } from './types';
  *
  * - `task_completion`: several turns read 11–13 notes and then ended in
  *   narration ("Let me first…") with zero mutation, burning 170k+ tokens.
- * - `context_continuity`: a terse "continue" restarted the reads from scratch
- *   (10+ fresh searches, ~1.2M input tokens) instead of resuming the in-flight
- *   task.
  * - `rework_avoidance`: identical prompts auto-re-executed and duplicated side
  *   effects (the same "create todos" run fired twice, creating duplicates).
+ *
+ * A third canary once lived here: a terse "continue" was expected to resume
+ * without re-reading. It was removed deliberately. Forbidding `get_note`/`search`
+ * on the second turn judges how the agent works rather than what it delivers, and
+ * a fresh read of a note that may have changed is correct behaviour, not a
+ * regression. The cost blowups that motivated it were input-size problems, which
+ * are out of scope for this suite.
  *
  * All fixtures are synthetic; nothing from real production content is used.
  */
@@ -82,70 +86,6 @@ export const completionRegressionCases: readonly EvalCase[] = [
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
 			expect(mutated, 'the run must perform a mutation, not end in narration').toBe(true);
 			expect(landed, `expected an Outcome section in all 6 notes, landed in ${landed}`).toBe(6);
-		}
-	},
-	{
-		id: 'continuation-resumes-not-restarts',
-		name: 'continues from context instead of re-reading the note it already holds',
-		splits: [ARCHETYPES.contextContinuity],
-		input: { firstTurn: 'Read the note "Launch Plan" and name its top action item.', secondTurn: 'continue' },
-		expected: { forbiddenTools: ['get_note', 'search'] },
-		metadata: {
-			observedAt: '2026-08-09',
-			note: 'Production regression: a bare "continue" re-ran 10+ fresh searches (~1.2M input tokens) instead of resuming the task already in context.'
-		},
-		async run(lab) {
-			const workspace = await seedWorkspace(lab, {
-				projects: [
-					{
-						name: 'Launch',
-						notes: [
-							{
-								title: 'Launch Plan',
-								body: 'Top action item: finalise the pricing tier. Secondary: schedule the demo.'
-							}
-						]
-					}
-				]
-			});
-			const projectId = workspace.projectIds.get('Launch');
-
-			const turn1 = await runCase(lab, workspace.actor, {
-				prompt: this.input.firstTurn as string,
-				mode: 'auto_accept',
-				projectId
-			});
-			expect(turn1.status).toBe('completed');
-			expect(
-				turn1.calledToolNames.includes('get_note'),
-				'turn 1 must have read the note so the continuation has context'
-			).toBe(true);
-
-			const turn2 = await runCase(lab, workspace.actor, {
-				prompt: this.input.secondTurn as string,
-				mode: 'auto_accept',
-				projectId,
-				conversationId: turn1.conversationId
-			});
-			px.logOutput({
-				model: turn2.model,
-				turn1Tools: turn1.calledToolNames,
-				turn2Tools: turn2.calledToolNames,
-				response: turn2.finalResponse.slice(0, 400)
-			});
-
-			const verdict = scoreToolCalling(turn2, {
-				forbidden: this.expected.forbiddenTools as string[]
-			});
-			px.logAnnotation({
-				name: ARCHETYPES.contextContinuity,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'resumed' : 'restarted',
-				explanation: verdict.explanation
-			});
-
-			expect(turn2.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
 	},
 	{

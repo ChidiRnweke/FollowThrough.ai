@@ -84,13 +84,22 @@ describe('The call log is one door per turn', () => {
 		await expect.element(screen.getByRole('button', { name: '2 steps' })).toBeInTheDocument();
 	});
 
-	it('lists the calls the summary left out', async () => {
+	it('lists the calls the summary left out, in place rather than in a dialog', async () => {
+		// The log opens under the row it hangs off. As a dialog it took the reader out of the
+		// conversation to read evidence about it, and gave them the job of finding their place
+		// again on the way back.
 		const screen = await renderTurnWithLog([
 			call({ name: 'search_tools', arguments: { query: 'save_note' } }),
 			call({ name: 'save_note' })
 		]);
 		await screen.getByRole('button', { name: '2 steps' }).click();
-		await expect.element(screen.getByText('2 steps, in the order they ran.')).toBeVisible();
+		await expect.element(screen.getByText('Search tools completed')).toBeVisible();
+	});
+
+	it('opens the log without putting a dialog over the turn', async () => {
+		const screen = await renderTurnWithLog([call({ name: 'save_note' })]);
+		await screen.getByRole('button', { name: '1 step' }).click();
+		expect(await screen.getByRole('dialog').all()).toHaveLength(0);
 	});
 
 	it('leaves the other groups of a turn without a door of their own', async () => {

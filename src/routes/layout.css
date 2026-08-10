@@ -73,9 +73,20 @@
 	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%230c0c09' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
 		12 12;
 	--duration-micro: 125ms;
+	/* A row opening onto its own detail. Between the two: --duration-micro is a
+	   state change and reads as a snap when a block of content has to arrive with
+	   it, while --duration-panel is the budget for a whole surface moving and is
+	   over the 250ms ceiling for something this small. */
+	--duration-disclosure: 200ms;
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	--note-content-width: 90ch;
+	/* How wide a question is allowed to get before it stops reading as one. The user's
+	   turn is right-aligned against a wash and the agent's runs flush left, so the two
+	   are told apart by side — which only holds while the washed side is visibly short
+	   of the full measure. At 100% a question and an answer are the same rectangle in
+	   the same place, differing only in fill. */
+	--chat-turn-measure: 85%;
 	/* Near-full-viewport modal for comparison surfaces: the panel stays centered
 	   but covers most of the screen, and geometry comes from the token so a long
 	   line or a wide diagram can never stretch it. */
@@ -560,6 +571,49 @@
 	}
 }
 
+/* A disclosure growing into its own measured height instead of snapping to it.
+   `--bits-collapsible-content-height` is measured by the primitive before the
+   state flips, so the keyframe has a real target and the content below is pushed
+   rather than jumped.
+
+   Deliberately opt-in rather than a blanket rule on `[data-slot='collapsible-content']`:
+   the project tree and the sidebar are built on the same primitive, and a tree whose
+   every branch animates open is a slower tree, not a calmer one.
+
+   The base reduced-motion guard collapses the duration to 1ms, which is the whole
+   fallback needed here — this is CSS, not a Svelte transition, so nothing escapes it. */
+@keyframes chat-disclosure-open {
+	from {
+		height: 0;
+		opacity: 0;
+	}
+	to {
+		height: var(--bits-collapsible-content-height);
+		opacity: 1;
+	}
+}
+
+@keyframes chat-disclosure-close {
+	from {
+		height: var(--bits-collapsible-content-height);
+		opacity: 1;
+	}
+	to {
+		height: 0;
+		opacity: 0;
+	}
+}
+
+@utility chat-disclosure {
+	overflow: hidden;
+	&[data-state='open'] {
+		animation: chat-disclosure-open var(--duration-disclosure) var(--ease-standard);
+	}
+	&[data-state='closed'] {
+		animation: chat-disclosure-close var(--duration-disclosure) var(--ease-standard);
+	}
+}
+
 /* The same row contract without the lift, for dense rows whose whole job is being
    picked — a multi-select list, where a surface that moves under the pointer between
    the decision and the click costs the user the row they aimed at. Same reason menu
@@ -873,12 +927,23 @@
 	}
 
 	/* Global search hits. Same teal wash recipe as the suggestion anchors, but
-	   stronger: the hit is the whole point of a search result row. */
+	   stronger: the hit is the whole point of a search result row. The hit text
+	   steps up to foreground — muted-fg on the wash measures 3.0:1, under AA. */
 	.search-hit {
 		border-radius: 2px;
+		color: var(--color-foreground);
 		background-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
 	}
 	.dark .search-hit {
+		background-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+	}
+	/* The match a search click-through landed on: the same wash as the result row it
+	   came from, applied as a transient editor decoration. */
+	.search-reveal {
+		border-radius: 2px;
+		background-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
+	}
+	.dark .search-reveal {
 		background-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
 	}
 	.suggestion-anchor:hover {

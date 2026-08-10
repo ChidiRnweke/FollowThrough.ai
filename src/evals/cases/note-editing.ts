@@ -203,30 +203,27 @@ export const noteEditingCases: readonly EvalCase[] = [
 		expected: {
 			requiredTools: ['edit_note'],
 			forbiddenTools: ['save_note'],
-			effect: 'targeted change, unrelated section survives'
+			effect: 'final markdown equals the original with exactly one phrase replaced'
 		},
 		metadata: {
 			observedAt: '2026-08-09',
-			note: 'Production regression: the agent used whole-document save_note for single localized changes (one run saved before even reading the note). On a long multi-section note a save_note rewrite silently drops untargeted sections.'
+			note: 'Production regression: the agent used whole-document save_note for single localized changes (one run saved before even reading the note). On a long multi-section note a save_note rewrite silently drops untargeted sections. The gate is exact final-text equality rather than "called edit_note", because the tool a run picks is not the harm — losing an unrelated byte is. Tool names stay as diagnostic annotations.'
 		},
 		async run(lab) {
+			const originalBody = [
+				'# Scheduler design',
+				'The platform runs a legacy scheduler that wakes every five minutes.',
+				'# Cost governance',
+				'Every cluster carries a monthly cost ceiling of 4000 credits.',
+				'# Untouchable section',
+				'The answer to everything remains 42 and this line must survive any edit.'
+			].join('\n\n');
+			const expectedBody = originalBody.replace('legacy scheduler', 'event-driven scheduler');
 			const workspace = await seedWorkspace(lab, {
 				projects: [
 					{
 						name: 'Infra',
-						notes: [
-							{
-								title: 'Long note',
-								body: [
-									'# Scheduler design',
-									'The platform runs a legacy scheduler that wakes every five minutes.',
-									'# Cost governance',
-									'Every cluster carries a monthly cost ceiling of 4000 credits.',
-									'# Untouchable section',
-									'The answer to everything remains 42 and this line must survive any edit.'
-								].join('\n\n')
-							}
-						]
+						notes: [{ title: 'Long note', body: originalBody }]
 					}
 				]
 			});
@@ -243,6 +240,8 @@ export const noteEditingCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 400)
 			});
 
+			// Diagnostic only. Reaching the right final text through save_note is not a
+			// failure; reaching the wrong text through edit_note is.
 			const tools = scoreToolCalling(result, {
 				required: this.expected.requiredTools as string[],
 				forbidden: this.expected.forbiddenTools as string[]
@@ -255,22 +254,22 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const changed = view.note.plainText.includes('event-driven scheduler');
-			const preserved = view.note.plainText.includes('The answer to everything remains 42');
+			const actualBody = view.note.plainText.trim();
+			const exact = actualBody === expectedBody.trim();
 			noteEffect(view.note.plainText, 'event-driven scheduler');
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
-				score: changed && preserved ? 1 : 0,
-				label: changed && preserved ? 'surgical' : 'clobbered',
-				explanation: changed && preserved
-					? 'targeted change landed and the untouchable section survived'
-					: `changed=${changed}, unrelated section survived=${preserved}`
+				score: exact ? 1 : 0,
+				label: exact ? 'surgical' : 'clobbered',
+				explanation: exact
+					? 'final markdown is the original with exactly one phrase replaced'
+					: `final markdown diverged from the expected single replacement:\n--- expected ---\n${expectedBody.trim()}\n--- actual ---\n${actualBody}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
-			expect(changed, 'the targeted phrase must change').toBe(true);
-			expect(preserved, 'the unrelated section must survive a surgical edit').toBe(true);
+			expect(
+				{ status: result.status, body: actualBody },
+				'a localized edit must leave every unrelated byte untouched'
+			).toEqual({ status: 'completed', body: expectedBody.trim() });
 		}
 	}
 ];

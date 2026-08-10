@@ -13,6 +13,12 @@
  * `search_note` is first-class not for frequency but because injected prompt
  * text names it: the oversized-context-note pointer tells the model to call it,
  * and a tool our own prompts reference must work without a discovery round-trip.
+ *
+ * `edit_note` and `save_note` are first-class for the same reason plus frequency:
+ * they are the app's most common mutations, the prompt's note-safety rules name
+ * both, and every production `Tool not found` failure was a note write that had
+ * to survive a discovery round-trip first. Two extra schemas per generation is a
+ * cheaper price than losing the user's edit.
  */
 export const FIRST_CLASS_TOOL_NAMES = [
 	'search',
@@ -23,7 +29,9 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	'get_note',
 	'list_todos',
 	'load_skill',
-	'propose_memory_change'
+	'propose_memory_change',
+	'edit_note',
+	'save_note'
 ];
 
 export interface ToolCatalogEntry {
@@ -91,12 +99,12 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'save_note',
 		description:
-			'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Prefer edit_note unless you are genuinely rewriting the note end to end — this tool discards anything you leave out. Skill bodies have their own tools: use save_skill or edit_skill instead.'
+			'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Use this only when the user asked for a full end-to-end rewrite or the note is empty and you are populating it — this tool discards anything you leave out, so it is never the way to recover from a failed edit_note. Skill bodies have their own tools: use save_skill or edit_skill instead.'
 	},
 	{
 		name: 'edit_note',
 		description:
-			'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Prefer this over save_note for anything short of a full rewrite. If a call fails with "oldText was not found", re-run get_note, and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop retrying the patch and use save_note with the complete desired body instead. Skill bodies are edited with edit_skill or save_skill, not this tool.'
+			'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Use this for any change short of a full rewrite. If a call fails with "oldText was not found", re-run get_note and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop and report exactly which anchor could not be matched: do not fall back to save_note, which would replace the whole body and discard the sections you were told to leave alone. Skill bodies are edited with edit_skill or save_skill, not this tool.'
 	},
 	{
 		name: 'rename_note',

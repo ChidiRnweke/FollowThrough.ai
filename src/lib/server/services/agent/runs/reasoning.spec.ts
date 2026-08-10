@@ -38,7 +38,7 @@ class RecoveringToolCallModel implements Model {
 	}
 
 	async *getStreamedResponse(request: ModelRequest): AsyncIterable<StreamEvent> {
-		const recovered = JSON.stringify(request.input).includes('available only through');
+		const recovered = JSON.stringify(request.input).includes('has not been surfaced');
 		const output = recovered
 			? [
 					{
@@ -141,16 +141,14 @@ describe('Agent runtime boundary', () => {
 		expect(instructions).toContain('(UTC)');
 	});
 
-	it('tells the model to dispatch searched tools through use_tool', () => {
+	it('tells the model a searched tool becomes directly callable', () => {
 		expect(buildAgentInstructions({})).toContain(
-			'Names returned by search_tools are not direct tools: invoke them only through use_tool'
+			'A searched tool then becomes a direct tool — call it by its own name with flat top-level arguments'
 		);
 	});
 
-	it('tells the model not to double-serialize use_tool arguments', () => {
-		expect(buildAgentInstructions({})).toContain(
-			'Never put that object under an arguments field and never JSON-stringify payload'
-		);
+	it('never instructs the in-app model to wrap a call in use_tool', () => {
+		expect(buildAgentInstructions({})).not.toContain('use_tool');
 	});
 
 	it('limits retries after recoverable tool failures', () => {
@@ -262,19 +260,25 @@ describe('Agent runtime boundary', () => {
 });
 
 describe('Unknown agent tool recovery', () => {
-	it('routes an exact catalog tool name through use_tool', async () => {
+	it('sends an undiscovered catalog tool through search and back to itself', async () => {
 		expect(await formattedMissingTool('save_note', ['search'], ['save_note'])).toEqual({
-			failure: 'Tool "save_note" is available only through "use_tool", not as a direct call.',
-			suggestions: [{ name: 'save_note', invokeVia: 'use_tool' }],
+			failure: 'Tool "save_note" exists but has not been surfaced in this conversation yet.',
+			suggestions: [{ name: 'save_note', invokeVia: 'search_first' }],
 			recovery:
-				'Call "use_tool" with name "save_note" and pass the original arguments under "payload".'
+				'Call "search_tools" with a query describing what you want to do, then call "save_note" directly by that name with flat top-level arguments matching the schema it returns.'
 		});
 	});
 
-	it('returns every close direct and catalog suggestion', async () => {
+	it('treats an already-enabled catalog tool as directly callable', async () => {
+		expect(await formattedMissingTool('save_nte', ['save_note'], ['save_note'])).toMatchObject({
+			suggestions: [{ name: 'save_note', invokeVia: 'direct' }]
+		});
+	});
+
+	it('returns every close enabled and undiscovered suggestion', async () => {
 		expect(await formattedMissingTool('save_nte', ['save_notes'], ['save_note'])).toMatchObject({
 			suggestions: [
-				{ name: 'save_note', invokeVia: 'use_tool' },
+				{ name: 'save_note', invokeVia: 'search_first' },
 				{ name: 'save_notes', invokeVia: 'direct' }
 			]
 		});
@@ -286,7 +290,7 @@ describe('Unknown agent tool recovery', () => {
 		).toMatchObject({
 			suggestions: [],
 			recovery:
-				'Call "search_tools" to discover the capability, then invoke a returned name through "use_tool".'
+				'Call "search_tools" to discover the capability, then call the name it returns directly with flat top-level arguments.'
 		});
 	});
 
