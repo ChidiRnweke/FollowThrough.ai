@@ -37,6 +37,8 @@ export const FIRST_CLASS_TOOL_NAMES = [
 export interface ToolCatalogEntry {
 	readonly name: string;
 	readonly description: string;
+	/** Concise intent language used only for semantic tool discovery. */
+	readonly retrievalText?: string;
 }
 
 /** Every tool defined by AgentTools.buildDefinitions(), first-class included. */
@@ -98,11 +100,14 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	},
 	{
 		name: 'save_note',
+		retrievalText: 'replace or rewrite an entire existing note body with complete markdown',
 		description:
 			'Replace a whole note body with Markdown. Pass only the noteId and complete desired Markdown body; use rename_note separately for the title. Use this only when the user asked for a full end-to-end rewrite or the note is empty and you are populating it — this tool discards anything you leave out, so it is never the way to recover from a failed edit_note. Skill bodies have their own tools: use save_skill or edit_skill instead.'
 	},
 	{
 		name: 'edit_note',
+		retrievalText:
+			'change one sentence, phrase, typo, line, or section in an existing note and leave the rest unchanged; preserve all unrelated note content',
 		description:
 			'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Use this for any change short of a full rewrite. If a call fails with "oldText was not found", re-run get_note and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop and report exactly which anchor could not be matched: do not fall back to save_note, which would replace the whole body and discard the sections you were told to leave alone. Skill bodies are edited with edit_skill or save_skill, not this tool.'
 	},

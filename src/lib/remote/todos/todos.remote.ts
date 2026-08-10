@@ -4,6 +4,8 @@ import { AppFactory } from '$lib/server/app-factory';
 import { requestActor } from '$lib/server/request-actor-factory';
 import type { TodoId, TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
 
+const localDate = z.iso.date();
+
 /** The board's shareable URL filters; the title search stays client-only, so the PDF
     reflects the server-side filters rather than the search box. */
 export const exportBoardPdf = query(
@@ -33,7 +35,7 @@ export const updateTodo = command(
 			status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
 			title: z.string().optional(),
 			description: z.string().nullable().optional(),
-			dueDate: z.string().nullable().optional(),
+			dueDate: localDate.nullable().optional(),
 			responsibility: z.enum(['mine', 'waiting_on']).optional(),
 			priority: z.enum(['low', 'medium', 'high']).nullable().optional(),
 			category: z.string().trim().max(100).nullable().optional(),

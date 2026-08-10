@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
+import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { noteEtag } from '$lib/models/notes';
@@ -18,13 +19,21 @@ import {
 	type ToolAccessPolicy
 } from './agent-tool-factory';
 
+const authoritativeSelection: TextSelection = {
+	noteId: '00000000-0000-4000-8000-000000000001' as never,
+	revision: 3,
+	from: 7,
+	to: 12,
+	text: 'OAuth'
+};
+
 const registry = (
 	mode: 'approval_required' | 'auto_accept',
 	options: { factory?: ControllerFactory } = {}
 ) =>
 	new AgentTools(options.factory ?? ({} as ControllerFactory), testActor(), mode, {
 		provenanceId: testProvenanceId(),
-		input: { prompt: 'Help' },
+		input: { prompt: 'Help', selection: authoritativeSelection },
 		model: 'openai/gpt-5.6'
 	});
 
@@ -1094,10 +1103,7 @@ describe('Agent tool coverage invariants', () => {
 			})
 		} as unknown as ControllerFactory;
 		const invoke = (name: string, payload: unknown) =>
-			directToolFor('auto_accept', name, { factory }).invoke(
-				{} as never,
-				JSON.stringify(payload)
-			);
+			directToolFor('auto_accept', name, { factory }).invoke({} as never, JSON.stringify(payload));
 		return { current, invoke, saved: () => saved };
 	};
 
@@ -1170,6 +1176,17 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'extract_promises')).toBe(false);
 	});
 
+	it('does not expose selection-bound tools without an authoritative selection', () => {
+		const names = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Help' },
+			model: 'openai/gpt-5.6'
+		})
+			.tools()
+			.map((candidate) => candidate.name);
+		expect(names.includes('generate_mermaid_diagram')).toBe(false);
+	});
+
 	it('executes mutation tools immediately in auto-accept mode', async () => {
 		expect(await approvalFor('auto_accept', 'create_note')).toBe(false);
 	});
@@ -1229,24 +1246,44 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const selected = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Find references' },
+			input: { prompt: 'Find references', selection: authoritativeSelection },
 			model: 'anthropic/claude-sonnet-4.5'
 		})
 			.tools()
 			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
-		await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				selection: {
-					noteId: '00000000-0000-4000-8000-000000000001',
-					revision: 1,
-					from: 0,
-					to: 4,
-					text: 'OAuth'
+		await selected.invoke({} as never, '{}');
+		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
+	});
+
+	it('injects the run selection instead of accepting a model-authored selection', async () => {
+		let received: unknown;
+		const factory = {
+			references: () => ({
+				suggestFromSelection: async (_actor: unknown, input: unknown) => {
+					received = input;
+					return { outcome: 'nothing_relevant' };
 				}
 			})
-		);
-		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
+		} as unknown as ControllerFactory;
+		const selected = registry('auto_accept', { factory })
+			.tools()
+			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
+		await selected.invoke({} as never, '{}');
+		expect(received).toEqual({ selection: authoritativeSelection });
+	});
+
+	it('rejects an empty todo due date at the agent boundary', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'create_todo');
+		expect(
+			definition?.parameters.safeParse({
+				projectId: crypto.randomUUID(),
+				title: 'Ship',
+				responsibility: 'mine',
+				dueDate: ''
+			}).success
+		).toBe(false);
 	});
 });
 

@@ -1,6 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
-import { seedWorkspace } from '../lab/workspace';
+import { seedWorkspace, selectionFromSeededNote } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
@@ -676,8 +676,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 		splits: [ARCHETYPES.intentInterpretation, ARCHETYPES.selectionHandling],
 		input: {
 			prompt: 'What did I commit to here?',
-			selectionText:
-				'I will deploy the new payment gateway by Friday and notify the downstream teams once traffic is migrated.'
+			selectionText: 'The Checkout API then publishes an order-confirmed event'
 		},
 		expected: { tool: 'extract_promises' },
 		metadata: {
@@ -693,13 +692,12 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
 				noteId,
-				selection: {
+				selection: await selectionFromSeededNote(
+					lab,
+					workspace,
 					noteId,
-					revision: 1,
-					from: 0,
-					to: 130,
-					text: this.input.selectionText as string
-				}
+					this.input.selectionText as string
+				)
 			});
 			px.logOutput({
 				model: result.model,
@@ -742,13 +740,12 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
 				noteId,
-				selection: {
+				selection: await selectionFromSeededNote(
+					lab,
+					workspace,
 					noteId,
-					revision: 1,
-					from: 0,
-					to: 110,
-					text: this.input.selectionText as string
-				}
+					this.input.selectionText as string
+				)
 			});
 			px.logOutput({
 				model: result.model,

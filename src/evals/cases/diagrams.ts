@@ -1,6 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
-import { seedWorkspace } from '../lab/workspace';
+import { seedWorkspace, selectionFromSeededNote } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { findCall, scoreToolDiscovery } from '../assertions/tool-calls';
@@ -49,13 +49,27 @@ export const diagramCases: readonly EvalCase[] = [
 		metadata: { layer: 'agent', axes: 'syntax + faithfulness' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
+			const noteId = workspace.noteIds.get('Checkout architecture');
+			const sourceText = architectureWorkspace.projects?.[0]?.notes?.[0]?.body;
+			if (!noteId || !sourceText) throw new Error('Checkout architecture note was not seeded');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
+				mode: 'auto_accept',
+				noteId,
+				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
 
 			const source = extractMermaid(result);
 			const syntax = validateMermaid(source);
+			const normalizedSource = source.toLocaleLowerCase();
+			const namedComponentsPresent = [
+				'storefront',
+				'checkout api',
+				'payment gateway',
+				'ledger service',
+				'notification worker'
+			].every((component) => normalizedSource.includes(component));
+			const connectedFlow = syntax.edgeCount >= 4;
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
@@ -74,9 +88,6 @@ export const diagramCases: readonly EvalCase[] = [
 					: syntax.problems.join('; ')
 			});
 
-			expect(source, 'no Mermaid source was produced').not.toBe('');
-			expect(syntax.valid, syntax.problems.join('; ')).toBe(true);
-
 			const faithful = await judgeRubricConsensus({
 				subject: 'a Mermaid diagram generated from a note describing a system',
 				criteria: [
@@ -94,10 +105,19 @@ export const diagramCases: readonly EvalCase[] = [
 				label: faithful.verdict,
 				explanation: `${faithful.agreement} agreement across ${faithful.judges} judges (${faithful.votes.join(', ')}): ${faithful.reasoning}`
 			});
-			expect(
-				faithful.followed,
-				`${faithful.verdict} (${faithful.agreement} agreement): ${faithful.reasoning}`
-			).toBe(true);
+			expect({
+				produced: source !== '',
+				syntax: syntax.valid,
+				namedComponentsPresent,
+				connectedFlow,
+				faithful: faithful.followed
+			}).toEqual({
+				produced: true,
+				syntax: true,
+				namedComponentsPresent: true,
+				connectedFlow: true,
+				faithful: true
+			});
 		}
 	},
 	{
@@ -109,9 +129,14 @@ export const diagramCases: readonly EvalCase[] = [
 		metadata: { layer: 'agent' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
+			const noteId = workspace.noteIds.get('Checkout architecture');
+			const sourceText = architectureWorkspace.projects?.[0]?.notes?.[0]?.body;
+			if (!noteId || !sourceText) throw new Error('Checkout architecture note was not seeded');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
+				mode: 'auto_accept',
+				noteId,
+				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
 			px.logOutput({
 				model: result.model,

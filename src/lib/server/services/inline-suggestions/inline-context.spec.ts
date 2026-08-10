@@ -101,6 +101,20 @@ class FailingReranker implements Reranker {
 	}
 }
 
+class RecordingObserver {
+	readonly outputs = new Map<string, string>();
+	async run<T>(
+		name: string,
+		_context: unknown,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T> {
+		const result = await body();
+		if (describeOutput) this.outputs.set(name, describeOutput(result));
+		return result;
+	}
+}
+
 const build = (
 	projectMatches: readonly SearchMatch[] = [],
 	memories: readonly MemoryEntry[] = [],
@@ -167,6 +181,19 @@ describe('inline completion context', () => {
 			reranker: new RelevantReranker()
 		}).build(actor, request, note, new AbortController().signal);
 		expect(context.projectPassages).toEqual([]);
+	});
+
+	it('records the underlying project retrieval failure when degrading', async () => {
+		const observer = new RecordingObserver();
+		await new InlineSuggestionContext({
+			searcher: new FailingSearcher(),
+			memory: new Memories([]),
+			reranker: new RelevantReranker(),
+			observer
+		}).build(actor, request, note, new AbortController().signal);
+		expect(observer.outputs.get('inline.project-retrieval-degraded')).toContain(
+			'embedding unavailable'
+		);
 	});
 
 	it('injects every shared user memory at or below the threshold', async () => {

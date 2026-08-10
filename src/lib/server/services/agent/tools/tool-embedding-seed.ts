@@ -23,9 +23,9 @@ export interface ToolEmbeddingSeedSummary {
 	readonly removed: number;
 }
 
-/** The embedded text is `"${name}: ${description}"` — same shape the query side ranks against. */
+/** Retrieval stays concise; operational instructions remain in the execution description. */
 export const toolEmbeddingText = (entry: ToolCatalogEntry): string =>
-	`${entry.name}: ${entry.description}`;
+	`${entry.name}: ${entry.retrievalText ?? entry.description}`;
 
 export const toolContentHash = (entry: ToolCatalogEntry): string =>
 	createHash('sha256').update(toolEmbeddingText(entry)).digest('hex');

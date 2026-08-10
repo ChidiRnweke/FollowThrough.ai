@@ -89,7 +89,10 @@ export async function fetchImages(
 	const images = new Map<string, string>();
 	await Promise.all(
 		[...new Set(sources)].map(async (src) => {
-			const data = isRemoteSource(src) ? await fetchRemoteDataUrl(src) : await resolve(src);
+			// Document-authored URLs are untrusted. The injected resolver is the only
+			// authority allowed to turn a source into bytes (for example, by resolving
+			// an actor-authorized attachment to a short-lived storage URL).
+			const data = await resolve(src);
 			if (data) images.set(src, data);
 		})
 	);

@@ -12,7 +12,11 @@ import type { EmbeddingClient } from '$lib/server/services/knowledge-search/cont
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import { seedToolEmbeddings } from '$lib/server/services/agent/tools/tool-embedding-seed';
+import {
+	seedToolEmbeddings,
+	toolEmbeddingText
+} from '$lib/server/services/agent/tools/tool-embedding-seed';
+import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
@@ -66,10 +70,12 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
+	const deterministicToolTexts = new Set(TOOL_CATALOG.map(toolEmbeddingText));
 	const clientOptions = { baseURL, appURL };
 	const embeddingClient = new CachedEmbeddingClient(
 		new Embeddings(openRouterApiKey, clientOptions),
-		cache
+		cache,
+		(content) => deterministicToolTexts.has(content)
 	);
 
 	const application = createApplication({
@@ -106,6 +112,10 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		embeddingClient,
 		db: database,
 		async close() {
+			const stats = cache.stats();
+			process.stderr.write(
+				`[evals] cache hits=${stats.hits} misses=${stats.misses} live=${stats.live}\n`
+			);
 			await cache.flush();
 			await closeDatabase();
 		}

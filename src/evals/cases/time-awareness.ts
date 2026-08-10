@@ -34,6 +34,24 @@ const isoLocalDate = (now: Date, timeZone: string): string =>
 const longLocalDate = (now: Date, timeZone: string): string =>
 	new Intl.DateTimeFormat('en-US', { timeZone, dateStyle: 'full' }).format(now);
 
+/** Locale-aware but deterministic: accepts equivalent en-GB renderings, including 10 August 2026. */
+const statesLocalCalendarDate = (response: string, now: Date, timeZone: string): boolean => {
+	const normalized = response.toLocaleLowerCase('en-GB');
+	const formats: Intl.DateTimeFormatOptions[] = [
+		{ dateStyle: 'full' },
+		{ dateStyle: 'long' },
+		{ dateStyle: 'medium' },
+		{ dateStyle: 'short' }
+	];
+	const candidates = formats.map((options) =>
+		new Intl.DateTimeFormat('en-GB', { timeZone, ...options })
+			.format(now)
+			.toLocaleLowerCase('en-GB')
+	);
+	candidates.push(isoLocalDate(now, timeZone));
+	return candidates.some((candidate) => normalized.includes(candidate));
+};
+
 const appContextFor = (timeZone: string): AppContextSnapshotV1 => {
 	const now = new Date();
 	return {
@@ -93,18 +111,17 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeAdherenceConsensus({
-				instruction: `Answer with today's date: ${expected}. That is the local date for the Pacific/Kiritimati timezone. A UTC date or a date from any other timezone is wrong.`,
-				prompt: this.input.prompt as string,
-				response: result.finalResponse
+			const correctDate = statesLocalCalendarDate(result.finalResponse, now, KIRIBATI);
+			px.logAnnotation({
+				name: ARCHETYPES.timeAwareness,
+				score: correctDate ? 1 : 0,
+				label: correctDate ? 'correct_local_date' : 'wrong_local_date',
+				explanation: `Expected a local-calendar rendering equivalent to ${expected}`
 			});
-			logAdherence(ARCHETYPES.timeAwareness, adherence);
-
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(
-				adherence.followed,
-				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
-			).toBe(true);
+			expect({ status: result.status, correctDate }).toEqual({
+				status: 'completed',
+				correctDate: true
+			});
 		}
 	},
 	{
@@ -127,18 +144,17 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const adherence = await judgeAdherenceConsensus({
-				instruction: `Answer with today's date: ${expected}. That is the local date for the Pacific/Pago_Pago timezone. A UTC date or a date from any other timezone is wrong.`,
-				prompt: this.input.prompt as string,
-				response: result.finalResponse
+			const correctDate = statesLocalCalendarDate(result.finalResponse, now, PAGO_PAGO);
+			px.logAnnotation({
+				name: ARCHETYPES.timeAwareness,
+				score: correctDate ? 1 : 0,
+				label: correctDate ? 'correct_local_date' : 'wrong_local_date',
+				explanation: `Expected a local-calendar rendering equivalent to ${expected}`
 			});
-			logAdherence(ARCHETYPES.timeAwareness, adherence);
-
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(
-				adherence.followed,
-				`${adherence.verdict} (${adherence.agreement} agreement): ${adherence.reasoning}`
-			).toBe(true);
+			expect({ status: result.status, correctDate }).toEqual({
+				status: 'completed',
+				correctDate: true
+			});
 		}
 	},
 	{

@@ -4,7 +4,6 @@ import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { groundingWorkspace, GROUNDING_HASH, MEMORY_HASH } from '../fixtures/workspaces/grounding';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
-import { scoreToolCalling } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -19,7 +18,7 @@ export const groundingCases: readonly EvalCase[] = [
 		name: 'searches notes and reproduces the embedded verification code',
 		splits: [ARCHETYPES.toolCalling],
 		input: { prompt: 'What is the deployment verification code from my runbook?' },
-		expected: { requiredTools: ['search'], hash: GROUNDING_HASH },
+		expected: { authoritativeRead: ['search', 'get_note'], hash: GROUNDING_HASH },
 		metadata: { layer: 'agent', trick: 'hidden hash in note body' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, groundingWorkspace);
@@ -33,12 +32,14 @@ export const groundingCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 400)
 			});
 
-			const tools = scoreToolCalling(result, { required: ['search'] });
+			const usedAuthoritativeRead = result.calledToolNames.some(
+				(name) => name === 'search' || name === 'get_note'
+			);
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
-				score: tools.passed ? 1 : 0,
-				label: tools.passed ? 'pass' : 'fail',
-				explanation: tools.explanation
+				score: usedAuthoritativeRead ? 1 : 0,
+				label: usedAuthoritativeRead ? 'pass' : 'fail',
+				explanation: `called ${result.calledToolNames.join(', ') || 'no tools'}`
 			});
 
 			const grounded = result.finalResponse.includes(GROUNDING_HASH);
@@ -51,9 +52,11 @@ export const groundingCases: readonly EvalCase[] = [
 					: `response does not contain the seeded hash ${GROUNDING_HASH}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
-			expect(grounded, `response must contain ${GROUNDING_HASH}`).toBe(true);
+			expect({ status: result.status, usedAuthoritativeRead, grounded }).toEqual({
+				status: 'completed',
+				usedAuthoritativeRead: true,
+				grounded: true
+			});
 		}
 	},
 	{
@@ -61,7 +64,7 @@ export const groundingCases: readonly EvalCase[] = [
 		name: 'reads memory and reproduces the embedded employee ID',
 		splits: [ARCHETYPES.toolCalling],
 		input: { prompt: 'What is my employee ID? Check your memory.' },
-		expected: { requiredTools: ['list_user_memory'], hash: MEMORY_HASH },
+		expected: { forbiddenTools: ['list_user_memory'], hash: MEMORY_HASH },
 		metadata: { layer: 'agent', trick: 'hidden hash in user memory' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, groundingWorkspace);
@@ -75,12 +78,12 @@ export const groundingCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 400)
 			});
 
-			const tools = scoreToolCalling(result, { required: ['list_user_memory'] });
+			const avoidedRedundantRead = !result.calledToolNames.includes('list_user_memory');
 			px.logAnnotation({
 				name: ARCHETYPES.toolCalling,
-				score: tools.passed ? 1 : 0,
-				label: tools.passed ? 'pass' : 'fail',
-				explanation: tools.explanation
+				score: avoidedRedundantRead ? 1 : 0,
+				label: avoidedRedundantRead ? 'used_injected' : 'redundant_read',
+				explanation: `called ${result.calledToolNames.join(', ') || 'no tools'}`
 			});
 
 			const grounded = result.finalResponse.includes(MEMORY_HASH);
@@ -93,9 +96,11 @@ export const groundingCases: readonly EvalCase[] = [
 					: `response does not contain the seeded hash ${MEMORY_HASH}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
-			expect(grounded, `response must contain ${MEMORY_HASH}`).toBe(true);
+			expect({ status: result.status, avoidedRedundantRead, grounded }).toEqual({
+				status: 'completed',
+				avoidedRedundantRead: true,
+				grounded: true
+			});
 		}
 	},
 	{

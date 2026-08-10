@@ -61,7 +61,9 @@ export const retrievalCases: readonly EvalCase[] = queries.map((entry) => ({
 				: `top result did not contain "${entry.phrase}"; got "${top.slice(0, 120)}"`
 		});
 
-		expect(matches.length, 'search returned nothing at all').toBeGreaterThan(0);
-		expect(top, `expected the top result to mention "${entry.phrase}"`).toContain(entry.phrase);
+		expect({ returnedResults: matches.length > 0, topHit: hit }).toEqual({
+			returnedResults: true,
+			topHit: true
+		});
 	}
 }));

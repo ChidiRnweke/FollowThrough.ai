@@ -23,6 +23,7 @@ export interface ToolEmbeddingRanker {
 export interface ToolDescriptor {
 	readonly name: string;
 	readonly description: string;
+	readonly retrievalText?: string;
 }
 
 export interface ToolRetriever {
@@ -70,7 +71,7 @@ export class EmbeddedToolRetriever implements ToolRetriever {
 		const missing = catalog.filter((tool) => !this.vectors.has(tool.name));
 		if (missing.length === 0) return;
 		const batch = await this.embeddingClient.embed(
-			missing.map((tool) => `${tool.name}: ${tool.description}`)
+			missing.map((tool) => `${tool.name}: ${tool.retrievalText ?? tool.description}`)
 		);
 		missing.forEach((tool, index) => {
 			const vector = batch.vectors[index];

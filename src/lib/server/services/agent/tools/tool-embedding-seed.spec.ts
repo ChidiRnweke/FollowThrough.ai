@@ -8,7 +8,7 @@ import type { ToolCatalogEntry } from '$lib/models/agent/tool-catalog';
 import { seedToolEmbeddings, toolContentHash } from './tool-embedding-seed';
 
 const catalog: readonly ToolCatalogEntry[] = [
-	{ name: 'create_note', description: 'Create a note' },
+	{ name: 'create_note', description: 'Create a note', retrievalText: 'write a new note' },
 	{ name: 'archive_note', description: 'Archive a note' }
 ];
 
@@ -29,11 +29,11 @@ describe('seedToolEmbeddings', () => {
 		expect(summary).toEqual({ embedded: 2, unchanged: 0, removed: 0 });
 	});
 
-	it('embeds the name + description text the query side ranks against', async () => {
+	it('prefers concise retrieval text over the execution description', async () => {
 		const embeddings = new RecordingEmbeddings();
 		await seedToolEmbeddings(new InMemoryToolEmbeddingRepository(), embeddings, catalog);
 		expect(embeddings.requests).toEqual([
-			['create_note: Create a note', 'archive_note: Archive a note']
+			['create_note: write a new note', 'archive_note: Archive a note']
 		]);
 	});
 

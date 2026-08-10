@@ -1,5 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { afterAll, beforeAll } from 'vitest';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createLab, type Lab } from '../lab/application';
 import { ARCHETYPES } from '../cases/types';
 import { toolCallingCases } from '../cases/tool-calling';
@@ -78,6 +79,35 @@ const allCases = [
 	...completionRegressionCases
 ];
 
+/** Smoke is intentionally explicit: substring test filters made "completion" select many costly cases. */
+const smokeCaseIds = new Set(['tool-retrieval-todos-create', 'retrieval-postgres-failover']);
+const profiledCases =
+	process.env.EVAL_PROFILE === 'smoke'
+		? allCases.filter((evalCase) => smokeCaseIds.has(evalCase.id))
+		: allCases;
+
+const exactInvariantSplits = new Set<string>([
+	ARCHETYPES.toolRetrieval,
+	ARCHETYPES.retrieval,
+	ARCHETYPES.toolPayload,
+	ARCHETYPES.effect,
+	ARCHETYPES.injectionResistance,
+	ARCHETYPES.approvalCompliance
+]);
+const configuredRepetitions = Math.max(1, Number.parseInt(process.env.EVAL_REPETITIONS ?? '1', 10));
+const repetitionsFor = (evalCase: (typeof allCases)[number]): number =>
+	evalCase.splits.some((split) => exactInvariantSplits.has(split)) ? 1 : configuredRepetitions;
+const resultsPath = process.env.EVAL_RESULTS_PATH ?? '/tmp/followthrough-eval-results.json';
+const persistResult = async (entry: Record<string, unknown>): Promise<void> => {
+	let entries: Record<string, unknown>[] = [];
+	try {
+		entries = JSON.parse(await readFile(resultsPath, 'utf8')) as Record<string, unknown>[];
+	} catch {
+		// The first completed case creates the incremental result file.
+	}
+	await writeFile(resultsPath, JSON.stringify([...entries, entry], null, 2), 'utf8');
+};
+
 /**
  * Every case in the app is registered into this one suite, which is what makes
  * a single accumulating dataset possible.
@@ -103,35 +133,66 @@ px.describe(
 			await lab?.close();
 		});
 
-		for (const evalCase of allCases) {
-			px.test(
-				evalCase.name,
-				{
-					id: evalCase.id,
-					input: evalCase.input,
-					expected: evalCase.expected,
-					splits: [...evalCase.splits],
-					// Splits are sent on upload but Phoenix 17.15.0 does not persist
-					// them — every example reads back `splits: null`, so the UI has
-					// nothing to filter on. Metadata does round-trip, so the archetype
-					// is mirrored here to keep the dataset sliceable today. Keep both:
-					// `splits` starts working the moment the server supports it.
-					metadata: {
-						archetype: evalCase.splits[0],
-						tags: [...evalCase.splits],
-						...evalCase.metadata
+		for (const evalCase of profiledCases) {
+			for (let sample = 1; sample <= repetitionsFor(evalCase); sample += 1) {
+				px.test(
+					configuredRepetitions > 1 ? `${evalCase.name} [sample ${sample}]` : evalCase.name,
+					{
+						id: configuredRepetitions > 1 ? `${evalCase.id}-sample-${sample}` : evalCase.id,
+						input: evalCase.input,
+						expected: evalCase.expected,
+						splits: [...evalCase.splits],
+						// Splits are sent on upload but Phoenix 17.15.0 does not persist
+						// them — every example reads back `splits: null`, so the UI has
+						// nothing to filter on. Metadata does round-trip, so the archetype
+						// is mirrored here to keep the dataset sliceable today. Keep both:
+						// `splits` starts working the moment the server supports it.
+						metadata: {
+							archetype: evalCase.splits[0],
+							tags: [...evalCase.splits],
+							sample,
+							...evalCase.metadata
+						}
+					},
+					async () => {
+						const startedAt = Date.now();
+						process.stderr.write(`[evals] start ${evalCase.id} sample=${sample}\n`);
+						try {
+							await evalCase.run(lab);
+							await persistResult({
+								caseId: evalCase.id,
+								sample,
+								status: 'passed',
+								durationMs: Date.now() - startedAt,
+								completedAt: new Date().toISOString()
+							});
+						} catch (error) {
+							await persistResult({
+								caseId: evalCase.id,
+								sample,
+								status: 'failed',
+								durationMs: Date.now() - startedAt,
+								failure: error instanceof Error ? error.message : String(error),
+								completedAt: new Date().toISOString()
+							});
+							throw error;
+						} finally {
+							process.stderr.write(
+								`[evals] end ${evalCase.id} sample=${sample} durationMs=${Date.now() - startedAt}\n`
+							);
+						}
 					}
-				},
-				async () => {
-					await evalCase.run(lab);
-				}
-			);
+				);
+			}
 		}
 	},
 	suiteConfig({
 		description:
 			'Capability evals for the FollowThrough agent: tool calling and discovery, memory adherence, precedence and capture, injection resistance, approval gating, and retrieval ranking.',
-		metadata: { caseCount: allCases.length },
+		metadata: {
+			caseCount: profiledCases.length,
+			profile: process.env.EVAL_PROFILE ?? 'exploratory'
+		},
 		acceptanceCriteria
 	})
 );

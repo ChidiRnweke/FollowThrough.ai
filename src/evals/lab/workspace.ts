@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { LocalDate } from '$lib/models/workspace';
-import type { NoteId } from '$lib/models/notes';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
@@ -60,6 +60,28 @@ export interface SeededWorkspace {
 	readonly noteIds: ReadonlyMap<string, NoteId>;
 	readonly skillIds: ReadonlyMap<string, NoteId>;
 	readonly todoIds: ReadonlyMap<string, TodoId>;
+}
+
+/** Build a valid selection from the authoritative saved note, never hand-authored offsets. */
+export async function selectionFromSeededNote(
+	lab: Lab,
+	workspace: Pick<SeededWorkspace, 'actor'>,
+	noteId: NoteId,
+	selectedText: string
+): Promise<TextSelection> {
+	const { note } = await lab.controllers.notes().get(workspace.actor, { noteId });
+	const from = note.plainText.indexOf(selectedText);
+	if (from < 0)
+		throw new Error(
+			`Eval selection fixture is invalid: ${JSON.stringify(selectedText)} is absent from note ${JSON.stringify(note.title)}`
+		);
+	return {
+		noteId,
+		revision: note.currentRevision,
+		from,
+		to: from + selectedText.length,
+		text: selectedText
+	};
 }
 
 /**

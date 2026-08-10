@@ -444,7 +444,11 @@ export class AgentReasoning {
 		const session = this.createSession(this.sessions, actor, run.conversationId);
 		let visionDescriptions: string[] | undefined;
 		if (request.images?.length && request.visionModelOverride) {
-			const client = new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });
+			const client = new OpenAI({
+				apiKey: this.apiKey,
+				baseURL: this.baseURL,
+				timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
+			});
 			visionDescriptions = await Promise.all(
 				request.images.map(async (image) => {
 					const response = await client.chat.completions.create({
@@ -668,6 +672,7 @@ export class AgentReasoning {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,
+			timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
 			fetch: withWebResearch(
 				this.providerFetch ?? globalThis.fetch,
 				openRouterWebSearchTool(webSearch)

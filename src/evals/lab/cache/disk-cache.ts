@@ -23,6 +23,7 @@ import { dirname } from 'node:path';
 export class DiskCache {
 	private entries: Record<string, unknown> | undefined;
 	private dirty = false;
+	private readonly counters = { hits: 0, misses: 0, live: 0 };
 
 	constructor(private readonly path: string) {}
 
@@ -35,16 +36,27 @@ export class DiskCache {
 		return `${namespace}:${hash.slice(0, 32)}`;
 	}
 
-	async resolve<T>(key: string, produce: () => Promise<T>): Promise<T> {
+	async resolve<T>(
+		key: string,
+		produce: () => Promise<T>,
+		options: { deterministic?: boolean } = {}
+	): Promise<T> {
 		const entries = await this.load();
-		if (!DiskCache.recording() && key in entries) return entries[key] as T;
-		if (!DiskCache.recording()) {
-			if (process.env.EVAL_STRICT_CACHE === '1')
-				throw new Error(
-					`Eval cache miss for "${key}" under EVAL_STRICT_CACHE. Re-run with EVAL_RECORD=1 to record it.`
-				);
-			process.stderr.write(`[evals] cache miss for ${key}; calling the live provider\n`);
+		if (!DiskCache.recording() && key in entries) {
+			this.counters.hits += 1;
+			return entries[key] as T;
 		}
+		this.counters.misses += 1;
+		if (!DiskCache.recording()) {
+			if (options.deterministic && process.env.EVAL_STRICT_DETERMINISTIC_CACHE === '1')
+				throw new Error(
+					`Deterministic eval cache miss for "${key}". Re-run test:evals:cache or record the cache intentionally.`
+				);
+			process.stderr.write(
+				`[evals] ${options.deterministic ? 'deterministic cache miss' : 'dynamic live call'} for ${key}\n`
+			);
+		}
+		this.counters.live += 1;
 		const value = await produce();
 		entries[key] = value;
 		this.dirty = true;
@@ -54,8 +66,18 @@ export class DiskCache {
 	async flush(): Promise<void> {
 		if (!this.dirty || !this.entries) return;
 		await mkdir(dirname(this.path), { recursive: true });
-		await writeFile(this.path, JSON.stringify(this.entries, null, 0), 'utf8');
+		let onDisk: Record<string, unknown> = {};
+		try {
+			onDisk = JSON.parse(await readFile(this.path, 'utf8')) as Record<string, unknown>;
+		} catch {
+			// First writer creates the cache.
+		}
+		await writeFile(this.path, JSON.stringify({ ...onDisk, ...this.entries }, null, 0), 'utf8');
 		this.dirty = false;
+	}
+
+	stats(): Readonly<{ hits: number; misses: number; live: number }> {
+		return { ...this.counters };
 	}
 
 	private async load(): Promise<Record<string, unknown>> {

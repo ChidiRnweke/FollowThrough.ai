@@ -17,7 +17,8 @@ export class CachedEmbeddingClient implements EmbeddingClient {
 
 	constructor(
 		private readonly inner: EmbeddingClient,
-		private readonly cache: DiskCache
+		private readonly cache: DiskCache,
+		private readonly isDeterministic: (content: string) => boolean = () => false
 	) {
 		this.model = inner.model;
 	}
@@ -26,10 +27,14 @@ export class CachedEmbeddingClient implements EmbeddingClient {
 		const vectors = await Promise.all(
 			contents.map(async (content) => {
 				const key = DiskCache.key('embed', { model: this.model, content });
-				const encoded = await this.cache.resolve(key, async () => {
-					const batch = await this.inner.embed([content]);
-					return encodeVector(batch.vectors[0]);
-				});
+				const encoded = await this.cache.resolve(
+					key,
+					async () => {
+						const batch = await this.inner.embed([content]);
+						return encodeVector(batch.vectors[0]);
+					},
+					{ deterministic: this.isDeterministic(content) }
+				);
 				return decodeVector(encoded);
 			})
 		);

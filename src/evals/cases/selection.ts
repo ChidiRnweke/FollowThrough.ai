@@ -1,6 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
-import { seedWorkspace } from '../lab/workspace';
+import { seedWorkspace, selectionFromSeededNote } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
@@ -19,7 +19,7 @@ export const selectionCases: readonly EvalCase[] = [
 		input: {
 			prompt: 'Extract action items from this selected text.',
 			selectionText:
-				'I will deploy the new payment gateway by Friday and notify the downstream teams once traffic is migrated.'
+				'The Checkout API calls the Payment Gateway to authorise the card, and waits for the authorisation result.'
 		},
 		expected: { tool: 'extract_promises' },
 		metadata: { layer: 'agent', note: 'Selection present → selection tool preferred.' },
@@ -32,13 +32,12 @@ export const selectionCases: readonly EvalCase[] = [
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
 				noteId,
-				selection: {
+				selection: await selectionFromSeededNote(
+					lab,
+					workspace,
 					noteId,
-					revision: 1,
-					from: 0,
-					to: 130,
-					text: this.input.selectionText as string
-				}
+					this.input.selectionText as string
+				)
 			});
 			px.logOutput({
 				model: result.model,
@@ -54,8 +53,10 @@ export const selectionCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, discovered: verdict.passed }).toEqual({
+				status: 'completed',
+				discovered: true
+			});
 		}
 	},
 	{
@@ -78,13 +79,12 @@ export const selectionCases: readonly EvalCase[] = [
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
 				noteId,
-				selection: {
+				selection: await selectionFromSeededNote(
+					lab,
+					workspace,
 					noteId,
-					revision: 1,
-					from: 0,
-					to: 110,
-					text: this.input.selectionText as string
-				}
+					this.input.selectionText as string
+				)
 			});
 			px.logOutput({
 				model: result.model,
@@ -100,8 +100,10 @@ export const selectionCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, discovered: verdict.passed }).toEqual({
+				status: 'completed',
+				discovered: true
+			});
 		}
 	},
 	{
@@ -142,8 +144,10 @@ export const selectionCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
+			expect({ status: result.status, tools: tools.passed }).toEqual({
+				status: 'completed',
+				tools: true
+			});
 		}
 	}
 ];

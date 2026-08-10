@@ -25,6 +25,25 @@ describe('EmbeddedToolRetriever', () => {
 	it('is available as a domain service', () => {
 		expect(EmbeddedToolRetriever).toBeTypeOf('function');
 	});
+
+	it('indexes concise retrieval text instead of operational descriptions', async () => {
+		const embeddings = new RecordingEmbeddings();
+		embeddings.vectors = [vector(0), vector(0)];
+		await new EmbeddedToolRetriever(embeddings).retrieve(
+			[
+				{
+					name: 'edit_note',
+					description: 'Long execution contract',
+					retrievalText: 'change one sentence and preserve the rest'
+				}
+			],
+			'fix one sentence',
+			1
+		);
+		expect(embeddings.requests[0]).toEqual([
+			'edit_note: change one sentence and preserve the rest'
+		]);
+	});
 });
 
 describe('PgToolRetriever', () => {

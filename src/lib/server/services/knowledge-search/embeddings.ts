@@ -24,6 +24,7 @@ const createLanguageModelClient = (
 	new OpenAI({
 		apiKey,
 		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
+		timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
 		defaultHeaders: {
 			'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
 			'X-OpenRouter-Title': 'FollowThrough'

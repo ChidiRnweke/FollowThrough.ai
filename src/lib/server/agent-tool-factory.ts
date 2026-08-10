@@ -413,6 +413,14 @@ const noteEdits = z.object({
 	noteId: id,
 	edits: z.array(noteEdit).min(1).max(20)
 });
+const localDate = z.iso.date();
+const SELECTION_BOUND_TOOL_NAMES = [
+	'extract_promises',
+	'relate_selection',
+	'find_references',
+	'generate_mermaid_diagram',
+	'create_skill_from_selection'
+] as const;
 interface RegistryContext {
 	readonly provenanceId: ProvenanceId;
 	readonly input: RunAgentInput;
@@ -526,6 +534,10 @@ export class AgentTools {
 			: undefined;
 		return this.buildDefinitions().filter(
 			(definition) =>
+				(!SELECTION_BOUND_TOOL_NAMES.includes(
+					definition.name as (typeof SELECTION_BOUND_TOOL_NAMES)[number]
+				) ||
+					this.context.input.selection !== undefined) &&
 				(!allowed || allowed.has(definition.classification)) &&
 				(LOCKED_TOOL_NAMES.includes(definition.name) ||
 					!this.toolAccess ||
@@ -943,7 +955,7 @@ export class AgentTools {
 					noteId: id.optional(),
 					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
 					responsibility: z.enum(['mine', 'waiting_on']).optional(),
-					dueBefore: z.string().optional()
+					dueBefore: localDate.optional()
 				}),
 				async (input) => ({
 					todos: (await factory.todos().list(actor, input as never)).todos.map((view) =>
@@ -961,7 +973,7 @@ export class AgentTools {
 					description: z.string().optional(),
 					responsibility: z.enum(['mine', 'waiting_on']),
 					waitingOn: z.string().optional(),
-					dueDate: z.string().optional()
+					dueDate: localDate.optional()
 				}),
 				(input) => factory.todos().create(actor, input as never)
 			),
@@ -978,7 +990,7 @@ export class AgentTools {
 								description: z.string().optional(),
 								responsibility: z.enum(['mine', 'waiting_on']),
 								waitingOn: z.string().optional(),
-								dueDate: z.string().optional()
+								dueDate: localDate.optional()
 							})
 						)
 						.min(1)
@@ -1002,7 +1014,7 @@ export class AgentTools {
 					todoId: id,
 					title: z.string().optional(),
 					description: z.string().nullable().optional(),
-					dueDate: z.string().nullable().optional(),
+					dueDate: localDate.nullable().optional(),
 					responsibility: z.enum(['mine', 'waiting_on']).optional(),
 					waitingOn: z.string().nullable().optional(),
 					linkedNoteId: id.nullable().optional(),
@@ -1014,32 +1026,48 @@ export class AgentTools {
 				'extract_promises',
 				toolDescription('extract_promises'),
 				'proposal',
-				z.object({ selection }),
-				(input) => factory.todos().extractPromises(actor, input as never)
+				z.object({}),
+				(input) =>
+					factory.todos().extractPromises(actor, {
+						...input,
+						selection: this.context.input.selection
+					} as never)
 			),
 			define(
 				'relate_selection',
 				toolDescription('relate_selection'),
 				'proposal',
-				z.object({ selection }),
-				(input) => factory.relationships().suggestFromSelection(actor, input as never)
+				z.object({}),
+				(input) =>
+					factory.relationships().suggestFromSelection(actor, {
+						...input,
+						selection: this.context.input.selection
+					} as never)
 			),
 			define(
 				'find_references',
 				toolDescription('find_references'),
 				'proposal',
-				z.object({ selection }),
+				z.object({}),
 				(input) =>
 					factory
 						.references()
-						.suggestFromSelection(actor, input as never, { model: this.context.model })
+						.suggestFromSelection(
+							actor,
+							{ ...input, selection: this.context.input.selection } as never,
+							{ model: this.context.model }
+						)
 			),
 			define(
 				'generate_mermaid_diagram',
 				toolDescription('generate_mermaid_diagram'),
 				'proposal',
-				z.object({ selection, instruction: z.string().optional() }),
-				(input) => factory.diagrams().generateMermaid(actor, input as never)
+				z.object({ instruction: z.string().optional() }),
+				(input) =>
+					factory.diagrams().generateMermaid(actor, {
+						...input,
+						selection: this.context.input.selection
+					} as never)
 			),
 			define(
 				'revise_mermaid_diagram',
@@ -1184,12 +1212,15 @@ export class AgentTools {
 				toolDescription('create_skill_from_selection'),
 				'mutation',
 				z.object({
-					selection,
 					name: z.string().min(1),
 					description: z.string(),
 					triggerHints: z.array(z.string())
 				}),
-				(input) => factory.skills().createFromSelection(actor, input as never)
+				(input) =>
+					factory.skills().createFromSelection(actor, {
+						...input,
+						selection: this.context.input.selection
+					} as never)
 			),
 			define(
 				'list_skill_versions',

@@ -167,8 +167,17 @@ export class InlineSuggestionContext implements IInlineSuggestionContext {
 			async () => {
 				signal.throwIfAborted();
 				const [projectPassages, userEntries] = await Promise.all([
-					this.projectPassages(actor, request, query, signal).catch((error) => {
+					this.projectPassages(actor, request, query, signal).catch(async (error) => {
 						if (signal.aborted) throw error;
+						await this.observer.run(
+							'inline.project-retrieval-degraded',
+							{ outputMimeType: MimeType.JSON },
+							async () => ({
+								outcome: 'empty_fallback',
+								error: error instanceof Error ? error.message : String(error)
+							}),
+							(result) => JSON.stringify(result)
+						);
 						return [] as readonly InlineCompletionPassage[];
 					}),
 					this.dependencies.memory.list(actor, {}).catch(() => [] as readonly MemoryEntry[])
