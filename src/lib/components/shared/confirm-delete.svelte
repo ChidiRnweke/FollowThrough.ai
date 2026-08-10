@@ -6,6 +6,7 @@
 		title = 'Delete this item?',
 		description = 'This cannot be undone.',
 		confirmLabel = 'Delete',
+		confirmVariant = 'destructive',
 		busy = false,
 		onconfirm,
 		trigger
@@ -13,6 +14,8 @@
 		title?: string;
 		description?: string;
 		confirmLabel?: string;
+		/** Non-destructive bulk actions (e.g. replace all) confirm without reading as deletion. */
+		confirmVariant?: 'destructive' | 'default';
 		busy?: boolean;
 		onconfirm: () => void | Promise<void>;
 		/** Rendered inside an AlertDialog.Trigger; receives the trigger props to spread. */
@@ -40,7 +43,7 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel disabled={busy}>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" disabled={busy} onclick={() => void confirm()}>
+			<AlertDialog.Action variant={confirmVariant} disabled={busy} onclick={() => void confirm()}>
 				{confirmLabel}
 			</AlertDialog.Action>
 		</AlertDialog.Footer>

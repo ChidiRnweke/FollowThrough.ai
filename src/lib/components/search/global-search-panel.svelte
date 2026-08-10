@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NoteTextMatch } from '$lib/models/notes';
+	import type { NoteId, NoteSearchContentMatch, NoteTextMatch } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -11,18 +11,25 @@
 		FtChevronDown as ChevronDown,
 		FtChevronRight as ChevronRight,
 		FtDocument as Document,
-		FtExternal as ExternalLink
+		FtExternal as ExternalLink,
+		FtSearch as Search
 	} from '$lib/components/icons';
+	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
+	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch } from '$lib/stores/search/global-search.svelte';
+	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 
 	let {
 		projects = [],
-		onMoveToCanvas
+		onMoveToCanvas,
+		onOpenMatch
 	}: {
 		projects?: readonly Project[];
 		/** Offered by the right panel only; in the workbench the search is already on the canvas. */
 		onMoveToCanvas?: () => void;
+		/** Override for the snippet click-through; defaults to revealing the match in the workbench. */
+		onOpenMatch?: (noteId: NoteId, match: NoteSearchContentMatch) => void;
 	} = $props();
 
 	interface TitleSegment {
@@ -51,42 +58,42 @@
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
 	const projectFilter = $derived(globalSearch.projectId ?? 'all');
-	const replacing = $derived(globalSearch.replaceOpen && globalSearch.hits.length > 0);
+	const replacing = $derived(globalSearch.hits.length > 0);
+	const replaceTitle = $derived(
+		`Replace ${globalSearch.totalMatches} ${globalSearch.totalMatches === 1 ? 'match' : 'matches'} across ${globalSearch.hits.length} ${globalSearch.hits.length === 1 ? 'note' : 'notes'}?`
+	);
 
 	const pickProject = (value: string): void => {
 		globalSearch.projectId = value === 'all' ? undefined : (value as ProjectId);
 		void globalSearch.search();
 	};
+
+	/**
+	 * A snippet click is a promise: land in the note with the match selected, scrolled to
+	 * and lit. The reveal rides a one-shot store rather than the URL — it is a transient
+	 * intent, and `workbench.openTab` owns the shareable state.
+	 */
+	const openMatch = (noteId: NoteId, match: NoteSearchContentMatch): void => {
+		noteReveal.request({ noteId, start: match.start, end: match.end, text: match.text });
+		void workbench.openTab(noteId);
+	};
+	const handleOpenMatch = $derived(onOpenMatch ?? openMatch);
 </script>
 
 <div class="flex h-full min-h-0 flex-col gap-3">
+	<!--
+		Two rows, like the todos toolbar: the first defines the search, the second acts on
+		the results. Replace stays visible — one compact row is not worth hiding behind a
+		toggle.
+	-->
 	<div class="flex flex-col gap-2">
-		<div class="flex items-start gap-1">
-			<Tip text={globalSearch.replaceOpen ? 'Hide replace' : 'Show replace'}>
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						class="mt-0.5 shrink-0"
-						aria-label={globalSearch.replaceOpen ? 'Hide replace' : 'Show replace'}
-						aria-expanded={globalSearch.replaceOpen}
-						onclick={() => (globalSearch.replaceOpen = !globalSearch.replaceOpen)}
-					>
-						{#if globalSearch.replaceOpen}
-							<ChevronDown data-icon />
-						{:else}
-							<ChevronRight data-icon />
-						{/if}
-					</Button>
-				{/snippet}
-			</Tip>
+		<div class="flex items-center gap-1">
 			<div class="relative min-w-0 flex-1">
 				<Input
 					value={globalSearch.query}
 					placeholder="Search all notes"
 					aria-label="Search all notes"
-					class="pr-14"
+					class="h-11 pr-14 sm:h-8"
 					oninput={(event) => {
 						globalSearch.query = event.currentTarget.value;
 						globalSearch.scheduleSearch();
@@ -122,29 +129,12 @@
 					</Toggle>
 				</div>
 			</div>
-		</div>
-		{#if globalSearch.replaceOpen}
-			<div class="flex items-center gap-1 pl-7">
-				<Input
-					value={globalSearch.replacement}
-					placeholder="Replace"
-					aria-label="Replace with"
-					class="min-w-0 flex-1"
-					oninput={(event) => (globalSearch.replacement = event.currentTarget.value)}
-				/>
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={!replacing}
-					onclick={() => void globalSearch.replaceAll()}
-				>
-					Replace all
-				</Button>
-			</div>
-		{/if}
-		<div class="flex items-center gap-2 pl-7">
 			<Select.Root type="single" value={projectFilter} onValueChange={pickProject}>
-				<Select.Trigger size="sm" aria-label="Filter by project" class="max-w-48">
+				<Select.Trigger
+					size="sm"
+					aria-label="Filter by project"
+					class="h-11 w-auto min-w-0 sm:h-8 sm:w-44"
+				>
 					{projectFilter === 'all'
 						? 'All projects'
 						: (projects.find((project) => project.id === projectFilter)?.name ?? 'Project')}
@@ -165,7 +155,7 @@
 							{...props}
 							variant="ghost"
 							size="icon-sm"
-							class="ml-auto"
+							class="shrink-0"
 							aria-label="Open search in workbench"
 							onclick={onMoveToCanvas}
 						>
@@ -175,12 +165,34 @@
 				</Tip>
 			{/if}
 		</div>
+		<div class="flex items-center gap-1">
+			<Input
+				value={globalSearch.replacement}
+				placeholder="Replace with..."
+				aria-label="Replace with"
+				class="h-11 min-w-0 flex-1 sm:h-8"
+				oninput={(event) => (globalSearch.replacement = event.currentTarget.value)}
+			/>
+			<ConfirmDelete
+				title={replaceTitle}
+				description="This rewrites every match in the note bodies. Title matches are left alone."
+				confirmLabel="Replace all"
+				confirmVariant="default"
+				onconfirm={() => globalSearch.replaceAll()}
+			>
+				{#snippet trigger(props)}
+					<Button {...props} size="sm" class="h-11 shrink-0 sm:h-8" disabled={!replacing}>
+						Replace all
+					</Button>
+				{/snippet}
+			</ConfirmDelete>
+		</div>
 	</div>
 
 	{#if globalSearch.searchError}
-		<p class="pl-7 text-xs text-destructive" role="alert">{globalSearch.searchError}</p>
+		<p class="text-xs text-destructive" role="alert">{globalSearch.searchError}</p>
 	{:else if globalSearch.lastReplace}
-		<p class="pl-7 text-xs text-muted-foreground" role="status">
+		<p class="text-xs text-muted-foreground" role="status">
 			Replaced {globalSearch.lastReplace.replacedMatches}
 			{globalSearch.lastReplace.replacedMatches === 1 ? 'match' : 'matches'} in
 			{globalSearch.lastReplace.replacedNotes}
@@ -190,23 +202,27 @@
 
 	<div class="min-h-0 flex-1 overflow-y-auto">
 		{#if globalSearch.searching}
-			<div class="flex items-center gap-2 pl-7 text-xs text-muted-foreground">
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
 				<Spinner class="size-3.5" /> Searching…
 			</div>
 		{:else if globalSearch.query === ''}
-			<p class="pl-7 text-xs text-muted-foreground">
-				Search across every note's title and text. Toggle <span class="font-mono">.*</span> for regex.
-			</p>
+			<EmptyState
+				icon={Search}
+				title="Search every note's title and text."
+				hint="Toggle .* for regex."
+			/>
 		{:else if globalSearch.hits.length === 0}
-			<p class="pl-7 text-xs text-muted-foreground">No results for “{globalSearch.query}”.</p>
+			<EmptyState icon={Search} title="No results for “{globalSearch.query}”." />
 		{:else}
-			<p class="pl-7 text-xs text-muted-foreground">
+			<p class="text-xs text-muted-foreground">
 				{globalSearch.totalMatches}
 				{globalSearch.totalMatches === 1 ? 'result' : 'results'} in
 				{globalSearch.hits.length}
 				{globalSearch.hits.length === 1 ? 'note' : 'notes'}
 			</p>
-			<ul class="mt-1 flex flex-col">
+			<!-- The gap between documents is the grouping signal: clearly wider than the
+			     snippet spacing inside one document, no dividers. -->
+			<ul class="mt-1 flex flex-col gap-3">
 				{#each globalSearch.hits as hit (hit.noteId)}
 					{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
 					{@const count = hit.titleMatches.length + hit.matches.length}
@@ -214,15 +230,25 @@
 						<div class="row-quiet flex items-center gap-1 rounded-md px-2 py-1">
 							<Button
 								variant="ghost"
-								class="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 rounded-none px-0 py-0 text-left hover:bg-transparent hover:text-current"
+								size="icon-xs"
+								class="shrink-0 text-muted-foreground"
+								aria-label={collapsed ? 'Expand matches' : 'Collapse matches'}
 								aria-expanded={!collapsed}
 								onclick={() => globalSearch.toggleCollapsed(hit.noteId)}
 							>
 								{#if collapsed}
-									<ChevronRight data-icon class="shrink-0 text-muted-foreground" />
+									<ChevronRight data-icon />
 								{:else}
-									<ChevronDown data-icon class="shrink-0 text-muted-foreground" />
+									<ChevronDown data-icon />
 								{/if}
+							</Button>
+							<!-- The title navigates; the chevron collapses. One gesture each, so a
+							     click on the document never reads as ambiguous. -->
+							<Button
+								variant="ghost"
+								class="h-auto min-w-0 items-center justify-start gap-1.5 rounded-none px-0 py-0 text-left hover:bg-transparent hover:text-current"
+								onclick={() => void workbench.openTab(hit.noteId)}
+							>
 								<Document data-icon class="shrink-0 text-muted-foreground" />
 								<span class="truncate text-sm font-medium">
 									{#each titleSegments(hit.title, hit.titleMatches) as segment, index (index)}
@@ -231,14 +257,20 @@
 									{/each}
 								</span>
 							</Button>
-							{#if globalSearch.replaceOpen && hit.matches.length > 0}
+							<span
+								class="shrink-0 rounded-full bg-accent px-1.5 text-xs text-muted-foreground tabular-nums"
+							>
+								{count}
+								{count === 1 ? 'match' : 'matches'}
+							</span>
+							{#if hit.matches.length > 0}
 								<Tip text="Replace in this note">
 									{#snippet children({ props })}
 										<Button
 											{...props}
 											variant="ghost"
 											size="sm"
-											class="h-6 px-1.5 text-xs"
+											class="ml-auto h-6 shrink-0 px-1.5 text-xs"
 											aria-label="Replace in {hit.title}"
 											onclick={() => void globalSearch.replaceInNote(hit.noteId)}
 										>
@@ -247,11 +279,6 @@
 									{/snippet}
 								</Tip>
 							{/if}
-							<span
-								class="shrink-0 rounded-full bg-accent px-1.5 text-xs text-muted-foreground tabular-nums"
-							>
-								{count}
-							</span>
 						</div>
 						{#if !collapsed}
 							<ul>
@@ -260,11 +287,15 @@
 										<Button
 											variant="ghost"
 											class="row-interactive block h-auto w-full truncate justify-start rounded-md py-1 pr-2 pl-9 text-left text-xs font-normal text-muted-foreground hover:bg-accent hover:text-current"
-											onclick={() => void workbench.openTab(hit.noteId)}
+											onclick={() => handleOpenMatch(hit.noteId, match)}
 										>
-											{inline(match.snippet.before)}<mark class="search-hit"
-												>{inline(match.snippet.hit)}</mark
-											>{inline(match.snippet.after)}
+											<!-- Ellipses only where the window was actually cut — a match at
+											     the end of a note gets no fake trailing "…". -->
+											{#if match.snippet.truncatedBefore}…{/if}{inline(
+												match.snippet.before
+											)}<mark class="search-hit">{inline(match.snippet.hit)}</mark>{inline(
+												match.snippet.after
+											)}{#if match.snippet.truncatedAfter}…{/if}
 										</Button>
 									</li>
 								{/each}

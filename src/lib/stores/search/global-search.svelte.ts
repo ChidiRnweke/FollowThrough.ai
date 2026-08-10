@@ -20,7 +20,6 @@ export class GlobalSearchStore {
 	regex = $state(false);
 	caseSensitive = $state(false);
 	projectId = $state<ProjectId | undefined>(undefined);
-	replaceOpen = $state(false);
 	hits = $state<readonly NoteSearchHit[]>([]);
 	searching = $state(false);
 	/** Set when the pattern cannot run — an empty query or an invalid regex. */

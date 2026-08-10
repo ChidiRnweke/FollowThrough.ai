@@ -39,6 +39,10 @@ export interface NoteSearchSnippet {
 	readonly before: string;
 	readonly hit: string;
 	readonly after: string;
+	/** True only when `before` was actually cut short — a UI may prefix an ellipsis, never otherwise. */
+	readonly truncatedBefore: boolean;
+	/** True only when `after` was actually cut short — a UI may suffix an ellipsis, never otherwise. */
+	readonly truncatedAfter: boolean;
 }
 
 /** A content match paired with the snippet a result row renders. */
@@ -116,16 +120,33 @@ export const searchNoteText = (
 	}));
 };
 
-/** A display window around a match: the hit plus `contextChars` of breathing room either side. */
+/**
+ * A display window around a match: the hit plus `contextChars` of breathing room either
+ * side. When one side clamps at a text boundary its unused budget moves to the other
+ * side, so a match at the start of a note still shows a full trailing context. The
+ * truncated flags report which sides were actually cut, so a UI never implies more text
+ * than exists.
+ */
 export const noteSearchSnippet = (
 	text: string,
 	match: NoteTextMatch,
 	contextChars = 60
-): NoteSearchSnippet => ({
-	before: text.slice(Math.max(0, match.start - contextChars), match.start),
-	hit: text.slice(match.start, match.end),
-	after: text.slice(match.end, match.end + contextChars)
-});
+): NoteSearchSnippet => {
+	const beforeChars =
+		Math.min(contextChars, match.start) +
+		Math.max(0, contextChars - (text.length - match.end));
+	const afterChars =
+		Math.min(contextChars, text.length - match.end) + Math.max(0, contextChars - match.start);
+	const beforeStart = Math.max(0, match.start - beforeChars);
+	const afterEnd = Math.min(text.length, match.end + afterChars);
+	return {
+		before: text.slice(beforeStart, match.start),
+		hit: text.slice(match.start, match.end),
+		after: text.slice(match.end, afterEnd),
+		truncatedBefore: beforeStart > 0,
+		truncatedAfter: afterEnd < text.length
+	};
+};
 
 /**
  * Expands `$` references in a replacement string the way `String.replace` does:

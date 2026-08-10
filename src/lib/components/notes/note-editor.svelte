@@ -59,6 +59,7 @@
 		type ResolvedReferenceLinkGroup
 	} from './reference-link-plugin';
 	import { createSelectionActionPlugin, selectionActionKey } from './selection-action-plugin';
+	import { createSearchRevealPlugin, searchRevealKey } from './search-reveal-plugin';
 	import {
 		createPendingInsertionsPlugin,
 		getPendingInsertion,
@@ -75,12 +76,16 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import { uploadNoteAttachment } from './attachment-upload';
+	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
+	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';
 	/** Long enough for the ripple to finish; short enough that a second update can follow. */
 	const SHIMMER_DURATION = 4500;
 	const shimmerKey = new PluginKey('note-block-shimmer');
+	/** Long enough to spot the lit match; short enough that typing soon after reads clean. */
+	const REVEAL_DURATION = 2400;
 
 	const runningCopy: Record<NoteAiAction, string> = {
 		promises: 'Reading for commitments',
@@ -177,6 +182,8 @@
 	let hydrated = $state(false);
 	/** Guards the shimmer teardown: only the latest replacement removes its decoration. */
 	let shimmerGeneration = 0;
+	/** Same guard for the search-reveal decoration. */
+	let revealGeneration = 0;
 	let activeLink = $state<
 		{ readonly group: ResolvedReferenceLinkGroup; readonly anchor: HTMLAnchorElement } | undefined
 	>();
@@ -528,6 +535,7 @@
 			})
 		);
 		editor.registerPlugin(createSelectionActionPlugin());
+		editor.registerPlugin(createSearchRevealPlugin());
 		editor.registerPlugin(createPendingInsertionsPlugin());
 		// Keep the run store's context on the mapped position, so a refresh while the
 		// author is still typing lands the diagram where the text is, not where it was.
@@ -561,6 +569,29 @@
 		});
 		hydrated = true;
 		return retainActiveLink;
+	});
+
+	// Search click-through: once this editor is hydrated, a pending reveal for its note
+	// lands on the match — selected, scrolled to, lit — and fires exactly once. The
+	// view's DOM is attached by `EditorContent`'s own effect, which can settle after
+	// this one, so the request is consumed only once the view is actually connected; a
+	// detached twin (mounted and replaced during load) polls briefly, gives up, and
+	// leaves the request for the visible instance.
+	$effect(() => {
+		const pending = noteReveal.pending;
+		if (!hydrated || pending?.noteId !== noteId) return;
+		untrack(() => {
+			const attempt = (framesLeft: number): void => {
+				if (!editor || editor.isDestroyed) return;
+				if (!editor.view.dom.isConnected) {
+					if (framesLeft > 0) requestAnimationFrame(() => attempt(framesLeft - 1));
+					return;
+				}
+				const reveal = noteReveal.consume(noteId);
+				if (reveal) revealPlainTextRange(reveal.start, reveal.end, reveal.text);
+			};
+			attempt(120);
+		});
 	});
 
 	// Rebuild highlights whenever the anchored suggestion set changes. The dispatch
@@ -628,6 +659,39 @@
 					})
 				);
 		}, SHIMMER_DURATION);
+	}
+
+	/**
+	 * Search click-through: select the matched range, scroll it into view, and light it
+	 * with a transient inline decoration — a decoration, not a mark, so nothing about
+	 * the reveal is ever serialized into the document. The offsets describe the saved
+	 * plain text; when unsaved keystrokes have shifted them, the matched text itself is
+	 * the anchor, the same reconciliation `readSelection` uses.
+	 */
+	function revealPlainTextRange(start: number, end: number, text: string): void {
+		if (!editor) return;
+		const plainText = editor.getText({ blockSeparator: BLOCK_SEPARATOR });
+		let from = start;
+		if (plainText.slice(start, end) !== text) {
+			from = nearestTextOffset(plainText, text, start);
+			if (from < 0) return;
+		}
+		const range = plainTextRangeToPm(editor, from, from + text.length);
+		if (!range) return;
+		const generation = revealGeneration + 1;
+		revealGeneration = generation;
+		try {
+			editor.view.dispatch(editor.state.tr.setMeta(searchRevealKey, range));
+			editor.chain().setTextSelection(range).scrollIntoView().run();
+		} catch {
+			// A range the live document cannot resolve is a miss, not an error: the tab
+			// still opened at the note, which is most of the promise.
+			return;
+		}
+		window.setTimeout(() => {
+			if (editor && !editor.isDestroyed && revealGeneration === generation)
+				editor.view.dispatch(editor.state.tr.setMeta(searchRevealKey, null));
+		}, REVEAL_DURATION);
 	}
 
 	export function getDocument(): ProseMirrorDocument {

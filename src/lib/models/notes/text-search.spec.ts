@@ -70,7 +70,41 @@ describe('Shaping a snippet', () => {
 		expect(noteSearchSnippet(text, { start: 50, end: 55, text: '' }, 5)).toEqual({
 			before: '56789',
 			hit: '01234',
-			after: '56789'
+			after: '56789',
+			truncatedBefore: true,
+			truncatedAfter: true
+		});
+	});
+
+	it('moves the leading budget to trailing context for a match at the text start', () => {
+		const text = '0123456789'.repeat(10);
+		expect(noteSearchSnippet(text, { start: 2, end: 4, text: '' }, 5)).toEqual({
+			before: '01',
+			hit: '23',
+			after: '45678901',
+			truncatedBefore: false,
+			truncatedAfter: true
+		});
+	});
+
+	it('moves the trailing budget to leading context for a match at the text end', () => {
+		const text = '0123456789'.repeat(10);
+		expect(noteSearchSnippet(text, { start: 96, end: 98, text: '' }, 5)).toEqual({
+			before: '89012345',
+			hit: '67',
+			after: '89',
+			truncatedBefore: true,
+			truncatedAfter: false
+		});
+	});
+
+	it('claims no truncation when the whole text fits the window', () => {
+		expect(noteSearchSnippet('short note', { start: 0, end: 5, text: '' }, 60)).toEqual({
+			before: '',
+			hit: 'short',
+			after: ' note',
+			truncatedBefore: false,
+			truncatedAfter: false
 		});
 	});
 });

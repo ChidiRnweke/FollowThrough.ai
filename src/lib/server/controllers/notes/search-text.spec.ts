@@ -56,7 +56,9 @@ describe('Searching note text', () => {
 		expect(result.hits[0]?.matches[0]?.snippet).toEqual({
 			before: '',
 			hit: 'ship',
-			after: ' it, then ship it again'
+			after: ' it, then ship it again',
+			truncatedBefore: false,
+			truncatedAfter: false
 		});
 	});
 
