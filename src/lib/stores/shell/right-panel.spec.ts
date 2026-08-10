@@ -32,4 +32,15 @@ describe('RightPanelStore composer focus ownership', () => {
 
 		expect(focusCount).toBe(0);
 	});
+
+	it('discards a pending search focus request when the panel closes', () => {
+		const panel = new RightPanelStore();
+		let focused = false;
+		panel.requestSearchInputFocus();
+
+		panel.close();
+		panel.registerSearchInputFocus(() => (focused = true));
+
+		expect(focused).toBe(false);
+	});
 });

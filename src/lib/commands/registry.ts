@@ -88,9 +88,17 @@ export const commandRegistry: readonly AppCommand[] = [
 		label: 'Search all notes',
 		shortcut: '⌘⇧F',
 		icon: SearchIcon,
-		run() {
+		async run() {
 			palette.close();
-			rightPanel.toggle('search');
+			// Open or refocus — the point of the shortcut is typing immediately,
+			// so an already-open search gets its input focused, not closed.
+			if (rightPanel.mode === 'search') {
+				rightPanel.requestSearchInputFocus();
+				return;
+			}
+			rightPanel.openSearch();
+			await tick();
+			rightPanel.requestSearchInputFocus();
 		}
 	},
 	{

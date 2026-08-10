@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { NoteSearchContentMatch, NoteSearchHit, NoteTextMatch } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -18,6 +19,7 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch } from '$lib/stores/search/global-search.svelte';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
+	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 
 	let {
@@ -85,6 +87,12 @@
 		void workbench.openTab(hit.noteId);
 	};
 	const handleOpenMatch = $derived(onOpenMatch ?? openMatch);
+
+	// ⌘⇧F lands here: the command opens the panel, then asks for the input.
+	// `$state` — not a plain `let`: the `bind:ref` hands the element over through
+	// it, and without reactivity the hand-off is dropped (`non_reactive_update`).
+	let searchInput = $state<HTMLInputElement | undefined>();
+	onMount(() => rightPanel.registerSearchInputFocus(() => searchInput?.focus()));
 </script>
 
 <div class="flex h-full min-h-0 flex-col gap-6">
@@ -96,6 +104,7 @@
 	<div class="flex items-center gap-1">
 		<div class="relative min-w-0 flex-1">
 			<Input
+				bind:ref={searchInput}
 				value={globalSearch.query}
 				placeholder="Search all notes"
 				aria-label="Search all notes"
