@@ -575,24 +575,29 @@
 
 	// Search click-through: once this editor is hydrated, a pending reveal for its note
 	// lands on the match — selected, scrolled to, lit — and fires exactly once. The
-	// view's DOM is attached by `EditorContent`'s own effect, which can settle after
-	// this one, so the request is consumed only once the view is actually connected; a
-	// detached twin (mounted and replaced during load) polls briefly, gives up, and
-	// leaves the request for the visible instance.
+	// request is consumed only once the view can actually show it: `EditorContent`
+	// attaches the DOM in its own effect, which can settle after this one, and a
+	// background tab's editor stays mounted under `display: none` — connected, but
+	// scrollIntoView reads zeroed layout rects and the wash paints invisibly. The
+	// click that sent the reveal also focuses the tab, flipping the pane visible
+	// within a few frames; a detached twin (mounted and replaced during load) never
+	// becomes visible, polls briefly, gives up, and leaves the request for the
+	// visible instance.
 	$effect(() => {
 		const pending = noteReveal.pending;
 		if (!hydrated || pending?.noteId !== noteId) return;
 		untrack(() => {
 			const attempt = (framesLeft: number): void => {
 				if (!editor || editor.isDestroyed) return;
-				if (!editor.view.dom.isConnected) {
+				const dom = editor.view.dom;
+				if (!dom.isConnected || dom.offsetParent === null) {
 					if (framesLeft > 0) requestAnimationFrame(() => attempt(framesLeft - 1));
 					return;
 				}
 				const reveal = noteReveal.consume(noteId);
 				if (reveal) revealPlainTextRange(reveal.start, reveal.end, reveal.text, reveal.others);
 			};
-			attempt(120);
+			attempt(300);
 		});
 	});
 
@@ -702,7 +707,12 @@
 			editor.view.dispatch(
 				editor.state.tr.setMeta(searchRevealKey, { primary: range, others: otherRanges })
 			);
-			editor.chain().setTextSelection(range).scrollIntoView().run();
+			editor.chain().setTextSelection(range).run();
+			// ProseMirror's scrollIntoView is a no-op against the pane's ScrollArea
+			// viewport; scroll the match's DOM into view natively instead.
+			const at = editor.view.domAtPos(range.from);
+			const element = at.node instanceof HTMLElement ? at.node : at.node.parentElement;
+			element?.scrollIntoView({ block: 'center' });
 		} catch {
 			// A range the live document cannot resolve is a miss, not an error: the tab
 			// still opened at the note, which is most of the promise.
