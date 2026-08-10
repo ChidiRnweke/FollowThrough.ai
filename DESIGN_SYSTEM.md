@@ -34,6 +34,11 @@
   chat origin lines, artifact format badges, and the project-overview resource icon chips all
   use `--brand` text with the shared `bg-brand/10` wash (`dark:bg-brand/15`). No new wash
   tokens: the badge `brand` variant is the canonical recipe.
+- **The reader's own words carry the accent:** the user's chat turn takes the same `bg-brand/10`
+  (`dark:bg-brand/15`) wash. `bg-muted` is the fill of every disabled notice and hover row in the
+  app, so it said nothing about whose turn it was; the teal marks the half of the transcript the
+  reader wrote. The text stays `foreground` — a wash marks a turn, tinted prose would be reading
+  it aloud in colour.
 
 ## Tokens and composition
 
@@ -265,7 +270,14 @@ zone and center the voice line inside it.
     that is right there.
 - User messages expose copy and edit-in-composer actions; assistant messages expose copy and retry when eligible. Retrying never duplicates the visible user turn.
 - Conversation origin is fixed on its first turn and distinct from context chips added later. Full-page chats link back through project/note breadcrumbs.
-- Auto-scroll only while the reader is at the latest turn; preserve their position when they scroll upward.
+- **A question stays where it was asked.** On send, the newest question is scrolled to the top of
+  the port and its answer is written into space the thread reserves beneath it, so nothing the
+  reader is looking at moves while the reply arrives. The thread was bottom-anchored before, which
+  meant every streamed line shoved the question up the screen. Reserved space is not transcript:
+  it collapses as the answer fills it, and once the answer outgrows the port following the bottom
+  takes over as usual. Auto-scroll otherwise only runs while the reader is at the latest turn;
+  preserve their position when they scroll upward, and never scroll backwards to chase an end that
+  sits above where they are.
 - The empty thread teaches before it lists. Route-aware starters name an action with a destination
   ("extract commitments into todos"), never a bare question — they are the only place the panel can
   show that the agent writes as well as answers. Recent chats sit below them, not above. Both groups

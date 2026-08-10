@@ -73,8 +73,9 @@
 		const releaseComposerFocus = registerComposerFocus?.(() => textareaRef?.focus());
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) chat.clear();
-		else if (initialConversationId) void chat.switchToConversation(initialConversationId);
-		else void chat.hydrate();
+		else if (initialConversationId)
+			void openConversation(chat.switchToConversation(initialConversationId));
+		else void openConversation(chat.hydrate());
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else prompt = sessionStorage.getItem(draftKey()) ?? '';
@@ -156,6 +157,37 @@
 	}
 	let followingLatest = $state(true);
 	let showJumpToLatest = $state(false);
+	let questionRef = $state<HTMLElement | null>(null);
+	let anchorSpacer = $state(0);
+	/**
+	 * `pinned`: the question just asked is held at the top of the port while its answer is
+	 * written into the space the thread reserved beneath it — nothing moves, so nothing is
+	 * pulled out from under the reader. Once that space is used up there is nowhere left to
+	 * write and following the bottom resumes, which is also what `follow` does throughout.
+	 */
+	let anchorMode = $state<'pinned' | 'follow'>('follow');
+
+	// A finished turn has no more content coming, so it releases the pin. The next send
+	// takes it again.
+	$effect(() => {
+		if (!chat.isStreaming) anchorMode = 'follow';
+	});
+
+	/** Put the newest question at the top of the scroll port. */
+	function pinLatestQuestion(): void {
+		const port = viewport;
+		const question = questionRef;
+		anchorMode = 'pinned';
+		if (!port || !question) return;
+		port.scrollTop += question.getBoundingClientRect().top - port.getBoundingClientRect().top;
+	}
+
+	/** Open a conversation on its last exchange rather than on the reserved space below it. */
+	async function openConversation(loaded: Promise<unknown>): Promise<void> {
+		await loaded;
+		await tick();
+		pinLatestQuestion();
+	}
 	// Keyed by session, not conversation: the id only arrives once the first
 	// message is sent, so a conversation-keyed draft moved out from under the
 	// user mid-compose.
@@ -175,13 +207,25 @@
 		// not enough: the empty state's own starters and history overflow the panel,
 		// which raised the button over a thread that had nothing below.
 		const scrollable = () => node.scrollHeight > node.clientHeight && chat.entries.length > 0;
+		// The room reserved under the last turn is not transcript: a reader parked at the
+		// top of the newest question has seen everything there is to see, however far the
+		// scrollbar says they still are from the end of the range.
+		const distanceFromEnd = () =>
+			node.scrollHeight - anchorSpacer - node.scrollTop - node.clientHeight;
+		// Following never scrolls backwards: with room still reserved, the end of the
+		// transcript sits above where the pin put the viewport, and chasing it would drag
+		// the question back down the screen.
+		const followEnd = () =>
+			node.scrollTo({
+				top: Math.max(node.scrollTop, node.scrollHeight - anchorSpacer - node.clientHeight)
+			});
 		const updatePosition = () => {
-			followingLatest = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+			followingLatest = distanceFromEnd() < 48;
 			showJumpToLatest = !followingLatest && scrollable();
 		};
 		const observer = new MutationObserver(() => {
-			if (followingLatest) node.scrollTo({ top: node.scrollHeight });
-			else showJumpToLatest = scrollable();
+			if (followingLatest && (anchorMode === 'follow' || anchorSpacer === 0)) followEnd();
+			else showJumpToLatest = !followingLatest && scrollable();
 		});
 		node.addEventListener('scroll', updatePosition, { passive: true });
 		observer.observe(node, { childList: true, subtree: true, characterData: true });
@@ -194,7 +238,14 @@
 	function jumpToLatest(): void {
 		followingLatest = true;
 		showJumpToLatest = false;
-		viewport?.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+		anchorMode = 'follow';
+		if (!viewport) return;
+		// The end of the transcript, not the end of the scroll range — landing on the
+		// reserved blank would look like the answer had gone missing.
+		viewport.scrollTo({
+			top: viewport.scrollHeight - anchorSpacer - viewport.clientHeight,
+			behavior: 'smooth'
+		});
 	}
 
 	// The open note travels along automatically, like Copilot's current file.
@@ -317,7 +368,7 @@
 		chat.chips = [];
 		handoff = undefined;
 		await tick();
-		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
+		pinLatestQuestion();
 		await request;
 	}
 
@@ -353,7 +404,7 @@
 			return;
 		}
 		await tick();
-		if (followingLatest) viewport?.scrollTo({ top: viewport.scrollHeight });
+		pinLatestQuestion();
 	}
 
 	function askAgain(reply: ChatEntry): void {
@@ -482,8 +533,10 @@
 			{editingId}
 			bind:editDraft
 			bind:viewport
+			bind:questionRef
+			bind:anchorSpacer
 			{showJumpToLatest}
-			onswitchconversation={(id) => void chat.switchToConversation(id)}
+			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id))}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}

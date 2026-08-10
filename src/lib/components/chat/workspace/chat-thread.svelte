@@ -28,6 +28,7 @@
 	import { chatPartGroupKey, groupChatParts } from '../chat-parts';
 	import ChatHistoryList from './chat-history-list.svelte';
 	import ImageLightbox from '../image-lightbox.svelte';
+	import { anchorSpacerHeight } from './thread-anchor';
 
 	let {
 		shell,
@@ -41,6 +42,8 @@
 		editingId,
 		editDraft = $bindable(''),
 		viewport = $bindable<HTMLElement | null>(null),
+		questionRef = $bindable<HTMLElement | null>(null),
+		anchorSpacer = $bindable(0),
 		showJumpToLatest,
 		onswitchconversation,
 		onstarter,
@@ -68,6 +71,10 @@
 		editingId?: string;
 		editDraft?: string;
 		viewport?: HTMLElement | null;
+		/** The newest question's element, so the panel can scroll it to the top of the port. */
+		questionRef?: HTMLElement | null;
+		/** Height of the reserved space under the last turn; the panel measures scrolling against it. */
+		anchorSpacer?: number;
 		showJumpToLatest: boolean;
 		onswitchconversation: (id: Conversation['id']) => void;
 		onstarter: (text: string) => void;
@@ -102,6 +109,48 @@
 		node.focus();
 		node.setSelectionRange(node.value.length, node.value.length);
 	};
+
+	// --- keeping the newest question at the top of the port ---
+
+	let stack = $state<HTMLElement | null>(null);
+	const latestQuestionId = $derived(entries.findLast((entry) => entry.role === 'user')?.id);
+
+	/**
+	 * Only the newest question is worth a reference, and it moves as the thread grows, so
+	 * the turn hands itself over through an attachment rather than a `bind:this` that
+	 * would have to be written on every row and guarded on every read.
+	 */
+	const markLatestQuestion = (node: HTMLElement): (() => void) => {
+		questionRef = node;
+		return () => {
+			if (questionRef === node) questionRef = null;
+		};
+	};
+	const ignore = (_node: HTMLElement): void => {};
+
+	// The stack grows on every streamed token and the port changes with the window, the
+	// docked panel's width, and the composer's own height — so both are watched rather
+	// than measured once per turn.
+	$effect(() => {
+		const port = viewport;
+		const content = stack;
+		if (!port || !content) return;
+		const measure = (): void => {
+			const question = questionRef;
+			anchorSpacer = question
+				? anchorSpacerHeight({
+						viewportHeight: port.clientHeight,
+						stackHeight: content.offsetHeight,
+						questionOffset: question.offsetTop - content.offsetTop
+					})
+				: 0;
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(port);
+		observer.observe(content);
+		return () => observer.disconnect();
+	});
 </script>
 
 <!--
@@ -145,29 +194,32 @@
 				{/if}
 			{/if}
 			<!--
-				`mt-auto` is what closes the gap over the composer. The scroll area takes every
-				pixel the composer does not, and a column that only stacks from the top leaves
-				the difference as dead space between the last turn and the input — worst on a
-				short conversation, which is every conversation at the point someone is deciding
-				whether to keep talking. Anchored to the bottom, a thread grows upward out of the
-				composer and the gap is never there to begin with.
+				The thread reads downward: a question stays where it was asked and its answer is
+				written underneath it. The stack used to be bottom-anchored with `mt-auto`, which
+				closed the gap over the composer but at the cost of shoving the question you just
+				asked upward, one streamed line at a time, while you were still reading it.
 
-				`mt-auto` rather than `justify-end`: once the turns outgrow the viewport the
-				margin collapses to zero and normal scrolling takes over, where `justify-end`
-				would push the earliest turn out of the top of the scroll port and put it beyond
-				reach. The empty state keeps the top — it teaches, and belongs where reading
-				starts.
+				The gap is closed from below instead — see `thread-anchor.ts` for the filler that
+				lets the newest question climb to the top of the port. The empty state keeps the
+				top and gets no filler: it teaches, and belongs where reading starts.
 			-->
-			<div class="mt-auto flex flex-col gap-6">
+			<div bind:this={stack} class="flex flex-col gap-6">
 				{#each entries as entry (entry.id)}
 					{@const isUser = entry.role === 'user'}
 					<ErrorBoundary label="this turn" class="my-0">
-						<div class="group/turn flex flex-col">
+						<div
+							class="group/turn flex flex-col"
+							{@attach entry.id === latestQuestionId ? markLatestQuestion : ignore}
+						>
 							<!--
 							The question is a surface and the answer is the page. Side carries that
 							now: the question sits right against a wash, the answer runs flush left
 							with no bubble, which would put a second surface inside a panel that
 							already is one. Flat, per the ornament rule — no border, no shadow.
+
+							The wash is the brand teal rather than `bg-muted`, which is the fill of
+							every disabled notice and hover row in the app and said nothing about
+							whose turn this was. Same recipe as the `brand` badge — no new token.
 
 							The captions that used to say it are gone, and a screen reader is told
 							none of this — position and fill are not announced — so the turn states
@@ -176,7 +228,7 @@
 							<span class="sr-only">{isUser ? 'You said' : 'The agent replied'}</span>
 							<div
 								class="flex flex-col gap-2 {isUser
-									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-muted/50 px-3 py-2'
+									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-brand/10 px-3 py-2 dark:bg-brand/15'
 									: ''}"
 							>
 								{#if editingId === entry.id}
@@ -333,6 +385,12 @@
 					</ErrorBoundary>
 				{/each}
 			</div>
+			{#if entries.length > 0}
+				<!-- Reserved room, not content: it is what the newest question is scrolled up
+				     into, and what the answer then fills. `-mt-6` cancels the column gap so the
+				     reserved height is exactly the height that was measured. -->
+				<div class="-mt-6 shrink-0" aria-hidden="true" style:height="{anchorSpacer}px"></div>
+			{/if}
 		</div>
 	</ScrollArea>
 	<!-- An overlay, not a flow element: as a sibling in the column it pushed the

@@ -84,8 +84,13 @@
 
 ## chat panel
 
-- sidebar surface tone. user turn=right-aligned + muted wash, agent=flush left, no container. NO
-  colored bubbles. NO visible author labels — side carries it, sr-only restates it
+- sidebar surface tone. user turn=right-aligned + brand wash (bg-brand/10, dark:bg-brand/15, text
+  stays foreground), agent=flush left, no container. NO per-role palette beyond that one wash. NO
+  visible author labels — side carries it, sr-only restates it
+- thread reads DOWNWARD, never bottom-anchored: on send the newest question scrolls to top of port
+  and the answer fills space reserved below it (thread-anchor.ts). reserved space collapses as the
+  answer grows; once the answer outgrows the port, follow-the-bottom resumes. following never
+  scrolls backwards
 - turn reports things touched, not calls made. log door=ONE per turn, inline collapsible, NEVER a
   dialog
 - disclosure is EARNED: a chevron only where something sits behind it the row cannot already say.
