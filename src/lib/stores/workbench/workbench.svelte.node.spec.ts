@@ -194,3 +194,89 @@ describe('Workbench store pruning away from the workbench', () => {
 		expect(router.gotoCount).toBe(1);
 	});
 });
+
+// The strip stays on screen off `/notes/*`, and its focus is still the last workbench
+// session's — so the tab the user *arrived from* is the one whose focus state already
+// matches. Treating that as a no-op made it the single dead tab in the strip: every
+// other tab navigated, that one did nothing.
+describe('Workbench store clicking a tab away from the workbench', () => {
+	const settingsSetup = (openTabs: readonly NoteId[], focused: NoteId) =>
+		setup('/settings', openTabs, focused);
+
+	it('navigates back to the tab the user arrived from', async () => {
+		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.focusTab(NOTE_A);
+		expect(router.currentUrl().pathname).toBe(`/notes/${NOTE_A}`);
+	});
+
+	it('carries the rest of the strip back into the URL', async () => {
+		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.focusTab(NOTE_A);
+		expect(router.currentUrl().searchParams.get('tabs')).toBe(`${NOTE_A},${NOTE_B}`);
+	});
+
+	it('still navigates when a different tab is clicked', async () => {
+		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.focusTab(NOTE_B);
+		expect(router.currentUrl().pathname).toBe(`/notes/${NOTE_B}`);
+	});
+
+	// On a workbench route the guard is right: clicking the tab you are already on
+	// must not push a history entry.
+	it('stays put when the focused tab is clicked on its own route', async () => {
+		const { router, store } = setup(twoTabUrl, twoTabs, NOTE_A);
+		await store.focusTab(NOTE_A);
+		expect(router.gotoCount).toBe(0);
+	});
+});
+
+// Closing is the mirror image: navigating to whatever survives would drag the user
+// into the workbench they had just left.
+describe('Workbench store closing a tab away from the workbench', () => {
+	const settingsSetup = (openTabs: readonly NoteId[], focused: NoteId) =>
+		setup('/settings', openTabs, focused);
+
+	it('drops the closed tab from the strip', async () => {
+		const { store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTab(NOTE_A);
+		expect(store.openTabs).toEqual([NOTE_B]);
+	});
+
+	it('stays on the current route', async () => {
+		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTab(NOTE_A);
+		expect(router.gotoCount).toBe(0);
+	});
+
+	it('refocuses a surviving tab', async () => {
+		const { store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTab(NOTE_A);
+		expect(store.focusedNoteId).toBe(NOTE_B);
+	});
+
+	it('persists the closed tab', async () => {
+		const { repository, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTab(NOTE_A);
+		expect(repository.record?.openTabs).toEqual([NOTE_B]);
+	});
+
+	it('unpins a tab closed in bulk', async () => {
+		const { store } = settingsSetup(twoTabs, NOTE_A);
+		store.pinnedTabs = [NOTE_A, NOTE_B];
+		await store.closeTabs([NOTE_A]);
+		expect(store.pinnedTabs).toEqual([NOTE_B]);
+	});
+
+	// Emptying the strip has no URL to move to either, so it must not reach for `/today`.
+	it('empties the strip in place when every tab is closed', async () => {
+		const { store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTabs(twoTabs);
+		expect(store.openTabs).toEqual([]);
+	});
+
+	it('does not leave for the overview when every tab is closed', async () => {
+		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+		await store.closeTabs(twoTabs);
+		expect(router.currentUrl().pathname).toBe('/settings');
+	});
+});

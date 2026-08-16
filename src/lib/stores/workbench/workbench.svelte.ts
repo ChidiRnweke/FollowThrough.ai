@@ -420,7 +420,11 @@ export class WorkbenchStore {
 			return;
 		}
 		const next = focusTabInState(current, noteId);
-		if (next === current) return;
+		// Off a workbench route the strip's focus is the *last* session's, not where
+		// the user is standing, so re-focusing the same tab is a real navigation back
+		// into the workbench rather than the no-op it is on `/notes/*`.  Without this
+		// the tab you arrived from is the one tab in the strip that does nothing.
+		if (next === current && this.isWorkbenchPath) return;
 		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
@@ -428,6 +432,10 @@ export class WorkbenchStore {
 	async closeTab(noteId: TabId): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
+		if (!this.isWorkbenchPath) {
+			await this.closeInMemory([noteId]);
+			return;
+		}
 		const next = closeTabInState(current, noteId, { recentlyUsed: this.recentlyUsed });
 		if (!next) {
 			// Closing the last tab navigates to Today.
@@ -449,6 +457,10 @@ export class WorkbenchStore {
 	async closeTabs(noteIds: readonly TabId[]): Promise<void> {
 		const current = this.toUrlState();
 		if (!current) return;
+		if (!this.isWorkbenchPath) {
+			await this.closeInMemory(noteIds);
+			return;
+		}
 		const next = closeTabsInState(current, noteIds, { recentlyUsed: this.recentlyUsed });
 		if (next === current) return;
 		this.pinnedTabs = this.pinnedTabs.filter((id) => !noteIds.includes(id));
@@ -575,8 +587,20 @@ export class WorkbenchStore {
 	}
 
 	/**
-	 * Prune without touching the URL, for when the strip isn't rendered.  The
-	 * next `/notes/*` navigation serialises whatever survives here.
+	 * Close tabs while the user is off `/notes/*`.  The strip is still on screen
+	 * there, but its URL isn't: navigating to whatever survives would take the
+	 * user into the workbench they had just left.  So the close lands in memory
+	 * and the next workbench navigation serialises it.
+	 */
+	private async closeInMemory(noteIds: readonly TabId[]): Promise<void> {
+		const survives = (id: TabId): boolean => !noteIds.includes(id);
+		await this.pruneInMemory(survives, this.openTabs.filter(survives));
+	}
+
+	/**
+	 * Prune without touching the URL, for when the strip isn't rendered — and for
+	 * an explicit close off `/notes/*` (see `closeInMemory`).  The next `/notes/*`
+	 * navigation serialises whatever survives here.
 	 */
 	private async pruneInMemory(
 		survives: (id: TabId) => boolean,
