@@ -1,5 +1,5 @@
 import { noteEtag, type NoteId } from '$lib/models/notes';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {

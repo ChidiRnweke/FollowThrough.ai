@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
-import { runIdInput, submitAgentRunSchema } from '$lib/server/agent-request-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
+import { runIdInput, submitAgentRunSchema } from '$lib/server/factories/agent/agent-request-factory';
 import type { AgentRunId, ConversationId, SubmitAgentRunInput } from '$lib/models/agent';
 
 export const submitAgentRun = command(submitAgentRunSchema, async (input) =>

@@ -1,6 +1,6 @@
 import type { AgentRunId } from '$lib/models/agent';
 import { isTerminalAgentRunStatus } from '$lib/models/agent';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
 const encoder = new TextEncoder();

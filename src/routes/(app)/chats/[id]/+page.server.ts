@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { ConversationId } from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
 import type { PageServerLoad } from './$types';

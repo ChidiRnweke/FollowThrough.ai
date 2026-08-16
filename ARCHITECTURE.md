@@ -22,8 +22,9 @@ capabilities first; frameworks and infrastructure appear only at delivery bounda
 `components/icons`, `components/marketing`, and `components/layout` are intentional presentation
 boundaries rather than product-capability buckets.
 
-The root-level `server/*-capability-factory.ts` modules are composition helpers, not another
-application layer. Each exports one typed `create<Capability>Capability` function. Those functions
+The `server/factories/` tree holds composition helpers, not another
+application layer. `server/factories/capabilities/*-capability-factory.ts` modules each export one
+typed `create<Capability>Capability` function. Those functions
 instantiate and connect the existing repositories, services, and controllers for one capability;
 they contain no queries or business rules. `server/application.ts` calls them in dependency order
 and constructs the final controller facade. A typed `finalize(...)` step or lazy callback may close

@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import type { NoteId } from '$lib/models/notes';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import { parseWorkbenchUrl } from '$lib/stores/workbench/workbench-url';
 
 // The workbench shell in `(app)/+layout.svelte` always renders the tab strip

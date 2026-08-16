@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { AttachmentId } from '$lib/models/attachments';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {

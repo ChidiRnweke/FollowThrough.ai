@@ -1,18 +1,18 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { ControllerFactory } from '$lib/server/controller-factory';
-import type { AgentEventBus } from './services/agent/runs/events';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import type { AgentEventBus } from '../services/agent/runs/events';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
 import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
 import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
-import type { ProvenanceRecorder } from './services/notes/provenance';
-import type { ToolRetriever } from './services/agent/tools/tool-retriever';
-import { ApiTokenRecords } from './repositories/identity/postgres/api-tokens';
+import type { ProvenanceRecorder } from '../services/notes/provenance';
+import type { ToolRetriever } from '../services/agent/tools/tool-retriever';
+import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
 import { SignIn } from '$lib/server/services/identity/sign-in';
 import type { IOSessionRegistry } from '$lib/server/services/identity/sign-in';
-import { SessionRecords } from './repositories/identity/postgres/sessions';
-import { UserRecords } from './repositories/identity/postgres/users';
-import { db } from './db';
-import { authenticationEnabled, authentikConfiguration, requestActor } from './config';
+import { SessionRecords } from '../repositories/identity/postgres/sessions';
+import { UserRecords } from '../repositories/identity/postgres/users';
+import { db } from '../db';
+import { authenticationEnabled, authentikConfiguration, requestActor } from '../config';
 
 class DeferredValue<T> {
 	private value: T | undefined;

@@ -133,10 +133,12 @@ export const noteEditingCases: readonly EvalCase[] = [
 					: 'the edit dropped untargeted content'
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
-			expect(changed, 'note body must contain K8s after the edit').toBe(true);
-			expect(preserved, 'untargeted note content must survive a surgical edit').toBe(true);
+			expect({ status: result.status, tools: tools.passed, changed, preserved }).toEqual({
+				status: 'completed',
+				tools: true,
+				changed: true,
+				preserved: true
+			});
 		}
 	},
 	{
@@ -198,7 +200,8 @@ export const noteEditingCases: readonly EvalCase[] = [
 		name: 'makes a surgical edit on a long note without clobbering unrelated sections',
 		splits: [ARCHETYPES.toolCalling, ARCHETYPES.effect],
 		input: {
-			prompt: 'In my Long note, change the phrase "legacy scheduler" to "event-driven scheduler". Change nothing else.'
+			prompt:
+				'In my Long note, change the phrase "legacy scheduler" to "event-driven scheduler". Change nothing else.'
 		},
 		expected: {
 			requiredTools: ['edit_note'],

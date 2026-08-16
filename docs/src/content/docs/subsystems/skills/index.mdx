@@ -67,7 +67,7 @@ flowchart LR
 
 ## The agent tool catalog
 
-Every `SkillsController` method is classified in `agentToolCoverage` (`src/lib/server/agent-tool-factory.ts:199`): `list_skills`, `load_skill`, `create_skill`, `create_skill_from_selection`, `list_skill_versions`, `restore_skill_version`, `update_skill`, `set_skill_pinned`. Reads stay reads, creation and edits are mutations, and `get` and `serialize` are the exclusions: skill reads go through `load_skill`, and the full skill is already reachable there. `load_skill` is also first-class (`FIRST_CLASS_TOOL_NAMES`, `agent-tool-factory.ts:58`): offered directly without going through `search_tools`. The same coverage feeds the MCP surface, so an external host sees the identical skill tools.
+Every `SkillsController` method is classified in `agentToolCoverage` (`src/lib/server/factories/agent/agent-tool-factory.ts:199`): `list_skills`, `load_skill`, `create_skill`, `create_skill_from_selection`, `list_skill_versions`, `restore_skill_version`, `update_skill`, `set_skill_pinned`. Reads stay reads, creation and edits are mutations, and `get` and `serialize` are the exclusions: skill reads go through `load_skill`, and the full skill is already reachable there. `load_skill` is also first-class (`FIRST_CLASS_TOOL_NAMES`, `factories/agent/agent-tool-factory.ts:58`): offered directly without going through `search_tools`. The same coverage feeds the MCP surface, so an external host sees the identical skill tools.
 
 ## Built-in skills
 
@@ -77,7 +77,7 @@ Upgrades are conservative: a stored built-in is replaced by a newer definition o
 
 `BuiltInSkillLibrary` wraps the plain finder and calls `ensure` before every `listEnabled`/`listAll`, so built-ins simply appear. The diagramming pipeline is the one consumer that loads a built-in by key (`load(actor, 'diagramming')` in `src/lib/server/services/diagrams/authoring.ts:387`) and that load refuses a skill the user has disabled. The Diagramming definition sets `allowImplicitInvocation: false`, so it is advertised to the agent only when explicitly requested.
 
-Composition lives in `createSkillsCapability` (`src/lib/server/skills-capability-factory.ts`): one repository wired into `SkillLibrary`, `BuiltInSkills`, and the `BuiltInSkillLibrary` wrapper. In `application.ts` the controller's `skillFinder` is the provisioned wrapper (built-ins ensured on every listing) while editing, usage, and versioning go straight to the plain library.
+Composition lives in `createSkillsCapability` (`src/lib/server/factories/capabilities/skills-capability-factory.ts`): one repository wired into `SkillLibrary`, `BuiltInSkills`, and the `BuiltInSkillLibrary` wrapper. In `application.ts` the controller's `skillFinder` is the provisioned wrapper (built-ins ensured on every listing) while editing, usage, and versioning go straight to the plain library.
 
 ## What holds
 
@@ -85,7 +85,7 @@ Composition lives in `createSkillsCapability` (`src/lib/server/skills-capability
 - The agent never receives full skill text in the system prompt: only summaries, within the 16,000-character budget, with requested and pinned entries immune to truncation.
 - Every agent load is recorded in `skill_usages` with provenance; the UI reads skill bodies through the controller, outside the agent tools, so its reads never count as usage.
 - Metadata-only edits never create note revisions; content edits always do.
-- `load_skill` is locked on (`LOCKED_TOOL_NAMES`, `agent-tool-factory.ts:79`): the user cannot deselect it, because without it the agent loses its instructions.
+- `load_skill` is locked on (`LOCKED_TOOL_NAMES`, `factories/agent/agent-tool-factory.ts:79`): the user cannot deselect it, because without it the agent loses its instructions.
 
 ## Related pieces
 

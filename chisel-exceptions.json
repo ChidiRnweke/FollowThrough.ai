@@ -16,6 +16,11 @@
 			"files": [".env"],
 			"rules": ["project-structure:backend-env-in-frontend"],
 			"reason": "Standalone SvelteKit deployment: server-only infrastructure and frontend share one deployment root."
+		},
+		{
+			"files": ["src/lib/server/factories/**"],
+			"rules": ["structure:unknown-server-folder"],
+			"reason": "Composition wiring is grouped under factories/ (capabilities/, agent/, plus the composition-adjacent root) instead of 24 flat factory modules at the server root; application.ts remains the composition root."
 		}
 	]
 }

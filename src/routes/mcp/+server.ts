@@ -2,8 +2,8 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
-import { AppFactory } from '$lib/server/app-factory';
-import { createMcpToolSurface } from '$lib/server/mcp-tool-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 
 const unauthorized = (detail: string): Response =>
 	new Response(JSON.stringify({ error: 'unauthorized', detail }), {

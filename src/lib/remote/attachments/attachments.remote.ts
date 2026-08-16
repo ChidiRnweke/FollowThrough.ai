@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, form, query, requested } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';

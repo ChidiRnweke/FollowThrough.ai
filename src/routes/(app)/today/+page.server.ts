@@ -1,4 +1,4 @@
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import { todayLocalDate } from '$lib/client/todos/local-date';
 import type { PageServerLoad } from './$types';
 

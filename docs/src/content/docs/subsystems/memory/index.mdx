@@ -45,7 +45,7 @@ flowchart LR
 
 Any failure aborts the whole batch: there is no state where a suggestion exists without provenance, or an applied change without an accepted suggestion. Auto-accept is `ToolTrust.shouldAutoAccept(actor, 'memory', suggestion)`: the per-user policy for the `memory` pipeline must have auto-accept enabled, and the suggestion's confidence must clear the policy's `minimumConfidence` when set. The default policy is review-first (`autoAcceptEnabled: false`).
 
-The agent-tool catalog (`src/lib/server/agent-tool-factory.ts:263`) enforces the same rule from the other side: direct memory mutations are gated behind "Memory changes must flow through propose_memory_change review", and the agent gets `propose_memory_change` plus only the read tools `list_project_memory` and `list_user_memory`: both called with `sharedOnly: true`.
+The agent-tool catalog (`src/lib/server/factories/agent/agent-tool-factory.ts:263`) enforces the same rule from the other side: direct memory mutations are gated behind "Memory changes must flow through propose_memory_change review", and the agent gets `propose_memory_change` plus only the read tools `list_project_memory` and `list_user_memory`: both called with `sharedOnly: true`.
 
 ## Apply and revert
 

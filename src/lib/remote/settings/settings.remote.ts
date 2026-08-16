@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, form, query } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ApiTokenId } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { UpdateTrustPolicyInput, WebSearchEngine } from '$lib/models/agent';

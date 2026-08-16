@@ -3,7 +3,7 @@ import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { NoteId } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
 /**

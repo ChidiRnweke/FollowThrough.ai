@@ -80,7 +80,12 @@ const allCases = [
 ];
 
 /** Smoke is intentionally explicit: substring test filters made "completion" select many costly cases. */
-const smokeCaseIds = new Set(['tool-retrieval-todos-create', 'retrieval-postgres-failover']);
+const smokeCaseIds = new Set([
+	'tool-retrieval-todos-create',
+	'retrieval-postgres-failover',
+	'effect-todo-persisted',
+	'note-surgical-edit-requires-edit-note'
+]);
 const profiledCases =
 	process.env.EVAL_PROFILE === 'smoke'
 		? allCases.filter((evalCase) => smokeCaseIds.has(evalCase.id))

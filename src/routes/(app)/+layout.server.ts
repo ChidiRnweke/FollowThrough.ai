@@ -1,4 +1,4 @@
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import { parseSidebarWidth } from '$lib/models/workspace';
 import { SIDEBAR_WIDTH_COOKIE_NAME } from '$lib/components/ui/sidebar/constants';
 import { redirect } from '@sveltejs/kit';

@@ -1,7 +1,7 @@
 import {
 	ProductionControllerFactory,
 	type ProductionControllerDependencies
-} from '$lib/server/production-controller-factory';
+} from '$lib/server/factories/production-controller-factory';
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './services/agent/tools/tool-retriever';
@@ -16,21 +16,21 @@ import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './con
 import type { IAttachmentStorage, ObjectStorageConfig } from './services/attachments/storage';
 import type { AgentEventBus } from './services/agent/runs/events';
 import type { ScheduledTask } from './services/scheduler';
-import { createIdentityCapability } from './identity-capability-factory';
-import { createProjectsCapability } from './projects-capability-factory';
-import { createNotesCapability } from './notes-capability-factory';
-import { createReferencesCapability } from './references-capability-factory';
-import { createRelationshipsCapability } from './relationships-capability-factory';
-import { createTodosCapability } from './todos-capability-factory';
-import { createSuggestionsCapability } from './suggestions-capability-factory';
-import { createKnowledgeSearchCapability } from './knowledge-search-capability-factory';
-import { createSkillsCapability } from './skills-capability-factory';
-import { createMemoryCapability } from './memory-capability-factory';
-import { createAttachmentsCapability } from './attachments-capability-factory';
-import { createDeliverablesCapability } from './deliverables-capability-factory';
-import { createDiagramsCapability } from './diagrams-capability-factory';
-import { createAgentCapability } from './agent-capability-factory';
-import { createFeedbackCapability } from './feedback-capability-factory';
+import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
+import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
+import { createNotesCapability } from './factories/capabilities/notes-capability-factory';
+import { createReferencesCapability } from './factories/capabilities/references-capability-factory';
+import { createRelationshipsCapability } from './factories/capabilities/relationships-capability-factory';
+import { createTodosCapability } from './factories/capabilities/todos-capability-factory';
+import { createSuggestionsCapability } from './factories/capabilities/suggestions-capability-factory';
+import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
+import { createSkillsCapability } from './factories/capabilities/skills-capability-factory';
+import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
+import { createAttachmentsCapability } from './factories/capabilities/attachments-capability-factory';
+import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
+import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
+import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
+import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
 
 /**
  * Collaborators that reach outside the process and are therefore worth

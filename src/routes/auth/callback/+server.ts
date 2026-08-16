@@ -1,6 +1,6 @@
 import { redirect, error, type RequestHandler } from '@sveltejs/kit';
 import { deletePkceCookie, getPkceCookie, setSessionCookie } from '$lib/server/config';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');

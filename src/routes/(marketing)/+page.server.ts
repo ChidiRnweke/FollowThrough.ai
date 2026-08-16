@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { PageServerLoad } from './$types';
 
 // The root is the only public page. Anyone who is already through the door goes

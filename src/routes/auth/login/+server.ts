@@ -1,5 +1,5 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import { setPkceCookie } from '$lib/server/config';
 
 export const GET: RequestHandler = async ({ cookies }) => {

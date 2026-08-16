@@ -1,8 +1,8 @@
 import { command } from '$app/server';
 import { z } from 'zod';
 import type { SaveDrawioDiagramInput } from '$lib/models/diagrams';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
 
 export const saveDrawioDiagram = command(
 	z.object({

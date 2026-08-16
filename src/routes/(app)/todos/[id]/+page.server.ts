@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { TodoId } from '$lib/models/todos';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import { safeReturnUrl } from '$lib/client/todos/return-url';
 import type { PageServerLoad } from './$types';
 

@@ -30,7 +30,7 @@
 		"test:contracts": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project contracts",
 		"test:capability": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project node-fast src/lib/server/services src/lib/server/controllers",
 		"test:evals": "EVAL_PROFILE=exploratory NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
-		"test:evals:smoke": "EVAL_PROFILE=smoke NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default",
+		"test:evals:smoke": "EVAL_PROFILE=smoke NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals src/evals/lab/lab.eval.ts src/evals/suites/agent.eval.ts --reporter=default",
 		"test:evals:gate": "EVAL_PROFILE=gate EVAL_GATE=1 EVAL_REPETITIONS=3 EVAL_RECORD=1 NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"test:evals:cache": "node --experimental-strip-types scripts/verify-eval-cache.ts",
 		"test:quality": "node --experimental-strip-types scripts/audit-tests.ts",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
-import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { noteEtag } from '$lib/models/notes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';

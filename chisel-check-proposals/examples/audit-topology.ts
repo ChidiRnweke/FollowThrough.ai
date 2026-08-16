@@ -17,13 +17,6 @@ for (const path of removedPaths) {
 	if (existsSync(resolve(root, path))) failures.push(`${path} is a removed generic bucket`);
 }
 
-for (const entry of readdirSync(resolve(root, 'src/lib/server'))) {
-	if (/factory(?:\.spec)?\.ts$/.test(entry))
-		failures.push(
-			`src/lib/server/${entry} is a factory outside src/lib/server/factories (capabilities/, agent/, or the factories root)`
-		);
-}
-
 const sourceFiles: string[] = [];
 const componentCapabilities = new Set([
 	'agent',

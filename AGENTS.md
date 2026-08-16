@@ -76,9 +76,9 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
 1. Interface + implementation in `src/lib/server/controllers/<domain>/controller.ts`.
 2. New constructor dependencies are wired in `src/lib/server/application.ts`, which may not
    import services or construct anything itself — expose collaborators through the matching
-   capability factory (e.g. `src/lib/server/deliverables-capability-factory.ts`).
+   capability factory (e.g. `src/lib/server/factories/capabilities/deliverables-capability-factory.ts`).
 3. UI access goes through a zod-validated `query`/`command` in `src/lib/remote/<domain>/`.
-4. Classify the method in the `AgentToolCoverage` map in `src/lib/server/agent-tool-factory.ts`.
+4. Classify the method in the `AgentToolCoverage` map in `src/lib/server/factories/agent/agent-tool-factory.ts`.
    The map is total over each controller's methods; a missing entry is a type error.
 
 Boundary logging and tracing are automatic: `ProductionControllerFactory` wraps every

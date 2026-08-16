@@ -18,7 +18,7 @@ import type { SkillsController } from '$lib/server/controllers/skills/controller
 import type { SuggestionsController } from '$lib/server/controllers/suggestions/controller';
 import type { TodosController } from '$lib/server/controllers/todos/controller';
 import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
-import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -44,7 +44,7 @@ import {
 	projectSuggestion,
 	projectTodo,
 	projectUser
-} from './services/agent/runs/tool-views';
+} from '../../services/agent/runs/tool-views';
 import {
 	FIRST_CLASS_TOOL_NAMES,
 	TOOL_CATALOG,

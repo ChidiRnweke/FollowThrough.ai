@@ -38,9 +38,9 @@ import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import type { BuiltInSkillLibrary } from '$lib/server/services/skills/built-ins';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
-import { agentToolCatalog } from '$lib/server/agent-tool-catalog-factory';
-import { agentToolRegistry } from '$lib/server/agent-tool-factory';
-import type { ProductionControllerFactory } from '$lib/server/production-controller-factory';
+import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
+import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
+import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
 
 export interface AgentCapabilityInput {
 	readonly db: Database;

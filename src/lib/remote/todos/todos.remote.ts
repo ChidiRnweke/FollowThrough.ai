@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { TodoId, TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
 
 const localDate = z.iso.date();

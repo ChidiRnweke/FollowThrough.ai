@@ -1,4 +1,4 @@
-import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ToolCatalog, ToolCatalogEntry } from '$lib/server/services/agent/tools/preferences';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { submitAgentRunSchema } from '$lib/server/agent-request-factory';
+import { submitAgentRunSchema } from '$lib/server/factories/agent/agent-request-factory';
 
 /** RFC-4122 ids: the schema validates the variant nibble, unlike the domain fixtures. */
 const alpha = '5f7a1c2e-8b3d-4a91-9c05-1d2e3f405060';

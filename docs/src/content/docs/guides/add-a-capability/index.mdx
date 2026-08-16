@@ -58,11 +58,11 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
    - `SkillsDependencies`: every service role the controller needs, injected so it can be built and tested without real stores.
    - `class Skills implements SkillsController`: thin orchestration. It coordinates services and wraps multi-step work in `transactionRunner.run(...)`; it makes no domain decisions itself.
 
-   Then register it in the factory types: add a `<cap>(): <Cap>Controller` method to `ControllerFactory` (`src/lib/server/controller-factory.ts`) and implement it in `ProductionControllerFactory` (`src/lib/server/production-controller-factory.ts`), adding your dependencies to `ProductionControllerDependencies`.
+   Then register it in the factory types: add a `<cap>(): <Cap>Controller` method to `ControllerFactory` (`src/lib/server/factories/controller-factory.ts`) and implement it in `ProductionControllerFactory` (`src/lib/server/factories/production-controller-factory.ts`), adding your dependencies to `ProductionControllerDependencies`.
 
 5. **Capability factory: `src/lib/server/<cap>-capability-factory.ts`**
 
-   Export exactly one `create<Capability>Capability` function. It takes the database plus the _other capabilities' repositories and services_ it depends on, constructs this capability's repository and services, and returns them: nothing else. The real thing, from `src/lib/server/skills-capability-factory.ts:24`:
+   Export exactly one `create<Capability>Capability` function. It takes the database plus the _other capabilities' repositories and services_ it depends on, constructs this capability's repository and services, and returns them: nothing else. The real thing, from `src/lib/server/factories/capabilities/skills-capability-factory.ts:24`:
 
    ```ts
    export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {

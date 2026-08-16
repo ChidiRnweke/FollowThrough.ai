@@ -1,7 +1,7 @@
 // chisel-ignore-file structural:factory-contains-logic -- MCP protocol adapter maps the shared capability surface to protocol schemas and error envelopes; it is not application composition.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { DomainError } from '$lib/errors';
@@ -11,7 +11,7 @@ import {
 	FIRST_CLASS_TOOL_NAMES,
 	type AgentToolDefinition,
 	type ToolAccessPolicy
-} from '$lib/server/agent-tool-factory';
+} from './agent-tool-factory';
 import {
 	invalidUseToolPayload,
 	unknownUseToolName,

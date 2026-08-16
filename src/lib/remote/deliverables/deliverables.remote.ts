@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { command, query } from '$app/server';
-import { AppFactory } from '$lib/server/app-factory';
-import { requestActor } from '$lib/server/request-actor-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
+import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
 import type {
 	ArtifactId,

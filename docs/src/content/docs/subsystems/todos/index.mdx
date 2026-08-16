@@ -86,5 +86,5 @@ Due-date filtering in the repository is `dueDate <= dueBefore` (`postgres/todos.
 ## Neighboring pieces
 
 - [Notes](/FollowThrough.ai/subsystems/notes/): selections, `SourceAnchor`, and `Provenance` are notes-capability types; extraction starts from a note revision.
-- [Agent](/FollowThrough.ai/subsystems/agent/): `extractPromises` is registered as a proposal-kind agent tool (`src/lib/server/agent-tool-factory.ts`), and the trust policies that gate auto-accept are agent-run policy. Suggestions review UI also lives beside the agent.
+- [Agent](/FollowThrough.ai/subsystems/agent/): `extractPromises` is registered as a proposal-kind agent tool (`src/lib/server/factories/agent/agent-tool-factory.ts`), and the trust policies that gate auto-accept are agent-run policy. Suggestions review UI also lives beside the agent.
 - Search: todos themselves are not indexed; the note text they came from is.

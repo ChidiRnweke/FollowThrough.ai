@@ -1,4 +1,4 @@
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import {
 	CHAT_WEB_SEARCH_DEFAULTS,
 	DEFAULT_AGENT_MAX_TURNS,

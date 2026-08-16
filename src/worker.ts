@@ -6,7 +6,7 @@
  * periodic tasks the request path deliberately hands off. Deployed as a second
  * container on the same image; see `docker-compose.prod.yml`.
  */
-import { createProductionFactory } from '$lib/server/production-factory';
+import { createProductionFactory } from '$lib/server/factories/production-factory';
 import { hydrateEnvironment } from '$lib/server/config';
 import { startScheduler } from '$lib/server/services/scheduler';
 

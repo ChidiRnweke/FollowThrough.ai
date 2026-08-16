@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { ControllerFactory } from '$lib/server/controller-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ApiTokenScope } from '$lib/models/identity';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createMcpToolSurface } from '$lib/server/mcp-tool-factory';
+import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 
 const connect = async (
 	scope: ApiTokenScope,

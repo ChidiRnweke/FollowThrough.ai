@@ -6,7 +6,7 @@ import {
 	EmbeddedToolRetriever,
 	type ToolDescriptor
 } from '$lib/server/services/agent/tools/tool-retriever';
-import { AgentTools } from '$lib/server/agent-tool-factory';
+import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
 import type { Lab } from './application';
 
 /**

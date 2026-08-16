@@ -18,7 +18,7 @@ The agent's tools and the search index work on text. Attachments is the subsyste
 - **Controllers**: `src/lib/server/controllers/attachments/controller.ts`: the `Attachments` controller, the documented public surface (`initiate`, `complete`, `list`, `listForProject`, `download`/`downloadById`, `read`, `retry`, `remove`/`removeById`).
 - **Repositories**: `src/lib/server/repositories/attachments/attachments.ts` (contract) and `postgres/attachments.ts` (`AttachmentRecords`, all Drizzle/SQL).
 
-Composition lives in `src/lib/server/attachments-capability-factory.ts`, called from `src/lib/server/application.ts`.
+Composition lives in `src/lib/server/factories/capabilities/attachments-capability-factory.ts`, called from `src/lib/server/application.ts`.
 
 ## The upload lifecycle
 

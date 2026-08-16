@@ -5,10 +5,10 @@ import {
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
 	requiredEnvironmentValue
-} from './config';
-import { createApplication, type ProductionApplication } from './application';
+} from '../config';
+import { createApplication, type ProductionApplication } from '../application';
 
-export type { ProductionApplication } from './application';
+export type { ProductionApplication } from '../application';
 
 /**
  * Reads the environment and hands the resulting configuration to

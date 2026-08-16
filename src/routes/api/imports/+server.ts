@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { ValidationError } from '$lib/errors';
-import { AppFactory } from '$lib/server/app-factory';
+import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
 const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
