@@ -22,6 +22,7 @@
 		FtDocument as FileText,
 		FtClose as X
 	} from '$lib/components/icons';
+	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteSyncStatus from '../note-sync-status.svelte';
 
@@ -232,6 +233,18 @@
 								data-icon="inline-start"
 							/>Pin to sidebar{/if}
 					</DropdownMenu.Item>
+					<!--
+						A device preference rather than a note action, but it belongs to the
+						surface it changes: the underlines appear in this document, and a
+						checker that can only be found in a settings page reads as absent.
+						Off by default — turning it on downloads the checker.
+					-->
+					<DropdownMenu.CheckboxItem
+						checked={proofreading.enabled}
+						onCheckedChange={(checked) => proofreading.setEnabled(checked)}
+					>
+						Check spelling and grammar
+					</DropdownMenu.CheckboxItem>
 					<DropdownMenu.Sub>
 						<DropdownMenu.SubTrigger>Move to</DropdownMenu.SubTrigger>
 						<DropdownMenu.SubContent>

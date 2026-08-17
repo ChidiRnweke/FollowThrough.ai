@@ -11,6 +11,7 @@ export * from './ImageExtended.js';
 export * from './InlineSuggestion.js';
 export * from './inline-suggestion-trigger.js';
 export * from './MediaPlaceHolder.js';
+export * from './Proofread.js';
 export * from './SvelteMarkViewRenderer.js';
 export * from './SvelteNodeViewRenderer.js';
 export * from './Video.js';

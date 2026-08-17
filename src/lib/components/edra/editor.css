@@ -784,3 +784,35 @@
 	text-underline-offset: 2px;
 	cursor: pointer;
 }
+
+/* Spelling and grammar underlines.
+
+   Two weights, because the two say different things. A misspelling is an error and
+   takes the destructive token; a grammar, style or usage note is advice and stays in
+   the resting neutral, so a page of gentle suggestions never reads as a page of
+   mistakes. Wavy rather than a wash: the flagged span is usually one word inside a
+   sentence, and a fill at that size fights the prose it is marking. */
+
+.tiptap .proofread-issue {
+	text-decoration-line: underline;
+	text-decoration-style: wavy;
+	text-decoration-thickness: 1px;
+	text-decoration-color: var(--muted-foreground);
+	text-underline-offset: 3px;
+	/* The whole editable surface is `cursor: text`; this span is a control. */
+	cursor: pointer;
+}
+
+.tiptap .proofread-issue--spelling,
+.tiptap .proofread-issue--typo,
+.tiptap .proofread-issue--malapropism,
+.tiptap .proofread-issue--eggcorn {
+	text-decoration-color: var(--destructive);
+}
+
+/* Skipped-block insurance: a decoration can only be placed on prose, but a node view
+   that later gains editable text should never inherit an underline it cannot explain. */
+.tiptap pre .proofread-issue,
+.tiptap code .proofread-issue {
+	text-decoration-line: none;
+}

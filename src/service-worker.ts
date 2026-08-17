@@ -11,8 +11,18 @@ const ASSET_CACHE = `${CACHE_PREFIX}assets-${version}`;
 const PAGE_CACHE = `${CACHE_PREFIX}pages-${version}`;
 const APP_ROOT = `${base}/`;
 const OFFLINE_ROUTE = `${base}/offline`;
-const PRECACHED_PATHS = [...build, ...files, ...prerendered];
-const PRECACHED_PATH_SET = new Set(PRECACHED_PATHS);
+const BUILD_PATHS = [...build, ...files, ...prerendered];
+/**
+ * Harper's proofreading engine is a ~16 MB WebAssembly binary, and proofreading
+ * is off until a user asks for it. Installing it with the app would make every
+ * install — including every version bump — pay for a checker most people never
+ * switch on, and `cache.addAll` is atomic, so a failure on that one download
+ * would take the whole precache down with it. It is served cache-first like any
+ * other asset and stored the first time it is actually fetched.
+ */
+const isOnDemandAsset = (path: string): boolean => path.endsWith('.wasm');
+const PRECACHED_PATHS = BUILD_PATHS.filter((path) => !isOnDemandAsset(path));
+const PRECACHED_PATH_SET = new Set(BUILD_PATHS);
 
 const canStore = (response: Response, allowPrivatePageData = false): boolean =>
 	response.ok &&
@@ -84,7 +94,11 @@ const cacheFirst = async (request: Request, pathname: string): Promise<Response>
 	const cached = (await cache.match(request)) ?? (await cache.match(pathname));
 	if (cached) return cached;
 	try {
-		return await fetch(request);
+		const response = await fetch(request);
+		// Assets held back from the install precache are stored the first time they
+		// are used, so switching proofreading on once makes it work offline after.
+		if (isOnDemandAsset(pathname) && canStore(response)) await store(cache, pathname, response);
+		return response;
 	} catch {
 		return unavailable();
 	}

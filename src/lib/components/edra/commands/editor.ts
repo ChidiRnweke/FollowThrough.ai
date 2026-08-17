@@ -31,6 +31,7 @@ import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table
 import { setTocItems } from '../toc.svelte';
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
+import { Proofread, type ProofreadIssueReport } from './Proofread.js';
 import {
 	armLiteralPaste,
 	clipboardImage,
@@ -87,6 +88,14 @@ export interface EdraEditorProps {
 	findLinkableNotes?: (query: string) => readonly NoteLinkTarget[];
 	/** Follow a note link. Omitting it leaves links inert rather than navigating badly. */
 	onOpenNoteLink?: (noteId: string, options: { readonly background: boolean }) => boolean;
+	/**
+	 * Check a block of prose for spelling and grammar. Injected like everything
+	 * else here — the editor never learns which checker is behind it. Omitting it
+	 * leaves the browser's own spellchecker in charge.
+	 */
+	proofread?: (text: string) => Promise<readonly ProofreadIssueReport[]>;
+	/** Whether proofreading starts on. Toggled afterwards with `setProofreadEnabled`. */
+	proofreadEnabled?: boolean;
 }
 
 export const createEditor = (props?: EdraEditorProps, extraExtensions: Extensions = []) => {
@@ -154,6 +163,10 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			AIHighlight.configure({
 				callAI: props?.callAI || null
 			}),
+			Proofread.configure({
+				...(props?.proofread ? { check: props.proofread } : {}),
+				enabled: (props?.proofreadEnabled ?? false) && props?.proofread !== undefined
+			}),
 			TableOfContents.configure({
 				getIndex: getHierarchicalIndexes,
 				onUpdate: (indexes) => {
@@ -165,7 +178,12 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			attributes: {
 				role: 'textbox',
 				'aria-label': props?.ariaLabel ?? 'Rich text editor',
-				'aria-multiline': 'true'
+				'aria-multiline': 'true',
+				// Stated rather than inherited: the native checker guesses the language
+				// from the surrounding document, and the app shell is the only thing
+				// that has ever declared one. Whether that checker runs at all is the
+				// Proofread extension's call — it owns the `spellcheck` attribute.
+				lang: 'en'
 			},
 			handleKeyDown: (_view, event) => {
 				// Arm rather than paste: the clipboard is only readable from the paste event

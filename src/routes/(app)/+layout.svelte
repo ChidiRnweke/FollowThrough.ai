@@ -7,6 +7,7 @@
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
@@ -76,6 +77,10 @@
 		// close an initialisation loop.
 		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
 		void workbench.hydrate(shellProjectOf);
+		// Read here rather than in the note editor: the preference decides whether a
+		// 16 MB checker is fetched, and a note pane that mounts before the answer is
+		// known would spend its first seconds with the wrong underlines.
+		proofreading.hydrate();
 	});
 
 	// The URL is canonical for the workbench.  Synchronise store ↔ URL after

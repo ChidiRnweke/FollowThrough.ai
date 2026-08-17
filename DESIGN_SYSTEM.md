@@ -214,6 +214,18 @@ zone and center the voice line inside it.
 - **Split notes:** Document-within-Workbench pattern. Note routes occupy the shell's fixed remaining height and never make the shell scroll. Each mounted note pane owns independent vertical and horizontal scrolling. At narrow workspace widths, one pane is shown at a time without discarding the canonical split URL or the saved divider ratio.
 - Backlinks and AI suggestions are compact context, not competing document chrome. Authored links and references share a forgiving title-and-URL hover preview, expose the active destination in a compact bottom-right status card, and open from the editable document with Cmd/Ctrl+click. References do not create a trailing card section.
 - Note actions stay contextual in the overflow or selection bubble menu. Saving is automatic with a visible status; Cmd/Ctrl+S remains available.
+- **Proofreading marks the word, not the paragraph.** Spelling and grammar issues are wavy
+  underlines on the flagged span — a misspelling in `--destructive`, a grammar or style note in the
+  resting `--muted-foreground`, because the first is an error and the second is advice, and a page
+  of advice must not read as a page of mistakes. No wash: the span is usually one word inside a
+  sentence, and a fill at that size fights the prose it is marking. Clicking the underline opens a
+  small menu anchored to the word itself — never to the caret, which is not where the reader
+  clicked — carrying the explanation, the offered fixes, and, for a misspelling only, one
+  "Add to dictionary". Code blocks, maths, and diagram sources are never underlined, and neither is
+  inline code inside a paragraph. Exactly one checker underlines at a time: turning ours on turns
+  the browser's off, so a misspelling never carries two squiggles and two different menus. The
+  whole thing is off until asked for from the note's overflow menu, because switching it on is what
+  downloads it.
 - **A selection action answers where it was asked.** While one runs, the bubble menu becomes a
   single status line in the same box — the action's own icon, one present-tense clause, and the
   chat's three-dot activity — and the selected text holds a brand wash until the result settles.

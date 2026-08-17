@@ -155,6 +155,7 @@
 		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",
 		"fontkit": "^2.0.4",
+		"harper.js": "^2.7.0",
 		"js-tiktoken": "^1.0.21",
 		"jsdom": "^29.1.1",
 		"katex": "^0.17.0",

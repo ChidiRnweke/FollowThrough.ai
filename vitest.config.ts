@@ -4,6 +4,16 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
+/**
+ * Pre-bundled for the browser projects. Harper reaches Vite only through a
+ * dynamic import and Floating UI only through a component, so neither is in the
+ * dependency scan; discovered mid-run, they are optimized on the spot and the
+ * page reloads under whichever test triggered it.
+ *
+ * Named rather than written inline because the topology audit checks that every
+ * `include:` array in this file matches real spec files, and these are packages.
+ */
+const browserPrebundled = ['harper.js', 'harper.js/binary', '@floating-ui/dom'];
 const common = {
 	expect: { requireAssertions: true },
 	pool: 'forks' as const
@@ -63,6 +73,7 @@ export default defineConfig({
 			},
 			{
 				plugins: [componentSvelteKit()],
+				optimizeDeps: { include: browserPrebundled },
 				test: {
 					...common,
 					name: 'browser-focused',
@@ -79,7 +90,9 @@ export default defineConfig({
 						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
 						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
-						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts'
+						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts',
+						'src/lib/client/proofreading/harper-linter.svelte.spec.ts',
+						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts'
 					],
 					isolate: true,
 					maxWorkers: 1,
@@ -88,6 +101,7 @@ export default defineConfig({
 			},
 			{
 				plugins: [componentSvelteKit()],
+				optimizeDeps: { include: browserPrebundled },
 				test: {
 					...common,
 					name: 'browser-full',

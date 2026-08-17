@@ -51,6 +51,7 @@
 	} from '../suggestions/suggestion-anchor-plugin';
 	import SuggestionInlineWidget from '../suggestions/suggestion-inline-widget.svelte';
 	import ReferenceLinkPreview from './reference-link-preview.svelte';
+	import ProofreadMenu from './proofread-menu.svelte';
 	import {
 		createReferenceLinkPlugin,
 		referenceLinkKey,
@@ -78,6 +79,12 @@
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import { uploadNoteAttachment } from './attachment-upload';
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
+	import {
+		proofreadSelection,
+		type ProofreadSelection
+	} from '$lib/components/edra/commands/Proofread.js';
+	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
+	import { dictionaryWordFor } from '$lib/models/proofreading';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -285,6 +292,12 @@
 				}
 			},
 			getInlineSuggestion: requestInlineSuggestion,
+			// The dictionary is applied here rather than left to the checker: Harper's
+			// own copy only takes effect on the next pass, and the block the caret sits
+			// in is not re-linted until the writer stops typing — so a word they just
+			// added would stay underlined until they paused.
+			proofread: async (text) => proofreading.accepted(await proofreading.linter().lint(text)),
+			proofreadEnabled: proofreading.enabled,
 			findLinkableNotes: (query) => rankNoteLinkTargets(linkableNotes, query),
 			// Read through the prop inside the closure: `createEditor` runs once, so
 			// capturing it here would pin whatever the first render happened to pass.
@@ -302,6 +315,9 @@
 	);
 	$effect(() => {
 		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);
+	});
+	$effect(() => {
+		editor?.commands.setProofreadEnabled(proofreading.enabled);
 	});
 	// Attach per-note stores so TipTap NodeViews (TodoNode, SuggestionInlineWidget)
 	// can resolve the right note's todos/suggestions without going through a
@@ -343,6 +359,45 @@
 			editor.view.dispatch(editor.view.state.tr.setMeta(selectionActionKey, { from, to }));
 		}
 		onaction?.(action, readSelection(), to);
+	}
+
+	/**
+	 * The proofreading issue whose menu is open. Mirrored into `$state` from the
+	 * plugin because `editor.state` is a plain field: the transaction hook is the
+	 * only thing that tells Svelte a decoration was clicked.
+	 */
+	let proofreadIssue = $state<ProofreadSelection | undefined>(undefined);
+	$effect(() => {
+		const instance = editor;
+		if (!instance) return;
+		const sync = () => {
+			proofreadIssue = proofreadSelection(instance.view.state);
+		};
+		instance.on('transaction', sync);
+		sync();
+		return () => {
+			instance.off('transaction', sync);
+		};
+	});
+
+	/** The word this issue would teach the dictionary, if it is one it can answer. */
+	const proofreadWord = $derived(proofreadIssue && dictionaryWordFor(proofreadIssue.issue));
+
+	function applyProofreadFix(replacement: string): void {
+		if (!editor || !proofreadIssue) return;
+		const { from, to } = proofreadIssue;
+		editor.commands.applyProofreadSuggestion(from, to, replacement);
+		editor.commands.focus();
+	}
+
+	function learnProofreadWord(): void {
+		if (!editor || !proofreadWord) return;
+		proofreading.addWord(proofreadWord);
+		editor.commands.dismissProofreadSelection();
+		// The text is unchanged, so nothing else would trigger a re-check and the
+		// underline the reader just dismissed would sit there until they typed.
+		editor.commands.refreshProofread();
+		editor.commands.focus();
 	}
 
 	/**
@@ -1020,6 +1075,15 @@
 							{/if}
 						{/if}
 					</BubbleMenu>
+					{#if proofreadIssue}
+						<ProofreadMenu
+							{editor}
+							selection={proofreadIssue}
+							word={proofreadWord}
+							onapply={applyProofreadFix}
+							onlearn={learnProofreadWord}
+						/>
+					{/if}
 					<EdraEditor
 						class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
 					/>
