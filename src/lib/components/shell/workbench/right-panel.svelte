@@ -203,6 +203,7 @@
 			side="right"
 			class="flex w-full max-w-full flex-col p-0 sm:max-w-sm"
 			overlayProps={{ class: 'bg-black/60 supports-backdrop-filter:backdrop-blur-none' }}
+			showCloseButton={false}
 			onCloseAutoFocus={(event) => {
 				if (renderedMode !== 'chat') return;
 				event.preventDefault();
@@ -210,13 +211,31 @@
 			}}
 		>
 			<Sheet.Header class="shrink-0 border-b border-border px-4 py-3">
+				<!--
+					The header owns its close button rather than using the sheet's built-in
+					one: that one is absolute at `top-4 right-4` and lands on top of the chat
+					header actions. In-flow, the row matches the docked header above.
+				-->
 				<div class="flex items-center justify-between gap-2">
 					<Sheet.Title>{headings[renderedMode]}</Sheet.Title>
-					{#if renderedMode === 'chat'}
-						<div class="flex items-center gap-1">
+					<div class="flex items-center gap-1">
+						{#if renderedMode === 'chat'}
 							{@render chatHeaderActions()}
-						</div>
-					{/if}
+						{/if}
+						<Tip text="Close panel">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Close panel"
+									onclick={() => rightPanel.close()}
+								>
+									<X data-icon />
+								</Button>
+							{/snippet}
+						</Tip>
+					</div>
 				</div>
 			</Sheet.Header>
 			<div

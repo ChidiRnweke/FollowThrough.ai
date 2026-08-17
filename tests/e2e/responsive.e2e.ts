@@ -113,10 +113,10 @@ test('compact note chat opens in a Sheet with note context', async ({ page }) =>
 test('closing compact note chat restores focus to its trigger', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 667 });
 	await openFirstNote(page);
-	const trigger = page.getByRole('button', { name: 'Open chat' });
+	const trigger = page.getByRole('button', { name: 'Open chat', exact: true });
 	await trigger.click();
 	const sheet = page.getByRole('dialog', { name: 'Let FollowThrough act' });
-	await sheet.getByRole('button', { name: 'Close', exact: true }).click();
+	await sheet.getByRole('button', { name: 'Close panel' }).click();
 	await expect(trigger).toBeFocused();
 });
 
