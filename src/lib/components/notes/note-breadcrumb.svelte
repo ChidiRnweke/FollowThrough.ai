@@ -4,7 +4,11 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtFolder as Folder, FtEdit as Pencil } from '$lib/components/icons';
+	import {
+		FtFolder as Folder,
+		FtEdit as Pencil,
+		FtEllipsis as Ellipsis
+	} from '$lib/components/icons';
 	import NoteTitleInlineInput from './note-title-inline-input.svelte';
 
 	let {
@@ -37,6 +41,15 @@
 		return chain;
 	});
 
+	// Depth must not cost header height: the header is sticky and its measured height drives
+	// --note-header-h, so a wrapped crumb row pushes the editor down. The action cluster leaves the
+	// crumbs room for roughly one name, so a nested note trades its project and folder crumbs for a
+	// single collapsed one — same link target, whole path on hover.
+	const nested = $derived(folderChain.length > 0);
+	const fullPath = $derived(
+		[project?.name, ...folderChain.map((folder) => folder.title)].filter(Boolean).join(' / ')
+	);
+
 	/** A note without a real title cannot be saved, so its rename affordance never hides. */
 	const needsTitle = $derived(!note.title.trim() || note.title === 'Untitled');
 
@@ -65,22 +78,31 @@
 </script>
 
 <Breadcrumb.Root>
-	<Breadcrumb.List>
+	<Breadcrumb.List class="flex-nowrap">
 		{#if project}
-			<Breadcrumb.Item>
-				<Breadcrumb.Link href="/projects/{project.id}">{project.name}</Breadcrumb.Link>
+			<Breadcrumb.Item class="min-w-0">
+				<Tip text={fullPath} side="bottom">
+					{#snippet children({ props })}
+						<Breadcrumb.Link
+							{...props}
+							data-slot="breadcrumb-link"
+							href="/projects/{project.id}"
+							class="flex max-w-32 items-center gap-1 truncate"
+							aria-label={nested ? fullPath : project.name}
+						>
+							{#if nested}
+								<Folder class="size-3 shrink-0" />
+								<Ellipsis class="size-4 shrink-0" />
+							{:else}
+								{project.name}
+							{/if}
+						</Breadcrumb.Link>
+					{/snippet}
+				</Tip>
 			</Breadcrumb.Item>
-			<Breadcrumb.Separator />
+			<Breadcrumb.Separator class="shrink-0" />
 		{/if}
-		{#each folderChain as folder (folder.id)}
-			<Breadcrumb.Item>
-				<span class="flex items-center gap-1 text-muted-foreground">
-					<Folder class="size-3" />
-					{folder.title}
-				</span>
-			</Breadcrumb.Item>
-			<Breadcrumb.Separator />
-		{/each}
+		<!-- min-w-12 below keeps the title from being squeezed to nothing by the crumb above it. -->
 		<Breadcrumb.Item class="group/crumb min-w-0">
 			{#if editing}
 				<NoteTitleInlineInput initialValue={draft} onsubmit={commit} oncancel={close} {onadvance} />
@@ -88,7 +110,9 @@
 				<!-- The crumb truncates at 12rem, so a long title is only readable on hover. -->
 				<Tip text={note.title} side="bottom" delayDuration={700}>
 					{#snippet children({ props })}
-						<Breadcrumb.Page {...props} class="max-w-48 truncate">{note.title}</Breadcrumb.Page>
+						<Breadcrumb.Page {...props} class="max-w-48 min-w-12 truncate"
+							>{note.title}</Breadcrumb.Page
+						>
 					{/snippet}
 				</Tip>
 				<Tip text="Rename note">

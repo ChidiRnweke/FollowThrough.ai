@@ -104,7 +104,7 @@
 	bind:clientHeight={height}
 >
 	<div class="flex min-w-0 items-center gap-1 @[48rem]:flex-1">
-		<div class="min-w-0 flex-1">
+		<div class="min-w-0 flex-1 overflow-hidden">
 			<NoteBreadcrumb {shell} {note} oncommit={ontitle} {onadvance} />
 		</div>
 		{#if onCloseSplit}
