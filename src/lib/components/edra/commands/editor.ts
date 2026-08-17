@@ -94,7 +94,10 @@ export interface EdraEditorProps {
 	 * leaves the browser's own spellchecker in charge.
 	 */
 	proofread?: (text: string) => Promise<readonly ProofreadIssueReport[]>;
-	/** Whether proofreading starts on. Toggled afterwards with `setProofreadEnabled`. */
+	/**
+	 * Whether proofreading starts on. Defaults to on where a checker is supplied;
+	 * toggled afterwards with `setProofreadEnabled`.
+	 */
 	proofreadEnabled?: boolean;
 }
 
@@ -165,7 +168,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			}),
 			Proofread.configure({
 				...(props?.proofread ? { check: props.proofread } : {}),
-				enabled: (props?.proofreadEnabled ?? false) && props?.proofread !== undefined
+				enabled: (props?.proofreadEnabled ?? true) && props?.proofread !== undefined
 			}),
 			TableOfContents.configure({
 				getIndex: getHierarchicalIndexes,

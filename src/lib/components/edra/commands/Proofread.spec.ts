@@ -73,6 +73,17 @@ describe('Proofread', () => {
 		expect(editor.state.doc.textBetween(decoration.from, decoration.to)).toBe('teh');
 	});
 
+	it('checks without being asked to when a checker is supplied', async () => {
+		const editor = new Editor({
+			element: document.createElement('div'),
+			// No `enabled`: a checker that has to be switched on is one nobody uses.
+			extensions: [StarterKit, Proofread.configure({ check: stubChecker().check, idleDelayMs: 0 })],
+			content: doc(paragraph('I saw teh dog'))
+		});
+		await settle();
+		expect(decorations(editor)).toHaveLength(1);
+	});
+
 	it('draws nothing when no checker is injected', async () => {
 		const editor = createEditor(doc(paragraph('I saw teh dog')));
 		await settle();

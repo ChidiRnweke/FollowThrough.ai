@@ -237,7 +237,8 @@
 						A device preference rather than a note action, but it belongs to the
 						surface it changes: the underlines appear in this document, and a
 						checker that can only be found in a settings page reads as absent.
-						Off by default — turning it on downloads the checker.
+						On by default; this is the way out for someone whose notes are full
+						of names, code or another language and who wants the underlines gone.
 					-->
 					<DropdownMenu.CheckboxItem
 						checked={proofreading.enabled}

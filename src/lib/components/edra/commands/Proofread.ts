@@ -138,7 +138,9 @@ export const Proofread = Extension.create<ProofreadOptions, ProofreadStorage>({
 	name: 'proofread',
 
 	addOptions() {
-		return { idleDelayMs: 600, enabled: false };
+		// Enabled, but inert until a `check` is injected — an editor that is handed
+		// no checker does nothing regardless of this flag.
+		return { idleDelayMs: 600, enabled: true };
 	},
 
 	addStorage() {

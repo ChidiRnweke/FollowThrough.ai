@@ -222,10 +222,11 @@ zone and center the voice line inside it.
   small menu anchored to the word itself — never to the caret, which is not where the reader
   clicked — carrying the explanation, the offered fixes, and, for a misspelling only, one
   "Add to dictionary". Code blocks, maths, and diagram sources are never underlined, and neither is
-  inline code inside a paragraph. Exactly one checker underlines at a time: turning ours on turns
-  the browser's off, so a misspelling never carries two squiggles and two different menus. The
-  whole thing is off until asked for from the note's overflow menu, because switching it on is what
-  downloads it.
+  inline code inside a paragraph. Exactly one checker underlines at a time: ours replaces the
+  browser's, so a misspelling never carries two squiggles and two different menus. It is on by
+  default — a checker the reader has to go and find in a menu is one nobody uses — and the note's
+  overflow menu carries the way out for someone whose notes are mostly names or code. The engine is
+  fetched by the first note that opens, never on the way to Today or a board.
 - **A selection action answers where it was asked.** While one runs, the bubble menu becomes a
   single status line in the same box — the action's own icon, one present-tense clause, and the
   chat's three-dot activity — and the selected text holds a brand wash until the result settles.

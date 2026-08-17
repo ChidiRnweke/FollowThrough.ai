@@ -77,9 +77,11 @@
 		// close an initialisation loop.
 		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
 		void workbench.hydrate(shellProjectOf);
-		// Read here rather than in the note editor: the preference decides whether a
-		// 16 MB checker is fetched, and a note pane that mounts before the answer is
-		// known would spend its first seconds with the wrong underlines.
+		// Read here rather than in the note editor so the answer is already known
+		// when a note pane mounts; a pane that started before it would spend its
+		// first seconds underlining words the reader had already dismissed. This
+		// only reads preferences — the checker itself is fetched by the first note
+		// that opens, never on the way to Today or a todo board.
 		proofreading.hydrate();
 	});
 
