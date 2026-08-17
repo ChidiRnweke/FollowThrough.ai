@@ -1011,6 +1011,15 @@
 		@apply text-xs text-muted-foreground;
 	}
 
+	/* The note's word count and reading time, held against the bottom of its own pane.
+	   Sticky rather than fixed so a split note gives each pane its own edge instead of
+	   both stacking in one viewport corner. The bottom padding clears a phone's home
+	   indicator without stealing height from the note on a desktop. */
+	.note-reading-stats {
+		padding-top: 0.25rem;
+		padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+	}
+
 	.chrome-control {
 		@apply min-h-8 text-sm;
 	}

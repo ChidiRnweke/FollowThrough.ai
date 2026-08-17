@@ -73,8 +73,9 @@
 	import { toast } from 'svelte-sonner';
 	import {
 		selectionClipboardItem,
-		selectionPlainText
+		selectionMarkdown
 	} from '$lib/components/edra/commands/clipboard-payload';
+	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import { uploadNoteAttachment } from './attachment-upload';
@@ -434,13 +435,8 @@
 		});
 	});
 
-	/** Plain text of the current selection, '' when there is none. */
-	function selectionText(): string {
-		return editor ? selectionPlainText(editor.state) : '';
-	}
-
-	async function copySelectionRaw(): Promise<void> {
-		const text = selectionText();
+	async function copySelectionMarkdown(): Promise<void> {
+		const text = editor ? selectionMarkdown(editor.state) : '';
 		if (!text) return;
 		try {
 			await navigator.clipboard.writeText(text);
@@ -1087,6 +1083,10 @@
 					<EdraEditor
 						class="prose flex min-h-full max-w-none flex-1 flex-col pb-40 dark:prose-invert"
 					/>
+					<!-- Yields the corner to the link destination, which is transient and more urgent. -->
+					{#if !activeLink}
+						<NoteReadingStats />
+					{/if}
 				</Tiptap>
 				{#if activeLink}
 					<ReferenceLinkPreview
@@ -1107,7 +1107,9 @@
 			</ErrorBoundary>
 		</ContextMenu.Trigger>
 		<ContextMenu.Content>
-			<ContextMenu.Item onclick={() => void copySelectionRaw()}>Copy raw</ContextMenu.Item>
+			<ContextMenu.Item onclick={() => void copySelectionMarkdown()}>
+				Copy as markdown
+			</ContextMenu.Item>
 			<ContextMenu.Item onclick={() => void copySelectionFormatted()}>
 				Copy with formatting
 			</ContextMenu.Item>

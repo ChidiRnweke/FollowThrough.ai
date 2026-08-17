@@ -4,6 +4,8 @@ import type { EditorState } from '@tiptap/pm/state';
 import { mermaidPngBlob } from '../mermaid-export.js';
 import type { MermaidTheme } from '../mermaid-rendering.js';
 import { selectionMedia } from './diagram-copy.js';
+import { noteMarkdownFromContent } from './note-markdown.js';
+import type { EdraDocument } from './document.js';
 
 const BLOCK_SEPARATOR = '\n\n';
 
@@ -34,6 +36,20 @@ export const selectionPlainText = (state: EditorState): string => {
 			textSerializers: getTextSerializersFromSchema(state.schema)
 		}
 	);
+};
+
+/**
+ * The current selection as Markdown, '' when there is none.
+ *
+ * Deliberately the same serializer the agent tools, the import path and the patch preview
+ * use: a note copied out and a note described to the agent have to read identically, or a
+ * targeted edit would anchor against text the user never saw.
+ */
+export const selectionMarkdown = (state: EditorState): string => {
+	if (state.selection.empty) return '';
+	const content = state.selection.content().content.toJSON();
+	if (!content) return '';
+	return noteMarkdownFromContent({ type: 'doc', content } as EdraDocument);
 };
 
 const dataUri = (blob: Blob): Promise<string> =>

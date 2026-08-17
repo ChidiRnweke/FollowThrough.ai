@@ -61,6 +61,36 @@ export const markdownSlice = (
 };
 
 /**
+ * Elements that carry only presentation — an editor or terminal's idea of "HTML".
+ *
+ * `pre` and `code` are here deliberately: an editor's wrapper is `white-space: pre`
+ * styling around source text, and a genuine fenced block in that text still becomes a
+ * code block by way of the Markdown parser.
+ */
+const STRUCTURELESS_TAGS = new Set(['DIV', 'SPAN', 'BR', 'P', 'FONT', 'PRE', 'CODE']);
+
+/**
+ * Whether pasted HTML says anything the plain text does not.
+ *
+ * VS Code, terminals and most code editors put a styled `div`/`span` tree on the clipboard
+ * for every copy. It looks like HTML but encodes nothing — the meaning is still in the
+ * characters, which is exactly the case the Markdown parser handles better than
+ * ProseMirror's HTML parser does.
+ */
+export const htmlCarriesStructure = (html: string): boolean => {
+	// A copy from this editor is always richer than a Markdown re-parse of its text.
+	if (html.includes('data-pm-slice')) return true;
+	// Without a parser there is nothing to judge, so keep the existing behaviour.
+	if (typeof DOMParser === 'undefined') return true;
+
+	const parsed = new DOMParser().parseFromString(html, 'text/html');
+	for (const element of parsed.body.querySelectorAll('*')) {
+		if (!STRUCTURELESS_TAGS.has(element.tagName)) return true;
+	}
+	return false;
+};
+
+/**
  * Set while the user asks for one literal paste.
  *
  * Scoped to a single paste because it is a modifier on one gesture, not a mode — and
@@ -123,8 +153,11 @@ export const handleMarkdownPaste = (view: EditorView, event: ClipboardEvent): bo
 	}
 
 	// Real rich content already round-trips through ProseMirror's own HTML parser, which
-	// knows more about the source document than a Markdown pass would.
-	if (clipboard.getData('text/html')) return false;
+	// knows more about the source document than a Markdown pass would. Styled `div`s from
+	// an editor or a terminal are not that: they carry the source text and none of its
+	// meaning, so a `.md` file copied out of VS Code would otherwise arrive preformatted.
+	const html = clipboard.getData('text/html');
+	if (html && htmlCarriesStructure(html)) return false;
 	// Inside a code block or diagram source the characters are the content.
 	if (view.state.selection.$from.parent.type.spec.code) return false;
 	if (!looksLikeMarkdown(text)) return false;
