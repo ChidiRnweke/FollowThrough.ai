@@ -1,6 +1,6 @@
 import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
 import { DOMSerializer } from '@tiptap/pm/model';
-import type { EditorState } from '@tiptap/pm/state';
+import { TextSelection, type EditorState } from '@tiptap/pm/state';
 import { mermaidPngBlob } from '../mermaid-export.js';
 import type { MermaidTheme } from '../mermaid-rendering.js';
 import { selectionMedia } from './diagram-copy.js';
@@ -23,6 +23,36 @@ const MAX_INLINED_BYTES = 12 * 1024 * 1024;
 export const activeMermaidTheme = (): MermaidTheme => ({
 	base: window.document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 });
+
+/** A range of the document, in ProseMirror positions. */
+export interface SelectedRange {
+	readonly from: number;
+	readonly to: number;
+}
+
+/**
+ * The same state with `range` selected again.
+ *
+ * A right-click collapses the selection unless it lands on it, and opening a context menu
+ * moves focus off the contenteditable — so by the time a menu item is clicked, the range
+ * the reader meant to copy is gone from `state.selection` and every copy comes out empty.
+ * The menu captures the range as it opens; this puts it back on a state, without touching
+ * the view, so the copy describes the selection rather than the caret that replaced it.
+ *
+ * `TextSelection.between` rather than `create`: the endpoints are re-resolved against the
+ * live document, and a position that no longer points into inline content resolves to the
+ * nearest one that does instead of throwing.
+ */
+export const selectRange = (state: EditorState, range: SelectedRange | undefined): EditorState => {
+	if (!range) return state;
+	const limit = state.doc.content.size;
+	const from = Math.min(Math.max(range.from, 0), limit);
+	const to = Math.min(Math.max(range.to, 0), limit);
+	if (from >= to) return state;
+	return state.apply(
+		state.tr.setSelection(TextSelection.between(state.doc.resolve(from), state.doc.resolve(to)))
+	);
+};
 
 /** Plain text of the current selection, '' when there is none. */
 export const selectionPlainText = (state: EditorState): string => {

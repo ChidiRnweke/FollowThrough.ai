@@ -2,7 +2,12 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
-	import { Plugin, PluginKey, TextSelection as PmTextSelection } from '@tiptap/pm/state';
+	import {
+		Plugin,
+		PluginKey,
+		TextSelection as PmTextSelection,
+		type EditorState
+	} from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
 	import type { AgentRunId } from '$lib/models/agent';
@@ -72,8 +77,11 @@
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { toast } from 'svelte-sonner';
 	import {
+		selectRange,
 		selectionClipboardItem,
-		selectionMarkdown
+		selectionMarkdown,
+		selectionPlainText,
+		type SelectedRange
 	} from '$lib/components/edra/commands/clipboard-payload';
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
@@ -435,10 +443,41 @@
 		});
 	});
 
+	/**
+	 * The range the context menu was opened over.
+	 *
+	 * By the time a menu item is clicked the editor's own selection is usually gone. A
+	 * right-click that lands anywhere but on the selection collapses it to a caret before
+	 * the menu even opens, and opening the menu moves focus off the contenteditable — so
+	 * every copy read an empty selection and silently put nothing on the clipboard. The
+	 * range is taken at `contextmenu`, ahead of both, and re-applied when an item runs.
+	 */
+	let contextRange = $state<SelectedRange | undefined>(undefined);
+
+	function rememberContextRange(): void {
+		const selection = editor?.view.state.selection;
+		contextRange =
+			selection && !selection.empty ? { from: selection.from, to: selection.to } : undefined;
+	}
+
+	/** The state a copy serializes from, or undefined when there is nothing to copy. */
+	function copySource(): EditorState | undefined {
+		if (!editor) return undefined;
+		const state = selectRange(editor.view.state, contextRange);
+		return state.selection.empty ? undefined : state;
+	}
+
 	async function copySelectionMarkdown(): Promise<void> {
-		const text = editor ? selectionMarkdown(editor.state) : '';
-		if (!text) return;
+		const state = copySource();
+		if (!state) return;
 		try {
+			// A node the Markdown serializer has no syntax for still has text worth carrying,
+			// and an empty clipboard is indistinguishable from a copy that never happened.
+			const text = selectionMarkdown(state) || selectionPlainText(state);
+			if (!text) {
+				toast.error('The selection could not be copied');
+				return;
+			}
 			await navigator.clipboard.writeText(text);
 		} catch {
 			toast.error('The clipboard could not be written');
@@ -446,14 +485,26 @@
 	}
 
 	async function copySelectionFormatted(): Promise<void> {
-		if (!editor) return;
+		const state = copySource();
+		if (!state) return;
 		// A direct call, not a `copy` event, so it misses the editor's own handler —
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
-			await navigator.clipboard.write([selectionClipboardItem(editor.state)]);
+			await navigator.clipboard.write([selectionClipboardItem(state)]);
 		} catch {
 			toast.error('The clipboard could not be written');
 		}
+	}
+
+	/**
+	 * Puts the remembered range back on the view, so a paste from this menu replaces what
+	 * was selected rather than landing at the caret the menu left behind.
+	 */
+	function restoreContextRange(): void {
+		if (!editor || !contextRange) return;
+		const restored = selectRange(editor.view.state, contextRange);
+		if (restored.selection.empty) return;
+		editor.view.dispatch(editor.view.state.tr.setSelection(restored.selection));
 	}
 
 	async function pasteRaw(): Promise<void> {
@@ -462,6 +513,7 @@
 			const text = await navigator.clipboard.readText();
 			if (!text) return;
 			editor.view.focus();
+			restoreContextRange();
 			editor.view.pasteText(text);
 		} catch {
 			toast.error('The clipboard could not be read');
@@ -478,6 +530,7 @@
 			if (!htmlItem) return await pasteRaw();
 			const html = await (await htmlItem.getType('text/html')).text();
 			editor.view.focus();
+			restoreContextRange();
 			editor.view.pasteHTML(html);
 		} catch {
 			toast.error('The clipboard could not be read');
@@ -613,8 +666,10 @@
 		// leave the stale bar floating over nothing; collapsing the selection both
 		// matches what the author sees and forces the menu to re-evaluate. Skipped
 		// while an action runs, because the running status rides the same menu.
+		// `isDestroyed` first: a blur fires as the view is torn down, and by then reading
+		// `activeAction` — a prop, and so a derived — would warn about a destroyed effect.
 		editor.on('blur', () => {
-			if (activeAction !== undefined || editor.isDestroyed) return;
+			if (editor.isDestroyed || activeAction !== undefined) return;
 			const { doc, selection } = editor.state;
 			if (selection.empty) return;
 			editor.view.dispatch(
@@ -927,7 +982,9 @@
 	     surface, so the I-beam extended into dead margin where clicking places no
 	     caret. `.tiptap` declares it for the surface that actually takes text. -->
 	<ContextMenu.Root>
-		<ContextMenu.Trigger class="flex min-h-96 flex-1 flex-col">
+		<!-- Before bits-ui's own handler, which focuses the menu and so collapses the
+		     selection the items are about to act on. -->
+		<ContextMenu.Trigger class="flex min-h-96 flex-1 flex-col" oncontextmenu={rememberContextRange}>
 			<!--
 			The editor is the one surface where degrading quietly would be wrong: a
 			node view that throws must not read as "the note is empty". State what
@@ -1107,10 +1164,18 @@
 			</ErrorBoundary>
 		</ContextMenu.Trigger>
 		<ContextMenu.Content>
-			<ContextMenu.Item onclick={() => void copySelectionMarkdown()}>
+			<!-- Disabled rather than absent, so a right-click with nothing selected explains
+			     itself instead of offering an item that would do nothing. -->
+			<ContextMenu.Item
+				disabled={contextRange === undefined}
+				onclick={() => void copySelectionMarkdown()}
+			>
 				Copy as markdown
 			</ContextMenu.Item>
-			<ContextMenu.Item onclick={() => void copySelectionFormatted()}>
+			<ContextMenu.Item
+				disabled={contextRange === undefined}
+				onclick={() => void copySelectionFormatted()}
+			>
 				Copy with formatting
 			</ContextMenu.Item>
 			<ContextMenu.Separator />

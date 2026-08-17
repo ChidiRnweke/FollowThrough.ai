@@ -3,7 +3,7 @@ import { getSchema } from '@tiptap/core';
 import { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { AllSelection, EditorState, TextSelection } from '@tiptap/pm/state';
 import { noteMarkdownExtensions } from './markdown-extensions';
-import { selectionMarkdown } from './clipboard-payload';
+import { selectRange, selectionMarkdown } from './clipboard-payload';
 
 /**
  * "Copy as markdown" has to describe the note the same way the agent's `edit_note` patch
@@ -92,6 +92,55 @@ describe('Copying a selection that cuts across nodes', () => {
 
 	it('keeps the text that was actually selected', () => {
 		expect(selectionMarkdown(openSlice)).toContain('item');
+	});
+});
+
+/**
+ * Opening the context menu focuses the menu, and the browser collapses the selection in
+ * the contenteditable when focus leaves it — so the state a menu item sees has a caret
+ * where the reader had a range. The menu remembers the range and puts it back.
+ */
+describe('Copying the range a context menu was opened over', () => {
+	const state = stateOf([paragraph('this is important')]);
+	const collapsed = state.apply(
+		state.tr.setSelection(TextSelection.create(state.doc, 'this is'.length + 1))
+	);
+
+	it('copies nothing from the collapsed selection the menu leaves behind', () => {
+		expect(selectionMarkdown(collapsed)).toBe('');
+	});
+
+	it('copies the remembered range instead', () => {
+		expect(selectionMarkdown(selectRange(collapsed, { from: 1, to: 8 })).trim()).toBe('this is');
+	});
+
+	it('leaves the state alone when nothing was remembered', () => {
+		expect(selectRange(collapsed, undefined).selection.empty).toBe(true);
+	});
+
+	it('leaves the state alone when the range is empty', () => {
+		expect(selectRange(collapsed, { from: 4, to: 4 }).selection.empty).toBe(true);
+	});
+
+	it('clamps a range that outlived the text it pointed at', () => {
+		expect(selectionMarkdown(selectRange(collapsed, { from: 1, to: 9_999 })).trim()).toBe(
+			'this is important'
+		);
+	});
+});
+
+/**
+ * A range that spans block boundaries cannot be resolved as-is at both ends; the nearest
+ * inline positions have to stand in, rather than the copy throwing.
+ */
+describe('Remembering a range whose endpoints are not inline', () => {
+	const state = stateOf([paragraph('first'), paragraph('second')]);
+	const collapsed = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 1)));
+
+	it('still copies across the block boundary', () => {
+		expect(
+			selectionMarkdown(selectRange(collapsed, { from: 0, to: state.doc.content.size }))
+		).toContain('second');
 	});
 });
 
