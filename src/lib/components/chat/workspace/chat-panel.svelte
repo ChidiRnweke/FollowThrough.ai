@@ -13,8 +13,10 @@
 		entryText,
 		type ChatEntry,
 		type ChatStore,
-		type ContextChip
+		type ContextChip,
+		type ResourceChip
 	} from '$lib/stores/agent/chat.svelte';
+	import { liveSelectionChipOf, selectionChipOf } from '$lib/stores/agent/selection-chip';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -99,6 +101,13 @@
 	function prefill(request: ChatHandoff): void {
 		prompt = request.prompt;
 		handoff = request;
+		// A selection arrives as a chip rather than as hidden request state, so the composer
+		// shows the passage the question is about before the question is asked. Pinning the
+		// same passage twice is a no-op: the chip's id is its range.
+		if (request.selection) {
+			const title = shell?.noteTree.find((entry) => entry.id === request.selection?.noteId)?.title;
+			chat.addChip(selectionChipOf(request.selection, title ?? 'Untitled note'));
+		}
 		saveDraft();
 		// The textarea may not be bound yet on the mount path, so go through the tick
 		// rather than `textareaRef` directly.
@@ -257,6 +266,33 @@
 		return note ? { kind: 'note', id: note.id, name: note.title } : undefined;
 	});
 
+	/**
+	 * Whose selection counts. The same note the request is grounded in, so the passage the
+	 * composer shows and the passage the run receives can never come from different panes.
+	 */
+	const focusedNoteId = $derived(workbench.interactionFocusedNoteId ?? workbench.focusedNoteId);
+
+	/**
+	 * The passage highlighted right now, attached the way Copilot attaches the current
+	 * selection: automatically, but out loud. It follows the caret and is dismissible, and
+	 * `requestFor` reads this very chip — never the editor — so what the agent gets is what
+	 * the composer showed.
+	 */
+	const liveSelectionChip = $derived.by(() => {
+		const selection = focusedNoteId
+			? editorSelectionRegistry.peek(focusedNoteId)?.current
+			: undefined;
+		const title = selection
+			? shell?.noteTree.find((entry) => entry.id === selection.noteId)?.title
+			: undefined;
+		return liveSelectionChipOf(
+			selection,
+			title ?? 'Untitled note',
+			chat.chips.filter((chip) => chip.kind === 'selection').map((chip) => chip.id),
+			chat.dismissedSelectionId
+		);
+	});
+
 	// --- @ mention picker ---
 
 	const mentionQuery = $derived(mentionQueryOf(prompt));
@@ -281,7 +317,9 @@
 	}
 
 	function unpick(chip: ContextChip): void {
-		prompt = withoutMention(prompt, chip);
+		// A pinned selection put no token in the sentence, so there is nothing to take back
+		// out of it — and its name is a note title the user may well have typed themselves.
+		if (chip.kind !== 'selection') prompt = withoutMention(prompt, chip);
 		chat.removeChip(chip);
 	}
 
@@ -300,25 +338,25 @@
 	}
 
 	/**
-	 * The context a prompt travels with — open note, project, editor selection,
-	 * handoff. Shared by the composer and by resubmitting an edited question, so an
-	 * edited turn is grounded exactly like a freshly typed one.
+	 * The context a prompt travels with — open note, project, handoff. Shared by the
+	 * composer and by resubmitting an edited question, so an edited turn is grounded
+	 * exactly like a freshly typed one.
+	 *
+	 * Passages travel as chips. The pinned ones `ChatStore.send` maps itself; the one still
+	 * following the caret is added here, from the same derivation the composer renders. The
+	 * editor's own selection is never read at this point, so what the agent gets is what the
+	 * composer showed — including the case where the user dismissed the chip and gets nothing.
 	 */
 	function requestFor(text: string): Omit<RunAgentInput, 'conversationId'> {
 		const folderNotes = shell
 			? chat.chips
-					.filter((chip) => chip.kind === 'folder')
+					.filter((chip): chip is ResourceChip => chip.kind === 'folder')
 					.flatMap((chip) => folderNoteIds(shell.noteTree, chip.id))
 			: [];
 		const contextNoteIds = [
 			...new Set([...(autoChip ? [autoChip.id] : []), ...folderNotes])
 		] as NoteId[];
-		// Read the focused pane's editor selection; falls back to undefined
-		// when no pane is mounted (e.g. a fresh `/chats/new` page).
-		const interactionNoteId = workbench.interactionFocusedNoteId ?? workbench.focusedNoteId;
-		const selection = interactionNoteId
-			? editorSelectionRegistry.peek(interactionNoteId)?.current
-			: undefined;
+		const interactionNoteId = focusedNoteId;
 		const interactionProjectId = interactionNoteId
 			? (shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId as
 					ProjectId | undefined)
@@ -341,11 +379,7 @@
 			// A tagged folder rides in as the notes inside it; the store unions these
 			// with the note chips it maps itself.
 			...(contextNoteIds.length ? { contextNoteIds } : {}),
-			...(handoff?.selection !== undefined
-				? { selection: handoff.selection, noteId: handoff.selection.noteId }
-				: selection !== undefined
-					? { selection, noteId: selection.noteId }
-					: {}),
+			...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
 			...(handoff?.requestedSkillNames
 				? { requestedSkillNames: [...handoff.requestedSkillNames] }
 				: {})
@@ -563,6 +597,7 @@
 				bind:prompt
 				bind:textareaRef
 				{autoChip}
+				liveSelection={liveSelectionChip}
 				chips={chat.chips}
 				{mentionCandidates}
 				{highlighted}
@@ -572,7 +607,11 @@
 				connection={chat.connection}
 				executionMode={chat.executionModeOverride}
 				onremovechip={(chip, automatic) => {
-					if (automatic) chat.autoChipDismissedFor = chip.id;
+					// Two chips arrive automatic — the open note and the live selection — and neither
+					// is held in `chat.chips`, so dismissing them is remembering not to offer them
+					// again rather than removing anything.
+					if (automatic && chip.kind === 'note') chat.autoChipDismissedFor = chip.id;
+					else if (automatic && chip.kind === 'selection') chat.dismissedSelectionId = chip.id;
 					else unpick(chip);
 				}}
 				onpick={pick}

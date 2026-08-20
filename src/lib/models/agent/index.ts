@@ -454,12 +454,28 @@ export interface ContextNote {
 	readonly tokenCount: number;
 }
 
+/**
+ * One pinned passage as assembled for a run: the selection itself, plus the title of the
+ * note it came from when that note is already loaded for this run. The title is optional
+ * because resolving one per passage would cost a read apiece to name something the model can
+ * ask for with get_note.
+ */
+export interface ContextSelection extends TextSelection {
+	readonly title?: string;
+}
+
 export interface RunAgentInput {
 	readonly requestId?: string;
 	readonly conversationId?: ConversationId;
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
+	/**
+	 * The first of `selections`, and only ever that. It is kept as its own field because the
+	 * selection-bound tools are offered to the model on the strength of a run having one.
+	 */
 	readonly selection?: TextSelection;
+	/** Every passage the user pinned to this message, in the order they pinned them. */
+	readonly selections?: readonly TextSelection[];
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
@@ -556,7 +572,9 @@ export interface SubmitAgentRunInput {
 	readonly mode?: AgentExecutionMode | null;
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
+	/** The first of `selections`; see the note on `RunAgentInput`. */
 	readonly selection?: TextSelection;
+	readonly selections?: readonly TextSelection[];
 	readonly contextNoteIds?: readonly NoteId[];
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];

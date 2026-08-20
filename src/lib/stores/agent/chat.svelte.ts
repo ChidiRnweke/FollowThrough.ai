@@ -27,9 +27,11 @@ import {
 import { suggestionToView } from '../suggestions/suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
+import type { SelectionChip } from './selection-chip';
 import { SvelteSet } from 'svelte/reactivity';
 
 export type { ChatToolActivity } from './chat-tools';
+export type { SelectionChip } from './selection-chip';
 
 const STORAGE_KEY_PREFIX = 'followthrough.agent.conversation';
 const browser = typeof window !== 'undefined';
@@ -86,13 +88,24 @@ const persistedConversation = (key: string): PersistedConversationChoices => {
 	}
 };
 
-export interface ContextChip {
+/**
+ * A whole resource attached by name. Its `@Name` token in the prompt is the source of truth:
+ * typing the token away detaches the chip, and removing the chip deletes the token.
+ */
+export interface ResourceChip {
 	readonly kind: 'note' | 'skill' | 'folder';
 	readonly id: NoteId;
 	readonly name: string;
 	/** Folders only: how many notes the tag stands for, shown before sending. */
 	readonly noteCount?: number;
 }
+
+/**
+ * The two kinds of attachment differ in what holds them on. A resource chip is held by its
+ * token in the sentence; a selection chip has no sayable name, so it is held only by having
+ * been pinned — and is let go only by being dismissed.
+ */
+export type ContextChip = ResourceChip | SelectionChip;
 
 export type ChatPart =
 	| { kind: 'text'; text: string }
@@ -301,6 +314,12 @@ export class ChatStore {
 	chips = $state<ContextChip[]>([]);
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
 	/**
+	 * The one highlighted passage the user has waved off, by chip id. Not cleared on send:
+	 * the text stays highlighted after a message goes out, and re-attaching a passage
+	 * somebody explicitly detached would undo their decision behind their back.
+	 */
+	dismissedSelectionId = $state<string | undefined>(undefined);
+	/**
 	 * A prompt written by an invocation point elsewhere in the app, waiting for the
 	 * composer to pick it up. `chat-handoff` covers the case where the panel has yet
 	 * to mount; this covers the docked panel, which is mounted already and so never
@@ -433,8 +452,23 @@ export class ChatStore {
 	): Promise<void> {
 		if (this.isStreaming) return;
 		const requestId = crypto.randomUUID();
-		const noteChips = this.chips.filter((chip) => chip.kind === 'note').map((chip) => chip.id);
+		const noteChips = this.chips
+			.filter((chip): chip is ResourceChip => chip.kind === 'note')
+			.map((chip) => chip.id);
 		const skillChips = this.chips.filter((chip) => chip.kind === 'skill').map((chip) => chip.name);
+		// The singular `selection` is derived here and nowhere else. It stays on the wire
+		// because the selection-bound tools (extract_promises, relate_selection, …) are offered
+		// only when the run input has one; the plural field is what the prompt actually quotes.
+		//
+		// Pinned passages come first, so a pin takes that singular slot ahead of the passage
+		// merely highlighted at the moment of sending: pinning is deliberate, highlighting is
+		// incidental, and the tools should act on the one the user meant.
+		const selections = [
+			...this.chips
+				.filter((chip): chip is SelectionChip => chip.kind === 'selection')
+				.map((chip) => chip.selection),
+			...(input.selections ?? [])
+		];
 		this.storage.save({ cursor: '0', attempt: 0, pendingRequestId: requestId });
 		this.entries.push({
 			id: crypto.randomUUID(),
@@ -475,7 +509,7 @@ export class ChatStore {
 				appContext: contextSnapshot,
 				...(input.projectId ? { projectId: input.projectId } : {}),
 				...(input.noteId ? { noteId: input.noteId } : {}),
-				...(input.selection ? { selection: input.selection } : {}),
+				...(selections.length ? { selections, selection: selections[0] } : {}),
 				contextNoteIds: [...new SvelteSet([...(input.contextNoteIds ?? []), ...noteChips])],
 				requestedSkillNames: [
 					...new SvelteSet([...(input.requestedSkillNames ?? []), ...skillChips])
@@ -626,6 +660,7 @@ export class ChatStore {
 		this.visionModelOverride = null;
 		this.chips = [];
 		this.autoChipDismissedFor = undefined;
+		this.dismissedSelectionId = undefined;
 		this.hydratedConversationId = undefined;
 		this.runId = undefined;
 		this.runStatus = undefined;
@@ -644,6 +679,7 @@ export class ChatStore {
 		this.hydratedConversationId = undefined;
 		this.chips = [];
 		this.autoChipDismissedFor = undefined;
+		this.dismissedSelectionId = undefined;
 		this.runId = undefined;
 		this.runStatus = undefined;
 		this.activeReply = undefined;

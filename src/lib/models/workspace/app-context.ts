@@ -1,13 +1,6 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 type NoteId = Brand<string, 'NoteId'>;
 type ProjectId = Brand<string, 'ProjectId'>;
-interface TextSelection {
-	readonly noteId: NoteId;
-	readonly revision: number;
-	readonly from: number;
-	readonly to: number;
-	readonly text: string;
-}
 
 export type AppSurfaceKind =
 	| 'today'
@@ -84,7 +77,6 @@ export interface AppContextSnapshotV1 {
 			readonly title: string;
 		}[];
 	};
-	readonly selection?: TextSelection;
 	readonly recentInteractions: readonly SemanticInteraction[];
 }
 

@@ -5,14 +5,16 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunSnapshot,
-	ConversationId
+	ConversationId,
+	SubmitAgentRunInput
 } from '$lib/models/agent';
 import type {
 	AgentRunClientStorage,
 	AgentRunTransport,
 	StoredAgentRunClientState
 } from '$lib/client/agent/runs/contracts';
-import { ChatStore, entryText } from './chat.svelte';
+import type { NoteId } from '$lib/models/notes';
+import { ChatStore, entryText, type ContextChip, type SelectionChip } from './chat.svelte';
 
 const runId = '10000000-0000-4000-8000-000000000001' as AgentRunId;
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
@@ -32,7 +34,8 @@ class MemoryStorage implements AgentRunClientStorage {
 
 class FakeAgentRunTransport implements AgentRunTransport {
 	constructor(private readonly events: readonly AgentEvent[]) {}
-	async submit() {
+	async submit(input: SubmitAgentRunInput) {
+		void input;
 		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
 	}
 	async get(): Promise<AgentRunSnapshot> {
@@ -623,5 +626,101 @@ describe('a reopened turn reads as it happened', () => {
 			pendingDecisions: []
 		});
 		expect(part?.kind === 'tool' && part.tool.status).toBe('approval_required');
+	});
+});
+
+/** Records what a send actually put on the wire, which is the whole subject below. */
+class RecordingTransport extends FakeAgentRunTransport {
+	submitted?: SubmitAgentRunInput;
+	constructor() {
+		super([]);
+	}
+	override async submit(input: SubmitAgentRunInput) {
+		this.submitted = input;
+		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
+	}
+}
+
+describe('the context a send carries', () => {
+	const noteId = '30000000-0000-4000-8000-000000000001' as NoteId;
+	const otherNoteId = '30000000-0000-4000-8000-000000000002' as NoteId;
+
+	const pin = (text: string, from: number, id: NoteId = noteId): SelectionChip => ({
+		kind: 'selection',
+		id: `${id}:${from}-${from + text.length}`,
+		name: 'Q3 planning',
+		wordCount: 3,
+		selection: { noteId: id, revision: 2, from, to: from + text.length, text }
+	});
+
+	const sentWith = async (chips: ContextChip[], live?: SelectionChip) => {
+		const transport = new RecordingTransport();
+		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		store.chips = chips;
+		// The passage still following the caret is not a chip the store holds: the panel
+		// derives it and hands it over on the request, exactly as it does here.
+		await store.send({
+			prompt: 'what does this commit me to?',
+			...(live ? { selections: [live.selection] } : {})
+		});
+		return transport.submitted!;
+	};
+
+	it('sends every pinned passage', async () => {
+		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
+		expect(sent.selections).toHaveLength(2);
+	});
+
+	it('keeps the order the passages were pinned in', async () => {
+		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
+		expect(sent.selections?.[1]?.text).toBe('then review');
+	});
+
+	/** The selection-bound tools are offered on the strength of this field being set. */
+	it('names the first pinned passage as the singular selection', async () => {
+		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
+		expect(sent.selection?.text).toBe('ship it');
+	});
+
+	it('sends passages pinned from different notes', async () => {
+		const sent = await sentWith([pin('ship it', 10), pin('elsewhere', 4, otherNoteId)]);
+		expect(sent.selections?.[1]?.noteId).toBe(otherNoteId);
+	});
+
+	it('sends the passage highlighted right now, with nothing pinned', async () => {
+		const sent = await sentWith([], pin('the live one', 70));
+		expect(sent.selections?.[0]?.text).toBe('the live one');
+	});
+
+	it('sends the highlighted passage alongside the pinned ones', async () => {
+		const sent = await sentWith([pin('ship it', 10)], pin('the live one', 70));
+		expect(sent.selections).toHaveLength(2);
+	});
+
+	/**
+	 * Pinning is deliberate and highlighting is incidental, so the pin takes the singular
+	 * field the selection-bound tools are offered on.
+	 */
+	it('lets a pin outrank the highlight for the singular selection', async () => {
+		const sent = await sentWith([pin('ship it', 10)], pin('the live one', 70));
+		expect(sent.selection?.text).toBe('ship it');
+	});
+
+	it('sends no selection when nothing was pinned', async () => {
+		const sent = await sentWith([{ kind: 'note', id: noteId, name: 'Q3 planning' }]);
+		expect(sent.selection).toBeUndefined();
+	});
+
+	it('leaves the plural field off entirely when nothing was pinned', async () => {
+		const sent = await sentWith([]);
+		expect(sent.selections).toBeUndefined();
+	});
+
+	it('still maps note chips onto the attached notes', async () => {
+		const sent = await sentWith([
+			{ kind: 'note', id: noteId, name: 'Q3 planning' },
+			pin('ship it', 10)
+		]);
+		expect(sent.contextNoteIds).toEqual([noteId]);
 	});
 });

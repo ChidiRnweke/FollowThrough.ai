@@ -4,9 +4,8 @@ import type {
 	SemanticInteraction,
 	ShellContext
 } from '$lib/models/workspace';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import { editorSelectionRegistry } from '../notes/registries/editor-selection-registry.svelte';
 import { workbench } from '../workbench/workbench.svelte';
 import { chatKeyOf, noteIdOf } from '../workbench/tab-ref';
 
@@ -128,12 +127,6 @@ class AppContextStore {
 			: undefined;
 		const projectId = focusedNote?.projectId ?? pathProjectId;
 		const project = this.shell?.projects.find((entry) => entry.id === projectId);
-		const selection: TextSelection | undefined = focusedNoteId
-			? editorSelectionRegistry.peek(focusedNoteId)?.current
-			: undefined;
-		const clippedSelection = selection
-			? { ...selection, text: selection.text.slice(0, 12000) }
-			: undefined;
 		return {
 			version: 1,
 			capturedAt: now.toISOString(),
@@ -170,7 +163,6 @@ class AppContextStore {
 						}
 					}
 				: {}),
-			...(clippedSelection ? { selection: clippedSelection } : {}),
 			recentInteractions: this.interactions.slice(0, 5)
 		};
 	}

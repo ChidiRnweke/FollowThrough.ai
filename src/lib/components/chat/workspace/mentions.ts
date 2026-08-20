@@ -1,6 +1,6 @@
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
-import type { ContextChip } from '$lib/stores/agent/chat.svelte';
+import type { ContextChip, ResourceChip } from '$lib/stores/agent/chat.svelte';
 
 /**
  * The composer's `@` mentions. The prompt text is the source of truth: picking a
@@ -35,17 +35,17 @@ export const mentionCandidatesFor = (
 	query: string,
 	noteTree: readonly NoteSummary[],
 	skills: readonly SkillSummary[]
-): ContextChip[] => {
+): ResourceChip[] => {
 	const needle = query.toLowerCase();
 	const live = noteTree.filter((entry) => !entry.archivedAt && matches(entry.title, needle));
 	const notes = live
 		.filter((entry) => entry.kind !== 'folder')
 		.slice(0, NOTE_CANDIDATES)
-		.map((note): ContextChip => ({ kind: 'note', id: note.id, name: note.title }));
+		.map((note): ResourceChip => ({ kind: 'note', id: note.id, name: note.title }));
 	const folders = live
 		.filter((entry) => entry.kind === 'folder')
 		.slice(0, FOLDER_CANDIDATES)
-		.map((folder): ContextChip => ({
+		.map((folder): ResourceChip => ({
 			kind: 'folder',
 			id: folder.id,
 			name: folder.title,
@@ -54,7 +54,7 @@ export const mentionCandidatesFor = (
 	const matched = skills
 		.filter((skill) => matches(skill.name, needle))
 		.slice(0, SKILL_CANDIDATES)
-		.map((skill): ContextChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
+		.map((skill): ResourceChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
 	return [...notes, ...folders, ...matched];
 };
 
@@ -68,9 +68,15 @@ export const withMention = (prompt: string, chip: ContextChip): string =>
 export const withoutMention = (prompt: string, chip: ContextChip): string =>
 	prompt.split(tokenOf(chip)).join('').replace(/ {2,}/g, ' ');
 
-/** The chips still spoken for by the prompt text. */
+/**
+ * The chips still spoken for by the prompt text.
+ *
+ * A pinned selection is not spoken for by anything: it has no sayable name, so there is no
+ * token to keep or delete, and it is held on by having been pinned. Only the tag-driven
+ * chips answer to the sentence.
+ */
 export const liveChips = (prompt: string, chips: readonly ContextChip[]): ContextChip[] =>
-	chips.filter((chip) => prompt.includes(tokenOf(chip)));
+	chips.filter((chip) => chip.kind === 'selection' || prompt.includes(tokenOf(chip)));
 
 /**
  * Every note under a folder, however deep. Folders themselves carry no content, so

@@ -8,6 +8,17 @@ const selectionSchema = z.object({
 	to: z.number().int().nonnegative(),
 	text: z.string()
 });
+/** The same excerpt budget the snapshot has always applied, now on the field that carries it. */
+const SELECTION_TEXT_LIMIT = 12000;
+const pinnedSelectionSchema = selectionSchema.extend({
+	text: z.string().max(SELECTION_TEXT_LIMIT)
+});
+/**
+ * Pinning is a per-message gesture and each pin is its own chip, so the cap is about what a
+ * composer can plausibly hold rather than about tokens — the per-note budget downstream
+ * handles size.
+ */
+const MAX_PINNED_SELECTIONS = 8;
 const noteContextSchema = z.object({ id, title: z.string().max(500), projectId: id });
 const appContextSchema = z.object({
 	version: z.literal(1),
@@ -76,7 +87,6 @@ const appContextSchema = z.object({
 				.optional()
 		})
 		.optional(),
-	selection: selectionSchema.extend({ text: z.string().max(12000) }).optional(),
 	recentInteractions: z
 		.array(
 			z.object({
@@ -119,7 +129,8 @@ export const submitAgentRunSchema = z
 		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
 		projectId: id.optional(),
 		noteId: id.optional(),
-		selection: selectionSchema.optional(),
+		selection: pinnedSelectionSchema.optional(),
+		selections: z.array(pinnedSelectionSchema).max(MAX_PINNED_SELECTIONS).optional(),
 		contextNoteIds: z.array(id).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
 		requestedSkillNoteIds: z.array(id).optional(),

@@ -585,6 +585,7 @@ export class Agent implements AgentController {
 				: {}),
 			...((contextNoteId ?? input.noteId) ? { noteId: contextNoteId ?? input.noteId } : {}),
 			...(input.selection ? { selection: input.selection } : {}),
+			...(input.selections?.length ? { selections: input.selections } : {}),
 			...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
 			...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
 			...(input.requestedSkillNoteIds

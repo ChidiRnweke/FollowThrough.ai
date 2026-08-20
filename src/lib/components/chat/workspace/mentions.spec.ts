@@ -33,6 +33,19 @@ const skill = (name: string, noteId: NoteId): SkillSummary =>
 
 const folderChip: ContextChip = { kind: 'folder', id: id(1), name: 'Research', noteCount: 2 };
 const noteChip: ContextChip = { kind: 'note', id: id(2), name: 'Q3 Planning' };
+const selectionChip: ContextChip = {
+	kind: 'selection',
+	id: `${id(2)}:12-41`,
+	name: 'Q3 Planning',
+	wordCount: 6,
+	selection: {
+		noteId: id(2),
+		revision: 4,
+		from: 12,
+		to: 41,
+		text: 'We ship the export flow first.'
+	}
+};
 
 describe('mention query detection', () => {
 	it('reads the word being typed after an @', () => {
@@ -87,6 +100,14 @@ describe('chips the prompt still speaks for', () => {
 
 	it('judges each chip on its own tag', () => {
 		expect(liveChips('@Q3 Planning only', [folderChip, noteChip])).toEqual([noteChip]);
+	});
+
+	it('keeps a pinned passage, which has no tag to type away', () => {
+		expect(liveChips('what does this commit me to?', [selectionChip])).toEqual([selectionChip]);
+	});
+
+	it('keeps a pinned passage even when its note title is nowhere in the sentence', () => {
+		expect(liveChips('', [selectionChip, noteChip])).toEqual([selectionChip]);
 	});
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import ChatComposer from './chat-composer.svelte';
-import type { ContextChip } from '$lib/stores/agent/chat.svelte';
+import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
 import type { NoteId } from '$lib/models/notes';
 
 const skillChip: ContextChip = { kind: 'skill', id: '1' as NoteId, name: 'Note analyzer' };
@@ -11,6 +11,20 @@ const folderChip: ContextChip = {
 	id: '3' as NoteId,
 	name: 'Research',
 	noteCount: 4
+};
+
+const selectionChip: SelectionChip = {
+	kind: 'selection',
+	id: '4:12-41',
+	name: 'Q3 planning',
+	wordCount: 6,
+	selection: {
+		noteId: '4' as NoteId,
+		revision: 2,
+		from: 12,
+		to: 41,
+		text: 'We ship the export flow first.'
+	}
 };
 
 const base = {
@@ -74,6 +88,46 @@ describe('ChatComposer context chips', () => {
 	it('shows how many notes a folder chip stands for', async () => {
 		const screen = await render(ChatComposer, { ...base, chips: [folderChip] });
 		await expect.element(screen.getByText('4 notes')).toBeInTheDocument();
+	});
+
+	it('says how much of the note a pinned passage brought along', async () => {
+		const screen = await render(ChatComposer, { ...base, chips: [selectionChip] });
+		await expect.element(screen.getByText('6 words')).toBeInTheDocument();
+	});
+});
+
+describe('ChatComposer live selection', () => {
+	/**
+	 * The highlight is not the note and is about to be some other part of it, so the chip
+	 * says what it is rather than borrowing the note's title.
+	 */
+	it('labels the highlighted passage as the current selection', async () => {
+		const screen = await render(ChatComposer, { ...base, liveSelection: selectionChip });
+		await expect.element(screen.getByText('Current selection')).toBeInTheDocument();
+	});
+
+	it('reports its dismissal as automatic, so the panel remembers rather than unpins', async () => {
+		const dismissed: string[] = [];
+		const screen = await render(ChatComposer, {
+			...base,
+			liveSelection: selectionChip,
+			onremovechip: (chip, automatic) => dismissed.push(`${chip.id}:${automatic}`)
+		});
+		// By label, not by role: the hover-card trigger wrapping the badge is itself a button
+		// whose accessible name swallows the dismiss button's.
+		await screen.getByLabelText('Remove the current selection from context').click();
+		expect(dismissed).toEqual(['4:12-41:true']);
+	});
+
+	it('keeps a pinned passage distinguishable from the highlighted one', async () => {
+		const screen = await render(ChatComposer, {
+			...base,
+			liveSelection: selectionChip,
+			chips: [{ ...selectionChip, id: '4:60-80' }]
+		});
+		await expect
+			.element(screen.getByLabelText('Remove the passage pinned from Q3 planning from context'))
+			.toBeInTheDocument();
 	});
 });
 
