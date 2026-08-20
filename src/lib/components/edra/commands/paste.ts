@@ -122,15 +122,24 @@ export const isLiteralPasteShortcut = (event: KeyboardEvent): boolean =>
 /**
  * The first image file on the clipboard, when the paste carries one.
  *
- * Screenshots arrive as files, not text: the snipping-tool-style copy puts a
- * `File` on `clipboardData.files` and no usable `text/plain`, so the Markdown
- * path below never sees them.
+ * Screenshots arrive as files, not text. Depending on the browser and operating
+ * system, a snipping-tool-style copy may expose that file through `files` or only
+ * through a file-kind item, with no usable `text/plain` in either case.
  */
 export const clipboardImage = (event: ClipboardEvent): File | undefined => {
-	const files = event.clipboardData?.files;
-	if (!files) return undefined;
+	const clipboard = event.clipboardData;
+	if (!clipboard) return undefined;
+	const files = clipboard.files;
 	for (const file of files) {
 		if (file.type.startsWith('image/')) return file;
+	}
+	// Windows Snipping Tool can expose its bitmap only as a file-kind item. Check
+	// items after files so browsers that populate both representations still yield
+	// one upload.
+	for (const item of clipboard.items) {
+		if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+		const file = item.getAsFile();
+		if (file) return file;
 	}
 	return undefined;
 };

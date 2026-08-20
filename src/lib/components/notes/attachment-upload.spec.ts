@@ -67,6 +67,44 @@ describe('uploadNoteAttachment', () => {
 		expect(result).toBe(`/api/attachments/${attachment.id}/content`);
 	});
 
+	it('gives repeated clipboard filenames independent attachment paths', async () => {
+		const paths: string[] = [];
+		const recording = transport({
+			initiate: async (input) => {
+				paths.push(input.path);
+				return { upload, uploadUrl: 'http://127.0.0.1:9/put', requiredHeaders: {} };
+			}
+		});
+		await uploadNoteAttachment(noteId, file, recording);
+		await uploadNoteAttachment(noteId, file, recording);
+		expect(new Set(paths).size).toBe(2);
+	});
+
+	it('keeps the original filename in the inline attachment path', async () => {
+		let path = '';
+		const recording = transport({
+			initiate: async (input) => {
+				path = input.path;
+				return { upload, uploadUrl: 'http://127.0.0.1:9/put', requiredHeaders: {} };
+			}
+		});
+		await uploadNoteAttachment(noteId, file, recording);
+		expect(path.endsWith('/draft.png')).toBe(true);
+	});
+
+	it('derives a filename for an unnamed clipboard image', async () => {
+		let path = '';
+		const unnamed = new File(['hello'], '', { type: 'image/jpeg' });
+		const recording = transport({
+			initiate: async (input) => {
+				path = input.path;
+				return { upload, uploadUrl: 'http://127.0.0.1:9/put', requiredHeaders: {} };
+			}
+		});
+		await uploadNoteAttachment(noteId, unnamed, recording);
+		expect(path.endsWith('/pasted-image.jpg')).toBe(true);
+	});
+
 	it('propagates an object-storage rejection with the S3 message', async () => {
 		const failing = transport({
 			put: async () =>

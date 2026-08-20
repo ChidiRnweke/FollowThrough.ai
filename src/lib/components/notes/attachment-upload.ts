@@ -26,6 +26,18 @@ const liveTransport: AttachmentUploadTransport = {
 	complete: (uploadId) => completeAttachmentUpload({ uploadId })
 };
 
+const pastedImageName = (file: File): string => {
+	if (file.name.trim()) return file.name;
+	if (file.type === 'image/jpeg') return 'pasted-image.jpg';
+	if (file.type === 'image/webp') return 'pasted-image.webp';
+	if (file.type === 'image/gif') return 'pasted-image.gif';
+	return 'pasted-image.png';
+};
+
+/** Each inline image is independent; the attachments page owns same-path replacement. */
+const inlineAttachmentPath = (file: File): string =>
+	`inline/${crypto.randomUUID()}/${pastedImageName(file)}`;
+
 /** Uploads editor media and returns the stable application-owned content URL. */
 export const uploadNoteAttachment = async (
 	noteId: NoteId,
@@ -34,7 +46,7 @@ export const uploadNoteAttachment = async (
 ): Promise<string> => {
 	const intent = await transport.initiate({
 		noteId,
-		path: file.name || `pasted-${Date.now()}.png`,
+		path: inlineAttachmentPath(file),
 		mediaType: file.type || 'image/png',
 		byteSize: file.size,
 		checksumSha256: await fileChecksumSha256(file)
