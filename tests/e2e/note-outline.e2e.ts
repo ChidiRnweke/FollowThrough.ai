@@ -11,7 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
  * browser in `note-outline-rail.svelte.spec.ts`.
  */
 
-/** Comfortably past the rail's 108ch container threshold, even when halved. */
+/** Comfortably past the rail's 112ch container threshold, even when halved. */
 const WIDE = { width: 2560, height: 1100 };
 
 /**

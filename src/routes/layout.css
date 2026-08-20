@@ -906,10 +906,10 @@
 
 	/* The reading column is 90ch centred inside the pane's 2rem padding, so the
 	   gutter is (pane - 4rem - 90ch) / 2. The rail wants ~1.5rem of ticks plus
-	   0.75rem of separation, which resolves to roughly 90ch + 8.5rem. Stated in
-	   `ch` rather than `rem` so it tracks `--note-content-width` if the measure
-	   or the typeface ever changes. */
-	@container pane (min-width: 108ch) {
+	   2rem of separation from the text, which resolves to roughly 90ch + 11rem.
+	   Stated in `ch` rather than `rem` so it tracks `--note-content-width` if the
+	   measure or the typeface ever changes. */
+	@container pane (min-width: 112ch) {
 		.note-outline {
 			display: block;
 			position: sticky;
@@ -931,7 +931,7 @@
 		   the pane's ScrollArea is `orientation="both"`, and content left of the
 		   scroll origin does not extend `scrollWidth` in LTR, so a rail wider
 		   than its gutter is clipped instead of summoning a scrollbar. */
-		inset-inline-end: calc(100% + 0.75rem);
+		inset-inline-end: calc(100% + 2rem);
 		width: max-content;
 	}
 
