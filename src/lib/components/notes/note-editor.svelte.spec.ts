@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { GapCursor } from '@tiptap/pm/gapcursor';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import NoteEditor from './note-editor.svelte';
+import '../../../routes/layout.css';
 import {
 	DiagramDeletion,
 	deleteDiagramBackward
@@ -241,6 +242,50 @@ describe('Diagram selection affordances', () => {
 		editor.destroy();
 
 		expect(outline).toEqual({ style: 'solid', width: '2px' });
+	});
+});
+
+const typographyDocument = documentWith(
+	...([1, 2, 3, 4] as const).map((level) => ({
+		type: 'heading',
+		attrs: { level },
+		content: [{ type: 'text', text: `Heading ${level}` }]
+	})),
+	{
+		type: 'paragraph',
+		content: [
+			{ type: 'text', text: 'Body ' },
+			{ type: 'text', marks: [{ type: 'bold' }], text: 'bold' }
+		]
+	}
+);
+
+const computedTypography = (selector: string) => {
+	const editor = createTestEditor(typographyDocument);
+	editor.view.dom.classList.add('tiptap');
+	document.body.append(editor.view.dom);
+	const element = editor.view.dom.querySelector<HTMLElement>(selector)!;
+	const styles = getComputedStyle(element);
+	const result = {
+		fontSize: styles.fontSize,
+		lineHeight: styles.lineHeight,
+		fontWeight: styles.fontWeight
+	};
+	editor.view.dom.remove();
+	editor.destroy();
+	return result;
+};
+
+describe('Authored note typography', () => {
+	it.each([
+		['h1', '32px', '38px', '800'],
+		['h2', '24px', '32px', '700'],
+		['h3', '20px', '28px', '600'],
+		['h4', '18px', '26px', '600'],
+		['p', '16px', '24.8px', '400'],
+		['strong', '16px', '24.8px', '600']
+	])('gives %s its authored hierarchy step', (selector, fontSize, lineHeight, fontWeight) => {
+		expect(computedTypography(selector)).toEqual({ fontSize, lineHeight, fontWeight });
 	});
 });
 

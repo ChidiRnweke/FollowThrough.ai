@@ -6,6 +6,9 @@
 .tiptap {
 	flex: 1;
 	min-height: 100%;
+	font-size: var(--note-body-font-size);
+	font-weight: var(--note-body-font-weight);
+	line-height: var(--note-body-line-height);
 	caret-color: var(--foreground);
 	cursor: var(--cursor-ibeam), text;
 	outline: none;
@@ -144,28 +147,40 @@
 }
 
 .tiptap h1 {
-	font-size: 2.25rem;
-	font-weight: 800;
-	line-height: 2.5rem;
+	font-size: var(--note-h1-font-size);
+	font-weight: var(--note-h1-font-weight);
+	line-height: var(--note-h1-line-height);
 	letter-spacing: -0.015em;
 	scroll-margin: 5rem;
 }
 
 .tiptap h2 {
-	font-size: 1.5rem;
-	font-weight: 700;
+	font-size: var(--note-h2-font-size);
+	font-weight: var(--note-h2-font-weight);
+	line-height: var(--note-h2-line-height);
 }
 
 .tiptap h3 {
-	font-size: 1.25rem;
-	font-weight: 600;
+	font-size: var(--note-h3-font-size);
+	font-weight: var(--note-h3-font-weight);
+	line-height: var(--note-h3-line-height);
 }
 
-.tiptap h4,
+.tiptap h4 {
+	font-size: var(--note-h4-font-size);
+	font-weight: var(--note-h4-font-weight);
+	line-height: var(--note-h4-line-height);
+}
+
 .tiptap h5,
 .tiptap h6 {
 	font-size: 1rem;
 	font-weight: 600;
+}
+
+.tiptap strong {
+	font-size: inherit;
+	font-weight: var(--note-bold-font-weight);
 }
 
 .tiptap em {

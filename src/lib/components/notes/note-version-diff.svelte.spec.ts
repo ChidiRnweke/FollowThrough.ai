@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteVersionDiff from './note-version-diff.svelte';
 import type { ProseMirrorDocument } from '$lib/models/notes';
+import '../../../routes/layout.css';
 
 const para = (text: string) => ({
 	type: 'paragraph',
@@ -12,6 +13,21 @@ const doc = (...content: Record<string, unknown>[]): ProseMirrorDocument => ({
 	type: 'doc',
 	content
 });
+
+const typographyDoc = doc(
+	...([1, 2, 3, 4] as const).map((level) => ({
+		type: 'heading',
+		attrs: { level },
+		content: [{ type: 'text', text: `Heading ${level}` }]
+	})),
+	{
+		type: 'paragraph',
+		content: [
+			{ type: 'text', text: 'Body ' },
+			{ type: 'text', marks: [{ type: 'bold' }], text: 'bold' }
+		]
+	}
+);
 
 const base = {
 	base: doc(para('kept'), para('rewritten')),
@@ -77,4 +93,30 @@ describe('NoteVersionDiff', () => {
 		const screen = await render(NoteVersionDiff, base);
 		expect(await screen.getByText('1 added · 1 removed').all()).not.toHaveLength(0);
 	});
+
+	it.each([
+		['h1', '32px', '38px', '800'],
+		['h2', '24px', '32px', '700'],
+		['h3', '20px', '28px', '600'],
+		['h4', '18px', '26px', '600'],
+		['p', '16px', '24.8px', '400'],
+		['strong', '16px', '24.8px', '600']
+	])(
+		'inherits the authored %s typography in full-size diffs',
+		async (selector, fontSize, lineHeight, fontWeight) => {
+			const screen = await render(NoteVersionDiff, {
+				...base,
+				base: typographyDoc,
+				candidate: typographyDoc
+			});
+			const element = screen.container.querySelector<HTMLElement>(`.ProseMirror ${selector}`)!;
+			const styles = getComputedStyle(element);
+
+			expect({
+				fontSize: styles.fontSize,
+				lineHeight: styles.lineHeight,
+				fontWeight: styles.fontWeight
+			}).toEqual({ fontSize, lineHeight, fontWeight });
+		}
+	);
 });

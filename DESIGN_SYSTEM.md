@@ -55,6 +55,13 @@
   empty-strip placeholder are chrome-scale exceptions, not content captions. `xs` is reserved for
   eyebrows and provenance captions.
 - **Type scale:** app code uses the named utilities in `layout.css` instead of raw heading size classes — `page-title` (one per page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group of items), and `provenance-caption` (per-item metadata). The ladder is eyebrow/caption → body → section-title → page-title. Form labels (shadcn `Label`) are small and muted so values lead; `Field.Title` stays at body size above its muted description.
+- **Authored note scale:** rich note and skill-editor content has its own document ladder, separate
+  from app chrome: body and inline bold are 16px / 24.8px at weights 400 and 600; H1 is
+  32px / 38px at 800; H2 is 24px / 32px at 700; H3 is 20px / 28px at 600; and H4 is
+  18px / 26px at 600. Full-size read-only note diffs inherit the same ladder. Compact diff
+  previews embedded in chat deliberately keep their smaller local scale so they remain subordinate
+  to the conversation. Heading margins, tracking, colour, and face remain shared with the existing
+  Swiss document treatment.
 - Spacing follows the existing Tailwind scale. Corners use the shared shadcn radius family and elevation stays flat.
 - **Spacing is the hierarchy.** In a Swiss layout with flat surfaces and one accent, the gap
   between two things is the primary statement about whether they belong together — so gaps

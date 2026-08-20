@@ -81,6 +81,25 @@
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	--note-content-width: 90ch;
+	/* Authored document type is deliberately independent from app chrome. The
+	   editor, skill content, and full-size diffs share this ladder; compact diff
+	   previews override it locally to remain subordinate to their chat turn. */
+	--note-body-font-size: 1rem;
+	--note-body-line-height: 1.55rem;
+	--note-body-font-weight: 400;
+	--note-bold-font-weight: 600;
+	--note-h1-font-size: 2rem;
+	--note-h1-line-height: 2.375rem;
+	--note-h1-font-weight: 800;
+	--note-h2-font-size: 1.5rem;
+	--note-h2-line-height: 2rem;
+	--note-h2-font-weight: 700;
+	--note-h3-font-size: 1.25rem;
+	--note-h3-line-height: 1.75rem;
+	--note-h3-font-weight: 600;
+	--note-h4-font-size: 1.125rem;
+	--note-h4-line-height: 1.625rem;
+	--note-h4-font-weight: 600;
 	/* How wide a question is allowed to get before it stops reading as one. The user's
 	   turn is right-aligned against a wash and the agent's runs flush left, so the two
 	   are told apart by side — which only holds while the washed side is visibly short
