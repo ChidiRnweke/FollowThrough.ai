@@ -27,8 +27,10 @@ import type { DrawioPreviewProps, DrawioReferenceView } from './nodes.js';
 import type { NoteLinkTarget } from './NoteLinkSuggestion.js';
 import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
-import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
-import { setTocItems } from '../toc.svelte';
+import TableOfContents, {
+	getHierarchicalIndexes,
+	type TableOfContentData
+} from '@tiptap/extension-table-of-contents';
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
 import { Proofread, type ProofreadIssueReport } from './Proofread.js';
@@ -88,6 +90,15 @@ export interface EdraEditorProps {
 	findLinkableNotes?: (query: string) => readonly NoteLinkTarget[];
 	/** Follow a note link. Omitting it leaves links inert rather than navigating badly. */
 	onOpenNoteLink?: (noteId: string, options: { readonly background: boolean }) => boolean;
+	/**
+	 * The note's headings, in document order, whenever the structure changes.
+	 *
+	 * Raw extension data: shaping it into a product model happens above this
+	 * boundary, and structure is all that is on offer here anyway — which heading
+	 * is *active* depends on the scrollport and the sticky note header, neither of
+	 * which the editor is in a position to judge.
+	 */
+	onTocUpdate?: (headings: TableOfContentData) => void;
 	/**
 	 * Check a block of prose for spelling and grammar. Injected like everything
 	 * else here — the editor never learns which checker is behind it. Omitting it
@@ -172,8 +183,20 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			}),
 			TableOfContents.configure({
 				getIndex: getHierarchicalIndexes,
+				// Deliberately off, and an explicit key rather than an omission: TipTap's
+				// `configure` merges by `Object.keys`, so leaving it out would keep the
+				// extension's `() => window` default.
+				//
+				// Its scroll tracking cannot be made correct here by configuration. The
+				// listener is bound once in `onCreate`, while `editor.view.dom` is still
+				// detached, so even a lazy resolver returns null and it lands on `window`
+				// anyway. And its test is `scrollPosition >= domElement.offsetTop`, where
+				// `offsetTop` is measured from the absolutely positioned workspace pane
+				// layer rather than the scrollport, and knows nothing of the sticky note
+				// header. `NoteEditor` measures the active heading against both instead.
+				scrollParent: undefined,
 				onUpdate: (indexes) => {
-					setTocItems(indexes);
+					props?.onTocUpdate?.(indexes);
 				}
 			})
 		],

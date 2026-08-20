@@ -151,7 +151,13 @@
 	font-weight: var(--note-h1-font-weight);
 	line-height: var(--note-h1-line-height);
 	letter-spacing: -0.015em;
-	scroll-margin: 5rem;
+}
+
+/* Every level, not just h1: the outline rail can jump to any heading, and the
+   note's utility header is sticky, so a target that stopped flush with the
+   scrollport top would come to rest underneath it. */
+.tiptap :is(h1, h2, h3, h4, h5, h6) {
+	scroll-margin-block-start: calc(var(--note-header-h, 0px) + 1.5rem);
 }
 
 .tiptap h2 {
@@ -176,6 +182,49 @@
 .tiptap h6 {
 	font-size: 1rem;
 	font-weight: 600;
+}
+
+/* Word-style section numbering, toggled per document from the note's "…" menu.
+   Purely visual: the numbers are generated content, so they never enter the
+   document, its plain text, or a copy selection. The class sits on a boxless
+   wrapper in the note workspace, so the counters scope to one editor. */
+.note-section-numbering .tiptap {
+	counter-reset: note-h1;
+}
+
+.note-section-numbering .tiptap h1 {
+	counter-increment: note-h1;
+	counter-reset: note-h2;
+}
+
+.note-section-numbering .tiptap h2 {
+	counter-increment: note-h2;
+	counter-reset: note-h3;
+}
+
+.note-section-numbering .tiptap h3 {
+	counter-increment: note-h3;
+	counter-reset: note-h4;
+}
+
+.note-section-numbering .tiptap h4 {
+	counter-increment: note-h4;
+}
+
+.note-section-numbering .tiptap h1::before {
+	content: counter(note-h1) '.\2002';
+}
+
+.note-section-numbering .tiptap h2::before {
+	content: counter(note-h1) '.' counter(note-h2) '\2002';
+}
+
+.note-section-numbering .tiptap h3::before {
+	content: counter(note-h1) '.' counter(note-h2) '.' counter(note-h3) '\2002';
+}
+
+.note-section-numbering .tiptap h4::before {
+	content: counter(note-h1) '.' counter(note-h2) '.' counter(note-h3) '.' counter(note-h4) '\2002';
 }
 
 .tiptap strong {

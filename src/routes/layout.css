@@ -753,8 +753,13 @@
 		padding-block: 1rem;
 		/* The reading gutter keys off the pane's own width, not the viewport's:
 		   in a split the pane is a fraction of the shell and a media query
-		   cannot see the divider ratio. */
-		container-type: inline-size;
+		   cannot see the divider ratio.
+
+		   Named, because `.note-measure` is itself a container: an *unnamed*
+		   query on anything inside the note would resolve against the 90ch
+		   column and never see the pane. Naming is backwards compatible —
+		   unnamed queries still match a named container. */
+		container: pane / inline-size;
 	}
 
 	.workspace-pane-layer[data-pane-role='primary'] {
@@ -878,6 +883,136 @@
 
 		.workspace-panes[data-split-active='true']
 			.workspace-pane-layer:not([data-narrow-active='true']) {
+			display: none;
+		}
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Note outline rail
+
+   A dormant stack of tick marks in the note's left gutter that expands, on
+   hover or keyboard focus, into the list of headings. It lives beside the pane
+   geometry because it is positioned against the reading column, not against
+   anything the component itself can see.
+   --------------------------------------------------------------------------- */
+@layer components {
+	.note-outline {
+		/* Below the threshold there is no gutter to sit in and the rail would
+		   land on the prose. No drawer, no docked fallback: the note header is
+		   the better home for an outline on a narrow pane, if one is ever wanted. */
+		display: none;
+	}
+
+	/* The reading column is 90ch centred inside the pane's 2rem padding, so the
+	   gutter is (pane - 4rem - 90ch) / 2. The rail wants ~1.5rem of ticks plus
+	   0.75rem of separation, which resolves to roughly 90ch + 8.5rem. Stated in
+	   `ch` rather than `rem` so it tracks `--note-content-width` if the measure
+	   or the typeface ever changes. */
+	@container pane (min-width: 108ch) {
+		.note-outline {
+			display: block;
+			position: sticky;
+			/* Clear the note's own sticky utility header. */
+			top: calc(var(--note-header-h, 0px) + 2.5rem);
+			/* Above the prose, below the tab strip (z-30) and every overlay (z-50). */
+			z-index: 20;
+			/* Zero height, and the column's `gap-4` cancelled: the rail is pinned
+			   beside the flow it sits in and must cost it no vertical space. */
+			height: 0;
+			margin-block-end: -1rem;
+		}
+	}
+
+	.note-outline-rail {
+		position: absolute;
+		top: 0;
+		/* Outside the measure, in the gutter. Left is the safe side to overflow:
+		   the pane's ScrollArea is `orientation="both"`, and content left of the
+		   scroll origin does not extend `scrollWidth` in LTR, so a rail wider
+		   than its gutter is clipped instead of summoning a scrollbar. */
+		inset-inline-end: calc(100% + 0.75rem);
+		width: max-content;
+	}
+
+	.note-outline-ticks {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		align-items: flex-end;
+		padding: 0.25rem 0;
+		transition: opacity var(--duration-disclosure) var(--ease-standard);
+	}
+
+	.note-outline-ticks li {
+		height: 2px;
+		border-radius: 9999px;
+		background-color: color-mix(in oklab, var(--color-muted-foreground) 40%, transparent);
+		transition:
+			background-color var(--duration-micro) var(--ease-standard),
+			width var(--duration-micro) var(--ease-standard);
+	}
+
+	/* Depth reads as width, so the shape of the document is legible at rest. */
+	.note-outline-ticks li[data-level='1'] {
+		width: 1.25rem;
+	}
+	.note-outline-ticks li[data-level='2'] {
+		width: 1rem;
+	}
+	.note-outline-ticks li[data-level='3'] {
+		width: 0.75rem;
+	}
+	.note-outline-ticks li[data-level='4'],
+	.note-outline-ticks li[data-level='5'],
+	.note-outline-ticks li[data-level='6'] {
+		width: 0.5rem;
+	}
+
+	.note-outline-ticks li[data-active='true'] {
+		background-color: var(--color-brand);
+	}
+
+	.note-outline-list {
+		position: absolute;
+		top: 0;
+		inset-inline-start: 0;
+		width: 16rem;
+		max-height: 60vh;
+		overflow-y: auto;
+		padding: 0.25rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		background-color: var(--color-popover);
+		color: var(--color-popover-foreground);
+
+		/* Hidden by opacity rather than `display`, so every button stays
+		   focusable and in the accessibility tree — which is what makes the
+		   keyboard reveal below work without any JS. */
+		opacity: 0;
+		pointer-events: none;
+		translate: -0.25rem 0;
+		transition:
+			opacity var(--duration-disclosure) var(--ease-standard),
+			translate var(--duration-disclosure) var(--ease-standard);
+	}
+
+	/* The expansion is pure CSS, so the global reduced-motion guard already
+	   neutralises it — no JS transition to opt out separately. */
+	.note-outline-rail:hover .note-outline-list,
+	.note-outline-rail:focus-within .note-outline-list {
+		opacity: 1;
+		pointer-events: auto;
+		translate: 0 0;
+	}
+
+	.note-outline-rail:hover .note-outline-ticks,
+	.note-outline-rail:focus-within .note-outline-ticks {
+		opacity: 0;
+	}
+
+	@media print {
+		.note-outline {
 			display: none;
 		}
 	}

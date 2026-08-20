@@ -17,12 +17,13 @@
 		NoteRevisionId,
 		NoteRevisionSummary,
 		NoteView,
+		SectionNumberingLevel,
 		TextSelection,
 		VersionedNote
 	} from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { noteEtag } from '$lib/models/notes';
+	import { noteEtag, sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from 'svelte-sonner';
@@ -44,6 +45,8 @@
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
+	import NoteOutlineRail from '../note-outline-rail.svelte';
+	import type { OutlineHeading } from '$lib/models/notes';
 	import { FtSuggestion as Lightbulb } from '$lib/components/icons';
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
@@ -52,7 +55,8 @@
 		discardNoteDraft,
 		listNoteRevisions,
 		getNoteRevision,
-		restoreNoteRevision
+		restoreNoteRevision,
+		setNoteSectionNumbering
 	} from '$lib/remote/notes/notes.remote';
 
 	let {
@@ -96,6 +100,12 @@
 	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
 	let reviewDialogOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
+	// The note's shape, as the editor reports it. Local `$state` rather than a
+	// store: the outline is derived from the document and re-emitted on every
+	// remount, and this component is instantiated once per pane — so a split
+	// gets two independent rails for free.
+	let outline = $state<readonly OutlineHeading[]>([]);
+	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
 	let syncReady = $state(false);
 	let dirty = $state(false);
@@ -116,6 +126,24 @@
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
+	// The numbering cascade arrives resolved from the server. A writable derived so a
+	// toggle applies instantly; the server value takes over again on the next view
+	// refresh, which is also how external changes (another device, or a project/app
+	// default edit) arrive.
+	let sectionNumbering = $derived(view.sectionNumbering);
+
+	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
+		try {
+			const output = await setNoteSectionNumbering({
+				noteId: note.id,
+				enabled: sectionNumberingOverrideFor(level)
+			});
+			sectionNumbering = output.sectionNumbering;
+			await refreshView();
+		} catch {
+			toast.error('Could not update section numbering. Try again.');
+		}
+	}
 
 	/**
 	 * Notes offerable as `@` link targets. Scoped to this note's project because a
@@ -787,9 +815,15 @@
 <svelte:window {onkeydown} {onbeforeunload} />
 
 <div
-	class="note-measure @container mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
+	class="note-measure @container relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
 	style:--note-header-h="{utilityHeaderHeight}px"
 >
+	<NoteOutlineRail
+		headings={outline}
+		activeId={activeHeading}
+		numbered={view.sectionNumbering.effective}
+		onpick={(id) => editorRef?.scrollToHeading(id)}
+	/>
 	<NoteWorkspaceHeader
 		{shell}
 		{note}
@@ -803,6 +837,7 @@
 		{publishing}
 		{comparable}
 		{folders}
+		{sectionNumbering}
 		{onCloseSplit}
 		bind:height={utilityHeaderHeight}
 		ontitle={(title) => {
@@ -818,6 +853,7 @@
 		oncompare={askCompare}
 		ontogglepin={() => void togglePin()}
 		onmove={(parentId) => void moveTo(parentId)}
+		onsectionnumbering={(level) => void changeSectionNumbering(level)}
 		ondiscard={() => {
 			if (confirm('Discard all changes since last publish?')) void discardDraft();
 		}}
@@ -840,39 +876,47 @@
 	{/if}
 
 	{#if syncReady}
-		<NoteEditor
-			bind:this={editorRef}
-			noteId={note.id}
-			revision={note.currentRevision}
-			{inlineSuggestionsEnabled}
-			document={note.document}
-			references={view.references}
-			diagrams={view.diagrams}
-			skills={shell.skills}
-			{linkableNotes}
-			onOpenNote={(noteId, options) =>
-				options.background ? workbench.openTabInBackground(noteId) : void workbench.openTab(noteId)}
-			{perNote}
-			onchange={markDirty}
-			{activeAction}
-			actionCancelling={cancellingAction}
-			onInsertionPointMoved={(runId, position) =>
-				actionRuns.updateContext(runId, { insertAt: position })}
-			oncancelaction={() => {
-				const run = actionRuns.activeSelectionAction;
-				if (run) void actionRuns.cancel(run.runId);
-			}}
-			oncancelmermaid={(kind) => {
-				const run = actionRuns.find(kind);
-				if (run) void actionRuns.cancel(run.runId);
-			}}
-			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
-			onskill={runSkill}
-			onask={(prompt) => askSelection(prompt)}
-			onreviseMermaid={reviseMermaid}
-			onconvertMermaid={convertMermaid}
-			onrejectDrawio={rejectDrawio}
-		/>
+		<!-- `contents` keeps the wrapper boxless: it exists only to scope the
+		     section-numbering counters to this editor, not to change layout. -->
+		<div class="contents" class:note-section-numbering={sectionNumbering.effective}>
+			<NoteEditor
+				bind:this={editorRef}
+				noteId={note.id}
+				revision={note.currentRevision}
+				{inlineSuggestionsEnabled}
+				document={note.document}
+				references={view.references}
+				diagrams={view.diagrams}
+				skills={shell.skills}
+				{linkableNotes}
+				onOpenNote={(noteId, options) =>
+					options.background
+						? workbench.openTabInBackground(noteId)
+						: void workbench.openTab(noteId)}
+				{perNote}
+				onchange={markDirty}
+				onoutline={(headings) => (outline = headings)}
+				onactiveheading={(id) => (activeHeading = id)}
+				{activeAction}
+				actionCancelling={cancellingAction}
+				onInsertionPointMoved={(runId, position) =>
+					actionRuns.updateContext(runId, { insertAt: position })}
+				oncancelaction={() => {
+					const run = actionRuns.activeSelectionAction;
+					if (run) void actionRuns.cancel(run.runId);
+				}}
+				oncancelmermaid={(kind) => {
+					const run = actionRuns.find(kind);
+					if (run) void actionRuns.cancel(run.runId);
+				}}
+				onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
+				onskill={runSkill}
+				onask={(prompt) => askSelection(prompt)}
+				onreviseMermaid={reviseMermaid}
+				onconvertMermaid={convertMermaid}
+				onrejectDrawio={rejectDrawio}
+			/>
+		</div>
 	{:else}
 		<!-- Match the editor's eventual footprint (full viewport height minus the
 		     72px header row above) so IndexedDB init time doesn't cause

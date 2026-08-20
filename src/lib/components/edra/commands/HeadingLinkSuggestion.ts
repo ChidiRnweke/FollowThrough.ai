@@ -22,6 +22,28 @@ export interface HeadingLinkTarget {
 	readonly textContent: string;
 }
 
+/**
+ * Scroll a heading into view by its `data-toc-id`, returning whether one was found.
+ *
+ * Shared by the in-note heading link and the outline rail so both resolve the
+ * same way. Two details are deliberate:
+ *
+ * - The fallback to `getElementById` covers documents whose headings were
+ *   serialized with a plain `id` but no `data-toc-id`.
+ * - Smooth scrolling is gated here rather than left to CSS: the global
+ *   `prefers-reduced-motion` guard in `layout.css` neutralises CSS transitions,
+ *   but a scroll this function starts in JS runs outside it.
+ */
+export const revealHeading = (root: ParentNode, id: string): boolean => {
+	const heading =
+		root.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(id)}"]`) ??
+		document.getElementById(id);
+	if (!heading) return false;
+	const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	heading.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+	return true;
+};
+
 export interface HeadingLinkSuggestionOptions {
 	/** Candidate headings for a query. Injected so the editor stays transport-unaware. */
 	findHeadings?: (query: string) => readonly HeadingLinkTarget[];
@@ -80,13 +102,8 @@ export const HeadingLinkSuggestion = Extension.create<HeadingLinkSuggestionOptio
 						if (!(target instanceof Element)) return false;
 						const href = target.closest('a[href^="#"]')?.getAttribute('href');
 						if (!href || href.length < 2) return false;
-						const id = href.slice(1);
-						const heading =
-							view.dom.querySelector(`[data-toc-id="${CSS.escape(id)}"]`) ??
-							document.getElementById(id);
-						if (!heading) return false;
+						if (!revealHeading(view.dom, href.slice(1))) return false;
 						event.preventDefault();
-						heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
 						return true;
 					}
 				}

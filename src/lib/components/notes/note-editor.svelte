@@ -14,9 +14,13 @@
 	import type {
 		NoteId,
 		NoteLinkTarget,
+		OutlineHeading,
+		OutlineOffset,
 		ProseMirrorDocument,
 		TextSelection
 	} from '$lib/models/notes';
+	import { activeHeadingAt, outlineFrom } from '$lib/models/notes';
+	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
 	import { changedTopLevelBlockIndices } from '$lib/models/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
@@ -161,7 +165,9 @@
 		activeAction,
 		actionCancelling = false,
 		oncancelaction,
-		oncancelmermaid
+		oncancelmermaid,
+		onoutline,
+		onactiveheading
 	}: {
 		noteId: NoteId;
 		revision: number;
@@ -195,6 +201,13 @@
 		oncancelaction?: () => void;
 		/** Stops a revision or conversion started from a mermaid node in this note. */
 		oncancelmermaid?: (kind: 'revise' | 'convert') => void;
+		/** The note's headings whenever the document structure changes. */
+		onoutline?: (headings: readonly OutlineHeading[]) => void;
+		/**
+		 * The heading the reader is currently under, as the pane scrolls. Separate
+		 * from `onoutline` because it changes on scroll, which fires no transaction.
+		 */
+		onactiveheading?: (id: string | undefined) => void;
 	} = $props();
 
 	let initialized = false;
@@ -261,9 +274,76 @@
 		}
 	}
 
+	/**
+	 * Where each heading sits inside the pane's scrollport, and which one the
+	 * reader is under.
+	 *
+	 * Measured here rather than taken from the table-of-contents extension: its
+	 * own tracking compares against `offsetTop`, which is relative to the
+	 * absolutely positioned pane layer rather than the scroll container, and it
+	 * cannot see the sticky note header. Kept as a plain array, not `$state` —
+	 * it is only ever read from event handlers, and a scroll-rate proxy write
+	 * would be pure overhead.
+	 */
+	let headingOffsets: readonly OutlineOffset[] = [];
+	let measureFrame = 0;
+	let lastActiveHeading: string | undefined;
+
+	const paneViewport = (): HTMLElement | null =>
+		editor?.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? null;
+
+	/** The line down the pane at which a heading counts as the section you are in. */
+	const activationLine = (): number => {
+		const dom = editor?.view.dom;
+		if (!dom) return 0;
+		const header = getComputedStyle(dom).getPropertyValue('--note-header-h');
+		return (Number.parseFloat(header) || 0) + 24;
+	};
+
+	function measureHeadings(): void {
+		const dom = editor?.view.dom;
+		const viewport = paneViewport();
+		// A pane in a background tab stays mounted but renders at zero size, so
+		// every rect would be zero. The ResizeObserver re-measures when it returns.
+		if (!dom || !viewport || !dom.isConnected || dom.offsetParent === null) return;
+		const origin = viewport.getBoundingClientRect().top - viewport.scrollTop;
+		headingOffsets = [...dom.querySelectorAll<HTMLElement>('[data-toc-id]')].map((heading) => ({
+			id: heading.getAttribute('data-toc-id') ?? '',
+			top: heading.getBoundingClientRect().top - origin
+		}));
+		reportActiveHeading();
+	}
+
+	function reportActiveHeading(): void {
+		const viewport = paneViewport();
+		if (!viewport) return;
+		const active = activeHeadingAt(headingOffsets, viewport.scrollTop + activationLine());
+		if (active === lastActiveHeading) return;
+		lastActiveHeading = active;
+		onactiveheading?.(active);
+	}
+
+	/** Coalesced: a structure change can arrive many times per keystroke. */
+	function queueMeasure(): void {
+		if (typeof requestAnimationFrame === 'undefined' || measureFrame) return;
+		measureFrame = requestAnimationFrame(() => {
+			measureFrame = 0;
+			measureHeadings();
+		});
+	}
+
+	/** Jump to a heading. Exported so the outline rail can drive the editor. */
+	export function scrollToHeading(id: string): void {
+		if (editor && !editor.isDestroyed) revealHeading(editor.view.dom, id);
+	}
+
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
+			onTocUpdate: (headings) => {
+				onoutline?.(outlineFrom(headings));
+				queueMeasure();
+			},
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
 			onConvertMermaid: async (source, instruction) =>
 				(await onconvertMermaid(source, instruction)).id,
@@ -704,6 +784,59 @@
 		});
 		hydrated = true;
 		return retainActiveLink;
+	});
+
+	// Track the reader's position down the note. The scroll listener sits on the
+	// pane's ScrollArea viewport rather than the window — the window never scrolls
+	// here — and the observer catches the reflows that move headings without any
+	// scrolling at all: images and diagrams settling, or a background pane being
+	// promoted and gaining a size for the first time.
+	$effect(() => {
+		if (!hydrated) return;
+		let disposed = false;
+		let poll = 0;
+		let frame = 0;
+		let detach: (() => void) | undefined;
+
+		const onScroll = () => {
+			if (frame) return;
+			frame = requestAnimationFrame(() => {
+				frame = 0;
+				reportActiveHeading();
+			});
+		};
+
+		// `EditorContent` moves the editor DOM into the pane in an effect of its
+		// own, which can settle after this one — so the viewport is often still
+		// out of reach on the first pass. Retry for a bounded stretch rather than
+		// binding to nothing and going quiet for the editor's whole life.
+		const attach = (framesLeft: number): void => {
+			if (disposed) return;
+			const viewport = paneViewport();
+			const dom = editor?.view.dom;
+			if (!viewport || !dom) {
+				if (framesLeft > 0) poll = requestAnimationFrame(() => attach(framesLeft - 1));
+				return;
+			}
+			viewport.addEventListener('scroll', onScroll, { passive: true });
+			const observer = new ResizeObserver(() => queueMeasure());
+			observer.observe(dom);
+			detach = () => {
+				viewport.removeEventListener('scroll', onScroll);
+				observer.disconnect();
+			};
+			queueMeasure();
+		};
+		attach(120);
+
+		return () => {
+			disposed = true;
+			detach?.();
+			if (poll) cancelAnimationFrame(poll);
+			if (frame) cancelAnimationFrame(frame);
+			if (measureFrame) cancelAnimationFrame(measureFrame);
+			measureFrame = 0;
+		};
 	});
 
 	// Search click-through: once this editor is hydrated, a pending reveal for its note

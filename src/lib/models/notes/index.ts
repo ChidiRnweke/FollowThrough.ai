@@ -1,5 +1,7 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
+import type { SectionNumberingView } from './section-numbering';
+
 type UserId = Brand<string, 'UserId'>;
 
 type ProjectId = Brand<string, 'ProjectId'>;
@@ -86,6 +88,13 @@ export interface Note {
 	readonly currentRevision: number;
 	readonly publishedRevision: number;
 	readonly isPinned: boolean;
+	/**
+	 * The note's own section-numbering choice; absent inherits the project default.
+	 * Carried on reads but deliberately never written by {@link SaveNoteInput} — it
+	 * changes through `setSectionNumbering`, outside the sync protocol, the same way
+	 * `parentId` and `position` do.
+	 */
+	readonly sectionNumbering?: boolean;
 	readonly publishedAt?: DateTime;
 	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;
@@ -340,6 +349,16 @@ export interface ListNoteSyncInventoryInput {
 	readonly projectId?: ProjectId;
 }
 
+export interface SetNoteSectionNumberingInput {
+	readonly noteId: NoteId;
+	/** `undefined` clears the note's override so it inherits the project default again. */
+	readonly enabled?: boolean;
+}
+
+export interface SetNoteSectionNumberingOutput {
+	readonly sectionNumbering: SectionNumberingView;
+}
+
 export interface ListNoteSyncInventoryOutput {
 	readonly entries: readonly NoteSyncInventoryEntry[];
 }
@@ -441,6 +460,8 @@ export interface NoteView {
 	readonly diagrams: readonly Diagram[];
 	readonly todos: readonly TodoView[];
 	readonly pendingSuggestions: readonly SuggestionView[];
+	/** The note's section-numbering cascade, resolved by the controller across note, project and app. */
+	readonly sectionNumbering: SectionNumberingView;
 }
 
 export interface GetNoteViewInput {
@@ -588,3 +609,7 @@ export * from './note-patch';
 export * from './note-links';
 
 export * from './text-search';
+
+export * from './section-numbering';
+
+export * from './outline';
