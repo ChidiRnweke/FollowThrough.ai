@@ -50,6 +50,22 @@ describe('Pasting text that contains prices', () => {
 	});
 });
 
+describe('Pasting text with boundary whitespace', () => {
+	const schema = getSchema(noteMarkdownExtensions);
+
+	it('does not create blank blocks around padded paragraphs', () => {
+		const pasted = markdownSlice(schema, '\n\nFirst thought.\n\nSecond thought.\n\n');
+
+		expect(pasted?.content.childCount).toBe(2);
+	});
+
+	it('preserves spaces on the content line', () => {
+		const pasted = markdownSlice(schema, '   Just text   ');
+
+		expect(pasted?.content.textBetween(0, pasted.content.size)).toBe('   Just text   ');
+	});
+});
+
 describe('Recognising the literal-paste shortcut', () => {
 	it('matches ctrl+shift+V', () => {
 		expect(

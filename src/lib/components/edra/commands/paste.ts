@@ -38,6 +38,15 @@ export const looksLikeMarkdown = (text: string): boolean => {
 };
 
 /**
+ * Remove clipboard padding that would parse as empty boundary paragraphs.
+ *
+ * Only whitespace joined to a line break is removed, so spaces deliberately copied on
+ * the first or last content line and every internal paragraph break remain untouched.
+ */
+const withoutBoundaryBlankLines = (text: string): string =>
+	text.replace(/^(?:[^\S\r\n]*(?:\r\n|\r|\n))+/, '').replace(/(?:(?:\r\n|\r|\n)[^\S\r\n]*)+$/, '');
+
+/**
  * A slice for the parsed text, or undefined when there is nothing better than the
  * default behaviour to offer.
  *
@@ -50,7 +59,10 @@ export const markdownSlice = (
 ): Slice | undefined => {
 	let document: ProseMirrorNode;
 	try {
-		document = ProseMirrorNode.fromJSON(schema, noteContentFromMarkdown(text).document);
+		document = ProseMirrorNode.fromJSON(
+			schema,
+			noteContentFromMarkdown(withoutBoundaryBlankLines(text)).document
+		);
 	} catch {
 		return undefined;
 	}
