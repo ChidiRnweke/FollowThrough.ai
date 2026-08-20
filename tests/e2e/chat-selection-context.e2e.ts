@@ -133,6 +133,45 @@ test.describe('with the chat docked beside the note', () => {
 	});
 
 	/**
+	 * The regression this file exists for now. Clicking into the composer blurs the editor,
+	 * and the blur used to collapse the selection and take the chip with it — so the passage
+	 * detached itself on the way to being asked about.
+	 */
+	test('the highlighted passage survives clicking into the composer', async ({ page }) => {
+		await openFirstNote(page);
+		await openDockedChat(page);
+		await selectFromParagraph(page, 12);
+		await page.locator('#chat-composer').click();
+		await page.keyboard.type('what does this commit me to?');
+
+		await expect(liveChip(page)).toBeVisible();
+	});
+
+	test('the pin on the chip keeps the passage', async ({ page }) => {
+		await openFirstNote(page);
+		await openDockedChat(page);
+		await selectFromParagraph(page, 12);
+		// The chip row grows as the passage lands in it; clicking mid-reflow reaches for a
+		// pin that has already moved.
+		await expect(liveChip(page)).toBeVisible();
+		await page.getByLabel('Pin this passage to the message').click();
+
+		await expect(chips(page)).toHaveCount(1);
+	});
+
+	test('pinning from the chip leaves no live chip behind', async ({ page }) => {
+		await openFirstNote(page);
+		await openDockedChat(page);
+		await selectFromParagraph(page, 12);
+		// The chip row grows as the passage lands in it; clicking mid-reflow reaches for a
+		// pin that has already moved.
+		await expect(liveChip(page)).toBeVisible();
+		await page.getByLabel('Pin this passage to the message').click();
+
+		await expect(liveChip(page)).toHaveCount(0);
+	});
+
+	/**
 	 * Pinning is the same passage said more firmly, so it replaces the live chip rather than
 	 * joining it — one highlight, one chip.
 	 */

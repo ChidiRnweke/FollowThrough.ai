@@ -37,6 +37,7 @@ const base = {
 	connection: 'connected',
 	executionMode: 'approval_required',
 	onremovechip: () => undefined,
+	onpinselection: () => undefined,
 	onpick: () => undefined,
 	onhighlight: () => undefined,
 	onremoveimage: () => undefined,
@@ -117,6 +118,24 @@ describe('ChatComposer live selection', () => {
 		// whose accessible name swallows the dismiss button's.
 		await screen.getByLabelText('Remove the current selection from context').click();
 		expect(dismissed).toEqual(['4:12-41:true']);
+	});
+
+	it('pins the highlighted passage through the pin the chip shows', async () => {
+		const pinned: string[] = [];
+		const screen = await render(ChatComposer, {
+			...base,
+			liveSelection: selectionChip,
+			onpinselection: (chip) => pinned.push(chip.id)
+		});
+		await screen.getByLabelText('Pin this passage to the message').click();
+		expect(pinned).toEqual(['4:12-41']);
+	});
+
+	it('offers no pin on a passage already pinned', async () => {
+		const screen = await render(ChatComposer, { ...base, chips: [selectionChip] });
+		await expect
+			.element(screen.getByLabelText('Pin this passage to the message'))
+			.not.toBeInTheDocument();
 	});
 
 	it('keeps a pinned passage distinguishable from the highlighted one', async () => {

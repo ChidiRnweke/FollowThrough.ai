@@ -614,6 +614,7 @@
 					else if (automatic && chip.kind === 'selection') chat.dismissedSelectionId = chip.id;
 					else unpick(chip);
 				}}
+				onpinselection={(chip) => chat.addChip(chip)}
 				onpick={pick}
 				onhighlight={(index) => (highlighted = index)}
 				onremoveimage={(id) => (selectedImages = selectedImages.filter((image) => image.id !== id))}

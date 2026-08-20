@@ -14,7 +14,6 @@
 		FtFolder as Folder,
 		FtSkills as Wrench,
 		FtPin as Pin,
-		FtPinOff as PinOff,
 		FtCheck as Check,
 		FtWorkflow as Workflow,
 		FtAttachments as Paperclip,
@@ -37,6 +36,7 @@
 		connection,
 		executionMode,
 		onremovechip,
+		onpinselection,
 		onpick,
 		onhighlight,
 		onremoveimage,
@@ -62,6 +62,8 @@
 		connection: 'detached' | 'connected' | 'reconnecting' | 'offline';
 		executionMode: AgentExecutionMode;
 		onremovechip: (chip: ContextChip, automatic: boolean) => void;
+		/** Promotes the highlighted passage to a pin, which stops it following the caret. */
+		onpinselection: (chip: SelectionChip) => void;
 		onpick: (chip: ContextChip) => void;
 		onhighlight: (index: number) => void;
 		onremoveimage: (id: string) => void;
@@ -76,9 +78,9 @@
 </script>
 
 {#snippet chipBadge(chip: ContextChip, automatic: boolean)}
-	<!-- The live selection is the one chip that is still moving: it follows the caret and is
-	     let go the moment the highlight changes. The dashed, unfilled badge and the open pin
-	     say that before the user has to find out — a pin, by contrast, stays where it was put. -->
+	<!-- The live selection is the one chip that is still moving: it stands for whatever is
+	     highlighted, and is let go once the caret lands somewhere else. The dashed, unfilled
+	     badge says that; a pin, by contrast, stays where it was put. -->
 	{@const live = automatic && chip.kind === 'selection'}
 	<!-- A pinned passage spends part of its width on the word count, so the title would be
 	     truncated past use inside a resource chip's budget. The extra room buys back the note
@@ -95,7 +97,23 @@
 			<Folder class="size-3 shrink-0" />
 		{:else if chip.kind === 'selection'}
 			{#if live}
-				<PinOff class="size-3 shrink-0" />
+				<!-- The gesture the pin glyph invites, made real. Reaching for it and getting
+				     nothing was the whole complaint: it looked like the control that keeps the
+				     passage, so it is. -->
+				<Tip text="Keep this passage in the message">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							type="button"
+							variant="ghost"
+							size="icon-xs"
+							aria-label="Pin this passage to the message"
+							onclick={() => onpinselection(chip)}
+						>
+							<Pin />
+						</Button>
+					{/snippet}
+				</Tip>
 			{:else}
 				<Pin class="size-3 shrink-0" />
 			{/if}

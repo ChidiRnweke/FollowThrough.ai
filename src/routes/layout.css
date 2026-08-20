@@ -991,6 +991,15 @@
 		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
 	}
 
+	/* The author's own selection, kept visible while the editor is not the focused thing —
+	   they are in the chat, and the passage is attached to the message they are writing.
+	   Deliberately the same colour as `::selection` rather than the brand wash above: it is
+	   still their selection, only unfocused, and nothing is working on it. No delayed
+	   reveal either — an agent turn is worth a beat before announcing, this is not. */
+	.selection-held {
+		background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+	}
+
 	.reference-link {
 		cursor: pointer;
 		font-weight: 500;

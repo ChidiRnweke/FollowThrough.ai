@@ -17,6 +17,13 @@ const baseState = () =>
 const held = (state: EditorState) =>
 	(selectionActionKey.getState(state)?.find() ?? []).map(({ from, to }) => ({ from, to }));
 
+/** What the wash is drawn as, which is the only thing the two variants differ in. */
+const heldClass = (state: EditorState) =>
+	(selectionActionKey.getState(state)?.find() ?? []).map(
+		(decoration) =>
+			(decoration as unknown as { type: { attrs: { class: string } } }).type.attrs.class
+	);
+
 const hold = (state: EditorState, from: number, to: number) =>
 	state.apply(state.tr.setMeta(selectionActionKey, { from, to }));
 
@@ -43,5 +50,18 @@ describe('selection action plugin', () => {
 	it('releases the range on a null meta', () => {
 		const holding = hold(baseState(), 1, 6);
 		expect(held(holding.apply(holding.tr.setMeta(selectionActionKey, null)))).toEqual([]);
+	});
+
+	it('washes a running action in the action colour', () => {
+		expect(heldClass(hold(baseState(), 1, 6))).toEqual(['selection-action-range']);
+	});
+
+	/** The author's own selection, kept visible while they are typing about it in the chat. */
+	it('washes a held selection in its own colour', () => {
+		const state = baseState();
+		const holding = state.apply(
+			state.tr.setMeta(selectionActionKey, { from: 1, to: 6, variant: 'held' })
+		);
+		expect(heldClass(holding)).toEqual(['selection-held']);
 	});
 });

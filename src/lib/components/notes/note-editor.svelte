@@ -335,6 +335,12 @@
 		if (editor) editor.perNote = perNote;
 	});
 
+	/**
+	 * True only for the instant the blur handler below collapses the selection itself, so
+	 * `selectionUpdate` can tell that transaction apart from the author moving the caret.
+	 */
+	let holdingSelection = false;
+
 	function readSelection(): TextSelection | undefined {
 		if (!editor) return undefined;
 		const { from, to, empty } = editor.state.selection;
@@ -657,6 +663,9 @@
 			}
 		});
 		editor.on('selectionUpdate', () => {
+			// The collapse below is this component's doing, not the author's, and the passage
+			// they highlighted is still the one attached to whatever they are typing next.
+			if (holdingSelection) return;
 			const selection = readSelection();
 			if (selection) perNote?.selection.set(selection);
 			else perNote?.selection.clear();
@@ -666,15 +675,32 @@
 		// leave the stale bar floating over nothing; collapsing the selection both
 		// matches what the author sees and forces the menu to re-evaluate. Skipped
 		// while an action runs, because the running status rides the same menu.
+		//
+		// The wash is what the collapse would otherwise cost: clicking into the chat is how
+		// you use a highlighted passage, and both the highlight and the chip standing for it
+		// used to vanish on the way there. The passage stays lit, and stays attached, until
+		// the author comes back and puts the caret somewhere.
 		// `isDestroyed` first: a blur fires as the view is torn down, and by then reading
 		// `activeAction` — a prop, and so a derived — would warn about a destroyed effect.
 		editor.on('blur', () => {
 			if (editor.isDestroyed || activeAction !== undefined) return;
 			const { doc, selection } = editor.state;
 			if (selection.empty) return;
+			const { from, to } = selection;
+			holdingSelection = true;
 			editor.view.dispatch(
-				editor.view.state.tr.setSelection(PmTextSelection.create(doc, selection.from))
+				editor.view.state.tr
+					.setSelection(PmTextSelection.create(doc, from))
+					.setMeta(selectionActionKey, { from, to, variant: 'held' })
 			);
+			holdingSelection = false;
+		});
+		// Back in the editor: the caret is about to say where the author actually is, so the
+		// held wash has nothing left to stand in for. An action's own wash is not ours to
+		// release — it outlives focus by design.
+		editor.on('focus', () => {
+			if (editor.isDestroyed || activeAction !== undefined) return;
+			editor.view.dispatch(editor.view.state.tr.setMeta(selectionActionKey, null));
 		});
 		hydrated = true;
 		return retainActiveLink;
