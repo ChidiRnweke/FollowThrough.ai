@@ -43,7 +43,7 @@ export const looksLikeMarkdown = (text: string): boolean => {
  * Only whitespace joined to a line break is removed, so spaces deliberately copied on
  * the first or last content line and every internal paragraph break remain untouched.
  */
-const withoutBoundaryBlankLines = (text: string): string =>
+export const withoutBoundaryBlankLines = (text: string): string =>
 	text.replace(/^(?:[^\S\r\n]*(?:\r\n|\r|\n))+/, '').replace(/(?:(?:\r\n|\r|\n)[^\S\r\n]*)+$/, '');
 
 /**

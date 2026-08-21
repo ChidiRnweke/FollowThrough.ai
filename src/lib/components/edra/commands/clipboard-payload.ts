@@ -5,6 +5,8 @@ import { mermaidPngBlob } from '../mermaid-export.js';
 import type { MermaidTheme } from '../mermaid-rendering.js';
 import { selectionMedia } from './diagram-copy.js';
 import { noteMarkdownFromContent } from './note-markdown.js';
+import { withoutClipboardPadding } from './paste-slice.js';
+import { withoutBoundaryBlankLines } from './paste.js';
 import type { EdraDocument } from './document.js';
 
 const BLOCK_SEPARATOR = '\n\n';
@@ -54,17 +56,24 @@ export const selectRange = (state: EditorState, range: SelectedRange | undefined
 	);
 };
 
-/** Plain text of the current selection, '' when there is none. */
+/**
+ * Plain text of the current selection, '' when there is none.
+ *
+ * Trailing line breaks in the selection serialize to blank lines, which paste back as
+ * blank lines wherever the text lands. See paste-slice: they are padding, not content.
+ */
 export const selectionPlainText = (state: EditorState): string => {
 	const { from, to, empty } = state.selection;
 	if (empty) return '';
-	return getTextBetween(
-		state.doc,
-		{ from, to },
-		{
-			blockSeparator: BLOCK_SEPARATOR,
-			textSerializers: getTextSerializersFromSchema(state.schema)
-		}
+	return withoutBoundaryBlankLines(
+		getTextBetween(
+			state.doc,
+			{ from, to },
+			{
+				blockSeparator: BLOCK_SEPARATOR,
+				textSerializers: getTextSerializersFromSchema(state.schema)
+			}
+		)
 	);
 };
 
@@ -77,7 +86,7 @@ export const selectionPlainText = (state: EditorState): string => {
  */
 export const selectionMarkdown = (state: EditorState): string => {
 	if (state.selection.empty) return '';
-	const content = state.selection.content().content.toJSON();
+	const content = withoutClipboardPadding(state.selection.content()).content.toJSON();
 	if (!content) return '';
 	return noteMarkdownFromContent({ type: 'doc', content } as EdraDocument);
 };
@@ -144,7 +153,9 @@ export const buildRichClipboard = async (
 ): Promise<{ html: string; text: string }> => {
 	const container = window.document.createElement('div');
 	container.appendChild(
-		DOMSerializer.fromSchema(state.schema).serializeFragment(state.selection.content().content)
+		DOMSerializer.fromSchema(state.schema).serializeFragment(
+			withoutClipboardPadding(state.selection.content()).content
+		)
 	);
 
 	let budget = MAX_INLINED_BYTES;
