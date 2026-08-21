@@ -7,6 +7,7 @@ import type {
 	NoteRevisionId,
 	NoteSearchTarget,
 	NoteSummary,
+	SetNoteSectionNumberingInput,
 	TextSelection,
 	TrashedNote
 } from '$lib/models/notes';
@@ -31,6 +32,9 @@ export interface NoteEditor {
 export interface NoteArchiver {
 	archive(actor: ActorContext, noteId: NoteId): Promise<Note>;
 	restore(actor: ActorContext, noteId: NoteId): Promise<Note>;
+}
+export interface NoteSectionNumberingEditor {
+	setSectionNumbering(actor: ActorContext, input: SetNoteSectionNumberingInput): Promise<Note>;
 }
 export interface NoteRevisionRecorder {
 	record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void>;

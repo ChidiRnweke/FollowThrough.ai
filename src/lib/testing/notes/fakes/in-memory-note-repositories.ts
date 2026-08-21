@@ -4,6 +4,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
+import { NotFoundError } from '$lib/errors';
 
 export class InMemoryNoteRepository implements NoteRepository {
 	notes: Note[] = [];
@@ -108,6 +109,18 @@ export class InMemoryNoteRepository implements NoteRepository {
 		this.notes = this.notes.filter((note) => note.id !== id);
 		// Revisions cascade from the note in Postgres, so they cannot outlive it here either.
 		this.revisions = this.revisions.filter((revision) => revision.noteId !== id);
+	}
+
+	async setSectionNumbering(
+		actor: ActorContext,
+		id: NoteId,
+		enabled: boolean | null
+	): Promise<Note> {
+		const current = this.notes.find((note) => note.id === id && note.userId === actor.userId);
+		if (!current) throw new NotFoundError('Note was not found');
+		const updated: Note = { ...current, sectionNumbering: enabled ?? undefined };
+		this.notes = this.notes.map((note) => (note.id === id ? updated : note));
+		return updated;
 	}
 
 	async insertRevision(_actor: ActorContext, revision: NoteRevision): Promise<NoteRevision> {

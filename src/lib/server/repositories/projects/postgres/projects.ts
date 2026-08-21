@@ -8,7 +8,7 @@ import type {
 	RenameProjectInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
-import { ConflictError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	ProjectRepository,
 	ProjectTreeRepository
@@ -100,6 +100,26 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 			.where(and(eq(schema.projects.id, projectId), eq(schema.projects.userId, actor.userId)))
 			.returning();
 		return toProject(row!);
+	}
+
+	async setSectionNumberingDefault(
+		actor: ActorContext,
+		projectId: ProjectId,
+		enabled: boolean | null
+	): Promise<Project> {
+		const [row] = await this.database
+			.update(schema.projects)
+			.set({ sectionNumberingDefault: enabled })
+			.where(
+				and(
+					eq(schema.projects.id, projectId),
+					eq(schema.projects.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Project was not found');
+		return toProject(row);
 	}
 
 	async list(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {

@@ -7,6 +7,7 @@ import type {
 	NoteRevisionId,
 	NoteSearchTarget,
 	NoteSummary,
+	SetNoteSectionNumberingInput,
 	TextSelection
 } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
@@ -93,6 +94,14 @@ export class NoteCatalog {
 		);
 		if (!updated) throw new StaleRevisionError('The note changed while it was being saved');
 		return updated;
+	}
+
+	async setSectionNumbering(
+		actor: ActorContext,
+		input: SetNoteSectionNumberingInput
+	): Promise<Note> {
+		await this.get(actor, input.noteId);
+		return this.notes.setSectionNumbering(actor, input.noteId, input.enabled ?? null);
 	}
 
 	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {

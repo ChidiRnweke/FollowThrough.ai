@@ -12,6 +12,20 @@ type Url = Brand<string, 'Url'>;
 
 export type UserRole = 'USER' | 'ADMIN' | 'WAITING';
 
+/**
+ * The user's non-agent preferences. Sparse: an absent field defers to the
+ * deployment default rather than pinning "off", so a shipped default reaches
+ * users who never touched the setting.
+ */
+export interface UserPreferences {
+	/** App-level default for H1–H4 section numbering in documents. */
+	readonly sectionNumberingDefault?: boolean;
+}
+
+export interface UpdateUserPreferencesInput {
+	readonly sectionNumberingDefault?: boolean;
+}
+
 export interface ActorContext {
 	readonly userId: UserId;
 }

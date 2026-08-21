@@ -16,6 +16,12 @@ export interface NoteRepository {
 	countSiblings(actor: ActorContext, projectId: ProjectId, parentId?: NoteId): Promise<number>;
 	insert(actor: ActorContext, note: Note): Promise<Note>;
 	update(actor: ActorContext, note: Note): Promise<Note>;
+	/**
+	 * Targeted write for the note's section-numbering override (`null` clears it back to
+	 * inherit), kept off {@link update} so the sync protocol can never clobber it with a
+	 * stale device copy.
+	 */
+	setSectionNumbering(actor: ActorContext, id: NoteId, enabled: boolean | null): Promise<Note>;
 	updateIfRevision(
 		actor: ActorContext,
 		note: Note,

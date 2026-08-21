@@ -17,6 +17,7 @@ import type {
 	RestoreNoteRevisionInput,
 	SearchNoteTextInput,
 	ReplaceNoteTextInput,
+	SetNoteSectionNumberingInput,
 	SyncNoteInput
 } from '$lib/models/notes';
 import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
@@ -39,6 +40,7 @@ const noteSchema = z.object({
 	currentRevision: z.number().int(),
 	publishedRevision: z.number().int().default(0),
 	isPinned: z.boolean(),
+	sectionNumbering: z.boolean().nullish(),
 	publishedAt: z.string().optional(),
 	archivedAt: z.string().optional(),
 	createdAt: z.string(),
@@ -117,6 +119,19 @@ export const discardNoteDraft = command(
 		return AppFactory.controllers()
 			.notes()
 			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
+	}
+);
+
+export const setNoteSectionNumbering = command(
+	z.object({
+		noteId: z.string().uuid(),
+		// Omitted (not false) clears the override so the note inherits again.
+		enabled: z.boolean().optional()
+	}),
+	async (input) => {
+		return AppFactory.controllers()
+			.notes()
+			.setSectionNumbering(requestActor(), input as SetNoteSectionNumberingInput);
 	}
 );
 

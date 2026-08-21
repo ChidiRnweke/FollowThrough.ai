@@ -18,6 +18,7 @@ import type { RelationshipsController } from '../controllers/relationships/contr
 import type { SkillsController } from '../controllers/skills/controller';
 import type { SuggestionsController } from '../controllers/suggestions/controller';
 import type { TodosController } from '../controllers/todos/controller';
+import type { UserSettingsController } from '../controllers/user-settings/controller';
 import type { WorkspaceController } from '../controllers/workspace/controller';
 
 export interface ControllerFactory {
@@ -32,6 +33,7 @@ export interface ControllerFactory {
 	skills(): SkillsController;
 	agent(): AgentController;
 	agentSettings(): AgentSettingsController;
+	userSettings(): UserSettingsController;
 	apiTokens(): ApiTokensController;
 	toolPreferences(): ToolPreferencesController;
 	attachments(): AttachmentsController;

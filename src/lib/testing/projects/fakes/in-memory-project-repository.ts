@@ -7,7 +7,7 @@ import type {
 	RenameProjectInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
-import { ConflictError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	ProjectRepository,
 	ProjectTreeRepository
@@ -85,6 +85,25 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 			(project) => project.id === projectId && project.userId === actor.userId
 		)!;
 		const updated = { ...current, archivedAt: testNow, updatedAt: testNow };
+		this.projects = this.projects.map((project) => (project.id === updated.id ? updated : project));
+		return updated;
+	}
+
+	async setSectionNumberingDefault(
+		actor: ActorContext,
+		projectId: ProjectId,
+		enabled: boolean | null
+	): Promise<Project> {
+		const current = this.projects.find(
+			(project) =>
+				project.id === projectId && project.userId === actor.userId && !project.archivedAt
+		);
+		if (!current) throw new NotFoundError('Project was not found');
+		const updated = {
+			...current,
+			sectionNumberingDefault: enabled ?? undefined,
+			updatedAt: testNow
+		};
 		this.projects = this.projects.map((project) => (project.id === updated.id ? updated : project));
 		return updated;
 	}

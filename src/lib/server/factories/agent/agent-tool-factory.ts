@@ -114,7 +114,11 @@ export const agentToolCoverage = {
 		rename: { kind: 'mutation' },
 		archive: { kind: 'mutation' },
 		createFolder: { kind: 'mutation' },
-		move: { kind: 'mutation' }
+		move: { kind: 'mutation' },
+		setSectionNumberingDefault: {
+			kind: 'excluded',
+			reason: 'A viewing default for the editor; it changes nothing the agent can read.'
+		}
 	},
 	notes: {
 		get: { kind: 'read' },
@@ -150,7 +154,11 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Diff rendering detail; the agent reads note content with get_note.'
 		},
-		restoreRevision: { kind: 'mutation' }
+		restoreRevision: { kind: 'mutation' },
+		setSectionNumbering: {
+			kind: 'excluded',
+			reason: 'Section numbering is a visual editor preference; note content is unchanged.'
+		}
 	},
 	todos: {
 		list: { kind: 'read' },

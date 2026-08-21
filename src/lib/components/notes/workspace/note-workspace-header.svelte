@@ -1,5 +1,10 @@
 <script lang="ts">
 	import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
+	import {
+		sectionNumberingLevelFor,
+		type SectionNumberingLevel,
+		type SectionNumberingView
+	} from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
@@ -39,6 +44,7 @@
 		publishing,
 		comparable,
 		folders,
+		sectionNumbering,
 		onCloseSplit,
 		height = $bindable(0),
 		ontitle,
@@ -51,6 +57,7 @@
 		oncompare,
 		ontogglepin,
 		onmove,
+		onsectionnumbering,
 		ondiscard,
 		onarchive,
 		onhistory
@@ -67,6 +74,7 @@
 		publishing: boolean;
 		comparable: boolean;
 		folders: readonly NoteSummary[];
+		sectionNumbering: SectionNumberingView;
 		onCloseSplit?: () => void;
 		height?: number;
 		ontitle: (title: string) => void;
@@ -79,6 +87,7 @@
 		oncompare: () => void;
 		ontogglepin: () => void;
 		onmove: (parentId?: NoteId) => void;
+		onsectionnumbering: (level: SectionNumberingLevel) => void;
 		ondiscard: () => void;
 		onarchive: () => void;
 		/** Opens the version history, which doubles as the draft-versus-published comparison. */
@@ -246,6 +255,21 @@
 					>
 						Check spelling and grammar
 					</DropdownMenu.CheckboxItem>
+					<DropdownMenu.Sub>
+						<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
+						<DropdownMenu.SubContent>
+							<DropdownMenu.RadioGroup
+								value={sectionNumberingLevelFor(sectionNumbering.noteOverride)}
+								onValueChange={(value) => onsectionnumbering(value as SectionNumberingLevel)}
+							>
+								<DropdownMenu.RadioItem value="on">On</DropdownMenu.RadioItem>
+								<DropdownMenu.RadioItem value="off">Off</DropdownMenu.RadioItem>
+								<DropdownMenu.RadioItem value="default">
+									Use default ({sectionNumbering.inherited ? 'on' : 'off'})
+								</DropdownMenu.RadioItem>
+							</DropdownMenu.RadioGroup>
+						</DropdownMenu.SubContent>
+					</DropdownMenu.Sub>
 					<DropdownMenu.Sub>
 						<DropdownMenu.SubTrigger>Move to</DropdownMenu.SubTrigger>
 						<DropdownMenu.SubContent>

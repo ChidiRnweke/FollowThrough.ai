@@ -8,14 +8,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 
-	const [view, todosResult, memoryResult, artifactsResult, attachments, trash] = await Promise.all([
-		factory.projects().get(actor, { projectId }),
-		factory.todos().list(actor, { projectId, status: 'open' }),
-		factory.memory().list(actor, { projectId }),
-		factory.deliverables().listArtifacts(actor, projectId),
-		factory.attachments().listForProject(actor, projectId),
-		factory.notes().listTrash(actor, { projectId })
-	]);
+	const [view, todosResult, memoryResult, artifactsResult, attachments, trash, userPreferences] =
+		await Promise.all([
+			factory.projects().get(actor, { projectId }),
+			factory.todos().list(actor, { projectId, status: 'open' }),
+			factory.memory().list(actor, { projectId }),
+			factory.deliverables().listArtifacts(actor, projectId),
+			factory.attachments().listForProject(actor, projectId),
+			factory.notes().listTrash(actor, { projectId }),
+			factory.userSettings().getPreferences(actor)
+		]);
 
 	// Overdue is a clock comparison, so it happens here rather than in a $derived.
 	// Reading the clock during render reads it twice — once for SSR, once during
@@ -29,6 +31,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		view,
 		trashed: trash.notes,
 		overdueTodoCount,
+		// The project menu labels its inherit choice with the app default it falls back to.
+		sectionNumberingAppDefault: userPreferences.sectionNumberingDefault ?? false,
 		// The documents list renders relative timestamps. Both the SSR pass and
 		// hydration format against this one instant so their markup matches.
 		renderedAt: new Date().toISOString(),

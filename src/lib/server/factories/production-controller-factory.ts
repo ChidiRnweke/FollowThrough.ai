@@ -13,7 +13,10 @@ import {
 } from '../controllers/agent/trust-policies/controller';
 import { ApiTokens, type ApiTokensDependencies } from '../controllers/api-tokens/controller';
 import { Attachments, type AttachmentsDependencies } from '../controllers/attachments/controller';
-import { Deliverables, type DeliverablesDependencies } from '../controllers/deliverables/controller';
+import {
+	Deliverables,
+	type DeliverablesDependencies
+} from '../controllers/deliverables/controller';
 import { Diagrams, type DiagramsDependencies } from '../controllers/diagrams/controller';
 import { Feedback, type FeedbackDependencies } from '../controllers/feedback/controller';
 import { NoteImportsController } from '../controllers/imports/controller';
@@ -33,6 +36,10 @@ import {
 import { Skills, type SkillsDependencies } from '../controllers/skills/controller';
 import { Suggestions, type SuggestionsDependencies } from '../controllers/suggestions/controller';
 import { Todos, type TodosDependencies } from '../controllers/todos/controller';
+import {
+	UserSettings,
+	type UserSettingsDependencies
+} from '../controllers/user-settings/controller';
 import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/controller';
 import type { ControllerFactory } from './controller-factory';
 import { instrumentedController } from '../controllers/instrumentation';
@@ -49,6 +56,7 @@ export interface ProductionControllerDependencies {
 	skills: SkillsDependencies;
 	agent: AgentDependencies;
 	agentSettings: AgentSettingsDependencies;
+	userSettings: UserSettingsDependencies;
 	apiTokens: ApiTokensDependencies;
 	toolPreferences: ToolPreferencesDependencies;
 	attachments: AttachmentsDependencies;
@@ -102,6 +110,9 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'agentSettings',
 			new AgentSettings(this.dependencies.agentSettings)
 		);
+	}
+	userSettings() {
+		return instrumentedController('userSettings', new UserSettings(this.dependencies.userSettings));
 	}
 	apiTokens() {
 		return instrumentedController('apiTokens', new ApiTokens(this.dependencies.apiTokens));

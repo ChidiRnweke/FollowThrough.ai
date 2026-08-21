@@ -15,6 +15,12 @@ export interface ProjectRepository {
 	listActive(actor: ActorContext): Promise<readonly Project[]>;
 	findFirstActive(actor: ActorContext): Promise<Project | undefined>;
 	update(actor: ActorContext, input: RenameProjectInput): Promise<Project>;
+	/** `null` clears the project default so its notes inherit the app default again. */
+	setSectionNumberingDefault(
+		actor: ActorContext,
+		projectId: ProjectId,
+		enabled: boolean | null
+	): Promise<Project>;
 	archive(actor: ActorContext, projectId: ProjectId): Promise<Project>;
 }
 

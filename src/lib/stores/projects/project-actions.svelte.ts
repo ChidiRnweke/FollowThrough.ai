@@ -14,7 +14,8 @@ import type {
 	CreateProjectOutput,
 	MoveProjectEntryOutput,
 	ProjectId,
-	RenameProjectOutput
+	RenameProjectOutput,
+	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
 import type { CreateSkillOutput } from '$lib/models/skills';
 import {
@@ -29,7 +30,8 @@ import {
 	restoreNote,
 	deleteNoteForever,
 	emptyNoteTrash,
-	createSkill
+	createSkill,
+	setProjectSectionNumberingDefault
 } from '$lib/remote/projects/projects.remote';
 
 class ProjectActionsStore {
@@ -60,6 +62,10 @@ class ProjectActionsStore {
 		this.withInvalidation<RenameProjectOutput>(() => renameProject({ projectId, name }));
 	archiveProject = (projectId: ProjectId) =>
 		this.withInvalidation(() => archiveProject({ projectId }));
+	setSectionNumberingDefault = (projectId: ProjectId, enabled?: boolean) =>
+		this.withInvalidation<SetProjectSectionNumberingOutput>(() =>
+			setProjectSectionNumberingDefault({ projectId, enabled })
+		);
 	createFolder = (projectId: ProjectId, name: string, parentId?: NoteId) =>
 		this.withInvalidation<CreateFolderOutput>(() => createFolder({ projectId, name, parentId }));
 	moveEntry = (

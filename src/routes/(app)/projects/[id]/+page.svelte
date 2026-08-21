@@ -16,6 +16,11 @@
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/models/projects';
+	import {
+		sectionNumberingLevelFor,
+		sectionNumberingOverrideFor,
+		type SectionNumberingLevel
+	} from '$lib/models/notes';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
@@ -67,6 +72,14 @@
 		}
 		await goto('/today');
 	}
+
+	async function changeSectionNumberingDefault(level: SectionNumberingLevel): Promise<void> {
+		const output = await projectActions.setSectionNumberingDefault(
+			project.id,
+			sectionNumberingOverrideFor(level)
+		);
+		if (!output) toast.error('Could not update the project default. Try again.');
+	}
 </script>
 
 {#key project.id}
@@ -102,6 +115,22 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
 					<DropdownMenu.Item onclick={() => (renameOpen = true)}>Rename project</DropdownMenu.Item>
+					<DropdownMenu.Sub>
+						<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
+						<DropdownMenu.SubContent>
+							<DropdownMenu.RadioGroup
+								value={sectionNumberingLevelFor(project.sectionNumberingDefault)}
+								onValueChange={(value) =>
+									void changeSectionNumberingDefault(value as SectionNumberingLevel)}
+							>
+								<DropdownMenu.RadioItem value="on">On by default</DropdownMenu.RadioItem>
+								<DropdownMenu.RadioItem value="off">Off by default</DropdownMenu.RadioItem>
+								<DropdownMenu.RadioItem value="default">
+									Use app default ({data.sectionNumberingAppDefault ? 'on' : 'off'})
+								</DropdownMenu.RadioItem>
+							</DropdownMenu.RadioGroup>
+						</DropdownMenu.SubContent>
+					</DropdownMenu.Sub>
 					{#if projectEntries.length > 0}
 						<DropdownMenu.Item onclick={() => startExport(project.name, projectEntries)}>
 							Export documents…

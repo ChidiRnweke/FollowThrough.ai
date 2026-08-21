@@ -193,6 +193,20 @@ export class NoteRecords implements NoteRepository {
 			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)));
 	}
 
+	async setSectionNumbering(
+		actor: ActorContext,
+		id: NoteId,
+		enabled: boolean | null
+	): Promise<Note> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({ sectionNumbering: enabled })
+			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)))
+			.returning();
+		if (!row) throw new NotFoundError('Note was not found');
+		return toNote(row);
+	}
+
 	async insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision> {
 		const note = await this.findById(actor, revision.noteId);
 		if (!note) throw new NotFoundError('Note was not found');

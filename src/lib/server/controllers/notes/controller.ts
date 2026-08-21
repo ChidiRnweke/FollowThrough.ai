@@ -22,6 +22,7 @@ import type {
 	RestoreNoteOutput,
 	RestoreNoteRevisionInput,
 	RestoreNoteRevisionOutput,
+	Note,
 	NoteDocument,
 	NoteSearchOptions,
 	NoteView,
@@ -34,6 +35,9 @@ import type {
 	SaveNoteOutput,
 	SearchNoteTextInput,
 	SearchNoteTextOutput,
+	SectionNumberingView,
+	SetNoteSectionNumberingInput,
+	SetNoteSectionNumberingOutput,
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput,
 	SyncNoteInput,
@@ -49,17 +53,25 @@ import {
 	noteMatchesEtag,
 	noteSyncContentEquals,
 	replaceInNoteDocument,
-	searchNoteTargets
+	searchNoteTargets,
+	sectionNumberingView
 } from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
 import type {
 	BacklinkViewAssembler,
 	NoteLinkReconciler,
 	RelationshipFinder
 } from '$lib/server/services/relationships/contracts';
 import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
-import type { NoteCreator, NoteReader, NoteTextSearcher, NoteTreeReader } from '$lib/server/services/notes/contracts';
+import type {
+	NoteCreator,
+	NoteReader,
+	NoteTextSearcher,
+	NoteTreeReader
+} from '$lib/server/services/notes/contracts';
 import type {
 	ReferenceLister,
 	ReferenceViewAssembler
@@ -78,6 +90,7 @@ import type {
 	NotePurger,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
+	NoteSectionNumberingEditor,
 	NoteTrashReader,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
@@ -97,6 +110,14 @@ export interface NotesController {
 	 * The pieces are fetched in parallel because nothing depends on another's result.
 	 */
 	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
+	/**
+	 * Pin or clear the note's own section-numbering choice, returning the resolved
+	 * cascade so the caller sees the effect of its write without a second read.
+	 */
+	setSectionNumbering(
+		actor: ActorContext,
+		input: SetNoteSectionNumberingInput
+	): Promise<SetNoteSectionNumberingOutput>;
 	/**
 	 * Read the bodies of several notes at once, for a caller that renders documents rather
 	 * than a note screen — the export dialog, which needs every selected note's content in
@@ -235,6 +256,9 @@ export interface NotesDependencies {
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
 	noteCreator: NoteCreator;
+	noteSectionNumbering: NoteSectionNumberingEditor;
+	projectReader: ProjectReader;
+	userPreferences: UserPreferencesReader;
 	relationshipFinder: RelationshipFinder;
 	backlinkViewAssembler: BacklinkViewAssembler;
 	referenceLister: ReferenceLister;
@@ -262,7 +286,9 @@ export interface NotesDependencies {
 const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
 	if (buildNoteSearchPattern(query, options) !== undefined) return;
 	throw new ValidationError(
-		options.regex ? 'The search pattern is not a valid regular expression' : 'A search query is required'
+		options.regex
+			? 'The search pattern is not a valid regular expression'
+			: 'A search query is required'
 	);
 };
 
@@ -277,12 +303,14 @@ export class Notes implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinks, referenceViews, todoViews, pendingSuggestions] = await Promise.all([
-			this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
-			this.dependencies.referenceViewAssembler.assemble(actor, references),
-			this.dependencies.todoViewAssembler.assemble(actor, todos),
-			this.dependencies.suggestionViewAssembler.assemble(actor, pending)
-		]);
+		const [backlinks, referenceViews, todoViews, pendingSuggestions, sectionNumbering] =
+			await Promise.all([
+				this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
+				this.dependencies.referenceViewAssembler.assemble(actor, references),
+				this.dependencies.todoViewAssembler.assemble(actor, todos),
+				this.dependencies.suggestionViewAssembler.assemble(actor, pending),
+				this.resolveSectionNumbering(actor, note)
+			]);
 		return {
 			note,
 			etag: noteEtag(note),
@@ -290,8 +318,35 @@ export class Notes implements NotesController {
 			references: referenceViews,
 			diagrams,
 			todos: todoViews,
-			pendingSuggestions
+			pendingSuggestions,
+			sectionNumbering
 		};
+	}
+
+	async setSectionNumbering(
+		actor: ActorContext,
+		input: SetNoteSectionNumberingInput
+	): Promise<SetNoteSectionNumberingOutput> {
+		const note = await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, input);
+		// The resolved view is returned so the caller sees the effect of its own
+		// write without a second round trip.
+		return { sectionNumbering: await this.resolveSectionNumbering(actor, note) };
+	}
+
+	/** The note's cascade resolved across the note, its project and the app default. */
+	private async resolveSectionNumbering(
+		actor: ActorContext,
+		note: Note
+	): Promise<SectionNumberingView> {
+		const [project, preferences] = await Promise.all([
+			this.dependencies.projectReader.get(actor, note.projectId),
+			this.dependencies.userPreferences.get(actor)
+		]);
+		return sectionNumberingView(
+			note.sectionNumbering,
+			project.sectionNumberingDefault,
+			preferences.sectionNumberingDefault
+		);
 	}
 
 	async listDocuments(
@@ -404,7 +459,10 @@ export class Notes implements NotesController {
 		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
 		return { hits: searchNoteTargets(targets, input.query, options) };
 	}
-	async replaceText(actor: ActorContext, input: ReplaceNoteTextInput): Promise<ReplaceNoteTextOutput> {
+	async replaceText(
+		actor: ActorContext,
+		input: ReplaceNoteTextInput
+	): Promise<ReplaceNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
 		assertValidSearch(input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);

@@ -58,6 +58,7 @@ const props = {
 	publishing: false,
 	comparable: false,
 	folders,
+	sectionNumbering: { effective: false, inherited: false },
 	ontitle: () => undefined,
 	onadvance: () => undefined,
 	onreviewconflict: () => undefined,
@@ -68,6 +69,7 @@ const props = {
 	oncompare: () => undefined,
 	ontogglepin: () => undefined,
 	onmove: () => undefined,
+	onsectionnumbering: () => undefined,
 	ondiscard: () => undefined,
 	onarchive: () => undefined,
 	onhistory: () => undefined
@@ -87,6 +89,14 @@ describe('NoteWorkspaceHeader actions', () => {
 		expect(await screen.getByRole('menuitem', { name: 'Export document' }).all()).not.toHaveLength(
 			0
 		);
+	});
+
+	it('offers Section numbering through the note-actions overflow menu', async () => {
+		const screen = await render(NoteWorkspaceHeader, props);
+		await screen.getByRole('button', { name: 'Note actions' }).click();
+		expect(
+			await screen.getByRole('menuitem', { name: 'Section numbering' }).all()
+		).not.toHaveLength(0);
 	});
 
 	it('renders the inline Export button', async () => {

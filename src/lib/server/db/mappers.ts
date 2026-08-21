@@ -50,6 +50,7 @@ export const toProject = (row: typeof schema.projects.$inferSelect): Project =>
 	domain<Project>({
 		...row,
 		description: row.description ?? undefined,
+		sectionNumberingDefault: row.sectionNumberingDefault ?? undefined,
 		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
 		createdAt: instant(row.createdAt),
 		updatedAt: instant(row.updatedAt)
@@ -60,6 +61,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 		...row,
 		parentId: row.parentId ?? undefined,
 		builtInKey: row.builtInKey ?? undefined,
+		sectionNumbering: row.sectionNumbering ?? undefined,
 		document: row.document,
 		publishedRevision: row.publishedRevision,
 		publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined,

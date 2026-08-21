@@ -152,3 +152,14 @@ export const resetToolOverride = command(
 		await listToolPreferences({ projectId: input.projectId }).refresh();
 	}
 );
+
+/** The app-level document defaults, edited on the Documents settings tab. */
+export const saveDocumentPreferences = form(
+	z.object({ sectionNumberingDefault: booleanText }),
+	async (input) => {
+		await AppFactory.controllers().userSettings().updatePreferences(requestActor(), {
+			sectionNumberingDefault: input.sectionNumberingDefault
+		});
+		return { saved: true };
+	}
+);

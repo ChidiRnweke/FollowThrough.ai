@@ -26,6 +26,8 @@ export interface Project {
 	readonly userId: UserId;
 	readonly name: string;
 	readonly description?: string;
+	/** Project-level default for H1–H4 section numbering; absent inherits the app default. */
+	readonly sectionNumberingDefault?: boolean;
 	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
@@ -172,6 +174,16 @@ export interface RenameProjectOutput {
 
 export interface ArchiveProjectInput {
 	readonly projectId: ProjectId;
+}
+
+export interface SetProjectSectionNumberingInput {
+	readonly projectId: ProjectId;
+	/** `undefined` clears the project default so it inherits the app default again. */
+	readonly enabled?: boolean;
+}
+
+export interface SetProjectSectionNumberingOutput {
+	readonly project: Project;
 }
 
 export interface ArchiveProjectOutput {

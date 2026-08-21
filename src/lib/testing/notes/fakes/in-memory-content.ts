@@ -1,5 +1,12 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget, TextSelection } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	SetNoteSectionNumberingInput,
+	TextSelection
+} from '$lib/models/notes';
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
 import {
@@ -15,6 +22,7 @@ import type {
 	NoteIndexer,
 	NotePublisher,
 	NoteReader,
+	NoteSectionNumberingEditor,
 	NoteTextSearcher,
 	NoteTreeReader,
 	NoteRevisionReader,
@@ -43,6 +51,7 @@ export class InMemoryNoteContent
 		NoteRevisionRecorder,
 		NoteRevisionReader,
 		NoteAttachmentRestorer,
+		NoteSectionNumberingEditor,
 		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
@@ -70,6 +79,16 @@ export class InMemoryNoteContent
 		);
 		if (!note) throw new NotFoundError('Note was not found');
 		return note;
+	}
+
+	async setSectionNumbering(
+		actor: ActorContext,
+		input: SetNoteSectionNumberingInput
+	): Promise<Note> {
+		const current = await this.get(actor, input.noteId);
+		const updated: Note = { ...current, sectionNumbering: input.enabled };
+		this.notes = this.notes.map((candidate) => (candidate.id === updated.id ? updated : candidate));
+		return updated;
 	}
 
 	async list(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly Note[]> {

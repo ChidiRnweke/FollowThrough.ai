@@ -7,7 +7,8 @@ import type {
 	RenameProjectInput,
 	ArchiveProjectInput,
 	CreateFolderInput,
-	MoveProjectEntryInput
+	MoveProjectEntryInput,
+	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type {
 	CreateNoteInput,
@@ -40,6 +41,19 @@ export const archiveProject = command(z.object({ projectId: z.string().uuid() })
 		.projects()
 		.archive(requestActor(), input as ArchiveProjectInput);
 });
+
+export const setProjectSectionNumberingDefault = command(
+	z.object({
+		projectId: z.string().uuid(),
+		// Omitted (not false) clears the project default so it inherits the app default.
+		enabled: z.boolean().optional()
+	}),
+	async (input) => {
+		return AppFactory.controllers()
+			.projects()
+			.setSectionNumberingDefault(requestActor(), input as SetProjectSectionNumberingInput);
+	}
+);
 
 export const createFolder = command(
 	z.object({

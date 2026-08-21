@@ -12,7 +12,9 @@ import type {
 	MoveProjectEntryInput,
 	MoveProjectEntryOutput,
 	RenameProjectInput,
-	RenameProjectOutput
+	RenameProjectOutput,
+	SetProjectSectionNumberingInput,
+	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
 import type {
 	FolderCreator,
@@ -41,6 +43,11 @@ export interface ProjectsController {
 	rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput>;
 	/** Archive a project, removing it from the default workspace view. */
 	archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput>;
+	/** Set or clear the project's section-numbering default (`undefined` inherits the app default). */
+	setSectionNumberingDefault(
+		actor: ActorContext,
+		input: SetProjectSectionNumberingInput
+	): Promise<SetProjectSectionNumberingOutput>;
 	/** Create a folder inside a project. */
 	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput>;
 	/** Move a note or folder to a new parent and position, atomically. */
@@ -83,6 +90,15 @@ export class Projects implements ProjectsController {
 
 	async archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
 		return { project: await this.dependencies.projectEditor.archive(actor, input.projectId) };
+	}
+
+	async setSectionNumberingDefault(
+		actor: ActorContext,
+		input: SetProjectSectionNumberingInput
+	): Promise<SetProjectSectionNumberingOutput> {
+		return {
+			project: await this.dependencies.projectEditor.setSectionNumberingDefault(actor, input)
+		};
 	}
 
 	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput> {

@@ -8,7 +8,7 @@ import type { PageServerLoad } from './$types';
 
 // Not exported: SvelteKit only permits `load`/`actions`/etc. out of a
 // +page.server.ts, and rejects the module at runtime otherwise.
-const SETTINGS_TABS = ['models', 'agents', 'tools', 'mcp', 'policies'] as const;
+const SETTINGS_TABS = ['models', 'agents', 'documents', 'tools', 'mcp', 'policies'] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 /**
@@ -37,6 +37,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const tab = tabFrom(url.searchParams.get('tab'));
 	const output = await factory.trustPolicies().list(actor);
 	const preferences = await factory.agentSettings().getPreferences(actor);
+	const userPreferences = await factory.userSettings().getPreferences(actor);
 	// The model catalogue is the only outbound call on this page, so it is worth
 	// skipping entirely when the tab that renders it is not the one being viewed.
 	let models =
@@ -77,6 +78,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		projects,
 		policies: output.policies,
 		preferences,
+		userPreferences,
 		models,
 		defaults: numericDefaults(),
 		// Shown so the user can paste it straight into a client config.

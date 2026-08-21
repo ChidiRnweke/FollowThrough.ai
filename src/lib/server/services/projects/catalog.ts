@@ -6,7 +6,8 @@ import type {
 	Project,
 	ProjectId,
 	ProjectTreeNode,
-	RenameProjectInput
+	RenameProjectInput,
+	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -54,6 +55,14 @@ export class ProjectCatalog {
 	async archive(actor: ActorContext, projectId: ProjectId): Promise<Project> {
 		await this.get(actor, projectId);
 		return this.projects.archive(actor, projectId);
+	}
+
+	async setSectionNumberingDefault(
+		actor: ActorContext,
+		input: SetProjectSectionNumberingInput
+	): Promise<Project> {
+		await this.get(actor, input.projectId);
+		return this.projects.setSectionNumberingDefault(actor, input.projectId, input.enabled ?? null);
 	}
 
 	async read(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTreeNode[]> {
@@ -144,7 +153,10 @@ export class ProjectCatalog {
 export type ProjectCreator = Pick<ProjectCatalog, 'create'>;
 export type ProjectReader = Pick<ProjectCatalog, 'get'>;
 export type ProjectLister = Pick<ProjectCatalog, 'list'>;
-export type ProjectEditor = Pick<ProjectCatalog, 'rename' | 'archive'>;
+export type ProjectEditor = Pick<
+	ProjectCatalog,
+	'rename' | 'archive' | 'setSectionNumberingDefault'
+>;
 export type ProjectTreeReader = Pick<ProjectCatalog, 'read'>;
 export type FolderCreator = Pick<ProjectCatalog, 'createFolder'>;
 export type ProjectEntryMover = Pick<ProjectCatalog, 'move'>;

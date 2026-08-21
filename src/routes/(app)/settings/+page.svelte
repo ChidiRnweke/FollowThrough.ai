@@ -5,6 +5,7 @@
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import {
 		SettingsAgents,
+		SettingsDocuments,
 		SettingsMcp,
 		SettingsModels,
 		SettingsPolicies,
@@ -40,7 +41,7 @@
 
 <PageShell
 	title="Settings"
-	description="Agent defaults, the tools it may use, MCP access, and per-pipeline trust policies."
+	description="Agent defaults, document defaults, the tools it may use, MCP access, and per-pipeline trust policies."
 >
 	{#snippet actions()}
 		<AgentAction action={agentActions.settings} />
@@ -49,6 +50,7 @@
 		<Tabs.List variant="line">
 			<Tabs.Trigger value="models">Models</Tabs.Trigger>
 			<Tabs.Trigger value="agents">Agents</Tabs.Trigger>
+			<Tabs.Trigger value="documents">Documents</Tabs.Trigger>
 			<Tabs.Trigger value="tools">Tools</Tabs.Trigger>
 			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
 			<Tabs.Trigger value="policies">Trust policies</Tabs.Trigger>
@@ -65,6 +67,11 @@
 		<Tabs.Content value="agents" class="pt-6">
 			{#if data.tab === 'agents'}
 				<SettingsAgents preferences={data.preferences} defaults={data.defaults} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="documents" class="pt-6">
+			{#if data.tab === 'documents'}
+				<SettingsDocuments preferences={data.userPreferences} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="tools" class="pt-6">

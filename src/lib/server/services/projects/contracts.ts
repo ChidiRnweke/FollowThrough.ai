@@ -6,7 +6,8 @@ import type {
 	Project,
 	ProjectId,
 	ProjectTreeNode,
-	RenameProjectInput
+	RenameProjectInput,
+	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note } from '$lib/models/notes';
 
@@ -25,6 +26,10 @@ export interface ProjectLister {
 export interface ProjectEditor {
 	rename(actor: ActorContext, input: RenameProjectInput): Promise<Project>;
 	archive(actor: ActorContext, projectId: ProjectId): Promise<Project>;
+	setSectionNumberingDefault(
+		actor: ActorContext,
+		input: SetProjectSectionNumberingInput
+	): Promise<Project>;
 }
 
 export interface ProjectTreeReader {

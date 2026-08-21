@@ -380,6 +380,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			executor
 		},
 		agentSettings: { preferences, models: modelCatalog },
+		userSettings: { preferences: identity.userPreferences },
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences },
 		attachments: { attachments, transactionRunner },
@@ -425,6 +426,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteTreeReader: notes,
 			noteTextSearcher: notes,
 			noteCreator: notes,
+			noteSectionNumbering: notes,
+			projectReader: projects,
+			userPreferences: identity.userPreferences,
 			relationshipFinder: relationships,
 			backlinkViewAssembler: relationships,
 			noteLinkReconciler: relationships,

@@ -6,7 +6,8 @@ import type {
 	Project,
 	ProjectId,
 	ProjectTreeNode,
-	RenameProjectInput
+	RenameProjectInput,
+	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
@@ -99,6 +100,20 @@ export class InMemoryProjects
 	async archive(actor: ActorContext, projectId: ProjectId): Promise<Project> {
 		const current = await this.get(actor, projectId);
 		const updated = { ...current, archivedAt: testNow, updatedAt: testNow };
+		this.replaceProject(updated);
+		return updated;
+	}
+
+	async setSectionNumberingDefault(
+		actor: ActorContext,
+		input: SetProjectSectionNumberingInput
+	): Promise<Project> {
+		const current = await this.get(actor, input.projectId);
+		const updated: Project = {
+			...current,
+			sectionNumberingDefault: input.enabled,
+			updatedAt: testNow
+		};
 		this.replaceProject(updated);
 		return updated;
 	}

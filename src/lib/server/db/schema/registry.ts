@@ -162,6 +162,8 @@ export const projects = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
 		description: text('description'),
+		// Null defers to the app default in user_preferences.
+		sectionNumberingDefault: boolean('section_numbering_default'),
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		...timestamps
 	},
@@ -188,6 +190,8 @@ export const notes = pgTable(
 		position: integer('position').notNull().default(0),
 		title: text('title').notNull(),
 		builtInKey: text('built_in_key'),
+		// Null defers to the project default, which defers to the app default.
+		sectionNumbering: boolean('section_numbering'),
 		document: jsonb('document')
 			.$type<ProseMirrorDocument>()
 			.notNull()
@@ -693,6 +697,20 @@ export const agentPreferences = pgTable(
 );
 
 /**
+ * The user's non-agent preferences. Every nullable column means "use the
+ * deployment default" rather than "off", the same contract as
+ * `agent_preferences` — kept in its own table so document and editor defaults
+ * don't accrete onto the agent's settings.
+ */
+export const userPreferences = pgTable('user_preferences', {
+	userId: uuid('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	sectionNumberingDefault: boolean('section_numbering_default'),
+	...timestamps
+});
+
+/**
  * Which agent tools the user has turned off. Rows are sparse: an absent tool is
  * enabled, so the default surface needs no rows at all and a newly added tool is
  * available without a backfill.
@@ -1052,3 +1070,4 @@ export type Artifact = typeof artifacts.$inferSelect;
 export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 export type ToolPreferenceRow = typeof toolPreferences.$inferSelect;
 export type ProjectToolOverrideRow = typeof projectToolOverrides.$inferSelect;
+export type UserPreferencesRow = typeof userPreferences.$inferSelect;
