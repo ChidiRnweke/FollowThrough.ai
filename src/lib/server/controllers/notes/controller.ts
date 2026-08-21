@@ -2,6 +2,8 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
+	CompareNoteRevisionsInput,
+	CompareNoteRevisionsOutput,
 	CreateNoteInput,
 	CreateNoteOutput,
 	DiscardNoteDraftInput,
@@ -24,6 +26,7 @@ import type {
 	RestoreNoteRevisionOutput,
 	Note,
 	NoteDocument,
+	NoteRevision,
 	NoteSearchOptions,
 	NoteView,
 	NoteSyncInventoryEntry,
@@ -31,6 +34,8 @@ import type {
 	PublishNoteOutput,
 	RenameNoteInput,
 	RenameNoteOutput,
+	ReadNoteRevisionInput,
+	ReadNoteRevisionOutput,
 	SaveNoteInput,
 	SaveNoteOutput,
 	SearchNoteTextInput,
@@ -49,6 +54,7 @@ import {
 	MAX_NOTE_DOCUMENTS,
 	buildNoteSearchPattern,
 	collectNoteLinkTargets,
+	diffNoteRevisionTexts,
 	noteEtag,
 	noteMatchesEtag,
 	noteSyncContentEquals,
@@ -236,6 +242,27 @@ export interface NotesController {
 	 * @throws NotFoundError if the revision does not belong to the note or has been pruned.
 	 */
 	getRevision(actor: ActorContext, input: GetNoteRevisionInput): Promise<GetNoteRevisionOutput>;
+	/**
+	 * Read one snapshot's plain text without its ProseMirror document — the cheap way to
+	 * see an old version in full when {@link compareRevisions}' diff is not enough.
+	 *
+	 * @throws NotFoundError if the revision does not belong to the note or has been pruned.
+	 */
+	readRevision(actor: ActorContext, input: ReadNoteRevisionInput): Promise<ReadNoteRevisionOutput>;
+	/**
+	 * Diff one snapshot against a baseline — another snapshot when `againstRevisionId` is
+	 * given, otherwise the note's current published revision — returning a compact unified
+	 * patch so a caller can see what changed without loading either body in full. The
+	 * patch reads from the baseline to the requested snapshot, i.e. the change restoring
+	 * that snapshot would apply.
+	 *
+	 * @throws NotFoundError if either revision is unknown or pruned, or the note has no
+	 * published revision to use as the default baseline.
+	 */
+	compareRevisions(
+		actor: ActorContext,
+		input: CompareNoteRevisionsInput
+	): Promise<CompareNoteRevisionsOutput>;
 	/**
 	 * Roll the note back to a snapshot by copying it forward as a new current revision,
 	 * restoring the attachments that snapshot was taken with.
@@ -566,6 +593,65 @@ export class Notes implements NotesController {
 				revisionId: input.revisionId
 			});
 		return { revision };
+	}
+	async readRevision(
+		actor: ActorContext,
+		input: ReadNoteRevisionInput
+	): Promise<ReadNoteRevisionOutput> {
+		const [note, revision] = await Promise.all([
+			this.dependencies.noteReader.get(actor, input.noteId),
+			this.dependencies.revisionReader.revisionById(actor, input.noteId, input.revisionId)
+		]);
+		if (!revision)
+			throw new NotFoundError('That version of the note is no longer available', {
+				noteId: input.noteId,
+				revisionId: input.revisionId
+			});
+		return {
+			revision: revision.revision,
+			title: revision.title,
+			plainText: revision.plainText,
+			createdAt: revision.createdAt,
+			isPublished: revision.revision === note.publishedRevision
+		};
+	}
+	async compareRevisions(
+		actor: ActorContext,
+		input: CompareNoteRevisionsInput
+	): Promise<CompareNoteRevisionsOutput> {
+		const revision = await this.dependencies.revisionReader.revisionById(
+			actor,
+			input.noteId,
+			input.revisionId
+		);
+		if (!revision)
+			throw new NotFoundError('That version of the note is no longer available', {
+				noteId: input.noteId,
+				revisionId: input.revisionId
+			});
+		let baseline: NoteRevision | undefined;
+		if (input.againstRevisionId) {
+			baseline = await this.dependencies.revisionReader.revisionById(
+				actor,
+				input.noteId,
+				input.againstRevisionId
+			);
+			if (!baseline)
+				throw new NotFoundError('That version of the note is no longer available', {
+					noteId: input.noteId,
+					revisionId: input.againstRevisionId
+				});
+		} else {
+			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			baseline = (await this.dependencies.revisionReader.revisions(actor, input.noteId)).find(
+				(candidate) => candidate.revision === note.publishedRevision
+			);
+			if (!baseline)
+				throw new NotFoundError('The note has no published version to compare against', {
+					noteId: input.noteId
+				});
+		}
+		return { diff: diffNoteRevisionTexts(baseline, revision), againstRevision: baseline.revision };
 	}
 	async restoreRevision(
 		actor: ActorContext,

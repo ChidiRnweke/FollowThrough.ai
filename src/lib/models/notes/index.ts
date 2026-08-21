@@ -1,5 +1,6 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
+import type { NoteRevisionDiff } from './revision-diff';
 import type { SectionNumberingView } from './section-numbering';
 
 type UserId = Brand<string, 'UserId'>;
@@ -602,6 +603,37 @@ export interface RestoreNoteRevisionOutput {
 	readonly etag: NoteEtag;
 }
 
+export interface ReadNoteRevisionInput {
+	readonly noteId: NoteId;
+	readonly revisionId: NoteRevisionId;
+}
+
+/**
+ * One revision's plain text. Deliberately without the ProseMirror document:
+ * the agent's `read_note_version` tool needs the words, not the editor JSON.
+ */
+export interface ReadNoteRevisionOutput {
+	readonly revision: number;
+	readonly title: string;
+	readonly plainText: string;
+	readonly createdAt: DateTime;
+	/** True when this snapshot is the note's current published revision. */
+	readonly isPublished: boolean;
+}
+
+export interface CompareNoteRevisionsInput {
+	readonly noteId: NoteId;
+	readonly revisionId: NoteRevisionId;
+	/** Baseline for the diff; defaults to the note's current published revision. */
+	readonly againstRevisionId?: NoteRevisionId;
+}
+
+export interface CompareNoteRevisionsOutput {
+	readonly diff: NoteRevisionDiff;
+	/** The revision number the target was diffed against, resolved server-side. */
+	readonly againstRevision: number;
+}
+
 export * from './prosemirror';
 
 export * from './note-patch';
@@ -613,3 +645,5 @@ export * from './text-search';
 export * from './section-numbering';
 
 export * from './outline';
+
+export * from './revision-diff';

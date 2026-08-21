@@ -143,6 +143,16 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 			"List a note's published version history, newest first, marking the current published version. Use restore_note_version to roll one back."
 	},
 	{
+		name: 'diff_note_versions',
+		description:
+			"Show what changed between a note's published version and another version (the current published one by default) as a compact unified diff, reading from the baseline to the requested version — i.e. the change restoring it would apply. Prefer this over read_note_version to inspect history without loading full content."
+	},
+	{
+		name: 'read_note_version',
+		description:
+			"Read the full plain text of one published version of a note. Use only when diff_note_versions is not enough, for example to check the exact wording before restore_note_version."
+	},
+	{
 		name: 'restore_note_version',
 		description:
 			'Roll a note back to one of its published versions, copied forward as a new revision so the rollback is itself undoable.'

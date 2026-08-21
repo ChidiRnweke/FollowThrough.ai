@@ -154,6 +154,8 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Diff rendering detail; the agent reads note content with get_note.'
 		},
+		readRevision: { kind: 'read' },
+		compareRevisions: { kind: 'read' },
 		restoreRevision: { kind: 'mutation' },
 		setSectionNumbering: {
 			kind: 'excluded',
@@ -932,6 +934,20 @@ export class AgentTools {
 				'read',
 				z.object({ noteId: id }),
 				(input) => factory.notes().listRevisions(actor, input as never)
+			),
+			define(
+				'read_note_version',
+				toolDescription('read_note_version'),
+				'read',
+				z.object({ noteId: id, revisionId: id }),
+				(input) => factory.notes().readRevision(actor, input as never)
+			),
+			define(
+				'diff_note_versions',
+				toolDescription('diff_note_versions'),
+				'read',
+				z.object({ noteId: id, revisionId: id, againstRevisionId: id.optional() }),
+				(input) => factory.notes().compareRevisions(actor, input as never)
 			),
 			define(
 				'restore_note_version',
