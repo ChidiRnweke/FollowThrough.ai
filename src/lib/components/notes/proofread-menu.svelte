@@ -13,6 +13,11 @@
 	 * underline changes neither — it is a click on a decoration, with the caret
 	 * left where it was. Floating UI is already a dependency, and `autoUpdate`
 	 * keeps the menu on its word through the pane's own scrolling.
+	 *
+	 * Outside-click dismissal also lives here rather than in the plugin: the
+	 * plugin's `handleClick` only sees clicks inside the editor, and this menu
+	 * is mounted on <body> — without a document-level listener, a click on the
+	 * sidebar or another pane would leave it floating over the app forever.
 	 */
 	let {
 		editor,
@@ -57,8 +62,18 @@
 			});
 		};
 		const stop = autoUpdate(anchor, element, place);
+		// Capture phase, and on pointerdown rather than click: the press that
+		// moves focus off the editor must not first unmount the menu's own
+		// buttons — those presses land inside `element` and are left alone.
+		const onPointerDown = (event: PointerEvent) => {
+			if (event.target instanceof Node && !element.contains(event.target)) {
+				editor.commands.dismissProofreadSelection();
+			}
+		};
+		window.document.addEventListener('pointerdown', onPointerDown, true);
 		return () => {
 			stop();
+			window.document.removeEventListener('pointerdown', onPointerDown, true);
 			element.remove();
 		};
 	});
