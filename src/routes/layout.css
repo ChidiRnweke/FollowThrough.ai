@@ -905,11 +905,12 @@
 	}
 
 	/* The reading column is 90ch centred inside the pane's 2rem padding, so the
-	   gutter is (pane - 4rem - 90ch) / 2. The rail wants ~1.5rem of ticks plus
-	   2rem of separation from the text, which resolves to roughly 90ch + 11rem.
-	   Stated in `ch` rather than `rem` so it tracks `--note-content-width` if the
-	   measure or the typeface ever changes. */
-	@container pane (min-width: 112ch) {
+	   gutter is (pane - 4rem - 90ch) / 2 — it grows at half the pane's rate.
+	   The rail needs its 1.25rem of ticks plus `--note-outline-gap`, whose floor
+	   is 4.5rem, so it stops fitting at roughly 90ch + 15rem. Stated in `ch`
+	   rather than `rem` so it tracks `--note-content-width` if the measure or the
+	   typeface ever changes. */
+	@container pane (min-width: 122ch) {
 		.note-outline {
 			display: block;
 			position: sticky;
@@ -931,8 +932,36 @@
 		   the pane's ScrollArea is `orientation="both"`, and content left of the
 		   scroll origin does not extend `scrollWidth` in LTR, so a rail wider
 		   than its gutter is clipped instead of summoning a scrollbar. */
-		inset-inline-end: calc(100% + 2rem);
+		inset-inline-end: calc(100% + var(--note-outline-gap, 4.5rem));
 		width: max-content;
+	}
+
+	/* How far the rail stands off the prose, and it has to grow with the pane:
+	   the gutter widens at half the pane's rate, so a fixed offset would leave
+	   the rail hugging the text inside an ever-larger empty margin.
+	
+	   Stepped through named `pane` queries rather than a fluid `cqi` expression.
+	   A container *unit* always resolves against the nearest container, which
+	   inside the note is `.note-measure` — a constant 90ch, so `cqi` here buys
+	   nothing. A named container *query* skips past it to the pane, which is the
+	   width that actually matters. Each step stays well inside what the gutter
+	   can spare at that width. */
+	@container pane (min-width: 122ch) {
+		.note-outline-rail {
+			--note-outline-gap: 4.5rem;
+		}
+	}
+
+	@container pane (min-width: 150ch) {
+		.note-outline-rail {
+			--note-outline-gap: 6rem;
+		}
+	}
+
+	@container pane (min-width: 185ch) {
+		.note-outline-rail {
+			--note-outline-gap: 8rem;
+		}
 	}
 
 	.note-outline-ticks {

@@ -11,8 +11,8 @@ import { expect, test, type Page } from '@playwright/test';
  * browser in `note-outline-rail.svelte.spec.ts`.
  */
 
-/** Comfortably past the rail's 112ch container threshold, even when halved. */
-const WIDE = { width: 2560, height: 1100 };
+/** Comfortably past the rail's 122ch container threshold, even when halved. */
+const WIDE = { width: 2880, height: 1100 };
 
 /**
  * A hard navigation against a cold dev server can abort while Vite is still
