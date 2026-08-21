@@ -41,6 +41,7 @@ import {
 	isLiteralPasteShortcut
 } from './paste.js';
 import { stripPastedStyling } from './clipboard-styles.js';
+import { withoutBoundaryBlankBlocks } from './paste-slice.js';
 import { NoteLinkMark } from './nodes.js';
 import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
 import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggestion.js';
@@ -230,6 +231,10 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			},
 			// Colours from the source document, not from this note: see clipboard-styles.
 			transformPastedHTML: (html) => stripPastedStyling(html),
+			// Blank lines the clipboard padded the selection with, not lines the author
+			// wrote: see paste-slice. Last hook of every paste path, so it covers the
+			// rich-HTML pastes `handleMarkdownPaste` deliberately hands to ProseMirror.
+			transformPasted: (slice) => withoutBoundaryBlankBlocks(slice),
 			handleDOMEvents: {
 				// Pictures stay pictures on the way out. A diagram is stored as mermaid source
 				// and an image as a relative, cookie-authenticated attachment URL, so the

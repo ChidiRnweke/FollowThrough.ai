@@ -1,7 +1,12 @@
 <script lang="ts">
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId, TodoStatus, TodoView } from '$lib/models/todos';
-	import { dragHandleZone, type DndEvent } from 'svelte-dnd-action';
+	import {
+		dragHandleZone,
+		SHADOW_ITEM_MARKER_PROPERTY_NAME,
+		TRIGGERS,
+		type DndEvent
+	} from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
 	import { FtPlus as Plus, FtCheck as Check } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
@@ -11,6 +16,7 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { Input } from '$lib/components/ui/input';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	interface BoardItem {
 		id: TodoId;
@@ -61,6 +67,15 @@
 	let settleTimer: ReturnType<typeof setTimeout> | undefined;
 	let settleEndsAt = 0;
 	let draggingId = $state<TodoId | null>(null);
+	let settlingId = $state<TodoId | null>(null);
+
+	function isShadowItem(item: BoardItem): boolean {
+		return Boolean(
+			(item as BoardItem & { [SHADOW_ITEM_MARKER_PROPERTY_NAME]?: boolean })[
+				SHADOW_ITEM_MARKER_PROPERTY_NAME
+			]
+		);
+	}
 
 	/* The dnd zone only ever receives the visible (collapsed-to-5) slice of a
 	   column, since svelte-dnd-action requires its `items` option to match what's
@@ -68,7 +83,24 @@
 	   from state. */
 	function withHiddenTail(status: TodoStatus, updatedVisible: BoardItem[]): BoardItem[] {
 		if (expanded.has(status)) return updatedVisible;
-		return [...updatedVisible, ...board[status].slice(VISIBLE_LIMIT)];
+		const visibleIds = new Set(updatedVisible.map((item) => item.id));
+		const hidden = board[status]
+			.slice(VISIBLE_LIMIT)
+			.filter((item) => !isShadowItem(item) && !visibleIds.has(item.id));
+		return [...updatedVisible, ...hidden];
+	}
+
+	/* A collapsed zone normally renders five cards. During a tail drop the dnd
+	   library adds a sixth shadow item; keep that transient item rendered so the
+	   zone cannot lose the drop just because the column is collapsed. The same
+	   rule keeps the settled card visible until refreshed server data arrives. */
+	function visibleItems(items: BoardItem[], isExpanded: boolean): BoardItem[] {
+		if (isExpanded) return items;
+		const visible = items.slice(0, VISIBLE_LIMIT);
+		const transient = items.find(
+			(item) => isShadowItem(item) || item.id === draggingId || item.id === settlingId
+		);
+		return transient && !visible.includes(transient) ? [...visible, transient] : visible;
 	}
 
 	function handleConsider(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
@@ -77,15 +109,25 @@
 	}
 
 	function handleFinalize(status: TodoStatus, event: CustomEvent<DndEvent<BoardItem>>): void {
-		override = { ...board, [status]: withHiddenTail(status, event.detail.items) };
+		const movedId = event.detail.info.id as TodoId;
+		const isTargetDrop = event.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE;
+		const moved = todos.find((item) => item.todo.id === movedId);
+		const updatedItems =
+			isTargetDrop && moved && !event.detail.items.some((item) => item.id === movedId)
+				? [...event.detail.items, { id: movedId, view: moved }]
+				: event.detail.items;
+		override = { ...board, [status]: withHiddenTail(status, updatedItems) };
 		draggingId = null;
+		settlingId = isTargetDrop ? movedId : settlingId;
 		settleEndsAt = Date.now() + 300;
-		const moved = event.detail.items.find((item) => item.id === event.detail.info.id);
-		if (moved && moved.view.todo.status !== status) {
-			onmove?.(moved.id, status);
+		if (isTargetDrop && moved && moved.todo.status !== status) {
+			onmove?.(movedId, status);
 		}
 		clearTimeout(settleTimer);
-		settleTimer = setTimeout(() => (override = null), 5000);
+		settleTimer = setTimeout(() => {
+			override = null;
+			settlingId = null;
+		}, 5000);
 	}
 
 	let lastTodos = untrack(() => todos);
@@ -94,20 +136,24 @@
 		lastTodos = todos;
 		if (!override) return;
 		clearTimeout(settleTimer);
-		settleTimer = setTimeout(() => (override = null), Math.max(0, settleEndsAt - Date.now()));
+		settleTimer = setTimeout(
+			() => {
+				override = null;
+				settlingId = null;
+			},
+			Math.max(0, settleEndsAt - Date.now())
+		);
 	});
 
 	let addingTo = $state<TodoStatus | null>(page.url.searchParams.has('quickTodo') ? 'open' : null);
 	let newTitle = $state('');
 
 	const VISIBLE_LIMIT = 5;
-	let expanded = $state<Set<TodoStatus>>(new Set());
+	const expanded = new SvelteSet<TodoStatus>();
 
 	function toggleExpanded(status: TodoStatus): void {
-		const next = new Set(expanded);
-		if (next.has(status)) next.delete(status);
-		else next.add(status);
-		expanded = next;
+		if (expanded.has(status)) expanded.delete(status);
+		else expanded.add(status);
 	}
 
 	async function addTodo(status: TodoStatus): Promise<void> {
@@ -126,7 +172,7 @@
 	{#each columns as status (status)}
 		{@const items = board[status]}
 		{@const isExpanded = expanded.has(status)}
-		{@const visible = isExpanded ? items : items.slice(0, VISIBLE_LIMIT)}
+		{@const visible = visibleItems(items, isExpanded)}
 		<!-- Tinted tray holding default cards — the same layering recipe as the
 		     docked right panel (bg-sidebar + ring hairline). -->
 		<section
@@ -173,6 +219,7 @@
 				     keeps the cards' ring hairline (and the dnd drop outline) from being
 				     clipped by the overflow scrollport. -->
 				<div
+					data-todo-status={status}
 					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto p-0.5"
 					use:dragHandleZone={{
 						items: visible,
