@@ -1,9 +1,9 @@
 ---
-title: "ADR 0002: Build the product as one SvelteKit application"
+title: "ADR 0002: Build the web UI, agent, and MCP as one SvelteKit application"
 description: Use one TypeScript application instead of separate web and agent backends.
 ---
 
-# ADR 0002: Build the product as one SvelteKit application
+# ADR 0002: Build the web UI, agent, and MCP as one SvelteKit application
 
 ## Status
 
@@ -22,16 +22,18 @@ FollowThrough has one delivery channel today. It may have a desktop app or anoth
 
 ## Decision
 
-Build the product as one SvelteKit and TypeScript application.
+We chose one SvelteKit and TypeScript application because the web UI, agent, and MCP use the same
+product rules and operations.
 
-Use controllers as the shared application boundary. The web UI, agent tools, and MCP call the same
-controllers. Keep Svelte logic out of the controllers.
+The web UI, agent tools, and MCP call the same controllers. The controllers contain no Svelte
+logic. This keeps the product rules available outside the web framework.
 
-Do not create a separate agent backend. Do not create a shared package before another delivery
-channel needs one.
+We will keep this shape while FollowThrough has one delivery channel. A separate agent backend or
+shared package would add a boundary without serving another channel.
 
-If another channel is added, move the controllers and shared types into a package in the monorepo.
-Let each channel use that package.
+If FollowThrough adds a desktop app or another delivery channel, we will reconsider this boundary.
+We expect to move the controllers and shared types into a package in the monorepo. Each channel can
+then use that package.
 
 ## Consequences
 

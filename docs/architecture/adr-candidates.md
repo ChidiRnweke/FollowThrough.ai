@@ -8,7 +8,7 @@ decision record.
 
 ## Ready to draft
 
-### C002 — Build the product as one SvelteKit application, not a frontend and agent backend
+### C002 — Build the web UI, agent, and MCP as one SvelteKit application
 
 - **Decision:** Keep the UI, server, agent tools, and MCP in one SvelteKit and TypeScript
   application. Make controllers the framework-free application contract.
@@ -21,7 +21,7 @@ decision record.
   `src/lib/server/factories/agent/mcp-tool-factory.ts`.
 - **Readiness:** Ready. Drafted as ADR 0002.
 
-### C003 — Treat the design system as a collaboration contract
+### C003 — Give humans and agents one written design system
 
 - **Decision:** Keep one repository-owned design system for UI rules, tokens, interaction rules,
   and accessibility limits.
@@ -29,9 +29,9 @@ decision record.
   author or session.
 - **Cost:** The rules need maintenance. Some visual decisions still need human judgment.
 - **Evidence:** `DESIGN_SYSTEM.md`, `src/routes/layout.css`, `src/lib/components/ui/`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0005.
 
-### C004 — Organize and construct the app by capability
+### C004 — Group code by product capability so features can change independently
 
 - **Decision:** Group product code by capability. Construct each capability through its own
   factory.
@@ -39,47 +39,48 @@ decision record.
   with less overlap.
 - **Cost:** Factories add files and wiring.
 - **Evidence:** `src/lib/server/factories/capabilities/`, commit `bfd0b3d`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0006.
 
-### C005 — Put domain rules in services and workflows in controllers
+### C005 — Keep feature rules in services and coordinate features in controllers
 
 - **Decision:** Keep one-domain rules in services. Put workflows that use several services in a
   controller.
 - **Reason:** This prevents hidden service coupling. It also keeps services reusable.
 - **Cost:** Controllers need explicit collaborators and transaction boundaries.
 - **Evidence:** `src/lib/server/services/`, `src/lib/server/controllers/`, architecture audits.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0007.
 
-### C006 — Keep suggestion state and its result consistent
+### C006 — Require approval before agent-proposed changes become saved data
 
-- **Decision:** Apply a suggestion and record its acceptance, result, and provenance in one
-  transaction.
-- **Reason:** The history must never say that a change landed when it did not. A landed change
-  must not appear pending.
-- **Cost:** Suggestion workflows need transaction-aware collaborators and reversal checks.
+- **Decision:** Store agent-proposed changes as proposals. Apply them only after approval by a
+  user or an explicit trust policy.
+- **Reason:** An agent can be wrong or misunderstand the user's intent. Saved data outlives the run
+  that produced it, so the agent does not decide by itself what becomes durable.
+- **Cost:** Useful changes may wait for review. The proposal, approval, applied result, and source
+  must remain consistent.
 - **Evidence:** `src/lib/server/controllers/suggestions/controller.ts`,
   `src/lib/server/controllers/suggestions/lifecycle.spec.ts`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0003.
 
-### C007 — Use projects as the durable work boundary
+### C007 — Scope notes, tasks, files, memory, diagrams, and search to projects
 
 - **Decision:** Scope notes, todos, memory, attachments, diagrams, settings, and retrieval to a
   project when they belong to durable project work.
 - **Reason:** A project defines ownership, context, and the boundary of a work stream.
 - **Cost:** Moving data across projects needs an explicit transition.
 - **Evidence:** Controller inputs and repository ownership checks across project capabilities.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0008.
 
-### C008 — Archive a project as one visible unit
+### C008 — Archive a project without archiving each item inside it
 
 - **Decision:** Hide an archived project and its content from normal views without archiving every
   child row.
 - **Reason:** The project is the visible lifecycle boundary. Its data must remain stored.
 - **Cost:** Every active view must scope through an active project.
 - **Evidence:** `src/lib/server/controllers/projects/controller.ts`, project repository contracts.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0009.
 
-### C009 — Detect divergent note edits and accept landed retries
+### C009 — Reject conflicting note edits without rejecting a save that already succeeded
 
 - **Decision:** Use revision tokens to reject divergent saves. Treat a repeated save as successful
   when the same content already landed.
@@ -88,18 +89,18 @@ decision record.
 - **Cost:** The client must retain base, local, and remote versions for conflict handling.
 - **Evidence:** `src/lib/server/controllers/notes/controller.ts`,
   `src/lib/client/notes/sync/coordinator.ts` and their tests.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0010.
 
-### C010 — Restore note history by copying forward
+### C010 — Restore an old note version as a new version
 
 - **Decision:** Restore an old snapshot as a new revision. Do not rewrite revision history.
 - **Reason:** A restore must itself be reversible.
 - **Cost:** Snapshot storage grows and needs a retention policy. Snapshots occur on publish, not on
   every edit.
 - **Evidence:** `src/lib/server/controllers/notes/restore-revision.spec.ts`, commit `1cfe1b7`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0011.
 
-### C011 — Run proofreading on the device
+### C011 — Proofread notes on the user's device without sending drafts to a server
 
 - **Decision:** Run proofreading in a browser worker. Keep the personal dictionary on the device.
 - **Reason:** Typing feedback must be fast. Draft text must not leave the device for basic
@@ -107,17 +108,17 @@ decision record.
 - **Cost:** The checker is English-only. Learned words do not follow the user to another device.
 - **Evidence:** `src/lib/client/proofreading/harper-linter.ts`,
   `src/lib/stores/notes/proofreading.svelte.ts`, commit `80616c5`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0012.
 
-### C012 — Keep todo categories open
+### C012 — Let users name their own task categories
 
 - **Decision:** Store todo categories as user-defined text, not as a fixed enum.
 - **Reason:** Users invent vocabulary that fits their work.
 - **Cost:** The system cannot rely on a closed category set.
 - **Evidence:** Todo model and schema, commit `9b3dbf8`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0013.
 
-### C013 — Keep valid results from a partial vault import
+### C013 — Keep valid notes when other files in an import fail
 
 - **Decision:** Import valid files when other files fail. Report each failure. A note shell may
   remain when its body cannot be saved.
@@ -125,9 +126,9 @@ decision record.
   work. A reported partial result is recoverable.
 - **Cost:** Users may need to remove or repair blank shells after the import.
 - **Evidence:** `src/lib/server/controllers/imports/controller.ts` and `import.spec.ts`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0014.
 
-### C014 — Fail instead of hiding weaker behavior
+### C014 — Report a failure instead of silently returning a weaker result
 
 - **Decision:** Do not silently switch to a weaker result. Fail clearly. If an operation can return
   a partial result, state what it omitted.
@@ -136,18 +137,18 @@ decision record.
   request.
 - **Evidence:** Retrieval and OCR services that throw instead of falling back. Several violations
   are listed in `suspicious-findings.md`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0015.
 
-### C015 — Keep binary media outside authored text
+### C015 — Store files in object storage and keep links in authored text
 
 - **Decision:** Put binary bytes in object storage. Put references in notes and other authored
   text.
 - **Reason:** Lists, exports, sync, and agent context must not carry repeated base64 data.
 - **Cost:** References and bytes have separate lifecycles.
 - **Evidence:** Attachment and todo screenshot storage, commit `f4488f5`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0016.
 
-### C016 — Use direct, two-phase uploads
+### C016 — Upload files directly and make them visible only after completion
 
 - **Decision:** Upload large bytes directly to an S3-compatible object store. Make the resource
   visible only after completion. Start later processing from durable state.
@@ -156,9 +157,9 @@ decision record.
 - **Cost:** Database and object storage cannot share one transaction. Retry and cleanup rules are
   required.
 - **Evidence:** Attachment and deliverable upload controllers and services.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0017.
 
-### C017 — Keep vectors beside application data in PostgreSQL
+### C017 — Store embeddings in PostgreSQL instead of a separate vector database
 
 - **Decision:** Use PostgreSQL with pgvector for stored embeddings. Do not add a separate vector
   service without a stronger need.
@@ -167,62 +168,62 @@ decision record.
   prevent adding one later.
 - **Evidence:** `search_chunks` in `src/lib/server/db/schema/registry.ts`, knowledge-search
   repositories.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0018.
 
-### C018 — Treat chunking as product design
+### C018 — Design search chunks around what users need to find
 
 - **Decision:** Review chunk boundaries and carried context as product behavior. Keep exact token
   sizes as tuning values.
 - **Reason:** Chunking controls what parts of a user's work can be found together.
 - **Cost:** Changes require retrieval evaluation, not only a configuration edit.
 - **Evidence:** `src/lib/server/services/knowledge-search/indexing.ts` and indexing tests.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0019.
 
-### C019 — Keep search available during reindexing
+### C019 — Keep old search results available while updated content is indexed
 
 - **Decision:** Keep the prior embedded chunks searchable until their replacements have vectors.
 - **Reason:** An edit must not make a source disappear from semantic search.
 - **Cost:** Semantic search may briefly return old text. Lexical search must exclude that old text.
 - **Evidence:** `index-maintenance.spec.ts`, `search_chunks.supersededAt`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0020.
 
-### C020 — Use durable state as the background-work queue
+### C020 — Use unfinished database records as the embedding work queue
 
 - **Decision:** Use rows with missing embeddings as the embedding backlog. Do not add a separate job
   table for this work.
 - **Reason:** The backlog is already durable state. A crashed worker can resume by scanning it.
 - **Cost:** The table needs a partial index and per-source failure isolation.
 - **Evidence:** `index-maintenance.ts`, `search_chunks_pending_idx`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0021.
 
-### C021 — Make workspace retrieval an agent tool
+### C021 — Let the agent decide when to search the user's work
 
 - **Decision:** Let the agent decide when to search, what to search for, and whether to retry.
 - **Reason:** Automatic retrieval fills every prompt with unrequested text and prevents the agent
   from correcting a poor query.
 - **Cost:** The agent can fail to search when search would help. Evals must test tool choice.
 - **Evidence:** Knowledge-search agent tools and agent request construction.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0004.
 
-### C022 — Discover long-tail tools on demand
+### C022 — Give the agent a small common tool set and find other tools on demand
 
 - **Decision:** Keep a small common tool set in context. Discover other tools on demand and then
   expose their real schemas.
 - **Reason:** Tool definitions consume context. Real schemas are required for reliable calls.
 - **Cost:** Tool search becomes part of capability reachability and needs its own tests.
 - **Evidence:** Agent tool catalog, tool embedding seed, and tool search tests.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0022.
 
-### C023 — Evaluate decisions and effects, not prose alone
+### C023 — Evaluate agent actions and saved results, not only final answers
 
 - **Decision:** Run agent evals against the real controller graph. Check tool choice, arguments,
   stopping, and persisted effects.
 - **Reason:** A valid-looking answer can hide a rejected call or a change in the wrong project.
 - **Cost:** Evals need a real database and recorded model-dependent services.
 - **Evidence:** Evaluation tests and repository test harness.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0023.
 
-### C024 — Keep one trace from user action to result
+### C024 — Trace each agent run from the user action to the saved result
 
 - **Decision:** Preserve trace context across submission, commit, background execution, model calls,
   tools, controllers, and the visible result. Instrument controller boundaries centrally.
@@ -230,9 +231,9 @@ decision record.
   diagnosis needs both in one trace.
 - **Cost:** Trace context becomes durable run data. Instrumentation needs coverage checks.
 - **Evidence:** Controller instrumentation, run submission, and telemetry tests.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0024.
 
-### C025 — Use durable and idempotent long-running workflows
+### C025 — Save agent runs before starting them so retries and cancellation are safe
 
 - **Decision:** Commit a run before starting work. Key submissions for idempotency. Journal events.
   Support cancellation and replay after refresh.
@@ -240,16 +241,16 @@ decision record.
   work.
 - **Cost:** Runs need explicit states, event storage, recovery, and cancellation settlement.
 - **Evidence:** Agent run controller and services, commit `6c9fe76`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0025.
 
-### C026 — Separate profile memory from project memory
+### C026 — Always include small profile facts and search project memory when needed
 
 - **Decision:** Inject a small set of profile facts into every run. Retrieve the larger project
   memory only when it applies.
 - **Reason:** Profile facts are always relevant. Project memory is long, changing, and scoped.
 - **Cost:** The system needs separate lifecycle and retrieval rules.
 - **Evidence:** Memory controller, memory indexer, and agent prompt construction.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0026.
 
 ### C027 — Let agents propose memory changes
 
@@ -258,9 +259,9 @@ decision record.
 - **Reason:** Memory changes affect later runs and need review, provenance, and reversal.
 - **Cost:** A useful memory can remain pending until reviewed.
 - **Evidence:** `src/lib/server/controllers/memory/controller.ts` and suggestion services.
-- **Readiness:** Ready.
+- **Readiness:** Covered by ADR 0003. No separate ADR.
 
-### C028 — Keep tool control outside the agent's reach
+### C028 — Let users disable agent tools but keep recovery tools available
 
 - **Decision:** Let users disable tools. Keep a small locked recovery set. Apply live tool authority
   when retrying a frozen request.
@@ -268,9 +269,9 @@ decision record.
   tool the user has since disabled.
 - **Cost:** Retry is not a byte-for-byte replay of old authority.
 - **Evidence:** Tool-preference controllers and agent run retry tests.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0027.
 
-### C029 — Use direct Mistral OCR
+### C029 — Use Mistral directly to turn uploaded documents into Markdown
 
 - **Decision:** Call Mistral Document AI directly for OCR. Do not silently replace it with a weaker
   parser.
@@ -278,9 +279,9 @@ decision record.
   path does not provide the same OCR contract.
 - **Cost:** The object store must be reachable by Mistral. The app needs a separate provider key.
 - **Evidence:** Attachment processing, config, and commit `4eae319`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0028.
 
-### C030 — Use OpenTelemetry as the telemetry contract
+### C030 — Send telemetry through OpenTelemetry instead of coding for each backend
 
 - **Decision:** Emit OpenTelemetry to a collector. Let deployment filter and route telemetry to
   Phoenix, Tempo, and Loki.
@@ -288,18 +289,18 @@ decision record.
   backend.
 - **Cost:** The collector is another operated component.
 - **Evidence:** `scripts/otel-instrumentation.js`, `otel-collector-config.yaml`.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0029.
 
-### C031 — Use Phoenix for agent traces
+### C031 — Use Phoenix to inspect agent runs that logs cannot explain
 
 - **Decision:** Use Phoenix to inspect model, tool, retrieval, token, and evaluation traces.
 - **Reason:** Ordinary logs do not show run shape. Phoenix provides the needed AI trace views and
   uses less memory than the considered MLflow deployment, which needed about 2 GB.
 - **Cost:** Phoenix is another service. OpenTelemetry must remain the portable boundary.
 - **Evidence:** Telemetry configuration, trace audit scripts, evaluation reporting.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0030.
 
-### C032 — Require managed secrets and rotation
+### C032 — Manage application secrets across environments with Infisical
 
 - **Decision:** Require multi-environment secret management and rotation. Use Infisical as the
   current open-source provider. Keep plain environment variables as a supported simple mode.
@@ -308,17 +309,17 @@ decision record.
 - **Cost:** The default setup reflects the maintainer's infrastructure and adds work for some
   self-hosters.
 - **Evidence:** `src/lib/server/config.ts`, provisioning scripts, self-hosting docs.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0031.
 
-### C033 — Ship web and worker from one release image
+### C033 — Build the web process and worker from the same container image
 
 - **Decision:** Build one image and run it as separate web and worker processes.
 - **Reason:** Both processes must use the same code and contracts while they scale separately.
 - **Cost:** The image contains code that each individual process does not run.
 - **Evidence:** `Dockerfile`, `docker-compose.prod.yml`, worker build config.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0032.
 
-### C034 — Publish an opinionated reference deployment
+### C034 — Publish the maintainer's deployment as a reference that consumers may fork
 
 - **Decision:** Maintain the current Caddy, Komodo, Infisical, external-network, and container setup
   as the reference deployment. Keep core interfaces portable. Do not abstract the topology before
@@ -326,7 +327,7 @@ decision record.
 - **Reason:** Product and deployment can stay together while one operator owns both.
 - **Cost:** Consumers may need to fork the deployment. Real adoption may require later separation.
 - **Evidence:** `docker-compose.prod.yml` and self-hosting docs.
-- **Readiness:** Ready.
+- **Readiness:** Ready. Drafted as ADR 0033.
 
 ## Confirm before drafting
 
