@@ -1,5 +1,5 @@
 ---
-title: "ADR 0034: Model each agent execution path with distinct input types"
+title: 'ADR 0034: Model each agent execution path with distinct input types'
 description: Keep submission, resolved runs, in-app tools, MCP tools, and catalog generation separate while sharing product operations.
 ---
 
@@ -57,7 +57,7 @@ shared type only if the paths gain the same possible states and the same require
   request context.
 - `src/lib/server/factories/agent/agent-tool-catalog-factory.ts` generates static catalog metadata
   without an executable context.
-- `src/lib/server/repositories/agent/postgres/agent-settings.ts` is being changed to validate the
-  persisted resolved run input instead of returning an untyped snapshot.
-- The source audit still reports shape casts while this refactor is in progress. Those casts are
-  implementation violations, not exceptions to this decision.
+- `src/lib/server/repositories/agent/postgres/agent-settings.ts` validates persisted resolved run
+  input instead of returning an untyped snapshot.
+- `scripts/audit-source.ts` reports zero shape-cast and silent-catch violations. No implementation
+  exception weakens this decision.
