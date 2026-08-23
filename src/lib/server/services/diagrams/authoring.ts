@@ -1,4 +1,4 @@
-import { Agent, OpenAIProvider, Runner, tool } from '@openai/agents';
+import { Agent, OpenAIProvider, Runner, tool, type AgentInputItem } from '@openai/agents';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -539,7 +539,7 @@ export class DiagramAuthoring {
 						modelProvider: provider,
 						traceIncludeSensitiveData: false
 					});
-					const providerInput = task.renderedPngDataUrl
+					const providerInput: string | AgentInputItem[] = task.renderedPngDataUrl
 						? [
 								{
 									role: 'user' as const,
@@ -550,7 +550,7 @@ export class DiagramAuthoring {
 								}
 							]
 						: input.prompt;
-					const stream = await runner.run(agent, providerInput as never, {
+					const stream = await runner.run(agent, providerInput, {
 						stream: true,
 						maxTurns: 12,
 						...(task.signal ? { signal: task.signal } : {})

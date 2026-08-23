@@ -1,4 +1,5 @@
 import createDOMPurify from 'dompurify';
+import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
 
@@ -167,6 +168,19 @@ export class DrawioXmlValidator {
 
 const safeSvgUrl = (value: string): boolean => value.trim().startsWith('#');
 
+const purifierWindow = (window: JSDOM['window']): WindowLike => ({
+	DocumentFragment: window.DocumentFragment,
+	HTMLTemplateElement: window.HTMLTemplateElement,
+	Node: window.Node,
+	Element: window.Element,
+	NodeFilter: window.NodeFilter,
+	NamedNodeMap: window.NamedNodeMap,
+	HTMLFormElement: window.HTMLFormElement,
+	DOMParser: window.DOMParser,
+	document: window.document,
+	trustedTypes: window.trustedTypes
+});
+
 export class DrawioSvgSanitizer {
 	sanitize(source: string): string {
 		const normalized = source.trim();
@@ -176,7 +190,7 @@ export class DrawioSvgSanitizer {
 
 		const window = new JSDOM('').window;
 		try {
-			const purifier = createDOMPurify(window as unknown as Parameters<typeof createDOMPurify>[0]);
+			const purifier = createDOMPurify(purifierWindow(window));
 			const sanitized = purifier.sanitize(normalized, {
 				USE_PROFILES: { svg: true, svgFilters: true },
 				FORBID_TAGS: ['script', 'foreignObject', 'iframe', 'object', 'embed', 'style'],
