@@ -8,6 +8,7 @@ import {
 	moveTabInState,
 	openTabInState,
 	parseWorkbenchUrl,
+	replaceTabInState,
 	serializeWorkbenchUrl,
 	setSplitInState
 } from './workbench-url';
@@ -558,5 +559,94 @@ describe('the search tab in the workbench URL', () => {
 		const state = { focusedNoteId: 'search', openTabs: [id(1), 'search'] };
 		const [path, query] = serializeWorkbenchUrl(state).split('?');
 		expect(parse(path, query)).toEqual(state);
+	});
+});
+
+describe('diagram tabs in the workbench URL', () => {
+	const DIAGRAM = '55555555-5555-4555-8555-555555555555';
+	const diagram = `diagram:${DIAGRAM}`;
+
+	it('reads a diagram-focused URL from ?focus=', () => {
+		expect(parse(`/diagrams/${DIAGRAM}`, `tabs=${diagram}&focus=${diagram}`)?.focusedNoteId).toBe(
+			diagram
+		);
+	});
+
+	it('serialises a focused diagram onto its own host route', () => {
+		expect(serializeWorkbenchUrl({ focusedNoteId: diagram, openTabs: [diagram] })).toBe(
+			`/diagrams/${DIAGRAM}?focus=${encodeURIComponent(diagram)}`
+		);
+	});
+
+	// The studio is a diagram beside its chat, which is the whole point of making
+	// it a tab rather than a bespoke two-pane route.
+	it('accepts a chat tab as the split pane beside a diagram', () => {
+		const chat = '66666666-6666-4666-8666-666666666666';
+		expect(
+			parse(
+				`/diagrams/${DIAGRAM}`,
+				`tabs=${diagram},chat:${chat}&focus=${diagram}&split=chat:${chat}`
+			)?.splitNoteId
+		).toBe(`chat:${chat}`);
+	});
+
+	it('round-trips a diagram tab through serialise and parse', () => {
+		const state = { focusedNoteId: diagram, openTabs: [id(1), diagram] };
+		const [path, query] = serializeWorkbenchUrl(state).split('?');
+		expect(parse(path, query)).toEqual(state);
+	});
+
+	// Without ?focus= the route is a plain page, not a workbench host, so the
+	// gallery and a shared link both stay renderable.
+	it('treats a /diagrams URL without ?focus= as no workbench at all', () => {
+		expect(parse(`/diagrams/${DIAGRAM}`)).toBeUndefined();
+	});
+
+	it('drops a diagram tab whose id is not a uuid', () => {
+		expect(parse(`/notes/${id(1)}`, `tabs=${id(1)},diagram:nonsense`)?.openTabs).toEqual([id(1)]);
+	});
+});
+
+describe('replacing one tab with another', () => {
+	const DRAFT = 'draft:77777777-7777-4777-8777-777777777777';
+	const DIAGRAM = 'diagram:88888888-8888-4888-8888-888888888888';
+	const promoted = () =>
+		replaceTabInState(
+			{ focusedNoteId: 'chat:x', openTabs: ['chat:x', DRAFT], splitNoteId: DRAFT },
+			DRAFT,
+			DIAGRAM
+		);
+
+	it('keeps the replacement on the split side', () => {
+		expect(promoted().splitNoteId).toBe(DIAGRAM);
+	});
+
+	it('keeps the replacement in the tab position the original held', () => {
+		expect(promoted().openTabs).toEqual(['chat:x', DIAGRAM]);
+	});
+
+	it('leaves the focused tab where it was', () => {
+		expect(promoted().focusedNoteId).toBe('chat:x');
+	});
+
+	it('moves focus with the tab when the replaced one was focused', () => {
+		expect(
+			replaceTabInState({ focusedNoteId: DRAFT, openTabs: [DRAFT] }, DRAFT, DIAGRAM).focusedNoteId
+		).toBe(DIAGRAM);
+	});
+
+	it('does not duplicate a replacement that is already open', () => {
+		expect(
+			replaceTabInState(
+				{ focusedNoteId: 'chat:x', openTabs: ['chat:x', DRAFT, DIAGRAM], splitNoteId: DRAFT },
+				DRAFT,
+				DIAGRAM
+			).openTabs
+		).toEqual(['chat:x', DIAGRAM]);
+	});
+
+	it('leaves a state that has no such tab untouched', () => {
+		const state = { focusedNoteId: 'chat:x', openTabs: ['chat:x'] };
+		expect(replaceTabInState(state, DRAFT, DIAGRAM)).toBe(state);
 	});
 });

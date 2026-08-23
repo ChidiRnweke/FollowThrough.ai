@@ -20,6 +20,8 @@
 		TextSelection
 	} from '$lib/models/notes';
 	import { activeHeadingAt, outlineFrom } from '$lib/models/notes';
+	import type { ProjectId } from '$lib/models/projects';
+	import { ProjectDiagramPicker } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
 	import { changedTopLevelBlockIndices } from '$lib/models/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
@@ -145,6 +147,7 @@
 
 	let {
 		noteId,
+		projectId,
 		revision,
 		inlineSuggestionsEnabled = true,
 		document,
@@ -170,6 +173,8 @@
 		onactiveheading
 	}: {
 		noteId: NoteId;
+		/** Scopes the project-diagram picker: a note only renders its own project's diagrams. */
+		projectId: ProjectId;
 		revision: number;
 		inlineSuggestionsEnabled?: boolean;
 		document: ProseMirrorDocument;
@@ -333,6 +338,13 @@
 	}
 
 	/** Jump to a heading. Exported so the outline rail can drive the editor. */
+	let pickingProjectDiagram = $state(false);
+
+	/** Inserts the chosen diagram at the caret as a live reference. */
+	function insertProjectDiagram(diagramId: DiagramId): void {
+		editor?.chain().focus().setDrawio(diagramId).run();
+	}
+
 	export function scrollToHeading(id: string): void {
 		if (editor && !editor.isDestroyed) revealHeading(editor.view.dom, id);
 	}
@@ -367,7 +379,8 @@
 				const candidate = diagrams.find((diagram) => diagram.id === reference);
 				return candidate?.kind === 'drawio' ? candidate : undefined;
 			},
-			resolveDrawioHref: (reference) => `/notes/${noteId}/diagrams/${reference}`,
+			resolveDrawioHref: (reference) => `/diagrams/${reference}`,
+			onPickProjectDiagram: () => (pickingProjectDiagram = true),
 			drawioPreview: SafeSvgPreview,
 			// Pasted/dropped images upload as note attachments; the src is the stable
 			// content endpoint (a 302 to a fresh presigned URL), never the expiring
@@ -1351,3 +1364,5 @@
 		<Skeleton class="h-5 w-2/3" />
 	</div>
 {/if}
+
+<ProjectDiagramPicker bind:open={pickingProjectDiagram} {projectId} onpick={insertProjectDiagram} />

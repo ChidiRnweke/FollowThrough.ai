@@ -241,7 +241,11 @@ describe('controller-boundary span routing', () => {
 	});
 
 	test('does not stamp openinference.span.kind on controller-boundary spans', async () => {
-		const wrapped = instrumentedController('fake', new FakeController('hello'), recordingLogger([]));
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			recordingLogger([])
+		);
 
 		await wrapped.get({ userId: 'u1' }, 'n1');
 

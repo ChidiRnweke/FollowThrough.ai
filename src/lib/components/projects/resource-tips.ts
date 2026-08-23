@@ -10,7 +10,7 @@
  * that promises something the code does not do is worse than no tip. Voice rules
  * apply — calm, dry, second person, one sentence with a period, no exclamations.
  */
-export type ResourceKey = 'todos' | 'memory' | 'artifacts' | 'attachments';
+export type ResourceKey = 'todos' | 'memory' | 'artifacts' | 'attachments' | 'diagrams';
 
 export const resourceTips: Record<ResourceKey, readonly string[]> = {
 	// Grounded in the `extract_promises` pipeline and the `SourceAnchor` quote
@@ -31,6 +31,12 @@ export const resourceTips: Record<ResourceKey, readonly string[]> = {
 	artifacts: [
 		'Notes you export as docx or pdf land here.',
 		'An export remembers which notes it was built from.'
+	],
+	// Grounded in the studio: a diagram is promoted out of a conversation, and a
+	// draw.io one can be inserted into any note in this project.
+	diagrams: [
+		'Diagrams you keep from a conversation land here.',
+		'A diagram can be linked into more than one note.'
 	],
 	// Grounded in TextAttachmentParser and the OCR path: both extract text on
 	// upload so the agent can quote the source.

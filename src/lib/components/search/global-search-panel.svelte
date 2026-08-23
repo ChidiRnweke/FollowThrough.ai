@@ -268,91 +268,93 @@
 					<ul
 						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) mt-1 flex flex-col gap-3"
 					>
-				{#each globalSearch.hits as hit (hit.noteId)}
-					{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
-					{@const count = hit.titleMatches.length + hit.matches.length}
-					<li>
-						<div class="row-quiet flex items-center gap-1 rounded-md px-2 py-1">
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								class="shrink-0 text-muted-foreground"
-								aria-label={collapsed ? 'Expand matches' : 'Collapse matches'}
-								aria-expanded={!collapsed}
-								onclick={() => globalSearch.toggleCollapsed(hit.noteId)}
-							>
-								{#if collapsed}
-									<ChevronRight data-icon />
-								{:else}
-									<ChevronDown data-icon />
-								{/if}
-							</Button>
-							<!-- The title jumps to the first match; the chevron collapses. One gesture
+						{#each globalSearch.hits as hit (hit.noteId)}
+							{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
+							{@const count = hit.titleMatches.length + hit.matches.length}
+							<li>
+								<div class="row-quiet flex items-center gap-1 rounded-md px-2 py-1">
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										class="shrink-0 text-muted-foreground"
+										aria-label={collapsed ? 'Expand matches' : 'Collapse matches'}
+										aria-expanded={!collapsed}
+										onclick={() => globalSearch.toggleCollapsed(hit.noteId)}
+									>
+										{#if collapsed}
+											<ChevronRight data-icon />
+										{:else}
+											<ChevronDown data-icon />
+										{/if}
+									</Button>
+									<!-- The title jumps to the first match; the chevron collapses. One gesture
 							     each, so a click on the document never reads as ambiguous. -->
-							<Button
-								variant="ghost"
-								class="h-auto min-w-0 items-center justify-start gap-1.5 rounded-none px-0 py-0 text-left hover:bg-transparent hover:text-current"
-								onclick={() => {
-									const first = hit.matches[0];
-									if (first) handleOpenMatch(hit, first);
-									else void workbench.openTab(hit.noteId);
-								}}
-							>
-								<Document data-icon class="shrink-0 text-muted-foreground" />
-								<span class="truncate text-sm font-medium">
-									{#each titleSegments(hit.title, hit.titleMatches) as segment, index (index)}
-										{#if segment.hit}<mark class="search-hit">{segment.text}</mark
-											>{:else}{segment.text}{/if}
-									{/each}
-								</span>
-							</Button>
-							<span
-								class="shrink-0 rounded-full bg-accent px-1.5 text-xs text-muted-foreground tabular-nums"
-							>
-								{count}
-								{count === 1 ? 'match' : 'matches'}
-							</span>
-							{#if hit.matches.length > 0}
-								<Tip text="Replace in this note">
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="sm"
-											class="ml-auto h-6 shrink-0 px-1.5 text-xs"
-											aria-label="Replace in {hit.title}"
-											onclick={() => void globalSearch.replaceInNote(hit.noteId)}
-										>
-											Replace
-										</Button>
-									{/snippet}
-								</Tip>
-							{/if}
-						</div>
-						{#if !collapsed}
-							<ul>
-								{#each hit.matches as match (match.start)}
-									<li>
-										<Button
-											variant="ghost"
-											class="row-interactive block h-auto w-full truncate justify-start rounded-md py-1 pr-2 pl-9 text-left text-xs font-normal text-muted-foreground hover:bg-accent hover:text-current"
-											onclick={() => handleOpenMatch(hit, match)}
-										>
-											<!-- Ellipses only where the window was actually cut — a match at
+									<Button
+										variant="ghost"
+										class="h-auto min-w-0 items-center justify-start gap-1.5 rounded-none px-0 py-0 text-left hover:bg-transparent hover:text-current"
+										onclick={() => {
+											const first = hit.matches[0];
+											if (first) handleOpenMatch(hit, first);
+											else void workbench.openTab(hit.noteId);
+										}}
+									>
+										<Document data-icon class="shrink-0 text-muted-foreground" />
+										<span class="truncate text-sm font-medium">
+											{#each titleSegments(hit.title, hit.titleMatches) as segment, index (index)}
+												{#if segment.hit}<mark class="search-hit">{segment.text}</mark
+													>{:else}{segment.text}{/if}
+											{/each}
+										</span>
+									</Button>
+									<span
+										class="shrink-0 rounded-full bg-accent px-1.5 text-xs text-muted-foreground tabular-nums"
+									>
+										{count}
+										{count === 1 ? 'match' : 'matches'}
+									</span>
+									{#if hit.matches.length > 0}
+										<Tip text="Replace in this note">
+											{#snippet children({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="sm"
+													class="ml-auto h-6 shrink-0 px-1.5 text-xs"
+													aria-label="Replace in {hit.title}"
+													onclick={() => void globalSearch.replaceInNote(hit.noteId)}
+												>
+													Replace
+												</Button>
+											{/snippet}
+										</Tip>
+									{/if}
+								</div>
+								{#if !collapsed}
+									<ul>
+										{#each hit.matches as match (match.start)}
+											<li>
+												<Button
+													variant="ghost"
+													class="row-interactive block h-auto w-full truncate justify-start rounded-md py-1 pr-2 pl-9 text-left text-xs font-normal text-muted-foreground hover:bg-accent hover:text-current"
+													onclick={() => handleOpenMatch(hit, match)}
+												>
+													<!-- Ellipses only where the window was actually cut — a match at
 											     the end of a note gets no fake trailing "…". -->
-											{#if match.snippet.truncatedBefore}…{/if}{inline(match.snippet.before)}<mark
-												class="search-hit">{inline(match.snippet.hit)}</mark
-											>{inline(match.snippet.after)}{#if match.snippet.truncatedAfter}…{/if}
-										</Button>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</li>
-				{/each}
-				</ul>
-			{/key}
-		</div>
+													{#if match.snippet.truncatedBefore}…{/if}{inline(
+														match.snippet.before
+													)}<mark class="search-hit">{inline(match.snippet.hit)}</mark>{inline(
+														match.snippet.after
+													)}{#if match.snippet.truncatedAfter}…{/if}
+												</Button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/key}
+			</div>
 		{/if}
 	</div>
 </div>

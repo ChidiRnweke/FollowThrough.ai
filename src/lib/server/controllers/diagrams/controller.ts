@@ -21,6 +21,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 import type {
 	DiagramFinder,
 	DiagramIndexer,
+	MermaidSourceValidator,
 	DiagramTextExtractor,
 	DiagramWriter,
 	DrawioDiagramCreator,
@@ -32,6 +33,7 @@ import type {
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
+import type { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
@@ -132,9 +134,11 @@ export interface DiagramsDependencies {
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;
+	mermaidValidator: MermaidSourceValidator;
 	mermaidReviser: MermaidDiagramReviser;
 	inlineMermaidReviser: InlineMermaidReviser;
 	inlineMermaidToDrawioConverter: InlineMermaidToDrawioConverter;
+	drawioWrites: DrawioWrites;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	mermaidRenderer: MermaidDiagramRenderer;
@@ -259,31 +263,25 @@ export class Diagrams implements DiagramsController {
 
 	async getDrawio(actor: ActorContext, input: GetDrawioDiagramInput): Promise<DrawioDiagram> {
 		const diagram = await this.dependencies.diagramFinder.get(actor, input.diagramId);
-		if (diagram.noteId !== input.noteId) throw new NotFoundError('Diagram was not found');
+		if (diagram.sourceNoteId !== input.noteId) throw new NotFoundError('Diagram was not found');
 		if (diagram.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
 		return diagram;
 	}
 
 	saveDrawio(actor: ActorContext, input: SaveDrawioDiagramInput): Promise<SaveDrawioDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.getDrawio(actor, input);
-			const source = this.dependencies.drawioXmlValidator.validate(input.source);
-			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-			const searchableText = await this.dependencies.drawioTextExtractor.extract({
-				...current,
-				source
-			});
-			const diagram = (await this.dependencies.diagramWriter.update(actor, {
-				...current,
-				source,
-				renderedSvg,
-				searchableText,
-				updatedAt: new Date().toISOString() as DrawioDiagram['updatedAt']
-			})) as DrawioDiagram;
-			await this.dependencies.diagramIndexer.index(actor, diagram);
-			return { diagram };
-		});
+		return this.dependencies.transactionRunner.run(async () =>
+			this.writeDrawio(actor, await this.getDrawio(actor, input), input)
+		);
+	}
+
+	/** Validate, sanitize, re-extract and re-index one draw.io diagram. */
+	private async writeDrawio(
+		actor: ActorContext,
+		current: DrawioDiagram,
+		input: { readonly source: string; readonly renderedSvg: string }
+	): Promise<SaveDrawioDiagramOutput> {
+		return { diagram: await this.dependencies.drawioWrites.write(actor, current, input) };
 	}
 
 	async reviseMermaid(
@@ -313,6 +311,13 @@ export class Diagrams implements DiagramsController {
 		const source = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		if (source.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be promoted');
+		// This is the note-inline promotion, which raises a suggestion against the
+		// note the diagram sits in. A studio diagram is promoted by its own operation.
+		const sourceNoteId = source.sourceNoteId;
+		if (sourceNoteId === undefined)
+			throw new UnsupportedDiagramOperationError(
+				'Only a diagram created from a note can be promoted here'
+			);
 		const draft = await this.dependencies.drawioCreator.createFromMermaid(actor, source);
 		this.dependencies.drawioXmlValidator.validate(draft.source);
 		const suggestion = await this.dependencies.transactionRunner.run(async () => {
@@ -328,10 +333,10 @@ export class Diagrams implements DiagramsController {
 				).id;
 			return this.dependencies.suggestionCreator.create(actor, {
 				kind: 'diagram',
-				noteId: source.noteId,
+				noteId: sourceNoteId,
 				provenanceId,
 				payload: {
-					noteId: source.noteId,
+					noteId: sourceNoteId,
 					kind: 'drawio',
 					title: draft.title,
 					source: draft.source

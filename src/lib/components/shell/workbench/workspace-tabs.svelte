@@ -20,8 +20,9 @@
 		readActiveTabDrag,
 		writeTabDrag
 	} from '$lib/client/workbench/tab-drag';
-	import { chatKeyOf, isChatTab, isSearchTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import type { Conversation } from '$lib/models/agent';
 
 	let {
@@ -44,19 +45,31 @@
 	const projectOf = (tabId: TabId): ProjectId | undefined =>
 		shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 
+	// Parsed once and switched on, rather than asked five yes/no questions that
+	// each re-parse the id: every `isXTab`/`xIdOf` helper runs the same prefix scan
+	// and uuid check, and this runs for every open tab on every recompute.
 	const titleOf = (tabId: TabId): string => {
-		if (isSearchTab(tabId)) return 'Search notes';
-		const sessionKey = chatKeyOf(tabId);
-		if (sessionKey !== undefined) {
-			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
-			return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
+		const ref = parseTabId(tabId);
+		switch (ref?.kind) {
+			case 'search':
+				return 'Search notes';
+			case 'diagram':
+				return diagramRegistry.peek(ref.diagramId)?.title ?? 'Untitled diagram';
+			case 'draft':
+				return 'Diagram draft';
+			case 'chat': {
+				const conversationId = chatRegistry.peek(ref.sessionKey)?.conversationId;
+				return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
+			}
+			default:
+				return shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.title ?? 'Untitled';
 		}
-		return shell.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.title ?? 'Untitled';
 	};
 
 	/** Groups are keyed by string, not `ProjectId`, so chats and search can have one too. */
 	const CHATS_GROUP = 'chats';
 	const SEARCH_GROUP = 'search';
+	const DIAGRAMS_GROUP = 'diagrams';
 
 	// Plain Maps: reactivity comes from `shell` and `workbench.openTabs`, and a
 	// SvelteMap here would be read and written inside its own derivation.
@@ -69,13 +82,19 @@
 		/* eslint-enable svelte/prefer-svelte-reactivity */
 		const chatTabs: TabId[] = [];
 		const searchTabs: TabId[] = [];
+		const diagramTabs: TabId[] = [];
 		for (const id of workbench.openTabs) {
-			if (isChatTab(id)) {
+			const kind = parseTabId(id)?.kind;
+			if (kind === 'chat') {
 				chatTabs.push(id);
 				continue;
 			}
-			if (isSearchTab(id)) {
+			if (kind === 'search') {
 				searchTabs.push(id);
+				continue;
+			}
+			if (kind === 'diagram' || kind === 'draft') {
+				diagramTabs.push(id);
 				continue;
 			}
 			const projectId = projectOf(id);
@@ -100,6 +119,9 @@
 				: []),
 			...(chatTabs.length > 0
 				? [{ projectId: CHATS_GROUP, projectName: 'Chats', tabs: chatTabs }]
+				: []),
+			...(diagramTabs.length > 0
+				? [{ projectId: DIAGRAMS_GROUP, projectName: 'Diagrams', tabs: diagramTabs }]
 				: []),
 			...projectGroups
 		];

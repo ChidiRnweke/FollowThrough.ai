@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
+import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
@@ -99,6 +99,41 @@ describe('durable agent submission', () => {
 		expect(receipt.status).toBe('queued');
 	});
 
+	// The run's own record of itself has to name its conversation. It used not to
+	// when the client had no id to send — which is every chat's first message —
+	// and any tool reading the snapshot for it got an empty string. That reached
+	// the database as `where id = ''` and failed the whole turn.
+	it('names the conversation in the snapshot when the request carried no id', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-00000000000a',
+			input: 'Draw me the ingest pipeline'
+		});
+		expect(runs.runs.find((run) => run.id === receipt.runId)?.inputSnapshot?.conversationId).toBe(
+			receipt.conversationId
+		);
+	});
+
+	it('keeps the conversation the request named', async () => {
+		const { controller, runs, conversations } = setup();
+		const existing = '20000000-0000-4000-8000-00000000000b' as ConversationId;
+		await conversations.insert(testActor(), {
+			id: existing,
+			userId: testActor().userId,
+			kind: 'chat',
+			createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
+			updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
+		} as Parameters<typeof conversations.insert>[1]);
+		const receipt = await controller.submit(testActor(), {
+			requestId: '10000000-0000-4000-8000-00000000000c',
+			conversationId: existing,
+			input: 'Carry on'
+		});
+		expect(runs.runs.find((run) => run.id === receipt.runId)?.inputSnapshot?.conversationId).toBe(
+			existing
+		);
+	});
+
 	it('records the user prompt against the persisted run', async () => {
 		const { controller, conversations } = setup();
 		const receipt = await controller.submit(testActor(), {
@@ -181,6 +216,26 @@ describe('scope staged before the user moved screens', () => {
 			appContext: appContextBuilder()
 		});
 		expect(runs.runs.at(-1)?.inputSnapshot).not.toHaveProperty('requestedScope');
+	});
+});
+
+describe('skills a studio run needs', () => {
+	const submitted = async (kind: 'diagram_studio' | 'chat') => {
+		const context = setup();
+		await context.controller.submit(testActor(), {
+			requestId: '30000000-0000-4000-8000-000000000003',
+			input: 'Draw the ingestion pipeline',
+			appContext: appContextBuilder({ surface: { kind, presentation: 'full_page' } })
+		});
+		return context.runs.runs.at(-1)?.inputSnapshot as RunAgentInput | undefined;
+	};
+
+	it('requests the Diagramming skill when a canvas is open', async () => {
+		expect((await submitted('diagram_studio'))?.requestedSkillNames).toEqual(['Diagramming']);
+	});
+
+	it('leaves an ordinary chat run without it', async () => {
+		expect(await submitted('chat').then((input) => input?.requestedSkillNames)).toBeUndefined();
 	});
 });
 

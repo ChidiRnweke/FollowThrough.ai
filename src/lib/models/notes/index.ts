@@ -7,6 +7,8 @@ type UserId = Brand<string, 'UserId'>;
 
 type ProjectId = Brand<string, 'ProjectId'>;
 
+type ConversationId = Brand<string, 'ConversationId'>;
+
 export type NoteId = Brand<string, 'NoteId'>;
 
 export type NoteEtag = Brand<string, 'NoteEtag'>;
@@ -207,7 +209,12 @@ interface ExternalReference {
 interface DiagramBase {
 	readonly id: DiagramId;
 	readonly userId: UserId;
-	readonly noteId: NoteId;
+	/** Diagrams are owned by their project; a source note is optional context. */
+	readonly projectId: ProjectId;
+	/** Absent for a studio diagram, which belongs to the project rather than a note. */
+	readonly sourceNoteId?: NoteId;
+	/** The studio conversation that produced this diagram, for reopening it. */
+	readonly conversationId?: ConversationId;
 	readonly title?: string;
 	readonly renderedSvg?: string;
 	readonly searchableText: string;

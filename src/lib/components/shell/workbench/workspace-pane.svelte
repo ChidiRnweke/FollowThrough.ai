@@ -6,6 +6,9 @@
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';
 	import GlobalSearchPanel from '$lib/components/search/global-search-panel.svelte';
+	import { DiagramDraftPane, DiagramPane } from '$lib/components/diagrams';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 
 	let {
 		tabId,
@@ -45,6 +48,14 @@
 		{agentPreferences}
 		{agentModels}
 		{agentAvailable}
+		{onCloseSplit}
+	/>
+{:else if ref?.kind === 'diagram'}
+	<DiagramPane diagramId={ref.diagramId} {onCloseSplit} />
+{:else if ref?.kind === 'draft'}
+	<DiagramDraftPane
+		sessionKey={ref.sessionKey}
+		projectId={diagramRegistry.draftProject(ref.sessionKey) ?? workbench.activeProjectId}
 		{onCloseSplit}
 	/>
 {:else if ref?.kind === 'search'}

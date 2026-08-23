@@ -15,10 +15,12 @@ import {
 	openTabInState,
 	parseWorkbenchUrl,
 	serializeWorkbenchUrl,
+	replaceTabInState,
 	setSplitInState,
 	type WorkbenchUrlState
 } from './workbench-url';
-import { noteIdOf, type TabId } from './tab-ref';
+import { diagramIdOf, noteIdOf, type TabId } from './tab-ref';
+import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 
 /**
  * The store's window onto SvelteKit's router.  Injected rather than imported
@@ -390,7 +392,16 @@ export class WorkbenchStore {
 	 * tab changes.
 	 */
 	refreshActiveProjectId(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): void {
-		this._activeProjectId = this.focusedNoteId ? shellProjectOf(this.focusedNoteId) : undefined;
+		if (this.focusedNoteId) {
+			this._activeProjectId = shellProjectOf(this.focusedNoteId);
+			return;
+		}
+		// A diagram is project-owned, so a focused diagram tab still tells the
+		// sidebar and the agent which project the user is working in. The note tree
+		// cannot answer for it, so the diagram's own pane does, through the registry.
+		const diagramId = diagramIdOf(this.focusedTabId);
+		this._activeProjectId =
+			diagramId === undefined ? undefined : diagramRegistry.peek(diagramId)?.projectId;
 	}
 
 	/** Returns the user's working set in URL-state form. */
@@ -409,6 +420,21 @@ export class WorkbenchStore {
 	 */
 	async openTab(noteId: TabId): Promise<void> {
 		const next = openTabInState(this.toUrlState(), noteId);
+		await this.navigate(next, { replace: false, invalidate: false });
+	}
+
+	/**
+	 * Open two tabs at once: `tabId` focused, `splitTabId` beside it.
+	 *
+	 * `openTab` followed by `setSplit` is two navigations and therefore two
+	 * history entries, so Back from a studio left the user in a half-opened
+	 * state — chat with no canvas — which is not somewhere they ever were. This
+	 * composes both transitions before navigating, so the pair opens and closes
+	 * as the single act it is.
+	 */
+	async openSplit(tabId: TabId, splitTabId: TabId): Promise<void> {
+		const opened = openTabInState(this.toUrlState(), tabId);
+		const next = setSplitInState(opened, splitTabId);
 		await this.navigate(next, { replace: false, invalidate: false });
 	}
 
@@ -504,6 +530,21 @@ export class WorkbenchStore {
 		if (!current) return;
 		const next = setSplitInState(current, noteId);
 		if (next === current) return;
+		await this.navigate(next, { replace: false, invalidate: false });
+	}
+
+	/**
+	 * Swap an open tab for another one, keeping its place and its split side.
+	 *
+	 * What promotion needs: the studio's draft canvas becomes the saved diagram
+	 * without the conversation beside it flickering or the split closing.
+	 */
+	async replaceTab(from: TabId, to: TabId): Promise<void> {
+		const current = this.toUrlState();
+		if (!current) return;
+		const next = replaceTabInState(current, from, to);
+		if (next === current) return;
+		this.pinnedTabs = this.pinnedTabs.map((id) => (id === from ? to : id));
 		await this.navigate(next, { replace: false, invalidate: false });
 	}
 

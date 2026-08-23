@@ -62,7 +62,8 @@ export const createSuggestionsCapability = (
 				dependencies.diagramDeleter,
 				dependencies.memoryChangeApplier,
 				dependencies.drawioValidator,
-				dependencies.drawioLabels
+				dependencies.drawioLabels,
+				input.notes
 			)
 	};
 };

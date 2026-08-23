@@ -48,6 +48,24 @@ const browser = typeof window !== 'undefined';
 export type ChatSessionKey = string;
 
 export const mintChatSessionKey = (): ChatSessionKey => crypto.randomUUID();
+
+/**
+ * Bind a session key to an existing conversation before anything mounts it.
+ *
+ * Opening a saved diagram beside the conversation that produced it needs a chat
+ * tab that already knows which conversation it shows, and the tab id carries only
+ * the session key. The pairing goes where a session's conversation always lives —
+ * session storage — so the pane adopts it in `initialize`, without this having to
+ * build a store, hydrate it and tear it down just to write one field.
+ */
+export const rememberConversation = (
+	sessionKey: ChatSessionKey,
+	conversationId: ConversationId
+): void => {
+	if (!browser) return;
+	const key = `${STORAGE_KEY_PREFIX}.${sessionKey}`;
+	sessionStorage.setItem(key, JSON.stringify({ ...persistedConversation(key), conversationId }));
+};
 const activeStatuses: readonly AgentRunStatus[] = [
 	'queued',
 	'running',
@@ -502,6 +520,9 @@ export class ChatStore {
 				requestId,
 				input: input.prompt,
 				...(input.images?.length ? { images: input.images } : {}),
+				// Deliberately not echoed into `entries` above: the transcript shows
+				// what the user sent, and this is context the app supplied.
+				...(input.contextImages?.length ? { contextImages: input.contextImages } : {}),
 				...(this.conversationId ? { conversationId: this.conversationId } : {}),
 				model: this.modelOverride,
 				visionModel: this.visionModelOverride,

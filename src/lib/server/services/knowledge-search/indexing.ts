@@ -403,19 +403,29 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 			await this.repository.deleteForDiagram(actor, diagram.id);
 			return;
 		}
-		const note = await this.noteReader.get(actor, diagram.noteId);
-		const sourceTitle = `Diagram in ${note.title}`;
+		// A diagram chunk is a bare list of labels, so its title is the only context
+		// the reranker gets — `rerankDocumentText` joins title, section and content.
+		// A diagram that came from a note borrows that note's name; a studio diagram
+		// has none, so it must still say what it is rather than index untitled.
+		//
+		// Fetched for the note's title alone — the diagram carries its own
+		// `projectId` since it became project-owned, so nothing else here needs it.
+		const note =
+			diagram.sourceNoteId === undefined
+				? undefined
+				: await this.noteReader.get(actor, diagram.sourceNoteId);
+		const sectionPath = note?.title ?? diagram.title ?? 'Untitled diagram';
+		const sourceTitle = note ? `Diagram in ${sectionPath}` : `Diagram: ${sectionPath}`;
 		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
 			source: { kind: 'diagram', diagramId: diagram.id },
 			contents,
-			metadata: { sourceTitle, sectionPath: note.title },
+			metadata: { sourceTitle, sectionPath },
 			embedPrefix: sourceTitle,
 			base: {
-				projectId: note.projectId,
-				noteId: diagram.noteId,
+				projectId: diagram.projectId,
 				diagramId: diagram.id,
 				sourceTitle,
-				sectionPath: note.title,
+				sectionPath,
 				sourceRevision: 0,
 				sourceCreatedAt: diagram.createdAt
 			}

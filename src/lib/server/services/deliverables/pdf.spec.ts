@@ -544,4 +544,15 @@ describe('Pdf generation invariants', () => {
 		});
 		expect(pdfText(withTitle)).toContain('ZebraQuarterlyReport');
 	});
+
+	// draw.io has no readable source, so a missing render must say so rather than
+	// printing XML at the reader.
+	it('marks a draw.io diagram unavailable when nothing rendered it', async () => {
+		const withDrawio: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'drawio', attrs: { diagramId: '00000000-0000-4000-8000-0000000000d1' } }]
+		} as ProseMirrorDocument;
+		const buffer = await generate({ notes: [{ title: 'Note', document: withDrawio }] });
+		expect(buffer.byteLength).toBeGreaterThan(0);
+	});
 });

@@ -357,6 +357,28 @@ function tableBlock(node: Record<string, unknown>, context: ConversionContext): 
 	};
 }
 
+/**
+ * One rendered diagram, however it was keyed.
+ *
+ * The browser-rendered PNG raster is the reference rendering (the DOCX export
+ * uses the same one); pdfmake's `fit` downscales to the content box, preserving
+ * aspect, without upscaling — so diagrams always stay inline on the page.
+ *
+ * Both diagram kinds resolve through this rather than each spelling out the
+ * raster-then-vector fallback: the two copies were identical down to the fit box,
+ * and only one carried the note explaining it.
+ */
+function diagramContent(key: string, context: ConversionContext): unknown {
+	// Leave the block's own margins out of the fit box: an unbreakable block
+	// reaching the exact page body height sits on a knife's edge.
+	const fit = [context.contentWidth, context.usableHeight - 16];
+	const margin = [0, 8, 0, 8];
+	const png = context.diagramPngs[key];
+	if (png) return { image: png, fit, margin };
+	const svg = context.diagramSvgs[key];
+	return svg ? { svg, fit, margin } : undefined;
+}
+
 function convertNode(node: Record<string, unknown>, context: ConversionContext): unknown {
 	const type = node.type as string;
 	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
@@ -419,30 +441,22 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 		}
 		case 'mermaid': {
 			const source = collectText(node);
-			const hash = mermaidSourceHash(source);
-			// The browser-rendered PNG raster is the reference rendering (the DOCX export
-			// uses the same one); pdfmake's `fit` downscales to the content box, preserving
-			// aspect, without upscaling — so diagrams always stay inline on the page.
-			const png = context.diagramPngs[hash];
-			if (png) {
-				return {
-					image: png,
-					// Leave the block's own margins out of the fit box: an unbreakable block
-					// reaching the exact page body height sits on a knife's edge.
-					fit: [context.contentWidth, context.usableHeight - 16],
-					margin: [0, 8, 0, 8]
-				};
-			}
-			const svg = context.diagramSvgs[hash];
-			if (svg) {
-				return {
-					svg,
-					fit: [context.contentWidth, context.usableHeight - 16],
-					margin: [0, 8, 0, 8]
-				};
-			}
 			// Without a browser render the diagram source is still worth keeping.
-			return codePanel(source);
+			return diagramContent(mermaidSourceHash(source), context) ?? codePanel(source);
+		}
+		case 'drawio': {
+			// draw.io ships its own exported SVG, rasterized by the browser like a
+			// mermaid diagram. Without one there is no source worth printing — the XML
+			// is not something a reader can use — so the block says it is missing.
+			const reference = (node.attrs as { diagramId?: string } | undefined)?.diagramId;
+			return (
+				(reference ? diagramContent(reference, context) : undefined) ?? {
+					text: '[diagram unavailable]',
+					italics: true,
+					color: '#9ca3af',
+					margin: [0, 4, 0, 4]
+				}
+			);
 		}
 		case 'horizontalRule': {
 			return {

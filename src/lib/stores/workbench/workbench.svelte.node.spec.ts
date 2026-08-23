@@ -280,3 +280,42 @@ describe('Workbench store closing a tab away from the workbench', () => {
 		expect(router.currentUrl().pathname).toBe('/settings');
 	});
 });
+
+describe('Workbench store opening a pair of tabs', () => {
+	const CHAT = 'chat:33333333-3333-4333-8333-333333333333';
+	const DRAFT = 'draft:33333333-3333-4333-8333-333333333333';
+
+	/** The gallery's starting point: a page with no workbench tabs open at all. */
+	const emptyWorkbench = () => {
+		const context = setup('/diagrams', [NOTE_A], NOTE_A);
+		context.store.openTabs = [];
+		context.store.focusedTabId = undefined;
+		return context;
+	};
+
+	// The studio is a pair, so it has to arrive as one navigation: two `goto`s
+	// leave a history entry showing a chat with no canvas beside it.
+	it('navigates once for both tabs', async () => {
+		const { router, store } = emptyWorkbench();
+		await store.openSplit(CHAT, DRAFT);
+		expect(router.gotoCount).toBe(1);
+	});
+
+	it('focuses the first tab', async () => {
+		const { router, store } = emptyWorkbench();
+		await store.openSplit(CHAT, DRAFT);
+		expect(router.currentUrl().searchParams.get('focus')).toBe(CHAT);
+	});
+
+	it('puts the second tab in the split', async () => {
+		const { router, store } = emptyWorkbench();
+		await store.openSplit(CHAT, DRAFT);
+		expect(router.currentUrl().searchParams.get('split')).toBe(DRAFT);
+	});
+
+	it('opens both tabs in the strip', async () => {
+		const { router, store } = emptyWorkbench();
+		await store.openSplit(CHAT, DRAFT);
+		expect(router.currentUrl().searchParams.get('tabs')).toBe(`${CHAT},${DRAFT}`);
+	});
+});

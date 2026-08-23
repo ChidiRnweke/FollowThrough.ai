@@ -8,16 +8,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const factory = AppFactory.controllers();
 	const actor = AppFactory.actor(locals);
 
-	const [view, todosResult, memoryResult, artifactsResult, attachments, trash, userPreferences] =
-		await Promise.all([
-			factory.projects().get(actor, { projectId }),
-			factory.todos().list(actor, { projectId, status: 'open' }),
-			factory.memory().list(actor, { projectId }),
-			factory.deliverables().listArtifacts(actor, projectId),
-			factory.attachments().listForProject(actor, projectId),
-			factory.notes().listTrash(actor, { projectId }),
-			factory.userSettings().getPreferences(actor)
-		]);
+	const [
+		view,
+		todosResult,
+		memoryResult,
+		artifactsResult,
+		diagramCount,
+		attachments,
+		trash,
+		userPreferences
+	] = await Promise.all([
+		factory.projects().get(actor, { projectId }),
+		factory.todos().list(actor, { projectId, status: 'open' }),
+		factory.memory().list(actor, { projectId }),
+		factory.deliverables().listArtifacts(actor, projectId),
+		factory.diagramStudio().countProjectDiagrams(actor, { projectId, kind: 'drawio' }),
+		factory.attachments().listForProject(actor, projectId),
+		factory.notes().listTrash(actor, { projectId }),
+		factory.userSettings().getPreferences(actor)
+	]);
 
 	// Overdue is a clock comparison, so it happens here rather than in a $derived.
 	// Reading the clock during render reads it twice — once for SSR, once during
@@ -43,6 +52,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			todos: todosResult.todos.length,
 			memory: memoryResult.entries.length,
 			artifacts: artifactsResult.total,
+			diagrams: diagramCount,
 			attachments: attachments.length
 		}
 	};

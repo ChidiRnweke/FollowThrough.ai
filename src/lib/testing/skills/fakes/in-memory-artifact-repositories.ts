@@ -1,5 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { ConversationId } from '$lib/models/agent';
+import type { Diagram, DiagramId, ListProjectDiagramsParams } from '$lib/models/diagrams';
 import type { ExternalReference, ReferenceId } from '$lib/models/references';
 import type { NoteId, NoteRelationship } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -51,17 +52,52 @@ export class InMemoryReferenceRepository implements ReferenceRepository {
 
 export class InMemoryDiagramRepository implements DiagramRepository {
 	diagrams: Diagram[] = [];
-	projectIds = new Map<DiagramId, ProjectId>();
+	/** Notes whose document renders a diagram, keyed by diagram id. */
+	referencingNotes = new Map<DiagramId, number>();
 	async findById(actor: ActorContext, id: DiagramId) {
 		return this.diagrams.find((item) => item.id === id && item.userId === actor.userId);
 	}
-	async listForNote(actor: ActorContext, noteId: NoteId) {
-		return this.diagrams.filter((item) => item.noteId === noteId && item.userId === actor.userId);
-	}
-	async listForProject(actor: ActorContext, projectId: ProjectId) {
-		return this.diagrams.filter(
-			(item) => item.userId === actor.userId && this.projectIds.get(item.id) === projectId
+	async findByConversation(actor: ActorContext, conversationId: ConversationId) {
+		return this.diagrams.find(
+			(item) => item.conversationId === conversationId && item.userId === actor.userId
 		);
+	}
+	async countReferencingNotes(_actor: ActorContext, id: DiagramId) {
+		return this.referencingNotes.get(id) ?? 0;
+	}
+	async listForNote(actor: ActorContext, noteId: NoteId) {
+		return this.diagrams.filter(
+			(item) => item.sourceNoteId === noteId && item.userId === actor.userId
+		);
+	}
+	async countForProject(
+		actor: ActorContext,
+		projectId: ProjectId,
+		params: ListProjectDiagramsParams = {}
+	) {
+		return (await this.listForProject(actor, projectId, params)).total;
+	}
+	async listForProject(
+		actor: ActorContext,
+		projectId: ProjectId,
+		params: ListProjectDiagramsParams = {}
+	) {
+		const term = params.query?.trim().toLowerCase();
+		const matched = this.diagrams.filter(
+			(item) =>
+				item.userId === actor.userId &&
+				item.projectId === projectId &&
+				(!params.kind || item.kind === params.kind) &&
+				(!term ||
+					(item.title ?? '').toLowerCase().includes(term) ||
+					item.searchableText.toLowerCase().includes(term))
+		);
+		const offset = params.offset ?? 0;
+		const page =
+			params.limit === undefined
+				? matched.slice(offset)
+				: matched.slice(offset, offset + params.limit);
+		return { diagrams: page, total: matched.length };
 	}
 	async insert(_actor: ActorContext, diagram: Diagram) {
 		this.diagrams.push(diagram);

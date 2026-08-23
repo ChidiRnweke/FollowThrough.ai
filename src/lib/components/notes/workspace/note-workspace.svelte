@@ -882,6 +882,7 @@
 			<NoteEditor
 				bind:this={editorRef}
 				noteId={note.id}
+				projectId={note.projectId}
 				revision={note.currentRevision}
 				{inlineSuggestionsEnabled}
 				document={note.document}

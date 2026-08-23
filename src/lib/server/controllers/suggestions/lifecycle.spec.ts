@@ -12,6 +12,7 @@ import {
 	memorySuggestionBuilder,
 	testActor,
 	testProjectId,
+	testNoteId,
 	testSuggestionId,
 	testTodoId,
 	todoBuilder
@@ -189,5 +190,39 @@ describe('Suggestion transaction invariants', () => {
 			// The invariant under test is the restored state.
 		}
 		expect(suggestions.suggestions[0]?.status).toBe('accepted');
+	});
+});
+
+describe('Draw.io acceptance invariants', () => {
+	const drawioSuggestion = () =>
+		suggestionBuilder({
+			id: testSuggestionId(9),
+			kind: 'diagram',
+			payload: {
+				noteId: testNoteId(),
+				kind: 'drawio',
+				title: 'Architecture',
+				source: '<mxfile />'
+			}
+		} as never);
+
+	// A draw.io diagram's preview is the SVG its editor exports on save. Accepting
+	// one without that review creates a diagram that can never show itself, and
+	// nothing in the system can repair it — so it must fail rather than persist.
+	it('refuses a draw.io suggestion accepted without its review', async () => {
+		const { suggestions, accept } = setup();
+		suggestions.suggestions = [drawioSuggestion()];
+		await expect(
+			accept.acceptReviewed(testActor(), { suggestionId: testSuggestionId(9) })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+
+	it('leaves the suggestion pending when its acceptance is refused', async () => {
+		const { suggestions, accept } = setup();
+		suggestions.suggestions = [drawioSuggestion()];
+		await accept
+			.acceptReviewed(testActor(), { suggestionId: testSuggestionId(9) })
+			.catch(() => undefined);
+		expect(suggestions.suggestions[0]?.status).toBe('proposed');
 	});
 });

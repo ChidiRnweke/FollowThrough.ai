@@ -4,6 +4,12 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+	import { canvasSubjectKey } from '$lib/stores/diagrams/canvas-subject';
+	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { chatTab } from '$lib/stores/workbench/tab-ref';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
 	import { ChatPanel } from '$lib/components/chat';
 	import { AgentSettingsPopover } from '$lib/components/agent';
@@ -42,6 +48,24 @@
 	// panes use — the agent's snapshot then names the chats open beside it.
 	// Registered in `onMount` like `note-pane.svelte`, so `sessionKey` is read
 	// where it is stable rather than captured during init.
+	// The project a studio conversation belongs to. `ChatPanel` turns it into the
+	// run's `projectId`, which becomes the conversation's own project on its first
+	// turn — without it a studio chat is scoped to nothing and its diagram has no
+	// project to be kept in.
+	const draftProjectId = $derived(diagramRegistry.draftProject(sessionKey));
+
+	// The canvas opens when the conversation has drafted something the canvas has
+	// not shown yet, and never for a background tab — a chat the user is not looking
+	// at must not take the split out from under the one they are.
+	const canvas = $derived(canvasFor(sessionKey));
+	$effect(() => {
+		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
+		const key = canvasSubjectKey(canvas.subject);
+		if (!canvasOpenings.shouldOpen(sessionKey, key) || !canvas.tab) return;
+		canvasOpenings.markShown(sessionKey, key);
+		void workbench.setSplit(canvas.tab);
+	});
+
 	let releaseContext: (() => void) | undefined;
 	onMount(() => {
 		releaseContext = appContext.registerChatPane(sessionKey, () => ({
@@ -85,6 +109,14 @@
 		</div>
 	</header>
 	<div class="min-h-0 flex-1">
-		<ChatPanel {chat} {shell} {sessions} {agentPreferences} {agentAvailable} showHistory={false} />
+		<ChatPanel
+			{chat}
+			{shell}
+			{sessions}
+			{agentPreferences}
+			{agentAvailable}
+			activeProjectId={draftProjectId}
+			showHistory={false}
+		/>
 	</div>
 </div>

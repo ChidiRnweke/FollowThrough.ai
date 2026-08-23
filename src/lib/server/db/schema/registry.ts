@@ -390,9 +390,22 @@ export const diagrams = pgTable(
 		projectId: uuid('project_id')
 			.notNull()
 			.references(() => projects.id, { onDelete: 'cascade' }),
-		noteId: uuid('note_id')
-			.notNull()
-			.references(() => notes.id, { onDelete: 'cascade' }),
+		// Null for a studio diagram, which is owned by its project rather than by a
+		// note. Deleting the note it came from leaves the diagram standing, because
+		// other notes may reference it.
+		//
+		// "Source" rather than "owner": unlike an attachment, a diagram is not the
+		// note's — this only records where it came from, and other notes may
+		// reference it. The migration renames the column in place; drizzle-kit's
+		// non-interactive fallback would have dropped and re-added it, discarding
+		// every existing diagram's note.
+		sourceNoteId: uuid('source_note_id').references(() => notes.id, { onDelete: 'set null' }),
+		// The studio conversation that produced this diagram. It is the studio
+		// diagram's provenance: promotion creates the row outright, so there is no
+		// ancestor diagram for `promotedFromId` to point at.
+		conversationId: uuid('conversation_id').references(() => conversations.id, {
+			onDelete: 'set null'
+		}),
 		kind: diagramKind('kind').notNull(),
 		title: text('title'),
 		source: text('source').notNull(),
@@ -408,8 +421,9 @@ export const diagrams = pgTable(
 		...timestamps
 	},
 	(table) => [
-		index('diagrams_note_idx').on(table.noteId),
-		index('diagrams_project_idx').on(table.projectId)
+		index('diagrams_source_note_idx').on(table.sourceNoteId),
+		index('diagrams_project_idx').on(table.projectId),
+		uniqueIndex('diagrams_conversation_unique').on(table.conversationId)
 	]
 );
 
@@ -910,8 +924,10 @@ export const memoryEntries = pgTable(
 
 // Retrieval units are separate from notes so large notes and diagram labels can be
 // independently embedded and reranked. The selected embedding model emits 3072 dimensions.
-// Each chunk has exactly one source: a note (diagram chunks also carry the note) or a
-// memory entry.
+// Each chunk has exactly one source: a note, a memory entry, an attachment, or a
+// diagram. A diagram chunk stands on its own rather than borrowing its note, because
+// a studio diagram has no note to borrow; a note's own chunks inline the text of the
+// diagrams it holds, so the document still reads as a document.
 export const searchChunks = pgTable(
 	'search_chunks',
 	{
@@ -961,7 +977,7 @@ export const searchChunks = pgTable(
 			.where(sql`embedding is null`),
 		check(
 			'search_chunks_single_source',
-			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}) = 1`
+			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}, ${table.diagramId}) = 1`
 		)
 	]
 );

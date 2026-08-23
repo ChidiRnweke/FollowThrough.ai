@@ -8,6 +8,7 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramsController } from '$lib/server/controllers/diagrams/controller';
+import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
 import type { RetrievalController } from '$lib/server/controllers/knowledge-search/controller';
 import type { MemoryController } from '$lib/server/controllers/memory/controller';
 import type { NotesController } from '$lib/server/controllers/notes/controller';
@@ -93,6 +94,7 @@ export interface AgentToolCoverage {
 	readonly relationships: Coverage<RelationshipsController>;
 	readonly references: Coverage<ReferencesController>;
 	readonly diagrams: Coverage<DiagramsController>;
+	readonly diagramStudio: Coverage<DiagramStudioController>;
 	readonly suggestions: Coverage<SuggestionsController>;
 	readonly skills: Coverage<SkillsController>;
 	readonly trustPolicies: Coverage<TrustPoliciesController>;
@@ -104,6 +106,13 @@ export interface AgentToolCoverage {
 	readonly memory: Coverage<MemoryController>;
 	readonly retrieval: Coverage<RetrievalController>;
 }
+
+/**
+ * Why most of the studio's surface is not an agent tool: these are the user
+ * saying what the project keeps, and the studio is where they say it.
+ */
+const STUDIO_GESTURE =
+	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
 
 export const agentToolCoverage = {
 	workspace: { getShellContext: { kind: 'read' }, getTodayView: { kind: 'read' } },
@@ -220,7 +229,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Inline draw.io conversion is scoped to the note editor review workflow.'
 		},
-		getDrawio: { kind: 'excluded', reason: 'The draw.io editor uses a note-scoped route.' },
+		getDrawio: {
+			kind: 'excluded',
+			reason: 'The note-scoped draw.io editor loads its own diagram.'
+		},
 		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
 		promote: { kind: 'proposal' },
 		startGenerateMermaid: {
@@ -239,17 +251,58 @@ export const agentToolCoverage = {
 				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
 		}
 	},
+	diagramStudio: {
+		// `read` is about approval: it stores nothing, so it raises no prompt. How it
+		// is *rendered* afterwards is a separate question, answered by the `proposal`
+		// family in `tool-disclosure.ts`.
+		presentDiagram: { kind: 'read' },
+		readCanvasDiagram: { kind: 'read' },
+		readProjectDiagram: { kind: 'read' },
+		searchDiagramIcons: { kind: 'read' },
+		// Everything below is a user gesture. Keeping, renaming and deleting are the
+		// user saying what the project holds; the studio and the gallery own those
+		// gates, and the agent's part is to put a version on the canvas.
+		keepStudioDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		renameProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		deleteProjectDiagram: {
+			kind: 'excluded',
+			reason: 'Deleting a diagram can break notes that render it; it stays a confirmed user action.'
+		},
+		saveProjectDrawio: {
+			kind: 'excluded',
+			reason: 'The studio canvas owns explicit saves; the agent does not drive the draw.io embed.'
+		},
+		countDiagramReferences: {
+			kind: 'excluded',
+			reason: 'The reference count exists to word the delete confirmation.'
+		},
+		getProjectDiagram: {
+			kind: 'excluded',
+			reason:
+				'The studio canvas loads its own diagram; the agent reads one through read_project_diagram, which does not hand back raw draw.io XML.'
+		},
+		listProjectDiagrams: {
+			kind: 'excluded',
+			reason:
+				'The project diagram gallery is a UI surface; the agent finds diagrams with search_knowledge.'
+		},
+		countProjectDiagrams: {
+			kind: 'excluded',
+			reason: 'The count exists to fill in a number on the project overview.'
+		}
+	},
 	suggestions: {
 		list: { kind: 'read' },
 		listPendingMemory: {
 			kind: 'excluded',
 			reason: 'Pending memory review is scoped to the notification and memory UI.'
 		},
-		acceptReviewed: {
+		acceptReviewed: { kind: 'mutation' },
+		accept: {
 			kind: 'excluded',
-			reason: 'Reviewed draw.io acceptance is scoped to the diagram review UI.'
+			reason:
+				'Acceptance goes through acceptReviewed, which refuses a draw.io diagram that has no review to draw its preview.'
 		},
-		accept: { kind: 'mutation' },
 		reject: { kind: 'mutation' },
 		revert: { kind: 'mutation' }
 	},
@@ -1101,6 +1154,41 @@ export class AgentTools {
 				(input) => factory.diagrams().reviseMermaid(actor, input as never)
 			),
 			define(
+				'present_diagram',
+				toolDescription('present_diagram'),
+				'read',
+				z.object({
+					source: z.string().min(1),
+					title: z.string().min(1).optional(),
+					diagramId: id.optional()
+				}),
+				(input) => factory.diagramStudio().presentDiagram(actor, input as never)
+			),
+			define(
+				'search_icons',
+				toolDescription('search_icons'),
+				'read',
+				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
+				(input) => factory.diagramStudio().searchDiagramIcons(actor, input as never)
+			),
+			define(
+				'read_canvas_diagram',
+				toolDescription('read_canvas_diagram'),
+				'read',
+				z.object({}),
+				() =>
+					factory.diagramStudio().readCanvasDiagram(actor, {
+						conversationId: this.context.input.conversationId
+					} as never)
+			),
+			define(
+				'read_project_diagram',
+				toolDescription('read_project_diagram'),
+				'read',
+				z.object({ diagramId: id, includeSource: z.boolean().optional() }),
+				(input) => factory.diagramStudio().readProjectDiagram(actor, input as never)
+			),
+			define(
 				'promote_diagram',
 				toolDescription('promote_diagram'),
 				'proposal',
@@ -1123,7 +1211,12 @@ export class AgentTools {
 				toolDescription('accept_suggestion'),
 				'mutation',
 				z.object({ suggestionId: id }),
-				(input) => factory.suggestions().accept(actor, input as never)
+				// `acceptReviewed`, not `accept`: a draw.io diagram accepted without its
+				// review has no preview and can never gain one, and that guard lives in
+				// `acceptReviewed`. Bound to the raw `accept`, this tool was the one
+				// caller in the system that could mint a preview-less diagram. For every
+				// other kind of suggestion the two are the same call.
+				(input) => factory.suggestions().acceptReviewed(actor, input as never)
 			),
 			define(
 				'reject_suggestion',

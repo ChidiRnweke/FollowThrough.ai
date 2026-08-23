@@ -156,6 +156,8 @@ export const toReference = (row: typeof schema.references.$inferSelect): Externa
 export const toDiagram = (row: typeof schema.diagrams.$inferSelect): Diagram =>
 	domain<Diagram>({
 		...row,
+		sourceNoteId: row.sourceNoteId ?? undefined,
+		conversationId: row.conversationId ?? undefined,
 		title: row.title ?? undefined,
 		renderedSvg: row.renderedSvg ?? undefined,
 		promotedFromId: row.promotedFromId ?? undefined,

@@ -46,10 +46,7 @@ const publishRepeatedly = async (
 	}
 };
 
-const revisionIdOf = async (
-	controller: Notes,
-	revision: number
-): Promise<NoteRevisionId> => {
+const revisionIdOf = async (controller: Notes, revision: number): Promise<NoteRevisionId> => {
 	const { revisions } = await controller.listRevisions(testActor(), { noteId: testNoteId() });
 	return revisions.find((candidate) => candidate.revision === revision)!.id;
 };

@@ -6,6 +6,7 @@ import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent'
 import { noteEtag } from '$lib/models/notes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
+	appContextBuilder,
 	noteBuilder,
 	testActor,
 	testProvenanceId
@@ -33,6 +34,8 @@ const registry = (
 ) =>
 	new AgentTools(options.factory ?? ({} as ControllerFactory), testActor(), mode, {
 		provenanceId: testProvenanceId(),
+		// A selection is supplied so the exhaustiveness check below sees the
+		// selection-bound tools, which are the only context-gated ones left.
 		input: { prompt: 'Help', selection: authoritativeSelection },
 		model: 'openai/gpt-5.6'
 	});
@@ -106,6 +109,46 @@ const directToolFor = (
 		(candidate) => candidate.name === name
 	) as FunctionTool;
 
+describe('Accepting a suggestion on the user\u2019s behalf', () => {
+	/** Records which acceptance the tool reached for, without a mocking library. */
+	const recordingSuggestions = () => {
+		const called: string[] = [];
+		const factory = {
+			suggestions: () => ({
+				accept: async () => {
+					called.push('accept');
+					return {};
+				},
+				acceptReviewed: async () => {
+					called.push('acceptReviewed');
+					return {};
+				}
+			})
+		} as unknown as ControllerFactory;
+		return { called, factory };
+	};
+
+	const acceptWith = async (factory: ControllerFactory): Promise<void> => {
+		const tool = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { prompt: 'Accept it' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'accept_suggestion');
+		await tool?.execute({ suggestionId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55' });
+	};
+
+	// Bound to the raw `accept`, this tool was the only caller in the system that
+	// could mint a draw.io diagram with no preview: the guard that refuses one
+	// lives in `acceptReviewed`, and the UI has always gone through it.
+	it('goes through the reviewed acceptance that guards draw.io', async () => {
+		const { called, factory } = recordingSuggestions();
+		await acceptWith(factory);
+		expect(called).toEqual(['acceptReviewed']);
+	});
+});
+
 describe('Agent tool coverage invariants', () => {
 	it('classifies every covered controller method', () => {
 		const classifications = Object.values(agentToolCoverage).flatMap((controller) =>
@@ -131,6 +174,21 @@ describe('Agent tool coverage invariants', () => {
 		// search_note (single note).
 		const scopedAliases = 6;
 		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
+	});
+
+	// The studio is a chat with a canvas beside it, not a place. Gating this on a
+	// surface hid it from the very screen the studio runs on, and a capability the
+	// model cannot reach is one nobody discovers.
+	it('offers present_diagram in an ordinary chat', () => {
+		const chat = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: {
+				prompt: 'Help',
+				appContext: appContextBuilder({ surface: { kind: 'chat', presentation: 'full_page' } })
+			},
+			model: 'openai/gpt-5.6'
+		});
+		expect(chat.tools().map((tool) => tool.name)).toContain('present_diagram');
 	});
 
 	it('exposes the user profile as a read tool', async () => {
@@ -164,6 +222,7 @@ describe('Agent tool coverage invariants', () => {
 			'propose_memory_change',
 			'edit_note',
 			'save_note',
+			'present_diagram',
 			'search_tools'
 		]);
 	});

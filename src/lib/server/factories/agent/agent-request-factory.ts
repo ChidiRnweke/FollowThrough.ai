@@ -1,4 +1,24 @@
 import { z } from 'zod';
+import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
+import { APP_SURFACE_KINDS } from '$lib/models/workspace/app-context';
+import type { RunAgentInput } from '$lib/models/agent';
+
+/**
+ * The surface list is written down twice — once in `models/workspace/app-context`
+ * beside the client that fills it in, once in `models/agent` beside the run that
+ * consumes it — because a model domain is self-contained and neither may import
+ * the other. This is the one place that can see both, so this is where the two
+ * are held to each other.
+ *
+ * They drifted once already: `diagrams` and `diagram_studio` reached the type but
+ * not the validator, and every chat sent from those screens came back a bare 400
+ * before it ever reached the agent. Adding a surface to one list and not the
+ * other is now a build error instead.
+ */
+type AgentSurfaceKind = NonNullable<RunAgentInput['appContext']>['surface']['kind'];
+type Mutual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const _surfacesAgree: Mutual<AppSurfaceKind, AgentSurfaceKind> = true;
+void _surfacesAgree;
 
 const id = z.string().uuid();
 const selectionSchema = z.object({
@@ -30,24 +50,10 @@ const appContextSchema = z.object({
 		layout: z.enum(['compact', 'wide'])
 	}),
 	surface: z.object({
-		kind: z.enum([
-			'today',
-			'todos',
-			'project',
-			'project_todos',
-			'project_memory',
-			'project_attachments',
-			'artifacts',
-			'note_workbench',
-			'diagram_editor',
-			'chats',
-			'chat',
-			'skills',
-			'skill',
-			'profile',
-			'settings',
-			'unknown'
-		]),
+		// Built from the model's own list, not restated here: when the two drifted,
+		// every chat sent from a screen the validator had never heard of was
+		// refused at the boundary with a bare 400.
+		kind: z.enum(APP_SURFACE_KINDS),
 		presentation: z.enum(['right_panel', 'full_page']),
 		filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
 	}),
@@ -108,22 +114,28 @@ export const runIdInput = z.object({ runId: z.string().uuid() });
  * controller keeps the live snapshot as the effective scope and forwards the
  * staged one to the agent as `requestedScope`.
  */
+const conversationImages = z
+	.array(
+		z.object({
+			id,
+			mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+			dataUrl: z.string().max(14_000_000),
+			name: z.string().min(1).max(255)
+		})
+	)
+	.max(4)
+	.optional();
+
 export const submitAgentRunSchema = z
 	.object({
 		requestId: id,
 		conversationId: id.optional(),
 		input: z.string().trim(),
-		images: z
-			.array(
-				z.object({
-					id,
-					mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
-					dataUrl: z.string().max(14_000_000),
-					name: z.string().min(1).max(255)
-				})
-			)
-			.max(4)
-			.optional(),
+		images: conversationImages,
+		// The same shape and the same cap. A separate field only because it must
+		// not enter the transcript as something the user attached — the count and
+		// size budget they share is enforced together in the controller.
+		contextImages: conversationImages,
 		model: z.string().nullable().optional(),
 		visionModel: z.string().nullable().optional(),
 		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),

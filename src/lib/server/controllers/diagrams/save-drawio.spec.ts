@@ -14,6 +14,7 @@ import {
 	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
 
 const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>API</text></svg>';
 
@@ -25,11 +26,13 @@ const setup = (kind: 'drawio' | 'mermaid' = 'drawio') => {
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
 			diagramFinder: diagrams,
-			diagramWriter: diagrams,
-			diagramIndexer: diagrams,
-			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioSvgSanitizer: new DrawioSvgSanitizer(),
-			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			drawioWrites: new DrawioWrites(
+				diagrams,
+				new DrawioXmlValidator(),
+				new DrawioSvgSanitizer(),
+				new DrawioDiagramTextExtractor(),
+				diagrams
+			),
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);

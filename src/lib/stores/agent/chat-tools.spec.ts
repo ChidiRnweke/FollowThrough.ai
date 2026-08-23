@@ -84,9 +84,9 @@ const envelope = (args: Record<string, unknown>): ChatToolActivity => ({
 
 describe('use_tool unwrapping', () => {
 	it('names the dispatched tool rather than the wrapper', () => {
-		expect(unwrapToolCall(envelope({ name: 'save_note', payload: { noteId: 'note-1' } })).name).toBe(
-			'save_note'
-		);
+		expect(
+			unwrapToolCall(envelope({ name: 'save_note', payload: { noteId: 'note-1' } })).name
+		).toBe('save_note');
 	});
 
 	it('lifts the nested payload to the call arguments', () => {

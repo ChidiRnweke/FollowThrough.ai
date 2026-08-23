@@ -116,3 +116,22 @@ export function describeError(error: unknown): string {
 	}
 	return parts.join(' <- ');
 }
+
+/**
+ * The message to show a user for a failure that came back from the server.
+ *
+ * A remote function does not reject with an `Error`: SvelteKit sends the object
+ * `handleError` returned and the client rejects with that shape, so the usual
+ * `error instanceof Error ? error.message : fallback` idiom throws away the one
+ * useful thing — a `DomainError`'s own message — and shows the generic fallback
+ * instead. That is how "The diagram could not be saved" hid a precise validation
+ * error for as long as it did.
+ */
+export function userFacingMessage(error: unknown, fallback: string): string {
+	if (error instanceof Error && error.message) return error.message;
+	if (typeof error === 'object' && error !== null) {
+		const { message } = error as { message?: unknown };
+		if (typeof message === 'string' && message.trim()) return message;
+	}
+	return fallback;
+}

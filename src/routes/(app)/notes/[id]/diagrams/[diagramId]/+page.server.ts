@@ -1,14 +1,11 @@
-import type { DiagramId } from '$lib/models/diagrams';
-import type { NoteId } from '$lib/models/notes';
-import { AppFactory } from '$lib/server/factories/app-factory';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
-	const diagram = await AppFactory.controllers()
-		.diagrams()
-		.getDrawio(AppFactory.actor(locals), {
-			noteId: params.id as NoteId,
-			diagramId: params.diagramId as DiagramId
-		});
-	return { diagram };
+/**
+ * The note-scoped draw.io editor moved to the project studio, where a diagram is
+ * edited beside the conversation that produced it. Existing links and bookmarks
+ * keep working through this redirect; the diagram itself is the same row.
+ */
+export const load: PageServerLoad = async ({ params }) => {
+	redirect(308, `/diagrams/${params.diagramId}`);
 };

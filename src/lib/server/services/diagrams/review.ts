@@ -1,7 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram, DrawioDiagram, DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
+import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
+
+const now = (): DateTime => new Date().toISOString() as DateTime;
 
 interface DiagramReader {
 	get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
@@ -20,7 +23,7 @@ interface DrawioPreviewSanitizer {
 }
 
 interface DiagramTextExtractor {
-	extract(diagram: Diagram): Promise<string>;
+	extract(diagram: { readonly source: string }): Promise<string>;
 }
 
 interface DiagramIndexer {
@@ -34,6 +37,14 @@ export interface DrawioReviewInput {
 	readonly renderedSvg: string;
 }
 
+/**
+ * Accepting a reviewed conversion into the note it was raised against.
+ *
+ * The write sequence below is the same one `DrawioWrites` performs for the
+ * editor and the studio, and it is spelled out again rather than shared: one
+ * service never imports another. What differs is the guard — this one answers to
+ * a suggestion and a note, which is the reason it exists separately.
+ */
 export class DrawioReview {
 	constructor(
 		private readonly diagrams: DiagramReader & DiagramWriter,
@@ -45,7 +56,7 @@ export class DrawioReview {
 
 	async save(actor: ActorContext, input: DrawioReviewInput): Promise<DrawioDiagram> {
 		const current = await this.diagrams.get(actor, input.diagramId);
-		if (current.noteId !== input.noteId || current.kind !== 'drawio')
+		if (current.sourceNoteId !== input.noteId || current.kind !== 'drawio')
 			throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
 		const source = this.sourceValidator.validate(input.source);
 		const renderedSvg = this.previewSanitizer.sanitize(input.renderedSvg);
@@ -55,7 +66,7 @@ export class DrawioReview {
 			source,
 			renderedSvg,
 			searchableText,
-			updatedAt: new Date().toISOString() as DrawioDiagram['updatedAt']
+			updatedAt: now()
 		})) as DrawioDiagram;
 		await this.indexer.index(actor, diagram);
 		return diagram;

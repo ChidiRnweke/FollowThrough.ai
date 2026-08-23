@@ -1,0 +1,297 @@
+import type { ActorContext } from '$lib/models/identity';
+import type {
+	CountDiagramReferencesInput,
+	DeleteProjectDiagramInput,
+	Diagram,
+	GetProjectDiagramInput,
+	KeepStudioDiagramInput,
+	KeepStudioDiagramOutput,
+	ListProjectDiagramsInput,
+	ListProjectDiagramsOutput,
+	PresentDiagramInput,
+	PresentDiagramOutput,
+	ReadCanvasDiagramInput,
+	ReadCanvasDiagramOutput,
+	ReadProjectDiagramInput,
+	ReadProjectDiagramOutput,
+	RenameProjectDiagramInput,
+	SaveDrawioDiagramOutput,
+	SaveProjectDrawioInput,
+	SearchDiagramIconsInput,
+	SearchDiagramIconsOutput
+} from '$lib/models/diagrams';
+import { UnsupportedDiagramOperationError } from '$lib/errors';
+import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type {
+	DiagramConversationFinder,
+	DiagramDeleter,
+	DiagramFinder,
+	DiagramIconSearch,
+	DiagramIndexer,
+	DiagramLister,
+	DiagramReferenceCounter,
+	DiagramRenamer,
+	DiagramTextExtractor,
+	DiagramWriter,
+	DrawioSvgPreviewSanitizer,
+	DrawioXmlContentValidator
+} from '$lib/server/services/diagrams/contracts';
+import type { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+import type { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
+
+/**
+ * Application boundary for the project diagram studio: the canvas beside a
+ * conversation, the diagrams a project has kept, and the gallery over them.
+ *
+ * Separate from `DiagramsController`, which owns the older note-inline flow —
+ * generating and revising Mermaid inside a note and offering it as a suggestion.
+ * The two share a repository and nothing else: one produces suggestions against a
+ * note, the other produces project-owned draw.io diagrams from a conversation.
+ * Held together they were one controller of twenty-two methods and twenty-seven
+ * collaborators, most of which any given method had no use for.
+ */
+export interface DiagramStudioController {
+	/**
+	 * Put a draw.io diagram on the studio canvas.
+	 *
+	 * Validates and hands it straight back; it stores nothing. The canvas is what
+	 * shows it and the user is who keeps it, so an abandoned conversation leaves no
+	 * diagram behind.
+	 */
+	presentDiagram(actor: ActorContext, input: PresentDiagramInput): Promise<PresentDiagramOutput>;
+	/**
+	 * Read the diagram currently on this conversation's canvas.
+	 *
+	 * Diagram source is elided from replayed history because it is large and rarely
+	 * re-read; this is how it is recovered on the turn that revises it. It answers
+	 * for a draft too, which `readProjectDiagram` cannot — a draft has no row.
+	 */
+	readCanvasDiagram(
+		actor: ActorContext,
+		input: ReadCanvasDiagramInput
+	): Promise<ReadCanvasDiagramOutput>;
+	/**
+	 * Read a saved diagram as text the agent can reason about.
+	 *
+	 * Returns the labels rather than the source: draw.io XML is thousands of tokens
+	 * of markup that tells a model nothing, and injecting it would crowd out the
+	 * conversation it is meant to inform.
+	 */
+	readProjectDiagram(
+		actor: ActorContext,
+		input: ReadProjectDiagramInput
+	): Promise<ReadProjectDiagramOutput>;
+	/**
+	 * Find a logo to put in a diagram.
+	 *
+	 * Without this the agent guesses at stencil names and draws broken boxes. The
+	 * result is an https SVG URL, which is what draw.io renders through
+	 * `shape=image` and the only image form the XML validator accepts.
+	 */
+	searchDiagramIcons(
+		actor: ActorContext,
+		input: SearchDiagramIconsInput
+	): Promise<SearchDiagramIconsOutput>;
+	/**
+	 * Turn what the canvas is showing into a durable project diagram.
+	 *
+	 * The one way a studio diagram comes into being. A presented draft lives in the
+	 * conversation and is never persisted, so this has no ancestor diagram to
+	 * supersede — it creates the row. Idempotent on `conversationId`, so a replayed
+	 * event cannot produce two diagrams.
+	 */
+	keepStudioDiagram(
+		actor: ActorContext,
+		input: KeepStudioDiagramInput
+	): Promise<KeepStudioDiagramOutput>;
+	/**
+	 * Fetch one project diagram, for the studio canvas.
+	 *
+	 * Reads are scoped to the actor, so a diagram belonging to someone else is
+	 * indistinguishable from one that does not exist.
+	 *
+	 * @throws NotFoundError if the actor has no such diagram.
+	 */
+	getProjectDiagram(actor: ActorContext, input: GetProjectDiagramInput): Promise<Diagram>;
+	/** Every diagram produced in a project, oldest first. */
+	listProjectDiagrams(
+		actor: ActorContext,
+		input: ListProjectDiagramsInput
+	): Promise<ListProjectDiagramsOutput>;
+	/** How many, for a screen that shows the number and none of the diagrams. */
+	countProjectDiagrams(actor: ActorContext, input: ListProjectDiagramsInput): Promise<number>;
+	/**
+	 * Persist an edited studio diagram, which need not sit in any note.
+	 *
+	 * @throws NotFoundError if the actor has no such diagram; throws
+	 * UnsupportedDiagramOperationError if it is not draw.io.
+	 */
+	saveProjectDrawio(
+		actor: ActorContext,
+		input: SaveProjectDrawioInput
+	): Promise<SaveDrawioDiagramOutput>;
+	/** Retitle a project diagram. */
+	renameProjectDiagram(actor: ActorContext, input: RenameProjectDiagramInput): Promise<Diagram>;
+	/** Permanently delete a project diagram. Notes referencing it show it as unavailable. */
+	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void>;
+	/** How many notes render this diagram, for the delete confirmation. */
+	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number>;
+}
+
+export interface DiagramStudioDependencies {
+	transactionRunner: TransactionRunner;
+	diagramFinder: DiagramFinder;
+	diagramLister: DiagramLister;
+	diagramConversations: DiagramConversationFinder;
+	diagramReferences: DiagramReferenceCounter;
+	diagramRenamer: DiagramRenamer;
+	diagramDeleter: DiagramDeleter;
+	diagramWriter: DiagramWriter;
+	diagramIndexer: DiagramIndexer;
+	drawioWrites: DrawioWrites;
+	drawioXmlValidator: DrawioXmlContentValidator;
+	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
+	drawioTextExtractor: DiagramTextExtractor;
+	iconSearch: DiagramIconSearch;
+	canvasSource: PresentedCanvasSource;
+	/** Injected so the write path has one clock, the way the services do. */
+	now: () => DateTime;
+}
+
+export class DiagramStudio implements DiagramStudioController {
+	constructor(private readonly dependencies: DiagramStudioDependencies) {}
+
+	// `presentDiagram` and `searchDiagramIcons` cross no service seam — they
+	// validate, or they ask one collaborator and hand the answer back. They live
+	// here because the agent's tools are bound to controllers, not because there is
+	// orchestration to do; hence the `void actor` in both.
+	async presentDiagram(
+		actor: ActorContext,
+		input: PresentDiagramInput
+	): Promise<PresentDiagramOutput> {
+		void actor;
+		// Validated even though nothing is stored: the canvas is about to load this
+		// into a draw.io embed, and a malformed source would fail there, in front of
+		// the user, rather than here.
+		const source = this.dependencies.drawioXmlValidator.validate(input.source);
+		return {
+			source,
+			...(input.title ? { title: input.title } : {}),
+			...(input.diagramId ? { diagramId: input.diagramId } : {})
+		};
+	}
+
+	async readCanvasDiagram(
+		actor: ActorContext,
+		input: ReadCanvasDiagramInput
+	): Promise<ReadCanvasDiagramOutput> {
+		const presented = await this.dependencies.canvasSource.latest(actor, input.conversationId);
+		return presented ?? {};
+	}
+
+	async readProjectDiagram(
+		actor: ActorContext,
+		input: ReadProjectDiagramInput
+	): Promise<ReadProjectDiagramOutput> {
+		const diagram = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+		return {
+			id: diagram.id,
+			kind: diagram.kind,
+			...(diagram.title ? { title: diagram.title } : {}),
+			labels:
+				diagram.kind === 'drawio'
+					? await this.dependencies.drawioTextExtractor.extract(diagram)
+					: diagram.source,
+			// Only when asked for. A Mermaid diagram's source is already its labels,
+			// so there is nothing extra to hand back for one.
+			...(input.includeSource && diagram.kind === 'drawio' ? { source: diagram.source } : {})
+		};
+	}
+
+	async searchDiagramIcons(
+		actor: ActorContext,
+		input: SearchDiagramIconsInput
+	): Promise<SearchDiagramIconsOutput> {
+		void actor;
+		const icons = await this.dependencies.iconSearch.search(input.query, input.limit);
+		return { icons };
+	}
+
+	keepStudioDiagram(
+		actor: ActorContext,
+		input: KeepStudioDiagramInput
+	): Promise<KeepStudioDiagramOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			// One conversation owns one diagram, so the conversation is the idempotency
+			// key a replayed keep collides on. Returning the existing diagram is what
+			// keeps a reconnect from producing a second artifact.
+			const existing = await this.dependencies.diagramConversations.findByConversation(
+				actor,
+				input.conversationId
+			);
+			if (existing) return { diagram: existing, created: false };
+			const source = this.dependencies.drawioXmlValidator.validate(input.source);
+			// The preview comes from the embed's own export, which is the only thing
+			// that can draw draw.io. The sanitizer throws on empty input, so a diagram
+			// can never be stored with a blank preview it could never recover from.
+			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
+			const timestamp = this.dependencies.now();
+			const diagram = await this.dependencies.diagramWriter.create(actor, {
+				id: crypto.randomUUID() as Diagram['id'],
+				userId: actor.userId,
+				projectId: input.projectId,
+				conversationId: input.conversationId,
+				kind: 'drawio',
+				title: input.title,
+				source,
+				renderedSvg,
+				searchableText: await this.dependencies.drawioTextExtractor.extract({ source }),
+				createdAt: timestamp,
+				updatedAt: timestamp
+			});
+			await this.dependencies.diagramIndexer.index(actor, diagram);
+			return { diagram, created: true };
+		});
+	}
+
+	getProjectDiagram(actor: ActorContext, input: GetProjectDiagramInput): Promise<Diagram> {
+		return this.dependencies.diagramFinder.get(actor, input.diagramId);
+	}
+
+	listProjectDiagrams(
+		actor: ActorContext,
+		input: ListProjectDiagramsInput
+	): Promise<ListProjectDiagramsOutput> {
+		const { projectId, ...params } = input;
+		return this.dependencies.diagramLister.listForProject(actor, projectId, params);
+	}
+
+	countProjectDiagrams(actor: ActorContext, input: ListProjectDiagramsInput): Promise<number> {
+		const { projectId, ...params } = input;
+		return this.dependencies.diagramLister.countForProject(actor, projectId, params);
+	}
+
+	saveProjectDrawio(
+		actor: ActorContext,
+		input: SaveProjectDrawioInput
+	): Promise<SaveDrawioDiagramOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+			if (current.kind !== 'drawio')
+				throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
+			return { diagram: await this.dependencies.drawioWrites.write(actor, current, input) };
+		});
+	}
+
+	renameProjectDiagram(actor: ActorContext, input: RenameProjectDiagramInput): Promise<Diagram> {
+		return this.dependencies.diagramRenamer.rename(actor, input.diagramId, input.title);
+	}
+
+	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {
+		return this.dependencies.diagramDeleter.delete(actor, input.diagramId);
+	}
+
+	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number> {
+		return this.dependencies.diagramReferences.countReferencingNotes(actor, input.diagramId);
+	}
+}

@@ -4,10 +4,11 @@ import type { CreateReferenceInput, ExternalReference, ReferenceId } from '$lib/
 import type { CreateRelationshipInput, RelationshipId } from '$lib/models/relationships';
 import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
-import type { NoteRelationship } from '$lib/models/notes';
+import type { NoteId, NoteRelationship } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { MemoryChangePayload, MemoryEntry, MemorySuggestion } from '$lib/models/memory';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { InvalidTransitionError } from '$lib/errors';
+import { InvalidTransitionError, NotFoundError } from '$lib/errors';
 
 interface TodoCreator {
 	create(actor: ActorContext, input: CreateTodoInput): Promise<Todo>;
@@ -29,6 +30,16 @@ interface ReferenceDeleter {
 }
 interface DiagramWriter {
 	create(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
+}
+/**
+ * Diagrams are owned by their project, but a suggestion payload only names the note
+ * it was raised on, so the note is what says which project the diagram belongs to.
+ */
+interface DiagramProjectResolver {
+	findById(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<{ readonly projectId: ProjectId } | undefined>;
 }
 interface DiagramDeleter {
 	delete(actor: ActorContext, diagramId: DiagramId): Promise<void>;
@@ -63,7 +74,8 @@ export class SuggestionApplication implements ISuggestionApplication {
 		private readonly diagramDeleter: DiagramDeleter,
 		private readonly memoryChangeApplier: MemoryChangeApplier,
 		private readonly drawioValidator: Pick<DrawioContent, 'validate'>,
-		private readonly drawioLabels: Pick<DrawioContent, 'extract'>
+		private readonly drawioLabels: Pick<DrawioContent, 'extract'>,
+		private readonly diagramProjects: DiagramProjectResolver
 	) {}
 
 	async apply(
@@ -83,10 +95,13 @@ export class SuggestionApplication implements ISuggestionApplication {
 						? this.drawioValidator.validate(suggestion.payload.source)
 						: suggestion.payload.source;
 				const now = new Date().toISOString() as Diagram['createdAt'];
+				const note = await this.diagramProjects.findById(actor, suggestion.payload.noteId);
+				if (!note) throw new NotFoundError('Diagram note was not found');
 				const base = {
 					id: crypto.randomUUID() as Diagram['id'],
 					userId: actor.userId,
-					noteId: suggestion.payload.noteId,
+					projectId: note.projectId,
+					sourceNoteId: suggestion.payload.noteId,
 					title: suggestion.payload.title,
 					source,
 					searchableText:

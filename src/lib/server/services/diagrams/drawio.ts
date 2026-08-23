@@ -1,10 +1,9 @@
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
-import type { Diagram } from '$lib/models/diagrams';
 import { ValidationError } from '$lib/errors';
 
 export interface IDiagramContent {
-	extract(diagram: Diagram): Promise<string>;
+	extract(diagram: { readonly source: string }): Promise<string>;
 }
 
 const MAX_DRAWIO_SOURCE_LENGTH = 2_000_000;
@@ -27,9 +26,50 @@ const unsafeUrl = (value: string): boolean => {
 	return !normalized.startsWith('https://');
 };
 
+/**
+ * One HTML document, kept only to borrow its entity table.
+ *
+ * Created lazily so a process that never parses a diagram never builds it.
+ */
+let entityDecoder: Document | undefined;
+
+const decodeNamedEntity = (entity: string): string | undefined => {
+	entityDecoder ??= new JSDOM('').window.document;
+	const holder = entityDecoder.createElement('div');
+	holder.innerHTML = entity;
+	const decoded = holder.textContent ?? '';
+	return decoded === entity ? undefined : decoded;
+};
+
+/** The five references XML defines itself; everything else is an HTML name. */
+const XML_ENTITIES = new Set(['amp', 'lt', 'gt', 'quot', 'apos']);
+
+/**
+ * Rewrite HTML named entities as numeric character references.
+ *
+ * draw.io labels come from a rich-text editor, so `&nbsp;` and friends appear in
+ * ordinary diagrams — and an XML parser, which knows only the five XML entities,
+ * rejects the whole document with "undefined entity". Rewriting to `&#160;` keeps
+ * the character and makes the document parseable.
+ *
+ * Numeric references rather than the literal character on purpose: a numeric
+ * reference can never re-introduce markup, so this cannot smuggle a `<` past the
+ * checks that run after parsing. A name with no HTML meaning is left untouched
+ * and still fails the parse, which is the honest answer for it.
+ */
+const normalizeEntities = (source: string): string =>
+	source.replace(/&([A-Za-z][A-Za-z0-9]{1,31});/g, (match, name: string) => {
+		if (XML_ENTITIES.has(name.toLowerCase())) return match;
+		const decoded = decodeNamedEntity(match);
+		if (decoded === undefined) return match;
+		return Array.from(decoded)
+			.map((character) => `&#${character.codePointAt(0)};`)
+			.join('');
+	});
+
 const parseXml = (source: string, label: string): JSDOM => {
 	try {
-		return new JSDOM(source, { contentType: 'text/xml' });
+		return new JSDOM(normalizeEntities(source), { contentType: 'text/xml' });
 	} catch (error) {
 		throw new ValidationError(
 			`${label} is malformed: ${error instanceof Error ? error.message : String(error)}`
@@ -201,7 +241,7 @@ export class DrawioLabelExtractor {
 export class DrawioDiagramTextExtractor implements IDiagramContent {
 	private readonly labels = new DrawioLabelExtractor();
 
-	async extract(diagram: Diagram): Promise<string> {
+	async extract(diagram: { readonly source: string }): Promise<string> {
 		return this.labels.extract(diagram.source);
 	}
 }

@@ -11,9 +11,7 @@ import {
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
-	const controller = new Notes(
-		capabilityDependencies<NotesDependencies>({ noteReader: content })
-	);
+	const controller = new Notes(capabilityDependencies<NotesDependencies>({ noteReader: content }));
 	return { content, controller };
 };
 

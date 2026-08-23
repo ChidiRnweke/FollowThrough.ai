@@ -120,7 +120,9 @@ describe('Links in an exported document', () => {
 	it('gives an h2 title a slightly smaller double-space', async () => {
 		const xml = await documentXml({
 			type: 'doc',
-			content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section' }] }]
+			content: [
+				{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section' }] }
+			]
 		});
 		expect(xml).toContain('<w:spacing w:after="300" w:before="300"/>');
 	});
@@ -142,6 +144,7 @@ describe('Links in an exported document', () => {
 const TINY_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
+const DRAWIO_ID = '00000000-0000-4000-8000-0000000000d1';
 const DIAGRAM_SOURCE = 'flowchart LR\n  A --> B';
 const DIAGRAM_SVG =
 	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><rect width="120" height="60" fill="#eee"/></svg>';
@@ -721,5 +724,29 @@ describe('Ordered-list numbering in an exported document', () => {
 		expect(
 			new Set([...xml.matchAll(/<w:numId w:val="(\d+)"/g)].map((match) => match[1]!)).size
 		).toBe(2);
+	});
+
+	// draw.io ships the SVG its editor exported; there is no readable source to fall
+	// back to, so the document either embeds the picture or says it is missing.
+	it('embeds a referenced draw.io diagram as an image', async () => {
+		const withDrawio: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'drawio', attrs: { diagramId: DRAWIO_ID } }]
+		} as ProseMirrorDocument;
+		const zip = await zipFor({
+			notes: [{ title: 'Note', document: withDrawio }],
+			diagramSvgs: { [DRAWIO_ID]: DIAGRAM_SVG },
+			diagramPngs: { [DRAWIO_ID]: TINY_PNG }
+		});
+		expect(zip.readAsText('word/document.xml')).toContain('<w:drawing>');
+	});
+
+	it('marks a draw.io diagram unavailable when nothing rendered it', async () => {
+		const withDrawio: ProseMirrorDocument = {
+			type: 'doc',
+			content: [{ type: 'drawio', attrs: { diagramId: DRAWIO_ID } }]
+		} as ProseMirrorDocument;
+		const zip = await zipFor({ notes: [{ title: 'Note', document: withDrawio }] });
+		expect(zip.readAsText('word/document.xml')).toContain('diagram unavailable');
 	});
 });

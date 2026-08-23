@@ -140,6 +140,44 @@ describe('Built-in skill provisioning invariants', () => {
 		]);
 	});
 
+	// Publishing a built-in used to freeze it: the guard treated "published" as
+	// "edited", so the Diagramming skill sat on v1 through every later release and
+	// none of that guidance ever reached the agent. Only the body decides.
+	it('upgrades an unedited built-in that the user published', async () => {
+		const { provisioner, notes, skills } = await setupLegacyFollowThrough();
+		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
+		const published = { ...current, publishedRevision: 1, publishedAt: current.updatedAt };
+		notes.notes = notes.notes.map((note) => (note.id === published.id ? published : note));
+		skills.skills = skills.skills.map((skill) =>
+			skill.note.id === published.id ? { ...skill, note: published } : skill
+		);
+		await provisioner.ensure(testActor());
+		expect(
+			skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')?.metadata?.[
+				'followthrough.built-in-version'
+			]
+		).toBe('3');
+	});
+
+	it('still refuses to overwrite an edited built-in that was published', async () => {
+		const { provisioner, notes, skills } = await setupLegacyFollowThrough();
+		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
+		const edited = {
+			...current,
+			plainText: 'My preferred workflow',
+			publishedRevision: 1,
+			publishedAt: current.updatedAt
+		};
+		notes.notes = notes.notes.map((note) => (note.id === edited.id ? edited : note));
+		skills.skills = skills.skills.map((skill) =>
+			skill.note.id === edited.id ? { ...skill, note: edited } : skill
+		);
+		await provisioner.ensure(testActor());
+		expect(notes.notes.find((note) => note.id === edited.id)?.plainText).toBe(
+			'My preferred workflow'
+		);
+	});
+
 	it('does not overwrite edited stock FollowThrough instructions', async () => {
 		const { provisioner, notes, skills } = await setupLegacyFollowThrough();
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;

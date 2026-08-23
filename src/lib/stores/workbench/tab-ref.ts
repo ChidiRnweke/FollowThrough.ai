@@ -1,3 +1,4 @@
+import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 
@@ -20,9 +21,22 @@ export type TabId = string;
 export type TabRef =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey }
+	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
+	| { readonly kind: 'draft'; readonly sessionKey: ChatSessionKey }
 	| { readonly kind: 'search' };
 
 const CHAT_PREFIX = 'chat:';
+
+const DIAGRAM_PREFIX = 'diagram:';
+
+/**
+ * The canvas beside a studio conversation, before anything has been kept.
+ *
+ * Keyed by the chat session rather than by a diagram, because during drafting
+ * there is no diagram: the draft lives in the transcript, and the canvas reads it
+ * from there.
+ */
+const DRAFT_PREFIX = 'draft:';
 
 /**
  * The one search tab's id. Unlike a chat there is never more than one global
@@ -39,6 +53,10 @@ export const noteTab = (noteId: NoteId): TabId => noteId;
 
 export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${sessionKey}`;
 
+export const diagramTab = (diagramId: DiagramId): TabId => `${DIAGRAM_PREFIX}${diagramId}`;
+
+export const draftTab = (sessionKey: ChatSessionKey): TabId => `${DRAFT_PREFIX}${sessionKey}`;
+
 export const searchTab = (): TabId => SEARCH_TAB_ID;
 
 /**
@@ -53,6 +71,14 @@ export function parseTabId(raw: string): TabRef | undefined {
 		const sessionKey = trimmed.slice(CHAT_PREFIX.length);
 		return isUuid(sessionKey) ? { kind: 'chat', sessionKey } : undefined;
 	}
+	if (trimmed.startsWith(DRAFT_PREFIX)) {
+		const sessionKey = trimmed.slice(DRAFT_PREFIX.length);
+		return isUuid(sessionKey) ? { kind: 'draft', sessionKey } : undefined;
+	}
+	if (trimmed.startsWith(DIAGRAM_PREFIX)) {
+		const diagramId = trimmed.slice(DIAGRAM_PREFIX.length);
+		return isUuid(diagramId) ? { kind: 'diagram', diagramId: diagramId as DiagramId } : undefined;
+	}
 	return isUuid(trimmed) ? { kind: 'note', noteId: trimmed as NoteId } : undefined;
 }
 
@@ -61,6 +87,10 @@ export const isChatTab = (id: TabId): boolean => parseTabId(id)?.kind === 'chat'
 export const isSearchTab = (id: TabId): boolean => parseTabId(id)?.kind === 'search';
 
 export const isNoteTab = (id: TabId): boolean => parseTabId(id)?.kind === 'note';
+
+export const isDiagramTab = (id: TabId): boolean => parseTabId(id)?.kind === 'diagram';
+
+export const isDraftTab = (id: TabId): boolean => parseTabId(id)?.kind === 'draft';
 
 /** The note behind a tab, or `undefined` for a chat tab. */
 export function noteIdOf(id: TabId | undefined): NoteId | undefined {
@@ -74,4 +104,11 @@ export function chatKeyOf(id: TabId | undefined): ChatSessionKey | undefined {
 	if (id === undefined) return undefined;
 	const ref = parseTabId(id);
 	return ref?.kind === 'chat' ? ref.sessionKey : undefined;
+}
+
+/** The diagram behind a tab, or `undefined` for any other kind. */
+export function diagramIdOf(id: TabId | undefined): DiagramId | undefined {
+	if (id === undefined) return undefined;
+	const ref = parseTabId(id);
+	return ref?.kind === 'diagram' ? ref.diagramId : undefined;
 }

@@ -84,6 +84,7 @@
 	defaultTitle={note.title}
 	defaultNoteIds={[note.id]}
 	documents={[{ id: note.id, document: note.document }]}
+	{diagrams}
 />
 
 {#if reviewingSuggestion}

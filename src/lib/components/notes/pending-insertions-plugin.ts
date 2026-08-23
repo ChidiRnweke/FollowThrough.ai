@@ -67,7 +67,11 @@ export function getPendingInsertion(
 }
 
 /** Marks `position` as the insertion spot for `runId` in `tr`'s resulting state. */
-export function holdPendingInsertion(tr: Transaction, runId: string, position: number): Transaction {
+export function holdPendingInsertion(
+	tr: Transaction,
+	runId: string,
+	position: number
+): Transaction {
 	return tr.setMeta(pendingInsertionsKey, { hold: { runId, position } });
 }
 

@@ -93,6 +93,8 @@ describe('NoteWorkspaceDialogs conflict resolution', () => {
 			reviewDialogOpen: true,
 			reviewingSuggestion: suggestion
 		});
-		expect(await screen.getByRole('dialog', { name: /Review draw.io/ }).all()).not.toHaveLength(0);
+		// The dialog names the diagram it is reviewing rather than restating its own
+		// mechanics; what it is for is carried by its description.
+		expect(await screen.getByRole('dialog', { name: /Architecture/ }).all()).not.toHaveLength(0);
 	});
 });

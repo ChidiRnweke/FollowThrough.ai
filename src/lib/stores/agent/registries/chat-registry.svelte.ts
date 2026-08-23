@@ -1,6 +1,11 @@
 import type { ConversationId } from '$lib/models/agent';
 import { Registry } from '$lib/stores/notes/registries/registry';
-import { ChatStore, mintChatSessionKey, type ChatSessionKey } from '../chat.svelte';
+import {
+	ChatStore,
+	mintChatSessionKey,
+	rememberConversation,
+	type ChatSessionKey
+} from '../chat.svelte';
 
 /**
  * Per-session registry of `ChatStore` instances.
@@ -48,6 +53,21 @@ export class ChatRegistry {
 		for (const key of registry.heldKeys())
 			if (registry.peek(key)?.conversationId === conversationId) return key;
 		return undefined;
+	}
+
+	/**
+	 * The session showing `conversationId`, opening one bound to it if none is.
+	 *
+	 * What a caller wants when it is about to put that conversation on screen —
+	 * a reopened studio, say — where `keyForConversation` alone would answer
+	 * `undefined` and leave it to mint a key that shows an empty chat.
+	 */
+	sessionKeyFor(conversationId: ConversationId): ChatSessionKey {
+		const existing = this.keyForConversation(conversationId);
+		if (existing !== undefined) return existing;
+		const key = this.mint();
+		rememberConversation(key, conversationId);
+		return key;
 	}
 
 	/** The open session showing `conversationId`, for callers that need the store. */

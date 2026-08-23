@@ -14,6 +14,9 @@ import {
 import type { DateTime } from '$lib/models/workspace';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
+
+const PROJECT_ID = '00000000-0000-4000-8000-000000000004' as ProjectId;
 import type { UserId } from '$lib/models/identity';
 
 const MermaidNode = Node.create({
@@ -299,6 +302,7 @@ describe('Note editor keyboard integration', () => {
 			}) as ProseMirrorDocument;
 			const screen = render(NoteEditor, {
 				noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+				projectId: PROJECT_ID,
 				revision: 1,
 				document: initialDocument,
 				onchange: () => {
@@ -315,7 +319,8 @@ describe('Note editor keyboard integration', () => {
 								{
 									id: '00000000-0000-4000-8000-000000000001' as DiagramId,
 									userId: '00000000-0000-4000-8000-000000000003' as UserId,
-									noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+									projectId: '00000000-0000-4000-8000-000000000004' as ProjectId,
+									sourceNoteId: '00000000-0000-4000-8000-000000000002' as NoteId,
 									kind: 'drawio',
 									title: 'Architecture',
 									source: '<mxfile/>',
@@ -360,6 +365,7 @@ describe('Agent-updated block shimmer', () => {
 		) as ProseMirrorDocument;
 		const screen = render(NoteEditor, {
 			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
 			revision: 1,
 			document: before,
 			onreviseMermaid: async (source) => ({ source }),
@@ -393,6 +399,7 @@ describe('Agent-updated block shimmer', () => {
 		) as ProseMirrorDocument;
 		const screen = render(NoteEditor, {
 			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
 			revision: 1,
 			document: before,
 			onreviseMermaid: async (source) => ({ source }),
@@ -416,6 +423,7 @@ describe('Diagram insert point tracking', () => {
 	const renderEditor = (props: Record<string, unknown> = {}) => {
 		const screen = render(NoteEditor, {
 			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
 			revision: 1,
 			document: documentWith({
 				type: 'paragraph',
@@ -479,6 +487,7 @@ describe('Deselect on editor blur', () => {
 	const renderEditor = (props: Record<string, unknown> = {}) =>
 		render(NoteEditor, {
 			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
 			revision: 1,
 			document: documentWith({
 				type: 'paragraph',

@@ -150,7 +150,9 @@ const recordError = (span: Span, error: unknown): void => {
 const spanAttributes = (params: WorkflowTraceContext): Attributes => ({
 	...(params.kind === null
 		? {}
-		: { [SemanticConventions.OPENINFERENCE_SPAN_KIND]: params.kind ?? OpenInferenceSpanKind.CHAIN }),
+		: {
+				[SemanticConventions.OPENINFERENCE_SPAN_KIND]: params.kind ?? OpenInferenceSpanKind.CHAIN
+			}),
 	...getInputAttributes(
 		params.input === undefined
 			? undefined

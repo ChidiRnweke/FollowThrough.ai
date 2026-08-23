@@ -1,4 +1,8 @@
 import { Extension, type Editor, type NodeViewProps } from '@tiptap/core';
+import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
+import { PluginKey } from '@tiptap/pm/state';
+import type { EdraCommand } from './commands.js';
+import type { Editor as AppEditor } from './CoreEditor.js';
 import type { Component } from 'svelte';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import { CalloutNode, DrawioNode, IFrameNode, MermaidNode, TodoNodeBase } from './nodes.js';
@@ -45,10 +49,85 @@ export const Callout = (component: Component<NodeViewProps>) =>
 export const TodoNode = (component: Component<NodeViewProps>) =>
 	withNodeView(TodoNodeBase, component);
 
-export const SlashCommand = (component: Component<never>) => {
-	void component;
-	return Extension.create({ name: 'slashCommand' });
-};
+/**
+ * The hook the "Project diagram" command calls.
+ *
+ * The editor knows nothing about projects or transport, so it cannot present a
+ * picker; it only raises the request. The note workspace supplies the handler and
+ * answers by inserting a reference, which keeps the editor's dependencies pointing
+ * the same way every other injected callback does.
+ */
+export interface ProjectDiagramPickerStorage {
+	open?: (editor: AppEditor) => void;
+}
+
+declare module '@tiptap/core' {
+	interface Storage {
+		projectDiagramPicker: ProjectDiagramPickerStorage;
+	}
+}
+
+export const ProjectDiagramPicker = Extension.create<{ open?: (editor: AppEditor) => void }>({
+	name: 'projectDiagramPicker',
+	addOptions() {
+		return { open: undefined };
+	},
+	addStorage(): ProjectDiagramPickerStorage {
+		return { open: undefined };
+	},
+	onBeforeCreate() {
+		this.storage.open = this.options.open;
+	}
+});
+
+export const slashCommandKey = new PluginKey('slashCommand');
+
+export interface SlashCommandOptions {
+	/** Mounts the list and returns the handlers the plugin drives. */
+	renderer?: () => ReturnType<NonNullable<SuggestionOptions['render']>>;
+}
+
+/**
+ * `/` to insert a block.
+ *
+ * Only at a word start, so a slash inside prose — a date, a path, "and/or" — is
+ * left alone. The query allows no spaces: the menu is meant to close as soon as
+ * the writer carries on writing rather than following them across a sentence.
+ */
+export const SlashCommand = Extension.create<SlashCommandOptions>({
+	name: 'slashCommand',
+
+	addOptions() {
+		return { renderer: undefined };
+	},
+
+	addProseMirrorPlugins() {
+		const renderer = this.options.renderer;
+		if (!renderer) return [];
+		return [
+			Suggestion<EdraCommand, EdraCommand>({
+				editor: this.editor,
+				pluginKey: slashCommandKey,
+				char: '/',
+				allowedPrefixes: [' ', '\n'],
+				allowSpaces: false,
+				startOfLine: false,
+				items: () => [],
+				render: renderer,
+				command: ({ editor, range, props }) => {
+					// Take the typed `/query` out first: the command that follows inserts at
+					// the caret, and leaving the text behind would strand it above the block.
+					editor.chain().focus().deleteRange(range).run();
+					// The commands are typed against the app's `Editor`, which is TipTap's
+					// plus the per-note store slot; the plugin hands back the base one. It is
+					// the same instance — the editor the app constructed — so this narrows
+					// rather than converts.
+					props.onClick?.(editor as unknown as AppEditor);
+				}
+			})
+		];
+	}
+});
 
 export enum AIState {
 	Idle = 'idle',

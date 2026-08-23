@@ -8,6 +8,8 @@ type NoteId = Brand<string, 'NoteId'>;
 
 export type DiagramId = Brand<string, 'DiagramId'>;
 
+type ConversationId = Brand<string, 'ConversationId'>;
+
 type SuggestionId = Brand<string, 'SuggestionId'>;
 
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
@@ -47,7 +49,16 @@ type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reve
 interface DiagramBase {
 	readonly id: DiagramId;
 	readonly userId: UserId;
-	readonly noteId: NoteId;
+	/** Diagrams are owned by their project; a source note is optional context. */
+	readonly projectId: ProjectId;
+	/**
+	 * The note this diagram was created from, when it was created from one.
+	 * Absent for a studio diagram, which is authored in a conversation and belongs
+	 * to the project rather than to any note.
+	 */
+	readonly sourceNoteId?: NoteId;
+	/** The studio conversation that produced this diagram, for reopening it. */
+	readonly conversationId?: ConversationId;
 	readonly title?: string;
 	readonly renderedSvg?: string;
 	readonly searchableText: string;
@@ -199,6 +210,152 @@ export interface ConvertInlineMermaidInput {
 
 export interface ConvertInlineMermaidOutput {
 	readonly suggestion: Suggestion;
+}
+
+export interface GetProjectDiagramInput {
+	readonly diagramId: DiagramId;
+}
+
+export interface ListProjectDiagramsInput {
+	readonly projectId: ProjectId;
+	readonly kind?: DiagramKind;
+	readonly query?: string;
+	readonly limit?: number;
+	readonly offset?: number;
+}
+
+export interface ListProjectDiagramsOutput {
+	readonly diagrams: readonly Diagram[];
+	readonly total: number;
+}
+
+export interface ListProjectDiagramsParams {
+	readonly kind?: DiagramKind;
+	readonly query?: string;
+	readonly limit?: number;
+	readonly offset?: number;
+}
+
+export interface KeepStudioDiagramInput {
+	readonly projectId: ProjectId;
+	/**
+	 * Also the idempotency key. One studio conversation owns one evolving diagram,
+	 * so a replayed event or a reconnect finds the diagram the first call created
+	 * instead of making a second one.
+	 */
+	readonly conversationId: ConversationId;
+	/** Uncompressed draw.io XML, as the agent presented it on the canvas. */
+	readonly source: string;
+	/**
+	 * The SVG the draw.io embed exported when the user kept the diagram.
+	 *
+	 * Required, not optional: nothing outside that embed can render draw.io, so a
+	 * diagram stored without one has no preview and no way to ever get one.
+	 */
+	readonly renderedSvg: string;
+	readonly title?: string;
+}
+
+export interface KeepStudioDiagramOutput {
+	readonly diagram: Diagram;
+	/** False when this conversation's diagram already existed. */
+	readonly created: boolean;
+}
+
+export interface RenameProjectDiagramInput {
+	readonly diagramId: DiagramId;
+	readonly title: string;
+}
+
+export interface DeleteProjectDiagramInput {
+	readonly diagramId: DiagramId;
+}
+
+export interface CountDiagramReferencesInput {
+	readonly diagramId: DiagramId;
+}
+
+export interface PresentDiagramInput {
+	/**
+	 * Uncompressed draw.io XML.
+	 *
+	 * The canvas is draw.io only, by design rather than by omission. Mermaid is
+	 * still how the agent iterates — it is cheap to write and cheap to read, so it
+	 * belongs in the reply where the user can react to it in one glance. What
+	 * reaches the canvas is the settled shape, and only draw.io is editable there,
+	 * renderable to a stored preview, and linkable into a note.
+	 */
+	readonly source: string;
+	readonly title?: string;
+	/**
+	 * The saved diagram this version replaces, when the agent is revising rather
+	 * than proposing something new. The canvas offers to replace that diagram
+	 * instead of keeping a second one beside it.
+	 */
+	readonly diagramId?: DiagramId;
+}
+
+/**
+ * A diagram the agent has put on the studio canvas. It is not stored: the canvas
+ * shows it, and the user keeps it — as a new diagram, or in place of the one it
+ * names in `diagramId`.
+ */
+export interface PresentDiagramOutput {
+	readonly source: string;
+	readonly title?: string;
+	readonly diagramId?: DiagramId;
+}
+
+export interface ReadCanvasDiagramInput {
+	readonly conversationId: ConversationId;
+}
+
+/** Undefined `source` means the conversation has not drawn anything yet. */
+export interface ReadCanvasDiagramOutput {
+	readonly title?: string;
+	/** Uncompressed draw.io XML; the canvas holds nothing else. */
+	readonly source?: string;
+}
+
+export interface SearchDiagramIconsInput {
+	/**
+	 * One term. The icon library matches names, not phrases — "azure app service"
+	 * finds nothing where "azure" finds plenty.
+	 */
+	readonly query: string;
+	readonly limit?: number;
+}
+
+export interface SearchDiagramIconsOutput {
+	readonly icons: readonly { readonly name: string; readonly url: string }[];
+}
+
+export interface ReadProjectDiagramInput {
+	readonly diagramId: DiagramId;
+	/**
+	 * Ask for draw.io's XML as well as its labels.
+	 *
+	 * Off by default, and it should stay off: draw.io source is thousands of
+	 * tokens of markup that tells a model nothing about the diagram. The one time
+	 * it earns its place is immediately before revising that diagram, because a
+	 * revision has to be written against the real thing.
+	 */
+	readonly includeSource?: boolean;
+}
+
+/** A saved diagram as the agent sees it: draw.io XML only when it asked for it. */
+export interface ReadProjectDiagramOutput {
+	readonly id: DiagramId;
+	readonly kind: DiagramKind;
+	readonly title?: string;
+	readonly labels: string;
+	readonly source?: string;
+}
+
+export interface SaveProjectDrawioInput {
+	readonly diagramId: DiagramId;
+	readonly source: string;
+	readonly renderedSvg: string;
 }
 
 export interface GetDrawioDiagramInput {

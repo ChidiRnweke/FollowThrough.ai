@@ -28,6 +28,9 @@
 		chatRegistry,
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
+	import { StudioHandoff } from '$lib/components/diagrams';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
 	import {
@@ -68,6 +71,20 @@
 		agentAvailable: boolean;
 		registerComposerFocus?: (focus: () => void) => () => void;
 	} = $props();
+	const canvas = $derived(canvasFor(chat.sessionKey));
+	/**
+	 * The diagram this conversation produced, when this chat has nowhere to show it.
+	 *
+	 * The canvas is a workbench tab, so the docked panel and the full-page chat
+	 * have none — and a diagram is not something to paste into a transcript. The
+	 * agent's work becomes an offer to move somewhere that can show it, carrying
+	 * this conversation along.
+	 */
+	const studioOffer = $derived(
+		canvas.subject && canvas.tab && !workbench.openTabs.includes(canvas.tab)
+			? { subject: canvas.subject, canvasTab: canvas.tab }
+			: undefined
+	);
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
 		// No `observe()` here any more: the registry's refcount is the same
@@ -393,11 +410,23 @@
 			toast.error(`Only ${MAX_CONCURRENT_STREAMS} chats can run at once. Wait for one to finish.`);
 			return;
 		}
+		// A picture of what the agent last drew travels as context, so its next turn
+		// can see its own output instead of reasoning about XML it cannot look at.
+		// It goes in its own channel rather than among the attachments: it is not
+		// something the user sent, and it must not appear in their message.
+		const render = takeCanvasRender(chat.sessionKey, selectedImages, {
+			maxImages: 4,
+			maxBytes: 10 * 1024 * 1024
+		});
 		const sentImages = selectedImages;
 		prompt = '';
 		selectedImages = [];
 		saveDraft();
-		const request = chat.send({ ...requestFor(text), images: sentImages });
+		const request = chat.send({
+			...requestFor(text),
+			images: sentImages,
+			...(render ? { contextImages: [render] } : {})
+		});
 		// The tags left with the prompt, so the chips they stood for go too.
 		chat.chips = [];
 		handoff = undefined;
@@ -590,6 +619,16 @@
 				false}
 			onjumptolatest={jumpToLatest}
 		/>
+		{#if studioOffer}
+			<div class="shrink-0 pt-4">
+				<StudioHandoff
+					sessionKey={chat.sessionKey}
+					projectId={activeProjectId}
+					canvasTab={studioOffer.canvasTab}
+					title={studioOffer.subject.kind === 'draft' ? studioOffer.subject.draft.title : undefined}
+				/>
+			</div>
+		{/if}
 		<!-- 24px: the composer is a different kind of thing from the transcript above it,
 	     and the gap is what says so. At the old 8px the two read as one cramped stack. -->
 		<div class="shrink-0 pt-6">

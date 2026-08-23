@@ -11,26 +11,14 @@ import {
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
+	diagramBuilder,
 	memoryEntryBuilder,
 	noteBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import { retrievalEncoding } from './indexing';
-
-const diagramBuilder = (overrides: Partial<Diagram> = {}): Diagram => ({
-	id: '00000000-0000-4000-8000-000000000090' as DiagramId,
-	userId: testActor().userId,
-	noteId: noteBuilder().id,
-	kind: 'mermaid',
-	source: 'flowchart LR\nA --> B',
-	searchableText: 'Service A calls Service B',
-	createdAt: noteBuilder().createdAt,
-	updatedAt: noteBuilder().updatedAt,
-	...overrides
-});
 
 describe('Content chunking invariants', () => {
 	it('uses large token chunks with a generous overlap', () => {
@@ -174,6 +162,45 @@ describe('Diagram indexing invariants', () => {
 		await indexer.index(testActor(), diagram);
 		await indexer.index(testActor(), { ...diagram, searchableText: '' });
 		expect(repository.documents.map((item) => item.document.content)).toEqual(['note content']);
+	});
+
+	// A studio diagram belongs to its project and never to a note, so the indexer
+	// must not go looking for one — the note reader would throw.
+	it('indexes a diagram that has no source note', async () => {
+		const repository = new InMemorySearchRepository();
+		const indexer = new EmbeddedDiagramIndexer(
+			repository,
+			new InMemoryEmbeddingClient(),
+			new InMemoryNoteContent()
+		);
+		const diagram = diagramBuilder({ sourceNoteId: undefined, title: 'Delivery pipeline' });
+		await indexer.index(testActor(), diagram);
+		expect(repository.documents[0]?.document.projectId).toBe(diagram.projectId);
+	});
+
+	// The chunk is a bare list of labels, so the title is the only context the
+	// reranker gets. An untitled studio diagram indexed with an empty title would
+	// rank on labels alone and effectively disappear.
+	it('titles an untitled note-less diagram rather than indexing it blank', async () => {
+		const repository = new InMemorySearchRepository();
+		const indexer = new EmbeddedDiagramIndexer(
+			repository,
+			new InMemoryEmbeddingClient(),
+			new InMemoryNoteContent()
+		);
+		await indexer.index(testActor(), diagramBuilder({ sourceNoteId: undefined, title: undefined }));
+		expect(repository.documents[0]?.document.sourceTitle).toBe('Diagram: Untitled diagram');
+	});
+
+	// A diagram chunk is its own retrieval source now: carrying the note as well
+	// would violate the single-source constraint the database enforces.
+	it('leaves the note off a diagram chunk so it stands as its own source', async () => {
+		const repository = new InMemorySearchRepository();
+		const notes = new InMemoryNoteContent();
+		notes.notes = [noteBuilder()];
+		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		await indexer.index(testActor(), diagramBuilder());
+		expect(repository.documents[0]?.document.noteId).toBeUndefined();
 	});
 });
 

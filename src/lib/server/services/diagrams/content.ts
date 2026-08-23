@@ -1,7 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type {
-	Diagram,
 	MermaidDiagram,
 	ReviseInlineMermaidInput,
 	ReviseInlineMermaidOutput
@@ -53,7 +52,7 @@ export class DiagramContent {
 			throw new ValidationError('Generated Mermaid is invalid');
 		return `<svg xmlns="http://www.w3.org/2000/svg" role="img"><text x="8" y="20">${escapeXml(source)}</text></svg>`;
 	}
-	async extract(diagram: Diagram): Promise<string> {
+	async extract(diagram: { readonly source: string }): Promise<string> {
 		return diagram.source
 			.replace(/<[^>]+>/g, ' ')
 			.replace(/[^a-z0-9 _.-]+/gi, ' ')

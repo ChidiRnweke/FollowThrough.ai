@@ -199,9 +199,9 @@ zone and center the voice line inside it.
 - **Quiet at rest, control on hover.** Metadata values render as text and reveal their control on
   hover, keyboard focus, or when open (`.field-quiet`). This keeps one-click editing without a page
   of boxes competing with the content; the affordance is deferred, never removed.
-- **Project resources:** Todos, Memory, Artifacts, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.
-- **Project overview:** The four spaces are grouped by what they do for you — what the project
-  produced versus what the agent works from — rather than listed as four equal nouns. A space that
+- **Project resources:** Todos, Memory, Artifacts, Diagrams, and Attachments use durable pages with a `Project > Resource` breadcrumb. The project name is always a link back to its overview; browser Back is never the only exit.
+- **Project overview:** The five spaces are grouped by what they do for you — what the project
+  produced versus what the agent works from — rather than listed as five equal nouns. A space that
   is empty states its purpose through a rotating tip instead of showing a zero, and every tip must
   describe behaviour the code actually has. Tips are chosen in the loader, never at render time.
 - **Grouping is spacing and similarity, not more rules.** On the overview the spaces cluster at

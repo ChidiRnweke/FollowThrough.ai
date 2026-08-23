@@ -5,6 +5,7 @@ import type { ControllerFactory } from '$lib/server/factories/controller-factory
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { DomainError } from '$lib/errors';
+import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import {
 	AgentTools,
@@ -114,7 +115,13 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		}
 	);
 
+	// A tool marked `surface: 'app'` acts on a window an MCP host does not have.
+	const appSurfaceOnly = new Set(
+		TOOL_DESCRIPTIONS.filter((entry) => entry.surface === 'app').map((entry) => entry.name)
+	);
+
 	for (const name of FIRST_CLASS_TOOL_NAMES) {
+		if (appSurfaceOnly.has(name)) continue;
 		const definition = byName.get(name);
 		if (!definition) continue;
 		server.registerTool(
@@ -128,6 +135,11 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		);
 	}
 
+	// First-class tools are already registered above, and they carry no stored
+	// embedding (`TOOL_CATALOG` excludes them from the seed), so they could not be
+	// ranked here even if they were listed. An `app`-surface tool is therefore not
+	// offered to an MCP host by either route — which is what a host with no
+	// workbench should see.
 	const discoverable = permitted.filter(
 		(definition) => !FIRST_CLASS_TOOL_NAMES.includes(definition.name)
 	);

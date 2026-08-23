@@ -2,6 +2,7 @@ import type { ActorContext, UserId } from '$lib/models/identity';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
 import type { MemoryEntry, MemoryEntryId, MemorySuggestion } from '$lib/models/memory';
 import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -21,6 +22,7 @@ export const testProvenanceId = (value = 1): ProvenanceId => id(6, value) as Pro
 export const testAnchorId = (value = 1): SourceAnchorId => id(7, value) as SourceAnchorId;
 export const testMemoryEntryId = (value = 1): MemoryEntryId => id(8, value) as MemoryEntryId;
 export const testNoteRevisionId = (value = 1): NoteRevisionId => id(9, value) as NoteRevisionId;
+export const testDiagramId = (value = 1): DiagramId => id(10, value) as DiagramId;
 
 export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	id: testProjectId(),
@@ -139,5 +141,22 @@ export const appContextBuilder = (
 	surface: { kind: 'project', presentation: 'full_page' },
 	currentProject: { id: testProjectId(), name: 'Project Alpha' },
 	recentInteractions: [],
+	...overrides
+});
+
+/**
+ * A diagram created from a note. Override `sourceNoteId` with `undefined` for the
+ * studio case, where the diagram belongs to its project and to no note.
+ */
+export const diagramBuilder = (overrides: Partial<Diagram> = {}): Diagram => ({
+	id: testDiagramId(),
+	userId: testActor().userId,
+	projectId: testProjectId(),
+	sourceNoteId: testNoteId(),
+	kind: 'mermaid',
+	source: 'flowchart LR\nA --> B',
+	searchableText: 'Service A calls Service B',
+	createdAt: testNow,
+	updatedAt: testNow,
 	...overrides
 });

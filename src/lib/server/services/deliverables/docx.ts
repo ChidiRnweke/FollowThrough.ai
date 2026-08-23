@@ -374,42 +374,71 @@ function tableBlock(node: Record<string, unknown>, ctx: DocxContext): Table | nu
 	});
 }
 
-/** A diagram: the browser-rendered PNG when supplied, otherwise the source as code. */
-function mermaidBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph[] {
-	const source = collectText(node);
-	const hash = mermaidSourceHash(source);
-	const png = ctx.diagramPngs[hash];
-	if (png) {
-		const parsed = parseDataUrl(png);
-		if (parsed) {
-			// The PNG is rasterized at 2x; the SVG viewBox is the intended display size. The
-			// browser normally sends that size directly and keeps its markup; the parse from
-			// markup stays as the path for callers that still ship the SVG.
-			const dimensions =
-				ctx.diagramSizes[hash] ??
-				svgDimensions(ctx.diagramSvgs[hash] ?? '') ??
-				rasterDimensions(parsed.buffer);
-			let width = dimensions?.width ?? ctx.contentWidthPx;
-			let height = dimensions?.height ?? width * 0.6;
-			if (width > ctx.contentWidthPx) {
-				height = (ctx.contentWidthPx / width) * height;
-				width = ctx.contentWidthPx;
-			}
-			return [
+/**
+ * One rendered diagram, sized to the page.
+ *
+ * Shared by both diagram kinds, which differ only in what keys their render and
+ * what to fall back on: the sizing chain and the content-width clamp were written
+ * out twice, identically, and only one copy carried the comment explaining them.
+ *
+ * The PNG is rasterized at 2x; the SVG viewBox is the intended display size. The
+ * browser normally sends that size directly and keeps its markup; the parse from
+ * markup stays as the path for callers that still ship the SVG.
+ */
+function diagramImage(
+	key: string,
+	ctx: DocxContext,
+	// Only draw.io blocks carry it, which is how they shipped; kept a parameter
+	// rather than applied to both so folding these together changed no output.
+	spacing?: { before: number; after: number }
+): Paragraph | undefined {
+	const png = ctx.diagramPngs[key];
+	const parsed = png ? parseDataUrl(png) : undefined;
+	if (!parsed) return undefined;
+	const dimensions =
+		ctx.diagramSizes[key] ??
+		svgDimensions(ctx.diagramSvgs[key] ?? '') ??
+		rasterDimensions(parsed.buffer);
+	let width = dimensions?.width ?? ctx.contentWidthPx;
+	let height = dimensions?.height ?? width * 0.6;
+	if (width > ctx.contentWidthPx) {
+		height = (ctx.contentWidthPx / width) * height;
+		width = ctx.contentWidthPx;
+	}
+	return new Paragraph({
+		children: [
+			new ImageRun({
+				type: 'png',
+				data: parsed.buffer,
+				transformation: { width: Math.round(width), height: Math.round(height) }
+			})
+		],
+		...(spacing ? { spacing } : {})
+	});
+}
+
+/**
+ * A referenced draw.io diagram, embedded from the SVG its editor exported and the
+ * browser rasterized. There is no textual fallback: the XML is not readable prose.
+ */
+function drawioBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph[] {
+	const reference = (node.attrs as { diagramId?: string } | undefined)?.diagramId;
+	const image = reference ? diagramImage(reference, ctx, { before: 120, after: 120 }) : undefined;
+	return image
+		? [image]
+		: [
 				new Paragraph({
-					children: [
-						new ImageRun({
-							type: 'png',
-							data: parsed.buffer,
-							transformation: { width: Math.round(width), height: Math.round(height) }
-						})
-					]
+					children: [new TextRun({ text: '[diagram unavailable]', italics: true, color: '9CA3AF' })]
 				})
 			];
-		}
-	}
+}
+
+/** A mermaid diagram: the browser-rendered PNG when supplied, otherwise its source as code. */
+function mermaidBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph[] {
+	const source = collectText(node);
+	const image = diagramImage(mermaidSourceHash(source), ctx);
 	// Without a browser render the diagram source is still worth keeping.
-	return [codeParagraph(source)];
+	return image ? [image] : [codeParagraph(source)];
 }
 
 function convertNode(
@@ -511,6 +540,10 @@ function convertNode(
 		}
 		case 'mermaid': {
 			results.push(...mermaidBlock(node, ctx));
+			break;
+		}
+		case 'drawio': {
+			results.push(...drawioBlock(node, ctx));
 			break;
 		}
 		case 'horizontalRule': {

@@ -172,8 +172,18 @@ export class Suggestions implements SuggestionsController {
 		input: AcceptReviewedSuggestionInput
 	): Promise<AcceptSuggestionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
+			if (!input.drawioReview) {
+				// A draw.io diagram accepted without its review has no preview and can
+				// never gain one: nothing outside the draw.io embed can draw draw.io, so
+				// the export that review produces is the only preview it will ever have.
+				// Checked before applying, so a refused acceptance creates nothing at all
+				// rather than relying on the transaction to undo it.
+				const pending = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
+				if (pending.kind === 'diagram' && pending.payload.kind === 'drawio')
+					throw new ValidationError('A draw.io diagram must be accepted through its review.');
+				return this.accept(actor, input);
+			}
 			const accepted = await this.accept(actor, input);
-			if (!input.drawioReview) return accepted;
 			if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
 				throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
 			if (!this.dependencies.drawioReviewSaver)

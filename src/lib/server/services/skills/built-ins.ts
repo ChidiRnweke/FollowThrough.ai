@@ -125,10 +125,18 @@ export class BuiltInSkills {
 	}
 
 	/**
-	 * True when the stored skill is still byte-for-byte a released version and was
-	 * never published, so replacing it cannot lose the user's work. Revision
-	 * numbers are deliberately not compared: an install already carried forward by
-	 * an earlier upgrade is still untouched.
+	 * True when the stored skill is still byte-for-byte a released version, so
+	 * replacing it cannot lose the user's work. Revision numbers are deliberately
+	 * not compared: an install already carried forward by an earlier upgrade is
+	 * still untouched.
+	 *
+	 * Publication state is not consulted either, and that is the point. It used to
+	 * be, and it conflated "published" with "edited" — publishing an unmodified
+	 * built-in froze it at that version forever. The Diagramming skill sat on v1
+	 * through every later release because of it, so none of the guidance those
+	 * releases added ever reached the agent. The byte comparison below is what
+	 * actually protects an edit; whether the user pressed publish says nothing
+	 * about authorship.
 	 */
 	private isUntouched(note: Note, skill: Skill, released: BuiltInSkillDefinition): boolean {
 		const metadata = skill.metadata ?? {};
@@ -136,8 +144,6 @@ export class BuiltInSkills {
 		return (
 			note.title === released.name &&
 			note.plainText === released.instructions &&
-			note.publishedRevision === 0 &&
-			note.publishedAt === undefined &&
 			skill.name === released.name &&
 			skill.slug === released.key &&
 			skill.description === released.description &&

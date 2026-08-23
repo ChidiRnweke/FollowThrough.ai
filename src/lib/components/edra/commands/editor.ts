@@ -6,11 +6,13 @@ import {
 	ImageExtended,
 	Mermaid,
 	SlashCommand,
+	ProjectDiagramPicker,
 	SvelteNodeViewRenderer,
 	useEditor,
 	VideoExtended
 } from './index.js';
 import type { Extensions } from '@tiptap/core';
+import type { Editor as AppEditor } from './CoreEditor.js';
 import { all, createLowlight } from 'lowlight';
 import extensions from './extensions.js';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -25,7 +27,6 @@ import DrawioComp from '../Drawio.svelte';
 import type { Component } from 'svelte';
 import type { DrawioPreviewProps, DrawioReferenceView } from './nodes.js';
 import type { NoteLinkTarget } from './NoteLinkSuggestion.js';
-import SlashCommandComp from '../SlashCommand.svelte';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, {
 	getHierarchicalIndexes,
@@ -46,6 +47,7 @@ import { NoteLinkMark } from './nodes.js';
 import { NoteLinkSuggestion } from './NoteLinkSuggestion.js';
 import { HeadingLinkSuggestion, rankHeadingTargets } from './HeadingLinkSuggestion.js';
 import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
+import { createSlashCommandRenderer } from './slash-command-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
 import { hasMedia, selectionMedia } from './diagram-copy.js';
 import { selectionClipboardItem, selectionPlainText } from './clipboard-payload.js';
@@ -75,6 +77,11 @@ export interface EdraEditorProps {
 	getDrawioDiagram?: (reference: string) => DrawioReferenceView | undefined;
 	resolveDrawioHref?: (reference: string) => string | undefined;
 	drawioPreview?: Component<DrawioPreviewProps>;
+	/**
+	 * Opens the project-diagram picker. The editor raises the request; the app
+	 * presents the list and inserts the reference the user chooses.
+	 */
+	onPickProjectDiagram?: (editor: AppEditor) => void;
 	/**
 	 * Proactive ghost text at the caret. Injected so the editor stays unaware of
 	 * transports; omitting it disables inline suggestions entirely.
@@ -147,7 +154,10 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				preview: props?.drawioPreview
 			}),
 			DiagramDeletion,
-			SlashCommand(SlashCommandComp),
+			SlashCommand.configure({ renderer: createSlashCommandRenderer }),
+			ProjectDiagramPicker.configure({
+				...(props?.onPickProjectDiagram ? { open: props.onPickProjectDiagram } : {})
+			}),
 			Callout(CalloutComp),
 			// Registered on both sides of the wire. The server can already parse and serialize
 			// a note link, so an editor that did not know the mark would drop it from the

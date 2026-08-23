@@ -6,6 +6,7 @@ import type { ApiTokensController } from '../controllers/api-tokens/controller';
 import type { AttachmentsController } from '../controllers/attachments/controller';
 import type { DeliverablesController } from '../controllers/deliverables/controller';
 import type { DiagramsController } from '../controllers/diagrams/controller';
+import type { DiagramStudioController } from '../controllers/diagram-studio/controller';
 import type { FeedbackController } from '../controllers/feedback/controller';
 import type { ImportsController } from '../controllers/imports/controller';
 import type { InlineSuggestionsController } from '../controllers/inline-suggestions/controller';
@@ -29,6 +30,7 @@ export interface ControllerFactory {
 	relationships(): RelationshipsController;
 	references(): ReferencesController;
 	diagrams(): DiagramsController;
+	diagramStudio(): DiagramStudioController;
 	suggestions(): SuggestionsController;
 	skills(): SkillsController;
 	agent(): AgentController;

@@ -20,10 +20,22 @@ export function surfaceFor(
 			filters[key] = key === 'page' && /^\d+$/.test(value) ? Number(value) : value;
 	}
 	const parts = pathname.split('/').filter(Boolean);
+	// The studio is a pair of workbench tabs, not a route: it runs at
+	// `/chats/new?focus=chat:…&split=draft:…` as often as at `/diagrams/<id>`.
+	// Reading it off the tab params is what makes the agent aware of the canvas
+	// wherever the user opened it, rather than on one URL shape.
+	const hasCanvasTab = ['tabs', 'focus', 'split'].some((key) =>
+		/(?:^|,)(?:diagram|draft):/.test(params.get(key) ?? '')
+	);
 	let kind: AppContextSnapshotV1['surface']['kind'] = 'unknown';
-	if (parts[0] === 'today') kind = 'today';
+	// Decided first, and it wins outright: a canvas tab is open, whatever route
+	// the user reached it by. Asking last meant the ladder below assigned a kind
+	// that was then thrown away.
+	if (hasCanvasTab) kind = 'diagram_studio';
+	else if (parts[0] === 'today') kind = 'today';
 	else if (parts[0] === 'todos') kind = 'todos';
 	else if (parts[0] === 'notes' && parts[2] === 'diagrams') kind = 'diagram_editor';
+	else if (parts[0] === 'diagrams') kind = parts.length > 1 ? 'diagram_studio' : 'diagrams';
 	else if (parts[0] === 'notes') kind = 'note_workbench';
 	else if (parts[0] === 'projects' && parts[2] === 'todos') kind = 'project_todos';
 	else if (parts[0] === 'projects' && parts[2] === 'memory') kind = 'project_memory';

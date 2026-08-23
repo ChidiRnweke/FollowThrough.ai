@@ -464,6 +464,23 @@ export interface ContextSelection extends TextSelection {
 	readonly title?: string;
 }
 
+/**
+ * Every image the model will see on this turn, in one list.
+ *
+ * `images` and `contextImages` are separate on the way in — one is what the user
+ * attached, the other is what the app supplied — and identical from here on: they
+ * share the four-image budget, the same size cap, the same vision-model
+ * fallback, and they arrive in the same request. Joining them was written out at
+ * four separate call sites, one of which is where the budget is enforced.
+ */
+export const allImages = (request: {
+	readonly images?: readonly ConversationImageInput[];
+	readonly contextImages?: readonly ConversationImageInput[];
+}): readonly ConversationImageInput[] => [
+	...(request.images ?? []),
+	...(request.contextImages ?? [])
+];
+
 export interface RunAgentInput {
 	readonly requestId?: string;
 	readonly conversationId?: ConversationId;
@@ -494,6 +511,14 @@ export interface RunAgentInput {
 	};
 	readonly prompt: string;
 	readonly images?: readonly ConversationImageInput[];
+	/**
+	 * Images the model should see that the user did not attach.
+	 *
+	 * A render of what the agent just drew belongs here rather than in `images`:
+	 * the transcript shows what was said, and a picture nobody attached appearing
+	 * in someone's own message is a lie about who sent it.
+	 */
+	readonly contextImages?: readonly ConversationImageInput[];
 	readonly appContext?: AppContextSnapshotV1;
 	/**
 	 * Scope the request was staged with, kept only when the live snapshot
@@ -567,6 +592,14 @@ export interface SubmitAgentRunInput {
 	readonly conversationId?: ConversationId;
 	readonly input: string;
 	readonly images?: readonly ConversationImageInput[];
+	/**
+	 * Images the model should see that the user did not attach.
+	 *
+	 * A render of what the agent just drew belongs here rather than in `images`:
+	 * the transcript shows what was said, and a picture nobody attached appearing
+	 * in someone's own message is a lie about who sent it.
+	 */
+	readonly contextImages?: readonly ConversationImageInput[];
 	readonly model?: string | null;
 	readonly visionModel?: string | null;
 	readonly mode?: AgentExecutionMode | null;
@@ -719,6 +752,8 @@ type AppSurfaceKind =
 	| 'artifacts'
 	| 'note_workbench'
 	| 'diagram_editor'
+	| 'diagram_studio'
+	| 'diagrams'
 	| 'chats'
 	| 'chat'
 	| 'skills'

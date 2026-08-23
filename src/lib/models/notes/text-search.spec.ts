@@ -37,18 +37,16 @@ describe('Searching note text', () => {
 	});
 
 	it('honours the case-sensitive toggle', () => {
-		expect(
-			searchNoteText('Fish fish FISH', 'fish', { regex: false, caseSensitive: true })
-		).toEqual([{ start: 5, end: 9, text: 'fish' }]);
+		expect(searchNoteText('Fish fish FISH', 'fish', { regex: false, caseSensitive: true })).toEqual(
+			[{ start: 5, end: 9, text: 'fish' }]
+		);
 	});
 
 	it('matches with regex when enabled', () => {
-		expect(searchNoteText('cat car cap', 'ca[rp]', { regex: true, caseSensitive: true })).toEqual(
-			[
-				{ start: 4, end: 7, text: 'car' },
-				{ start: 8, end: 11, text: 'cap' }
-			]
-		);
+		expect(searchNoteText('cat car cap', 'ca[rp]', { regex: true, caseSensitive: true })).toEqual([
+			{ start: 4, end: 7, text: 'car' },
+			{ start: 8, end: 11, text: 'cap' }
+		]);
 	});
 
 	it('returns no matches for an invalid regex instead of throwing', () => {
@@ -159,22 +157,15 @@ describe('Replacing in a document', () => {
 	});
 
 	it('removes the matched slice from later nodes without touching their siblings', () => {
-		const result = replaceInNoteDocument(
-			doc(paragraph('a', bold('Xb'))),
-			'aX',
-			'',
-			literal
-		);
+		const result = replaceInNoteDocument(doc(paragraph('a', bold('Xb'))), 'aX', '', literal);
 		expect(result?.document.content?.[0].content).toEqual([bold('b')]);
 	});
 
 	it('expands regex capture groups per match', () => {
-		const result = replaceInNoteDocument(
-			doc(paragraph('one two')),
-			'(\\w+) (\\w+)',
-			'$2 $1',
-			{ regex: true, caseSensitive: true }
-		);
+		const result = replaceInNoteDocument(doc(paragraph('one two')), '(\\w+) (\\w+)', '$2 $1', {
+			regex: true,
+			caseSensitive: true
+		});
 		expect(result?.plainText).toBe('two one');
 	});
 

@@ -19,6 +19,7 @@ import type {
 } from '$lib/models/agent';
 import type {
 	ConvertInlineMermaidInput,
+	Diagram,
 	DiagramId,
 	DrawioDiagram,
 	MermaidDiagram,
@@ -30,6 +31,8 @@ import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { Provenance, ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
+
+const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export interface MermaidDiagramDraft {
 	readonly title?: string;
@@ -137,8 +140,6 @@ export class DrawioSubmissionCollector {
 		return candidate;
 	}
 }
-
-const now = (): DateTime => new Date().toISOString() as DateTime;
 
 const runMermaidParser = (sourcePath: string): Promise<void> =>
 	new Promise((resolve, reject) => {
@@ -255,7 +256,8 @@ export interface DiagramAgentDependencies {
 
 interface DiagramTask {
 	readonly operation: 'generate' | 'revise' | 'convert';
-	readonly noteId: NoteId;
+	/** Absent for a studio conversion, which has no note to read around it. */
+	readonly noteId?: NoteId;
 	readonly selection?: TextSelection;
 	readonly source?: string;
 	readonly instruction?: string;
@@ -263,6 +265,17 @@ interface DiagramTask {
 	/** Aborts the model call when the user cancels the run this task belongs to. */
 	readonly signal?: AbortSignal;
 }
+
+/**
+ * The note a note-inline operation works from. Inline revision and conversion read
+ * the surrounding note for context, so they only apply to a diagram that came from
+ * one — a studio diagram is authored in a conversation and promoted directly.
+ */
+const requireSourceNote = (diagram: Diagram): NoteId => {
+	if (diagram.sourceNoteId === undefined)
+		throw new ValidationError('This operation needs a diagram created from a note.');
+	return diagram.sourceNoteId;
+};
 
 export const assertRenderedPng = (dataUrl: string | undefined): void => {
 	if (!dataUrl) return;
@@ -314,7 +327,7 @@ export class DiagramAuthoring {
 	): Promise<MermaidDiagram> {
 		const draft = await this.execute(actor, {
 			operation: 'revise',
-			noteId: diagram.noteId,
+			noteId: requireSourceNote(diagram),
 			source: diagram.source,
 			instruction,
 			signal
@@ -369,16 +382,18 @@ export class DiagramAuthoring {
 		diagram: MermaidDiagram,
 		signal?: AbortSignal
 	): Promise<DrawioDiagram> {
+		const sourceNoteId = requireSourceNote(diagram);
 		const draft = await this.convertInline(
 			actor,
-			{ noteId: diagram.noteId, source: diagram.source },
+			{ noteId: sourceNoteId, source: diagram.source },
 			signal
 		);
 		const timestamp = now();
 		return {
 			id: crypto.randomUUID() as DiagramId,
 			userId: actor.userId,
-			noteId: diagram.noteId,
+			projectId: diagram.projectId,
+			sourceNoteId,
 			kind: 'drawio',
 			title: draft.title,
 			source: draft.source,

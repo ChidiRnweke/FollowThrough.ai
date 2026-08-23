@@ -21,14 +21,16 @@ import {
 	noteBuilder,
 	testActor,
 	testNoteId,
-	testNow
+	testNow,
+	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export const mermaidBuilder = (overrides: Partial<MermaidDiagram> = {}): MermaidDiagram => ({
 	id: '60000000-0000-4000-8000-000000000001' as DiagramId,
 	userId: testActor().userId,
-	noteId: testNoteId(),
+	projectId: testProjectId(),
+	sourceNoteId: testNoteId(),
 	kind: 'mermaid',
 	title: 'Architecture',
 	source: 'flowchart LR\nA --> B',
@@ -41,7 +43,8 @@ export const mermaidBuilder = (overrides: Partial<MermaidDiagram> = {}): Mermaid
 export const drawioBuilder = (overrides: Partial<DrawioDiagram> = {}): DrawioDiagram => ({
 	id: '60000000-0000-4000-8000-000000000002' as DiagramId,
 	userId: testActor().userId,
-	noteId: testNoteId(),
+	projectId: testProjectId(),
+	sourceNoteId: testNoteId(),
 	kind: 'drawio',
 	title: 'Architecture',
 	source: '<mxfile />',
@@ -90,7 +93,8 @@ export class InMemoryDiagrams
 	async createFromMermaid(_actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram> {
 		void _actor;
 		return drawioBuilder({
-			noteId: diagram.noteId,
+			projectId: diagram.projectId,
+			sourceNoteId: diagram.sourceNoteId,
 			source:
 				'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>',
 			promotedFromId: diagram.id
@@ -110,7 +114,7 @@ export class InMemoryDiagrams
 		return { ...target, promotedFromId: source.id };
 	}
 
-	async extract(diagram: Diagram): Promise<string> {
+	async extract(diagram: { readonly source: string }): Promise<string> {
 		return diagram.source
 			.replace(/<[^>]+>/g, ' ')
 			.replace(/\s+/g, ' ')

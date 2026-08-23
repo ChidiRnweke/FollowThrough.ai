@@ -1,10 +1,8 @@
 import { mode } from 'mode-watcher';
 import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
 import { svgViewBoxSize } from '$lib/models/deliverables';
-import {
-	initializeMermaid,
-	sanitizeMermaidSvg
-} from '$lib/components/edra/mermaid-rendering';
+import { rasterizeSvg } from '$lib/client/images/rasterize';
+import { initializeMermaid, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
 
 /**
  * Rendering the mermaid diagrams an export carries.
@@ -22,6 +20,13 @@ export interface DiagramRenders {
 
 export const emptyDiagramRenders = (): DiagramRenders => ({ svgs: {}, pngs: {}, sizes: {} });
 
+/** Merges two render sets; later entries win on a key collision. */
+export const mergeDiagramRenders = (...parts: readonly DiagramRenders[]): DiagramRenders => ({
+	svgs: Object.assign({}, ...parts.map((part) => part.svgs)),
+	pngs: Object.assign({}, ...parts.map((part) => part.pngs)),
+	sizes: Object.assign({}, ...parts.map((part) => part.sizes))
+});
+
 function collectMermaidSources(node: unknown, sources: string[]): void {
 	if (typeof node !== 'object' || node === null) return;
 	const record = node as { type?: string; text?: string; content?: unknown[] };
@@ -33,6 +38,57 @@ function collectMermaidSources(node: unknown, sources: string[]): void {
 		return;
 	}
 	for (const child of record.content ?? []) collectMermaidSources(child, sources);
+}
+
+function collectDrawioIds(node: unknown, ids: string[]): void {
+	if (typeof node !== 'object' || node === null) return;
+	const record = node as { type?: string; attrs?: { diagramId?: string }; content?: unknown[] };
+	if (record.type === 'drawio') {
+		const id = record.attrs?.diagramId;
+		if (id && !ids.includes(id)) ids.push(id);
+		return;
+	}
+	for (const child of record.content ?? []) collectDrawioIds(child, ids);
+}
+
+/** Every draw.io diagram referenced by a set of documents, in document order. */
+export function drawioReferencesIn(documents: readonly { document: unknown }[]): string[] {
+	const ids: string[] = [];
+	for (const entry of documents) collectDrawioIds(entry.document, ids);
+	return ids;
+}
+
+/**
+ * Rasterize the draw.io diagrams an export carries, keyed by diagram id.
+ *
+ * Unlike mermaid there is nothing to lay out: draw.io's embed already exported an
+ * SVG on save, so this only converts it to the raster DOCX needs and keeps the SVG
+ * for the PDF. Ids and mermaid's source hashes share the key space harmlessly —
+ * one is a uuid, the other a SHA-256 digest.
+ */
+export async function renderDrawioDiagrams(
+	diagrams: readonly { readonly id: string; readonly renderedSvg?: string }[]
+): Promise<DiagramRenders> {
+	const svgs: Record<string, string> = {};
+	const pngs: Record<string, string> = {};
+	const sizes: Record<string, DiagramSize> = {};
+	// Rasterized together: each diagram's SVG is already laid out, so they have no
+	// bearing on each other and a serial loop just waited on each in turn.
+	const rendered = await Promise.all(
+		diagrams
+			.filter((diagram) => diagram.renderedSvg)
+			.map(async (diagram) => ({
+				diagram,
+				png: await rasterizeSvg(diagram.renderedSvg!)
+			}))
+	);
+	for (const { diagram, png } of rendered) {
+		const size = svgViewBoxSize(diagram.renderedSvg!);
+		if (size) sizes[diagram.id] = size;
+		if (png) pngs[diagram.id] = png;
+		else svgs[diagram.id] = diagram.renderedSvg!;
+	}
+	return { svgs, pngs, sizes };
 }
 
 /** Every mermaid source in a set of documents, in document order. */
@@ -96,48 +152,6 @@ function inlineSvgStyles(markup: string): string {
 		return svg.outerHTML;
 	} finally {
 		host.remove();
-	}
-}
-
-/**
- * Rasterize an SVG to a PNG data URL. DOCX embeds rasters (the docx library only
- * takes SVG with a mandatory raster fallback), so diagrams ship in both forms:
- * SVG for the PDF, PNG for the DOCX.
- */
-async function rasterizeSvg(svgMarkup: string, scale = 2): Promise<string | null> {
-	try {
-		const url = URL.createObjectURL(new Blob([svgMarkup], { type: 'image/svg+xml' }));
-		try {
-			const image = new Image();
-			await new Promise<void>((resolve, reject) => {
-				image.onload = () => resolve();
-				image.onerror = () => reject(new Error('SVG rasterization failed'));
-				image.src = url;
-			});
-			// Mermaid SVGs size themselves through max-width, not width/height, so the
-			// viewBox is the only reliable natural size.
-			const viewBox = /viewBox="([\d.\s-]+)"/
-				.exec(svgMarkup)?.[1]
-				?.trim()
-				.split(/\s+/)
-				.map(Number);
-			const baseWidth = viewBox?.[2] || image.naturalWidth || 800;
-			const baseHeight = viewBox?.[3] || image.naturalHeight || 600;
-			const canvas = document.createElement('canvas');
-			canvas.width = Math.round(baseWidth * scale);
-			canvas.height = Math.round(baseHeight * scale);
-			const context2d = canvas.getContext('2d');
-			if (!context2d) return null;
-			// Transparent pixels print as black boxes in some Word viewers.
-			context2d.fillStyle = '#ffffff';
-			context2d.fillRect(0, 0, canvas.width, canvas.height);
-			context2d.drawImage(image, 0, 0, canvas.width, canvas.height);
-			return canvas.toDataURL('image/png');
-		} finally {
-			URL.revokeObjectURL(url);
-		}
-	} catch {
-		return null;
 	}
 }
 

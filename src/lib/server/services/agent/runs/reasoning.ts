@@ -21,7 +21,7 @@ import {
 	type RunAgentInput,
 	type WebResearchOptions
 } from '$lib/models/agent';
-import { AgentProviderFailure } from '$lib/models/agent';
+import { allImages, AgentProviderFailure } from '$lib/models/agent';
 import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
@@ -460,14 +460,17 @@ export class AgentReasoning {
 		});
 		const session = this.createSession(this.sessions, actor, run.conversationId);
 		let visionDescriptions: string[] | undefined;
-		if (request.images?.length && request.visionModelOverride) {
+		// The app's own images are described too when the chat model cannot see: a
+		// render left out here would simply vanish on a text-only model.
+		const describable = allImages(request);
+		if (describable.length && request.visionModelOverride) {
 			const client = new OpenAI({
 				apiKey: this.apiKey,
 				baseURL: this.baseURL,
 				timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
 			});
 			visionDescriptions = await Promise.all(
-				request.images.map(async (image) => {
+				describable.map(async (image) => {
 					const response = await client.chat.completions.create({
 						model: request.visionModelOverride!,
 						messages: [
@@ -546,8 +549,13 @@ export class AgentReasoning {
 				const fallbackPrompt = visionDescriptions?.length
 					? `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}\n\n<hidden_image_context>\n${visionDescriptions.map((description, index) => `Image ${index + 1}: ${description}`).join('\n')}\n</hidden_image_context>`
 					: `${request.prompt ?? ''}${attachedBlocks}`;
+				// Both channels reach the model the same way. They differ only in where
+				// they came from: `images` is what the user attached, `contextImages`
+				// is what the app supplies — a render of the diagram the agent drew,
+				// which it otherwise has no way to look at.
+				const visibleImages = allImages(request);
 				const initialInput =
-					request.images?.length && !visionDescriptions
+					visibleImages.length && !visionDescriptions
 						? [
 								{
 									role: 'user' as const,
@@ -556,7 +564,7 @@ export class AgentReasoning {
 											type: 'input_text' as const,
 											text: `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}`
 										},
-										...request.images.map((image) => ({
+										...visibleImages.map((image) => ({
 											type: 'input_image' as const,
 											image: image.dataUrl
 										}))

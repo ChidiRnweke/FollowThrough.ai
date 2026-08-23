@@ -1,4 +1,4 @@
-import { chatKeyOf, isSearchTab, parseTabId, type TabId } from './tab-ref';
+import { chatKeyOf, diagramIdOf, isSearchTab, parseTabId, type TabId } from './tab-ref';
 
 /**
  * Workbench URL model.
@@ -14,6 +14,7 @@ import { chatKeyOf, isSearchTab, parseTabId, type TabId } from './tab-ref';
  *   /notes/<focused>?tabs=<id>,<id>,<id>&split=<id>
  *   /chats/<conversation>?tabs=<id>,<id>&focus=chat:<key>&split=<id>
  *   /chats/new?tabs=chat:<key>&focus=chat:<key>
+ *   /diagrams/<diagram>?tabs=<id>,<id>&focus=diagram:<diagram>&split=<id>
  *   /search?tabs=<id>,<id>&focus=search
  *
  * The focused tab is always also present in `?tabs=` (so the parameter
@@ -59,6 +60,15 @@ const isTabId = (value: string): boolean => parseTabId(value) !== undefined;
 function focusedFromPath(pathOnly: string, searchParams: URLSearchParams): TabId | undefined {
 	const noteMatch = /^\/notes\/([0-9a-f-]{36})\/?$/i.exec(pathOnly);
 	if (noteMatch) return isTabId(noteMatch[1]) ? noteMatch[1] : undefined;
+	const diagramMatch = /^\/diagrams\/([0-9a-f-]{36})\/?$/i.exec(pathOnly);
+	if (diagramMatch) {
+		// A diagram's pathname *could* name its tab, but `?focus=` keeps one rule for
+		// every non-note host and leaves `/diagrams/<id>` free to render as a plain
+		// page when the workbench is not involved.
+		const focusRaw = searchParams.get(FOCUS_PARAM);
+		if (!focusRaw || diagramIdOf(focusRaw) === undefined) return undefined;
+		return focusRaw;
+	}
 	if (/^\/search\/?$/.test(pathOnly)) {
 		const focusRaw = searchParams.get(FOCUS_PARAM);
 		if (!focusRaw || !isTabId(focusRaw)) return undefined;
@@ -146,6 +156,13 @@ export function serializeWorkbenchUrl(
 		const conversationId = options.conversationOf?.(chatKey);
 		const query = params.length > 0 ? `?${params.join('&')}` : '';
 		return `/chats/${conversationId ?? 'new'}${query}`;
+	}
+	const diagramId = diagramIdOf(state.focusedNoteId);
+	if (diagramId !== undefined) {
+		// Same trick as a chat: the pathname names the host, `?focus=` the tab.
+		params.push(`${FOCUS_PARAM}=${encodeURIComponent(state.focusedNoteId)}`);
+		const query = params.length > 0 ? `?${params.join('&')}` : '';
+		return `/diagrams/${diagramId}${query}`;
 	}
 	if (isSearchTab(state.focusedNoteId)) {
 		// Same trick as a chat: the `/search` pathname names the host, `?focus=` the tab.
@@ -339,6 +356,33 @@ export function moveTabInState(
  * isn't already in `openTabs`, it is appended so the resulting split pane
  * always has a matching tab in the strip.
  */
+/**
+ * Swap one open tab for another, in place.
+ *
+ * Promotion turns a studio draft into a saved diagram, and the pane showing it
+ * has to change with it. Closing the draft and opening the diagram separately
+ * would drop the split for a frame and leave a history entry for a studio that
+ * lost its canvas, so the substitution happens as one transition — keeping the
+ * tab's position, its focus and its side of the split.
+ */
+export function replaceTabInState(
+	state: WorkbenchUrlState,
+	from: TabId,
+	to: TabId
+): WorkbenchUrlState {
+	if (from === to || !state.openTabs.includes(from)) return state;
+	const openTabs = state.openTabs.includes(to)
+		? state.openTabs.filter((id) => id !== from)
+		: state.openTabs.map((id) => (id === from ? to : id));
+	const focusedNoteId = state.focusedNoteId === from ? to : state.focusedNoteId;
+	const splitNoteId = state.splitNoteId === from ? to : state.splitNoteId;
+	return {
+		focusedNoteId,
+		openTabs,
+		...(splitNoteId && splitNoteId !== focusedNoteId ? { splitNoteId } : {})
+	};
+}
+
 export function setSplitInState(
 	state: WorkbenchUrlState,
 	noteId: TabId | undefined

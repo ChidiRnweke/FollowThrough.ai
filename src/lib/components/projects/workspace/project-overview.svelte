@@ -17,6 +17,7 @@
 		FtFolder as Folder,
 		FtFolderOpen as FolderOpen,
 		FtArtifacts as PackageOpen,
+		FtWorkflow as Workflow,
 		FtAttachments as Paperclip,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
@@ -36,6 +37,7 @@
 		todos: number;
 		memory: number;
 		artifacts: number;
+		diagrams: number;
 		attachments: number;
 	}
 
@@ -104,6 +106,10 @@
 		counts.artifacts === 0 ? undefined : `${counts.artifacts} ready to download`
 	);
 
+	const diagramState = $derived(
+		counts.diagrams === 0 ? undefined : `${counts.diagrams} you can link into notes`
+	);
+
 	const attachmentState = $derived.by(() => {
 		if (counts.attachments === 0) return undefined;
 		return counts.attachments === 1
@@ -160,7 +166,7 @@
 </script>
 
 <!--
-	The four spaces are not peers, and grouping them is the explanation: two are
+	The spaces are not peers, and grouping them is the explanation: three are
 	what the project has produced, two are what the agent reasons from. The
 	headings carry the meaning so the rows themselves stay quiet.
 -->
@@ -168,7 +174,7 @@
 	Spacing carries the grouping: 8px inside a group, 24px between the two groups,
 	and the documents list is pushed a further step away below. Dividers are
 	deliberately absent here — the documents list uses them, so withholding them
-	is what stops four spaces from reading as five more documents.
+	is what stops the spaces from reading as more documents.
 -->
 <div class="flex flex-col gap-6" role="navigation" aria-label="Project spaces">
 	<section class="flex flex-col gap-2">
@@ -187,6 +193,13 @@
 				icon={PackageOpen}
 				state={artifactState}
 				tip={artifactState ? undefined : pickTip('artifacts', tipSeed)}
+			/>
+			<ResourceRow
+				href="/diagrams?projectId={project.id}"
+				label="Diagrams"
+				icon={Workflow}
+				state={diagramState}
+				tip={diagramState ? undefined : pickTip('diagrams', tipSeed)}
 			/>
 		</ul>
 	</section>

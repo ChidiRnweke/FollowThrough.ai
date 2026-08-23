@@ -2,23 +2,37 @@ type Brand<T, Name extends string> = T & { readonly __brand: Name };
 type NoteId = Brand<string, 'NoteId'>;
 type ProjectId = Brand<string, 'ProjectId'>;
 
-export type AppSurfaceKind =
-	| 'today'
-	| 'todos'
-	| 'project'
-	| 'project_todos'
-	| 'project_memory'
-	| 'project_attachments'
-	| 'artifacts'
-	| 'note_workbench'
-	| 'diagram_editor'
-	| 'chats'
-	| 'chat'
-	| 'skills'
-	| 'skill'
-	| 'profile'
-	| 'settings'
-	| 'unknown';
+/**
+ * Every screen the agent can be told it is looking at.
+ *
+ * A list rather than a bare union because the request boundary validates against
+ * it: `agent-request-factory.ts` builds its zod enum from this array, so a surface
+ * added here cannot be one the server then rejects. It drifted once — `diagrams`
+ * and `diagram_studio` were added to the type and not to the validator, and every
+ * chat sent from those screens came back 400 Bad Request before reaching the agent.
+ */
+export const APP_SURFACE_KINDS = [
+	'today',
+	'todos',
+	'project',
+	'project_todos',
+	'project_memory',
+	'project_attachments',
+	'artifacts',
+	'note_workbench',
+	'diagram_editor',
+	'diagram_studio',
+	'diagrams',
+	'chats',
+	'chat',
+	'skills',
+	'skill',
+	'profile',
+	'settings',
+	'unknown'
+] as const;
+
+export type AppSurfaceKind = (typeof APP_SURFACE_KINDS)[number];
 
 export interface NoteContext {
 	readonly id: NoteId;

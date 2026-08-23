@@ -121,7 +121,9 @@ describe('ordered list merging', () => {
 		const separator = paragraphRanges(editor)[0];
 		editor.commands.deleteRange(separator);
 
-		expect(docJSON(editor).content?.filter((block) => block.type === 'orderedList')).toHaveLength(1);
+		expect(docJSON(editor).content?.filter((block) => block.type === 'orderedList')).toHaveLength(
+			1
+		);
 		editor.destroy();
 	});
 

@@ -105,7 +105,7 @@ export const OrderedListNumbering = Extension.create({
 					// Document order makes adjacent siblings consecutive, so a run
 					// is a maximal span whose parent and index line up.
 					const runs: OrderedListInfo[][] = [];
-					for (let i = 0; i < lists.length; ) {
+					for (let i = 0; i < lists.length;) {
 						const run = [lists[i]];
 						i += 1;
 						while (
@@ -137,12 +137,9 @@ export const OrderedListNumbering = Extension.create({
 						}
 						for (const list of run) {
 							if (!touched(list)) continue;
-							const prev =
-								list.index > 0 ? list.parent.child(list.index - 1) : undefined;
+							const prev = list.index > 0 ? list.parent.child(list.index - 1) : undefined;
 							const start =
-								prev &&
-								prev.type === orderedList &&
-								prev.attrs.type === list.node.attrs.type
+								prev && prev.type === orderedList && prev.attrs.type === list.node.attrs.type
 									? (prev.attrs.start ?? 1) + prev.childCount
 									: 1;
 							if (list.node.attrs.start !== start) {

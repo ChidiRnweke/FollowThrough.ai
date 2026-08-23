@@ -10,7 +10,14 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { diagramKeepsOwnColours } from '$lib/components/edra/mermaid-rendering';
-	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
+	import {
+		type DiagramRenders,
+		drawioReferencesIn,
+		mergeDiagramRenders,
+		mermaidSourcesIn,
+		renderDiagrams,
+		renderDrawioDiagrams
+	} from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import {
 		generateDocument,
@@ -23,13 +30,16 @@
 		projectId,
 		defaultTitle = '',
 		defaultNoteIds = [],
-		documents = []
+		documents = [],
+		diagrams = []
 	}: {
 		open?: boolean;
 		projectId: string;
 		defaultTitle?: string;
 		defaultNoteIds?: string[];
 		documents?: readonly { id: string; document: unknown }[];
+		/** The note's draw.io diagrams, whose exported SVG is what the document embeds. */
+		diagrams?: readonly { readonly id: string; readonly renderedSvg?: string }[];
 	} = $props();
 
 	let title = $state('');
@@ -73,6 +83,24 @@
 	const hasDiagrams = $derived(mermaidSources.length > 0);
 	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
 
+	// draw.io diagrams travel as the SVG their editor exported, rasterized here the
+	// same way a mermaid render is. Only the ones the documents actually reference.
+	const referencedDrawio = $derived(
+		drawioReferencesIn(documents)
+			.map((id) => diagrams.find((diagram) => diagram.id === id))
+			.filter((diagram) => diagram !== undefined)
+	);
+
+	async function renderAllDiagrams(): Promise<DiagramRenders> {
+		// Together: two independent rasterization passes over two disjoint sets, so
+		// awaiting one before starting the other only made the export slower.
+		const [mermaid, drawio] = await Promise.all([
+			renderDiagrams(mermaidSources, settings),
+			renderDrawioDiagrams(referencedDrawio)
+		]);
+		return mergeDiagramRenders(mermaid, drawio);
+	}
+
 	async function preview(): Promise<void> {
 		const trimmed = title.trim();
 		if (!trimmed) return;
@@ -83,7 +111,7 @@
 				svgs: diagramSvgs,
 				pngs: diagramPngs,
 				sizes: diagramSizes
-			} = await renderDiagrams(mermaidSources, settings);
+			} = await renderAllDiagrams();
 			const output = await previewDocument({
 				projectId,
 				noteIds: defaultNoteIds,
@@ -115,7 +143,7 @@
 				svgs: diagramSvgs,
 				pngs: diagramPngs,
 				sizes: diagramSizes
-			} = await renderDiagrams(mermaidSources, settings);
+			} = await renderAllDiagrams();
 			const output = await generateDocument({
 				projectId,
 				noteIds: defaultNoteIds,

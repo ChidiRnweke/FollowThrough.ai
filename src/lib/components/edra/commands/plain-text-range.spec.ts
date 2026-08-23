@@ -16,10 +16,14 @@ const plainTextOf = (editor: Editor) => editor.getText({ blockSeparator: '\n\n' 
 
 /** Extracts a mapped range with the same serialization the mapper searched against. */
 const extract = (editor: Editor, range: PmTextRange): string =>
-	getTextBetween(editor.state.doc, { from: range.from, to: range.to }, {
-		blockSeparator: '\n\n',
-		textSerializers: getTextSerializersFromSchema(editor.schema)
-	});
+	getTextBetween(
+		editor.state.doc,
+		{ from: range.from, to: range.to },
+		{
+			blockSeparator: '\n\n',
+			textSerializers: getTextSerializersFromSchema(editor.schema)
+		}
+	);
 
 const paragraph = (text: string) => ({
 	type: 'paragraph',
@@ -70,7 +74,11 @@ describe('Mapping plain-text ranges to ProseMirror positions', () => {
 			content: [
 				{
 					type: 'paragraph',
-					content: [{ type: 'text', text: 'line' }, { type: 'hardBreak' }, { type: 'text', text: 'next' }]
+					content: [
+						{ type: 'text', text: 'line' },
+						{ type: 'hardBreak' },
+						{ type: 'text', text: 'next' }
+					]
 				}
 			]
 		});

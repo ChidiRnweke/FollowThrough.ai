@@ -4,6 +4,7 @@ import {
 	describeError,
 	ExternalServiceError,
 	NotFoundError,
+	userFacingMessage,
 	ValidationError
 } from '$lib/errors';
 import type { DomainErrorCode } from '$lib/errors';
@@ -81,5 +82,21 @@ describe('describeError', () => {
 
 	it('describes a plain value', () => {
 		expect(describeError('nope')).toBe('nope');
+	});
+});
+
+describe('userFacingMessage', () => {
+	it("uses a remote function's domain message, which is not an Error", () => {
+		expect(userFacingMessage({ message: 'Diagram is malformed', code: 'VALIDATION' }, 'fallback')).toBe(
+			'Diagram is malformed'
+		);
+	});
+
+	it('uses the fallback when the failure says nothing', () => {
+		expect(userFacingMessage({}, 'fallback')).toBe('fallback');
+	});
+
+	it("uses a thrown Error's message", () => {
+		expect(userFacingMessage(new Error('boom'), 'fallback')).toBe('boom');
 	});
 });

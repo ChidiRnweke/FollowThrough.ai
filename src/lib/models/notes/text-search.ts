@@ -133,8 +133,7 @@ export const noteSearchSnippet = (
 	contextChars = 60
 ): NoteSearchSnippet => {
 	const beforeChars =
-		Math.min(contextChars, match.start) +
-		Math.max(0, contextChars - (text.length - match.end));
+		Math.min(contextChars, match.start) + Math.max(0, contextChars - (text.length - match.end));
 	const afterChars =
 		Math.min(contextChars, text.length - match.end) + Math.max(0, contextChars - match.start);
 	const beforeStart = Math.max(0, match.start - beforeChars);

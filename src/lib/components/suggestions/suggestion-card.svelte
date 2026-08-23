@@ -29,6 +29,12 @@
 	const strength = $derived(
 		suggestion.kind === 'todo' ? suggestion.payload.promiseStrength : undefined
 	);
+	// A draw.io diagram's preview is the SVG its editor exports on save, so one
+	// accepted without the review has none and can never gain one. The server
+	// refuses it; this keeps the button that would fail off the card.
+	const needsDrawioReview = $derived(
+		suggestion.kind === 'diagram' && suggestion.payload.kind === 'drawio'
+	);
 	const memoryOperationLabels = { add: 'Add', update: 'Update', remove: 'Remove' } as const;
 </script>
 
@@ -121,8 +127,15 @@
 			{#if onreview}
 				<Button size="sm" variant="outline" disabled={busy} onclick={onreview}>Review</Button>
 			{/if}
-			{#if onaccept}
+			{#if onaccept && !needsDrawioReview}
 				<Button size="sm" disabled={busy} onclick={() => onaccept(suggestion.id)}>Accept</Button>
+			{:else if needsDrawioReview && !onreview}
+				<!--
+					No plain Accept for a draw.io diagram: its preview comes from the
+					editor's own export, so one accepted without the review can never show
+					itself. The review opens from the note the diagram belongs to.
+				-->
+				<p class="text-sm text-muted-foreground">Open the note to review this diagram.</p>
 			{/if}
 			{#if onreject}
 				<Button size="sm" variant="ghost" disabled={busy} onclick={() => onreject(suggestion.id)}>

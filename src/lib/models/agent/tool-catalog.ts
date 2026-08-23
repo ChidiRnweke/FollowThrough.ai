@@ -31,7 +31,12 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	'load_skill',
 	'propose_memory_change',
 	'edit_note',
-	'save_note'
+	'save_note',
+	// Direct rather than long-tail: it is the only way the agent can put a diagram
+	// in front of the user, and every turn of a studio conversation is about to
+	// need it. Nothing here is seeded into `tool_embeddings` — see `TOOL_CATALOG` —
+	// because a first-class tool is offered outright and never retrieved.
+	'present_diagram'
 ];
 
 export interface ToolCatalogEntry {
@@ -39,6 +44,13 @@ export interface ToolCatalogEntry {
 	readonly description: string;
 	/** Concise intent language used only for semantic tool discovery. */
 	readonly retrievalText?: string;
+	/**
+	 * `app` for a tool whose whole effect lands in a surface of this application.
+	 *
+	 * These are not offered over MCP at all. An external host has no workbench, so
+	 * the tool's entire result would happen in a window the caller cannot see.
+	 */
+	readonly surface?: 'app';
 }
 
 /** Every tool defined by AgentTools.buildDefinitions(), first-class included. */
@@ -150,7 +162,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'read_note_version',
 		description:
-			"Read the full plain text of one published version of a note. Use only when diff_note_versions is not enough, for example to check the exact wording before restore_note_version."
+			'Read the full plain text of one published version of a note. Use only when diff_note_versions is not enough, for example to check the exact wording before restore_note_version.'
 	},
 	{
 		name: 'restore_note_version',
@@ -336,6 +348,34 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		name: 'export_document',
 		description:
 			'Generate an artifact document (DOCX or PDF) from one or more project notes. Optionally apply a project template.'
+	},
+	{
+		name: 'present_diagram',
+		surface: 'app',
+		description:
+			'Show a diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML — the canvas is draw.io, so sketch in Mermaid in your reply and present here once the shape is settled. This saves nothing: the user keeps what they see. To revise a diagram that is already saved, pass its diagramId and the canvas offers to replace it.',
+		retrievalText: 'show render draw a diagram on the canvas for the user to look at'
+	},
+	{
+		name: 'read_canvas_diagram',
+		// Reads *this conversation's* canvas. An MCP host has neither, so the tool
+		// could only ever fail there.
+		surface: 'app',
+		description:
+			'Read the diagram currently on this conversation\u2019s canvas, including its full source. Diagram source is left out of your history because it is large, so read it here before revising a diagram you drew earlier.',
+		retrievalText: 'read the current diagram source on the canvas before revising it'
+	},
+	{
+		name: 'search_icons',
+		description:
+			"Find a logo or icon to put in a diagram. Search one word at a time — 'azure', 'kubernetes', 'postgres' — because the library matches names, not phrases. Each result carries a URL to use directly in a draw.io style as shape=image;image=<url>.",
+		retrievalText: 'find a logo brand icon image for a diagram shape'
+	},
+	{
+		name: 'read_project_diagram',
+		description:
+			'Read a saved project diagram: its title, kind, and the labels it contains. Pass includeSource only when you are about to revise a draw.io diagram and need its XML — otherwise it is thousands of tokens of markup that says nothing.',
+		retrievalText: 'inspect read an existing saved diagram in this project'
 	},
 	{
 		name: 'list_artifacts',

@@ -40,6 +40,8 @@ export interface EdraCommand {
 	name: string;
 	icon: typeof Icon;
 	tooltip: string;
+	/** Extra words the slash menu matches on, for names a writer would not guess. */
+	aliases?: readonly string[];
 	shortCut?: string;
 	onClick?: (editor: Editor) => void;
 	turnInto?: (editor: Editor, node: Node, pos: number) => void;
@@ -548,10 +550,23 @@ export const commands: Record<string, EdraCommand[]> = {
 			icon: Workflow,
 			name: 'mermaid',
 			tooltip: 'Mermaid Diagram',
+			aliases: ['diagram', 'flowchart', 'chart'],
 			onClick: (editor) => {
 				editor.chain().focus().setMermaid(' ').run();
 			},
 			isActive: (editor) => editor.isActive('mermaid')
+		},
+		{
+			icon: Workflow,
+			name: 'projectDiagram',
+			tooltip: 'Project diagram',
+			aliases: ['drawio', 'diagram', 'saved'],
+			// Opening the picker is the app's job, not the editor's: the editor knows
+			// nothing about projects or transport. It raises the request and the note
+			// workspace answers it by inserting a reference.
+			onClick: (editor) => {
+				editor.extensionStorage.projectDiagramPicker?.open?.(editor);
+			}
 		}
 	]
 };

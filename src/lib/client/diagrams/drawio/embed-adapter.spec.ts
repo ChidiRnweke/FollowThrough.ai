@@ -48,11 +48,28 @@ const setup = () => {
 		onFailure: (message) => failures.push(message),
 		onExit: (modified) => exits.push(modified)
 	});
-	adapter.start({ xml: '<mxfile/>', title: 'Architecture' });
+	adapter.start({ xml: '<mxfile/>' });
 	return { adapter, port, exports, failures, exits };
 };
 
+/**
+ * An export leaves the message handler asynchronously: a compressed diagram body
+ * has to be inflated before it can be handed on, so the callback lands a task
+ * later rather than inside `emit`.
+ */
+const exported = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe('Safe draw.io iframe messaging invariants', () => {
+	// The pane header names the diagram. Sending it here too put the same words in
+	// the editor's menubar, so the title was on screen twice.
+	it('does not send the diagram title into the editor chrome', () => {
+		const { port } = setup();
+		port.emit({ event: 'init' });
+		expect(port.posted.map((entry) => entry.message)).not.toContainEqual(
+			expect.objectContaining({ action: 'load', title: expect.anything() })
+		);
+	});
+
 	it('configures the hosted editor before initialization', () => {
 		const { port } = setup();
 		port.emit({ event: 'configure' });
@@ -89,7 +106,7 @@ describe('Safe draw.io iframe messaging invariants', () => {
 		expect(port.posted).toEqual([]);
 	});
 
-	it('exports review XML and SVG without persisting through the adapter', () => {
+	it('exports review XML and SVG without persisting through the adapter', async () => {
 		const { adapter, port, exports } = setup();
 		adapter.requestExport('review');
 		port.emit({
@@ -97,16 +114,18 @@ describe('Safe draw.io iframe messaging invariants', () => {
 			xml: '<mxfile><diagram/></mxfile>',
 			data: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E'
 		});
+		await exported();
 		expect(exports[0]?.reason).toBe('review');
 	});
 
-	it('exports the XML from an explicit editor save event', () => {
+	it('exports the XML from an explicit editor save event', async () => {
 		const { port, exports } = setup();
 		port.emit({ event: 'save', xml: '<mxfile><diagram/></mxfile>' });
 		port.emit({
 			event: 'export',
 			data: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E'
 		});
+		await exported();
 		expect(exports[0]?.xml).toBe('<mxfile><diagram/></mxfile>');
 	});
 

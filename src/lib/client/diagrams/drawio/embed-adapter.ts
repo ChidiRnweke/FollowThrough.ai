@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { uncompressDrawioXml } from './uncompress';
 
 export const DRAWIO_EMBED_ORIGIN = 'https://embed.diagrams.net';
-export const DRAWIO_EMBED_URL = `${DRAWIO_EMBED_ORIGIN}/?embed=1&proto=json&configure=1&spin=1&libraries=1&saveAndExit=0`;
+// `compressed=0` is load-bearing: without it the embed returns each `<diagram>`
+// body as base64 raw-deflate, which the server's validator refuses to store —
+// every save failed with "Each draw.io diagram requires one uncompressed
+// mxGraphModel". `uncompressDrawioXml` covers the case where it is ignored.
+export const DRAWIO_EMBED_URL = `${DRAWIO_EMBED_ORIGIN}/?embed=1&proto=json&configure=1&spin=1&libraries=1&saveAndExit=0&compressed=0`;
 
 export interface DrawioMessageEvent {
 	readonly origin: string;
@@ -88,20 +93,33 @@ const decodeSvgDataUri = (uri: string): string => {
 export class DrawioEmbedAdapter {
 	private unsubscribe?: () => void;
 	private xml = '';
-	private title = '';
 	private dark = false;
 	private pending?: { reason: DrawioExportReason; xml?: string; exit: boolean };
+	/**
+	 * Behavioural defaults, kept here so an embed that asks for no theming still
+	 * scrolls and navigates the way the app needs.
+	 */
+	private config: Readonly<Record<string, unknown>> = {
+		passiveScroll: true,
+		preserveViewState: true,
+		suppressNewWindows: true
+	};
 
 	constructor(
 		private readonly port: DrawioEmbedPort,
 		private readonly callbacks: DrawioEmbedCallbacks = {}
 	) {}
 
-	start(input: { xml: string; title: string; dark?: boolean }): void {
+	start(input: {
+		xml: string;
+		dark?: boolean;
+		/** Appearance and behaviour, sent once before the editor initialises. */
+		config?: Readonly<Record<string, unknown>>;
+	}): void {
 		this.stop();
 		this.xml = input.xml;
-		this.title = input.title;
 		this.dark = input.dark ?? false;
+		if (input.config) this.config = input.config;
 		this.callbacks.onLoading?.();
 		this.unsubscribe = this.port.listen((event) => this.receive(event));
 	}
@@ -152,14 +170,7 @@ export class DrawioEmbedAdapter {
 
 		switch (envelope.data.event) {
 			case 'configure':
-				this.send({
-					action: 'configure',
-					config: {
-						passiveScroll: true,
-						preserveViewState: true,
-						suppressNewWindows: true
-					}
-				});
+				this.send({ action: 'configure', config: this.config });
 				break;
 			case 'init':
 				this.load();
@@ -187,22 +198,12 @@ export class DrawioEmbedAdapter {
 			case 'export': {
 				const exported = ExportEvent.safeParse(value);
 				if (!exported.success || !this.pending) return;
-				try {
-					const xml = exported.data.xml ?? this.pending.xml;
-					if (!xml) throw new Error('draw.io did not return the current XML.');
-					this.xml = xml;
-					this.callbacks.onExport?.({
-						xml,
-						svg: decodeSvgDataUri(exported.data.data),
-						reason: this.pending.reason,
-						exit: this.pending.exit
-					});
-					this.pending = undefined;
-				} catch (error) {
-					this.callbacks.onFailure?.(
-						error instanceof Error ? error.message : 'draw.io export failed.'
-					);
-				}
+				// Inflating is async, so the export leaves the switch here and
+				// completes on its own; `pending` is cleared first so a second
+				// export event cannot be answered with this one's reason.
+				const pending = this.pending;
+				this.pending = undefined;
+				void this.emitExport(exported.data, pending);
 				break;
 			}
 			case 'exit': {
@@ -213,6 +214,26 @@ export class DrawioEmbedAdapter {
 		}
 	}
 
+	private async emitExport(
+		exported: { readonly data: string; readonly xml?: string },
+		pending: { reason: DrawioExportReason; xml?: string; exit: boolean }
+	): Promise<void> {
+		try {
+			const raw = exported.xml ?? pending.xml;
+			if (!raw) throw new Error('draw.io did not return the current XML.');
+			const xml = await uncompressDrawioXml(raw);
+			this.xml = xml;
+			this.callbacks.onExport?.({
+				xml,
+				svg: decodeSvgDataUri(exported.data),
+				reason: pending.reason,
+				exit: pending.exit
+			});
+		} catch (error) {
+			this.callbacks.onFailure?.(error instanceof Error ? error.message : 'draw.io export failed.');
+		}
+	}
+
 	private load(): void {
 		this.send({
 			action: 'load',
@@ -220,7 +241,13 @@ export class DrawioEmbedAdapter {
 			autosave: 0,
 			modified: 'modified',
 			saveAndExit: 0,
-			title: this.title,
+			// Exit belongs to a host that can be exited. A workbench pane has no
+			// such gesture — its close is the tab's — so the button did nothing at
+			// all when pressed, which is worse than not offering it.
+			noExitBtn: 1,
+			// No title is sent. The pane header names the diagram; sending it here
+			// put the same words in the editor's menubar, on screen twice. The
+			// iframe's accessible name is set by the component, from its own prop.
 			dark: this.dark
 		});
 	}

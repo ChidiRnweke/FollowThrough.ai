@@ -14,7 +14,10 @@ const folder = (title: string, children: readonly ExportTreeNode[]): ExportTreeN
 
 describe('Project export entry invariants', () => {
 	it('offers every note in the tree', () => {
-		const entries = projectExportEntries([note('Kickoff'), folder('Interviews', [note('Round one')])]);
+		const entries = projectExportEntries([
+			note('Kickoff'),
+			folder('Interviews', [note('Round one')])
+		]);
 		expect(entries.map((entry) => entry.title)).toEqual(['Kickoff', 'Round one']);
 	});
 

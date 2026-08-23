@@ -1,8 +1,18 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatKeyOf, isChatTab, isSearchTab, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import {
+		chatKeyOf,
+		diagramIdOf,
+		isChatTab,
+		isDiagramTab,
+		isDraftTab,
+		isSearchTab,
+		noteIdOf,
+		type TabId
+	} from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
 	import type { NoteView } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
@@ -59,6 +69,10 @@
 	function noteTitle(tabId: TabId | undefined): string {
 		if (!tabId) return 'Note';
 		if (isSearchTab(tabId)) return 'Search';
+		const diagramId = diagramIdOf(tabId);
+		if (diagramId !== undefined)
+			return diagramRegistry.peek(diagramId)?.title ?? 'Untitled diagram';
+		if (isDraftTab(tabId)) return 'Diagram draft';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
@@ -196,7 +210,9 @@
 					takes the pane's full height instead — the sanctioned "independently
 					scrolling pane" case in DESIGN_SYSTEM's responsive contract. Wrapping
 					it in the document scroller collapsed it to content height and left
-					the composer floating mid-pane.
+					the composer floating mid-pane. A diagram canvas is the same case:
+					it scrolls and zooms in both axes against its own viewport, and the
+					draw.io embed sizes itself to the pane rather than to its content.
 				-->
 				{#snippet pane()}
 					<WorkspacePane
@@ -211,7 +227,7 @@
 						onCloseSplit={isSplit ? closeSplit : undefined}
 					/>
 				{/snippet}
-				{#if isChatTab(noteId)}
+				{#if isChatTab(noteId) || isDiagramTab(noteId) || isDraftTab(noteId)}
 					<div class="workspace-pane-scroll-content flex h-full min-h-0 flex-col">
 						{@render pane()}
 					</div>

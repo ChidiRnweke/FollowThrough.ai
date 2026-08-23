@@ -20,16 +20,17 @@ describe('Postgres actor-scoping matrix', () => {
 		await repository.insert(owner, {
 			id: 'a0000000-0000-4000-8000-000000000032' as DiagramId,
 			userId: owner.userId,
-			noteId: note.id,
+			projectId: project.id,
+			sourceNoteId: note.id,
 			kind: 'mermaid',
 			source: 'flowchart LR\nA --> B',
 			searchableText: 'A B',
 			createdAt: now,
 			updatedAt: now
 		});
-		expect((await repository.listForProject(owner, project.id)).map((item) => item.noteId)).toEqual(
-			[note.id]
-		);
+		expect(
+			(await repository.listForProject(owner, project.id)).diagrams.map((item) => item.sourceNoteId)
+		).toEqual([note.id]);
 	});
 
 	it('does not reveal another actor’s user record', async () => {

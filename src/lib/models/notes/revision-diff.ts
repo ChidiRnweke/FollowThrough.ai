@@ -40,8 +40,7 @@ function revisionLabel(side: RevisionText): string {
  * Identical inputs produce an empty patch.
  */
 export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText): NoteRevisionDiff {
-	const titleLine =
-		before.title === after.title ? '' : `title: ${before.title} → ${after.title}\n`;
+	const titleLine = before.title === after.title ? '' : `title: ${before.title} → ${after.title}\n`;
 	if (before.plainText === after.plainText) {
 		return { patch: titleLine.trimEnd(), addedLines: 0, removedLines: 0, truncated: false };
 	}

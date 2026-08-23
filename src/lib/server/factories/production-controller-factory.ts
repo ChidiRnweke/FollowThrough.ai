@@ -18,6 +18,10 @@ import {
 	type DeliverablesDependencies
 } from '../controllers/deliverables/controller';
 import { Diagrams, type DiagramsDependencies } from '../controllers/diagrams/controller';
+import {
+	DiagramStudio,
+	type DiagramStudioDependencies
+} from '../controllers/diagram-studio/controller';
 import { Feedback, type FeedbackDependencies } from '../controllers/feedback/controller';
 import { NoteImportsController } from '../controllers/imports/controller';
 import {
@@ -52,6 +56,7 @@ export interface ProductionControllerDependencies {
 	relationships: RelationshipsDependencies;
 	references: ReferencesDependencies;
 	diagrams: DiagramsDependencies;
+	diagramStudio: DiagramStudioDependencies;
 	suggestions: SuggestionsDependencies;
 	skills: SkillsDependencies;
 	agent: AgentDependencies;
@@ -95,6 +100,12 @@ export class ProductionControllerFactory implements ControllerFactory {
 	}
 	diagrams() {
 		return instrumentedController('diagrams', new Diagrams(this.dependencies.diagrams));
+	}
+	diagramStudio() {
+		return instrumentedController(
+			'diagramStudio',
+			new DiagramStudio(this.dependencies.diagramStudio)
+		);
 	}
 	suggestions() {
 		return instrumentedController('suggestions', new Suggestions(this.dependencies.suggestions));

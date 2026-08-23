@@ -6,6 +6,7 @@ import {
 	testActor,
 	testNow,
 	testNoteId,
+	testProjectId,
 	testProvenanceId,
 	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -39,7 +40,10 @@ const setup = () => {
 		unused,
 		unused,
 		new DrawioXmlValidator(),
-		new DrawioLabelExtractor()
+		new DrawioLabelExtractor(),
+		// A diagram is owned by its project, and the note it was suggested on is what
+		// says which project that is.
+		{ findById: async () => ({ projectId: testProjectId() }) }
 	);
 	return { applier, diagrams };
 };

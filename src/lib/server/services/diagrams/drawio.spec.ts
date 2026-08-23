@@ -7,6 +7,25 @@ describe('Untrusted draw.io XML invariants', () => {
 		expect(new DrawioXmlValidator().validate(VALID_DRAWIO_XML)).toBe(VALID_DRAWIO_XML);
 	});
 
+	it('accepts the HTML entities draw.io puts in rich-text labels', () => {
+		expect(
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace('</root>', '<mxCell id="e" parent="1" value="A&nbsp;B"/></root>')
+			)
+		).toContain('&nbsp;');
+	});
+
+	it('rejects an entity name with no HTML meaning', () => {
+		expect(() =>
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="e" parent="1" value="&bogusname;"/></root>'
+				)
+			)
+		).toThrow('malformed');
+	});
+
 	it('rejects malformed XML', () => {
 		expect(() => new DrawioXmlValidator().validate('<mxfile>')).toThrow('malformed');
 	});

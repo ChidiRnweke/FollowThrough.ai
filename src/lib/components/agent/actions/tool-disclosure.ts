@@ -108,6 +108,12 @@ const families: Readonly<Record<string, Family>> = {
 	get_artifact: 'link',
 	load_skill: 'link',
 	read_attachment: 'link',
+	// Many things, read: a list of icons to choose from.
+	search_icons: 'collection',
+	// One stored version, read back whole.
+	read_note_version: 'link',
+	read_canvas_diagram: 'link',
+	read_project_diagram: 'link',
 	download_artifact: 'link',
 
 	// Many things, read.
@@ -137,6 +143,8 @@ const families: Readonly<Record<string, Family>> = {
 	save_note: 'note-diff',
 	edit_note: 'note-diff',
 	restore_note_version: 'note-diff',
+	// The one read with a true before and after.
+	diff_note_versions: 'note-diff',
 	publish_note: 'note-diff',
 	discard_note_draft: 'note-diff',
 	create_skill: 'note-diff',
@@ -182,6 +190,13 @@ const families: Readonly<Record<string, Family>> = {
 	relate_selection: 'proposal',
 	find_references: 'proposal',
 	generate_mermaid_diagram: 'proposal',
+	// Shown on the canvas rather than saved: the user is the one who keeps it.
+	//
+	// `proposal` here is a *rendering* family — what this reads as once it has
+	// happened — not the approval classification of the same name in
+	// `agentToolCoverage`, where this tool is `read` because it mutates nothing.
+	// The two answer different questions and are meant to differ.
+	present_diagram: 'proposal',
 	revise_mermaid_diagram: 'proposal',
 	propose_memory_change: 'proposal',
 	accept_suggestion: 'proposal',
@@ -196,6 +211,8 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	search_note: 'note',
 	list_trashed_notes: 'note',
 	list_note_versions: 'note',
+	read_note_version: 'note',
+	diff_note_versions: 'note',
 	create_note: 'note',
 	archive_note: 'note',
 	restore_note: 'note',
@@ -234,6 +251,10 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	propose_memory_change: 'memory',
 	list_suggestions: 'suggestion',
 	promote_diagram: 'note',
+	present_diagram: 'note',
+	read_project_diagram: 'note',
+	read_canvas_diagram: 'note',
+	search_icons: 'note',
 	get_agent_preferences: 'setting',
 	update_agent_preferences: 'setting',
 	get_export_settings: 'setting',

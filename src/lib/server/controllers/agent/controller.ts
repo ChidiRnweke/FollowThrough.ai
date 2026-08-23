@@ -19,7 +19,8 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { isTerminalAgentRunStatus } from '$lib/models/agent';
+import { allImages, isTerminalAgentRunStatus } from '$lib/models/agent';
+import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
@@ -304,7 +305,15 @@ export class Agent implements AgentController {
 				const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
 				// Settled only now, because it depends on the chat model, which is not
 				// known until the conversation has been resolved.
-				const finalInput = await this.withImageReader(runInput, model, conversation, preferences);
+				const finalInput = await this.withImageReader(
+					// The snapshot names the conversation the run belongs to, not merely the
+					// one the client knew about: on a chat's first message the client has no
+					// id yet, and a run's own record of itself should not have that gap.
+					{ ...runInput, conversationId: conversation.id },
+					model,
+					conversation,
+					preferences
+				);
 				// Seeds the run with the requesting operation's span, so the first
 				// turn joins this request's trace even though execution starts
 				// after this transaction commits. Approval parks refresh it.
@@ -543,8 +552,10 @@ export class Agent implements AgentController {
 	}
 
 	private freezeInput(input: SubmitAgentRunInput, preferences: AgentPreferences): RunAgentInput {
-		if ((input.images?.length ?? 0) > 4) throw new ValidationError('Attach at most four images.');
-		const imageBytes = (input.images ?? []).reduce((sum, image) => {
+		// Both channels share one budget: they end up in the same request.
+		const images = allImages(input);
+		if (images.length > 4) throw new ValidationError('Attach at most four images.');
+		const imageBytes = images.reduce((sum, image) => {
 			if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType))
 				throw new ValidationError('Chat images must be PNG, JPEG, or WebP.');
 			if (!image.dataUrl.startsWith(`data:${image.mediaType};base64,`))
@@ -566,6 +577,17 @@ export class Agent implements AgentController {
 				: undefined;
 		const overriddenNoteId =
 			input.noteId && contextNoteId && input.noteId !== contextNoteId ? input.noteId : undefined;
+		// A skill with `allowImplicitInvocation: false` is only advertised when it is
+		// asked for, so the screens that exist for one ask on the user's behalf: a
+		// studio canvas is open, so diagram guidance is what the run is for. Which
+		// skill goes with which screen is declared by the skill, not decided here —
+		// otherwise every such pairing is another literal-against-literal branch.
+		const requestedSkillNames = [
+			...new Set([
+				...(input.requestedSkillNames ?? []),
+				...skillsForSurface(input.appContext?.surface?.kind)
+			])
+		];
 		// Only the fields the user actually set travel; an empty object would
 		// otherwise override the deployment defaults with nothing.
 		const webSearch = {
@@ -579,6 +601,7 @@ export class Agent implements AgentController {
 			requestId: input.requestId,
 			prompt: input.input,
 			...(input.images?.length ? { images: input.images } : {}),
+			...(input.contextImages?.length ? { contextImages: input.contextImages } : {}),
 			...(input.conversationId ? { conversationId: input.conversationId } : {}),
 			...((contextProjectId ?? input.projectId)
 				? { projectId: contextProjectId ?? input.projectId }
@@ -587,7 +610,7 @@ export class Agent implements AgentController {
 			...(input.selection ? { selection: input.selection } : {}),
 			...(input.selections?.length ? { selections: input.selections } : {}),
 			...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
-			...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
+			...(requestedSkillNames.length ? { requestedSkillNames } : {}),
 			...(input.requestedSkillNoteIds
 				? { requestedSkillNoteIds: input.requestedSkillNoteIds }
 				: {}),
@@ -628,7 +651,9 @@ export class Agent implements AgentController {
 		conversation: Conversation,
 		preferences: AgentPreferences
 	): Promise<RunAgentInput> {
-		if (!runInput.images?.length) return runInput;
+		// Context images need a model that can see just as much as attachments do;
+		// ignoring them here would silently drop the render on a text-only model.
+		if (allImages(runInput).length === 0) return runInput;
 		const models = await this.dependencies.models.list().catch(() => []);
 		if (models.find((candidate) => candidate.id === chatModel)?.supportsVision) {
 			const { visionModelOverride: _discarded, ...rest } = runInput;

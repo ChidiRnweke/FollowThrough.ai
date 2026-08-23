@@ -144,7 +144,10 @@ export default [
 						return editor.chain().setParagraph().run();
 					}
 					if (empty && $head.parentOffset === 0) {
-						editor.chain().insertContentAt($head.pos - 1, { type: 'paragraph' }).run();
+						editor
+							.chain()
+							.insertContentAt($head.pos - 1, { type: 'paragraph' })
+							.run();
 						return true;
 					}
 					if (empty && $head.parentOffset === $head.parent.content.size) {
