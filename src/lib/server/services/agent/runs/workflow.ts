@@ -89,6 +89,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		const timestamp = now();
 		const model = task.model ?? this.dependencies.defaultModel;
 		const run: AgentRun = {
+			kind: 'workflow',
 			id: crypto.randomUUID() as AgentRunId,
 			userId: actor.userId,
 			conversationId: conversation.id,

@@ -15,6 +15,7 @@ import type {
 	DecideAgentRunInput,
 	Message,
 	RunAgentInput,
+	ResolvedAgentRun,
 	StagedAgentRunInput,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
@@ -45,6 +46,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 
 interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
+	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
 	findLatestByConversation(
 		actor: ActorContext,
@@ -320,6 +322,7 @@ export class Agent implements AgentController {
 				// after this transaction commits. Approval parks refresh it.
 				const submittedTraceparent = activeTraceparent();
 				const run: AgentRun = {
+					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
 					userId: actor.userId,
 					conversationId: conversation.id,
@@ -329,7 +332,7 @@ export class Agent implements AgentController {
 					requestId: input.requestId,
 					pendingDecisions: [],
 					contextSnapshot: {},
-					inputSnapshot: finalInput as unknown as Readonly<Record<string, unknown>>,
+					inputSnapshot: finalInput,
 					...(submittedTraceparent ? { traceparent: submittedTraceparent } : {}),
 					definitionVersion: 2,
 					createdAt: submittedAt,
@@ -466,13 +469,14 @@ export class Agent implements AgentController {
 		if (duplicate) return this.receipt(actor, duplicate);
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
-				const original = await this.requireRun(actor, runId);
+				const original = await this.requireAgentRun(actor, runId);
 				if (!isTerminalAgentRunStatus(original.status) || original.status === 'completed')
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
 				// Joins the retry request's trace, same as a fresh submit.
 				const retryTraceparent = activeTraceparent();
 				const retry: AgentRun = {
+					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
 					userId: original.userId,
 					conversationId: original.conversationId,
@@ -675,6 +679,15 @@ export class Agent implements AgentController {
 
 	private async requireRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
 		const run = await this.dependencies.runs.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		return run;
+	}
+
+	private async requireAgentRun(
+		actor: ActorContext,
+		runId: AgentRunId
+	): Promise<ResolvedAgentRun> {
+		const run = await this.dependencies.runs.findAgentById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}

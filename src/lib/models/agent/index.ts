@@ -295,7 +295,7 @@ export interface PendingAgentDecision {
  * process restart, and `inputSnapshot` freezes the preferences a retry replays under,
  * not whatever the user's settings have since become.
  */
-export interface AgentRun {
+interface AgentRunBase {
 	readonly id: AgentRunId;
 	readonly userId: UserId;
 	readonly conversationId: ConversationId;
@@ -320,12 +320,23 @@ export interface AgentRun {
 	readonly failure?: string;
 	readonly providerErrorCode?: string;
 	readonly contextSnapshot?: Readonly<Record<string, unknown>>;
-	readonly inputSnapshot?: Readonly<Record<string, unknown>>;
 	readonly retryOfRunId?: AgentRunId;
 	readonly definitionVersion?: number;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
+
+export interface ResolvedAgentRun extends AgentRunBase {
+	readonly kind: 'agent';
+	readonly inputSnapshot: RunAgentInput;
+}
+
+export interface WorkflowAgentRun extends AgentRunBase {
+	readonly kind: 'workflow';
+	readonly inputSnapshot?: never;
+}
+
+export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
 
 export interface AgentRunReceipt {
 	readonly runId: AgentRunId;

@@ -6,7 +6,8 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunStatus,
-	ConversationId
+	ConversationId,
+	ResolvedAgentRun
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { OutputSegment } from '$lib/server/repositories/agent';
@@ -34,6 +35,16 @@ export class InMemoryAgentRunPersistence
 
 	async findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
 		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
+	}
+
+	async findAgentById(
+		actor: ActorContext,
+		id: AgentRunId
+	): Promise<ResolvedAgentRun | undefined> {
+		return this.runs.find(
+			(run): run is ResolvedAgentRun =>
+				run.kind === 'agent' && run.id === id && run.userId === actor.userId
+		);
 	}
 
 	async findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined> {
@@ -117,7 +128,45 @@ export class InMemoryAgentRunPersistence
 			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
 		);
 		if (!run) return undefined;
-		const updated: AgentRun = {
+		const { kind: _kind, inputSnapshot: _inputSnapshot, ...statePatch } = patch;
+		const updated: AgentRun =
+			run.kind === 'agent'
+				? {
+						...run,
+						...statePatch,
+						kind: 'agent',
+						status: to,
+						updatedAt: new Date().toISOString() as DateTime
+					}
+				: {
+						...run,
+						...statePatch,
+						kind: 'workflow',
+						status: to,
+						updatedAt: new Date().toISOString() as DateTime
+					};
+		void _kind;
+		void _inputSnapshot;
+		this.replace(updated);
+		return updated;
+	}
+
+	async transitionAgent(
+		runId: AgentRunId,
+		from: AgentRunStatus | readonly AgentRunStatus[],
+		to: AgentRunStatus,
+		patch: Partial<ResolvedAgentRun> = {}
+	): Promise<ResolvedAgentRun | undefined> {
+		const fromStatuses = Array.isArray(from) ? from : [from];
+		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+		const run = this.runs.find(
+			(candidate): candidate is ResolvedAgentRun =>
+				candidate.kind === 'agent' &&
+				candidate.id === runId &&
+				(fromStatuses as string[]).includes(candidate.status)
+		);
+		if (!run) return undefined;
+		const updated: ResolvedAgentRun = {
 			...run,
 			...patch,
 			status: to,

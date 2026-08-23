@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import { AgentProviderFailure, parseRunAgentInput } from '$lib/models/agent';
+import { AgentProviderFailure } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentEvent,
@@ -8,6 +8,7 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	ConversationId,
+	ResolvedAgentRun,
 	RunAgentInput,
 	ToolActivity
 } from '$lib/models/agent';
@@ -104,7 +105,7 @@ export class AgentRunLifecycle {
 			const run = await this.prepare(runId);
 			if (!run) return 'cancelled';
 			const actor: ActorContext = { userId: run.userId };
-			const request = parseRunAgentInput(run.inputSnapshot, run.conversationId);
+			const request = run.inputSnapshot;
 			const decisions = await this.deps.decisions.loadUnconsumed(run.id);
 			const successfulMutations = new Map<string, string>();
 			const toolExecutor: AgentToolExecutor = {
@@ -270,8 +271,8 @@ export class AgentRunLifecycle {
 		}
 	}
 
-	private async prepare(runId: AgentRunId): Promise<AgentRun | undefined> {
-		const transitioned = await this.deps.runs.transition(runId, 'queued', 'running', {
+	private async prepare(runId: AgentRunId): Promise<ResolvedAgentRun | undefined> {
+		const transitioned = await this.deps.runs.transitionAgent(runId, 'queued', 'running', {
 			startedAt: new Date().toISOString() as DateTime
 		});
 		if (!transitioned) return undefined;
@@ -294,7 +295,7 @@ export class AgentRunLifecycle {
 		if (!run.contextSnapshot || Object.keys(run.contextSnapshot).length === 0) {
 			const context = await this.deps.contextBuilder.build(
 				actor,
-				parseRunAgentInput(run.inputSnapshot, run.conversationId),
+				run.inputSnapshot,
 				{ provenanceId: run.provenanceId! }
 			);
 			run = { ...run, contextSnapshot: context };

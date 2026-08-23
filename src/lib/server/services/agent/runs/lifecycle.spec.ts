@@ -61,6 +61,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const toolRows: ToolActivity[] = [];
 	const run: AgentRun = {
+		kind: 'agent',
 		id: testRunId,
 		userId: testActor().userId,
 		conversationId: testConversationId,

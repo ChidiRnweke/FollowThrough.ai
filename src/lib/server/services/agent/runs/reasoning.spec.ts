@@ -90,6 +90,7 @@ const formattedMissingTool = async (
 
 const timestamp = '2026-01-01T00:00:00.000Z' as DateTime;
 const run: AgentRun = {
+	kind: 'agent',
 	id: '00000000-0000-4000-8000-000000000098' as never,
 	userId: testActor().userId,
 	conversationId: '00000000-0000-4000-8000-000000000099' as never,
@@ -99,7 +100,10 @@ const run: AgentRun = {
 	requestId: 'request-provider-test',
 	pendingDecisions: [],
 	contextSnapshot: { provenanceId: testProvenanceId() },
-	inputSnapshot: { prompt: 'Help' },
+	inputSnapshot: {
+		conversationId: '00000000-0000-4000-8000-000000000099' as never,
+		prompt: 'Help'
+	},
 	createdAt: timestamp,
 	updatedAt: timestamp
 };

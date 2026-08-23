@@ -470,6 +470,16 @@ const filterCreated = (
 		Object.entries(value).map(([key, item]) => [key, filterCreated(item, range)])
 	);
 };
+
+const createdRange = (value: unknown): { createdAfter?: string; createdBefore?: string } => {
+	if (typeof value !== 'object' || value === null) return {};
+	const createdAfter = 'createdAfter' in value ? value.createdAfter : undefined;
+	const createdBefore = 'createdBefore' in value ? value.createdBefore : undefined;
+	return {
+		...(typeof createdAfter === 'string' ? { createdAfter } : {}),
+		...(typeof createdBefore === 'string' ? { createdBefore } : {})
+	};
+};
 const id = z.string().uuid();
 const projectId = z.string().uuid().transform((value) => value as ProjectId);
 const noteId = z.string().uuid().transform((value) => value as NoteId);
@@ -548,46 +558,60 @@ const defineTool = <T extends z.ZodObject>(
 	parameters: T,
 	execute: (input: z.infer<T>) => Promise<unknown>,
 	preflight?: (input: z.infer<T>) => Promise<boolean>
-): Definition => ({
-	name,
-	description,
-	classification,
-	parameters,
-	...(preflight ? { preflight: preflight as Definition['preflight'] } : {}),
-	execute: async (input) => {
-		const parsed = parameters.parse(input);
-		const result = await execute(parsed);
-		return filterCreated(result, parsed as { createdAfter?: string; createdBefore?: string });
-	}
-});
+): Definition => {
+	const strictParameters = parameters.strict();
+	return {
+		name,
+		description,
+		classification,
+		parameters: strictParameters,
+		...(preflight
+			? { preflight: async (input) => preflight(parameters.parse(input)) }
+			: {}),
+		execute: async (input) => {
+			strictParameters.parse(input);
+			const parsed = parameters.parse(input);
+			const result = await execute(parsed);
+			return filterCreated(result, createdRange(parsed));
+		}
+	};
+};
 
 /**
  * True when a tool asks the model for nothing at all — the server resolves the
  * actor and workspace from run context, so the only valid argument object is
  * `{}`.
  */
-const declaresNoFields = (schema: Record<string, unknown>): boolean => {
-	const properties = schema.properties;
-	const required = schema.required;
-	const hasProperties =
-		typeof properties === 'object' && properties !== null && Object.keys(properties).length > 0;
-	const hasRequired = Array.isArray(required) && required.length > 0;
-	return !hasProperties && !hasRequired;
-};
+const declaresNoFields = (schema: z.ZodObject): boolean => Object.keys(schema.shape).length === 0;
 
+/**
+ * The Agents SDK uses a different Zod major, so it cannot consume this app's
+ * Zod objects directly. Keep Zod as the execution validator and publish the
+ * exact strict object schema Zod generates for the model-facing protocol.
+ */
 const jsonObjectSchema = (schema: z.ZodObject) => {
 	const converted = z.toJSONSchema(schema, { io: 'input' });
 	if (
 		converted.type !== 'object' ||
+		converted.additionalProperties !== false ||
 		typeof converted.properties !== 'object' ||
 		converted.properties === null
 	)
-		throw new Error('Tool parameters must convert to an object schema');
+		throw new Error('Tool parameters must convert to a strict object schema');
+	const properties: Record<string, Record<string, unknown>> = {};
+	for (const [name, property] of Object.entries(converted.properties)) {
+		if (typeof property !== 'object' || property === null)
+			throw new Error(`Tool parameter ${name} did not convert to an object schema`);
+		properties[name] = property;
+	}
+	const required = Array.isArray(converted.required)
+		? converted.required.filter((name): name is string => typeof name === 'string')
+		: [];
 	return {
 		type: 'object' as const,
-		properties: converted.properties,
-		required: Array.isArray(converted.required) ? converted.required : [],
-		additionalProperties: true as const,
+		properties,
+		required,
+		additionalProperties: false as const,
 		...(converted.description ? { description: converted.description } : {})
 	};
 };
@@ -619,18 +643,18 @@ export class AgentTools {
 	private readonly actor: ActorContext;
 	private readonly mode: AgentExecutionMode;
 	private readonly context: AgentToolContext;
-	private readonly toolExecutor?: AgentToolExecutor;
-	private readonly toolRetriever?: ToolRetriever;
-	private readonly toolAccess?: ToolAccessPolicy;
+	private readonly toolExecutor: AgentToolExecutor;
+	private readonly toolRetriever: ToolRetriever;
+	private readonly toolAccess: ToolAccessPolicy;
 
 	constructor(
 		controllers: ControllerFactory,
 		actor: ActorContext,
 		mode: AgentExecutionMode,
 		context: AgentToolContext,
-		toolExecutor?: AgentToolExecutor,
-		toolRetriever?: ToolRetriever,
-		toolAccess?: ToolAccessPolicy
+		toolExecutor: AgentToolExecutor,
+		toolRetriever: ToolRetriever,
+		toolAccess: ToolAccessPolicy
 	) {
 		this.controllers = controllers;
 		this.actor = actor;
@@ -668,9 +692,7 @@ export class AgentTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_NAMES.includes(definition.name) ||
-					!this.toolAccess ||
-					this.toolAccess.isEnabled(definition.name))
+				(LOCKED_TOOL_NAMES.includes(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 
@@ -712,22 +734,22 @@ export class AgentTools {
 				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
 			);
 
-		const searchParameters = z.object({
-			query: z.string().min(1),
-			limit: z.number().int().min(1).max(15).optional()
-		});
+		const searchParameters = z
+			.object({
+				query: z.string().min(1),
+				limit: z.number().int().min(1).max(15).optional()
+			})
+			.strict();
 		const searchSchema = jsonObjectSchema(searchParameters);
-		const searchTools = tool<typeof searchSchema, unknown, unknown>({
+		const searchTools = tool({
 			name: 'search_tools',
 			description:
 				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.',
 			parameters: searchSchema,
-			strict: false,
+			strict: true,
 			execute: async (input) => {
 				const { query: toolQuery, limit } = searchParameters.parse(input);
-				const ranked = this.toolRetriever
-					? await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5)
-					: [];
+				const ranked = await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5);
 				return ranked
 					.map((name) => byName.get(name))
 					.filter((definition): definition is Definition => definition !== undefined)
@@ -751,9 +773,7 @@ export class AgentTools {
 	catalog(): ToolDescriptor[] {
 		return TOOL_CATALOG.filter(
 			(entry) =>
-				LOCKED_TOOL_NAMES.includes(entry.name) ||
-				!this.toolAccess ||
-				this.toolAccess.isEnabled(entry.name)
+				LOCKED_TOOL_NAMES.includes(entry.name) || this.toolAccess.isEnabled(entry.name)
 		);
 	}
 
@@ -769,7 +789,7 @@ export class AgentTools {
 			name: definition.name,
 			description: definition.description,
 			parameters: schema,
-			strict: false,
+			strict: true,
 			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
 			// The approval boundary consults the tool's preflight gate before parking:
 			// a mutation that can only fail is not paused for the user — it executes
@@ -785,7 +805,6 @@ export class AgentTools {
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
 			execute: async (input, _runContext, details) => {
 				const parsed = definition.parameters.parse(input);
-				if (!this.toolExecutor) return definition.execute(parsed);
 				return this.toolExecutor.execute(
 					{
 						callId: String(details?.toolCall?.callId ?? ''),
@@ -797,7 +816,7 @@ export class AgentTools {
 				);
 			}
 		});
-		return declaresNoFields(schema) ? withBlankInputTolerated(built) : built;
+		return declaresNoFields(definition.parameters) ? withBlankInputTolerated(built) : built;
 	}
 
 }
@@ -1737,7 +1756,7 @@ export class McpTools {
 		private readonly controllers: ControllerFactory,
 		private readonly actor: ActorContext,
 		private readonly context: McpToolContext,
-		private readonly toolAccess?: ToolAccessPolicy
+		private readonly toolAccess: ToolAccessPolicy
 	) {}
 
 	definitions(
@@ -1752,9 +1771,7 @@ export class McpTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_NAMES.includes(definition.name) ||
-					!this.toolAccess ||
-					this.toolAccess.isEnabled(definition.name))
+				(LOCKED_TOOL_NAMES.includes(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 }

@@ -8,11 +8,13 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
+import type { ResolvedAgentRun } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
+	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
 	findAwaitingByConversation(
 		actor: ActorContext,
@@ -35,6 +37,12 @@ export interface AgentRunRepository {
 		to: AgentRunStatus,
 		patch?: Partial<AgentRun>
 	): Promise<AgentRun | undefined>;
+	transitionAgent(
+		runId: AgentRunId,
+		from: AgentRunStatus | readonly AgentRunStatus[],
+		to: AgentRunStatus,
+		patch?: Partial<ResolvedAgentRun>
+	): Promise<ResolvedAgentRun | undefined>;
 	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	recoverInterrupted(failureMessage: string): Promise<number>;

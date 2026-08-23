@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { FunctionTool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { noteEtag } from '$lib/models/notes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
@@ -20,6 +22,22 @@ import {
 	type AgentToolClassification,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
+import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+
+const executeDirectly: AgentToolExecutor = {
+	execute: (_input, action) => action()
+};
+const allTools: ToolAccessPolicy = { isEnabled: () => true };
+
+const createAgentTools = (
+	controllers: ConstructorParameters<typeof AgentTools>[0],
+	actor: ConstructorParameters<typeof AgentTools>[1],
+	mode: ConstructorParameters<typeof AgentTools>[2],
+	context: ConstructorParameters<typeof AgentTools>[3],
+	executor: AgentToolExecutor = executeDirectly,
+	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
+	access: ToolAccessPolicy = allTools
+): AgentTools => new AgentTools(controllers, actor, mode, context, executor, retriever, access);
 
 const authoritativeSelection: TextSelection = {
 	noteId: '00000000-0000-4000-8000-000000000001' as never,
@@ -33,13 +51,25 @@ const registry = (
 	mode: 'approval_required' | 'auto_accept',
 	options: { factory?: ControllerFactory } = {}
 ) =>
-	new AgentTools(options.factory ?? ({} as ControllerFactory), testActor(), mode, {
-		provenanceId: testProvenanceId(),
-		// A selection is supplied so the exhaustiveness check below sees the
-		// selection-bound tools, which are the only context-gated ones left.
-		input: { conversationId: testConversationId(), prompt: 'Help', selection: authoritativeSelection },
-		model: 'openai/gpt-5.6'
-	});
+	createAgentTools(
+		options.factory ?? ({} as ControllerFactory),
+		testActor(),
+		mode,
+		{
+			provenanceId: testProvenanceId(),
+			// A selection is supplied so the exhaustiveness check below sees the
+			// selection-bound tools, which are the only context-gated ones left.
+			input: {
+				conversationId: testConversationId(),
+				prompt: 'Help',
+				selection: authoritativeSelection
+			},
+			model: 'openai/gpt-5.6'
+		},
+		executeDirectly,
+		new InMemoryToolRetriever(),
+		allTools
+	);
 
 const approvalFor = async (
 	mode: 'approval_required' | 'auto_accept',
@@ -75,7 +105,7 @@ const agentToolsFor = (
 		promoted?: readonly string[];
 	} = {}
 ) =>
-	new AgentTools(
+	createAgentTools(
 		options.factory ?? ({} as ControllerFactory),
 		testActor(),
 		mode,
@@ -84,8 +114,9 @@ const agentToolsFor = (
 			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'openai/gpt-5.6'
 		},
-		undefined,
-		options.retriever
+		executeDirectly,
+		options.retriever ?? new InMemoryToolRetriever(),
+		allTools
 	).agentTools(options.promoted ?? []);
 
 const indirectToolFor = (
@@ -130,7 +161,7 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 	};
 
 	const acceptWith = async (factory: ControllerFactory): Promise<void> => {
-		const tool = new AgentTools(factory, testActor(), 'auto_accept', {
+		const tool = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Accept it' },
 			model: 'openai/gpt-5.6'
@@ -181,7 +212,7 @@ describe('Agent tool coverage invariants', () => {
 	// surface hid it from the very screen the studio runs on, and a capability the
 	// model cannot reach is one nobody discovers.
 	it('offers present_diagram in an ordinary chat', () => {
-		const chat = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
+		const chat = createAgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
 				conversationId: testConversationId(),
@@ -200,7 +231,7 @@ describe('Agent tool coverage invariants', () => {
 	it('keeps only frequent grounding and memory-proposal tools directly available', async () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_note'];
-		const selected = new AgentTools(
+		const selected = createAgentTools(
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',
@@ -272,7 +303,7 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const searchNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const searchNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Find in this note' },
 			model: 'openai/gpt-5.6'
@@ -285,24 +316,21 @@ describe('Agent tool coverage invariants', () => {
 
 	it('read_canvas_diagram uses the resolved run conversation', async () => {
 		const conversationId = testConversationId(7);
-		let received: unknown;
-		const factory = {
-			diagramStudio: () => ({
-				readCanvasDiagram: async (_actor: unknown, input: unknown) => {
-					received = input;
-					return {};
-				}
-			})
-		} as unknown as ControllerFactory;
-		const tool = new AgentTools(factory, testActor(), 'auto_accept', {
+		const diagramStudio = capabilityDependencies<DiagramStudioController>({
+			readCanvasDiagram: async (_actor, input) =>
+				input.conversationId === conversationId ? { source: '<mxfile />', title: 'Current' } : {}
+		});
+		const factory = capabilityDependencies<ControllerFactory>({
+			diagramStudio: () => diagramStudio
+		});
+		const tool = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId, prompt: 'Read the canvas' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
 			.find((definition) => definition.name === 'read_canvas_diagram');
-		await tool?.execute({});
-		expect(received).toEqual({ conversationId });
+		expect(await tool?.execute({})).toEqual({ source: '<mxfile />', title: 'Current' });
 	});
 
 	it('returns exact long-tail schemas from tool search', async () => {
@@ -322,7 +350,7 @@ describe('Agent tool coverage invariants', () => {
 	it('promotes a searched tool onto the enabled surface', async () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_note'];
-		const available = new AgentTools(
+		const available = createAgentTools(
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',
@@ -477,7 +505,7 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
@@ -507,7 +535,7 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
@@ -538,7 +566,7 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
@@ -563,7 +591,7 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
@@ -588,7 +616,7 @@ describe('Agent tool coverage invariants', () => {
 				})
 			})
 		} as unknown as ControllerFactory;
-		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
+		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
@@ -622,7 +650,7 @@ describe('Agent tool coverage invariants', () => {
 				loadForAgent: async () => view
 			})
 		} as unknown as ControllerFactory;
-		const definitions = new AgentTools(factory, testActor(), 'auto_accept', {
+		const definitions = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Use a skill' },
 			model: 'openai/gpt-5.6'
@@ -1261,7 +1289,7 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('does not expose selection-bound tools without an authoritative selection', () => {
-		const names = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
+		const names = createAgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'openai/gpt-5.6'
@@ -1303,7 +1331,7 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = new AgentTools(factory, testActor(), 'auto_accept', {
+		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Create a note' },
 			model: 'openai/gpt-5.6'
@@ -1328,7 +1356,7 @@ describe('Agent tool coverage invariants', () => {
 				}
 			})
 		} as unknown as ControllerFactory;
-		const selected = new AgentTools(factory, testActor(), 'auto_accept', {
+		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Find references', selection: authoritativeSelection },
 			model: 'anthropic/claude-sonnet-4.5'
@@ -1500,7 +1528,7 @@ describe('Doomed note edits never reach the approval boundary', () => {
 describe('Deselected tools', () => {
 	const without = (...disabled: string[]): AgentTools => {
 		const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
-		return new AgentTools(
+		return createAgentTools(
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',

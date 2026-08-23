@@ -167,6 +167,7 @@ describe('Postgres agent settings repository invariants', () => {
 		});
 		const repository = new AgentRunRecords(context.db);
 		const run: AgentRun = {
+			kind: 'agent',
 			id: '70000000-0000-4000-8000-000000000073' as AgentRunId,
 			userId: owner.userId,
 			conversationId: conversation.id,
@@ -178,6 +179,7 @@ describe('Postgres agent settings repository invariants', () => {
 			pendingDecisions: [
 				{ callId: 'call-1', toolName: 'create_note', arguments: { title: 'Draft' } }
 			],
+			inputSnapshot: { conversationId: conversation.id, prompt: 'Pause here' },
 			createdAt: now,
 			updatedAt: now
 		};
@@ -197,6 +199,7 @@ describe('Postgres agent settings repository invariants', () => {
 		});
 		const repository = new AgentRunRecords(context.db);
 		const run = await repository.insert(owner, {
+			kind: 'agent',
 			id: '70000000-0000-4000-8000-000000000075' as AgentRunId,
 			userId: owner.userId,
 			conversationId: conversation.id,
@@ -208,6 +211,7 @@ describe('Postgres agent settings repository invariants', () => {
 			pendingDecisions: [
 				{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }
 			],
+			inputSnapshot: { conversationId: conversation.id, prompt: 'Pause here' },
 			createdAt: now,
 			updatedAt: now
 		});
@@ -229,6 +233,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			updatedAt: now
 		});
 		return new AgentRunRecords(context.db).insert(owner, {
+			kind: 'agent',
 			id: `71000000-0000-4000-8000-${suffix.padStart(12, '0')}` as AgentRunId,
 			userId: owner.userId,
 			conversationId: conversation.id,
@@ -238,7 +243,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			requestId: `request-${suffix}`,
 			pendingDecisions: [],
 			contextSnapshot: {},
-			inputSnapshot: { prompt: 'Contract prompt' },
+			inputSnapshot: { conversationId: conversation.id, prompt: 'Contract prompt' },
 			createdAt: now,
 			updatedAt: now
 		});

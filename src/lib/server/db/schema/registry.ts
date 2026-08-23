@@ -792,6 +792,7 @@ export const agentRuns = pgTable(
 	'agent_runs',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
+		kind: text('kind').$type<'agent' | 'workflow'>().notNull(),
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),

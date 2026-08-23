@@ -20,7 +20,6 @@ export interface AgentRunStore {
 			model: string;
 			executionMode: AgentExecutionMode;
 			contextSnapshot: Readonly<Record<string, unknown>>;
-			inputSnapshot?: Readonly<Record<string, unknown>>;
 			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun>;
@@ -57,12 +56,12 @@ export class AgentRunLedger implements AgentRunStore {
 			model: string;
 			executionMode: AgentExecutionMode;
 			contextSnapshot: Readonly<Record<string, unknown>>;
-			inputSnapshot?: Readonly<Record<string, unknown>>;
 			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun> {
 		const timestamp = now();
 		return this.repository.insert(actor, {
+			kind: 'workflow',
 			id: crypto.randomUUID() as AgentRunId,
 			userId: actor.userId,
 			...input,

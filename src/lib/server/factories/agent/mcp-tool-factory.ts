@@ -25,8 +25,8 @@ export interface McpToolSurfaceOptions {
 	readonly scope: ApiTokenScope;
 	readonly provenanceId: ProvenanceId;
 	readonly toolRetriever: ToolRetriever;
-	/** The user's tool selection; omitted, every tool the scope allows is offered. */
-	readonly toolAccess?: ToolAccessPolicy;
+	/** The user's resolved tool authority for this MCP request. */
+	readonly toolAccess: ToolAccessPolicy;
 }
 
 /** MCP carries results as content blocks; every tool here returns JSON text. */

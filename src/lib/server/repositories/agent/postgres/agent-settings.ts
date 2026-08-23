@@ -6,9 +6,15 @@ import type {
 	AgentRunId,
 	AgentRunStatus,
 	AgentSessionItem,
-	ConversationId
+	ConversationId,
+	ResolvedAgentRun,
+	WorkflowAgentRun
 } from '$lib/models/agent';
-import { assertAgentRunTransition, isTerminalAgentRunStatus } from '$lib/models/agent';
+import {
+	assertAgentRunTransition,
+	isTerminalAgentRunStatus,
+	parseRunAgentInput
+} from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
@@ -38,7 +44,7 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
 	updatedAt: row.updatedAt.toISOString() as AgentPreferences['updatedAt']
 });
 
-export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
+const toRunBase = (row: typeof schema.agentRuns.$inferSelect) => ({
 	id: row.id as AgentRun['id'],
 	userId: row.userId as AgentRun['userId'],
 	conversationId: row.conversationId as AgentRun['conversationId'],
@@ -58,12 +64,25 @@ export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun => ({
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
 	contextSnapshot: row.contextSnapshot,
-	inputSnapshot: row.inputSnapshot,
 	...(row.retryOfRunId ? { retryOfRunId: row.retryOfRunId as AgentRun['retryOfRunId'] } : {}),
 	definitionVersion: row.definitionVersion,
 	createdAt: row.createdAt.toISOString() as AgentRun['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as AgentRun['updatedAt']
 });
+
+const toResolvedRun = (row: typeof schema.agentRuns.$inferSelect): ResolvedAgentRun => ({
+	...toRunBase(row),
+	kind: 'agent',
+	inputSnapshot: parseRunAgentInput(row.inputSnapshot, row.conversationId as ConversationId)
+});
+
+const toWorkflowRun = (row: typeof schema.agentRuns.$inferSelect): WorkflowAgentRun => ({
+	...toRunBase(row),
+	kind: 'workflow'
+});
+
+export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun =>
+	row.kind === 'agent' ? toResolvedRun(row) : toWorkflowRun(row);
 
 type PendingDecisionRows = NonNullable<(typeof schema.agentRuns.$inferInsert)['pendingDecisions']>;
 
@@ -120,6 +139,23 @@ export class AgentRunRecords implements AgentRunRepository {
 			.from(schema.agentRuns)
 			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)));
 		return row ? toRun(row) : undefined;
+	}
+
+	async findAgentById(
+		actor: ActorContext,
+		id: AgentRun['id']
+	): Promise<ResolvedAgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(
+				and(
+					eq(schema.agentRuns.id, id),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'agent')
+				)
+			);
+		return row ? toResolvedRun(row) : undefined;
 	}
 
 	async findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined> {
@@ -223,7 +259,7 @@ export class AgentRunRecords implements AgentRunRepository {
 				failure: run.failure ?? null,
 				providerErrorCode: run.providerErrorCode ?? null,
 				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
-				inputSnapshot: { ...(run.inputSnapshot ?? {}) },
+				inputSnapshot: run.inputSnapshot,
 				retryOfRunId: run.retryOfRunId,
 				definitionVersion: run.definitionVersion ?? 1,
 				updatedAt: new Date(run.updatedAt)
@@ -302,6 +338,7 @@ export class AgentRunRecords implements AgentRunRepository {
 	private toInsert(actor: ActorContext, run: AgentRun): typeof schema.agentRuns.$inferInsert {
 		return {
 			id: run.id,
+			kind: run.kind,
 			userId: actor.userId,
 			conversationId: run.conversationId,
 			model: run.model,
@@ -318,7 +355,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			failure: run.failure,
 			providerErrorCode: run.providerErrorCode,
 			contextSnapshot: { ...(run.contextSnapshot ?? {}) },
-			inputSnapshot: { ...(run.inputSnapshot ?? {}) },
+			inputSnapshot: run.kind === 'agent' ? run.inputSnapshot : {},
 			retryOfRunId: run.retryOfRunId,
 			definitionVersion: run.definitionVersion ?? 1,
 			createdAt: new Date(run.createdAt),
@@ -332,6 +369,27 @@ export class AgentRunRecords implements AgentRunRepository {
 		to: AgentRunStatus,
 		patch: Partial<AgentRun> = {}
 	): Promise<AgentRun | undefined> {
+		const row = await this.transitionRow(runId, from, to, patch);
+		return row ? toRun(row) : undefined;
+	}
+
+	async transitionAgent(
+		runId: AgentRunId,
+		from: AgentRunStatus | readonly AgentRunStatus[],
+		to: AgentRunStatus,
+		patch: Partial<ResolvedAgentRun> = {}
+	): Promise<ResolvedAgentRun | undefined> {
+		const row = await this.transitionRow(runId, from, to, patch, 'agent');
+		return row ? toResolvedRun(row) : undefined;
+	}
+
+	private async transitionRow(
+		runId: AgentRunId,
+		from: AgentRunStatus | readonly AgentRunStatus[],
+		to: AgentRunStatus,
+		patch: Partial<AgentRun> = {},
+		kind?: AgentRun['kind']
+	): Promise<typeof schema.agentRuns.$inferSelect | undefined> {
 		const fromStatuses = Array.isArray(from) ? from : [from];
 		for (const status of fromStatuses) assertAgentRunTransition(status, to);
 		const now = new Date();
@@ -368,11 +426,12 @@ export class AgentRunRecords implements AgentRunRepository {
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					inArray(schema.agentRuns.status, fromStatuses as [AgentRunStatus, ...AgentRunStatus[]])
+					inArray(schema.agentRuns.status, fromStatuses as [AgentRunStatus, ...AgentRunStatus[]]),
+					...(kind ? [eq(schema.agentRuns.kind, kind)] : [])
 				)
 			)
 			.returning();
-		return row ? toRun(row) : undefined;
+		return row;
 	}
 
 	async recoverInterrupted(failureMessage: string): Promise<number> {
