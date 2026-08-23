@@ -94,6 +94,44 @@ add boundary logs at call sites; log at `debug` inside services for detail. `LOG
 - Services may not import other services; orchestrate across services in a controller.
 - Pure logic shared by client and server belongs in `models/`; server-only logic in `services/`.
 
+## Failing loudly (audit-enforced)
+
+`scripts/audit-source.ts` ratchets these against a migration baseline: existing sites are
+tolerated, new ones fail `pnpm test:architecture`. Lower the baselines as sites are fixed; never
+raise them. The escape hatch is a `// audit-allow: <rule> — <reason>` comment on the line above,
+and the reason is the point — it puts the justification in the diff where a human can audit it.
+
+- **No type assertion onto an object literal** (`shape-cast`). `value as never` on a single
+  branded id is fine — the value is one thing and the reader can see it. `{ … } as never` turns
+  off field-by-field checking for a shape nobody verified. That is exactly how a required
+  `conversationId` came to be fed an optional one, compiled clean, and failed against the database
+  on every new chat's first message.
+- **No silent `catch`** (`silent-catch`). A `catch` that neither rethrows nor does anything
+  observable swallows the failure. Any call inside it — a log, a toast, a metric, a recovery that
+  reports itself — satisfies the rule.
+
+## Defaults, limits, and blast radius
+
+Judgement rules, not audited. They exist because each has already cost this codebase a defect.
+
+- **Never supply a default that makes a failure look like a success.** If the code cannot tell
+  "there is no data" from "the lookup failed", it must not default. A fallback that silences a
+  missing seed, an absent row, or an unreachable service converts a loud bug into a quiet wrong
+  answer, and the next person to see it will be a user.
+- **No cap, window, or limit on a read without citing the measurement that motivated it.** A
+  guessed window is silent data loss, not an optimisation — bounding a transcript scan to "the
+  last 100" makes anything older vanish with no error and no way to tell.
+- **Optionality must be honest.** A type describing something already decided carries no optional
+  fields for things that were decided. Request shapes and frozen/resolved shapes are different
+  types even when they look alike.
+- **A missing value is usually a data bug, not a plumbing bug.** Before adding a field or a channel
+  to carry it, find where it is produced and ask why it is not recorded there.
+- **Blast radius is a signal, not a score.** If fixing one call site means adding a required field
+  to a shared type, stop and re-derive. Unrelated construction sites needing a value they do not
+  have is evidence the fix is at the wrong altitude, not evidence of thoroughness.
+- **A fake or fixture must not represent a state production cannot produce.** A fixture encoding an
+  impossible state teaches the bug to everyone who copies it.
+
 ## Test conventions (audit-enforced)
 
 - Exactly one `expect` per `it()`; the legacy multi-assertion baseline must not grow.

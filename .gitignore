@@ -35,3 +35,6 @@ artifacts
 !src/lib/services/artifacts/**
 !src/routes/(app)/artifacts/
 !src/routes/(app)/artifacts/**
+
+# Editor settings are per-developer, not per-repo.
+.vscode/
