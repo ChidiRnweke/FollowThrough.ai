@@ -96,10 +96,10 @@ add boundary logs at call sites; log at `debug` inside services for detail. `LOG
 
 ## Failing loudly (audit-enforced)
 
-`scripts/audit-source.ts` ratchets these against a migration baseline: existing sites are
-tolerated, new ones fail `pnpm test:architecture`. Lower the baselines as sites are fixed; never
-raise them. The escape hatch is a `// audit-allow: <rule> — <reason>` comment on the line above,
-and the reason is the point — it puts the justification in the diff where a human can audit it.
+`scripts/audit-source.ts` enforces these at zero: there is no migration baseline and existing code
+is not grandfathered. The escape hatch is a `// audit-allow: <rule> — <reason>` comment on the line
+above, and the reason is the point — it puts a genuinely unavoidable boundary exception in the
+diff where a human can audit it. An allowance is not a migration mechanism.
 
 - **No type assertion onto an object literal** (`shape-cast`). `value as never` on a single
   branded id is fine — the value is one thing and the reader can see it. `{ … } as never` turns

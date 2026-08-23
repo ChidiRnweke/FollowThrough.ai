@@ -36,6 +36,7 @@ const isPageDataRequest = (url: URL): boolean =>
 const store = async (cache: Cache, key: Request | string, response: Response): Promise<void> => {
 	try {
 		await cache.put(key, response.clone());
+		// audit-allow: silent-catch — cache quota failure cannot invalidate the already-received network response
 	} catch {
 		// Nothing to recover: the response still goes to the page.
 	}
@@ -45,6 +46,7 @@ const cacheRootShell = async (): Promise<void> => {
 	try {
 		const response = await fetch(APP_ROOT);
 		if (canStore(response)) await store(await caches.open(PAGE_CACHE), APP_ROOT, response);
+		// audit-allow: silent-catch — dynamic shell precaching is optional and install still precaches immutable assets
 	} catch {
 		// The generated app remains installable even if the dynamic shell is briefly unavailable.
 	}

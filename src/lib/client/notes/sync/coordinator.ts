@@ -69,8 +69,9 @@ export class NoteSyncCoordinator {
 					remote: authoritative,
 					updatedAt: now()
 				});
-			} catch {
-				return this.store({ ...pending, state: 'pending', updatedAt: now() });
+			} catch (error) {
+				await this.store({ ...pending, state: 'pending', updatedAt: now() });
+				throw error;
 			}
 		}
 		const sent = await this.store({ ...pending, state: 'syncing', updatedAt: now() });
@@ -104,9 +105,10 @@ export class NoteSyncCoordinator {
 				remote: undefined,
 				updatedAt: now()
 			});
-		} catch {
+		} catch (error) {
 			const latest = (await this.repository.get(userId, noteId)) ?? sent;
-			return this.store({ ...latest, state: 'pending', updatedAt: now() });
+			await this.store({ ...latest, state: 'pending', updatedAt: now() });
+			throw error;
 		}
 	}
 

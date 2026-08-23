@@ -85,6 +85,7 @@ const INFISICAL_FETCH_RETRIES = 3;
 const INFISICAL_FETCH_BACKOFF_SECONDS = [0.5, 1, 2];
 
 export class SecretsNotFoundError extends Error {}
+export class SecretsBackendError extends Error {}
 
 export const REQUIRED_APPLICATION_KEYS = [
 	'DATABASE_URL',
@@ -288,8 +289,9 @@ export class InfisicalSecretsBackend implements SecretsBackend {
 	async readOptional(secretName: string): Promise<string | undefined> {
 		try {
 			return await this.readSecret(secretName);
-		} catch {
-			return undefined;
+		} catch (error) {
+			if (error instanceof SecretsNotFoundError) return undefined;
+			throw error;
 		}
 	}
 
@@ -322,10 +324,10 @@ export class InfisicalSecretsBackend implements SecretsBackend {
 				console.warn(`[secrets] Infisical fetch failed (attempt ${attempt + 1}), retrying`);
 				await this.wait(INFISICAL_FETCH_BACKOFF_SECONDS[attempt]);
 				// The access token may simply have expired — re-authenticate before retrying.
-				await this.login().catch(() => undefined);
+				await this.login();
 			}
 		}
-		throw new SecretsNotFoundError(
+		throw new SecretsBackendError(
 			`Failed to fetch secrets from Infisical: ${lastError instanceof Error ? lastError.message : String(lastError)}`
 		);
 	}
@@ -470,8 +472,8 @@ export const getPkceCookie = (
 	if (!data) return null;
 	try {
 		return JSON.parse(data) as { codeVerifier: string; state: string };
-	} catch {
-		return null;
+	} catch (error) {
+		throw new Error('The OAuth verification cookie is corrupt', { cause: error });
 	}
 };
 

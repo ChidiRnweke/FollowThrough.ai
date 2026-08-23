@@ -91,14 +91,10 @@ const objectArguments = (value: unknown): Readonly<Record<string, unknown>> => {
 	if (typeof value === 'object' && value !== null && !Array.isArray(value))
 		return value as Readonly<Record<string, unknown>>;
 	if (typeof value !== 'string') return {};
-	try {
-		const parsed = JSON.parse(value) as unknown;
-		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-			? (parsed as Readonly<Record<string, unknown>>)
-			: {};
-	} catch {
-		return {};
-	}
+	const parsed = JSON.parse(value) as unknown;
+	return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+		? (parsed as Readonly<Record<string, unknown>>)
+		: {};
 };
 
 const callDetails = (item: ToolStreamEvent['item']) => {
@@ -121,16 +117,12 @@ const failureFromOutput = (output: unknown): string | undefined => {
 	if (typeof output === 'object' && output !== null && 'failure' in output)
 		return typeof output.failure === 'string' ? output.failure : undefined;
 	if (typeof output !== 'string') return undefined;
-	try {
-		const parsed = JSON.parse(output) as unknown;
-		return typeof parsed === 'object' && parsed !== null && 'failure' in parsed
-			? typeof parsed.failure === 'string'
-				? parsed.failure
-				: undefined
-			: undefined;
-	} catch {
-		return undefined;
-	}
+	const parsed = JSON.parse(output) as unknown;
+	return typeof parsed === 'object' && parsed !== null && 'failure' in parsed
+		? typeof parsed.failure === 'string'
+			? parsed.failure
+			: undefined
+		: undefined;
 };
 
 /**
@@ -356,26 +348,15 @@ const promotedInConversation = async (
 	session: Session,
 	catalog: ReadonlySet<string>
 ): Promise<string[]> => {
-	let items: readonly AgentInputItem[];
-	try {
-		items = await session.getItems();
-	} catch {
-		// A conversation with no readable history simply starts with nothing
-		// promoted; discovery still works.
-		return [];
-	}
+	const items = await session.getItems();
 	const names = new Set<string>();
 	for (const item of items) {
 		const candidate = item as { type?: unknown; name?: unknown; arguments?: unknown };
 		if (candidate.type !== 'function_call' || typeof candidate.name !== 'string') continue;
 		if (candidate.name === 'use_tool') {
 			if (typeof candidate.arguments !== 'string') continue;
-			try {
-				const wrapped = JSON.parse(candidate.arguments) as { name?: unknown };
-				if (typeof wrapped.name === 'string' && catalog.has(wrapped.name)) names.add(wrapped.name);
-			} catch {
-				// A malformed historical envelope promotes nothing.
-			}
+			const wrapped = JSON.parse(candidate.arguments) as { name?: unknown };
+			if (typeof wrapped.name === 'string' && catalog.has(wrapped.name)) names.add(wrapped.name);
 			continue;
 		}
 		if (catalog.has(candidate.name)) names.add(candidate.name);
@@ -761,12 +742,7 @@ export function buildAgentInstructions(
 		...restContext
 	} = context as Record<string, unknown>;
 	const client = (context.appContext as { client?: { timeZone?: unknown } } | undefined)?.client;
-	let timeZone = typeof client?.timeZone === 'string' ? client.timeZone : 'UTC';
-	try {
-		new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
-	} catch {
-		timeZone = 'UTC';
-	}
+	const timeZone = typeof client?.timeZone === 'string' ? client.timeZone : 'UTC';
 	const localTime = new Intl.DateTimeFormat('en-CA', {
 		timeZone,
 		dateStyle: 'full',

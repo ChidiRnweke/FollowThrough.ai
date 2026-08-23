@@ -67,8 +67,8 @@
 	async function loadSettings(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
-		} catch {
-			settings = { ...defaultExportSettings };
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
 	}
 

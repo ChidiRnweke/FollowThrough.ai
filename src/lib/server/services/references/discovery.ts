@@ -116,12 +116,8 @@ const candidateFromCitation = (
 	selectionText: string
 ): ReferenceCandidate | undefined => {
 	if (!citation.url) return undefined;
-	let parsed: URL;
-	try {
-		parsed = new URL(citation.url);
-	} catch {
-		return undefined;
-	}
+	if (!URL.canParse(citation.url)) return undefined;
+	const parsed = new URL(citation.url);
 	if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
 	const tier = referenceTier(parsed);
 	return {

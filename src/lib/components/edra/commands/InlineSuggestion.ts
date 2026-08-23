@@ -144,6 +144,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 				})
 				.catch(() => {
 					if (inFlight === controller) inFlight = undefined;
+					announce('Writing suggestion unavailable.');
 				});
 		};
 

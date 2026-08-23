@@ -2,28 +2,26 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type {
-	ListMemoryInput,
-	CreateMemoryEntryInput,
-	UpdateMemoryEntryInput,
-	DeleteMemoryEntryInput,
-	ListPendingMemoryInput
-} from '$lib/models/memory';
+import type { MemoryEntryId } from '$lib/models/memory';
+import type { ProjectId } from '$lib/models/projects';
 
-export const getEntries = query(z.string().uuid().optional(), async (projectId) => {
+const projectId = z.uuid().transform((value) => value as ProjectId);
+const memoryEntryId = z.uuid().transform((value) => value as MemoryEntryId);
+
+export const getEntries = query(projectId.optional(), async (projectId) => {
 	const factory = AppFactory.controllers();
-	return factory.memory().list(requestActor(), { projectId } as ListMemoryInput);
+	return factory.memory().list(requestActor(), { projectId });
 });
 
-export const getPendingSuggestions = query(z.string().uuid().optional(), async (projectId) =>
+export const getPendingSuggestions = query(projectId.optional(), async (projectId) =>
 	AppFactory.controllers()
 		.suggestions()
-		.listPendingMemory(requestActor(), { projectId } as ListPendingMemoryInput)
+		.listPendingMemory(requestActor(), { projectId })
 );
 
 export const createEntry = command(
 	z.object({
-		projectId: z.string().uuid().optional(),
+		projectId: projectId.optional(),
 		content: z.string().min(1),
 		type: z.enum(['fact', 'decision', 'constraint', 'preference']).optional(),
 		shareWithAgents: z.boolean().optional()
@@ -31,13 +29,13 @@ export const createEntry = command(
 	async (input) => {
 		return AppFactory.controllers()
 			.memory()
-			.create(requestActor(), input as CreateMemoryEntryInput);
+			.create(requestActor(), input);
 	}
 );
 
 export const updateEntry = command(
 	z.object({
-		memoryEntryId: z.string().uuid(),
+		memoryEntryId,
 		content: z.string().optional(),
 		type: z.enum(['fact', 'decision', 'constraint', 'preference']).nullable().optional(),
 		shareWithAgents: z.boolean().optional()
@@ -45,15 +43,15 @@ export const updateEntry = command(
 	async (input) => {
 		return AppFactory.controllers()
 			.memory()
-			.update(requestActor(), input as UpdateMemoryEntryInput);
+			.update(requestActor(), input);
 	}
 );
 
 export const deleteEntry = command(
-	z.object({ memoryEntryId: z.string().uuid() }),
+	z.object({ memoryEntryId }),
 	async (input) => {
 		await AppFactory.controllers()
 			.memory()
-			.remove(requestActor(), input as DeleteMemoryEntryInput);
+			.remove(requestActor(), input);
 	}
 );

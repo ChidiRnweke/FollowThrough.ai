@@ -90,7 +90,9 @@ export class AccessTokens implements IAccessTokens {
 		if (result.user.role === 'WAITING') return null;
 
 		// Best-effort: a failed bookkeeping write must not fail the request.
-		void this.tokens.touchLastUsed(result.token.id, new Date()).catch(() => {});
+		void this.tokens
+			.touchLastUsed(result.token.id, new Date())
+			.catch((error) => console.warn('Could not update API token last-used timestamp', error));
 
 		return { user: result.user, scope: result.token.scope, tokenId: result.token.id };
 	}

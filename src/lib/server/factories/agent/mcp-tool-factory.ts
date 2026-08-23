@@ -8,7 +8,7 @@ import { DomainError } from '$lib/errors';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import {
-	AgentTools,
+	McpTools,
 	FIRST_CLASS_TOOL_NAMES,
 	type AgentToolDefinition,
 	type ToolAccessPolicy
@@ -79,23 +79,12 @@ const annotationsFor = (definition: AgentToolDefinition) => ({
  * from, so neither a `read` token nor a deselected tool can be reached by name.
  */
 export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer => {
-	const registry = new AgentTools(
+	const registry = new McpTools(
 		options.controllers,
 		options.actor,
-		// MCP has no approval-interrupt channel; the host owns approval UX, so
-		// the registry must never mark a tool as needing in-app approval.
-		'auto_accept',
 		{
-			provenanceId: options.provenanceId,
-			// Tool handlers read only `noteId`/`conversationId` off this, and an
-			// MCP caller is not editing a note or in a conversation.
-			input: { prompt: '' },
-			model: 'mcp'
+			provenanceId: options.provenanceId
 		},
-		// No AgentToolExecutor: its only job is emitting `resources_stale` for
-		// the in-app SSE stream, which has no meaning for an external client.
-		undefined,
-		undefined,
 		options.toolAccess
 	);
 
@@ -169,7 +158,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 						name: definition.name,
 						description: definition.description,
 						classification: definition.classification,
-						input_schema: z.toJSONSchema(definition.parameters)
+						input_schema: z.toJSONSchema(definition.parameters, { io: 'input' })
 					}))
 			);
 		}
@@ -193,7 +182,11 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 			const validation = target.parameters.safeParse(input.payload ?? {});
 			if (!validation.success)
 				return failed(
-					invalidUseToolPayload(target.name, validation.error, z.toJSONSchema(target.parameters))
+					invalidUseToolPayload(
+						target.name,
+						validation.error,
+						z.toJSONSchema(target.parameters, { io: 'input' })
+					)
 				);
 			return attempt(() => target.execute(validation.data as Record<string, unknown>));
 		}

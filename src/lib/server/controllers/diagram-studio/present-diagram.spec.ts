@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -21,7 +22,8 @@ const setup = () => {
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository()
+		new InMemoryProvenanceRepository(),
+		new InMemoryProjects()
 	);
 	return {
 		diagrams,
@@ -64,21 +66,35 @@ describe('Presenting a diagram on the studio canvas', () => {
 	});
 
 	it('carries the diagram a revision is meant to replace', async () => {
-		const { controller } = setup();
-		const result = await controller.presentDiagram(testActor(), {
+		const { controller, diagrams } = setup();
+		const target = drawioBuilder();
+		diagrams.diagrams = [target];
+		const result = await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: drawioBuilder().id
+			diagramId: target.id
 		});
-		expect(result.diagramId).toBe(drawioBuilder().id);
+		expect(result.diagramId).toBe(target.id);
 	});
 
 	it('stores nothing even when it is a revision of something saved', async () => {
 		const { controller, diagrams } = setup();
-		await controller.presentDiagram(testActor(), {
+		const target = drawioBuilder();
+		diagrams.diagrams = [target];
+		await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: drawioBuilder().id
+			diagramId: target.id
 		});
-		expect(diagrams.diagrams).toEqual([]);
+		expect(diagrams.diagrams).toEqual([target]);
+	});
+
+	it('rejects a revision target that the actor cannot read', async () => {
+		const { controller } = setup();
+		await expect(
+			controller.presentDiagramRevision(testActor(), {
+				source: VALID_DRAWIO_XML,
+				diagramId: drawioBuilder().id
+			})
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });
 

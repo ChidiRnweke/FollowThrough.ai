@@ -49,6 +49,9 @@ export const drawioBuilder = (overrides: Partial<DrawioDiagram> = {}): DrawioDia
 	title: 'Architecture',
 	source: '<mxfile />',
 	searchableText: 'A B',
+	currentRevision: 1,
+	publishedRevision: 1,
+	publishedAt: testNow,
 	createdAt: testNow,
 	updatedAt: testNow,
 	...overrides

@@ -25,11 +25,22 @@ describe('What the conversation put on the canvas', () => {
 	});
 
 	it('carries the diagram a revision replaces', () => {
-		const revision = call('present_diagram', {
+		const revision = call('present_diagram_revision', {
 			source: '<mxfile/>',
 			diagramId: DIAGRAM_ID
 		});
 		expect(canvasSubject([revision])).toMatchObject({ draft: { diagramId: DIAGRAM_ID } });
+	});
+
+	it('does not trust a persistence id returned by the new-diagram tool', () => {
+		const legacy = call('present_diagram', {
+			source: '<mxfile/>',
+			diagramId: DIAGRAM_ID
+		});
+		expect(canvasSubject([legacy])).toEqual({
+			kind: 'draft',
+			draft: { source: '<mxfile/>' }
+		});
 	});
 
 	// The failure this whole reader exists for: a diagram the agent saved some

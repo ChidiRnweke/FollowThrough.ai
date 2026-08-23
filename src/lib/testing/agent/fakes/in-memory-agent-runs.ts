@@ -117,12 +117,12 @@ export class InMemoryAgentRunPersistence
 			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
 		);
 		if (!run) return undefined;
-		const updated = {
+		const updated: AgentRun = {
 			...run,
 			...patch,
 			status: to,
 			updatedAt: new Date().toISOString() as DateTime
-		} as AgentRun;
+		};
 		this.replace(updated);
 		return updated;
 	}

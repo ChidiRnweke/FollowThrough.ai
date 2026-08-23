@@ -326,6 +326,9 @@ describe('Note editor keyboard integration', () => {
 									source: '<mxfile/>',
 									renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
 									searchableText: 'Architecture',
+									currentRevision: 1,
+									publishedRevision: 1,
+									publishedAt: '1970-01-01T00:00:00.000Z' as DateTime,
 									createdAt: '1970-01-01T00:00:00.000Z' as DateTime,
 									updatedAt: '1970-01-01T00:00:00.000Z' as DateTime
 								}

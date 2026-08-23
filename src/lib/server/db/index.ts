@@ -19,6 +19,7 @@ function runtimeDatabase(): Database {
 	return database;
 }
 
+// audit-allow: shape-cast — Proxy requires a target of the exposed type; every property is resolved from the validated runtime database before access.
 const lazyDatabase = new Proxy({} as Database, {
 	get(_target, property) {
 		const active = runtimeDatabase();

@@ -17,16 +17,21 @@ import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-m
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const CONVERSATION = '00000000-0000-4000-8000-0000000000c1' as ConversationId;
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();
+	const projects = new InMemoryProjects();
+	projects.projects = [projectBuilder()];
 	const library = new DiagramLibrary(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository()
+		new InMemoryProvenanceRepository(),
+		projects
 	);
 	const indexed: Diagram[] = [];
 	const controller = new DiagramStudio(
@@ -35,6 +40,7 @@ const setup = () => {
 			now: () => '2026-01-01T00:00:00.000Z' as Diagram['createdAt'],
 			diagramConversations: library,
 			diagramWriter: library,
+			diagramDraftWriter: library,
 			diagramLister: library,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
@@ -64,6 +70,22 @@ const draft = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('Studio keeping invariants', () => {
+	it('resolves the durable diagram from its original conversation', async () => {
+		const { controller } = setup();
+		const kept = await controller.keepStudioDiagram(testActor(), draft());
+		const found = await controller.findConversationDiagram(testActor(), {
+			conversationId: CONVERSATION
+		});
+		expect(found.diagram?.id).toBe(kept.diagram.id);
+	});
+
+	it('distinguishes a conversation with no persisted diagram', async () => {
+		const { controller } = setup();
+		const found = await controller.findConversationDiagram(testActor(), {
+			conversationId: CONVERSATION
+		});
+		expect(found.diagram).toBeUndefined();
+	});
 	it('creates the diagram a conversation was drafting', async () => {
 		const { controller, diagrams } = setup();
 		await controller.keepStudioDiagram(testActor(), draft());

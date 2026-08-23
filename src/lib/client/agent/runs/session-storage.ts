@@ -1,6 +1,24 @@
 import type { AgentRunClientStorage, StoredAgentRunClientState } from './contracts';
+import type { AgentRunId } from '$lib/models/agent';
+import { z } from 'zod';
 
 const KEY_PREFIX = 'followthrough.agent.active-run';
+const storedAgentRunClientStateSchema = z.object({
+	runId: z.string().min(1).optional(),
+	cursor: z.string(),
+	attempt: z.number().int().nonnegative(),
+	pendingRequestId: z.string().min(1).optional()
+});
+
+const parseStoredState = (value: string): StoredAgentRunClientState => {
+	const parsed = storedAgentRunClientStateSchema.parse(JSON.parse(value));
+	return {
+		...(parsed.runId ? { runId: parsed.runId as AgentRunId } : {}),
+		cursor: parsed.cursor,
+		attempt: parsed.attempt,
+		...(parsed.pendingRequestId ? { pendingRequestId: parsed.pendingRequestId } : {})
+	};
+};
 
 /**
  * The resume point for one chat session's run.
@@ -18,13 +36,8 @@ export class SessionAgentRunStorage implements AgentRunClientStorage {
 
 	load(): StoredAgentRunClientState {
 		if (typeof sessionStorage === 'undefined') return { cursor: '0', attempt: 0 };
-		try {
-			return JSON.parse(
-				sessionStorage.getItem(this.key) ?? '{"cursor":"0","attempt":0}'
-			) as StoredAgentRunClientState;
-		} catch {
-			return { cursor: '0', attempt: 0 };
-		}
+		const stored = sessionStorage.getItem(this.key);
+		return stored === null ? { cursor: '0', attempt: 0 } : parseStoredState(stored);
 	}
 
 	save(state: StoredAgentRunClientState): void {

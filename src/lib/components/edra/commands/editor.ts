@@ -266,7 +266,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 						const fallback = media.lone?.kind === 'mermaid' ? media.lone.source : undefined;
 						void navigator.clipboard
 							.writeText(fallback ?? selectionPlainText(view.state))
-							.catch(() => {});
+							.catch((error) => console.error('Clipboard text fallback failed', error));
 					});
 					return true;
 				}

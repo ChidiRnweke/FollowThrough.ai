@@ -71,7 +71,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		pendingDecisions: options?.pendingDecisions ?? [],
 		provenanceId: testProvenanceId() as ProvenanceId,
 		contextSnapshot: { seeded: true },
-		inputSnapshot: { input: 'Do the thing' },
+		inputSnapshot: { conversationId: testConversationId, prompt: 'Do the thing' },
 		definitionVersion: 2,
 		createdAt: testTime,
 		updatedAt: testTime

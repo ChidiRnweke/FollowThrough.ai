@@ -3,6 +3,9 @@ import type { ConversationId } from '$lib/models/agent';
 import type {
 	Diagram,
 	DiagramId,
+	DiagramEtag,
+	DiagramRevision,
+	DiagramRevisionId,
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams,
 	DrawioDiagram,
@@ -117,7 +120,44 @@ export interface DiagramReferenceCounter {
 	countReferencingNotes(actor: ActorContext, diagramId: DiagramId): Promise<number>;
 }
 export interface DiagramRenamer {
-	rename(actor: ActorContext, diagramId: DiagramId, title: string): Promise<Diagram>;
+	rename(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		title: string,
+		baseEtag: DiagramEtag
+	): Promise<DrawioDiagram>;
+}
+export interface DiagramDraftWriter {
+	saveDraftSource(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		source: string,
+		searchableText: string,
+		baseEtag: DiagramEtag
+	): Promise<DrawioDiagram>;
+	publish(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		source: string,
+		renderedSvg: string,
+		searchableText: string,
+		baseEtag: DiagramEtag
+	): Promise<DrawioDiagram>;
+	recordRevision(actor: ActorContext, diagram: DrawioDiagram): Promise<DiagramRevision>;
+	restore(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		revisionId: DiagramRevisionId,
+		baseEtag: DiagramEtag
+	): Promise<DrawioDiagram>;
+}
+export interface DiagramRevisionReader {
+	revisions(actor: ActorContext, diagramId: DiagramId): Promise<readonly DiagramRevision[]>;
+	revision(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		revisionId: DiagramRevisionId
+	): Promise<DiagramRevision>;
 }
 export interface DiagramDeleter {
 	delete(actor: ActorContext, diagramId: DiagramId): Promise<void>;

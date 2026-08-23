@@ -88,7 +88,8 @@ export const selectionMarkdown = (state: EditorState): string => {
 	if (state.selection.empty) return '';
 	const content = withoutClipboardPadding(state.selection.content()).content.toJSON();
 	if (!content) return '';
-	return noteMarkdownFromContent({ type: 'doc', content } as EdraDocument);
+	const document: EdraDocument = { type: 'doc', content };
+	return noteMarkdownFromContent(document);
 };
 
 const dataUri = (blob: Blob): Promise<string> =>
@@ -184,9 +185,8 @@ export const buildRichClipboard = async (
 			const width = diagram.getAttribute('data-width');
 			if (width) rendered.setAttribute('style', `width: ${width}`);
 			diagram.replaceWith(rendered);
-		} catch {
-			// A diagram that will not render keeps its source: one bad node must not
-			// cost the rest of the copy.
+		} catch (error) {
+			throw new Error('A diagram could not be rendered for the clipboard', { cause: error });
 		}
 	}
 
@@ -200,8 +200,8 @@ export const buildRichClipboard = async (
 			// were out of reach.
 			if (rendered) image.replaceWith(rendered);
 			else image.setAttribute('src', new URL(src, window.location.origin).href);
-		} catch {
-			image.setAttribute('src', new URL(src, window.location.origin).href);
+		} catch (error) {
+			throw new Error('An image could not be embedded for the clipboard', { cause: error });
 		}
 	}
 
@@ -213,6 +213,7 @@ export const buildRichClipboard = async (
  * same rejection from being reported a second time as an unhandled one.
  */
 const handled = <T>(promise: Promise<T>): Promise<T> => {
+	// audit-allow: silent-catch — ClipboardItem.write observes and reports this same promise rejection to its caller
 	promise.catch(() => {});
 	return promise;
 };

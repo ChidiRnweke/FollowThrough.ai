@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type { ListMemoryInput } from '$lib/models/memory';
 import type { ProjectId } from '$lib/models/projects';
+
+const projectIdSchema = z.uuid().transform((value) => value as ProjectId);
 
 /**
  * Counts behind the agent context bar.
@@ -18,27 +19,25 @@ import type { ProjectId } from '$lib/models/projects';
  * either: the bar reports what the agent reads, and artifacts are its output.
  */
 export const getCapabilityCounts = query(
-	z.object({ projectId: z.string().uuid().optional() }),
+	z.object({ projectId: projectIdSchema.optional() }),
 	async ({ projectId }): Promise<Record<'memory' | 'attachments' | 'todos', number>> => {
 		const factory = AppFactory.controllers();
 		const actor = requestActor();
-		const project = projectId as ProjectId | undefined;
-
 		// Profile-level memory is the only capability that means something without
 		// a project in scope; the rest are project-bound and read zero.
 		const [memory, attachments, todos] = await Promise.all([
 			factory
 				.memory()
-				.list(actor, { projectId, sharedOnly: true } as ListMemoryInput)
+				.list(actor, { projectId, sharedOnly: true })
 				.then((output) => output.entries.length),
-			project
+			projectId
 				? factory
 						.attachments()
-						.listForProject(actor, project)
+						.listForProject(actor, projectId)
 						.then((views) => views.length)
 				: Promise.resolve(0),
-			project
-				? factory.todos().count(actor, { projectId: project, status: 'open' })
+			projectId
+				? factory.todos().count(actor, { projectId, status: 'open' })
 				: Promise.resolve(0)
 		]);
 

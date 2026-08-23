@@ -54,6 +54,7 @@ export interface DrawioEmbedCallbacks {
 	onLoading?: () => void;
 	onLoaded?: () => void;
 	onModified?: (modified: boolean) => void;
+	onAutosave?: (xml: string) => void;
 	onExport?: (output: DrawioExport) => void;
 	onExit?: (modified: boolean) => void;
 	onFailure?: (message: string) => void;
@@ -66,6 +67,12 @@ const SaveEvent = z
 		event: z.literal('save'),
 		xml: z.string().min(1).max(2_000_000),
 		exit: z.boolean().optional()
+	})
+	.passthrough();
+const AutosaveEvent = z
+	.object({
+		event: z.literal('autosave'),
+		xml: z.string().min(1).max(2_000_000)
 	})
 	.passthrough();
 const ExportEvent = z
@@ -157,7 +164,10 @@ export class DrawioEmbedAdapter {
 		let value: unknown;
 		try {
 			value = JSON.parse(event.data);
-		} catch {
+		} catch (error) {
+			this.callbacks.onFailure?.(
+				error instanceof Error ? error.message : 'draw.io sent an unreadable response'
+			);
 			return;
 		}
 		const envelope = EventEnvelope.safeParse(value);
@@ -195,6 +205,11 @@ export class DrawioEmbedAdapter {
 				});
 				break;
 			}
+			case 'autosave': {
+				const autosave = AutosaveEvent.safeParse(value);
+				if (autosave.success) void this.emitAutosave(autosave.data.xml);
+				break;
+			}
 			case 'export': {
 				const exported = ExportEvent.safeParse(value);
 				if (!exported.success || !this.pending) return;
@@ -211,6 +226,18 @@ export class DrawioEmbedAdapter {
 				if (exit.success) this.callbacks.onExit?.(exit.data.modified ?? false);
 				break;
 			}
+		}
+	}
+
+	private async emitAutosave(raw: string): Promise<void> {
+		try {
+			const xml = await uncompressDrawioXml(raw);
+			this.xml = xml;
+			this.callbacks.onAutosave?.(xml);
+		} catch (error) {
+			this.callbacks.onFailure?.(
+				error instanceof Error ? error.message : 'draw.io autosave failed.'
+			);
 		}
 	}
 
@@ -238,7 +265,7 @@ export class DrawioEmbedAdapter {
 		this.send({
 			action: 'load',
 			xml: this.xml,
-			autosave: 0,
+			autosave: 1,
 			modified: 'modified',
 			saveAndExit: 0,
 			// Exit belongs to a host that can be exited. A workbench pane has no

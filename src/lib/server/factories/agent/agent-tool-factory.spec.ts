@@ -8,6 +8,7 @@ import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	appContextBuilder,
 	noteBuilder,
+	testConversationId,
 	testActor,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -36,7 +37,7 @@ const registry = (
 		provenanceId: testProvenanceId(),
 		// A selection is supplied so the exhaustiveness check below sees the
 		// selection-bound tools, which are the only context-gated ones left.
-		input: { prompt: 'Help', selection: authoritativeSelection },
+		input: { conversationId: testConversationId(), prompt: 'Help', selection: authoritativeSelection },
 		model: 'openai/gpt-5.6'
 	});
 
@@ -80,7 +81,7 @@ const agentToolsFor = (
 		mode,
 		{
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Help' },
+			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'openai/gpt-5.6'
 		},
 		undefined,
@@ -131,7 +132,7 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 	const acceptWith = async (factory: ControllerFactory): Promise<void> => {
 		const tool = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Accept it' },
+			input: { conversationId: testConversationId(), prompt: 'Accept it' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -183,6 +184,7 @@ describe('Agent tool coverage invariants', () => {
 		const chat = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
+				conversationId: testConversationId(),
 				prompt: 'Help',
 				appContext: appContextBuilder({ surface: { kind: 'chat', presentation: 'full_page' } })
 			},
@@ -204,7 +206,7 @@ describe('Agent tool coverage invariants', () => {
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),
-				input: { prompt: 'Create a note' },
+				input: { conversationId: testConversationId(), prompt: 'Create a note' },
 				model: 'openai/gpt-5.6'
 			},
 			undefined,
@@ -223,6 +225,7 @@ describe('Agent tool coverage invariants', () => {
 			'edit_note',
 			'save_note',
 			'present_diagram',
+			'present_diagram_revision',
 			'search_tools'
 		]);
 	});
@@ -271,13 +274,35 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const searchNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Find in this note' },
+			input: { conversationId: testConversationId(), prompt: 'Find in this note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
 			.find((definition) => definition.name === 'search_note');
 		await searchNote?.execute({ noteId, query: 'messaging' });
 		expect(received).toEqual({ query: 'messaging', noteId });
+	});
+
+	it('read_canvas_diagram uses the resolved run conversation', async () => {
+		const conversationId = testConversationId(7);
+		let received: unknown;
+		const factory = {
+			diagramStudio: () => ({
+				readCanvasDiagram: async (_actor: unknown, input: unknown) => {
+					received = input;
+					return {};
+				}
+			})
+		} as unknown as ControllerFactory;
+		const tool = new AgentTools(factory, testActor(), 'auto_accept', {
+			provenanceId: testProvenanceId(),
+			input: { conversationId, prompt: 'Read the canvas' },
+			model: 'openai/gpt-5.6'
+		})
+			.definitions()
+			.find((definition) => definition.name === 'read_canvas_diagram');
+		await tool?.execute({});
+		expect(received).toEqual({ conversationId });
 	});
 
 	it('returns exact long-tail schemas from tool search', async () => {
@@ -303,7 +328,7 @@ describe('Agent tool coverage invariants', () => {
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),
-				input: { prompt: 'Create a note' },
+				input: { conversationId: testConversationId(), prompt: 'Create a note' },
 				model: 'openai/gpt-5.6'
 			},
 			undefined,
@@ -454,7 +479,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Read a note' },
+			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -484,7 +509,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Read a note' },
+			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -515,7 +540,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Read a note' },
+			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -540,7 +565,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Read a note' },
+			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -565,7 +590,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const getNote = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Read a note' },
+			input: { conversationId: testConversationId(), prompt: 'Read a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
@@ -599,7 +624,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const definitions = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Use a skill' },
+			input: { conversationId: testConversationId(), prompt: 'Use a skill' },
 			model: 'openai/gpt-5.6'
 		}).definitions();
 		const skillTool = (name: string) => definitions.find((definition) => definition.name === name);
@@ -1238,7 +1263,7 @@ describe('Agent tool coverage invariants', () => {
 	it('does not expose selection-bound tools without an authoritative selection', () => {
 		const names = new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Help' },
+			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'openai/gpt-5.6'
 		})
 			.tools()
@@ -1280,7 +1305,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const selected = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Create a note' },
+			input: { conversationId: testConversationId(), prompt: 'Create a note' },
 			model: 'openai/gpt-5.6'
 		})
 			.tools()
@@ -1305,7 +1330,7 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const selected = new AgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { prompt: 'Find references', selection: authoritativeSelection },
+			input: { conversationId: testConversationId(), prompt: 'Find references', selection: authoritativeSelection },
 			model: 'anthropic/claude-sonnet-4.5'
 		})
 			.tools()
@@ -1479,7 +1504,7 @@ describe('Deselected tools', () => {
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',
-			{ provenanceId: testProvenanceId(), input: { prompt: 'Help' }, model: 'openai/gpt-5.6' },
+			{ provenanceId: testProvenanceId(), input: { conversationId: testConversationId(), prompt: 'Help' }, model: 'openai/gpt-5.6' },
 			undefined,
 			undefined,
 			policy

@@ -43,13 +43,15 @@ const setup = () => {
 	const exports: { xml: string; svg: string; reason: string }[] = [];
 	const failures: string[] = [];
 	const exits: boolean[] = [];
+	const autosaves: string[] = [];
 	const adapter = new DrawioEmbedAdapter(port, {
 		onExport: (output) => exports.push(output),
 		onFailure: (message) => failures.push(message),
-		onExit: (modified) => exits.push(modified)
+		onExit: (modified) => exits.push(modified),
+		onAutosave: (xml) => autosaves.push(xml)
 	});
 	adapter.start({ xml: '<mxfile/>' });
-	return { adapter, port, exports, failures, exits };
+	return { adapter, port, exports, failures, exits, autosaves };
 };
 
 /**
@@ -80,6 +82,19 @@ describe('Safe draw.io iframe messaging invariants', () => {
 		const { port } = setup();
 		port.emit({ event: 'init' });
 		expect(port.posted[0]?.message.xml).toBe('<mxfile/>');
+	});
+
+	it('enables hosted editor autosave', () => {
+		const { port } = setup();
+		port.emit({ event: 'init' });
+		expect(port.posted[0]?.message.autosave).toBe(1);
+	});
+
+	it('hands autosaved XML to the host', async () => {
+		const { port, autosaves } = setup();
+		port.emit({ event: 'autosave', xml: '<mxfile><diagram/></mxfile>' });
+		await exported();
+		expect(autosaves).toEqual(['<mxfile><diagram/></mxfile>']);
 	});
 
 	it('posts only to the exact hosted origin', () => {

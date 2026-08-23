@@ -74,13 +74,22 @@ describe('Local note synchronization invariants', () => {
 		expect(stored?.base.note.plainText).toBe(base.plainText);
 	});
 
-	it('retains pending work when transport is unavailable', async () => {
+	it('reports transport unavailability to the caller', async () => {
 		const { coordinator, repository, transport } = setup();
 		const pending = pendingRecord();
 		await repository.put(pending);
 		transport.failure = new Error('Offline');
-		const result = await coordinator.flush(pending.userId, pending.noteId);
-		expect(result?.state).toBe('pending');
+		await expect(coordinator.flush(pending.userId, pending.noteId)).rejects.toThrow('Offline');
+	});
+
+	it('retains pending work after transport unavailability', async () => {
+		const { coordinator, repository, transport } = setup();
+		const pending = pendingRecord();
+		await repository.put(pending);
+		transport.failure = new Error('Offline');
+		await coordinator.flush(pending.userId, pending.noteId).catch(() => undefined);
+		const stored = await repository.get(pending.userId, pending.noteId);
+		expect(stored?.state).toBe('pending');
 	});
 
 	it('never sends a poisoned local revision and base ETag pair', async () => {

@@ -1,6 +1,12 @@
 import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	DiagramId,
+	DiagramRevision,
+	DiagramRevisionId,
+	DrawioDiagram
+} from '$lib/models/diagrams';
 import type { ListProjectDiagramsOutput, ListProjectDiagramsParams } from '$lib/models/diagrams';
 import type { ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -9,7 +15,7 @@ import { NotFoundError } from '$lib/errors';
 import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/diagrams';
-import { toDiagram } from '$lib/server/db/mappers';
+import { toDiagram, toDiagramRevision } from '$lib/server/db/mappers';
 
 export class DiagramRecords implements DiagramRepository {
 	constructor(private readonly database: Database) {}
@@ -144,6 +150,12 @@ export class DiagramRecords implements DiagramRepository {
 				source: diagram.source,
 				renderedSvg: diagram.renderedSvg,
 				searchableText: diagram.searchableText,
+				currentRevision: diagram.kind === 'drawio' ? diagram.currentRevision : 1,
+				publishedRevision: diagram.kind === 'drawio' ? diagram.publishedRevision : 1,
+				publishedAt:
+					diagram.kind === 'drawio' && diagram.publishedAt
+						? new Date(diagram.publishedAt)
+						: undefined,
 				promotedFromId: diagram.kind === 'drawio' ? diagram.promotedFromId : undefined,
 				sourceAnchorId: diagram.sourceAnchorId,
 				provenanceId: diagram.provenanceId,
@@ -161,12 +173,82 @@ export class DiagramRecords implements DiagramRepository {
 				source: diagram.source,
 				renderedSvg: diagram.renderedSvg,
 				searchableText: diagram.searchableText,
+				...(diagram.kind === 'drawio'
+					? {
+							currentRevision: diagram.currentRevision,
+							publishedRevision: diagram.publishedRevision,
+							publishedAt: diagram.publishedAt ? new Date(diagram.publishedAt) : null
+						}
+					: {}),
 				updatedAt: new Date(diagram.updatedAt)
 			})
 			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Diagram was not found');
 		return toDiagram(row);
+	}
+	async updateIfRevision(actor: ActorContext, diagram: DrawioDiagram, expected: number) {
+		const [row] = await this.database
+			.update(schema.diagrams)
+			.set({
+				title: diagram.title,
+				source: diagram.source,
+				renderedSvg: diagram.renderedSvg,
+				searchableText: diagram.searchableText,
+				currentRevision: diagram.currentRevision,
+				publishedRevision: diagram.publishedRevision,
+				publishedAt: diagram.publishedAt ? new Date(diagram.publishedAt) : null,
+				updatedAt: new Date(diagram.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.diagrams.id, diagram.id),
+					eq(schema.diagrams.userId, actor.userId),
+					eq(schema.diagrams.currentRevision, expected)
+				)
+			)
+			.returning();
+		if (!row) return undefined;
+		const updated = toDiagram(row);
+		return updated.kind === 'drawio' ? updated : undefined;
+	}
+	async insertRevision(actor: ActorContext, revision: DiagramRevision) {
+		const owned = await this.findById(actor, revision.diagramId);
+		if (!owned) throw new NotFoundError('Diagram was not found');
+		const [row] = await this.database
+			.insert(schema.diagramRevisions)
+			.values({
+				id: revision.id,
+				diagramId: revision.diagramId,
+				revision: revision.revision,
+				title: revision.title,
+				source: revision.source,
+				renderedSvg: revision.renderedSvg,
+				searchableText: revision.searchableText,
+				createdAt: new Date(revision.createdAt)
+			})
+			.returning();
+		return toDiagramRevision(row!);
+	}
+	async listRevisions(actor: ActorContext, id: DiagramId) {
+		if (!(await this.findById(actor, id))) throw new NotFoundError('Diagram was not found');
+		return (
+			await this.database
+				.select()
+				.from(schema.diagramRevisions)
+				.where(eq(schema.diagramRevisions.diagramId, id))
+				.orderBy(desc(schema.diagramRevisions.createdAt))
+		).map(toDiagramRevision);
+	}
+	async findRevision(actor: ActorContext, id: DiagramId, revisionId: DiagramRevisionId) {
+		if (!(await this.findById(actor, id))) throw new NotFoundError('Diagram was not found');
+		const [row] = await this.database
+			.select()
+			.from(schema.diagramRevisions)
+			.where(
+				and(eq(schema.diagramRevisions.diagramId, id), eq(schema.diagramRevisions.id, revisionId))
+			);
+		return row ? toDiagramRevision(row) : undefined;
 	}
 	async delete(actor: ActorContext, id: DiagramId): Promise<void> {
 		const [row] = await this.database

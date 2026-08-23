@@ -30,6 +30,7 @@ export const handleError: HandleClientError = ({ error, event, status, message }
 			pathname: event.url.pathname,
 			status
 		});
+		// audit-allow: silent-catch — this is the terminal framework error handler and reporting cannot recursively report itself
 	} catch {
 		// A failure in the error handler would take down the very thing meant to
 		// keep the app up.

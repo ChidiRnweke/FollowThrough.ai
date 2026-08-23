@@ -1,6 +1,13 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
-import type { Diagram, DiagramId, ListProjectDiagramsParams } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	DiagramId,
+	DiagramRevision,
+	DiagramRevisionId,
+	DrawioDiagram,
+	ListProjectDiagramsParams
+} from '$lib/models/diagrams';
 import type { ExternalReference, ReferenceId } from '$lib/models/references';
 import type { NoteId, NoteRelationship } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -52,6 +59,7 @@ export class InMemoryReferenceRepository implements ReferenceRepository {
 
 export class InMemoryDiagramRepository implements DiagramRepository {
 	diagrams: Diagram[] = [];
+	diagramRevisions: DiagramRevision[] = [];
 	/** Notes whose document renders a diagram, keyed by diagram id. */
 	referencingNotes = new Map<DiagramId, number>();
 	async findById(actor: ActorContext, id: DiagramId) {
@@ -106,6 +114,22 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 	async update(_actor: ActorContext, diagram: Diagram) {
 		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
 		return diagram;
+	}
+	async updateIfRevision(_actor: ActorContext, diagram: DrawioDiagram, expected: number) {
+		const current = this.diagrams.find((item) => item.id === diagram.id);
+		if (!current || current.kind !== 'drawio' || current.currentRevision !== expected) return undefined;
+		await this.update(_actor, diagram);
+		return diagram;
+	}
+	async insertRevision(_actor: ActorContext, revision: DiagramRevision) {
+		this.diagramRevisions.push(revision);
+		return revision;
+	}
+	async listRevisions(_actor: ActorContext, id: DiagramId) {
+		return this.diagramRevisions.filter((revision) => revision.diagramId === id).reverse();
+	}
+	async findRevision(_actor: ActorContext, id: DiagramId, revisionId: DiagramRevisionId) {
+		return this.diagramRevisions.find((revision) => revision.diagramId === id && revision.id === revisionId);
 	}
 	async delete(actor: ActorContext, id: DiagramId) {
 		this.diagrams = this.diagrams.filter((item) => item.id !== id || item.userId !== actor.userId);

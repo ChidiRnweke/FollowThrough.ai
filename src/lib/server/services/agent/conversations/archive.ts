@@ -6,7 +6,7 @@ import type {
 	ConversationImageInput,
 	Message,
 	MessageId,
-	RunAgentInput,
+	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -20,7 +20,7 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
 export class ConversationArchive {
 	constructor(private readonly repository: ConversationRepository) {}
 
-	async getOrCreate(actor: ActorContext, input: RunAgentInput): Promise<Conversation> {
+	async getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation> {
 		if (input.conversationId) {
 			const existing = await this.repository.findById(actor, input.conversationId);
 			if (!existing) throw new NotFoundError('Conversation was not found');

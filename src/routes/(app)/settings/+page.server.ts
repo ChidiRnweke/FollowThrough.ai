@@ -42,10 +42,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// skipping entirely when the tab that renders it is not the one being viewed.
 	let models =
 		tab === 'models'
-			? await factory
-					.agentSettings()
-					.listModels(actor)
-					.catch(() => [])
+			? await factory.agentSettings().listModels(actor)
 			: [];
 	if (
 		tab === 'models' &&

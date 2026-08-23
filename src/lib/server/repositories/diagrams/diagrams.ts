@@ -2,6 +2,9 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
 	DiagramId,
+	DiagramRevision,
+	DiagramRevisionId,
+	DrawioDiagram,
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams
 } from '$lib/models/diagrams';
@@ -44,5 +47,17 @@ export interface DiagramRepository {
 	): Promise<number>;
 	insert(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
 	update(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
+	updateIfRevision(
+		actor: ActorContext,
+		diagram: DrawioDiagram,
+		expected: number
+	): Promise<DrawioDiagram | undefined>;
+	insertRevision(actor: ActorContext, revision: DiagramRevision): Promise<DiagramRevision>;
+	listRevisions(actor: ActorContext, id: DiagramId): Promise<readonly DiagramRevision[]>;
+	findRevision(
+		actor: ActorContext,
+		id: DiagramId,
+		revisionId: DiagramRevisionId
+	): Promise<DiagramRevision | undefined>;
 	delete(actor: ActorContext, id: DiagramId): Promise<void>;
 }

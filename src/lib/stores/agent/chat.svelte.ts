@@ -18,12 +18,7 @@ import type {
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
-import {
-	reconcileToolActivity,
-	unwrapToolCall,
-	type ChatToolActivity,
-	type ChatToolStatus
-} from './chat-tools';
+import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
 import { suggestionToView } from '../suggestions/suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
@@ -99,11 +94,9 @@ interface PersistedConversationChoices {
 
 const persistedConversation = (key: string): PersistedConversationChoices => {
 	if (!browser) return {};
-	try {
-		return JSON.parse(sessionStorage.getItem(key) ?? '{}') as PersistedConversationChoices;
-	} catch {
-		return {};
-	}
+	const stored = sessionStorage.getItem(key);
+	if (stored === null) return {};
+	return JSON.parse(stored) as PersistedConversationChoices;
 };
 
 /**
@@ -201,7 +194,7 @@ const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivit
 	const content = message.content;
 	const status = String(content.status ?? 'succeeded') as ChatToolStatus;
 	const abandoned = status === 'approval_required' && message.runId !== awaitingRunId;
-	return unwrapToolCall({
+	return {
 		callId: String(content.callId ?? ''),
 		name: String(content.name ?? 'tool'),
 		arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
@@ -213,7 +206,7 @@ const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivit
 				? { failure: ABANDONED_APPROVAL }
 				: {}),
 		status: abandoned ? 'failed' : status
-	});
+	};
 };
 
 /** Where a message sat in its run's event stream. Messages without one keep their order. */
@@ -301,9 +294,7 @@ const restoreEntries = (messages: readonly Message[], awaitingRunId?: string): C
 };
 
 const applyToolActivity = (entry: ChatEntry, raw: ChatToolActivity): void => {
-	const incoming = unwrapToolCall(raw);
-	if (!reconcileToolActivity(entryTools(entry), incoming))
-		entry.parts.push({ kind: 'tool', tool: incoming });
+	if (!reconcileToolActivity(entryTools(entry), raw)) entry.parts.push({ kind: 'tool', tool: raw });
 };
 
 const appendText = (entry: ChatEntry, text: string): void => {

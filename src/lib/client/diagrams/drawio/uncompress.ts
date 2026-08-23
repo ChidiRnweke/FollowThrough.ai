@@ -46,11 +46,7 @@ export async function uncompressDrawioXml(xml: string): Promise<string> {
 		matches.map(async (match) => {
 			const body = match[2]!;
 			if (isXml(body) || !body.trim()) return body;
-			try {
-				return await decompressBody(body);
-			} catch {
-				return body;
-			}
+			return decompressBody(body);
 		})
 	);
 	let index = 0;

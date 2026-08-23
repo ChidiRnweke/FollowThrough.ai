@@ -63,7 +63,7 @@
 				if (!cancelled) todoTitle = todo.title;
 			})
 			.catch(() => {
-				/* a missing title degrades to the detail lines, as before */
+				if (!cancelled) todoTitle = 'Todo title unavailable';
 			});
 		return () => {
 			cancelled = true;

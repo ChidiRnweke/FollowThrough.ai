@@ -8,6 +8,7 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
+	testConversationId,
 	testNoteId,
 	testProjectId,
 	testProvenanceId
@@ -45,7 +46,7 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context).not.toHaveProperty('userProfile');
@@ -55,7 +56,7 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items[0]).not.toHaveProperty('instructions');
@@ -65,7 +66,7 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup(testProjectId(2));
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
@@ -76,6 +77,7 @@ describe('Agent grounding invariants', () => {
 		const context = await builder.build(
 			testActor(),
 			{
+				conversationId: testConversationId(),
 				noteId: testNoteId(),
 				prompt: 'Summarize this text',
 				requestedSkillNames: ['Decision records']
@@ -90,6 +92,7 @@ describe('Agent grounding invariants', () => {
 		const context = await builder.build(
 			testActor(),
 			{
+				conversationId: testConversationId(),
 				noteId: testNoteId(),
 				prompt: 'Summarize this text',
 				requestedSkillNames: ['Decision records']
@@ -104,6 +107,7 @@ describe('Agent grounding invariants', () => {
 		const context = await builder.build(
 			testActor(),
 			{
+				conversationId: testConversationId(),
 				noteId: testNoteId(),
 				prompt: 'Create an architecture decision',
 				requestedSkillNames: ['Decision records']
@@ -117,7 +121,7 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Why does it keep asking me to approve things?' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Why does it keep asking me to approve things?' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
@@ -128,7 +132,7 @@ describe('Agent grounding invariants', () => {
 		skills.skills = [{ ...skill(), allowImplicitInvocation: false }];
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items).toEqual([]);
@@ -140,6 +144,7 @@ describe('Agent grounding invariants', () => {
 		const context = await builder.build(
 			testActor(),
 			{
+				conversationId: testConversationId(),
 				noteId: testNoteId(),
 				prompt: 'Summarize this text',
 				requestedSkillNames: ['Decision records']
@@ -168,7 +173,7 @@ describe('Agent grounding invariants', () => {
 		skills.pinnedNoteIds = [pinned.note.id];
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items[0]?.name).toBe('Zzz pinned');
@@ -184,7 +189,7 @@ describe('Agent grounding invariants', () => {
 		}));
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Anything at all' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).truncated).toBe(true);
@@ -198,7 +203,7 @@ describe('Agent grounding invariants', () => {
 		];
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(5)] },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(5)] },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.contextNotes).toEqual([
@@ -220,7 +225,7 @@ describe('Agent grounding invariants', () => {
 		];
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
 			{ provenanceId: testProvenanceId() }
 		);
 		return (context.contextNotes as { content?: string; tokenCount: number }[])[0];
@@ -238,7 +243,7 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(9)] },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(9)] },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.contextNotes).toEqual([]);
@@ -248,7 +253,7 @@ describe('Agent grounding invariants', () => {
 		const { builder, skills } = await setup();
 		await builder.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(skills.usages).toEqual([]);
@@ -272,6 +277,7 @@ describe('Scope staged before the user moved screens', () => {
 		const context = await builder.build(
 			testActor(),
 			{
+				conversationId: testConversationId(),
 				prompt: 'Summarise this',
 				appContext: appContextBuilder(),
 				requestedScope: { projectId: testProjectId(2), noteId: testNoteId(2) }

@@ -66,12 +66,8 @@ function buildDecorations(
 		// Place the accept/dismiss widget just after the textblock containing
 		// the anchor, like a code-review suggested change.
 		let widgetPos = toPos + 1;
-		try {
-			const $to = doc.resolve(toPos + 1);
-			widgetPos = $to.after($to.depth);
-		} catch {
-			// Anchor at the document edge — fall back to right after the quote.
-		}
+		const $to = doc.resolve(toPos + 1);
+		if ($to.depth > 0) widgetPos = $to.after($to.depth);
 		let rendered: RenderedWidget | null = null;
 		decorations.push(
 			Decoration.widget(

@@ -111,10 +111,15 @@ export class SuggestionApplication implements ISuggestionApplication {
 					createdAt: now,
 					updatedAt: now
 				};
-				const diagram =
+				const diagram: Diagram =
 					suggestion.payload.kind === 'mermaid'
-						? ({ ...base, kind: 'mermaid' } as Diagram)
-						: ({ ...base, kind: 'drawio' } as Diagram);
+						? { ...base, kind: 'mermaid' }
+						: {
+								...base,
+								kind: 'drawio',
+								currentRevision: 1,
+								publishedRevision: 0
+							};
 				return this.diagramWriter.create(actor, diagram);
 			}
 			case 'memory':

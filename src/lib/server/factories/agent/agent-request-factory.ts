@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
 import { APP_SURFACE_KINDS } from '$lib/models/workspace/app-context';
-import type { RunAgentInput } from '$lib/models/agent';
+import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 
 /**
  * The surface list is written down twice — once in `models/workspace/app-context`
@@ -21,8 +23,12 @@ const _surfacesAgree: Mutual<AppSurfaceKind, AgentSurfaceKind> = true;
 void _surfacesAgree;
 
 const id = z.string().uuid();
+const conversationId = z.string().uuid().transform((value) => value as ConversationId);
+const runId = z.string().uuid().transform((value) => value as AgentRunId);
+const projectId = z.string().uuid().transform((value) => value as ProjectId);
+const noteId = z.string().uuid().transform((value) => value as NoteId);
 const selectionSchema = z.object({
-	noteId: id,
+	noteId,
 	revision: z.number().int().nonnegative(),
 	from: z.number().int().nonnegative(),
 	to: z.number().int().nonnegative(),
@@ -39,7 +45,7 @@ const pinnedSelectionSchema = selectionSchema.extend({
  * handles size.
  */
 const MAX_PINNED_SELECTIONS = 8;
-const noteContextSchema = z.object({ id, title: z.string().max(500), projectId: id });
+const noteContextSchema = z.object({ id: noteId, title: z.string().max(500), projectId });
 const appContextSchema = z.object({
 	version: z.literal(1),
 	capturedAt: z.string().datetime(),
@@ -57,13 +63,13 @@ const appContextSchema = z.object({
 		presentation: z.enum(['right_panel', 'full_page']),
 		filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
 	}),
-	currentProject: z.object({ id, name: z.string().max(500) }).optional(),
+	currentProject: z.object({ id: projectId, name: z.string().max(500) }).optional(),
 	activeResource: z
 		.object({
 			kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
 			id: z.string().max(500),
 			title: z.string().max(500),
-			projectId: id.optional()
+			projectId: projectId.optional()
 		})
 		.optional(),
 	workbench: z
@@ -79,13 +85,13 @@ const appContextSchema = z.object({
 					})
 				)
 				.max(2),
-			focusedNoteId: id.optional(),
-			otherVisibleNoteId: id.optional(),
+			focusedNoteId: noteId.optional(),
+			otherVisibleNoteId: noteId.optional(),
 			openChatTabs: z
 				.array(
 					z.object({
 						sessionKey: id,
-						conversationId: id.optional(),
+						conversationId: conversationId.optional(),
 						title: z.string().max(500)
 					})
 				)
@@ -105,7 +111,7 @@ const appContextSchema = z.object({
 		.max(5)
 });
 
-export const runIdInput = z.object({ runId: z.string().uuid() });
+export const runIdInput = z.object({ runId });
 
 /**
  * `projectId`/`noteId` are the scope frozen when the request was staged; the
@@ -129,7 +135,7 @@ const conversationImages = z
 export const submitAgentRunSchema = z
 	.object({
 		requestId: id,
-		conversationId: id.optional(),
+		conversationId: conversationId.optional(),
 		input: z.string().trim(),
 		images: conversationImages,
 		// The same shape and the same cap. A separate field only because it must
@@ -139,13 +145,13 @@ export const submitAgentRunSchema = z
 		model: z.string().nullable().optional(),
 		visionModel: z.string().nullable().optional(),
 		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
-		projectId: id.optional(),
-		noteId: id.optional(),
+		projectId: projectId.optional(),
+		noteId: noteId.optional(),
 		selection: pinnedSelectionSchema.optional(),
 		selections: z.array(pinnedSelectionSchema).max(MAX_PINNED_SELECTIONS).optional(),
-		contextNoteIds: z.array(id).optional(),
+		contextNoteIds: z.array(noteId).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
-		requestedSkillNoteIds: z.array(id).optional(),
+		requestedSkillNoteIds: z.array(noteId).optional(),
 		appContext: appContextSchema.optional(),
 		retryUserOrdinal: z.number().int().min(1).optional()
 	})

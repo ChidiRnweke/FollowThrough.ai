@@ -8,8 +8,13 @@ import type { ToolCatalogEntry } from '$lib/models/agent/tool-catalog';
 import { seedToolEmbeddings, toolContentHash } from './tool-embedding-seed';
 
 const catalog: readonly ToolCatalogEntry[] = [
-	{ name: 'create_note', description: 'Create a note', retrievalText: 'write a new note' },
-	{ name: 'archive_note', description: 'Archive a note' }
+	{
+		name: 'create_note',
+		description: 'Create a note',
+		retrievalText: 'write a new note',
+		classification: 'mutation'
+	},
+	{ name: 'archive_note', description: 'Archive a note', classification: 'mutation' }
 ];
 
 const storedRow = (entry: ToolCatalogEntry, model = 'test-model'): ToolEmbeddingWrite => ({
@@ -104,7 +109,11 @@ describe('seedToolEmbeddings', () => {
 		const summary = await seedToolEmbeddings(
 			new InMemoryToolEmbeddingRepository([
 				...catalog.map((entry) => storedRow(entry)),
-				storedRow({ name: 'retired_tool', description: 'No longer defined' })
+				storedRow({
+					name: 'retired_tool',
+					description: 'No longer defined',
+					classification: 'mutation'
+				})
 			]),
 			new RecordingEmbeddings(),
 			catalog
@@ -115,7 +124,11 @@ describe('seedToolEmbeddings', () => {
 	it('removes the retired tool from the store', async () => {
 		const repository = new InMemoryToolEmbeddingRepository([
 			...catalog.map((entry) => storedRow(entry)),
-			storedRow({ name: 'retired_tool', description: 'No longer defined' })
+			storedRow({
+				name: 'retired_tool',
+				description: 'No longer defined',
+				classification: 'mutation'
+			})
 		]);
 		await seedToolEmbeddings(repository, new RecordingEmbeddings(), catalog);
 		expect(repository.rows.has('retired_tool')).toBe(false);

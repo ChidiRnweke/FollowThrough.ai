@@ -1,5 +1,9 @@
 import type { DiagramId } from '$lib/models/diagrams';
-import { presentedDiagram, type PresentedDiagram } from '$lib/models/diagrams/presented-canvas';
+import {
+	presentedDiagram,
+	presentedDiagramRevision,
+	type PresentedDiagram
+} from '$lib/models/diagrams/presented-canvas';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 
 export type { PresentedDiagram };
@@ -20,6 +24,11 @@ const record = (value: unknown): Record<string, unknown> | undefined =>
 
 const readDraft = (output: unknown): CanvasSubject | undefined => {
 	const draft = presentedDiagram(output);
+	return draft ? { kind: 'draft', draft } : undefined;
+};
+
+const readRevision = (output: unknown): CanvasSubject | undefined => {
+	const draft = presentedDiagramRevision(output);
 	return draft ? { kind: 'draft', draft } : undefined;
 };
 
@@ -53,6 +62,7 @@ const readAcceptedArtifact = (output: unknown): CanvasSubject | undefined =>
  */
 const SUBJECT_READERS: Readonly<Record<string, (output: unknown) => CanvasSubject | undefined>> = {
 	present_diagram: readDraft,
+	present_diagram_revision: readRevision,
 	accept_suggestion: readAcceptedArtifact,
 	read_project_diagram: readSavedDiagram
 };

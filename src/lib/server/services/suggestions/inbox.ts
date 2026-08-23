@@ -1,19 +1,15 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateReferenceInput } from '$lib/models/references';
-import type { CreateRelationshipInput } from '$lib/models/relationships';
-import type { CreateTodoInput } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
-import type { DiagramKind } from '$lib/models/diagrams';
-import type { MemoryChangePayload } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId, SourceAnchorId } from '$lib/models/provenance';
 import type {
 	Suggestion,
 	SuggestionId,
+	SuggestionProposal,
 	SuggestionStatus,
 	SuggestionView
 } from '$lib/models/suggestions';
+import { materializeSuggestion } from '$lib/models/suggestions';
 import { ExpiredSuggestionError, InvalidTransitionError, NotFoundError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
@@ -21,29 +17,6 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
-
-export interface SuggestionProposalBase {
-	readonly noteId?: NoteId;
-	readonly confidence?: number;
-	readonly provenanceId: ProvenanceId;
-	readonly sourceAnchorId?: SourceAnchorId;
-}
-
-export type SuggestionProposal =
-	| (SuggestionProposalBase & { readonly kind: 'todo'; readonly payload: CreateTodoInput })
-	| (SuggestionProposalBase & {
-			readonly kind: 'backlink';
-			readonly payload: CreateRelationshipInput;
-	  })
-	| (SuggestionProposalBase & {
-			readonly kind: 'reference';
-			readonly payload: CreateReferenceInput;
-	  })
-	| (SuggestionProposalBase & {
-			readonly kind: 'diagram';
-			readonly payload: { noteId: NoteId; kind: DiagramKind; title?: string; source: string };
-	  })
-	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
 export interface Clock {
 	now(): DateTime;
 }
@@ -78,22 +51,14 @@ export class SuggestionInbox {
 		if (note && !this.payloadBelongsToNote(proposal, note.id, note.projectId))
 			throw new InvalidTransitionError('Suggestion payload must belong to its source note');
 		const timestamp = this.clock.now();
-		return this.suggestions.insert(actor, {
-			id: crypto.randomUUID() as SuggestionId,
-			userId: actor.userId,
-			...(proposal.noteId ? { noteId: proposal.noteId } : {}),
-			kind: proposal.kind,
-			status: 'proposed',
-			payload: proposal.payload,
-			...(proposal.confidence !== undefined
-				? { confidence: proposal.confidence as Suggestion['confidence'] }
-				: {}),
-			provenanceId: proposal.provenanceId,
-			...(proposal.sourceAnchorId ? { sourceAnchorId: proposal.sourceAnchorId } : {}),
-			isAutoAccepted: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		} as Suggestion);
+		return this.suggestions.insert(
+			actor,
+			materializeSuggestion(proposal, {
+				id: crypto.randomUUID() as SuggestionId,
+				userId: actor.userId,
+				now: timestamp
+			})
+		);
 	}
 
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {

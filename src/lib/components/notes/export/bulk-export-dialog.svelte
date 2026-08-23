@@ -72,18 +72,17 @@
 	async function loadSettings(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
-		} catch {
-			settings = { ...defaultExportSettings };
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
 	}
 
 	async function loadDocuments(): Promise<void> {
 		try {
 			documents = await listNoteDocuments(offered.map((entry) => entry.id));
-		} catch {
-			// The bodies are an optimization: without them diagrams fall back to their
-			// source text, which is worth an export rather than a blocked dialog.
+		} catch (cause) {
 			documents = [];
+			error = cause instanceof Error ? cause.message : 'Note contents could not be loaded.';
 		}
 	}
 

@@ -123,22 +123,12 @@ function extractPageMargins(documentXml: string): ExtractedTemplateStyles['pageM
 export async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
 	const zip = new AdmZip(docxBuffer);
 
-	let stylesXml = '';
-	let documentXml = '';
+	const stylesEntry = zip.getEntry('word/styles.xml');
+	const documentEntry = zip.getEntry('word/document.xml');
+	const stylesXml = stylesEntry ? stylesEntry.getData().toString('utf8') : '';
+	const documentXml = documentEntry ? documentEntry.getData().toString('utf8') : '';
 	const headerImages: string[] = [];
 	let footerContent: string | undefined;
-
-	try {
-		stylesXml = zip.readAsText('word/styles.xml');
-	} catch {
-		// A template may rely entirely on Word defaults.
-	}
-
-	try {
-		documentXml = zip.readAsText('word/document.xml');
-	} catch {
-		// Missing document metadata falls back to the standard margins.
-	}
 
 	const heading = extractHeadingStyles(stylesXml);
 	const body = extractBodyStyle(stylesXml);

@@ -15,11 +15,12 @@ import type {
 	DecideAgentRunInput,
 	Message,
 	RunAgentInput,
+	StagedAgentRunInput,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { allImages, isTerminalAgentRunStatus } from '$lib/models/agent';
+import { allImages, isTerminalAgentRunStatus, resolveAgentRunInput } from '$lib/models/agent';
 import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
@@ -309,7 +310,7 @@ export class Agent implements AgentController {
 					// The snapshot names the conversation the run belongs to, not merely the
 					// one the client knew about: on a chat's first message the client has no
 					// id yet, and a run's own record of itself should not have that gap.
-					{ ...runInput, conversationId: conversation.id },
+					resolveAgentRunInput(runInput, conversation.id),
 					model,
 					conversation,
 					preferences
@@ -551,7 +552,10 @@ export class Agent implements AgentController {
 		if (rewound) await this.dependencies.sessions.replace(conversationId, rewound);
 	}
 
-	private freezeInput(input: SubmitAgentRunInput, preferences: AgentPreferences): RunAgentInput {
+	private freezeInput(
+		input: SubmitAgentRunInput,
+		preferences: AgentPreferences
+	): StagedAgentRunInput {
 		// Both channels share one budget: they end up in the same request.
 		const images = allImages(input);
 		if (images.length > 4) throw new ValidationError('Attach at most four images.');
@@ -654,7 +658,7 @@ export class Agent implements AgentController {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
 		if (allImages(runInput).length === 0) return runInput;
-		const models = await this.dependencies.models.list().catch(() => []);
+		const models = await this.dependencies.models.list();
 		if (models.find((candidate) => candidate.id === chatModel)?.supportsVision) {
 			const { visionModelOverride: _discarded, ...rest } = runInput;
 			return rest;

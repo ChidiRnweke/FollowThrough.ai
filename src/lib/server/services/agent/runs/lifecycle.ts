@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import { AgentProviderFailure } from '$lib/models/agent';
+import { AgentProviderFailure, parseRunAgentInput } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentEvent,
@@ -24,10 +24,7 @@ interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		run: {
-			provenanceId: ProvenanceId;
-			conversationId?: ConversationId;
-		}
+		run: { provenanceId: ProvenanceId }
 	): Promise<Readonly<Record<string, unknown>>>;
 }
 interface AgentToolExecutor {
@@ -107,7 +104,7 @@ export class AgentRunLifecycle {
 			const run = await this.prepare(runId);
 			if (!run) return 'cancelled';
 			const actor: ActorContext = { userId: run.userId };
-			const request = run.inputSnapshot as unknown as RunAgentInput;
+			const request = parseRunAgentInput(run.inputSnapshot, run.conversationId);
 			const decisions = await this.deps.decisions.loadUnconsumed(run.id);
 			const successfulMutations = new Map<string, string>();
 			const toolExecutor: AgentToolExecutor = {
@@ -118,7 +115,6 @@ export class AgentRunLifecycle {
 					return output;
 				}
 			};
-			let lastEvent: AgentRunEventRecord | undefined;
 			for await (const update of this.deps.runner.execute({
 				actor,
 				run,
@@ -135,12 +131,12 @@ export class AgentRunLifecycle {
 					return 'cancelled';
 				}
 				if (update.type === 'event') {
-					lastEvent = await this.persistEvent(run, actor, update.event);
+					await this.persistEvent(run, actor, update.event);
 					if (update.event.type === 'tool_completed' && !update.event.failure) {
 						const resource = successfulMutations.get(update.event.callId);
 						if (resource) {
 							successfulMutations.delete(update.event.callId);
-							lastEvent = await this.persistEvent(run, actor, {
+							await this.persistEvent(run, actor, {
 								type: 'resources_stale',
 								resources: [resource]
 							});
@@ -298,8 +294,8 @@ export class AgentRunLifecycle {
 		if (!run.contextSnapshot || Object.keys(run.contextSnapshot).length === 0) {
 			const context = await this.deps.contextBuilder.build(
 				actor,
-				run.inputSnapshot as unknown as RunAgentInput,
-				{ provenanceId: run.provenanceId!, conversationId: run.conversationId }
+				parseRunAgentInput(run.inputSnapshot, run.conversationId),
+				{ provenanceId: run.provenanceId! }
 			);
 			run = { ...run, contextSnapshot: context };
 			await this.deps.runs.update(actor, run);

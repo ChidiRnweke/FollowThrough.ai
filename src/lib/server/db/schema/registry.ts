@@ -411,6 +411,9 @@ export const diagrams = pgTable(
 		source: text('source').notNull(),
 		renderedSvg: text('rendered_svg'),
 		searchableText: text('searchable_text').notNull().default(''),
+		currentRevision: integer('current_revision').notNull().default(1),
+		publishedRevision: integer('published_revision').notNull().default(1),
+		publishedAt: timestamp('published_at', { withTimezone: true }),
 		promotedFromId: uuid('promoted_from_id').references((): AnyPgColumn => diagrams.id, {
 			onDelete: 'set null'
 		}),
@@ -424,6 +427,25 @@ export const diagrams = pgTable(
 		index('diagrams_source_note_idx').on(table.sourceNoteId),
 		index('diagrams_project_idx').on(table.projectId),
 		uniqueIndex('diagrams_conversation_unique').on(table.conversationId)
+	]
+);
+
+export const diagramRevisions = pgTable(
+	'diagram_revisions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		diagramId: uuid('diagram_id').notNull().references(() => diagrams.id, { onDelete: 'cascade' }),
+		revision: integer('revision').notNull(),
+		title: text('title'),
+		source: text('source').notNull(),
+		renderedSvg: text('rendered_svg'),
+		searchableText: text('searchable_text').notNull().default(''),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('diagram_revisions_diagram_revision_unique').on(table.diagramId, table.revision),
+		index('diagram_revisions_diagram_created_idx').on(table.diagramId, table.createdAt),
+		check('diagram_revisions_revision_positive', sql`${table.revision} > 0`)
 	]
 );
 
@@ -1080,6 +1102,7 @@ export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type NoteRevision = typeof noteRevisions.$inferSelect;
+export type DiagramRevision = typeof diagramRevisions.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Suggestion = typeof suggestions.$inferSelect;
 export type Artifact = typeof artifacts.$inferSelect;

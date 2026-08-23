@@ -184,6 +184,9 @@ interface MermaidDiagram extends DiagramBase {
 interface DrawioDiagram extends DiagramBase {
 	readonly kind: 'drawio';
 	readonly source: string;
+	readonly currentRevision: number;
+	readonly publishedRevision: number;
+	readonly publishedAt?: DateTime;
 	readonly promotedFromId?: DiagramId;
 }
 
@@ -290,6 +293,61 @@ interface CreateReferenceInput {
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
 }
+
+export interface SuggestionProposalBase {
+	readonly noteId?: NoteId;
+	readonly confidence?: number;
+	readonly provenanceId: ProvenanceId;
+	readonly sourceAnchorId?: SourceAnchorId;
+}
+
+export type SuggestionProposal =
+	| (SuggestionProposalBase & { readonly kind: 'todo'; readonly payload: CreateTodoInput })
+	| (SuggestionProposalBase & {
+			readonly kind: 'backlink';
+			readonly payload: CreateRelationshipInput;
+	  })
+	| (SuggestionProposalBase & {
+			readonly kind: 'reference';
+			readonly payload: CreateReferenceInput;
+	  })
+	| (SuggestionProposalBase & {
+			readonly kind: 'diagram';
+			readonly payload: { noteId: NoteId; kind: DiagramKind; title?: string; source: string };
+	  })
+	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
+
+export const materializeSuggestion = (
+	proposal: SuggestionProposal,
+	identity: { readonly id: SuggestionId; readonly userId: UserId; readonly now: DateTime }
+): Suggestion => {
+	const common = {
+		id: identity.id,
+		userId: identity.userId,
+		status: 'proposed' as const,
+		provenanceId: proposal.provenanceId,
+		isAutoAccepted: false,
+		createdAt: identity.now,
+		updatedAt: identity.now,
+		...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
+		...(proposal.confidence !== undefined
+			? { confidence: proposal.confidence as Suggestion['confidence'] }
+			: {}),
+		...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
+	};
+	switch (proposal.kind) {
+		case 'todo':
+			return { ...common, kind: 'todo', payload: proposal.payload };
+		case 'backlink':
+			return { ...common, kind: 'backlink', payload: proposal.payload };
+		case 'reference':
+			return { ...common, kind: 'reference', payload: proposal.payload };
+		case 'diagram':
+			return { ...common, kind: 'diagram', payload: proposal.payload };
+		case 'memory':
+			return { ...common, kind: 'memory', payload: proposal.payload };
+	}
+};
 
 /** `autoAccepted` distinguishes a trust-policy auto-accept from a user's manual click, so the two are never conflated in the audit trail. */
 export interface AcceptSuggestionInput {

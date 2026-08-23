@@ -1,34 +1,77 @@
 import type { AgentRunEventRecord, AgentRunId, ConversationId } from '$lib/models/agent';
 import type { AgentRunTransport } from './contracts';
+import {
+	cancelAgentRun,
+	decideAgentRunBatch,
+	getAgentRun,
+	getSession,
+	retryAgentRun,
+	submitAgentRun
+} from '$lib/remote/agent/chat.remote';
 
 export class RemoteAgentRunTransport implements AgentRunTransport {
 	async submit(input: Parameters<AgentRunTransport['submit']>[0]) {
-		const { submitAgentRun } = await import('$lib/remote/agent/chat.remote');
-		return submitAgentRun(input as never);
+		const {
+			images,
+			contextImages,
+			selections,
+			contextNoteIds,
+			requestedSkillNames,
+			requestedSkillNoteIds,
+			appContext,
+			...scalars
+		} = input;
+		const mutableAppContext = appContext
+			? (() => {
+					const { workbench, recentInteractions, ...context } = appContext;
+					return {
+						...context,
+						recentInteractions: [...recentInteractions],
+						...(workbench
+							? {
+									workbench: (() => {
+										const { openTabs, visiblePanes, openChatTabs, ...workbenchState } = workbench;
+										return {
+											...workbenchState,
+											openTabs: [...openTabs],
+											visiblePanes: [...visiblePanes],
+											...(openChatTabs ? { openChatTabs: [...openChatTabs] } : {})
+										};
+									})()
+								}
+							: {})
+					};
+				})()
+			: undefined;
+		return submitAgentRun({
+			...scalars,
+			...(images ? { images: [...images] } : {}),
+			...(contextImages ? { contextImages: [...contextImages] } : {}),
+			...(selections ? { selections: [...selections] } : {}),
+			...(contextNoteIds ? { contextNoteIds: [...contextNoteIds] } : {}),
+			...(requestedSkillNames ? { requestedSkillNames: [...requestedSkillNames] } : {}),
+			...(requestedSkillNoteIds ? { requestedSkillNoteIds: [...requestedSkillNoteIds] } : {}),
+			...(mutableAppContext ? { appContext: mutableAppContext } : {})
+		});
 	}
 
 	async get(runId: AgentRunId) {
-		const { getAgentRun } = await import('$lib/remote/agent/chat.remote');
-		return getAgentRun({ runId } as never);
+		return getAgentRun({ runId });
 	}
 
 	async decideMany(input: Parameters<AgentRunTransport['decideMany']>[0]) {
-		const { decideAgentRunBatch } = await import('$lib/remote/agent/chat.remote');
-		return decideAgentRunBatch(input as never);
+		return decideAgentRunBatch({ ...input, callIds: [...input.callIds] });
 	}
 
 	async cancel(runId: AgentRunId) {
-		const { cancelAgentRun } = await import('$lib/remote/agent/chat.remote');
-		return cancelAgentRun({ runId } as never);
+		return cancelAgentRun({ runId });
 	}
 
 	async retry(runId: AgentRunId, requestId: string) {
-		const { retryAgentRun } = await import('$lib/remote/agent/chat.remote');
-		return retryAgentRun({ runId, requestId } as never);
+		return retryAgentRun({ runId, requestId });
 	}
 
 	async getSession(conversationId: ConversationId) {
-		const { getSession } = await import('$lib/remote/agent/chat.remote');
 		return getSession(conversationId);
 	}
 

@@ -115,10 +115,15 @@ describe('ConversationBuffer', () => {
 	it('elides the source from the result as well as the call', async () => {
 		const buffer = await bufferWith([
 			{
+				callId: 'diagram-call',
 				name: 'present_diagram',
+				status: 'completed',
 				type: 'function_call_result',
-				output: { text: JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mxfile>' }) }
-			} as unknown as AgentInputItem
+				output: {
+					type: 'text',
+					text: JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mxfile>' })
+				}
+			} satisfies AgentInputItem
 		]);
 		expect(JSON.stringify(await buffer.getItems())).not.toContain('<mxfile>huge</mxfile>');
 	});

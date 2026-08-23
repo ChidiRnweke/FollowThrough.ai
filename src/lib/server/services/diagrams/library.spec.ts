@@ -12,22 +12,29 @@ import {
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import {
 	noteBuilder,
+	projectBuilder,
 	testActor,
-	testNoteId
+	testNoteId,
+	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { diagramEtag } from '$lib/models/diagrams';
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();
 	const notes = new InMemoryNoteRepository();
 	const anchors = new InMemoryAnchorRepository();
 	const provenance = new InMemoryProvenanceRepository();
+	const projects = new InMemoryProjects();
 	notes.notes = [noteBuilder()];
+	projects.projects = [projectBuilder()];
 	return {
 		diagrams,
 		notes,
 		anchors,
 		provenance,
-		service: new DiagramLibrary(diagrams, notes, anchors, provenance)
+		projects,
+		service: new DiagramLibrary(diagrams, notes, anchors, provenance, projects)
 	};
 };
 
@@ -50,6 +57,15 @@ describe('Diagram management invariants', () => {
 		await expect(
 			service.create(testActor(), mermaidBuilder({ userId: testActor(2).userId }))
 		).rejects.toMatchObject({ code: 'OWNERSHIP' });
+	});
+
+	it('rejects a diagram assigned to a project the actor does not own', async () => {
+		const { service, projects } = setup();
+		const foreign = projectBuilder({ id: testProjectId(2), userId: testActor(2).userId });
+		projects.projects.push(foreign);
+		await expect(
+			service.create(testActor(), mermaidBuilder({ projectId: foreign.id }))
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
 	it('deletes an existing owned diagram', async () => {
@@ -99,5 +115,95 @@ describe('Diagram management invariants', () => {
 			kind: 'drawio'
 		});
 		expect(listed.total).toBe(1);
+	});
+
+	it('trims a renamed diagram title', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		expect(
+			(await service.rename(testActor(), diagram.id, '  Architecture  ', diagramEtag(diagram)))
+				.title
+		).toBe('Architecture');
+	});
+
+	it('rejects an empty renamed diagram title', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		await expect(
+			service.rename(testActor(), diagram.id, '   ', diagramEtag(diagram))
+		).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
+	});
+});
+
+describe('Diagram publication invariants', () => {
+	it('autosaves source as an unpublished revision', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		const saved = await service.saveDraftSource(
+			testActor(),
+			diagram.id,
+			'<mxfile>draft</mxfile>',
+			'draft',
+			diagramEtag(diagram)
+		);
+		expect(saved.currentRevision > saved.publishedRevision).toBe(true);
+	});
+
+	it('publishing records an immutable snapshot', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({
+			currentRevision: 2,
+			publishedRevision: 1,
+			source: '<mxfile>draft</mxfile>'
+		});
+		diagrams.diagrams = [diagram];
+		await service.publish(
+			testActor(),
+			diagram.id,
+			diagram.source,
+			'<svg/>',
+			'draft',
+			diagramEtag(diagram)
+		);
+		expect(diagrams.diagramRevisions).toHaveLength(1);
+	});
+
+	it('publishing advances the published revision', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({
+			currentRevision: 2,
+			publishedRevision: 1,
+			source: '<mxfile>draft</mxfile>'
+		});
+		diagrams.diagrams = [diagram];
+		const published = await service.publish(
+			testActor(),
+			diagram.id,
+			diagram.source,
+			'<svg/>',
+			'draft',
+			diagramEtag(diagram)
+		);
+		expect(published.publishedRevision).toBe(2);
+	});
+
+	it('rejects a stale draft write', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({ currentRevision: 2 });
+		diagrams.diagrams = [diagram];
+		await expect(
+			service.saveDraftSource(
+				testActor(),
+				diagram.id,
+				'<mxfile>draft</mxfile>',
+				'draft',
+				diagramEtag(drawioBuilder())
+			)
+		).rejects.toMatchObject({ code: 'STALE_REVISION' });
 	});
 });

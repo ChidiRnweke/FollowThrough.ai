@@ -3,6 +3,9 @@
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, isDraftTab, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { diagramTab } from '$lib/stores/workbench/tab-ref';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { findConversationDiagram } from '$lib/remote/diagrams/diagrams.remote';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -34,9 +37,16 @@
 	 * rather than forking, and nothing has to be asked twice.
 	 */
 	async function openStudio(): Promise<void> {
+		const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
+		const persisted = conversationId
+			? (await findConversationDiagram(conversationId)).diagram
+			: undefined;
 		if (keepableIn) diagramRegistry.startDraft(sessionKey, keepableIn);
 		rightPanel.close();
-		await workbench.openSplit(chatTab(sessionKey), canvasTab);
+		await workbench.openSplit(
+			chatTab(sessionKey),
+			persisted ? diagramTab(persisted.id) : canvasTab
+		);
 	}
 </script>
 
@@ -50,7 +60,7 @@
 		<p class="truncate text-sm font-medium">{title ?? 'Untitled diagram'}</p>
 		<p class="text-xs text-muted-foreground">
 			{unkeepable
-				? 'Open this chat inside a project to keep the diagram it draws.'
+				? 'Choose which project it belongs to when you keep it.'
 				: 'Diagrams open side by side with the conversation, where you can edit and keep them.'}
 		</p>
 	</div>

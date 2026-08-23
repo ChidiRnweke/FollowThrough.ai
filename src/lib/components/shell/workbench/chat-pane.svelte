@@ -7,9 +7,11 @@
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { canvasSubjectKey } from '$lib/stores/diagrams/canvas-subject';
 	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab } from '$lib/stores/workbench/tab-ref';
+	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
+	import { findConversationDiagram } from '$lib/remote/diagrams/diagrams.remote';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
 	import { ChatPanel } from '$lib/components/chat';
 	import { AgentSettingsPopover } from '$lib/components/agent';
@@ -40,9 +42,8 @@
 	// by its tab id in `workspace-panes.svelte`.
 	const chat = untrack(() => chatRegistry.for(sessionKey));
 
-	const title = $derived(
-		sessions.find((entry) => entry.id === chat.conversationId)?.title ?? 'New chat'
-	);
+	const conversation = $derived(sessions.find((entry) => entry.id === chat.conversationId));
+	const title = $derived(conversation?.title ?? 'New chat');
 
 	// The pane tells the app context what it holds, the same inversion the note
 	// panes use — the agent's snapshot then names the chats open beside it.
@@ -52,18 +53,30 @@
 	// run's `projectId`, which becomes the conversation's own project on its first
 	// turn — without it a studio chat is scoped to nothing and its diagram has no
 	// project to be kept in.
-	const draftProjectId = $derived(diagramRegistry.draftProject(sessionKey));
+	const draftProjectId = $derived(
+		conversationProjectId(conversation, shell.noteTree) ?? diagramRegistry.draftProject(sessionKey)
+	);
 
 	// The canvas opens when the conversation has drafted something the canvas has
 	// not shown yet, and never for a background tab — a chat the user is not looking
 	// at must not take the split out from under the one they are.
 	const canvas = $derived(canvasFor(sessionKey));
+	let openingGeneration = 0;
 	$effect(() => {
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
 		const key = canvasSubjectKey(canvas.subject);
 		if (!canvasOpenings.shouldOpen(sessionKey, key) || !canvas.tab) return;
-		canvasOpenings.markShown(sessionKey, key);
-		void workbench.setSplit(canvas.tab);
+		const generation = ++openingGeneration;
+		const conversationId = chat.conversationId;
+		void (async () => {
+			const persisted = conversationId
+				? (await findConversationDiagram(conversationId)).diagram
+				: undefined;
+			if (generation !== openingGeneration || workbench.focusedTabId !== chatTab(sessionKey))
+				return;
+			canvasOpenings.markShown(sessionKey, key);
+			await workbench.setSplit(persisted ? diagramTab(persisted.id) : canvas.tab!);
+		})();
 	});
 
 	let releaseContext: (() => void) | undefined;

@@ -68,13 +68,12 @@
 
 	function readStoredToggles(): string[] {
 		if (typeof localStorage === 'undefined') return [];
-		try {
-			const raw = localStorage.getItem(STORAGE_KEY);
-			if (raw) return JSON.parse(raw) as string[];
-		} catch {
-			// Fall back to the defaults.
-		}
-		return [];
+		const raw = localStorage.getItem(STORAGE_KEY);
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== 'string'))
+			throw new Error('Stored project tree state is invalid');
+		return parsed;
 	}
 
 	onMount(() => {

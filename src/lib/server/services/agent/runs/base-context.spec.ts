@@ -5,6 +5,7 @@ import type { ActorContext } from '$lib/models/identity';
 import {
 	noteBuilder,
 	testActor,
+	testConversationId,
 	testNoteId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -35,10 +36,10 @@ describe('The pinned passages a run is built with', () => {
 		...overrides
 	});
 
-	const build = async (input: Partial<RunAgentInput>) =>
+	const build = async (input: Partial<Omit<RunAgentInput, 'conversationId'>>) =>
 		new BaseAgentContext(readerFor(note)).build(
 			testActor(),
-			{ prompt: 'Help', ...input },
+			{ conversationId: testConversationId(), prompt: 'Help', ...input },
 			{
 				provenanceId: testProvenanceId()
 			}

@@ -180,7 +180,7 @@ export class InlineSuggestionContext implements IInlineSuggestionContext {
 						);
 						return [] as readonly InlineCompletionPassage[];
 					}),
-					this.dependencies.memory.list(actor, {}).catch(() => [] as readonly MemoryEntry[])
+					this.dependencies.memory.list(actor, {})
 				]);
 				signal.throwIfAborted();
 				const userMemory = await this.userMemory(

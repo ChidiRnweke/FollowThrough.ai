@@ -9,7 +9,7 @@
 		FtEdit as Pencil,
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
-	import NoteTitleInlineInput from './note-title-inline-input.svelte';
+	import InlineTitleInput from '$lib/components/shared/inline-title-input.svelte';
 
 	let {
 		shell,
@@ -105,7 +105,13 @@
 		<!-- min-w-12 below keeps the title from being squeezed to nothing by the crumb above it. -->
 		<Breadcrumb.Item class="group/crumb min-w-0">
 			{#if editing}
-				<NoteTitleInlineInput initialValue={draft} onsubmit={commit} oncancel={close} {onadvance} />
+				<InlineTitleInput
+					initialValue={draft}
+					label="Note title"
+					onsubmit={commit}
+					oncancel={close}
+					{onadvance}
+				/>
 			{:else}
 				<!-- The crumb truncates at 12rem, so a long title is only readable on hover. -->
 				<Tip text={note.title} side="bottom" delayDuration={700}>

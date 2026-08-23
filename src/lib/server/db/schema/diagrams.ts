@@ -1,1 +1,1 @@
-export { diagramKind, diagrams, notes } from './registry';
+export { diagramKind, diagrams, diagramRevisions, notes } from './registry';

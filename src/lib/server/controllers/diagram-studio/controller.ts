@@ -3,33 +3,50 @@ import type {
 	CountDiagramReferencesInput,
 	DeleteProjectDiagramInput,
 	Diagram,
+	DrawioDiagram,
+	FindConversationDiagramInput,
+	FindConversationDiagramOutput,
+	GetDiagramRevisionInput,
+	GetDiagramRevisionOutput,
 	GetProjectDiagramInput,
 	KeepStudioDiagramInput,
 	KeepStudioDiagramOutput,
 	ListProjectDiagramsInput,
 	ListProjectDiagramsOutput,
+	ListDiagramRevisionsInput,
+	ListDiagramRevisionsOutput,
+	PublishProjectDiagramInput,
+	PublishProjectDiagramOutput,
 	PresentDiagramInput,
 	PresentDiagramOutput,
+	PresentDiagramRevisionInput,
+	PresentDiagramRevisionOutput,
 	ReadCanvasDiagramInput,
 	ReadCanvasDiagramOutput,
 	ReadProjectDiagramInput,
 	ReadProjectDiagramOutput,
 	RenameProjectDiagramInput,
+	RestoreDiagramRevisionInput,
+	RestoreDiagramRevisionOutput,
+	SaveProjectDiagramDraftInput,
 	SaveDrawioDiagramOutput,
 	SaveProjectDrawioInput,
 	SearchDiagramIconsInput,
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/models/diagrams';
 import { UnsupportedDiagramOperationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramConversationFinder,
 	DiagramDeleter,
+	DiagramDraftWriter,
 	DiagramFinder,
 	DiagramIconSearch,
 	DiagramIndexer,
 	DiagramLister,
 	DiagramReferenceCounter,
+	DiagramRevisionReader,
 	DiagramRenamer,
 	DiagramTextExtractor,
 	DiagramWriter,
@@ -59,6 +76,11 @@ export interface DiagramStudioController {
 	 * diagram behind.
 	 */
 	presentDiagram(actor: ActorContext, input: PresentDiagramInput): Promise<PresentDiagramOutput>;
+	/** Present a revision only after proving its replacement target exists and is editable. */
+	presentDiagramRevision(
+		actor: ActorContext,
+		input: PresentDiagramRevisionInput
+	): Promise<PresentDiagramRevisionOutput>;
 	/**
 	 * Read the diagram currently on this conversation's canvas.
 	 *
@@ -113,6 +135,10 @@ export interface DiagramStudioController {
 	 * @throws NotFoundError if the actor has no such diagram.
 	 */
 	getProjectDiagram(actor: ActorContext, input: GetProjectDiagramInput): Promise<Diagram>;
+	findConversationDiagram(
+		actor: ActorContext,
+		input: FindConversationDiagramInput
+	): Promise<FindConversationDiagramOutput>;
 	/** Every diagram produced in a project, oldest first. */
 	listProjectDiagrams(
 		actor: ActorContext,
@@ -130,8 +156,31 @@ export interface DiagramStudioController {
 		actor: ActorContext,
 		input: SaveProjectDrawioInput
 	): Promise<SaveDrawioDiagramOutput>;
+	saveProjectDiagramDraft(
+		actor: ActorContext,
+		input: SaveProjectDiagramDraftInput
+	): Promise<PublishProjectDiagramOutput>;
+	publishProjectDiagram(
+		actor: ActorContext,
+		input: PublishProjectDiagramInput
+	): Promise<PublishProjectDiagramOutput>;
+	listDiagramRevisions(
+		actor: ActorContext,
+		input: ListDiagramRevisionsInput
+	): Promise<ListDiagramRevisionsOutput>;
+	getDiagramRevision(
+		actor: ActorContext,
+		input: GetDiagramRevisionInput
+	): Promise<GetDiagramRevisionOutput>;
+	restoreDiagramRevision(
+		actor: ActorContext,
+		input: RestoreDiagramRevisionInput
+	): Promise<RestoreDiagramRevisionOutput>;
 	/** Retitle a project diagram. */
-	renameProjectDiagram(actor: ActorContext, input: RenameProjectDiagramInput): Promise<Diagram>;
+	renameProjectDiagram(
+		actor: ActorContext,
+		input: RenameProjectDiagramInput
+	): Promise<DrawioDiagram>;
 	/** Permanently delete a project diagram. Notes referencing it show it as unavailable. */
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void>;
 	/** How many notes render this diagram, for the delete confirmation. */
@@ -145,6 +194,8 @@ export interface DiagramStudioDependencies {
 	diagramConversations: DiagramConversationFinder;
 	diagramReferences: DiagramReferenceCounter;
 	diagramRenamer: DiagramRenamer;
+	diagramDraftWriter: DiagramDraftWriter;
+	diagramRevisionReader: DiagramRevisionReader;
 	diagramDeleter: DiagramDeleter;
 	diagramWriter: DiagramWriter;
 	diagramIndexer: DiagramIndexer;
@@ -176,9 +227,19 @@ export class DiagramStudio implements DiagramStudioController {
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
 		return {
 			source,
-			...(input.title ? { title: input.title } : {}),
-			...(input.diagramId ? { diagramId: input.diagramId } : {})
+			...(input.title ? { title: input.title } : {})
 		};
+	}
+
+	async presentDiagramRevision(
+		actor: ActorContext,
+		input: PresentDiagramRevisionInput
+	): Promise<PresentDiagramRevisionOutput> {
+		const target = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+		if (target.kind !== 'drawio')
+			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be revised here');
+		const presented = await this.presentDiagram(actor, input);
+		return { ...presented, diagramId: target.id };
 	}
 
 	async readCanvasDiagram(
@@ -246,16 +307,32 @@ export class DiagramStudio implements DiagramStudioController {
 				source,
 				renderedSvg,
 				searchableText: await this.dependencies.drawioTextExtractor.extract({ source }),
+				currentRevision: 1,
+				publishedRevision: 1,
+				publishedAt: timestamp,
 				createdAt: timestamp,
 				updatedAt: timestamp
 			});
 			await this.dependencies.diagramIndexer.index(actor, diagram);
+			if (diagram.kind === 'drawio')
+				await this.dependencies.diagramDraftWriter.recordRevision(actor, diagram);
 			return { diagram, created: true };
 		});
 	}
 
 	getProjectDiagram(actor: ActorContext, input: GetProjectDiagramInput): Promise<Diagram> {
 		return this.dependencies.diagramFinder.get(actor, input.diagramId);
+	}
+
+	async findConversationDiagram(
+		actor: ActorContext,
+		input: FindConversationDiagramInput
+	): Promise<FindConversationDiagramOutput> {
+		const diagram = await this.dependencies.diagramConversations.findByConversation(
+			actor,
+			input.conversationId
+		);
+		return diagram ? { diagram } : {};
 	}
 
 	listProjectDiagrams(
@@ -283,8 +360,103 @@ export class DiagramStudio implements DiagramStudioController {
 		});
 	}
 
-	renameProjectDiagram(actor: ActorContext, input: RenameProjectDiagramInput): Promise<Diagram> {
-		return this.dependencies.diagramRenamer.rename(actor, input.diagramId, input.title);
+	async saveProjectDiagramDraft(
+		actor: ActorContext,
+		input: SaveProjectDiagramDraftInput
+	): Promise<PublishProjectDiagramOutput> {
+		const source = this.dependencies.drawioXmlValidator.validate(input.source);
+		const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
+		const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
+			actor,
+			input.diagramId,
+			source,
+			searchableText,
+			input.baseEtag
+		);
+		await this.dependencies.diagramIndexer.index(actor, diagram);
+		return { diagram, etag: diagramEtag(diagram) };
+	}
+
+	publishProjectDiagram(
+		actor: ActorContext,
+		input: PublishProjectDiagramInput
+	): Promise<PublishProjectDiagramOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const source = this.dependencies.drawioXmlValidator.validate(input.source);
+			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
+			const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
+			const diagram = await this.dependencies.diagramDraftWriter.publish(
+				actor,
+				input.diagramId,
+				source,
+				renderedSvg,
+				searchableText,
+				input.baseEtag
+			);
+			await this.dependencies.diagramIndexer.index(actor, diagram);
+			return { diagram, etag: diagramEtag(diagram) };
+		});
+	}
+
+	async listDiagramRevisions(
+		actor: ActorContext,
+		input: ListDiagramRevisionsInput
+	): Promise<ListDiagramRevisionsOutput> {
+		const diagram = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+		if (diagram.kind !== 'drawio')
+			throw new UnsupportedDiagramOperationError('Only draw.io diagrams have publication history');
+		return {
+			revisions: (await this.dependencies.diagramRevisionReader.revisions(actor, diagram.id)).map(
+				(revision) => ({
+					id: revision.id,
+					revision: revision.revision,
+					title: revision.title,
+					createdAt: revision.createdAt,
+					isPublished: revision.revision === diagram.publishedRevision
+				})
+			)
+		};
+	}
+
+	async getDiagramRevision(
+		actor: ActorContext,
+		input: GetDiagramRevisionInput
+	): Promise<GetDiagramRevisionOutput> {
+		return {
+			revision: await this.dependencies.diagramRevisionReader.revision(
+				actor,
+				input.diagramId,
+				input.revisionId
+			)
+		};
+	}
+
+	restoreDiagramRevision(
+		actor: ActorContext,
+		input: RestoreDiagramRevisionInput
+	): Promise<RestoreDiagramRevisionOutput> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const diagram = await this.dependencies.diagramDraftWriter.restore(
+				actor,
+				input.diagramId,
+				input.revisionId,
+				input.baseEtag
+			);
+			await this.dependencies.diagramIndexer.index(actor, diagram);
+			return { diagram, etag: diagramEtag(diagram) };
+		});
+	}
+
+	renameProjectDiagram(
+		actor: ActorContext,
+		input: RenameProjectDiagramInput
+	): Promise<DrawioDiagram> {
+		return this.dependencies.diagramRenamer.rename(
+			actor,
+			input.diagramId,
+			input.title,
+			input.baseEtag
+		);
 	}
 
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {

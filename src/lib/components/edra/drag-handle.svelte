@@ -30,17 +30,12 @@
 	const { type = 'simple' }: Props = $props();
 
 	const alignments = commands.alignment;
-	const turnIntos: Record<string, EdraCommand[]> = Object.entries(commands).reduce(
-		(acc, [key, value]) => {
-			if (key === 'alignment') return acc;
-			const turnIntoCommands = value.filter((c) => c.turnInto);
-			if (turnIntoCommands.length > 0) {
-				acc[key] = turnIntoCommands;
-			}
-			return acc;
-		},
-		{} as Record<string, EdraCommand[]>
-	);
+	const turnIntos: Record<string, EdraCommand[]> = {};
+	for (const [key, value] of Object.entries(commands)) {
+		if (key === 'alignment') continue;
+		const turnIntoCommands = value.filter((command) => command.turnInto);
+		if (turnIntoCommands.length > 0) turnIntos[key] = turnIntoCommands;
+	}
 
 	let currentNode: Node | null = $state(null);
 	let currentNodePos: number = $state(-1);

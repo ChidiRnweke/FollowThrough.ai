@@ -280,7 +280,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		builtInSkills: skillCapability.builtIns,
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
-		indexer: diagramIndexer
+		indexer: diagramIndexer,
+		projects
 	});
 	const diagrams = diagramCapability.library;
 	const diagramTransforms = diagramCapability.transforms;
@@ -365,6 +366,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramConversations: diagrams,
 			diagramReferences: diagrams,
 			diagramRenamer: diagrams,
+			diagramDraftWriter: diagrams,
+			diagramRevisionReader: diagrams,
 			diagramDeleter: diagrams,
 			diagramWriter: diagrams,
 			diagramIndexer,

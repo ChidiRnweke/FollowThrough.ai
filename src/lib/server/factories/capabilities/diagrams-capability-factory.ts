@@ -36,6 +36,7 @@ import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { traceWorkflow } from '$lib/server/services/telemetry';
+import type { ProjectReader } from '$lib/server/services/projects/contracts';
 
 export interface DiagramsCapabilityInput {
 	readonly db: Database;
@@ -53,6 +54,7 @@ export interface DiagramsCapabilityInput {
 	readonly defaultVisionModel: string;
 	readonly indexer: EmbeddedDiagramIndexer;
 	readonly sessions: AgentSessionRepository;
+	readonly projects: ProjectReader;
 }
 
 export interface DiagramsCapability {
@@ -78,7 +80,8 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		new DiagramRecords(input.db),
 		input.notes,
 		input.anchors,
-		input.provenanceRepository
+		input.provenanceRepository,
+		input.projects
 	);
 	const drawioWrites = new DrawioWrites(
 		library,

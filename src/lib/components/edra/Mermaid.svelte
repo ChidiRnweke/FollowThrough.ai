@@ -33,6 +33,7 @@
 	import { setPendingConversionReference } from './commands/diagram-references.js';
 	import { createMediaResize } from './media-resize.svelte.js';
 	import { mermaidPngBlob } from './mermaid-export.js';
+	import { toast } from 'svelte-sonner';
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
 	const options = $derived(
@@ -303,20 +304,16 @@
 		revisionError = null;
 		try {
 			let renderedPngDataUrl: string | undefined;
-			try {
-				const blob = await mermaidPngBlob(editCode, {
-					base: colorMode.current === 'dark' ? 'dark' : 'light'
+			const blob = await mermaidPngBlob(editCode, {
+				base: colorMode.current === 'dark' ? 'dark' : 'light'
+			});
+			if (blob.size <= 10 * 1024 * 1024)
+				renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(String(reader.result));
+					reader.onerror = () => reject(reader.error);
+					reader.readAsDataURL(blob);
 				});
-				if (blob.size <= 10 * 1024 * 1024)
-					renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
-						const reader = new FileReader();
-						reader.onload = () => resolve(String(reader.result));
-						reader.onerror = () => reject(reader.error);
-						reader.readAsDataURL(blob);
-					});
-			} catch {
-				// Broken Mermaid must still reach the source-only repair path.
-			}
 			const revised = await onRevise(editCode, instruction, renderedPngDataUrl);
 			if (code !== committedSource)
 				throw new Error('The diagram changed while the revision was running. Try again.');
@@ -430,7 +427,11 @@
 			const png = mermaidPngBlob(source, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
-			png.catch(() => {});
+			png.catch((error) =>
+				toast.error(
+					error instanceof Error ? error.message : 'The diagram image could not be copied'
+				)
+			);
 			await navigator.clipboard.write([
 				new ClipboardItem({
 					'image/png': png,
@@ -439,9 +440,14 @@
 			]);
 			copiedImage = true;
 			setTimeout(() => (copiedImage = false), 2000);
-		} catch {
+		} catch (error) {
 			// A diagram that will not render still has its source to offer.
-			await navigator.clipboard.writeText(source).catch(() => {});
+			await navigator.clipboard.writeText(source);
+			toast.warning(
+				error instanceof Error
+					? `Image copy failed; copied diagram source instead. ${error.message}`
+					: 'Image copy failed; copied diagram source instead.'
+			);
 		}
 	}
 

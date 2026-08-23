@@ -47,7 +47,9 @@ const edit = <K extends string, V>(
 	value: V | null | undefined
 ): Partial<Record<K, V | undefined>> => {
 	if (value === undefined) return {};
-	return { [key]: value === null ? undefined : value } as Record<K, V | undefined>;
+	const result: Partial<Record<K, V | undefined>> = {};
+	result[key] = value === null ? undefined : value;
+	return result;
 };
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore {

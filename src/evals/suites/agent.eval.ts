@@ -26,6 +26,9 @@ import { timeAwarenessCases, parallelExecutionCases } from '../cases/time-awaren
 import { completionRegressionCases } from '../cases/completion';
 import { passRate, suiteConfig, suiteName } from '../lab/phoenix';
 
+const isMissingFile = (error: unknown): error is NodeJS.ErrnoException =>
+	error instanceof Error && 'code' in error && error.code === 'ENOENT';
+
 let lab: Lab;
 
 // New-feature archetypes measure behaviour the model is still learning: the
@@ -107,8 +110,8 @@ const persistResult = async (entry: Record<string, unknown>): Promise<void> => {
 	let entries: Record<string, unknown>[] = [];
 	try {
 		entries = JSON.parse(await readFile(resultsPath, 'utf8')) as Record<string, unknown>[];
-	} catch {
-		// The first completed case creates the incremental result file.
+	} catch (error) {
+		if (!isMissingFile(error)) throw error;
 	}
 	await writeFile(resultsPath, JSON.stringify([...entries, entry], null, 2), 'utf8');
 };

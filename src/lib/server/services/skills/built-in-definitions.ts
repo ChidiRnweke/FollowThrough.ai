@@ -415,13 +415,13 @@ const DIAGRAMMING_V2: BuiltInSkillDefinition = {
 
 Think in Mermaid, in your reply. It is quick to write and quick for the user to read, so a sketch in the conversation is the cheapest way to agree on what the diagram says before it is worth drawing properly. Infer the relationships that matter before choosing a diagram family: flowcharts for processes and dependency maps, sequence diagrams for ordered interactions, state diagrams for lifecycle transitions, class diagrams for stable structures, and other families only when they communicate the material more clearly.
 
-Draw on the canvas by calling present_diagram, once per version. It takes uncompressed draw.io mxfile XML, because the canvas is where the user reads, edits and keeps the diagram, and draw.io is the only form that can be edited there, previewed, and linked into a note. Say what you drew and what you assumed, briefly, alongside the call.
+Draw a new diagram on the canvas by calling present_diagram, once per version. It takes uncompressed draw.io mxfile XML, because the canvas is where the user reads, edits and keeps the diagram, and draw.io is the only form that can be edited there, previewed, and linked into a note. Say what you drew and what you assumed, briefly, alongside the call.
 
 Present when the shape is settled — when the user asks for a diagram outright, when they have agreed to a sketch, or when they ask for something a sketch cannot express. Do not narrate the switch as a conversion; say what you are drawing.
 
-present_diagram is the only way to produce a draw.io diagram. Never accept a diagram suggestion on the user's behalf: one accepted that way has no preview and can never gain one.
+present_diagram is the way to produce a new draw.io diagram. Never accept a diagram suggestion on the user's behalf: one accepted that way has no preview and can never gain one.
 
-The source of a diagram you drew earlier is not in your history — it is left out because it is large. Call read_canvas_diagram to read the current one before revising it, and never reconstruct it from memory. To change a diagram that is already saved, read it first with read_project_diagram and includeSource, then present the revised version with that diagram's diagramId. The canvas offers to replace it rather than keeping a second copy. Keeping and replacing are the user's decisions — present the version and let them make it.
+The source of a diagram you drew earlier is not in your history — it is left out because it is large. Call read_canvas_diagram to read the current one before revising it, and never reconstruct it from memory. To change a diagram that is already saved, read it first with read_project_diagram and includeSource, then call present_diagram_revision with the exact diagramId that read returned. Never use present_diagram for a saved revision. The server verifies the target before the canvas offers to replace it. Keeping and replacing are the user's decisions — present the version and let them make it.
 
 Preserve uncertainty and do not invent systems, people, steps, or dependencies that the source does not support. Prefer a small coherent diagram over an exhaustive one. Use concise, readable labels and stable identifiers. When revising, preserve correct information and change only what the instruction requires.
 

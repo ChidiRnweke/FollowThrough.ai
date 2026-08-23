@@ -398,6 +398,8 @@ export class DiagramAuthoring {
 			title: draft.title,
 			source: draft.source,
 			searchableText: '',
+			currentRevision: 1,
+			publishedRevision: 0,
 			provenanceId: draft.provenanceId,
 			promotedFromId: diagram.id,
 			createdAt: timestamp,
@@ -456,6 +458,7 @@ export class DiagramAuthoring {
 			metadata: { conversationId: conversation.id, operation: task.operation }
 		});
 		const input: RunAgentInput = {
+			conversationId: conversation.id,
 			noteId: task.noteId,
 			selection: task.selection,
 			requestedSkillNoteIds: [diagramming.note.id],
@@ -464,8 +467,7 @@ export class DiagramAuthoring {
 		await this.dependencies.conversations.recordUserPrompt(actor, conversation.id, input.prompt);
 		const context = {
 			...(await this.dependencies.contextBuilder.build(actor, input, {
-				provenanceId: provenance.id,
-				conversationId: conversation.id
+				provenanceId: provenance.id
 			})),
 			conversationId: conversation.id,
 			effectiveModel: model,

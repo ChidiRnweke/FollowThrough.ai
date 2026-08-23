@@ -18,6 +18,7 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import {
 	noteBuilder,
 	testActor,
+	testConversationId,
 	testNoteId,
 	testProjectId,
 	testProvenanceId
@@ -161,7 +162,13 @@ describe('Agent runtime boundary', () => {
 	const systemPromptWithNotes = () =>
 		buildAgentInstructions({
 			contextNotes: [
-				{ noteId: testNoteId(5), title: 'Kickoff', content: 'secret note body', tokenCount: 4 }
+				{
+					conversationId: testConversationId(),
+					noteId: testNoteId(5),
+					title: 'Kickoff',
+					content: 'secret note body',
+					tokenCount: 4
+				}
 			]
 		});
 
@@ -179,7 +186,14 @@ describe('Agent runtime boundary', () => {
 
 	const oversizedNotesBlock = () =>
 		attachedNotesBlock({
-			contextNotes: [{ noteId: testNoteId(6), title: 'Huge', tokenCount: 9000 }]
+			contextNotes: [
+				{
+					conversationId: testConversationId(),
+					noteId: testNoteId(6),
+					title: 'Huge',
+					tokenCount: 9000
+				}
+			]
 		});
 
 	const hostileNotesBlock = () =>
@@ -333,7 +347,7 @@ describe('Agent runtime boundary', () => {
 		const updates = runner.execute({
 			actor: testActor(),
 			run,
-			request: { prompt: 'Help' },
+			request: { conversationId: run.conversationId, prompt: 'Help' },
 			context: run.contextSnapshot!,
 			signal: new AbortController().signal,
 			toolExecutor: { execute: async (_input, action) => action() }
@@ -603,7 +617,7 @@ describe('Agent context invariants', () => {
 		const agent = new BaseAgentContext(notes);
 		const context = await agent.build(
 			testActor(),
-			{ noteId: testNoteId(), prompt: 'Summarize this note' },
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Summarize this note' },
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.projectId).toBe(testProjectId());
@@ -655,7 +669,7 @@ describe('Agent turn span lifecycle', () => {
 	const approvalTool = tool({
 		name: 'save_note',
 		description: 'Save a note',
-		parameters: z.object({ noteId: z.string() }),
+		parameters: z.object({ conversationId: z.string(), noteId: z.string() }),
 		needsApproval: true,
 		execute: async () => ({ ok: true })
 	});
@@ -700,7 +714,7 @@ describe('Agent turn span lifecycle', () => {
 			const updates = reasoning.execute({
 				actor: testActor(),
 				run,
-				request: { prompt: 'Save this note' },
+				request: { conversationId: run.conversationId, prompt: 'Save this note' },
 				context: run.contextSnapshot!,
 				signal: new AbortController().signal,
 				toolExecutor: { execute: async (_input, action) => action() }
@@ -742,7 +756,7 @@ describe('Agent turn span lifecycle', () => {
 		const updates = recording.execute({
 			actor: testActor(),
 			run: parked,
-			request: { prompt: 'Save this note' },
+			request: { conversationId: run.conversationId, prompt: 'Save this note' },
 			context: parked.contextSnapshot!,
 			signal: new AbortController().signal,
 			toolExecutor: { execute: async (_input, action) => action() }

@@ -41,16 +41,23 @@ export const presentedDiagram = (output: unknown): PresentedDiagram | undefined 
 	if (!fields || !nonEmpty(fields.source)) return undefined;
 	return {
 		source: fields.source,
-		...(nonEmpty(fields.title) ? { title: fields.title } : {}),
-		...(nonEmpty(fields.diagramId) ? { diagramId: fields.diagramId as DiagramId } : {})
+		...(nonEmpty(fields.title) ? { title: fields.title } : {})
 	};
 };
 
+/** Read the result of the revision-only presentation boundary. */
+export const presentedDiagramRevision = (output: unknown): PresentedDiagram | undefined => {
+	const fields = record(output);
+	const draft = presentedDiagram(output);
+	if (!draft || !nonEmpty(fields?.diagramId)) return undefined;
+	return { ...draft, diagramId: fields.diagramId as DiagramId };
+};
+
 /** The same payload as it is stored in a transcript: JSON in a text field. */
-export const presentedDiagramFromText = (text: string): PresentedDiagram | undefined => {
-	try {
-		return presentedDiagram(JSON.parse(text));
-	} catch {
-		return undefined;
-	}
+export const presentedDiagramFromText = (
+	text: string,
+	kind: 'new' | 'revision' = 'new'
+): PresentedDiagram | undefined => {
+	const output = JSON.parse(text);
+	return kind === 'revision' ? presentedDiagramRevision(output) : presentedDiagram(output);
 };

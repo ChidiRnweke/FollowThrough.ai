@@ -138,15 +138,11 @@ export class ArtifactLibrary {
 		return async (src) => {
 			const attachmentId = attachmentIdFromSrc(src);
 			if (!attachmentId) return undefined;
-			try {
-				const { url } = await this.attachmentDownloader.downloadById(
-					actor,
-					attachmentId as AttachmentId
-				);
-				return await fetchRemoteDataUrl(url);
-			} catch {
-				return undefined;
-			}
+			const { url } = await this.attachmentDownloader.downloadById(
+				actor,
+				attachmentId as AttachmentId
+			);
+			return fetchRemoteDataUrl(url);
 		};
 	}
 

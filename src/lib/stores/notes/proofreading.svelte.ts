@@ -109,13 +109,12 @@ export class ProofreadingStore {
 }
 
 const readWords = (): readonly string[] => {
-	try {
-		const stored: unknown = JSON.parse(localStorage.getItem(DICTIONARY_KEY) ?? '[]');
-		return Array.isArray(stored) ? stored.filter((word) => typeof word === 'string') : [];
-	} catch {
-		// A hand-edited or half-written entry costs the dictionary, not the editor.
-		return [];
-	}
+	const raw = localStorage.getItem(DICTIONARY_KEY);
+	if (raw === null) return [];
+	const stored: unknown = JSON.parse(raw);
+	if (!Array.isArray(stored) || stored.some((word) => typeof word !== 'string'))
+		throw new Error('Stored proofreading dictionary is invalid');
+	return stored;
 };
 
 export const proofreading = new ProofreadingStore();

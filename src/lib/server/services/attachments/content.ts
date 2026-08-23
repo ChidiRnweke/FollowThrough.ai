@@ -98,15 +98,11 @@ export class AttachmentContent implements DocumentOcr {
 		image: { dataUrl: string; index: number; context?: string },
 		model: string
 	): Promise<string> {
-		try {
-			const description = await this.describer.describe({
-				imageDataUrl: image.dataUrl,
-				...(image.context ? { context: image.context } : {}),
-				model
-			});
-			return `> **Image ${image.index}:** ${description}`;
-		} catch {
-			return `> **Image ${image.index}:** (description unavailable)`;
-		}
+		const description = await this.describer.describe({
+			imageDataUrl: image.dataUrl,
+			...(image.context ? { context: image.context } : {}),
+			model
+		});
+		return `> **Image ${image.index}:** ${description}`;
 	}
 }

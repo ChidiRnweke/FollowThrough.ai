@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { userFacingMessage } from '$lib/errors';
+	import { tick } from 'svelte';
 	import type { ConversationId } from '$lib/models/agent';
-	import type { DiagramId } from '$lib/models/diagrams';
-	import type { ProjectId } from '$lib/models/projects';
+	import { diagramEtag, type DiagramId } from '$lib/models/diagrams';
+	import type { Project, ProjectId } from '$lib/models/projects';
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { diagramTab, draftTab } from '$lib/stores/workbench/tab-ref';
 	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
@@ -16,7 +18,8 @@
 	import { rasterizeSvg } from '$lib/client/images/rasterize';
 	import {
 		keepStudioDiagram,
-		saveProjectDrawio,
+		saveProjectDiagramDraft,
+		renameProjectDiagram,
 		getProjectDiagram
 	} from '$lib/remote/diagrams/diagrams.remote';
 	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
@@ -25,21 +28,35 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtClose as X } from '$lib/components/icons';
 	import DiagramStatus from './diagram-status.svelte';
+	import DiagramTitle from './diagram-title.svelte';
+	import DiagramProjectDialog from './diagram-project-dialog.svelte';
 
 	let {
 		sessionKey,
 		projectId,
+		projects,
 		onCloseSplit
 	}: {
 		sessionKey: ChatSessionKey;
 		projectId?: ProjectId;
+		projects: readonly Project[];
 		onCloseSplit?: () => void;
 	} = $props();
 
 	const chat = $derived(chatRegistry.peek(sessionKey));
 	const subject = $derived(canvasFor(sessionKey).subject);
 	const draft = $derived(subject?.kind === 'draft' ? subject.draft : undefined);
-	const title = $derived(draft?.title ?? 'Untitled diagram');
+	const draftKey = $derived(canvasSubjectKey(subject));
+	let titleOverride = $state<{ readonly key: string; readonly title: string } | undefined>();
+	const title = $derived.by(() => {
+		const override = titleOverride;
+		return override && override.key === draftKey
+			? override.title
+			: (draft?.title ?? 'Untitled diagram');
+	});
+	let selectedProjectId = $state<ProjectId | undefined>();
+	let projectDialogOpen = $state(false);
+	const effectiveProjectId = $derived(projectId ?? selectedProjectId);
 	/** The diagram a revision names — which the user may since have deleted. */
 	const target = $derived(draft?.diagramId);
 	// A transcript is history: it keeps naming the diagram long after the row is
@@ -51,7 +68,7 @@
 		keepIntent({
 			...(target ? { target } : {}),
 			targetMissing,
-			...(projectId ? { projectId } : {}),
+			...(effectiveProjectId ? { projectId: effectiveProjectId } : {}),
 			...(chat?.conversationId ? { conversationId: chat.conversationId } : {})
 		})
 	);
@@ -90,6 +107,7 @@
 				intent.kind === 'replace'
 					? await replace(intent.diagramId, output)
 					: await create(intent.projectId, intent.conversationId, output);
+			diagramRegistry.endDraft(sessionKey);
 			// The studio does not end here — the way to change a diagram is to keep
 			// talking about it. So the canvas becomes the saved diagram in place and
 			// the conversation stays beside it, rather than the user being sent to a
@@ -114,20 +132,47 @@
 			conversationId,
 			source: output.xml,
 			renderedSvg: output.svg,
-			...(draft?.title ? { title: draft.title } : {})
+			...(title !== 'Untitled diagram' ? { title } : {})
 		});
 		return result.diagram.id;
 	}
 
 	/** A revision writes over the diagram it was drawn against, rather than beside it. */
 	async function replace(diagramId: DiagramId, output: DrawioExport): Promise<DiagramId> {
-		await saveProjectDrawio({
+		const current = targetQuery?.current;
+		if (!current || current.kind !== 'drawio')
+			throw new Error('The diagram being revised is unavailable.');
+		const saved = await saveProjectDiagramDraft({
 			diagramId,
 			source: output.xml,
-			renderedSvg: output.svg
+			baseEtag: diagramEtag(current)
 		}).updates(getProjectDiagram(diagramId));
-		toast.success('Diagram updated');
+		if (title !== (saved.diagram.title ?? 'Untitled diagram')) {
+			await renameProjectDiagram({ diagramId, title, baseEtag: saved.etag }).updates(
+				getProjectDiagram(diagramId)
+			);
+		}
+		toast.success('Revision applied as a draft');
 		return diagramId;
+	}
+
+	function editTitle(next: string): void {
+		if (draftKey) titleOverride = { key: draftKey, title: next };
+	}
+
+	async function requestKeep(): Promise<void> {
+		if (!effectiveProjectId) {
+			projectDialogOpen = true;
+			return;
+		}
+		control?.commit();
+	}
+
+	async function chooseProject(next: ProjectId): Promise<void> {
+		selectedProjectId = next;
+		projectDialogOpen = false;
+		await tick();
+		control?.commit();
 	}
 
 	/**
@@ -154,10 +199,10 @@
 		diagram that is right there.
 	-->
 	<header class="flex min-h-10 shrink-0 items-center gap-2 px-4 pb-3 @[40rem]:px-8">
-		<h2 class="min-w-0 flex-1 truncate text-sm font-medium">{title}</h2>
+		<DiagramTitle {title} busy={editor.phase === 'saving'} oncommit={editTitle} />
 		<DiagramStatus status={editor} onretry={() => control?.retry()}>
 			{#snippet idle()}
-				{#if draft && intent.kind === 'blocked'}
+				{#if draft && intent.kind === 'blocked' && !chat?.conversationId}
 					<p class="text-xs text-muted-foreground" role="status" aria-live="polite">
 						{intent.reason}
 					</p>
@@ -174,10 +219,8 @@
 			{/if}
 			<Button
 				size="sm"
-				disabled={editor.phase === 'exporting' ||
-					editor.phase === 'saving' ||
-					intent.kind === 'blocked'}
-				onclick={() => control?.commit()}
+				disabled={editor.phase === 'exporting' || editor.phase === 'saving'}
+				onclick={() => void requestKeep()}
 			>
 				{keepLabel(intent)}
 			</Button>
@@ -226,3 +269,10 @@
 		{/if}
 	</div>
 </div>
+
+<DiagramProjectDialog
+	bind:open={projectDialogOpen}
+	{projects}
+	busy={editor.phase === 'exporting' || editor.phase === 'saving'}
+	onconfirm={chooseProject}
+/>

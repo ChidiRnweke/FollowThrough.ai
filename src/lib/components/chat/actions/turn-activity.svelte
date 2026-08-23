@@ -88,7 +88,8 @@
 					if (!cancelled) todoTitles.set(id, todo.title);
 				})
 				.catch(() => {
-					/* an unnamed todo still opens; it just reads "A todo" */
+					if (!cancelled) todoTitles.set(id, 'Todo title unavailable');
+					console.warn('Todo title unavailable', id);
 				});
 		}
 		return () => {

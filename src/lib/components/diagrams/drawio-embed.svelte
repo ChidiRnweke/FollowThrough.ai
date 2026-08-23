@@ -19,6 +19,7 @@
 	/** What a host needs to drive the editor from its own header. */
 	export interface DrawioControl {
 		commit(): void;
+		review(): void;
 		retry(): void;
 	}
 
@@ -35,6 +36,8 @@
 		oncommit,
 		onclose,
 		onmodifiedchange,
+		onautosave,
+		onreview,
 		oncapturepreview,
 		oncontrol,
 		onstatus
@@ -45,6 +48,8 @@
 		oncommit: (output: DrawioExport) => Promise<void>;
 		onclose?: () => void;
 		onmodifiedchange?: (modified: boolean) => void;
+		onautosave?: (xml: string) => Promise<void>;
+		onreview?: (output: DrawioExport) => void;
 		/**
 		 * Take one export as soon as the editor is ready, without the user asking.
 		 *
@@ -74,6 +79,7 @@
 	/** Guards the one silent export `oncapturepreview` takes, so it happens once. */
 	let captured = false;
 	let capturing = false;
+	let reviewing = false;
 	/** The theme the live editor was built for; `undefined` until it is built. */
 	let appliedDark: boolean | undefined;
 	let retheming = false;
@@ -156,6 +162,7 @@
 				if (phase === 'saved') phase = 'ready';
 				report();
 			},
+			onAutosave: (value) => void onautosave?.(value),
 			onExport: (output) => {
 				if (retheming) {
 					retheming = false;
@@ -168,6 +175,11 @@
 				if (capturing) {
 					capturing = false;
 					void oncapturepreview?.(output);
+					return;
+				}
+				if (reviewing) {
+					reviewing = false;
+					onreview?.(output);
 					return;
 				}
 				void persist(output);
@@ -185,7 +197,7 @@
 		});
 		appliedDark = colorMode.current === 'dark';
 		adapter.start({ xml: source, dark: appliedDark, config: drawioConfig(palette) });
-		oncontrol?.({ commit, retry });
+		oncontrol?.({ commit, review, retry });
 		report();
 	}
 
@@ -225,6 +237,12 @@
 		failure = '';
 		report();
 		adapter.requestExport(commitReason);
+	}
+
+	function review(): void {
+		if (!adapter || phase === 'exporting' || phase === 'saving') return;
+		reviewing = true;
+		adapter.requestExport('review');
 	}
 
 	function retry(): void {

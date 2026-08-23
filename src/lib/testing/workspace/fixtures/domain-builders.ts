@@ -1,8 +1,9 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
+import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
 import type { MemoryEntry, MemoryEntryId, MemorySuggestion } from '$lib/models/memory';
 import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { DiagramId, MermaidDiagram } from '$lib/models/diagrams';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -23,6 +24,16 @@ export const testAnchorId = (value = 1): SourceAnchorId => id(7, value) as Sourc
 export const testMemoryEntryId = (value = 1): MemoryEntryId => id(8, value) as MemoryEntryId;
 export const testNoteRevisionId = (value = 1): NoteRevisionId => id(9, value) as NoteRevisionId;
 export const testDiagramId = (value = 1): DiagramId => id(10, value) as DiagramId;
+export const testConversationId = (value = 1): ConversationId => id(11, value) as ConversationId;
+
+export const runAgentInputBuilder = (
+	overrides: Omit<Partial<RunAgentInput>, 'conversationId'> & {
+		readonly conversationId?: ConversationId;
+	} = {}
+): RunAgentInput => {
+	const { conversationId = testConversationId(), ...rest } = overrides;
+	return { conversationId, prompt: 'Help', ...rest };
+};
 
 export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	id: testProjectId(),
@@ -148,7 +159,7 @@ export const appContextBuilder = (
  * A diagram created from a note. Override `sourceNoteId` with `undefined` for the
  * studio case, where the diagram belongs to its project and to no note.
  */
-export const diagramBuilder = (overrides: Partial<Diagram> = {}): Diagram => ({
+export const diagramBuilder = (overrides: Partial<MermaidDiagram> = {}): MermaidDiagram => ({
 	id: testDiagramId(),
 	userId: testActor().userId,
 	projectId: testProjectId(),

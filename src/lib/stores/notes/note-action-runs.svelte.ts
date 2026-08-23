@@ -1,5 +1,7 @@
 import type { AgentRunEventRecord, AgentRunId, NoteActionKind } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
+import { z } from 'zod';
+import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
 
 const KEY = 'followthrough.notes.active-actions';
 
@@ -14,6 +16,26 @@ interface StoredRun {
 	readonly cursor: string;
 	readonly context: NoteActionContext;
 }
+
+const storedRunSchema = z.object({
+	runId: z.string().min(1),
+	action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+	noteId: z.string().min(1),
+	cursor: z.string(),
+	context: z.record(z.string(), z.unknown())
+});
+
+const parseStoredRuns = (value: string): readonly StoredRun[] =>
+	storedRunSchema
+		.array()
+		.parse(JSON.parse(value))
+		.map((run) => ({
+			runId: run.runId as AgentRunId,
+			action: run.action,
+			noteId: run.noteId as NoteId,
+			cursor: run.cursor,
+			context: run.context
+		}));
 
 export interface NoteActionRun extends StoredRun {
 	readonly cancelling: boolean;
@@ -68,8 +90,7 @@ class BrowserTransport implements NoteActionRunTransport {
 	}
 
 	async cancel(runId: AgentRunId): Promise<unknown> {
-		const { cancelAgentRun } = await import('$lib/remote/agent/chat.remote');
-		return cancelAgentRun({ runId } as never);
+		return cancelAgentRun({ runId });
 	}
 }
 
@@ -81,12 +102,8 @@ interface RunStorage {
 class SessionRunStorage implements RunStorage {
 	load(): readonly StoredRun[] {
 		if (typeof sessionStorage === 'undefined') return [];
-		try {
-			const parsed = JSON.parse(sessionStorage.getItem(KEY) ?? '[]') as unknown;
-			return Array.isArray(parsed) ? (parsed as StoredRun[]) : [];
-		} catch {
-			return [];
-		}
+		const stored = sessionStorage.getItem(KEY);
+		return stored === null ? [] : parseStoredRuns(stored);
 	}
 
 	save(runs: readonly StoredRun[]): void {
@@ -184,9 +201,11 @@ export class NoteActionRunsStore {
 		);
 		try {
 			await this.transport.cancel(runId);
-		} catch {
-			// The run may have settled between the click and the request; the stream
-			// carries the truth either way, so there is nothing to report here.
+		} catch (error) {
+			this.entries = this.entries.map((entry) =>
+				entry.runId === runId ? { ...entry, cancelling: false } : entry
+			);
+			throw error;
 		}
 	}
 

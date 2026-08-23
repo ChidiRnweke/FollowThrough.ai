@@ -1,17 +1,33 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
-	import type { Diagram, DiagramId } from '$lib/models/diagrams';
+	import {
+		diagramEtag,
+		type Diagram,
+		type DiagramEtag,
+		type DiagramId,
+		type DiagramRevisionId
+	} from '$lib/models/diagrams';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtClose as X } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { userFacingMessage } from '$lib/errors';
-	import { getProjectDiagram, saveProjectDrawio } from '$lib/remote/diagrams/diagrams.remote';
+	import {
+		getProjectDiagram,
+		renameProjectDiagram,
+		saveProjectDiagramDraft,
+		publishProjectDiagram,
+		listDiagramRevisions,
+		getDiagramRevision,
+		restoreDiagramRevision
+	} from '$lib/remote/diagrams/diagrams.remote';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
 	import DrawioEmbed, { type DrawioControl, type DrawioStatus } from '../drawio-embed.svelte';
 	import DiagramPreview from '../diagram-preview.svelte';
 	import DiagramStatus from './diagram-status.svelte';
+	import DiagramTitle from './diagram-title.svelte';
+	import DiagramVersionHistory from './diagram-version-history.svelte';
 
 	let {
 		diagramId,
@@ -31,7 +47,14 @@
 
 	const diagram = $derived(getProjectDiagram(diagramId));
 	const current = $derived(diagram.current ?? initial);
-	const title = $derived(current?.title ?? 'Untitled diagram');
+	let titleOverride = $state<
+		{ readonly diagramId: DiagramId; readonly title: string } | undefined
+	>();
+	const title = $derived(
+		titleOverride?.diagramId === diagramId
+			? titleOverride.title
+			: (current?.title ?? 'Untitled diagram')
+	);
 
 	// The pane is the only thing that loads a diagram, so it is what tells the tab
 	// strip and the workbench what this tab holds. This writes to state deliberately
@@ -45,41 +68,119 @@
 	let control = $state<DrawioControl | undefined>(undefined);
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
 	const busy = $derived(editor.phase === 'exporting' || editor.phase === 'saving');
+	let renaming = $state(false);
+	let etag = $state<DiagramEtag | undefined>();
+	let queuedSource = $state<string | undefined>();
+	let autosaving = $state(false);
+	let historyOpen = $state(false);
+	let currentPreview = $state<string | undefined>();
+	let selectedRevisionId = $state<DiagramRevisionId | undefined>();
+	let mutationTail: Promise<void> = Promise.resolve();
+	const history = $derived(listDiagramRevisions(diagramId));
+	const selectedRevision = $derived(
+		selectedRevisionId
+			? getDiagramRevision({ diagramId, revisionId: selectedRevisionId })
+			: undefined
+	);
+	const hasUnpublishedChanges = $derived(
+		current?.kind === 'drawio' && current.currentRevision > current.publishedRevision
+	);
 
-	/**
-	 * Backfill the preview of a diagram that was saved without one.
-	 *
-	 * The agent used to be able to create a draw.io diagram through a route that
-	 * never opened an editor, and such a row reads as "No preview yet" everywhere
-	 * it is listed. That route is closed now, but the rows it made are still here,
-	 * and this is the only place that can repair them: the export is the preview.
-	 */
-	async function capturePreview(output: DrawioExport): Promise<void> {
+	$effect(() => {
+		if (current?.kind === 'drawio' && !autosaving && !renaming) etag = diagramEtag(current);
+	});
+
+	function mutate<T>(operation: (baseEtag: DiagramEtag) => Promise<T>): Promise<T> {
+		const result = mutationTail.then(() => {
+			if (!etag) throw new Error('The diagram revision is not ready.');
+			return operation(etag);
+		});
+		// audit-allow: silent-catch — the returned operation promise propagates this failure; only the private serialization tail recovers
+		mutationTail = result.then(
+			() => undefined,
+			() => undefined
+		);
+		return result;
+	}
+
+	async function rename(title: string): Promise<void> {
+		if (!current || current.kind !== 'drawio' || !etag) return;
+		titleOverride = { diagramId, title };
+		renaming = true;
 		try {
-			await saveProjectDrawio({
-				diagramId,
-				source: output.xml,
-				renderedSvg: output.svg
-			}).updates(getProjectDiagram(diagramId));
-		} catch {
-			// Nothing was asked for, so nothing is reported: the diagram is on screen
-			// either way, and the next open tries again.
+			const renamed = await mutate((baseEtag) =>
+				renameProjectDiagram({ diagramId, title, baseEtag }).updates(getProjectDiagram(diagramId))
+			);
+			etag = diagramEtag(renamed);
+			store.describe({ title: renamed.title, projectId: renamed.projectId, kind: renamed.kind });
+			toast.success('Diagram title saved');
+		} catch (error) {
+			titleOverride = undefined;
+			toast.error(userFacingMessage(error, 'The diagram title could not be saved.'));
+		} finally {
+			renaming = false;
 		}
 	}
 
-	async function save(output: DrawioExport): Promise<void> {
+	async function publish(output: DrawioExport): Promise<void> {
+		if (!etag) return;
 		try {
-			await saveProjectDrawio({
-				diagramId,
-				source: output.xml,
-				renderedSvg: output.svg
-			}).updates(getProjectDiagram(diagramId));
-			toast.success('Diagram saved');
+			const result = await mutate((baseEtag) =>
+				publishProjectDiagram({
+					diagramId,
+					source: output.xml,
+					renderedSvg: output.svg,
+					baseEtag
+				}).updates(getProjectDiagram(diagramId))
+			);
+			etag = result.etag;
+			await history.refresh();
+			toast.success('Diagram published');
 		} catch (error) {
-			const message = userFacingMessage(error, 'The diagram could not be saved.');
+			const message = userFacingMessage(error, 'The diagram could not be published.');
 			toast.error(message);
 			throw new Error(message, { cause: error });
 		}
+	}
+
+	async function autosave(source: string): Promise<void> {
+		queuedSource = source;
+		if (autosaving) return;
+		autosaving = true;
+		try {
+			while (queuedSource) {
+				const next = queuedSource;
+				queuedSource = undefined;
+				const result = await mutate((baseEtag) =>
+					saveProjectDiagramDraft({ diagramId, source: next, baseEtag }).updates(
+						getProjectDiagram(diagramId)
+					)
+				);
+				etag = result.etag;
+			}
+		} catch (error) {
+			toast.error(userFacingMessage(error, 'The diagram draft could not be saved.'));
+			throw error;
+		} finally {
+			autosaving = false;
+		}
+	}
+
+	async function restore(revisionId: DiagramRevisionId): Promise<void> {
+		if (!etag) return;
+		const result = await mutate((baseEtag) =>
+			restoreDiagramRevision({ diagramId, revisionId, baseEtag }).updates(
+				getProjectDiagram(diagramId)
+			)
+		);
+		etag = result.etag;
+		historyOpen = false;
+	}
+
+	function openHistory(): void {
+		if (editor.modified) control?.review();
+		else currentPreview = current?.renderedSvg;
+		historyOpen = true;
 	}
 </script>
 
@@ -89,10 +190,18 @@
 		of diagram this is, so nothing above it needs to caption it.
 	-->
 	<header class="flex min-h-10 shrink-0 items-center gap-2 px-4 pb-3 @[40rem]:px-8">
-		<h2 class="min-w-0 flex-1 truncate text-sm font-medium">{title}</h2>
+		<DiagramTitle {title} busy={renaming} oncommit={rename} />
 		<DiagramStatus status={editor} onretry={() => control?.retry()} />
 		{#if current?.kind === 'drawio'}
-			<Button size="sm" disabled={busy} onclick={() => control?.commit()}>Save diagram</Button>
+			<Button variant="ghost" size="sm" onclick={openHistory}>History</Button>
+			<Button
+				size="sm"
+				disabled={busy ||
+					autosaving ||
+					queuedSource !== undefined ||
+					(!hasUnpublishedChanges && !editor.modified)}
+				onclick={() => control?.commit()}>Publish</Button
+			>
 		{/if}
 		{#if onCloseSplit}
 			<Tip text="Close split view">
@@ -124,8 +233,9 @@
 			<DrawioEmbed
 				xml={current.source}
 				{title}
-				oncommit={save}
-				oncapturepreview={current.renderedSvg ? undefined : capturePreview}
+				oncommit={publish}
+				onautosave={autosave}
+				onreview={(output) => (currentPreview = output.svg)}
 				oncontrol={(value) => (control = value)}
 				onstatus={(value) => (editor = value)}
 			/>
@@ -147,3 +257,15 @@
 		{/if}
 	</div>
 </div>
+
+{#if current?.kind === 'drawio'}
+	<DiagramVersionHistory
+		bind:open={historyOpen}
+		diagram={current}
+		currentPreview={currentPreview ?? current.renderedSvg}
+		revisions={history.current?.revisions ?? []}
+		selected={selectedRevision?.current?.revision}
+		bind:selectedId={selectedRevisionId}
+		onrestore={restore}
+	/>
+{/if}

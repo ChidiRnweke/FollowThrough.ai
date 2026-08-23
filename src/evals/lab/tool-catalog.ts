@@ -1,37 +1,22 @@
-import { randomUUID } from 'node:crypto';
 import type { ActorContext } from '$lib/models/identity';
-import type { ProvenanceId } from '$lib/models/provenance';
-import type { RunAgentInput } from '$lib/models/agent';
 import {
 	EmbeddedToolRetriever,
 	type ToolDescriptor
 } from '$lib/server/services/agent/tools/tool-retriever';
-import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
+import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
 import type { Lab } from './application';
 
 /**
- * Builds the production tool registry outside an agent run.
+ * Reads the production discovery catalog without inventing an execution
+ * context. Ranking metadata has no actor, provenance, model, or controllers.
  *
  * This is what makes broad tool coverage affordable: `search_tools` ranking is a
  * property of the retriever plus the catalog's descriptions, not of the model,
  * so it can be asserted directly. One agent turn costs ~30s; ranking every tool
  * in the catalog costs a cached embedding lookup each.
  */
-export function toolRegistry(lab: Lab, actor: ActorContext): AgentTools {
-	const input: RunAgentInput = { prompt: '' };
-	return new AgentTools(
-		lab.controllers,
-		actor,
-		'auto_accept',
-		{ provenanceId: randomUUID() as ProvenanceId, input, model: lab.model },
-		undefined,
-		new EmbeddedToolRetriever(lab.embeddingClient)
-	);
-}
-
 /** The long-tail catalog: everything reachable only via `search_tools`. */
-export const toolCatalog = (lab: Lab, actor: ActorContext): ToolDescriptor[] =>
-	toolRegistry(lab, actor).catalog();
+export const toolCatalog = (): ToolDescriptor[] => [...TOOL_CATALOG];
 
 /**
  * Ranks the catalog for a goal, returning tool names best-first — the same call
@@ -39,10 +24,10 @@ export const toolCatalog = (lab: Lab, actor: ActorContext): ToolDescriptor[] =>
  */
 export async function rankToolsForGoal(
 	lab: Lab,
-	actor: ActorContext,
+	_actor: ActorContext,
 	goal: string,
 	limit = 5
 ): Promise<readonly string[]> {
 	const retriever = new EmbeddedToolRetriever(lab.embeddingClient);
-	return retriever.retrieve(toolCatalog(lab, actor), goal, limit);
+	return retriever.retrieve(toolCatalog(), goal, limit);
 }

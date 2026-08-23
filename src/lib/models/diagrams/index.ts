@@ -7,6 +7,8 @@ type ProjectId = Brand<string, 'ProjectId'>;
 type NoteId = Brand<string, 'NoteId'>;
 
 export type DiagramId = Brand<string, 'DiagramId'>;
+export type DiagramRevisionId = Brand<string, 'DiagramRevisionId'>;
+export type DiagramEtag = Brand<string, 'DiagramEtag'>;
 
 type ConversationId = Brand<string, 'ConversationId'>;
 
@@ -82,10 +84,35 @@ export interface MermaidDiagram extends DiagramBase {
 export interface DrawioDiagram extends DiagramBase {
 	readonly kind: 'drawio';
 	readonly source: string;
+	readonly currentRevision: number;
+	readonly publishedRevision: number;
+	readonly publishedAt?: DateTime;
 	readonly promotedFromId?: DiagramId;
 }
 
 export type Diagram = MermaidDiagram | DrawioDiagram;
+
+export interface DiagramRevision {
+	readonly id: DiagramRevisionId;
+	readonly diagramId: DiagramId;
+	readonly revision: number;
+	readonly title?: string;
+	readonly source: string;
+	readonly renderedSvg?: string;
+	readonly searchableText: string;
+	readonly createdAt: DateTime;
+}
+
+export interface DiagramRevisionSummary {
+	readonly id: DiagramRevisionId;
+	readonly revision: number;
+	readonly title?: string;
+	readonly createdAt: DateTime;
+	readonly isPublished: boolean;
+}
+
+export const diagramEtag = (diagram: Pick<DrawioDiagram, 'id' | 'currentRevision'>): DiagramEtag =>
+	`diagram:${diagram.id}:r${diagram.currentRevision}` as DiagramEtag;
 
 type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
@@ -265,6 +292,49 @@ export interface KeepStudioDiagramOutput {
 export interface RenameProjectDiagramInput {
 	readonly diagramId: DiagramId;
 	readonly title: string;
+	readonly baseEtag: DiagramEtag;
+}
+
+export interface FindConversationDiagramInput {
+	readonly conversationId: ConversationId;
+}
+export interface FindConversationDiagramOutput {
+	readonly diagram?: Diagram;
+}
+export interface SaveProjectDiagramDraftInput {
+	readonly diagramId: DiagramId;
+	readonly source: string;
+	readonly baseEtag: DiagramEtag;
+}
+export interface PublishProjectDiagramInput {
+	readonly diagramId: DiagramId;
+	readonly source: string;
+	readonly renderedSvg: string;
+	readonly baseEtag: DiagramEtag;
+}
+export interface PublishProjectDiagramOutput {
+	readonly diagram: DrawioDiagram;
+	readonly etag: DiagramEtag;
+}
+export interface ListDiagramRevisionsInput {
+	readonly diagramId: DiagramId;
+}
+export interface ListDiagramRevisionsOutput {
+	readonly revisions: readonly DiagramRevisionSummary[];
+}
+export interface GetDiagramRevisionInput {
+	readonly diagramId: DiagramId;
+	readonly revisionId: DiagramRevisionId;
+}
+export interface GetDiagramRevisionOutput {
+	readonly revision: DiagramRevision;
+}
+export interface RestoreDiagramRevisionInput extends GetDiagramRevisionInput {
+	readonly baseEtag: DiagramEtag;
+}
+export interface RestoreDiagramRevisionOutput {
+	readonly diagram: DrawioDiagram;
+	readonly etag: DiagramEtag;
 }
 
 export interface DeleteProjectDiagramInput {
@@ -287,12 +357,6 @@ export interface PresentDiagramInput {
 	 */
 	readonly source: string;
 	readonly title?: string;
-	/**
-	 * The saved diagram this version replaces, when the agent is revising rather
-	 * than proposing something new. The canvas offers to replace that diagram
-	 * instead of keeping a second one beside it.
-	 */
-	readonly diagramId?: DiagramId;
 }
 
 /**
@@ -303,7 +367,15 @@ export interface PresentDiagramInput {
 export interface PresentDiagramOutput {
 	readonly source: string;
 	readonly title?: string;
-	readonly diagramId?: DiagramId;
+}
+
+/** A canvas version explicitly tied to an existing, actor-owned saved diagram. */
+export interface PresentDiagramRevisionInput extends PresentDiagramInput {
+	readonly diagramId: DiagramId;
+}
+
+export interface PresentDiagramRevisionOutput extends PresentDiagramOutput {
+	readonly diagramId: DiagramId;
 }
 
 export interface ReadCanvasDiagramInput {
@@ -315,6 +387,8 @@ export interface ReadCanvasDiagramOutput {
 	readonly title?: string;
 	/** Uncompressed draw.io XML; the canvas holds nothing else. */
 	readonly source?: string;
+	/** The saved diagram this canvas draft revises, when it names a real row. */
+	readonly diagramId?: DiagramId;
 }
 
 export interface SearchDiagramIconsInput {

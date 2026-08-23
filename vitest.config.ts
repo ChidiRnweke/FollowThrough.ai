@@ -60,7 +60,7 @@ export default defineConfig({
 					...common,
 					name: 'node-fast',
 					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
+					include: ['src/**/*.{test,spec}.{js,ts}', 'scripts/**/*.spec.ts'],
 					exclude: [
 						'src/**/*.svelte.{test,spec}.{js,ts}',
 						'src/**/*.isolated.spec.{js,ts}',

@@ -1,23 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describeAgentTools } from './agent-tool-catalog-factory';
-import { AgentTools, LOCKED_TOOL_NAMES } from './agent-tool-factory';
-
-const registryNames = () =>
-	new AgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
-		provenanceId: testProvenanceId(),
-		input: { prompt: '' },
-		model: 'openai/gpt-5.6'
-	})
-		.definitions()
-		.map((definition) => definition.name);
+import { LOCKED_TOOL_NAMES } from './agent-tool-factory';
 
 describe('Agent tool catalog', () => {
-	it('describes exactly the tools the registry defines', () => {
-		expect(describeAgentTools().map((entry) => entry.name)).toEqual(registryNames());
-	});
-
 	it('marks the locked tools as locked', () => {
 		expect(
 			describeAgentTools()

@@ -11,6 +11,7 @@ import type {
 	InlineSuggestionRequest,
 	Message,
 	RunAgentInput,
+	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
@@ -35,7 +36,7 @@ export interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
+		run: { provenanceId: ProvenanceId }
 	): Promise<Readonly<Record<string, unknown>>>;
 }
 export interface AgentRunner {
@@ -107,7 +108,7 @@ export interface AgentToolExecutor {
 	): Promise<unknown>;
 }
 export interface ConversationRecorder {
-	getOrCreate(actor: ActorContext, input: RunAgentInput): Promise<Conversation>;
+	getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation>;
 }
 
 export interface ConversationJournal extends ConversationRecorder {

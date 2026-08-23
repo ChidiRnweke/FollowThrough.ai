@@ -63,6 +63,7 @@ export const markdownSlice = (
 			schema,
 			noteContentFromMarkdown(withoutBoundaryBlankLines(text)).document
 		);
+		// audit-allow: silent-catch — undefined is the parser's explicit “not valid Markdown document” result
 	} catch {
 		return undefined;
 	}

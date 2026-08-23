@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -481,7 +483,7 @@ export const allImages = (request: {
 	...(request.contextImages ?? [])
 ];
 
-export interface RunAgentInput {
+export interface StagedAgentRunInput {
 	readonly requestId?: string;
 	readonly conversationId?: ConversationId;
 	readonly projectId?: ProjectId;
@@ -530,6 +532,11 @@ export interface RunAgentInput {
 		readonly noteId?: NoteId;
 	};
 }
+
+/** A frozen run after its conversation has been resolved. */
+export type RunAgentInput = Omit<StagedAgentRunInput, 'conversationId'> & {
+	readonly conversationId: ConversationId;
+};
 
 export interface ConversationImageInput {
 	readonly id: string;
@@ -808,9 +815,185 @@ interface AppContextSnapshotV1 {
 		readonly visiblePanes: readonly PaneContext[];
 		readonly focusedNoteId?: NoteId;
 		readonly otherVisibleNoteId?: NoteId;
+		readonly openChatTabs?: readonly {
+			readonly sessionKey: string;
+			readonly conversationId?: string;
+			readonly title: string;
+		}[];
 	};
 	readonly selection?: TextSelection;
 	readonly recentInteractions: readonly SemanticInteraction[];
 }
+
+const brandedUuid = <T extends string>() => z.uuid().transform((value) => value as T);
+const conversationIdSchema = brandedUuid<ConversationId>();
+const projectIdSchema = brandedUuid<ProjectId>();
+const noteIdSchema = brandedUuid<NoteId>();
+const textSelectionSchema = z
+	.object({
+		noteId: noteIdSchema,
+		revision: z.number().int().nonnegative(),
+		from: z.number().int().nonnegative(),
+		to: z.number().int().nonnegative(),
+		text: z.string()
+	})
+	.strict();
+const conversationImageSchema = z
+	.object({
+		id: z.string(),
+		mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+		dataUrl: z.string(),
+		name: z.string()
+	})
+	.strict();
+const appContextSnapshotSchema = z
+	.object({
+		version: z.literal(1),
+		capturedAt: z.iso.datetime(),
+		client: z
+			.object({
+				locale: z.string(),
+				timeZone: z.string(),
+				localDate: z.string(),
+				layout: z.enum(['compact', 'wide'])
+			})
+			.strict(),
+		surface: z
+			.object({
+				kind: z.enum([
+					'today',
+					'todos',
+					'project',
+					'project_todos',
+					'project_memory',
+					'project_attachments',
+					'artifacts',
+					'note_workbench',
+					'diagram_editor',
+					'diagram_studio',
+					'diagrams',
+					'chats',
+					'chat',
+					'skills',
+					'skill',
+					'profile',
+					'settings',
+					'unknown'
+				]),
+				presentation: z.enum(['right_panel', 'full_page']),
+				filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
+			})
+			.strict(),
+		currentProject: z.object({ id: projectIdSchema, name: z.string() }).strict().optional(),
+		activeResource: z
+			.object({
+				kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
+				id: z.string(),
+				title: z.string(),
+				projectId: projectIdSchema.optional()
+			})
+			.strict()
+			.optional(),
+		workbench: z
+			.object({
+				openTabs: z.array(
+					z.object({ id: noteIdSchema, title: z.string(), projectId: projectIdSchema }).strict()
+				),
+				visiblePanes: z.array(
+					z
+						.object({
+							id: noteIdSchema,
+							title: z.string(),
+							projectId: projectIdSchema,
+							revision: z.number().int().nonnegative(),
+							syncStatus: z.string(),
+							dirty: z.boolean(),
+							dirtyExcerpt: z.string().optional()
+						})
+						.strict()
+				),
+				focusedNoteId: noteIdSchema.optional(),
+				otherVisibleNoteId: noteIdSchema.optional(),
+				openChatTabs: z
+					.array(
+						z
+							.object({
+								sessionKey: z.string(),
+				conversationId: z.string().min(1).optional(),
+								title: z.string()
+							})
+							.strict()
+					)
+					.optional()
+			})
+			.strict()
+			.optional(),
+		selection: textSelectionSchema.optional(),
+		recentInteractions: z.array(
+			z
+				.object({
+					kind: z.enum(['focus', 'select', 'open', 'edit']),
+					resourceKind: z.enum(['note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
+					resourceId: z.string(),
+					occurredAt: z.iso.datetime()
+				})
+				.strict()
+		)
+	})
+	.strict();
+
+export const stagedAgentRunInputSchema = z
+	.object({
+		requestId: z.string().optional(),
+		conversationId: conversationIdSchema.optional(),
+		projectId: projectIdSchema.optional(),
+		noteId: noteIdSchema.optional(),
+		selection: textSelectionSchema.optional(),
+		selections: z.array(textSelectionSchema).optional(),
+		contextNoteIds: z.array(noteIdSchema).optional(),
+		requestedSkillNames: z.array(z.string()).optional(),
+		requestedSkillNoteIds: z.array(noteIdSchema).optional(),
+		modelOverride: z.string().nullable().optional(),
+		visionModelOverride: z.string().nullable().optional(),
+		executionModeOverride: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
+		maxTurns: z.number().int().positive().optional(),
+		webSearch: z
+			.object({
+				engine: z.enum(webSearchEngines).optional(),
+				maxResults: z.number().int().positive().optional(),
+				maxTotalResults: z.number().int().positive().optional()
+			})
+			.strict()
+			.optional(),
+		prompt: z.string(),
+		images: z.array(conversationImageSchema).optional(),
+		contextImages: z.array(conversationImageSchema).optional(),
+		appContext: appContextSnapshotSchema.optional(),
+		requestedScope: z
+			.object({ projectId: projectIdSchema.optional(), noteId: noteIdSchema.optional() })
+			.strict()
+			.optional()
+	})
+	.strict() satisfies z.ZodType<StagedAgentRunInput>;
+
+export const runAgentInputSchema = stagedAgentRunInputSchema.safeExtend({
+	conversationId: conversationIdSchema
+}) satisfies z.ZodType<RunAgentInput>;
+
+export const resolveAgentRunInput = (
+	input: StagedAgentRunInput,
+	conversationId: ConversationId
+): RunAgentInput => runAgentInputSchema.parse({ ...input, conversationId });
+
+export const parseRunAgentInput = (
+	input: unknown,
+	expectedConversationId: ConversationId
+): RunAgentInput =>
+	runAgentInputSchema
+		.refine((candidate) => candidate.conversationId === expectedConversationId, {
+			path: ['conversationId'],
+			message: 'Run input conversation does not match its persisted run'
+		})
+		.parse(input);
 
 export * from './agent-runs';

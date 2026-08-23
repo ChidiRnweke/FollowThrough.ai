@@ -173,13 +173,7 @@ export const splitFrontmatter = (source: string): Frontmatter => {
 	const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
 	if (!match) return { keys: [], body: source };
 	const body = source.slice(match[0].length);
-	let parsed: unknown;
-	try {
-		parsed = parseYaml(match[1]);
-	} catch {
-		// Malformed YAML is still frontmatter: strip it rather than rendering it as prose.
-		return { keys: [], body };
-	}
+	const parsed: unknown = parseYaml(match[1]);
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
 		return { keys: [], body };
 	return { keys: Object.keys(parsed as Record<string, unknown>), body };

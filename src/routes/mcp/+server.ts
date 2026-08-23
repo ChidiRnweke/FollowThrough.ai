@@ -38,7 +38,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		producerKind: 'agent',
 		producerName: 'MCP client',
 		pipeline: 'agent',
-		model: 'mcp',
 		metadata: { scope: authenticated.scope }
 	});
 

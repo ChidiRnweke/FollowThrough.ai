@@ -79,7 +79,7 @@ export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS):
 		try {
 			rendered = JSON.stringify(value) ?? String(value);
 		} catch {
-			rendered = '[unserializable]';
+			return '[unserializable]';
 		}
 	}
 	rendered = rendered.replace(

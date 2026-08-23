@@ -39,6 +39,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				cleanup();
 				try {
 					controller.close();
+					// audit-allow: silent-catch — closing an already-disconnected SSE controller has no remaining observer
 				} catch {
 					// The runtime already closed the controller (e.g. client disconnect).
 				}
@@ -63,6 +64,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 										`id: ${record.cursor}\nevent: agent\ndata: ${JSON.stringify(record)}\n\n`
 									)
 								);
+								// audit-allow: silent-catch — enqueue failure means the SSE consumer disconnected; cleanup is the recovery
 							} catch {
 								cleanup();
 								return;
@@ -83,6 +85,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 						cleanup();
 						try {
 							controller.error(error);
+							// audit-allow: silent-catch — reporting to an already-closed SSE controller cannot be observed again
 						} catch {
 							// The runtime already closed the controller.
 						}
@@ -106,6 +109,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				if (closed) return;
 				try {
 					controller.enqueue(encoder.encode(': keepalive\n\n'));
+					// audit-allow: silent-catch — keepalive enqueue failure proves disconnection and cleanup removes all producers
 				} catch {
 					cleanup();
 				}

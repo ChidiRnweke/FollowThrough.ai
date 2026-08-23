@@ -269,13 +269,14 @@
 				}),
 				signal
 			});
-			if (!response.ok) return { text: '' };
+			if (!response.ok) throw new Error(`Writing suggestion failed with status ${response.status}`);
 			const result = (await response.json()) as
 				| { readonly outcome: 'suggested'; readonly text: string }
 				| { readonly outcome: 'no_suggestion' };
 			return result.outcome === 'suggested' ? { text: result.text } : { text: '' };
-		} catch {
-			return { text: '' };
+		} catch (error) {
+			if (signal.aborted) return { text: '' };
+			throw error;
 		}
 	}
 
@@ -996,21 +997,16 @@
 				// the primary decoration already covers it.
 				(other) => other.from !== range.from || other.to !== range.to
 			);
-		try {
-			editor.view.dispatch(
-				editor.state.tr.setMeta(searchRevealKey, { primary: range, others: otherRanges })
-			);
-			editor.chain().setTextSelection(range).run();
-			// ProseMirror's scrollIntoView is a no-op against the pane's ScrollArea
-			// viewport; scroll the match's DOM into view natively instead.
-			const at = editor.view.domAtPos(range.from);
-			const element = at.node instanceof HTMLElement ? at.node : at.node.parentElement;
-			element?.scrollIntoView({ block: 'center' });
-		} catch {
-			// A range the live document cannot resolve is a miss, not an error: the tab
-			// still opened at the note, which is most of the promise.
-			return;
-		}
+		if (range.from < 0 || range.to > editor.state.doc.content.size) return;
+		editor.view.dispatch(
+			editor.state.tr.setMeta(searchRevealKey, { primary: range, others: otherRanges })
+		);
+		editor.chain().setTextSelection(range).run();
+		// ProseMirror's scrollIntoView is a no-op against the pane's ScrollArea
+		// viewport; scroll the match's DOM into view natively instead.
+		const at = editor.view.domAtPos(range.from);
+		const element = at.node instanceof HTMLElement ? at.node : at.node.parentElement;
+		element?.scrollIntoView({ block: 'center' });
 		// The wash stays while any search surface is open — the right panel's search mode
 		// or the workbench search tab, like Word's Find pane keeping its highlights until
 		// the pane closes. The release effect below clears it once none remains.

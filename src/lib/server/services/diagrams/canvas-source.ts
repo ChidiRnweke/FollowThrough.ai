@@ -27,12 +27,22 @@ export interface CanvasSourceItems {
 export type PresentedCanvasDiagram = PresentedDiagram;
 
 const PRESENT_DIAGRAM = 'present_diagram';
+const PRESENT_DIAGRAM_REVISION = 'present_diagram_revision';
 
 /** The tool's own result, which is the validated source rather than what it proposed. */
 const fromResult = (item: Record<string, unknown>): PresentedCanvasDiagram | undefined => {
-	if (item.name !== PRESENT_DIAGRAM || item.type !== 'function_call_result') return undefined;
+	if (
+		(item.name !== PRESENT_DIAGRAM && item.name !== PRESENT_DIAGRAM_REVISION) ||
+		item.type !== 'function_call_result'
+	)
+		return undefined;
 	const output = item.output as { text?: unknown } | undefined;
-	return typeof output?.text === 'string' ? presentedDiagramFromText(output.text) : undefined;
+	return typeof output?.text === 'string'
+		? presentedDiagramFromText(
+				output.text,
+				item.name === PRESENT_DIAGRAM_REVISION ? 'revision' : 'new'
+			)
+		: undefined;
 };
 
 export class PresentedCanvasSource {

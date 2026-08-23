@@ -141,7 +141,7 @@ const candidateBody = (
 		: { problems: preview.problems };
 };
 
-const EMPTY_DOCUMENT = { type: 'doc', content: [] } as unknown as Note['document'];
+const EMPTY_DOCUMENT: Note['document'] = { type: 'doc', content: [] };
 
 /**
  * A whole-body save with no baseline to compare against. Falling through to the argument

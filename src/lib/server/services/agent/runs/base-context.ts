@@ -6,10 +6,7 @@ export interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		run: {
-			provenanceId: ProvenanceId;
-			conversationId?: ConversationId;
-		}
+		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
 	): Promise<Readonly<Record<string, unknown>>>;
 }
 interface NoteReader {
@@ -21,10 +18,7 @@ export class BaseAgentContext implements AgentContextBuilder {
 	async build(
 		actor: ActorContext,
 		input: RunAgentInput,
-		_run: {
-			provenanceId: ProvenanceId;
-			conversationId?: ConversationId;
-		}
+		_run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
 	): Promise<Readonly<Record<string, unknown>>> {
 		void _run;
 		const note =

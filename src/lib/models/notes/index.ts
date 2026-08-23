@@ -232,6 +232,9 @@ interface MermaidDiagram extends DiagramBase {
 interface DrawioDiagram extends DiagramBase {
 	readonly kind: 'drawio';
 	readonly source: string;
+	readonly currentRevision: number;
+	readonly publishedRevision: number;
+	readonly publishedAt?: DateTime;
 	readonly promotedFromId?: DiagramId;
 }
 

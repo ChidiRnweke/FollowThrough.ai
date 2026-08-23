@@ -28,8 +28,8 @@
 	async function load(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
-		} catch {
-			settings = { ...defaultExportSettings };
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Export settings could not be loaded');
 		}
 	}
 

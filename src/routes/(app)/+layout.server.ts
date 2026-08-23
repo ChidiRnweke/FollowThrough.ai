@@ -17,10 +17,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 		factory.agentSettings().getPreferences(actor),
 		factory.agent().listSessions(actor, { limit: 5 })
 	]);
-	let agentModels = await factory
-		.agentSettings()
-		.listModels(actor)
-		.catch(() => []);
+	let agentModels = await factory.agentSettings().listModels(actor);
 	if (
 		agentPreferences.defaultModel &&
 		!agentModels.some((model) => model.id === agentPreferences.defaultModel)

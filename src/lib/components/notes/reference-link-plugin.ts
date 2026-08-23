@@ -168,12 +168,8 @@ export const resolveAuthoredLinkGroup = (
 ): ResolvedReferenceLinkGroup | undefined => {
 	const href = link.getAttribute('href')?.trim();
 	if (!href) return undefined;
-	let url: URL;
-	try {
-		url = new URL(href, window.location.href);
-	} catch {
-		return undefined;
-	}
+	if (!URL.canParse(href, window.location.href)) return undefined;
+	const url = new URL(href, window.location.href);
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
 	return {
 		key: `authored:${href}`,

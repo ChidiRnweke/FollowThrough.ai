@@ -59,33 +59,29 @@ const DIAGRAM_SOURCE_PLACEHOLDER =
 	'[source omitted from history; call read_canvas_diagram to read the current diagram]';
 
 const withElidedSource = (json: string): string => {
-	try {
-		const parsed = JSON.parse(json) as Record<string, unknown>;
-		if (typeof parsed.source !== 'string') return json;
-		return JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
-	} catch {
-		return json;
-	}
+	const parsed = JSON.parse(json) as Record<string, unknown>;
+	if (typeof parsed.source !== 'string') return json;
+	return JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
 };
 
 /** Both halves of a `present_diagram` exchange carry the whole document. */
 const withoutDiagramSource = (item: AgentInputItem): AgentInputItem => {
-	const record = item as unknown as Record<string, unknown>;
-	if (record.name !== 'present_diagram') return item;
-	if (record.type === 'function_call' && typeof record.arguments === 'string')
-		return {
-			...record,
-			arguments: withElidedSource(record.arguments)
-		} as unknown as AgentInputItem;
-	if (record.type === 'function_call_result') {
-		const output = record.output as { text?: unknown } | undefined;
-		if (typeof output?.text !== 'string') return item;
-		return {
-			...record,
-			output: { ...output, text: withElidedSource(output.text) }
-		} as unknown as AgentInputItem;
+	switch (item.type) {
+		case 'function_call':
+			if (item.name !== 'present_diagram' && item.name !== 'present_diagram_revision') return item;
+			return { ...item, arguments: withElidedSource(item.arguments) };
+		case 'function_call_result':
+			if (item.name !== 'present_diagram' && item.name !== 'present_diagram_revision') return item;
+			if (typeof item.output === 'string') {
+				return { ...item, output: withElidedSource(item.output) };
+			}
+			if (!Array.isArray(item.output) && item.output.type === 'text') {
+				return { ...item, output: { ...item.output, text: withElidedSource(item.output.text) } };
+			}
+			return item;
+		default:
+			return item;
 	}
-	return item;
 };
 
 export class ConversationBuffer implements Session {

@@ -1,6 +1,6 @@
 import type { ApiToken, Session, User } from '$lib/models/identity';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
-import type { Diagram } from '$lib/models/diagrams';
+import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note, NoteRelationship, NoteRevision } from '$lib/models/notes';
@@ -160,11 +160,28 @@ export const toDiagram = (row: typeof schema.diagrams.$inferSelect): Diagram =>
 		conversationId: row.conversationId ?? undefined,
 		title: row.title ?? undefined,
 		renderedSvg: row.renderedSvg ?? undefined,
+		...(row.kind === 'drawio'
+			? {
+					currentRevision: row.currentRevision,
+					publishedRevision: row.publishedRevision,
+					publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined
+				}
+			: {}),
 		promotedFromId: row.promotedFromId ?? undefined,
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
 		provenanceId: row.provenanceId ?? undefined,
 		createdAt: instant(row.createdAt),
 		updatedAt: instant(row.updatedAt)
+	});
+
+export const toDiagramRevision = (
+	row: typeof schema.diagramRevisions.$inferSelect
+): DiagramRevision =>
+	domain<DiagramRevision>({
+		...row,
+		title: row.title ?? undefined,
+		renderedSvg: row.renderedSvg ?? undefined,
+		createdAt: instant(row.createdAt)
 	});
 
 export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Suggestion =>

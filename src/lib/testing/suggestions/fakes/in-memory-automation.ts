@@ -23,6 +23,7 @@ import type {
 } from '$lib/server/services/suggestions/contracts';
 import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { materializeSuggestion } from '$lib/models/suggestions';
 
 export class InMemorySuggestionReader implements SuggestionLister, SuggestionViewAssembler {
 	suggestions: Suggestion[] = [];
@@ -75,22 +76,11 @@ export class InMemorySuggestions
 
 	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
 		if (this.failCreation) throw new ExternalServiceError('Suggestion creation failed');
-		const suggestion = {
+		const suggestion = materializeSuggestion(proposal, {
 			id: testSuggestionId(this.suggestions.length + 1),
 			userId: actor.userId,
-			kind: proposal.kind,
-			status: 'proposed',
-			payload: proposal.payload,
-			provenanceId: proposal.provenanceId,
-			isAutoAccepted: false,
-			createdAt: testNow,
-			updatedAt: testNow,
-			...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
-			...(proposal.confidence !== undefined
-				? { confidence: proposal.confidence as Suggestion['confidence'] }
-				: {}),
-			...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
-		} as Suggestion;
+			now: testNow
+		});
 		this.suggestions.push(suggestion);
 		return suggestion;
 	}

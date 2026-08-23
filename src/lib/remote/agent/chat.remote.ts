@@ -3,23 +3,26 @@ import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { runIdInput, submitAgentRunSchema } from '$lib/server/factories/agent/agent-request-factory';
-import type { AgentRunId, ConversationId, SubmitAgentRunInput } from '$lib/models/agent';
+import type { AgentRunId, ConversationId } from '$lib/models/agent';
+
+const agentRunId = z.string().uuid().transform((value) => value as AgentRunId);
+const conversationId = z.string().uuid().transform((value) => value as ConversationId);
 
 export const submitAgentRun = command(submitAgentRunSchema, async (input) =>
 	AppFactory.controllers()
 		.agent()
-		.submit(requestActor(), input as SubmitAgentRunInput)
+		.submit(requestActor(), input)
 );
 
 export const getAgentRun = query(runIdInput, async ({ runId }) =>
 	AppFactory.controllers()
 		.agent()
-		.getRun(requestActor(), runId as AgentRunId)
+		.getRun(requestActor(), runId)
 );
 
 export const decideAgentRun = command(
 	z.object({
-		runId: z.string().uuid(),
+		runId: agentRunId,
 		callId: z.string().min(1),
 		decision: z.enum(['approve', 'reject']),
 		message: z.string().optional()
@@ -27,12 +30,12 @@ export const decideAgentRun = command(
 	async (input) =>
 		AppFactory.controllers()
 			.agent()
-			.decide(requestActor(), input as never)
+			.decide(requestActor(), input)
 );
 
 export const decideAgentRunBatch = command(
 	z.object({
-		runId: z.string().uuid(),
+		runId: agentRunId,
 		callIds: z.array(z.string().min(1)).min(1),
 		decision: z.enum(['approve', 'reject']),
 		message: z.string().optional()
@@ -40,41 +43,41 @@ export const decideAgentRunBatch = command(
 	async (input) =>
 		AppFactory.controllers()
 			.agent()
-			.decideMany(requestActor(), input as never)
+			.decideMany(requestActor(), input)
 );
 
 export const cancelAgentRun = command(runIdInput, async ({ runId }) =>
 	AppFactory.controllers()
 		.agent()
-		.cancel(requestActor(), runId as AgentRunId)
+		.cancel(requestActor(), runId)
 );
 
 export const retryAgentRun = command(
-	z.object({ runId: z.string().uuid(), requestId: z.string().uuid() }),
+	z.object({ runId: agentRunId, requestId: z.string().uuid() }),
 	async ({ runId, requestId }) =>
 		AppFactory.controllers()
 			.agent()
-			.retry(requestActor(), runId as AgentRunId, requestId)
+			.retry(requestActor(), runId, requestId)
 );
 
-export const getSession = query(z.string().uuid(), async (conversationId) => {
+export const getSession = query(conversationId, async (conversationId) => {
 	const factory = AppFactory.controllers();
-	return factory.agent().getSession(requestActor(), conversationId as ConversationId);
+	return factory.agent().getSession(requestActor(), conversationId);
 });
 
 export const renameSession = command(
-	z.object({ conversationId: z.string().uuid(), title: z.string().trim().min(1).max(80) }),
+	z.object({ conversationId, title: z.string().trim().min(1).max(80) }),
 	async ({ conversationId, title }) =>
 		AppFactory.controllers()
 			.agent()
-			.renameSession(requestActor(), conversationId as never, title)
+			.renameSession(requestActor(), conversationId, title)
 );
 
 export const deleteSession = command(
-	z.object({ conversationId: z.string().uuid() }),
+	z.object({ conversationId }),
 	async ({ conversationId }) => {
 		await AppFactory.controllers()
 			.agent()
-			.deleteSession(requestActor(), conversationId as never);
+			.deleteSession(requestActor(), conversationId);
 	}
 );

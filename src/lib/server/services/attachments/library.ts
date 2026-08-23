@@ -111,14 +111,7 @@ export class AttachmentLibrary {
 	 */
 	private async visionModel(actor: ActorContext): Promise<string> {
 		if (!this.preferences) return deploymentVisionModel();
-		try {
-			return resolveAttachmentVisionModel(
-				await this.preferences.get(actor),
-				deploymentVisionModel()
-			);
-		} catch {
-			return deploymentVisionModel();
-		}
+		return resolveAttachmentVisionModel(await this.preferences.get(actor), deploymentVisionModel());
 	}
 
 	async initiate(
@@ -213,7 +206,9 @@ export class AttachmentLibrary {
 	}
 
 	startProcessing(actor: ActorContext, attachment: AttachmentView): void {
-		void this.process(actor, attachment).catch(() => undefined);
+		void this.process(actor, attachment).catch((error) =>
+			console.error('Could not persist attachment processing failure', error)
+		);
 	}
 
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
@@ -249,7 +244,9 @@ export class AttachmentLibrary {
 			processingFailure: undefined,
 			processedAt: undefined
 		});
-		void this.process(actor, queued).catch(() => undefined);
+		void this.process(actor, queued).catch((error) =>
+			console.error('Could not persist attachment retry failure', error)
+		);
 		return queued;
 	}
 
@@ -379,13 +376,8 @@ export class AttachmentLibrary {
 		return { text: sections.filter(Boolean).join('\n\n'), parserKind: 'ocr' };
 	}
 
-	/** Non-fatal: an attachment is still worth storing without its description. */
 	private async describeImage(view: AttachmentView, visionModel: string): Promise<string> {
-		try {
-			const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
-			return `> **Image:** ${await this.imageDescriber.describe({ imageDataUrl: imageUrl, model: visionModel })}`;
-		} catch {
-			return '';
-		}
+		const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
+		return `> **Image:** ${await this.imageDescriber.describe({ imageDataUrl: imageUrl, model: visionModel })}`;
 	}
 }

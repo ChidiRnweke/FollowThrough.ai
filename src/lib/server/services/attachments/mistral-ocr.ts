@@ -188,7 +188,7 @@ export class MistralOcr implements ITextRecognition {
 						include_image_base64: true
 					})
 				});
-				const payload = (await response.json().catch(() => ({}))) as OcrResponse;
+				const payload = (await response.json()) as OcrResponse;
 				if (!response.ok)
 					throw new ExternalServiceError('Document OCR failed', {
 						cause: failureMessage(payload, response.status)

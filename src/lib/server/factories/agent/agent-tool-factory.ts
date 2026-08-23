@@ -20,11 +20,17 @@ import type { SuggestionsController } from '$lib/server/controllers/suggestions/
 import type { TodosController } from '$lib/server/controllers/todos/controller';
 import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { ActorContext } from '$lib/models/identity';
+import type { ActorContext, ApiTokenId } from '$lib/models/identity';
 import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/agent';
-import type { NoteId } from '$lib/models/notes';
+import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
+import type { TodoId } from '$lib/models/todos';
+import type { SuggestionId } from '$lib/models/suggestions';
+import type { LocalDate } from '$lib/models/workspace';
+import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
+import type { Confidence, ProvenanceId } from '$lib/models/provenance';
+import type { DiagramId } from '$lib/models/diagrams';
+import type { MemoryEntryId } from '$lib/models/memory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type {
 	ToolDescriptor,
@@ -256,6 +262,7 @@ export const agentToolCoverage = {
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
 		presentDiagram: { kind: 'read' },
+		presentDiagramRevision: { kind: 'read' },
 		readCanvasDiagram: { kind: 'read' },
 		readProjectDiagram: { kind: 'read' },
 		searchDiagramIcons: { kind: 'read' },
@@ -263,7 +270,13 @@ export const agentToolCoverage = {
 		// user saying what the project holds; the studio and the gallery own those
 		// gates, and the agent's part is to put a version on the canvas.
 		keepStudioDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		findConversationDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		renameProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		saveProjectDiagramDraft: { kind: 'excluded', reason: STUDIO_GESTURE },
+		publishProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		listDiagramRevisions: { kind: 'excluded', reason: STUDIO_GESTURE },
+		getDiagramRevision: { kind: 'excluded', reason: STUDIO_GESTURE },
+		restoreDiagramRevision: { kind: 'excluded', reason: STUDIO_GESTURE },
 		deleteProjectDiagram: {
 			kind: 'excluded',
 			reason: 'Deleting a diagram can break notes that render it; it stays a confirmed user action.'
@@ -458,13 +471,17 @@ const filterCreated = (
 	);
 };
 const id = z.string().uuid();
-const selection = z.object({
-	noteId: id,
-	revision: z.number().int().positive(),
-	from: z.number().int().nonnegative(),
-	to: z.number().int().nonnegative(),
-	text: z.string()
-});
+const projectId = z.string().uuid().transform((value) => value as ProjectId);
+const noteId = z.string().uuid().transform((value) => value as NoteId);
+const todoId = z.string().uuid().transform((value) => value as TodoId);
+const diagramId = z.string().uuid().transform((value) => value as DiagramId);
+const suggestionId = z.string().uuid().transform((value) => value as SuggestionId);
+const apiTokenId = z.string().uuid().transform((value) => value as ApiTokenId);
+const artifactId = z.string().uuid().transform((value) => value as ArtifactId);
+const noteRevisionId = z.string().uuid().transform((value) => value as NoteRevisionId);
+const noteEtag = z.string().min(1).transform((value) => value as NoteEtag);
+const memoryEntryId = z.string().uuid().transform((value) => value as MemoryEntryId);
+const confidence = z.number().int().min(0).max(100).transform((value) => value as Confidence);
 /** One anchored replacement in a note or skill body. */
 const noteEdit = z.object({
 	oldText: z.string().min(1),
@@ -473,21 +490,18 @@ const noteEdit = z.object({
 });
 /** Shared by edit_note and edit_skill, so their preflight gates validate the same shape. */
 const noteEdits = z.object({
-	noteId: id,
+	noteId: noteId,
 	edits: z.array(noteEdit).min(1).max(20)
 });
-const localDate = z.iso.date();
-const SELECTION_BOUND_TOOL_NAMES = [
-	'extract_promises',
-	'relate_selection',
-	'find_references',
-	'generate_mermaid_diagram',
-	'create_skill_from_selection'
-] as const;
-interface RegistryContext {
+const localDate = z.iso.date().transform((value) => value as LocalDate);
+export interface AgentToolContext {
 	readonly provenanceId: ProvenanceId;
-	readonly input: RunAgentInput;
 	readonly model: string;
+	readonly input: RunAgentInput;
+}
+
+export interface McpToolContext {
+	readonly provenanceId: ProvenanceId;
 }
 
 /**
@@ -527,6 +541,26 @@ export interface AgentToolDefinition {
 
 type Definition = AgentToolDefinition;
 
+const defineTool = <T extends z.ZodObject>(
+	name: string,
+	description: string,
+	classification: Definition['classification'],
+	parameters: T,
+	execute: (input: z.infer<T>) => Promise<unknown>,
+	preflight?: (input: z.infer<T>) => Promise<boolean>
+): Definition => ({
+	name,
+	description,
+	classification,
+	parameters,
+	...(preflight ? { preflight: preflight as Definition['preflight'] } : {}),
+	execute: async (input) => {
+		const parsed = parameters.parse(input);
+		const result = await execute(parsed);
+		return filterCreated(result, parsed as { createdAfter?: string; createdBefore?: string });
+	}
+});
+
 /**
  * True when a tool asks the model for nothing at all — the server resolves the
  * actor and workspace from run context, so the only valid argument object is
@@ -539,6 +573,23 @@ const declaresNoFields = (schema: Record<string, unknown>): boolean => {
 		typeof properties === 'object' && properties !== null && Object.keys(properties).length > 0;
 	const hasRequired = Array.isArray(required) && required.length > 0;
 	return !hasProperties && !hasRequired;
+};
+
+const jsonObjectSchema = (schema: z.ZodObject) => {
+	const converted = z.toJSONSchema(schema, { io: 'input' });
+	if (
+		converted.type !== 'object' ||
+		typeof converted.properties !== 'object' ||
+		converted.properties === null
+	)
+		throw new Error('Tool parameters must convert to an object schema');
+	return {
+		type: 'object' as const,
+		properties: converted.properties,
+		required: Array.isArray(converted.required) ? converted.required : [],
+		additionalProperties: true as const,
+		...(converted.description ? { description: converted.description } : {})
+	};
 };
 
 /**
@@ -564,15 +615,31 @@ const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
 };
 
 export class AgentTools {
+	private readonly controllers: ControllerFactory;
+	private readonly actor: ActorContext;
+	private readonly mode: AgentExecutionMode;
+	private readonly context: AgentToolContext;
+	private readonly toolExecutor?: AgentToolExecutor;
+	private readonly toolRetriever?: ToolRetriever;
+	private readonly toolAccess?: ToolAccessPolicy;
+
 	constructor(
-		private readonly controllers: ControllerFactory,
-		private readonly actor: ActorContext,
-		private readonly mode: AgentExecutionMode,
-		private readonly context: RegistryContext,
-		private readonly toolExecutor?: AgentToolExecutor,
-		private readonly toolRetriever?: ToolRetriever,
-		private readonly toolAccess?: ToolAccessPolicy
-	) {}
+		controllers: ControllerFactory,
+		actor: ActorContext,
+		mode: AgentExecutionMode,
+		context: AgentToolContext,
+		toolExecutor?: AgentToolExecutor,
+		toolRetriever?: ToolRetriever,
+		toolAccess?: ToolAccessPolicy
+	) {
+		this.controllers = controllers;
+		this.actor = actor;
+		this.mode = mode;
+		this.context = context;
+		this.toolExecutor = toolExecutor;
+		this.toolRetriever = toolRetriever;
+		this.toolAccess = toolAccess;
+	}
 
 	tools(
 		options: { classifications?: readonly Definition['classification'][] } = {}
@@ -595,12 +662,11 @@ export class AgentTools {
 		const allowed = options.classifications
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
-		return this.buildDefinitions().filter(
+		return [
+			...sharedToolDefinitions(this.controllers, this.actor),
+			...agentOnlyDefinitions(this.controllers, this.actor, this.context)
+		].filter(
 			(definition) =>
-				(!SELECTION_BOUND_TOOL_NAMES.includes(
-					definition.name as (typeof SELECTION_BOUND_TOOL_NAMES)[number]
-				) ||
-					this.context.input.selection !== undefined) &&
 				(!allowed || allowed.has(definition.classification)) &&
 				(LOCKED_TOOL_NAMES.includes(definition.name) ||
 					!this.toolAccess ||
@@ -646,16 +712,19 @@ export class AgentTools {
 				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
 			);
 
-		const searchTools = tool({
+		const searchParameters = z.object({
+			query: z.string().min(1),
+			limit: z.number().int().min(1).max(15).optional()
+		});
+		const searchSchema = jsonObjectSchema(searchParameters);
+		const searchTools = tool<typeof searchSchema, unknown, unknown>({
 			name: 'search_tools',
 			description:
 				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.',
-			parameters: z.toJSONSchema(
-				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
-			) as never,
+			parameters: searchSchema,
 			strict: false,
 			execute: async (input) => {
-				const { query: toolQuery, limit } = input as { query: string; limit?: number };
+				const { query: toolQuery, limit } = searchParameters.parse(input);
 				const ranked = this.toolRetriever
 					? await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5)
 					: [];
@@ -668,7 +737,7 @@ export class AgentTools {
 							name: definition.name,
 							description: definition.description,
 							classification: definition.classification,
-							input_schema: z.toJSONSchema(definition.parameters),
+							input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
 							callable_directly: true
 						};
 					});
@@ -695,11 +764,11 @@ export class AgentTools {
 		// Captured so the approval callback below can narrow it: property narrowing
 		// does not survive into a nested closure.
 		const gate = definition.preflight;
-		const schema = z.toJSONSchema(definition.parameters);
+		const schema = jsonObjectSchema(definition.parameters);
 		const built = tool({
 			name: definition.name,
 			description: definition.description,
-			parameters: schema as never,
+			parameters: schema,
 			strict: false,
 			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
 			// The approval boundary consults the tool's preflight gate before parking:
@@ -710,12 +779,12 @@ export class AgentTools {
 				? async (_context, input) =>
 						definition.classification === 'mutation' &&
 						this.mode === 'approval_required' &&
-						(await gate(input))
+						(await gate(definition.parameters.parse(input)))
 				: definition.classification === 'mutation' && this.mode === 'approval_required',
 			errorFunction: (_context, error) =>
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
 			execute: async (input, _runContext, details) => {
-				const parsed = input as Record<string, unknown>;
+				const parsed = definition.parameters.parse(input);
 				if (!this.toolExecutor) return definition.execute(parsed);
 				return this.toolExecutor.execute(
 					{
@@ -731,39 +800,22 @@ export class AgentTools {
 		return declaresNoFields(schema) ? withBlankInputTolerated(built) : built;
 	}
 
-	private buildDefinitions(): Definition[] {
-		const actor = this.actor;
-		const factory = this.controllers;
-		const conversationId = this.context.input.conversationId;
-		const define = <T extends z.ZodObject>(
-			name: string,
-			description: string,
-			classification: Definition['classification'],
-			parameters: T,
-			execute: (input: z.infer<T>) => Promise<unknown>,
-			preflight?: (input: z.infer<T>) => Promise<boolean>
-		): Definition => ({
-			name,
-			description,
-			classification,
-			parameters,
-			...(preflight ? { preflight: preflight as Definition['preflight'] } : {}),
-			execute: async (input) => {
-				const parsed = parameters.parse(input);
-				const result = await execute(parsed);
-				return filterCreated(result, parsed as { createdAfter?: string; createdBefore?: string });
-			}
-		});
-		return [
+}
+
+const sharedToolDefinitions = (
+	factory: ControllerFactory,
+	actor: ActorContext
+): Definition[] => {
+		const define = defineTool;
+		const retrieval = (): Definition[] => [
 			define(
 				'search',
 				toolDescription('search'),
 				'read',
-				temporal({ query: z.string().min(1), projectId: id.optional() }),
+				temporal({ query: z.string().min(1), projectId: projectId.optional() }),
 				(input) =>
 					factory.retrieval().search(actor, {
 						query: input.query,
-						...(conversationId ? { conversationId } : {}),
 						...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
 						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
 						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
@@ -773,12 +825,11 @@ export class AgentTools {
 				'search_note',
 				toolDescription('search_note'),
 				'read',
-				temporal({ noteId: id, query: z.string().min(1) }),
+				temporal({ noteId: noteId, query: z.string().min(1) }),
 				(input) =>
 					factory.retrieval().search(actor, {
 						query: input.query,
 						noteId: input.noteId as NoteId,
-						...(conversationId ? { conversationId } : {}),
 						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
 						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
 					})
@@ -804,9 +855,11 @@ export class AgentTools {
 				'get_today_view',
 				toolDescription('get_today_view'),
 				'read',
-				z.object({ today: z.string() }),
-				(input) => factory.workspace().getTodayView(actor, input as never)
+				z.object({ today: localDate }),
+				(input) => factory.workspace().getTodayView(actor, input)
 			),
+		];
+		const projects = (): Definition[] => [
 			define('list_projects', toolDescription('list_projects'), 'read', temporal({}), async () => ({
 				projects: (await factory.projects().list(actor)).projects.map(projectProject)
 			})),
@@ -814,54 +867,56 @@ export class AgentTools {
 				'get_project',
 				toolDescription('get_project'),
 				'read',
-				z.object({ projectId: id }),
-				(input) => factory.projects().get(actor, input as never)
+				z.object({ projectId: projectId }),
+				(input) => factory.projects().get(actor, input)
 			),
 			define(
 				'create_project',
 				toolDescription('create_project'),
 				'mutation',
 				z.object({ name: z.string().min(1), description: z.string().optional() }),
-				(input) => factory.projects().create(actor, input as never)
+				(input) => factory.projects().create(actor, input)
 			),
 			define(
 				'rename_project',
 				toolDescription('rename_project'),
 				'mutation',
-				z.object({ projectId: id, name: z.string().min(1) }),
-				(input) => factory.projects().rename(actor, input as never)
+				z.object({ projectId: projectId, name: z.string().min(1) }),
+				(input) => factory.projects().rename(actor, input)
 			),
 			define(
 				'archive_project',
 				toolDescription('archive_project'),
 				'mutation',
-				z.object({ projectId: id }),
-				(input) => factory.projects().archive(actor, input as never)
+				z.object({ projectId: projectId }),
+				(input) => factory.projects().archive(actor, input)
 			),
 			define(
 				'create_folder',
 				toolDescription('create_folder'),
 				'mutation',
-				z.object({ projectId: id, name: z.string().min(1), parentId: id.optional() }),
-				(input) => factory.projects().createFolder(actor, input as never)
+				z.object({ projectId: projectId, name: z.string().min(1), parentId: noteId.optional() }),
+				(input) => factory.projects().createFolder(actor, input)
 			),
 			define(
 				'move_project_entry',
 				toolDescription('move_project_entry'),
 				'mutation',
 				z.object({
-					projectId: id,
-					entryId: id,
-					parentId: id.optional(),
+					projectId: projectId,
+					entryId: noteId,
+					parentId: noteId.optional(),
 					position: z.number().int().nonnegative()
 				}),
-				(input) => factory.projects().move(actor, input as never)
+				(input) => factory.projects().move(actor, input)
 			),
+		];
+		const notes = (): Definition[] => [
 			define(
 				'get_note',
 				toolDescription('get_note'),
 				'read',
-				z.object({ noteId: id }),
+				z.object({ noteId: noteId }),
 				async (input) => {
 					const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 					// The read and write surfaces must share one representation: the Markdown
@@ -875,15 +930,15 @@ export class AgentTools {
 				'create_note',
 				toolDescription('create_note'),
 				'mutation',
-				z.object({ title: z.string().min(1), projectId: id.optional(), parentId: id.optional() }),
-				(input) => factory.notes().create(actor, input as never)
+				z.object({ title: z.string().min(1), projectId: projectId.optional(), parentId: noteId.optional() }),
+				(input) => factory.notes().create(actor, input)
 			),
 			define(
 				'save_note',
 				toolDescription('save_note'),
 				'mutation',
 				z.object({
-					noteId: id,
+					noteId: noteId,
 					markdown: z.string()
 				}),
 				async (input) => {
@@ -943,99 +998,105 @@ export class AgentTools {
 				'rename_note',
 				toolDescription('rename_note'),
 				'mutation',
-				z.object({ noteId: id, title: z.string().min(1) }),
-				(input) => factory.notes().rename(actor, input as never)
+				z.object({ noteId: noteId, title: z.string().min(1) }),
+				(input) => factory.notes().rename(actor, input)
 			),
 			define(
 				'archive_note',
 				toolDescription('archive_note'),
 				'mutation',
-				z.object({ noteId: id }),
-				(input) => factory.notes().archive(actor, input as never)
+				z.object({ noteId: noteId }),
+				(input) => factory.notes().archive(actor, input)
 			),
 			define(
 				'restore_note',
 				toolDescription('restore_note'),
 				'mutation',
-				z.object({ noteId: id }),
-				(input) => factory.notes().restore(actor, input as never)
+				z.object({ noteId: noteId }),
+				(input) => factory.notes().restore(actor, input)
 			),
 			define(
 				'list_trashed_notes',
 				toolDescription('list_trashed_notes'),
 				'read',
-				z.object({ projectId: id.optional() }),
-				(input) => factory.notes().listTrash(actor, input as never)
+				z.object({ projectId: projectId.optional() }),
+				(input) => factory.notes().listTrash(actor, input)
 			),
 			define(
 				'delete_note_forever',
 				toolDescription('delete_note_forever'),
 				'mutation',
-				z.object({ noteId: id }),
-				(input) => factory.notes().deleteForever(actor, input as never)
+				z.object({ noteId: noteId }),
+				(input) => factory.notes().deleteForever(actor, input)
 			),
 			define(
 				'empty_note_trash',
 				toolDescription('empty_note_trash'),
 				'mutation',
-				z.object({ projectId: id.optional() }),
-				(input) => factory.notes().emptyTrash(actor, input as never)
+				z.object({ projectId: projectId.optional() }),
+				(input) => factory.notes().emptyTrash(actor, input)
 			),
 			define(
 				'list_note_versions',
 				toolDescription('list_note_versions'),
 				'read',
-				z.object({ noteId: id }),
-				(input) => factory.notes().listRevisions(actor, input as never)
+				z.object({ noteId: noteId }),
+				(input) => factory.notes().listRevisions(actor, input)
 			),
 			define(
 				'read_note_version',
 				toolDescription('read_note_version'),
 				'read',
-				z.object({ noteId: id, revisionId: id }),
-				(input) => factory.notes().readRevision(actor, input as never)
+				z.object({ noteId: noteId, revisionId: noteRevisionId }),
+				(input) => factory.notes().readRevision(actor, input)
 			),
 			define(
 				'diff_note_versions',
 				toolDescription('diff_note_versions'),
 				'read',
-				z.object({ noteId: id, revisionId: id, againstRevisionId: id.optional() }),
-				(input) => factory.notes().compareRevisions(actor, input as never)
+				z.object({
+					noteId: noteId,
+					revisionId: noteRevisionId,
+					againstRevisionId: noteRevisionId.optional()
+				}),
+				(input) => factory.notes().compareRevisions(actor, input)
 			),
 			define(
 				'restore_note_version',
 				toolDescription('restore_note_version'),
 				'mutation',
-				z.object({ noteId: id, revisionId: id }),
-				(input) => factory.notes().restoreRevision(actor, input as never)
+				z.object({ noteId: noteId, revisionId: noteRevisionId }),
+				(input) => factory.notes().restoreRevision(actor, input)
 			),
 			define(
 				'publish_note',
 				toolDescription('publish_note'),
 				'mutation',
-				z.object({ noteId: id, baseEtag: z.string() }),
-				(input) => factory.notes().publish(actor, input as never)
+				z.object({ noteId: noteId, baseEtag: noteEtag }),
+				(input) => factory.notes().publish(actor, input)
 			),
 			define(
 				'discard_note_draft',
 				toolDescription('discard_note_draft'),
 				'mutation',
-				z.object({ noteId: id }),
-				(input) => factory.notes().discardDraft(actor, input as never)
+				z.object({ noteId: noteId }),
+				(input) => factory.notes().discardDraft(actor, input)
 			),
+		];
+		const todos = (): Definition[] => [
 			define(
 				'list_todos',
 				toolDescription('list_todos'),
 				'read',
 				temporal({
-					projectId: id.optional(),
-					noteId: id.optional(),
+					projectId: projectId.optional(),
+					noteId: noteId.optional(),
 					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
 					responsibility: z.enum(['mine', 'waiting_on']).optional(),
 					dueBefore: localDate.optional()
 				}),
 				async (input) => ({
-					todos: (await factory.todos().list(actor, input as never)).todos.map((view) =>
+					todos: (await factory.todos().list(actor, input)).todos.map((view) =>
 						projectTodo(view.todo)
 					)
 				})
@@ -1045,21 +1106,21 @@ export class AgentTools {
 				toolDescription('create_todo'),
 				'mutation',
 				z.object({
-					projectId: id,
+					projectId: projectId,
 					title: z.string().min(1),
 					description: z.string().optional(),
 					responsibility: z.enum(['mine', 'waiting_on']),
 					waitingOn: z.string().optional(),
 					dueDate: localDate.optional()
 				}),
-				(input) => factory.todos().create(actor, input as never)
+				(input) => factory.todos().create(actor, input)
 			),
 			define(
 				'create_todos',
 				toolDescription('create_todos'),
 				'mutation',
 				z.object({
-					projectId: id,
+					projectId: projectId,
 					todos: z
 						.array(
 							z.object({
@@ -1076,8 +1137,13 @@ export class AgentTools {
 				async (input) => {
 					const created = [];
 					for (const todo of input.todos) {
+						const { dueDate, ...fields } = todo;
 						created.push(
-							await factory.todos().create(actor, { projectId: input.projectId, ...todo } as never)
+							await factory.todos().create(actor, {
+								...fields,
+								projectId: input.projectId,
+								...(dueDate ? { dueDate } : {})
+							})
 						);
 					}
 					return { todos: created };
@@ -1088,120 +1154,56 @@ export class AgentTools {
 				toolDescription('update_todo'),
 				'mutation',
 				z.object({
-					todoId: id,
+					todoId: todoId,
 					title: z.string().optional(),
 					description: z.string().nullable().optional(),
 					dueDate: localDate.nullable().optional(),
 					responsibility: z.enum(['mine', 'waiting_on']).optional(),
 					waitingOn: z.string().nullable().optional(),
-					linkedNoteId: id.nullable().optional(),
+					linkedNoteId: noteId.nullable().optional(),
 					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
 				}),
-				(input) => factory.todos().update(actor, input as never)
+				(input) => factory.todos().update(actor, input)
 			),
-			define(
-				'extract_promises',
-				toolDescription('extract_promises'),
-				'proposal',
-				z.object({}),
-				(input) =>
-					factory.todos().extractPromises(actor, {
-						...input,
-						selection: this.context.input.selection
-					} as never)
-			),
-			define(
-				'relate_selection',
-				toolDescription('relate_selection'),
-				'proposal',
-				z.object({}),
-				(input) =>
-					factory.relationships().suggestFromSelection(actor, {
-						...input,
-						selection: this.context.input.selection
-					} as never)
-			),
-			define(
-				'find_references',
-				toolDescription('find_references'),
-				'proposal',
-				z.object({}),
-				(input) =>
-					factory
-						.references()
-						.suggestFromSelection(
-							actor,
-							{ ...input, selection: this.context.input.selection } as never,
-							{ model: this.context.model }
-						)
-			),
-			define(
-				'generate_mermaid_diagram',
-				toolDescription('generate_mermaid_diagram'),
-				'proposal',
-				z.object({ instruction: z.string().optional() }),
-				(input) =>
-					factory.diagrams().generateMermaid(actor, {
-						...input,
-						selection: this.context.input.selection
-					} as never)
-			),
+		];
+		const diagrams = (): Definition[] => [
 			define(
 				'revise_mermaid_diagram',
 				toolDescription('revise_mermaid_diagram'),
 				'mutation',
-				z.object({ diagramId: id, instruction: z.string().min(1) }),
-				(input) => factory.diagrams().reviseMermaid(actor, input as never)
-			),
-			define(
-				'present_diagram',
-				toolDescription('present_diagram'),
-				'read',
-				z.object({
-					source: z.string().min(1),
-					title: z.string().min(1).optional(),
-					diagramId: id.optional()
-				}),
-				(input) => factory.diagramStudio().presentDiagram(actor, input as never)
+				z.object({ diagramId: diagramId, instruction: z.string().min(1) }),
+				(input) => factory.diagrams().reviseMermaid(actor, input)
 			),
 			define(
 				'search_icons',
 				toolDescription('search_icons'),
 				'read',
 				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
-				(input) => factory.diagramStudio().searchDiagramIcons(actor, input as never)
-			),
-			define(
-				'read_canvas_diagram',
-				toolDescription('read_canvas_diagram'),
-				'read',
-				z.object({}),
-				() =>
-					factory.diagramStudio().readCanvasDiagram(actor, {
-						conversationId: this.context.input.conversationId
-					} as never)
+				(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
 			),
 			define(
 				'read_project_diagram',
 				toolDescription('read_project_diagram'),
 				'read',
-				z.object({ diagramId: id, includeSource: z.boolean().optional() }),
-				(input) => factory.diagramStudio().readProjectDiagram(actor, input as never)
+				z.object({ diagramId: diagramId, includeSource: z.boolean().optional() }),
+				(input) => factory.diagramStudio().readProjectDiagram(actor, input)
 			),
 			define(
 				'promote_diagram',
 				toolDescription('promote_diagram'),
 				'proposal',
-				z.object({ diagramId: id }),
-				(input) => factory.diagrams().promote(actor, input as never)
+				z.object({ diagramId: diagramId }),
+				(input) => factory.diagrams().promote(actor, input)
 			),
+		];
+		const suggestions = (): Definition[] => [
 			define(
 				'list_suggestions',
 				toolDescription('list_suggestions'),
 				'read',
 				temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
 				async (input) => ({
-					suggestions: (await factory.suggestions().list(actor, input as never)).groups.flatMap(
+					suggestions: (await factory.suggestions().list(actor, input)).groups.flatMap(
 						(group) => group.suggestions.map((view) => projectSuggestion(view.suggestion))
 					)
 				})
@@ -1210,50 +1212,38 @@ export class AgentTools {
 				'accept_suggestion',
 				toolDescription('accept_suggestion'),
 				'mutation',
-				z.object({ suggestionId: id }),
+				z.object({ suggestionId: suggestionId }),
 				// `acceptReviewed`, not `accept`: a draw.io diagram accepted without its
 				// review has no preview and can never gain one, and that guard lives in
 				// `acceptReviewed`. Bound to the raw `accept`, this tool was the one
 				// caller in the system that could mint a preview-less diagram. For every
 				// other kind of suggestion the two are the same call.
-				(input) => factory.suggestions().acceptReviewed(actor, input as never)
+				(input) => factory.suggestions().acceptReviewed(actor, input)
 			),
 			define(
 				'reject_suggestion',
 				toolDescription('reject_suggestion'),
 				'mutation',
-				z.object({ suggestionId: id }),
-				(input) => factory.suggestions().reject(actor, input as never)
+				z.object({ suggestionId: suggestionId }),
+				(input) => factory.suggestions().reject(actor, input)
 			),
 			define(
 				'revert_suggestion',
 				toolDescription('revert_suggestion'),
 				'mutation',
-				z.object({ suggestionId: id }),
-				(input) => factory.suggestions().revert(actor, input as never)
+				z.object({ suggestionId: suggestionId }),
+				(input) => factory.suggestions().revert(actor, input)
 			),
+		];
+		const skills = (): Definition[] => [
 			define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
 				factory.skills().list(actor)
-			),
-			define(
-				'load_skill',
-				toolDescription('load_skill'),
-				'read',
-				z.object({ noteId: id }),
-				async (input) => {
-					const view = await factory.skills().loadForAgent(actor, {
-						noteId: input.noteId as NoteId,
-						contextNoteId: this.context.input.noteId,
-						provenanceId: this.context.provenanceId
-					});
-					return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
-				}
 			),
 			define(
 				'save_skill',
 				toolDescription('save_skill'),
 				'mutation',
-				z.object({ noteId: id, markdown: z.string() }),
+				z.object({ noteId: noteId, markdown: z.string() }),
 				async (input) => {
 					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
 					if (view.skill.note.kind !== 'skill')
@@ -1319,60 +1309,47 @@ export class AgentTools {
 					name: z.string().min(1),
 					description: z.string().optional(),
 					triggerHints: z.array(z.string()).optional(),
-					projectId: id.optional(),
-					parentId: id.optional()
+					projectId: projectId.optional(),
+					parentId: noteId.optional()
 				}),
-				(input) => factory.skills().create(actor, input as never)
-			),
-			define(
-				'create_skill_from_selection',
-				toolDescription('create_skill_from_selection'),
-				'mutation',
-				z.object({
-					name: z.string().min(1),
-					description: z.string(),
-					triggerHints: z.array(z.string())
-				}),
-				(input) =>
-					factory.skills().createFromSelection(actor, {
-						...input,
-						selection: this.context.input.selection
-					} as never)
+				(input) => factory.skills().create(actor, input)
 			),
 			define(
 				'list_skill_versions',
 				toolDescription('list_skill_versions'),
 				'read',
-				temporal({ noteId: id }),
-				(input) => factory.skills().listVersions(actor, input as never)
+				temporal({ noteId: noteId }),
+				(input) => factory.skills().listVersions(actor, input)
 			),
 			define(
 				'restore_skill_version',
 				toolDescription('restore_skill_version'),
 				'mutation',
-				z.object({ noteId: id, revision: z.number().int().positive() }),
-				(input) => factory.skills().restoreVersion(actor, input as never)
+				z.object({ noteId: noteId, revision: z.number().int().positive() }),
+				(input) => factory.skills().restoreVersion(actor, input)
 			),
 			define(
 				'update_skill',
 				toolDescription('update_skill'),
 				'mutation',
 				z.object({
-					noteId: id,
+					noteId: noteId,
 					displayName: z.string().min(1).optional(),
 					description: z.string().optional(),
 					triggerHints: z.array(z.string()).optional(),
 					isEnabled: z.boolean().optional()
 				}),
-				(input) => factory.skills().update(actor, input as never)
+				(input) => factory.skills().update(actor, input)
 			),
 			define(
 				'set_skill_pinned',
 				toolDescription('set_skill_pinned'),
 				'mutation',
-				z.object({ noteId: id, projectId: id, pinned: z.boolean() }),
-				(input) => factory.skills().setPinned(actor, input as never)
+				z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
+				(input) => factory.skills().setPinned(actor, input)
 			),
+		];
+		const account = (): Definition[] => [
 			define('list_api_tokens', toolDescription('list_api_tokens'), 'read', temporal({}), () =>
 				factory.apiTokens().list(actor)
 			),
@@ -1380,14 +1357,14 @@ export class AgentTools {
 				'revoke_api_token',
 				toolDescription('revoke_api_token'),
 				'mutation',
-				z.object({ tokenId: id }),
+				z.object({ tokenId: apiTokenId }),
 				(input) => factory.apiTokens().revoke(actor, input.tokenId as never)
 			),
 			define(
 				'list_attachments',
 				toolDescription('list_attachments'),
 				'read',
-				temporal({ noteId: id }),
+				temporal({ noteId: noteId }),
 				(input) => factory.attachments().list(actor, input.noteId as NoteId)
 			),
 			define(
@@ -1395,7 +1372,7 @@ export class AgentTools {
 				toolDescription('read_attachment'),
 				'read',
 				z.object({
-					noteId: id,
+					noteId: noteId,
 					path: z.string().min(1).max(512),
 					offset: z.number().int().nonnegative().optional(),
 					limit: z.number().int().positive().max(20_000).optional()
@@ -1405,11 +1382,13 @@ export class AgentTools {
 						.attachments()
 						.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
 			),
+		];
+		const memoryAndPreferences = (): Definition[] => [
 			define(
 				'list_project_memory',
 				toolDescription('list_project_memory'),
 				'read',
-				temporal({ projectId: id }),
+				temporal({ projectId: projectId }),
 				async (input) => ({
 					entries: (
 						await factory.memory().list(actor, {
@@ -1437,14 +1416,14 @@ export class AgentTools {
 				'proposal',
 				z.object({
 					scope: z.enum(['project', 'user']),
-					projectId: id.optional(),
+					projectId: projectId.optional(),
 					operation: z.enum(['add', 'update', 'remove']),
-					memoryEntryId: id.optional(),
+					memoryEntryId: memoryEntryId.optional(),
 					content: z.string().optional(),
 					justification: z.string().optional(),
-					confidence: z.number().int().min(0).max(100).optional()
+					confidence: confidence.optional()
 				}),
-				(input) => factory.memory().propose(actor, input as never)
+				(input) => factory.memory().propose(actor, input)
 			),
 			define(
 				'list_trust_policies',
@@ -1460,15 +1439,15 @@ export class AgentTools {
 				z.object({
 					pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
 					autoAcceptEnabled: z.boolean(),
-					minimumConfidence: z.number().int().min(0).max(100).optional()
+					minimumConfidence: confidence.optional()
 				}),
-				(input) => factory.trustPolicies().update(actor, input as never)
+				(input) => factory.trustPolicies().update(actor, input)
 			),
 			define(
 				'list_tool_preferences',
 				toolDescription('list_tool_preferences'),
 				'read',
-				z.object({ projectId: id.optional() }),
+				z.object({ projectId: projectId.optional() }),
 				(input) =>
 					factory
 						.toolPreferences()
@@ -1481,7 +1460,7 @@ export class AgentTools {
 				z.object({
 					toolName: z.string().min(1),
 					enabled: z.boolean(),
-					projectId: id.optional()
+					projectId: projectId.optional()
 				}),
 				(input) =>
 					factory.toolPreferences().setEnabled(actor, {
@@ -1528,41 +1507,47 @@ export class AgentTools {
 			define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
 				factory.agentSettings().listModels(actor)
 			),
+		];
+		const deliverables = (): Definition[] => [
 			define(
 				'export_document',
 				toolDescription('export_document'),
 				'mutation',
 				z.object({
-					projectId: id,
+					projectId: projectId,
 					noteIds: z.array(id),
 					title: z.string().min(1),
 					format: z.enum(['docx', 'pdf']),
 					templateId: id.optional()
 				}),
 				(input) =>
-					factory
-						.deliverables()
-						.generateDocument(actor, { ...input, projectId: input.projectId as never } as never)
+					factory.deliverables().generateDocument(actor, {
+						projectId: input.projectId as ProjectId,
+						noteIds: input.noteIds.map((noteId) => noteId as NoteId),
+						title: input.title,
+						format: input.format,
+						...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
+					})
 			),
 			define(
 				'list_artifacts',
 				toolDescription('list_artifacts'),
 				'read',
-				temporal({ projectId: id }),
+				temporal({ projectId: projectId }),
 				(input) => factory.deliverables().listArtifacts(actor, input.projectId as never)
 			),
 			define(
 				'list_templates',
 				toolDescription('list_templates'),
 				'read',
-				temporal({ projectId: id }),
+				temporal({ projectId: projectId }),
 				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
 			),
 			define(
 				'get_export_settings',
 				toolDescription('get_export_settings'),
 				'read',
-				z.object({ projectId: id }),
+				z.object({ projectId: projectId }),
 				(input) => factory.deliverables().getExportSettings(actor, input.projectId as never)
 			),
 			define(
@@ -1570,7 +1555,7 @@ export class AgentTools {
 				toolDescription('update_export_settings'),
 				'mutation',
 				z.object({
-					projectId: id,
+					projectId: projectId,
 					fontFamily: z.enum(['helvetica', 'times', 'courier']),
 					fontSize: z.number().min(8).max(18),
 					lineHeight: z.number().min(1).max(2.2),
@@ -1590,31 +1575,187 @@ export class AgentTools {
 				'get_artifact',
 				toolDescription('get_artifact'),
 				'read',
-				z.object({ artifactId: id }),
+				z.object({ artifactId: artifactId }),
 				(input) => factory.deliverables().getArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'download_artifact',
 				toolDescription('download_artifact'),
 				'read',
-				z.object({ artifactId: id }),
+				z.object({ artifactId: artifactId }),
 				(input) => factory.deliverables().downloadArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'delete_artifact',
 				toolDescription('delete_artifact'),
 				'mutation',
-				z.object({ artifactId: id }),
+				z.object({ artifactId: artifactId }),
 				(input) => factory.deliverables().deleteArtifact(actor, input.artifactId as never)
 			),
 			define(
 				'regenerate_artifact',
 				toolDescription('regenerate_artifact'),
 				'mutation',
-				z.object({ artifactId: id }),
+				z.object({ artifactId: artifactId }),
 				(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId as never)
 			)
 		];
+		return [
+			...retrieval(),
+			...projects(),
+			...notes(),
+			...todos(),
+			...diagrams(),
+			...suggestions(),
+			...skills(),
+			...account(),
+			...memoryAndPreferences(),
+			...deliverables()
+		];
+};
+
+const agentOnlyDefinitions = (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	context: AgentToolContext
+): Definition[] => {
+	const input = context.input;
+	const model = context.model;
+	const selection = input.selection;
+	const selectionDefinitions: Definition[] = selection
+		? [
+				defineTool(
+					'extract_promises',
+					toolDescription('extract_promises'),
+					'proposal',
+					z.object({}),
+					() => factory.todos().extractPromises(actor, { selection })
+				),
+				defineTool(
+					'relate_selection',
+					toolDescription('relate_selection'),
+					'proposal',
+					z.object({}),
+					() => factory.relationships().suggestFromSelection(actor, { selection })
+				),
+				defineTool(
+					'find_references',
+					toolDescription('find_references'),
+					'proposal',
+					z.object({}),
+					() => factory.references().suggestFromSelection(actor, { selection }, { model })
+				),
+				defineTool(
+					'generate_mermaid_diagram',
+					toolDescription('generate_mermaid_diagram'),
+					'proposal',
+					z.object({ instruction: z.string().optional() }),
+					(instruction) => factory.diagrams().generateMermaid(actor, { ...instruction, selection })
+				),
+				defineTool(
+					'create_skill_from_selection',
+					toolDescription('create_skill_from_selection'),
+					'mutation',
+					z.object({
+						name: z.string().min(1),
+						description: z.string(),
+						triggerHints: z.array(z.string())
+					}),
+					(fields) => factory.skills().createFromSelection(actor, { ...fields, selection })
+				)
+			]
+		: [];
+	return [
+		...selectionDefinitions,
+		defineTool(
+			'load_skill',
+			toolDescription('load_skill'),
+			'read',
+			z.object({ noteId: noteId }),
+			async (fields) => {
+				const view = await factory.skills().loadForAgent(actor, {
+					noteId: fields.noteId as NoteId,
+					contextNoteId: input.noteId,
+					provenanceId: context.provenanceId
+				});
+				return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+			}
+		),
+		defineTool(
+			'present_diagram',
+			toolDescription('present_diagram'),
+			'read',
+			z.object({ source: z.string().min(1), title: z.string().min(1).optional() }),
+			(fields) => factory.diagramStudio().presentDiagram(actor, fields)
+		),
+		defineTool(
+			'present_diagram_revision',
+			toolDescription('present_diagram_revision'),
+			'read',
+			z.object({
+				source: z.string().min(1),
+				title: z.string().min(1).optional(),
+				diagramId
+			}),
+			(fields) => factory.diagramStudio().presentDiagramRevision(actor, fields)
+		),
+		defineTool(
+			'read_canvas_diagram',
+			toolDescription('read_canvas_diagram'),
+			'read',
+			z.object({}),
+			() =>
+				factory.diagramStudio().readCanvasDiagram(actor, {
+					conversationId: input.conversationId
+				})
+		)
+	];
+};
+
+const mcpOnlyDefinitions = (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	context: McpToolContext
+): Definition[] => [
+	defineTool(
+		'load_skill',
+		toolDescription('load_skill'),
+		'read',
+		z.object({ noteId: noteId }),
+		async (fields) => {
+			const view = await factory.skills().loadForAgent(actor, {
+				noteId: fields.noteId as NoteId,
+				provenanceId: context.provenanceId
+			});
+			return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+		}
+	)
+];
+
+export class McpTools {
+	constructor(
+		private readonly controllers: ControllerFactory,
+		private readonly actor: ActorContext,
+		private readonly context: McpToolContext,
+		private readonly toolAccess?: ToolAccessPolicy
+	) {}
+
+	definitions(
+		options: { classifications?: readonly Definition['classification'][] } = {}
+	): AgentToolDefinition[] {
+		const allowed = options.classifications
+			? new Set<Definition['classification']>(options.classifications)
+			: undefined;
+		return [
+			...sharedToolDefinitions(this.controllers, this.actor),
+			...mcpOnlyDefinitions(this.controllers, this.actor, this.context)
+		].filter(
+			(definition) =>
+				(!allowed || allowed.has(definition.classification)) &&
+				(LOCKED_TOOL_NAMES.includes(definition.name) ||
+					!this.toolAccess ||
+					this.toolAccess.isEnabled(definition.name))
+		);
 	}
 }
 

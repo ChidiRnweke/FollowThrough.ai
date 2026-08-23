@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+const isMissingFile = (error: unknown): error is NodeJS.ErrnoException =>
+	error instanceof Error && 'code' in error && error.code === 'ENOENT';
+
 /**
  * Record/replay cache for the auxiliary LLM edges — embeddings, reranking and
  * condensing. Those calls are deterministic enough to be worth freezing: they
@@ -69,8 +72,8 @@ export class DiskCache {
 		let onDisk: Record<string, unknown> = {};
 		try {
 			onDisk = JSON.parse(await readFile(this.path, 'utf8')) as Record<string, unknown>;
-		} catch {
-			// First writer creates the cache.
+		} catch (error) {
+			if (!isMissingFile(error)) throw error;
 		}
 		await writeFile(this.path, JSON.stringify({ ...onDisk, ...this.entries }, null, 0), 'utf8');
 		this.dirty = false;
@@ -84,7 +87,8 @@ export class DiskCache {
 		if (this.entries) return this.entries;
 		try {
 			this.entries = JSON.parse(await readFile(this.path, 'utf8')) as Record<string, unknown>;
-		} catch {
+		} catch (error) {
+			if (!isMissingFile(error)) throw error;
 			this.entries = {};
 		}
 		return this.entries;

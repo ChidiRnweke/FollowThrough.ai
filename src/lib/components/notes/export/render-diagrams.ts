@@ -192,8 +192,8 @@ export async function renderDiagrams(
 				const png = await rasterizeSvg(markup);
 				if (png) pngs[hash] = png;
 				else svgs[hash] = markup;
-			} catch {
-				// A diagram that fails to render falls back to its source in the document.
+			} catch (error) {
+				throw new Error('A diagram could not be rendered for export', { cause: error });
 			}
 		}
 	} finally {

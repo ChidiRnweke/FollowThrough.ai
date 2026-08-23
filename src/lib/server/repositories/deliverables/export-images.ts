@@ -53,20 +53,16 @@ export function collectImageSources(doc: ProseMirrorDocument): string[] {
  * non-embeddable responses, oversized payloads, or any fetch failure.
  */
 export async function fetchRemoteDataUrl(url: string): Promise<string | undefined> {
-	try {
-		const response = await fetch(url, {
-			signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
-			redirect: 'follow'
-		});
-		if (!response.ok) return undefined;
-		const mediaType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
-		if (!EMBEDDABLE_IMAGE_TYPES.has(mediaType)) return undefined;
-		const bytes = Buffer.from(await response.arrayBuffer());
-		if (bytes.byteLength > IMAGE_MAX_BYTES) return undefined;
-		return `data:${mediaType};base64,${bytes.toString('base64')}`;
-	} catch {
-		return undefined;
-	}
+	const response = await fetch(url, {
+		signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+		redirect: 'follow'
+	});
+	if (!response.ok) throw new Error(`Image fetch failed with status ${response.status}`);
+	const mediaType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
+	if (!EMBEDDABLE_IMAGE_TYPES.has(mediaType)) return undefined;
+	const bytes = Buffer.from(await response.arrayBuffer());
+	if (bytes.byteLength > IMAGE_MAX_BYTES) return undefined;
+	return `data:${mediaType};base64,${bytes.toString('base64')}`;
 }
 
 /**

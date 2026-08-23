@@ -9,6 +9,8 @@
 	import { DiagramDraftPane, DiagramPane } from '$lib/components/diagrams';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
 
 	let {
 		tabId,
@@ -33,6 +35,20 @@
 	} = $props();
 
 	const ref = $derived(parseTabId(tabId));
+	const draftConversation = $derived(
+		ref?.kind === 'draft'
+			? sessions.find(
+					(conversation) => conversation.id === chatRegistry.peek(ref.sessionKey)?.conversationId
+				)
+			: undefined
+	);
+	const draftProjectId = $derived(
+		ref?.kind === 'draft'
+			? (conversationProjectId(draftConversation, shell.noteTree) ??
+					diagramRegistry.draftProject(ref.sessionKey) ??
+					workbench.activeProjectId)
+			: undefined
+	);
 </script>
 
 <!--
@@ -55,7 +71,8 @@
 {:else if ref?.kind === 'draft'}
 	<DiagramDraftPane
 		sessionKey={ref.sessionKey}
-		projectId={diagramRegistry.draftProject(ref.sessionKey) ?? workbench.activeProjectId}
+		projectId={draftProjectId}
+		projects={shell.projects}
 		{onCloseSplit}
 	/>
 {:else if ref?.kind === 'search'}

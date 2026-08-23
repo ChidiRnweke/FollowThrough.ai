@@ -105,7 +105,7 @@ export class AgentContext implements AgentContextBuilder {
 		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
 		return {
 			...base,
-			...(await this.resolveAppContext(actor, input, run.conversationId)),
+			...(await this.resolveAppContext(actor, input, input.conversationId ?? run.conversationId)),
 			...(userMemories.length > 0
 				? { userMemory: userMemories.map((entry) => entry.content) }
 				: {}),
@@ -168,16 +168,12 @@ export class AgentContext implements AgentContextBuilder {
 	private async resolveAppContext(
 		actor: ActorContext,
 		input: RunAgentInput,
-		conversationId?: ConversationId
+		conversationId: ConversationId
 	): Promise<{ appContext?: ResolvedAppContextV1 }> {
 		if (!input.appContext) return {};
-		const conversation = conversationId
-			? await this.conversations?.get(actor, conversationId)
-			: undefined;
+		const conversation = await this.conversations?.get(actor, conversationId);
 		const originProjectId = conversation?.contextProjectId;
-		const originProject = originProjectId
-			? await this.projects?.get(actor, originProjectId).catch(() => undefined)
-			: undefined;
+		const originProject = originProjectId ? await this.projects?.get(actor, originProjectId) : undefined;
 		const currentProjectId =
 			input.appContext.currentProject?.id ?? input.appContext.activeResource?.projectId;
 		const projectTransition = !originProjectId
@@ -213,12 +209,8 @@ export class AgentContext implements AgentContextBuilder {
 		const requested = input.requestedScope;
 		if (!requested) return {};
 		const [project, note] = await Promise.all([
-			requested.projectId
-				? this.projects?.get(actor, requested.projectId).catch(() => undefined)
-				: undefined,
-			requested.noteId
-				? this.noteReader.get(actor, requested.noteId).catch(() => undefined)
-				: undefined
+			requested.projectId ? this.projects?.get(actor, requested.projectId) : undefined,
+			requested.noteId ? this.noteReader.get(actor, requested.noteId) : undefined
 		]);
 		const staged = [
 			note ? `note "${note.title}"` : requested.noteId ? 'another note' : undefined,
@@ -242,9 +234,6 @@ export class AgentContext implements AgentContextBuilder {
 		actor: ActorContext,
 		noteIds: readonly Note['id'][]
 	): Promise<readonly Note[]> {
-		const results = await Promise.all(
-			noteIds.map((noteId) => this.noteReader.get(actor, noteId).catch(() => undefined))
-		);
-		return results.filter((note): note is Note => note !== undefined);
+		return Promise.all(noteIds.map((noteId) => this.noteReader.get(actor, noteId)));
 	}
 }

@@ -21,6 +21,7 @@ import {
 } from './workbench-url';
 import { diagramIdOf, noteIdOf, type TabId } from './tab-ref';
 import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+import { toast } from 'svelte-sonner';
 
 /**
  * The store's window onto SvelteKit's router.  Injected rather than imported
@@ -286,8 +287,10 @@ export class WorkbenchStore {
 					this.pinnedTabs = record.pinnedTabs;
 					this.recentlyUsed = record.recentlyUsed;
 				}
-			} catch {
-				// IndexedDB may be unavailable; localStorage remains canonical.
+			} catch (error) {
+				toast.error(
+					error instanceof Error ? error.message : 'Workspace state could not be restored'
+				);
 			}
 			void this.refreshActiveProjectId(shellProjectOf);
 			return;
@@ -334,8 +337,8 @@ export class WorkbenchStore {
 				void this.refreshActiveProjectId(shellProjectOf);
 				return;
 			}
-		} catch {
-			// IndexedDB may be unavailable; URL remains canonical.
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
 		}
 		this.applyUrlState(urlState);
 		void this.refreshActiveProjectId(shellProjectOf);
@@ -715,8 +718,8 @@ export class WorkbenchStore {
 		};
 		try {
 			await this.repository.put(record);
-		} catch {
-			// IndexedDB may be unavailable; the URL remains canonical.
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Workspace state could not be saved');
 		}
 	}
 }

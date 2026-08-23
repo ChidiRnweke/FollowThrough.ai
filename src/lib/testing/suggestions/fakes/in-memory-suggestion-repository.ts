@@ -36,7 +36,7 @@ export class InMemorySuggestionRepository implements SuggestionRepository {
 			(item) => item.id === id && item.userId === actor.userId && item.status === expectedStatus
 		);
 		if (!current) return undefined;
-		const updated = { ...current, ...patch } as Suggestion;
+		const updated: Suggestion = { ...current, ...patch };
 		this.suggestions = this.suggestions.map((item) => (item.id === id ? updated : item));
 		return updated;
 	}

@@ -197,6 +197,7 @@ const families: Readonly<Record<string, Family>> = {
 	// `agentToolCoverage`, where this tool is `read` because it mutates nothing.
 	// The two answer different questions and are meant to differ.
 	present_diagram: 'proposal',
+	present_diagram_revision: 'proposal',
 	revise_mermaid_diagram: 'proposal',
 	propose_memory_change: 'proposal',
 	accept_suggestion: 'proposal',
@@ -252,6 +253,7 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	list_suggestions: 'suggestion',
 	promote_diagram: 'note',
 	present_diagram: 'note',
+	present_diagram_revision: 'note',
 	read_project_diagram: 'note',
 	read_canvas_diagram: 'note',
 	search_icons: 'note',
