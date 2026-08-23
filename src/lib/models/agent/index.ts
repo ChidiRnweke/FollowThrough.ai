@@ -953,6 +953,37 @@ const appContextSnapshotSchema = z
 	})
 	.strict();
 
+const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().max(12_000) });
+const submittedImagesSchema = z.array(conversationImageSchema).max(4).optional();
+
+export const agentRunIdInputSchema = z.object({
+	runId: z.string().uuid().transform((value) => value as AgentRunId)
+});
+
+export const submitAgentRunInputSchema = z
+	.object({
+		requestId: z.string().uuid(),
+		conversationId: conversationIdSchema.optional(),
+		input: z.string().trim(),
+		images: submittedImagesSchema,
+		contextImages: submittedImagesSchema,
+		model: z.string().nullable().optional(),
+		visionModel: z.string().nullable().optional(),
+		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
+		projectId: projectIdSchema.optional(),
+		noteId: noteIdSchema.optional(),
+		selection: submittedSelectionSchema.optional(),
+		selections: z.array(submittedSelectionSchema).max(8).optional(),
+		contextNoteIds: z.array(noteIdSchema).optional(),
+		requestedSkillNames: z.array(z.string()).optional(),
+		requestedSkillNoteIds: z.array(noteIdSchema).optional(),
+		appContext: appContextSnapshotSchema.optional(),
+		retryUserOrdinal: z.number().int().min(1).optional()
+	})
+	.refine((input) => input.input.length > 0 || Boolean(input.images?.length), {
+		message: 'A message or image is required.'
+	}) satisfies z.ZodType<SubmitAgentRunInput>;
+
 export const stagedAgentRunInputSchema = z
 	.object({
 		requestId: z.string().optional(),

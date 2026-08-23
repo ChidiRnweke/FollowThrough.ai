@@ -1,160 +1,18 @@
-import { z } from 'zod';
 import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
-import { APP_SURFACE_KINDS } from '$lib/models/workspace/app-context';
-import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
-import type { NoteId } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
+import type { RunAgentInput } from '$lib/models/agent';
+import {
+	agentRunIdInputSchema as runIdInput,
+	submitAgentRunInputSchema as submitAgentRunSchema
+} from '$lib/models/agent';
 
 /**
- * The surface list is written down twice — once in `models/workspace/app-context`
- * beside the client that fills it in, once in `models/agent` beside the run that
- * consumes it — because a model domain is self-contained and neither may import
- * the other. This is the one place that can see both, so this is where the two
- * are held to each other.
- *
- * They drifted once already: `diagrams` and `diagram_studio` reached the type but
- * not the validator, and every chat sent from those screens came back a bare 400
- * before it ever reached the agent. Adding a surface to one list and not the
- * other is now a build error instead.
+ * The workspace and agent model domains repeat the surface vocabulary because
+ * model domains do not import one another. This adapter sees both and makes a
+ * drift between them a compile error at the protocol boundary.
  */
 type AgentSurfaceKind = NonNullable<RunAgentInput['appContext']>['surface']['kind'];
 type Mutual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const _surfacesAgree: Mutual<AppSurfaceKind, AgentSurfaceKind> = true;
 void _surfacesAgree;
 
-const id = z.string().uuid();
-const conversationId = z.string().uuid().transform((value) => value as ConversationId);
-const runId = z.string().uuid().transform((value) => value as AgentRunId);
-const projectId = z.string().uuid().transform((value) => value as ProjectId);
-const noteId = z.string().uuid().transform((value) => value as NoteId);
-const selectionSchema = z.object({
-	noteId,
-	revision: z.number().int().nonnegative(),
-	from: z.number().int().nonnegative(),
-	to: z.number().int().nonnegative(),
-	text: z.string()
-});
-/** The same excerpt budget the snapshot has always applied, now on the field that carries it. */
-const SELECTION_TEXT_LIMIT = 12000;
-const pinnedSelectionSchema = selectionSchema.extend({
-	text: z.string().max(SELECTION_TEXT_LIMIT)
-});
-/**
- * Pinning is a per-message gesture and each pin is its own chip, so the cap is about what a
- * composer can plausibly hold rather than about tokens — the per-note budget downstream
- * handles size.
- */
-const MAX_PINNED_SELECTIONS = 8;
-const noteContextSchema = z.object({ id: noteId, title: z.string().max(500), projectId });
-const appContextSchema = z.object({
-	version: z.literal(1),
-	capturedAt: z.string().datetime(),
-	client: z.object({
-		locale: z.string().max(100),
-		timeZone: z.string().max(100),
-		localDate: z.string().max(32),
-		layout: z.enum(['compact', 'wide'])
-	}),
-	surface: z.object({
-		// Built from the model's own list, not restated here: when the two drifted,
-		// every chat sent from a screen the validator had never heard of was
-		// refused at the boundary with a bare 400.
-		kind: z.enum(APP_SURFACE_KINDS),
-		presentation: z.enum(['right_panel', 'full_page']),
-		filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
-	}),
-	currentProject: z.object({ id: projectId, name: z.string().max(500) }).optional(),
-	activeResource: z
-		.object({
-			kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
-			id: z.string().max(500),
-			title: z.string().max(500),
-			projectId: projectId.optional()
-		})
-		.optional(),
-	workbench: z
-		.object({
-			openTabs: z.array(noteContextSchema).max(20),
-			visiblePanes: z
-				.array(
-					noteContextSchema.extend({
-						revision: z.number().int().nonnegative(),
-						syncStatus: z.string().max(50),
-						dirty: z.boolean(),
-						dirtyExcerpt: z.string().max(4000).optional()
-					})
-				)
-				.max(2),
-			focusedNoteId: noteId.optional(),
-			otherVisibleNoteId: noteId.optional(),
-			openChatTabs: z
-				.array(
-					z.object({
-						sessionKey: id,
-						conversationId: conversationId.optional(),
-						title: z.string().max(500)
-					})
-				)
-				.max(20)
-				.optional()
-		})
-		.optional(),
-	recentInteractions: z
-		.array(
-			z.object({
-				kind: z.enum(['focus', 'select', 'open', 'edit']),
-				resourceKind: z.enum(['note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
-				resourceId: z.string().max(500),
-				occurredAt: z.string().datetime()
-			})
-		)
-		.max(5)
-});
-
-export const runIdInput = z.object({ runId });
-
-/**
- * `projectId`/`noteId` are the scope frozen when the request was staged; the
- * snapshot is captured at send time. They diverge whenever the user moves
- * screens in between, which is ordinary and must not be rejected — the
- * controller keeps the live snapshot as the effective scope and forwards the
- * staged one to the agent as `requestedScope`.
- */
-const conversationImages = z
-	.array(
-		z.object({
-			id,
-			mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
-			dataUrl: z.string().max(14_000_000),
-			name: z.string().min(1).max(255)
-		})
-	)
-	.max(4)
-	.optional();
-
-export const submitAgentRunSchema = z
-	.object({
-		requestId: id,
-		conversationId: conversationId.optional(),
-		input: z.string().trim(),
-		images: conversationImages,
-		// The same shape and the same cap. A separate field only because it must
-		// not enter the transcript as something the user attached — the count and
-		// size budget they share is enforced together in the controller.
-		contextImages: conversationImages,
-		model: z.string().nullable().optional(),
-		visionModel: z.string().nullable().optional(),
-		mode: z.enum(['approval_required', 'auto_accept']).nullable().optional(),
-		projectId: projectId.optional(),
-		noteId: noteId.optional(),
-		selection: pinnedSelectionSchema.optional(),
-		selections: z.array(pinnedSelectionSchema).max(MAX_PINNED_SELECTIONS).optional(),
-		contextNoteIds: z.array(noteId).optional(),
-		requestedSkillNames: z.array(z.string()).optional(),
-		requestedSkillNoteIds: z.array(noteId).optional(),
-		appContext: appContextSchema.optional(),
-		retryUserOrdinal: z.number().int().min(1).optional()
-	})
-	.refine((input) => input.input.length > 0 || Boolean(input.images?.length), {
-		message: 'A message or image is required.'
-	});
+export { runIdInput, submitAgentRunSchema };

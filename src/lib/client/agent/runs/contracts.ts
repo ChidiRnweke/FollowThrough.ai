@@ -41,8 +41,13 @@ export interface StoredAgentRunClientState {
 	readonly pendingRequestId?: string;
 }
 
+export type StoredAgentRunClientStateResult =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'valid'; readonly state: StoredAgentRunClientState }
+	| { readonly kind: 'corrupt'; readonly message: string };
+
 export interface AgentRunClientStorage {
-	load(): StoredAgentRunClientState;
+	load(): StoredAgentRunClientStateResult;
 	save(state: StoredAgentRunClientState): void;
 	clear(): void;
 }

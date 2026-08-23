@@ -92,11 +92,30 @@ interface PersistedConversationChoices {
 	executionModeOverride?: AgentExecutionMode;
 }
 
-const persistedConversation = (key: string): PersistedConversationChoices => {
-	if (!browser) return {};
+type PersistedConversationResult =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'valid'; readonly choices: PersistedConversationChoices }
+	| { readonly kind: 'corrupt'; readonly message: string };
+
+const persistedConversationSchema = z.object({
+	conversationId: z.string().uuid().transform((value) => value as ConversationId).optional(),
+	modelOverride: z.string().nullable().optional(),
+	visionModelOverride: z.string().nullable().optional(),
+	executionModeOverride: z.enum(['approval_required', 'auto_accept']).optional()
+});
+
+const persistedConversation = (key: string): PersistedConversationResult => {
+	if (!browser) return { kind: 'missing' };
 	const stored = sessionStorage.getItem(key);
-	if (stored === null) return {};
-	return JSON.parse(stored) as PersistedConversationChoices;
+	if (stored === null) return { kind: 'missing' };
+	try {
+		return { kind: 'valid', choices: persistedConversationSchema.parse(JSON.parse(stored)) };
+	} catch (error) {
+		return {
+			kind: 'corrupt',
+			message: error instanceof Error ? error.message : 'Saved conversation state is unreadable'
+		};
+	}
 };
 
 /**
@@ -340,6 +359,7 @@ export class ChatStore {
 	cursor = $state('0');
 	attempt = $state(0);
 	connection = $state<'detached' | 'connected' | 'reconnecting' | 'offline'>('detached');
+	persistenceError = $state<string | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
 	private eventConnection?: AgentRunEventConnection;
 	private activeReply?: ChatEntry;
@@ -360,10 +380,13 @@ export class ChatStore {
 	initialize(defaultMode: AgentExecutionMode): void {
 		if (this.initialized) return;
 		const persisted = persistedConversation(this.storageKey);
-		this.conversationId = persisted.conversationId;
-		this.modelOverride = persisted.modelOverride ?? null;
-		this.visionModelOverride = persisted.visionModelOverride ?? null;
-		this.executionModeOverride = persisted.executionModeOverride ?? defaultMode;
+		if (persisted.kind === 'corrupt')
+			this.persistenceError = `Saved chat settings were corrupt. Reset them to continue safely. ${persisted.message}`;
+		const choices = persisted.kind === 'valid' ? persisted.choices : {};
+		this.conversationId = choices.conversationId;
+		this.modelOverride = choices.modelOverride ?? null;
+		this.visionModelOverride = choices.visionModelOverride ?? null;
+		this.executionModeOverride = choices.executionModeOverride ?? defaultMode;
 		this.initialized = true;
 	}
 
@@ -411,8 +434,11 @@ export class ChatStore {
 				}
 				if (activeStatuses.includes(snapshot.run.status) && reply) {
 					const stored = this.storage.load();
-					const resumeCursor = stored.runId === snapshot.run.id ? stored.cursor : '0';
-					const resumeAttempt = stored.runId === snapshot.run.id ? stored.attempt : 0;
+					if (stored.kind === 'corrupt')
+						this.persistenceError = `The saved run resume marker was corrupt. The run is being replayed from its durable server record. ${stored.message}`;
+					const saved = stored.kind === 'valid' ? stored.state : undefined;
+					const resumeCursor = saved?.runId === snapshot.run.id ? saved.cursor : '0';
+					const resumeAttempt = saved?.runId === snapshot.run.id ? saved.attempt : 0;
 					this.attach(reply, snapshot.run.id, resumeCursor, resumeAttempt);
 				}
 			}
@@ -422,6 +448,12 @@ export class ChatStore {
 		} finally {
 			this.loading = false;
 		}
+	}
+
+	resetCorruptPersistence(): void {
+		if (browser) sessionStorage.removeItem(this.storageKey);
+		this.storage.clear();
+		this.persistenceError = undefined;
 	}
 
 	persistConversationChoices(): void {
@@ -835,3 +867,4 @@ export class ChatStore {
 		});
 	}
 }
+import { z } from 'zod';

@@ -582,6 +582,14 @@
 			it.
 		</div>
 	{/if}
+	{#if chat.persistenceError}
+		<div class="mb-4 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm" role="alert">
+			<span>{chat.persistenceError}</span>
+			<button class="shrink-0 underline" type="button" onclick={() => chat.resetCorruptPersistence()}>
+				Reset saved state
+			</button>
+		</div>
+	{/if}
 
 	<!--
 		One measure for the whole column. `max-w-3xl` never binds in the 384px docked

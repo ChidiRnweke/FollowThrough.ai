@@ -1,4 +1,9 @@
-import type { AgentRunEventRecord, AgentRunId, ConversationId } from '$lib/models/agent';
+import {
+	submitAgentRunInputSchema,
+	type AgentRunEventRecord,
+	type AgentRunId,
+	type ConversationId
+} from '$lib/models/agent';
 import type { AgentRunTransport } from './contracts';
 import {
 	cancelAgentRun,
@@ -11,48 +16,7 @@ import {
 
 export class RemoteAgentRunTransport implements AgentRunTransport {
 	async submit(input: Parameters<AgentRunTransport['submit']>[0]) {
-		const {
-			images,
-			contextImages,
-			selections,
-			contextNoteIds,
-			requestedSkillNames,
-			requestedSkillNoteIds,
-			appContext,
-			...scalars
-		} = input;
-		const mutableAppContext = appContext
-			? (() => {
-					const { workbench, recentInteractions, ...context } = appContext;
-					return {
-						...context,
-						recentInteractions: [...recentInteractions],
-						...(workbench
-							? {
-									workbench: (() => {
-										const { openTabs, visiblePanes, openChatTabs, ...workbenchState } = workbench;
-										return {
-											...workbenchState,
-											openTabs: [...openTabs],
-											visiblePanes: [...visiblePanes],
-											...(openChatTabs ? { openChatTabs: [...openChatTabs] } : {})
-										};
-									})()
-								}
-							: {})
-					};
-				})()
-			: undefined;
-		return submitAgentRun({
-			...scalars,
-			...(images ? { images: [...images] } : {}),
-			...(contextImages ? { contextImages: [...contextImages] } : {}),
-			...(selections ? { selections: [...selections] } : {}),
-			...(contextNoteIds ? { contextNoteIds: [...contextNoteIds] } : {}),
-			...(requestedSkillNames ? { requestedSkillNames: [...requestedSkillNames] } : {}),
-			...(requestedSkillNoteIds ? { requestedSkillNoteIds: [...requestedSkillNoteIds] } : {}),
-			...(mutableAppContext ? { appContext: mutableAppContext } : {})
-		});
+		return submitAgentRun(submitAgentRunInputSchema.parse(input));
 	}
 
 	async get(runId: AgentRunId) {

@@ -1,4 +1,8 @@
-import type { AgentRunClientStorage, StoredAgentRunClientState } from './contracts';
+import type {
+	AgentRunClientStorage,
+	StoredAgentRunClientState,
+	StoredAgentRunClientStateResult
+} from './contracts';
 import type { AgentRunId } from '$lib/models/agent';
 import { z } from 'zod';
 
@@ -20,6 +24,18 @@ const parseStoredState = (value: string): StoredAgentRunClientState => {
 	};
 };
 
+export const readStoredAgentRunState = (value: string | null): StoredAgentRunClientStateResult => {
+	if (value === null) return { kind: 'missing' };
+	try {
+		return { kind: 'valid', state: parseStoredState(value) };
+	} catch (error) {
+		return {
+			kind: 'corrupt',
+			message: error instanceof Error ? error.message : 'Saved run state is unreadable'
+		};
+	}
+};
+
 /**
  * The resume point for one chat session's run.
  *
@@ -34,10 +50,9 @@ export class SessionAgentRunStorage implements AgentRunClientStorage {
 		this.key = sessionKey === undefined ? KEY_PREFIX : `${KEY_PREFIX}.${sessionKey}`;
 	}
 
-	load(): StoredAgentRunClientState {
-		if (typeof sessionStorage === 'undefined') return { cursor: '0', attempt: 0 };
-		const stored = sessionStorage.getItem(this.key);
-		return stored === null ? { cursor: '0', attempt: 0 } : parseStoredState(stored);
+	load(): StoredAgentRunClientStateResult {
+		if (typeof sessionStorage === 'undefined') return { kind: 'missing' };
+		return readStoredAgentRunState(sessionStorage.getItem(this.key));
 	}
 
 	save(state: StoredAgentRunClientState): void {

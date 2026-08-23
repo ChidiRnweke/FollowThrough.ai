@@ -11,7 +11,8 @@ import type {
 import type {
 	AgentRunClientStorage,
 	AgentRunTransport,
-	StoredAgentRunClientState
+	StoredAgentRunClientState,
+	StoredAgentRunClientStateResult
 } from '$lib/client/agent/runs/contracts';
 import type { NoteId } from '$lib/models/notes';
 import { ChatStore, entryText, type ContextChip, type SelectionChip } from './chat.svelte';
@@ -21,8 +22,8 @@ const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 
 class MemoryStorage implements AgentRunClientStorage {
 	state: StoredAgentRunClientState = { cursor: '0', attempt: 0 };
-	load() {
-		return this.state;
+	load(): StoredAgentRunClientStateResult {
+		return { kind: 'valid', state: this.state };
 	}
 	save(state: StoredAgentRunClientState) {
 		this.state = state;
