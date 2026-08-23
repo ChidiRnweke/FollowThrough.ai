@@ -20,11 +20,15 @@ const appendWebSearchTool = (body: string, tool: WebResearchTool): string => {
 	return JSON.stringify({ ...request, tools });
 };
 
-/** Wraps the OpenRouter fetch to append a web-search tool to every chat-completions request, so web search is available without every call site wiring it in by hand. */
+/** Adds OpenRouter's server-side search tool at the HTTP boundary for both supported generation protocols. */
 export const withWebResearch =
 	(delegate: Fetch = globalThis.fetch, tool: WebResearchTool = openRouterWebSearchTool()): Fetch =>
 	async (input, init) => {
-		if (!requestUrl(input).pathname.endsWith('/chat/completions') || typeof init?.body !== 'string')
+		const pathname = requestUrl(input).pathname;
+		if (
+			(!pathname.endsWith('/chat/completions') && !pathname.endsWith('/responses')) ||
+			typeof init?.body !== 'string'
+		)
 			return delegate(input, init);
 		return delegate(input, { ...init, body: appendWebSearchTool(init.body, tool) });
 	};

@@ -857,6 +857,18 @@ const conversationImageSchema = z
 		name: z.string()
 	})
 	.strict();
+const ianaTimeZoneSchema = z.string().refine(
+	(value) => {
+		try {
+			new Intl.DateTimeFormat('en', { timeZone: value });
+			return true;
+			// audit-allow: silent-catch — Zod refine converts Intl's RangeError into an explicit validation failure.
+		} catch {
+			return false;
+		}
+	},
+	{ message: 'Client timeZone must be a valid IANA time zone' }
+);
 const appContextSnapshotSchema = z
 	.object({
 		version: z.literal(1),
@@ -864,7 +876,7 @@ const appContextSnapshotSchema = z
 		client: z
 			.object({
 				locale: z.string(),
-				timeZone: z.string(),
+				timeZone: ianaTimeZoneSchema,
 				localDate: z.string(),
 				layout: z.enum(['compact', 'wide'])
 			})
@@ -930,7 +942,7 @@ const appContextSnapshotSchema = z
 						z
 							.object({
 								sessionKey: z.string(),
-				conversationId: z.string().min(1).optional(),
+								conversationId: z.string().min(1).optional(),
 								title: z.string()
 							})
 							.strict()
@@ -957,7 +969,10 @@ const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().m
 const submittedImagesSchema = z.array(conversationImageSchema).max(4).optional();
 
 export const agentRunIdInputSchema = z.object({
-	runId: z.string().uuid().transform((value) => value as AgentRunId)
+	runId: z
+		.string()
+		.uuid()
+		.transform((value) => value as AgentRunId)
 });
 
 export const submitAgentRunInputSchema = z

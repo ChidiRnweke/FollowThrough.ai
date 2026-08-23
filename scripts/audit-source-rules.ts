@@ -15,7 +15,9 @@ const shapeCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAssertion =>
 	(ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) &&
 	node.type.getText() !== 'const' &&
 	(ts.isObjectLiteralExpression(unwrap(node.expression)) ||
-		(node.type.kind === ts.SyntaxKind.NeverKeyword && ts.isIdentifier(unwrap(node.expression))) ||
+		(node.type.kind === ts.SyntaxKind.NeverKeyword &&
+			!ts.isPropertyAccessExpression(unwrap(node.expression)) &&
+			!ts.isElementAccessExpression(unwrap(node.expression))) ||
 		(node.type.kind === ts.SyntaxKind.UnknownKeyword &&
 			(ts.isAsExpression(node.parent) || ts.isTypeAssertionExpression(node.parent))));
 const explicitFailureResult = (node: ts.ReturnStatement): boolean => {

@@ -535,7 +535,7 @@ export class AgentReasoning {
 				// is what the app supplies — a render of the diagram the agent drew,
 				// which it otherwise has no way to look at.
 				const visibleImages = allImages(request);
-				const initialInput =
+				const initialInput: string | AgentInputItem[] =
 					visibleImages.length && !visionDescriptions
 						? [
 								{
@@ -553,7 +553,9 @@ export class AgentReasoning {
 								}
 							]
 						: fallbackPrompt;
-				const stream = await runner.run(agent, (state ?? initialInput) as never, {
+				const runInput: string | AgentInputItem[] | RunState<unknown, typeof agent> =
+					state ?? initialInput;
+				const stream = await runner.run(agent, runInput, {
 					stream: true,
 					session,
 					maxTurns: request.maxTurns ?? DEFAULT_MAX_TURNS,

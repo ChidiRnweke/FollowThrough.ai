@@ -117,15 +117,39 @@ type DiagramWorkflowObserver = <T>(
 	output: (result: T) => string
 ) => Promise<T>;
 
-const SubmitDiagram = z.object({
-	title: z.string().trim().min(1).max(120).optional(),
-	source: z.string().trim().min(1).max(50_000)
-});
+const SubmitDiagram = z
+	.object({
+		title: z.string().trim().min(1).max(120).optional(),
+		source: z.string().trim().min(1).max(50_000)
+	})
+	.strict();
 
-const SubmitDrawio = z.object({
-	title: z.string().trim().min(1).max(120),
-	source: z.string().trim().min(1).max(2_000_000)
-});
+const SubmitDrawio = z
+	.object({
+		title: z.string().trim().min(1).max(120),
+		source: z.string().trim().min(1).max(2_000_000)
+	})
+	.strict();
+
+const submitToolParameters = (schema: z.ZodObject) => {
+	const converted = z.toJSONSchema(schema, { io: 'input' });
+	if (
+		converted.type !== 'object' ||
+		converted.additionalProperties !== false ||
+		typeof converted.properties !== 'object' ||
+		converted.properties === null
+	)
+		throw new Error('Diagram submission parameters must convert to a strict object schema');
+	return {
+		type: 'object' as const,
+		properties: converted.properties,
+		required: Array.isArray(converted.required)
+			? converted.required.filter((name): name is string => typeof name === 'string')
+			: [],
+		additionalProperties: false as const,
+		...(converted.description ? { description: converted.description } : {})
+	};
+};
 
 export class DrawioSubmissionCollector {
 	private accepted?: z.infer<typeof SubmitDrawio>;
@@ -487,10 +511,8 @@ export class DiagramAuthoring {
 				task.operation === 'convert'
 					? 'Submit a title and final uncompressed draw.io mxfile XML. This is the only tool that completes conversion.'
 					: 'Submit the final Mermaid source. This is the only tool that completes the diagram task. Labels: for multi-line text use escaped \\n inside quoted labels; never use HTML tags such as <br/>.',
-			parameters: z.toJSONSchema(
-				task.operation === 'convert' ? SubmitDrawio : SubmitDiagram
-			) as never,
-			strict: false,
+			parameters: submitToolParameters(task.operation === 'convert' ? SubmitDrawio : SubmitDiagram),
+			strict: true,
 			errorFunction: (_context, error) =>
 				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
 			execute: async (value) => {

@@ -138,13 +138,14 @@ describe('Agent runtime boundary', () => {
 		expect(instructions).toContain('14:30:00');
 	});
 
-	it('falls back to UTC when the client timezone is invalid', () => {
-		const instructions = buildAgentInstructions(
-			{ appContext: { client: { timeZone: 'Mars/Olympus' } } },
-			'',
-			new Date('2026-08-01T12:30:00.000Z')
-		);
-		expect(instructions).toContain('(UTC)');
+	it('does not fabricate UTC for an impossible resolved timezone', () => {
+		expect(() =>
+			buildAgentInstructions(
+				{ appContext: { client: { timeZone: 'Mars/Olympus' } } },
+				'',
+				new Date('2026-08-01T12:30:00.000Z')
+			)
+		).toThrow('Invalid time zone');
 	});
 
 	it('tells the model a searched tool becomes directly callable', () => {

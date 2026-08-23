@@ -25,7 +25,7 @@ import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/ag
 import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
-import type { LocalDate } from '$lib/models/workspace';
+import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
@@ -426,12 +426,13 @@ export const agentToolCoverage = {
 } as const satisfies AgentToolCoverage;
 
 const none = z.object({});
+const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
 const temporal = <T extends z.ZodRawShape>(shape: T) =>
 	z
 		.object({
 			...shape,
-			createdAfter: z.iso.datetime({ offset: true }).optional(),
-			createdBefore: z.iso.datetime({ offset: true }).optional()
+			createdAfter: dateTime.optional(),
+			createdBefore: dateTime.optional()
 		})
 		.superRefine((value, context) => {
 			const range = value as { createdAfter?: string; createdBefore?: string };
@@ -481,17 +482,52 @@ const createdRange = (value: unknown): { createdAfter?: string; createdBefore?: 
 	};
 };
 const id = z.string().uuid();
-const projectId = z.string().uuid().transform((value) => value as ProjectId);
-const noteId = z.string().uuid().transform((value) => value as NoteId);
-const todoId = z.string().uuid().transform((value) => value as TodoId);
-const diagramId = z.string().uuid().transform((value) => value as DiagramId);
-const suggestionId = z.string().uuid().transform((value) => value as SuggestionId);
-const apiTokenId = z.string().uuid().transform((value) => value as ApiTokenId);
-const artifactId = z.string().uuid().transform((value) => value as ArtifactId);
-const noteRevisionId = z.string().uuid().transform((value) => value as NoteRevisionId);
-const noteEtag = z.string().min(1).transform((value) => value as NoteEtag);
-const memoryEntryId = z.string().uuid().transform((value) => value as MemoryEntryId);
-const confidence = z.number().int().min(0).max(100).transform((value) => value as Confidence);
+const projectId = z
+	.string()
+	.uuid()
+	.transform((value) => value as ProjectId);
+const noteId = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteId);
+const todoId = z
+	.string()
+	.uuid()
+	.transform((value) => value as TodoId);
+const diagramId = z
+	.string()
+	.uuid()
+	.transform((value) => value as DiagramId);
+const suggestionId = z
+	.string()
+	.uuid()
+	.transform((value) => value as SuggestionId);
+const apiTokenId = z
+	.string()
+	.uuid()
+	.transform((value) => value as ApiTokenId);
+const artifactId = z
+	.string()
+	.uuid()
+	.transform((value) => value as ArtifactId);
+const noteRevisionId = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteRevisionId);
+const noteEtag = z
+	.string()
+	.min(1)
+	.transform((value) => value as NoteEtag);
+const memoryEntryId = z
+	.string()
+	.uuid()
+	.transform((value) => value as MemoryEntryId);
+const confidence = z
+	.number()
+	.int()
+	.min(0)
+	.max(100)
+	.transform((value) => value as Confidence);
 /** One anchored replacement in a note or skill body. */
 const noteEdit = z.object({
 	oldText: z.string().min(1),
@@ -565,9 +601,7 @@ const defineTool = <T extends z.ZodObject>(
 		description,
 		classification,
 		parameters: strictParameters,
-		...(preflight
-			? { preflight: async (input) => preflight(parameters.parse(input)) }
-			: {}),
+		...(preflight ? { preflight: async (input) => preflight(parameters.parse(input)) } : {}),
 		execute: async (input) => {
 			strictParameters.parse(input);
 			const parsed = parameters.parse(input);
@@ -772,8 +806,7 @@ export class AgentTools {
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
 		return TOOL_CATALOG.filter(
-			(entry) =>
-				LOCKED_TOOL_NAMES.includes(entry.name) || this.toolAccess.isEnabled(entry.name)
+			(entry) => LOCKED_TOOL_NAMES.includes(entry.name) || this.toolAccess.isEnabled(entry.name)
 		);
 	}
 
@@ -818,819 +851,816 @@ export class AgentTools {
 		});
 		return declaresNoFields(definition.parameters) ? withBlankInputTolerated(built) : built;
 	}
-
 }
 
-const sharedToolDefinitions = (
-	factory: ControllerFactory,
-	actor: ActorContext
-): Definition[] => {
-		const define = defineTool;
-		const retrieval = (): Definition[] => [
-			define(
-				'search',
-				toolDescription('search'),
-				'read',
-				temporal({ query: z.string().min(1), projectId: projectId.optional() }),
-				(input) =>
-					factory.retrieval().search(actor, {
-						query: input.query,
-						...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
-						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
-						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
-					})
-			),
-			define(
-				'search_note',
-				toolDescription('search_note'),
-				'read',
-				temporal({ noteId: noteId, query: z.string().min(1) }),
-				(input) =>
-					factory.retrieval().search(actor, {
-						query: input.query,
-						noteId: input.noteId as NoteId,
-						...(input.createdAfter ? { createdAfter: input.createdAfter as never } : {}),
-						...(input.createdBefore ? { createdBefore: input.createdBefore as never } : {})
-					})
-			),
-			define(
-				'get_workspace_context',
-				toolDescription('get_workspace_context'),
-				'read',
-				none,
-				async () => {
-					const shell = await factory.workspace().getShellContext(actor);
-					return {
-						user: projectUser(shell.user),
-						projects: shell.projects.map(projectProject),
-						// Structure only — the agent calls get_note for content.
-						noteTree: shell.noteTree.map(projectNoteSummary),
-						skills: shell.skills,
-						pendingSuggestionCount: shell.pendingSuggestionCount
-					};
-				}
-			),
-			define(
-				'get_today_view',
-				toolDescription('get_today_view'),
-				'read',
-				z.object({ today: localDate }),
-				(input) => factory.workspace().getTodayView(actor, input)
-			),
-		];
-		const projects = (): Definition[] => [
-			define('list_projects', toolDescription('list_projects'), 'read', temporal({}), async () => ({
-				projects: (await factory.projects().list(actor)).projects.map(projectProject)
-			})),
-			define(
-				'get_project',
-				toolDescription('get_project'),
-				'read',
-				z.object({ projectId: projectId }),
-				(input) => factory.projects().get(actor, input)
-			),
-			define(
-				'create_project',
-				toolDescription('create_project'),
-				'mutation',
-				z.object({ name: z.string().min(1), description: z.string().optional() }),
-				(input) => factory.projects().create(actor, input)
-			),
-			define(
-				'rename_project',
-				toolDescription('rename_project'),
-				'mutation',
-				z.object({ projectId: projectId, name: z.string().min(1) }),
-				(input) => factory.projects().rename(actor, input)
-			),
-			define(
-				'archive_project',
-				toolDescription('archive_project'),
-				'mutation',
-				z.object({ projectId: projectId }),
-				(input) => factory.projects().archive(actor, input)
-			),
-			define(
-				'create_folder',
-				toolDescription('create_folder'),
-				'mutation',
-				z.object({ projectId: projectId, name: z.string().min(1), parentId: noteId.optional() }),
-				(input) => factory.projects().createFolder(actor, input)
-			),
-			define(
-				'move_project_entry',
-				toolDescription('move_project_entry'),
-				'mutation',
-				z.object({
-					projectId: projectId,
-					entryId: noteId,
-					parentId: noteId.optional(),
-					position: z.number().int().nonnegative()
-				}),
-				(input) => factory.projects().move(actor, input)
-			),
-		];
-		const notes = (): Definition[] => [
-			define(
-				'get_note',
-				toolDescription('get_note'),
-				'read',
-				z.object({ noteId: noteId }),
-				async (input) => {
-					const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-					// The read and write surfaces must share one representation: the Markdown
-					// string edit_note patches and save_note replaces, produced by the same
-					// serializer the patch anchors against. ProseMirror JSON is the storage
-					// format and the model never needs it, so it stays off the wire.
-					return projectNoteView(view, noteMarkdownFromContent(view.note.document));
-				}
-			),
-			define(
-				'create_note',
-				toolDescription('create_note'),
-				'mutation',
-				z.object({ title: z.string().min(1), projectId: projectId.optional(), parentId: noteId.optional() }),
-				(input) => factory.notes().create(actor, input)
-			),
-			define(
-				'save_note',
-				toolDescription('save_note'),
-				'mutation',
-				z.object({
-					noteId: noteId,
-					markdown: z.string()
-				}),
-				async (input) => {
-					const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-					const content = noteContentFromMarkdown(input.markdown);
-					const saved = await factory.notes().save(actor, {
-						note: { ...current.note, ...content }
-					});
-					return {
-						noteId: saved.note.id,
-						title: saved.note.title,
-						currentRevision: saved.note.currentRevision
-					};
-				}
-			),
-			define(
-				'edit_note',
-				toolDescription('edit_note'),
-				'mutation',
-				noteEdits,
-				async (input) => {
-					const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-					const before = noteMarkdownFromContent(current.note.document);
-					const patched = applyNotePatch(before, input.edits);
-					// A failure is returned rather than thrown: thrown errors are stringified
-					// into a bare message, which would strip the occurrence counts and nearest
-					// matches the model needs to correct itself on the next turn.
-					if (!patched.ok)
-						return {
-							failure: 'No edits were applied.',
-							problems: patched.failures.map(describeNotePatchFailure),
-							failures: patched.failures
-						};
-					const content = noteContentFromMarkdown(patched.markdown);
-					const saved = await factory.notes().save(actor, {
-						note: { ...current.note, ...content }
-					});
-					return {
-						noteId: saved.note.id,
-						title: saved.note.title,
-						currentRevision: saved.note.currentRevision,
-						appliedEdits: patched.appliedEdits,
-						matchedTexts: patched.matchedTexts
-					};
-				},
-				async (input) => {
-					const parsed = noteEdits.safeParse(input);
-					if (!parsed.success) return false;
-					const current = await factory.notes().get(actor, {
-						noteId: parsed.data.noteId as NoteId
-					});
-					return applyNotePatch(noteMarkdownFromContent(current.note.document), parsed.data.edits)
-						.ok;
-				}
-			),
-			define(
-				'rename_note',
-				toolDescription('rename_note'),
-				'mutation',
-				z.object({ noteId: noteId, title: z.string().min(1) }),
-				(input) => factory.notes().rename(actor, input)
-			),
-			define(
-				'archive_note',
-				toolDescription('archive_note'),
-				'mutation',
-				z.object({ noteId: noteId }),
-				(input) => factory.notes().archive(actor, input)
-			),
-			define(
-				'restore_note',
-				toolDescription('restore_note'),
-				'mutation',
-				z.object({ noteId: noteId }),
-				(input) => factory.notes().restore(actor, input)
-			),
-			define(
-				'list_trashed_notes',
-				toolDescription('list_trashed_notes'),
-				'read',
-				z.object({ projectId: projectId.optional() }),
-				(input) => factory.notes().listTrash(actor, input)
-			),
-			define(
-				'delete_note_forever',
-				toolDescription('delete_note_forever'),
-				'mutation',
-				z.object({ noteId: noteId }),
-				(input) => factory.notes().deleteForever(actor, input)
-			),
-			define(
-				'empty_note_trash',
-				toolDescription('empty_note_trash'),
-				'mutation',
-				z.object({ projectId: projectId.optional() }),
-				(input) => factory.notes().emptyTrash(actor, input)
-			),
-			define(
-				'list_note_versions',
-				toolDescription('list_note_versions'),
-				'read',
-				z.object({ noteId: noteId }),
-				(input) => factory.notes().listRevisions(actor, input)
-			),
-			define(
-				'read_note_version',
-				toolDescription('read_note_version'),
-				'read',
-				z.object({ noteId: noteId, revisionId: noteRevisionId }),
-				(input) => factory.notes().readRevision(actor, input)
-			),
-			define(
-				'diff_note_versions',
-				toolDescription('diff_note_versions'),
-				'read',
-				z.object({
-					noteId: noteId,
-					revisionId: noteRevisionId,
-					againstRevisionId: noteRevisionId.optional()
-				}),
-				(input) => factory.notes().compareRevisions(actor, input)
-			),
-			define(
-				'restore_note_version',
-				toolDescription('restore_note_version'),
-				'mutation',
-				z.object({ noteId: noteId, revisionId: noteRevisionId }),
-				(input) => factory.notes().restoreRevision(actor, input)
-			),
-			define(
-				'publish_note',
-				toolDescription('publish_note'),
-				'mutation',
-				z.object({ noteId: noteId, baseEtag: noteEtag }),
-				(input) => factory.notes().publish(actor, input)
-			),
-			define(
-				'discard_note_draft',
-				toolDescription('discard_note_draft'),
-				'mutation',
-				z.object({ noteId: noteId }),
-				(input) => factory.notes().discardDraft(actor, input)
-			),
-		];
-		const todos = (): Definition[] => [
-			define(
-				'list_todos',
-				toolDescription('list_todos'),
-				'read',
-				temporal({
-					projectId: projectId.optional(),
-					noteId: noteId.optional(),
-					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
-					responsibility: z.enum(['mine', 'waiting_on']).optional(),
-					dueBefore: localDate.optional()
-				}),
-				async (input) => ({
-					todos: (await factory.todos().list(actor, input)).todos.map((view) =>
-						projectTodo(view.todo)
-					)
+const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext): Definition[] => {
+	const define = defineTool;
+	const retrieval = (): Definition[] => [
+		define(
+			'search',
+			toolDescription('search'),
+			'read',
+			temporal({ query: z.string().min(1), projectId: projectId.optional() }),
+			(input) =>
+				factory.retrieval().search(actor, {
+					query: input.query,
+					...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
+					...(input.createdAfter ? { createdAfter: input.createdAfter } : {}),
+					...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
 				})
-			),
-			define(
-				'create_todo',
-				toolDescription('create_todo'),
-				'mutation',
-				z.object({
-					projectId: projectId,
-					title: z.string().min(1),
-					description: z.string().optional(),
-					responsibility: z.enum(['mine', 'waiting_on']),
-					waitingOn: z.string().optional(),
-					dueDate: localDate.optional()
-				}),
-				(input) => factory.todos().create(actor, input)
-			),
-			define(
-				'create_todos',
-				toolDescription('create_todos'),
-				'mutation',
-				z.object({
-					projectId: projectId,
-					todos: z
-						.array(
-							z.object({
-								title: z.string().min(1),
-								description: z.string().optional(),
-								responsibility: z.enum(['mine', 'waiting_on']),
-								waitingOn: z.string().optional(),
-								dueDate: localDate.optional()
-							})
-						)
-						.min(1)
-						.max(20)
-				}),
-				async (input) => {
-					const created = [];
-					for (const todo of input.todos) {
-						const { dueDate, ...fields } = todo;
-						created.push(
-							await factory.todos().create(actor, {
-								...fields,
-								projectId: input.projectId,
-								...(dueDate ? { dueDate } : {})
-							})
-						);
-					}
-					return { todos: created };
-				}
-			),
-			define(
-				'update_todo',
-				toolDescription('update_todo'),
-				'mutation',
-				z.object({
-					todoId: todoId,
-					title: z.string().optional(),
-					description: z.string().nullable().optional(),
-					dueDate: localDate.nullable().optional(),
-					responsibility: z.enum(['mine', 'waiting_on']).optional(),
-					waitingOn: z.string().nullable().optional(),
-					linkedNoteId: noteId.nullable().optional(),
-					status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
-				}),
-				(input) => factory.todos().update(actor, input)
-			),
-		];
-		const diagrams = (): Definition[] => [
-			define(
-				'revise_mermaid_diagram',
-				toolDescription('revise_mermaid_diagram'),
-				'mutation',
-				z.object({ diagramId: diagramId, instruction: z.string().min(1) }),
-				(input) => factory.diagrams().reviseMermaid(actor, input)
-			),
-			define(
-				'search_icons',
-				toolDescription('search_icons'),
-				'read',
-				z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
-				(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
-			),
-			define(
-				'read_project_diagram',
-				toolDescription('read_project_diagram'),
-				'read',
-				z.object({ diagramId: diagramId, includeSource: z.boolean().optional() }),
-				(input) => factory.diagramStudio().readProjectDiagram(actor, input)
-			),
-			define(
-				'promote_diagram',
-				toolDescription('promote_diagram'),
-				'proposal',
-				z.object({ diagramId: diagramId }),
-				(input) => factory.diagrams().promote(actor, input)
-			),
-		];
-		const suggestions = (): Definition[] => [
-			define(
-				'list_suggestions',
-				toolDescription('list_suggestions'),
-				'read',
-				temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
-				async (input) => ({
-					suggestions: (await factory.suggestions().list(actor, input)).groups.flatMap(
-						(group) => group.suggestions.map((view) => projectSuggestion(view.suggestion))
-					)
+		),
+		define(
+			'search_note',
+			toolDescription('search_note'),
+			'read',
+			temporal({ noteId: noteId, query: z.string().min(1) }),
+			(input) =>
+				factory.retrieval().search(actor, {
+					query: input.query,
+					noteId: input.noteId as NoteId,
+					...(input.createdAfter ? { createdAfter: input.createdAfter } : {}),
+					...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
 				})
-			),
-			define(
-				'accept_suggestion',
-				toolDescription('accept_suggestion'),
-				'mutation',
-				z.object({ suggestionId: suggestionId }),
-				// `acceptReviewed`, not `accept`: a draw.io diagram accepted without its
-				// review has no preview and can never gain one, and that guard lives in
-				// `acceptReviewed`. Bound to the raw `accept`, this tool was the one
-				// caller in the system that could mint a preview-less diagram. For every
-				// other kind of suggestion the two are the same call.
-				(input) => factory.suggestions().acceptReviewed(actor, input)
-			),
-			define(
-				'reject_suggestion',
-				toolDescription('reject_suggestion'),
-				'mutation',
-				z.object({ suggestionId: suggestionId }),
-				(input) => factory.suggestions().reject(actor, input)
-			),
-			define(
-				'revert_suggestion',
-				toolDescription('revert_suggestion'),
-				'mutation',
-				z.object({ suggestionId: suggestionId }),
-				(input) => factory.suggestions().revert(actor, input)
-			),
-		];
-		const skills = (): Definition[] => [
-			define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
-				factory.skills().list(actor)
-			),
-			define(
-				'save_skill',
-				toolDescription('save_skill'),
-				'mutation',
-				z.object({ noteId: noteId, markdown: z.string() }),
-				async (input) => {
-					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-					if (view.skill.note.kind !== 'skill')
-						return { failure: 'save_skill only edits skill notes; this note is not a skill.' };
-					const content = noteContentFromMarkdown(input.markdown);
-					const saved = await factory.notes().save(actor, {
-						note: { ...view.skill.note, ...content }
-					});
+		),
+		define(
+			'get_workspace_context',
+			toolDescription('get_workspace_context'),
+			'read',
+			none,
+			async () => {
+				const shell = await factory.workspace().getShellContext(actor);
+				return {
+					user: projectUser(shell.user),
+					projects: shell.projects.map(projectProject),
+					// Structure only — the agent calls get_note for content.
+					noteTree: shell.noteTree.map(projectNoteSummary),
+					skills: shell.skills,
+					pendingSuggestionCount: shell.pendingSuggestionCount
+				};
+			}
+		),
+		define(
+			'get_today_view',
+			toolDescription('get_today_view'),
+			'read',
+			z.object({ today: localDate }),
+			(input) => factory.workspace().getTodayView(actor, input)
+		)
+	];
+	const projects = (): Definition[] => [
+		define('list_projects', toolDescription('list_projects'), 'read', temporal({}), async () => ({
+			projects: (await factory.projects().list(actor)).projects.map(projectProject)
+		})),
+		define(
+			'get_project',
+			toolDescription('get_project'),
+			'read',
+			z.object({ projectId: projectId }),
+			(input) => factory.projects().get(actor, input)
+		),
+		define(
+			'create_project',
+			toolDescription('create_project'),
+			'mutation',
+			z.object({ name: z.string().min(1), description: z.string().optional() }),
+			(input) => factory.projects().create(actor, input)
+		),
+		define(
+			'rename_project',
+			toolDescription('rename_project'),
+			'mutation',
+			z.object({ projectId: projectId, name: z.string().min(1) }),
+			(input) => factory.projects().rename(actor, input)
+		),
+		define(
+			'archive_project',
+			toolDescription('archive_project'),
+			'mutation',
+			z.object({ projectId: projectId }),
+			(input) => factory.projects().archive(actor, input)
+		),
+		define(
+			'create_folder',
+			toolDescription('create_folder'),
+			'mutation',
+			z.object({ projectId: projectId, name: z.string().min(1), parentId: noteId.optional() }),
+			(input) => factory.projects().createFolder(actor, input)
+		),
+		define(
+			'move_project_entry',
+			toolDescription('move_project_entry'),
+			'mutation',
+			z.object({
+				projectId: projectId,
+				entryId: noteId,
+				parentId: noteId.optional(),
+				position: z.number().int().nonnegative()
+			}),
+			(input) => factory.projects().move(actor, input)
+		)
+	];
+	const notes = (): Definition[] => [
+		define(
+			'get_note',
+			toolDescription('get_note'),
+			'read',
+			z.object({ noteId: noteId }),
+			async (input) => {
+				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+				// The read and write surfaces must share one representation: the Markdown
+				// string edit_note patches and save_note replaces, produced by the same
+				// serializer the patch anchors against. ProseMirror JSON is the storage
+				// format and the model never needs it, so it stays off the wire.
+				return projectNoteView(view, noteMarkdownFromContent(view.note.document));
+			}
+		),
+		define(
+			'create_note',
+			toolDescription('create_note'),
+			'mutation',
+			z.object({
+				title: z.string().min(1),
+				projectId: projectId.optional(),
+				parentId: noteId.optional()
+			}),
+			(input) => factory.notes().create(actor, input)
+		),
+		define(
+			'save_note',
+			toolDescription('save_note'),
+			'mutation',
+			z.object({
+				noteId: noteId,
+				markdown: z.string()
+			}),
+			async (input) => {
+				const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+				const content = noteContentFromMarkdown(input.markdown);
+				const saved = await factory.notes().save(actor, {
+					note: { ...current.note, ...content }
+				});
+				return {
+					noteId: saved.note.id,
+					title: saved.note.title,
+					currentRevision: saved.note.currentRevision
+				};
+			}
+		),
+		define(
+			'edit_note',
+			toolDescription('edit_note'),
+			'mutation',
+			noteEdits,
+			async (input) => {
+				const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
+				const before = noteMarkdownFromContent(current.note.document);
+				const patched = applyNotePatch(before, input.edits);
+				// A failure is returned rather than thrown: thrown errors are stringified
+				// into a bare message, which would strip the occurrence counts and nearest
+				// matches the model needs to correct itself on the next turn.
+				if (!patched.ok)
 					return {
-						noteId: saved.note.id,
-						name: view.skill.name,
-						currentRevision: saved.note.currentRevision
+						failure: 'No edits were applied.',
+						problems: patched.failures.map(describeNotePatchFailure),
+						failures: patched.failures
 					};
-				}
-			),
-			define(
-				'edit_skill',
-				toolDescription('edit_skill'),
-				'mutation',
-				noteEdits,
-				async (input) => {
-					const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-					if (view.skill.note.kind !== 'skill')
-						return { failure: 'edit_skill only edits skill notes; this note is not a skill.' };
-					const before = noteMarkdownFromContent(view.skill.note.document);
-					const patched = applyNotePatch(before, input.edits);
-					// A failure is returned rather than thrown so the occurrence counts and
-					// nearest matches survive into the model's next attempt.
-					if (!patched.ok)
-						return {
-							failure: 'No edits were applied.',
-							problems: patched.failures.map(describeNotePatchFailure),
-							failures: patched.failures
-						};
-					const content = noteContentFromMarkdown(patched.markdown);
-					const saved = await factory.notes().save(actor, {
-						note: { ...view.skill.note, ...content }
-					});
-					return {
-						noteId: saved.note.id,
-						name: view.skill.name,
-						currentRevision: saved.note.currentRevision,
-						appliedEdits: patched.appliedEdits,
-						matchedTexts: patched.matchedTexts
-					};
-				},
-				async (input) => {
-					const parsed = noteEdits.safeParse(input);
-					if (!parsed.success) return false;
-					const view = await factory.skills().get(actor, { noteId: parsed.data.noteId as NoteId });
-					if (view.skill.note.kind !== 'skill') return false;
-					return applyNotePatch(
-						noteMarkdownFromContent(view.skill.note.document),
-						parsed.data.edits
-					).ok;
-				}
-			),
-			define(
-				'create_skill',
-				toolDescription('create_skill'),
-				'mutation',
-				z.object({
-					name: z.string().min(1),
-					description: z.string().optional(),
-					triggerHints: z.array(z.string()).optional(),
-					projectId: projectId.optional(),
-					parentId: noteId.optional()
-				}),
-				(input) => factory.skills().create(actor, input)
-			),
-			define(
-				'list_skill_versions',
-				toolDescription('list_skill_versions'),
-				'read',
-				temporal({ noteId: noteId }),
-				(input) => factory.skills().listVersions(actor, input)
-			),
-			define(
-				'restore_skill_version',
-				toolDescription('restore_skill_version'),
-				'mutation',
-				z.object({ noteId: noteId, revision: z.number().int().positive() }),
-				(input) => factory.skills().restoreVersion(actor, input)
-			),
-			define(
-				'update_skill',
-				toolDescription('update_skill'),
-				'mutation',
-				z.object({
-					noteId: noteId,
-					displayName: z.string().min(1).optional(),
-					description: z.string().optional(),
-					triggerHints: z.array(z.string()).optional(),
-					isEnabled: z.boolean().optional()
-				}),
-				(input) => factory.skills().update(actor, input)
-			),
-			define(
-				'set_skill_pinned',
-				toolDescription('set_skill_pinned'),
-				'mutation',
-				z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
-				(input) => factory.skills().setPinned(actor, input)
-			),
-		];
-		const account = (): Definition[] => [
-			define('list_api_tokens', toolDescription('list_api_tokens'), 'read', temporal({}), () =>
-				factory.apiTokens().list(actor)
-			),
-			define(
-				'revoke_api_token',
-				toolDescription('revoke_api_token'),
-				'mutation',
-				z.object({ tokenId: apiTokenId }),
-				(input) => factory.apiTokens().revoke(actor, input.tokenId as never)
-			),
-			define(
-				'list_attachments',
-				toolDescription('list_attachments'),
-				'read',
-				temporal({ noteId: noteId }),
-				(input) => factory.attachments().list(actor, input.noteId as NoteId)
-			),
-			define(
-				'read_attachment',
-				toolDescription('read_attachment'),
-				'read',
-				z.object({
-					noteId: noteId,
-					path: z.string().min(1).max(512),
-					offset: z.number().int().nonnegative().optional(),
-					limit: z.number().int().positive().max(20_000).optional()
-				}),
-				(input) =>
-					factory
-						.attachments()
-						.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
-			),
-		];
-		const memoryAndPreferences = (): Definition[] => [
-			define(
-				'list_project_memory',
-				toolDescription('list_project_memory'),
-				'read',
-				temporal({ projectId: projectId }),
-				async (input) => ({
-					entries: (
-						await factory.memory().list(actor, {
-							projectId: input.projectId as ProjectId,
-							sharedOnly: true
+				const content = noteContentFromMarkdown(patched.markdown);
+				const saved = await factory.notes().save(actor, {
+					note: { ...current.note, ...content }
+				});
+				return {
+					noteId: saved.note.id,
+					title: saved.note.title,
+					currentRevision: saved.note.currentRevision,
+					appliedEdits: patched.appliedEdits,
+					matchedTexts: patched.matchedTexts
+				};
+			},
+			async (input) => {
+				const parsed = noteEdits.safeParse(input);
+				if (!parsed.success) return false;
+				const current = await factory.notes().get(actor, {
+					noteId: parsed.data.noteId as NoteId
+				});
+				return applyNotePatch(noteMarkdownFromContent(current.note.document), parsed.data.edits).ok;
+			}
+		),
+		define(
+			'rename_note',
+			toolDescription('rename_note'),
+			'mutation',
+			z.object({ noteId: noteId, title: z.string().min(1) }),
+			(input) => factory.notes().rename(actor, input)
+		),
+		define(
+			'archive_note',
+			toolDescription('archive_note'),
+			'mutation',
+			z.object({ noteId: noteId }),
+			(input) => factory.notes().archive(actor, input)
+		),
+		define(
+			'restore_note',
+			toolDescription('restore_note'),
+			'mutation',
+			z.object({ noteId: noteId }),
+			(input) => factory.notes().restore(actor, input)
+		),
+		define(
+			'list_trashed_notes',
+			toolDescription('list_trashed_notes'),
+			'read',
+			z.object({ projectId: projectId.optional() }),
+			(input) => factory.notes().listTrash(actor, input)
+		),
+		define(
+			'delete_note_forever',
+			toolDescription('delete_note_forever'),
+			'mutation',
+			z.object({ noteId: noteId }),
+			(input) => factory.notes().deleteForever(actor, input)
+		),
+		define(
+			'empty_note_trash',
+			toolDescription('empty_note_trash'),
+			'mutation',
+			z.object({ projectId: projectId.optional() }),
+			(input) => factory.notes().emptyTrash(actor, input)
+		),
+		define(
+			'list_note_versions',
+			toolDescription('list_note_versions'),
+			'read',
+			z.object({ noteId: noteId }),
+			(input) => factory.notes().listRevisions(actor, input)
+		),
+		define(
+			'read_note_version',
+			toolDescription('read_note_version'),
+			'read',
+			z.object({ noteId: noteId, revisionId: noteRevisionId }),
+			(input) => factory.notes().readRevision(actor, input)
+		),
+		define(
+			'diff_note_versions',
+			toolDescription('diff_note_versions'),
+			'read',
+			z.object({
+				noteId: noteId,
+				revisionId: noteRevisionId,
+				againstRevisionId: noteRevisionId.optional()
+			}),
+			(input) => factory.notes().compareRevisions(actor, input)
+		),
+		define(
+			'restore_note_version',
+			toolDescription('restore_note_version'),
+			'mutation',
+			z.object({ noteId: noteId, revisionId: noteRevisionId }),
+			(input) => factory.notes().restoreRevision(actor, input)
+		),
+		define(
+			'publish_note',
+			toolDescription('publish_note'),
+			'mutation',
+			z.object({ noteId: noteId, baseEtag: noteEtag }),
+			(input) => factory.notes().publish(actor, input)
+		),
+		define(
+			'discard_note_draft',
+			toolDescription('discard_note_draft'),
+			'mutation',
+			z.object({ noteId: noteId }),
+			(input) => factory.notes().discardDraft(actor, input)
+		)
+	];
+	const todos = (): Definition[] => [
+		define(
+			'list_todos',
+			toolDescription('list_todos'),
+			'read',
+			temporal({
+				projectId: projectId.optional(),
+				noteId: noteId.optional(),
+				status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
+				responsibility: z.enum(['mine', 'waiting_on']).optional(),
+				dueBefore: localDate.optional()
+			}),
+			async (input) => ({
+				todos: (await factory.todos().list(actor, input)).todos.map((view) =>
+					projectTodo(view.todo)
+				)
+			})
+		),
+		define(
+			'create_todo',
+			toolDescription('create_todo'),
+			'mutation',
+			z.object({
+				projectId: projectId,
+				title: z.string().min(1),
+				description: z.string().optional(),
+				responsibility: z.enum(['mine', 'waiting_on']),
+				waitingOn: z.string().optional(),
+				dueDate: localDate.optional()
+			}),
+			(input) => factory.todos().create(actor, input)
+		),
+		define(
+			'create_todos',
+			toolDescription('create_todos'),
+			'mutation',
+			z.object({
+				projectId: projectId,
+				todos: z
+					.array(
+						z.object({
+							title: z.string().min(1),
+							description: z.string().optional(),
+							responsibility: z.enum(['mine', 'waiting_on']),
+							waitingOn: z.string().optional(),
+							dueDate: localDate.optional()
 						})
-					).entries.map(projectMemory)
-				})
-			),
-			define(
-				'list_user_memory',
-				toolDescription('list_user_memory'),
-				'read',
-				temporal({}),
-				async () => {
-					const entries = (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
-						projectMemory
+					)
+					.min(1)
+					.max(20)
+			}),
+			async (input) => {
+				const created = [];
+				for (const todo of input.todos) {
+					const { dueDate, ...fields } = todo;
+					created.push(
+						await factory.todos().create(actor, {
+							...fields,
+							projectId: input.projectId,
+							...(dueDate ? { dueDate } : {})
+						})
 					);
-					return { entries };
 				}
-			),
-			define(
-				'propose_memory_change',
-				toolDescription('propose_memory_change'),
-				'proposal',
-				z.object({
-					scope: z.enum(['project', 'user']),
-					projectId: projectId.optional(),
-					operation: z.enum(['add', 'update', 'remove']),
-					memoryEntryId: memoryEntryId.optional(),
-					content: z.string().optional(),
-					justification: z.string().optional(),
-					confidence: confidence.optional()
-				}),
-				(input) => factory.memory().propose(actor, input)
-			),
-			define(
-				'list_trust_policies',
-				toolDescription('list_trust_policies'),
-				'read',
-				temporal({}),
-				() => factory.trustPolicies().list(actor)
-			),
-			define(
-				'update_trust_policy',
-				toolDescription('update_trust_policy'),
-				'mutation',
-				z.object({
-					pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
-					autoAcceptEnabled: z.boolean(),
-					minimumConfidence: confidence.optional()
-				}),
-				(input) => factory.trustPolicies().update(actor, input)
-			),
-			define(
-				'list_tool_preferences',
-				toolDescription('list_tool_preferences'),
-				'read',
-				z.object({ projectId: projectId.optional() }),
-				(input) =>
-					factory
-						.toolPreferences()
-						.list(actor, input.projectId ? { projectId: input.projectId as ProjectId } : {})
-			),
-			define(
-				'set_tool_enabled',
-				toolDescription('set_tool_enabled'),
-				'mutation',
-				z.object({
-					toolName: z.string().min(1),
-					enabled: z.boolean(),
-					projectId: projectId.optional()
-				}),
-				(input) =>
-					factory.toolPreferences().setEnabled(actor, {
-						toolName: input.toolName,
-						enabled: input.enabled,
-						...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
-					})
-			),
-			define('get_agent_preferences', toolDescription('get_agent_preferences'), 'read', none, () =>
-				factory.agentSettings().getPreferences(actor)
-			),
-			define(
-				'update_agent_preferences',
-				toolDescription('update_agent_preferences'),
-				'mutation',
-				z.object({
-					defaultModel: z.string().nullable().optional(),
-					defaultVisionModel: z.string().nullable().optional(),
-					inlineModel: z.string().nullable().optional(),
-					attachmentVisionModel: z.string().nullable().optional(),
-					webSearchEngine: z.enum(webSearchEngines).nullable().optional(),
-					webSearchMaxResults: z.number().int().min(1).max(50).nullable().optional(),
-					webSearchMaxTotalResults: z.number().int().min(1).max(100).nullable().optional(),
-					agentMaxTurns: z.number().int().min(1).max(50).nullable().optional(),
-					executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
-					inlineSuggestionsEnabled: z.boolean().optional()
-				}),
-				/**
-				 * The one write in the catalog that has to be asked for its own before-image.
-				 * Every other mutating tool hands back the record whole, so the chat can show
-				 * what a call did by reading the post-state against the arguments that set it —
-				 * but a preference is a bare scalar, and "Default model: claude-opus-5" does not
-				 * say whether that was a change or a restatement. Preferences are set rarely
-				 * enough that one extra read costs nothing, and guessing the previous value
-				 * client-side would mean reading it back *after* the write, which is the one
-				 * moment it is guaranteed to be wrong.
-				 */
-				async (input) => {
-					const previous = await factory.agentSettings().getPreferences(actor);
-					const updated = await factory.agentSettings().updatePreferences(actor, input);
-					return { ...updated, previous };
-				}
-			),
-			define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
-				factory.agentSettings().listModels(actor)
-			),
-		];
-		const deliverables = (): Definition[] => [
-			define(
-				'export_document',
-				toolDescription('export_document'),
-				'mutation',
-				z.object({
-					projectId: projectId,
-					noteIds: z.array(id),
-					title: z.string().min(1),
-					format: z.enum(['docx', 'pdf']),
-					templateId: id.optional()
-				}),
-				(input) =>
-					factory.deliverables().generateDocument(actor, {
+				return { todos: created };
+			}
+		),
+		define(
+			'update_todo',
+			toolDescription('update_todo'),
+			'mutation',
+			z.object({
+				todoId: todoId,
+				title: z.string().optional(),
+				description: z.string().nullable().optional(),
+				dueDate: localDate.nullable().optional(),
+				responsibility: z.enum(['mine', 'waiting_on']).optional(),
+				waitingOn: z.string().nullable().optional(),
+				linkedNoteId: noteId.nullable().optional(),
+				status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
+			}),
+			(input) => factory.todos().update(actor, input)
+		)
+	];
+	const diagrams = (): Definition[] => [
+		define(
+			'revise_mermaid_diagram',
+			toolDescription('revise_mermaid_diagram'),
+			'mutation',
+			z.object({ diagramId: diagramId, instruction: z.string().min(1) }),
+			(input) => factory.diagrams().reviseMermaid(actor, input)
+		),
+		define(
+			'search_icons',
+			toolDescription('search_icons'),
+			'read',
+			z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
+			(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
+		),
+		define(
+			'read_project_diagram',
+			toolDescription('read_project_diagram'),
+			'read',
+			z.object({ diagramId: diagramId, includeSource: z.boolean().optional() }),
+			(input) => factory.diagramStudio().readProjectDiagram(actor, input)
+		),
+		define(
+			'promote_diagram',
+			toolDescription('promote_diagram'),
+			'proposal',
+			z.object({ diagramId: diagramId }),
+			(input) => factory.diagrams().promote(actor, input)
+		)
+	];
+	const suggestions = (): Definition[] => [
+		define(
+			'list_suggestions',
+			toolDescription('list_suggestions'),
+			'read',
+			temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
+			async (input) => ({
+				suggestions: (await factory.suggestions().list(actor, input)).groups.flatMap((group) =>
+					group.suggestions.map((view) => projectSuggestion(view.suggestion))
+				)
+			})
+		),
+		define(
+			'accept_suggestion',
+			toolDescription('accept_suggestion'),
+			'mutation',
+			z.object({ suggestionId: suggestionId }),
+			// `acceptReviewed`, not `accept`: a draw.io diagram accepted without its
+			// review has no preview and can never gain one, and that guard lives in
+			// `acceptReviewed`. Bound to the raw `accept`, this tool was the one
+			// caller in the system that could mint a preview-less diagram. For every
+			// other kind of suggestion the two are the same call.
+			(input) => factory.suggestions().acceptReviewed(actor, input)
+		),
+		define(
+			'reject_suggestion',
+			toolDescription('reject_suggestion'),
+			'mutation',
+			z.object({ suggestionId: suggestionId }),
+			(input) => factory.suggestions().reject(actor, input)
+		),
+		define(
+			'revert_suggestion',
+			toolDescription('revert_suggestion'),
+			'mutation',
+			z.object({ suggestionId: suggestionId }),
+			(input) => factory.suggestions().revert(actor, input)
+		)
+	];
+	const skills = (): Definition[] => [
+		define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
+			factory.skills().list(actor)
+		),
+		define(
+			'save_skill',
+			toolDescription('save_skill'),
+			'mutation',
+			z.object({ noteId: noteId, markdown: z.string() }),
+			async (input) => {
+				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+				if (view.skill.note.kind !== 'skill')
+					return { failure: 'save_skill only edits skill notes; this note is not a skill.' };
+				const content = noteContentFromMarkdown(input.markdown);
+				const saved = await factory.notes().save(actor, {
+					note: { ...view.skill.note, ...content }
+				});
+				return {
+					noteId: saved.note.id,
+					name: view.skill.name,
+					currentRevision: saved.note.currentRevision
+				};
+			}
+		),
+		define(
+			'edit_skill',
+			toolDescription('edit_skill'),
+			'mutation',
+			noteEdits,
+			async (input) => {
+				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
+				if (view.skill.note.kind !== 'skill')
+					return { failure: 'edit_skill only edits skill notes; this note is not a skill.' };
+				const before = noteMarkdownFromContent(view.skill.note.document);
+				const patched = applyNotePatch(before, input.edits);
+				// A failure is returned rather than thrown so the occurrence counts and
+				// nearest matches survive into the model's next attempt.
+				if (!patched.ok)
+					return {
+						failure: 'No edits were applied.',
+						problems: patched.failures.map(describeNotePatchFailure),
+						failures: patched.failures
+					};
+				const content = noteContentFromMarkdown(patched.markdown);
+				const saved = await factory.notes().save(actor, {
+					note: { ...view.skill.note, ...content }
+				});
+				return {
+					noteId: saved.note.id,
+					name: view.skill.name,
+					currentRevision: saved.note.currentRevision,
+					appliedEdits: patched.appliedEdits,
+					matchedTexts: patched.matchedTexts
+				};
+			},
+			async (input) => {
+				const parsed = noteEdits.safeParse(input);
+				if (!parsed.success) return false;
+				const view = await factory.skills().get(actor, { noteId: parsed.data.noteId as NoteId });
+				if (view.skill.note.kind !== 'skill') return false;
+				return applyNotePatch(noteMarkdownFromContent(view.skill.note.document), parsed.data.edits)
+					.ok;
+			}
+		),
+		define(
+			'create_skill',
+			toolDescription('create_skill'),
+			'mutation',
+			z.object({
+				name: z.string().min(1),
+				description: z.string().optional(),
+				triggerHints: z.array(z.string()).optional(),
+				projectId: projectId.optional(),
+				parentId: noteId.optional()
+			}),
+			(input) => factory.skills().create(actor, input)
+		),
+		define(
+			'list_skill_versions',
+			toolDescription('list_skill_versions'),
+			'read',
+			temporal({ noteId: noteId }),
+			(input) => factory.skills().listVersions(actor, input)
+		),
+		define(
+			'restore_skill_version',
+			toolDescription('restore_skill_version'),
+			'mutation',
+			z.object({ noteId: noteId, revision: z.number().int().positive() }),
+			(input) => factory.skills().restoreVersion(actor, input)
+		),
+		define(
+			'update_skill',
+			toolDescription('update_skill'),
+			'mutation',
+			z.object({
+				noteId: noteId,
+				displayName: z.string().min(1).optional(),
+				description: z.string().optional(),
+				triggerHints: z.array(z.string()).optional(),
+				isEnabled: z.boolean().optional()
+			}),
+			(input) => factory.skills().update(actor, input)
+		),
+		define(
+			'set_skill_pinned',
+			toolDescription('set_skill_pinned'),
+			'mutation',
+			z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
+			(input) => factory.skills().setPinned(actor, input)
+		)
+	];
+	const account = (): Definition[] => [
+		define('list_api_tokens', toolDescription('list_api_tokens'), 'read', temporal({}), () =>
+			factory.apiTokens().list(actor)
+		),
+		define(
+			'revoke_api_token',
+			toolDescription('revoke_api_token'),
+			'mutation',
+			z.object({ tokenId: apiTokenId }),
+			(input) => factory.apiTokens().revoke(actor, input.tokenId)
+		),
+		define(
+			'list_attachments',
+			toolDescription('list_attachments'),
+			'read',
+			temporal({ noteId: noteId }),
+			(input) => factory.attachments().list(actor, input.noteId as NoteId)
+		),
+		define(
+			'read_attachment',
+			toolDescription('read_attachment'),
+			'read',
+			z.object({
+				noteId: noteId,
+				path: z.string().min(1).max(512),
+				offset: z.number().int().nonnegative().optional(),
+				limit: z.number().int().positive().max(20_000).optional()
+			}),
+			(input) =>
+				factory
+					.attachments()
+					.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
+		)
+	];
+	const memoryAndPreferences = (): Definition[] => [
+		define(
+			'list_project_memory',
+			toolDescription('list_project_memory'),
+			'read',
+			temporal({ projectId: projectId }),
+			async (input) => ({
+				entries: (
+					await factory.memory().list(actor, {
 						projectId: input.projectId as ProjectId,
-						noteIds: input.noteIds.map((noteId) => noteId as NoteId),
-						title: input.title,
-						format: input.format,
-						...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
+						sharedOnly: true
 					})
-			),
-			define(
-				'list_artifacts',
-				toolDescription('list_artifacts'),
-				'read',
-				temporal({ projectId: projectId }),
-				(input) => factory.deliverables().listArtifacts(actor, input.projectId as never)
-			),
-			define(
-				'list_templates',
-				toolDescription('list_templates'),
-				'read',
-				temporal({ projectId: projectId }),
-				(input) => factory.deliverables().listTemplates(actor, input.projectId as never)
-			),
-			define(
-				'get_export_settings',
-				toolDescription('get_export_settings'),
-				'read',
-				z.object({ projectId: projectId }),
-				(input) => factory.deliverables().getExportSettings(actor, input.projectId as never)
-			),
-			define(
-				'update_export_settings',
-				toolDescription('update_export_settings'),
-				'mutation',
-				z.object({
-					projectId: projectId,
-					fontFamily: z.enum(['helvetica', 'times', 'courier']),
-					fontSize: z.number().min(8).max(18),
-					lineHeight: z.number().min(1).max(2.2),
-					margin: z.number().min(18).max(144),
-					includeTitle: z.boolean().optional()
-				}),
-				(input) =>
-					factory.deliverables().updateExportSettings(actor, input.projectId as never, {
-						fontFamily: input.fontFamily,
-						fontSize: input.fontSize,
-						lineHeight: input.lineHeight,
-						margin: input.margin,
-						includeTitle: input.includeTitle
-					})
-			),
-			define(
-				'get_artifact',
-				toolDescription('get_artifact'),
-				'read',
-				z.object({ artifactId: artifactId }),
-				(input) => factory.deliverables().getArtifact(actor, input.artifactId as never)
-			),
-			define(
-				'download_artifact',
-				toolDescription('download_artifact'),
-				'read',
-				z.object({ artifactId: artifactId }),
-				(input) => factory.deliverables().downloadArtifact(actor, input.artifactId as never)
-			),
-			define(
-				'delete_artifact',
-				toolDescription('delete_artifact'),
-				'mutation',
-				z.object({ artifactId: artifactId }),
-				(input) => factory.deliverables().deleteArtifact(actor, input.artifactId as never)
-			),
-			define(
-				'regenerate_artifact',
-				toolDescription('regenerate_artifact'),
-				'mutation',
-				z.object({ artifactId: artifactId }),
-				(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId as never)
-			)
-		];
-		return [
-			...retrieval(),
-			...projects(),
-			...notes(),
-			...todos(),
-			...diagrams(),
-			...suggestions(),
-			...skills(),
-			...account(),
-			...memoryAndPreferences(),
-			...deliverables()
-		];
+				).entries.map(projectMemory)
+			})
+		),
+		define(
+			'list_user_memory',
+			toolDescription('list_user_memory'),
+			'read',
+			temporal({}),
+			async () => {
+				const entries = (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
+					projectMemory
+				);
+				return { entries };
+			}
+		),
+		define(
+			'propose_memory_change',
+			toolDescription('propose_memory_change'),
+			'proposal',
+			z.object({
+				scope: z.enum(['project', 'user']),
+				projectId: projectId.optional(),
+				operation: z.enum(['add', 'update', 'remove']),
+				memoryEntryId: memoryEntryId.optional(),
+				content: z.string().optional(),
+				justification: z.string().optional(),
+				confidence: confidence.optional()
+			}),
+			(input) => factory.memory().propose(actor, input)
+		),
+		define(
+			'list_trust_policies',
+			toolDescription('list_trust_policies'),
+			'read',
+			temporal({}),
+			() => factory.trustPolicies().list(actor)
+		),
+		define(
+			'update_trust_policy',
+			toolDescription('update_trust_policy'),
+			'mutation',
+			z.object({
+				pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
+				autoAcceptEnabled: z.boolean(),
+				minimumConfidence: confidence.optional()
+			}),
+			(input) => factory.trustPolicies().update(actor, input)
+		),
+		define(
+			'list_tool_preferences',
+			toolDescription('list_tool_preferences'),
+			'read',
+			z.object({ projectId: projectId.optional() }),
+			(input) =>
+				factory
+					.toolPreferences()
+					.list(actor, input.projectId ? { projectId: input.projectId as ProjectId } : {})
+		),
+		define(
+			'set_tool_enabled',
+			toolDescription('set_tool_enabled'),
+			'mutation',
+			z.object({
+				toolName: z.string().min(1),
+				enabled: z.boolean(),
+				projectId: projectId.optional()
+			}),
+			(input) =>
+				factory.toolPreferences().setEnabled(actor, {
+					toolName: input.toolName,
+					enabled: input.enabled,
+					...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
+				})
+		),
+		define('get_agent_preferences', toolDescription('get_agent_preferences'), 'read', none, () =>
+			factory.agentSettings().getPreferences(actor)
+		),
+		define(
+			'update_agent_preferences',
+			toolDescription('update_agent_preferences'),
+			'mutation',
+			z.object({
+				defaultModel: z.string().nullable().optional(),
+				defaultVisionModel: z.string().nullable().optional(),
+				inlineModel: z.string().nullable().optional(),
+				attachmentVisionModel: z.string().nullable().optional(),
+				webSearchEngine: z.enum(webSearchEngines).nullable().optional(),
+				webSearchMaxResults: z.number().int().min(1).max(50).nullable().optional(),
+				webSearchMaxTotalResults: z.number().int().min(1).max(100).nullable().optional(),
+				agentMaxTurns: z.number().int().min(1).max(50).nullable().optional(),
+				executionMode: z.enum(['approval_required', 'auto_accept']).optional(),
+				inlineSuggestionsEnabled: z.boolean().optional()
+			}),
+			/**
+			 * The one write in the catalog that has to be asked for its own before-image.
+			 * Every other mutating tool hands back the record whole, so the chat can show
+			 * what a call did by reading the post-state against the arguments that set it —
+			 * but a preference is a bare scalar, and "Default model: claude-opus-5" does not
+			 * say whether that was a change or a restatement. Preferences are set rarely
+			 * enough that one extra read costs nothing, and guessing the previous value
+			 * client-side would mean reading it back *after* the write, which is the one
+			 * moment it is guaranteed to be wrong.
+			 */
+			async (input) => {
+				const previous = await factory.agentSettings().getPreferences(actor);
+				const updated = await factory.agentSettings().updatePreferences(actor, input);
+				return { ...updated, previous };
+			}
+		),
+		define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
+			factory.agentSettings().listModels(actor)
+		)
+	];
+	const deliverables = (): Definition[] => [
+		define(
+			'export_document',
+			toolDescription('export_document'),
+			'mutation',
+			z.object({
+				projectId: projectId,
+				noteIds: z.array(id),
+				title: z.string().min(1),
+				format: z.enum(['docx', 'pdf']),
+				templateId: id.optional()
+			}),
+			(input) =>
+				factory.deliverables().generateDocument(actor, {
+					projectId: input.projectId as ProjectId,
+					noteIds: input.noteIds.map((noteId) => noteId as NoteId),
+					title: input.title,
+					format: input.format,
+					...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
+				})
+		),
+		define(
+			'list_artifacts',
+			toolDescription('list_artifacts'),
+			'read',
+			temporal({ projectId: projectId }),
+			(input) => factory.deliverables().listArtifacts(actor, input.projectId)
+		),
+		define(
+			'list_templates',
+			toolDescription('list_templates'),
+			'read',
+			temporal({ projectId: projectId }),
+			(input) => factory.deliverables().listTemplates(actor, input.projectId)
+		),
+		define(
+			'get_export_settings',
+			toolDescription('get_export_settings'),
+			'read',
+			z.object({ projectId: projectId }),
+			(input) => factory.deliverables().getExportSettings(actor, input.projectId)
+		),
+		define(
+			'update_export_settings',
+			toolDescription('update_export_settings'),
+			'mutation',
+			z.object({
+				projectId: projectId,
+				fontFamily: z.enum(['helvetica', 'times', 'courier']),
+				fontSize: z.number().min(8).max(18),
+				lineHeight: z.number().min(1).max(2.2),
+				margin: z.number().min(18).max(144),
+				includeTitle: z.boolean().optional()
+			}),
+			(input) =>
+				factory.deliverables().updateExportSettings(actor, input.projectId, {
+					fontFamily: input.fontFamily,
+					fontSize: input.fontSize,
+					lineHeight: input.lineHeight,
+					margin: input.margin,
+					includeTitle: input.includeTitle
+				})
+		),
+		define(
+			'get_artifact',
+			toolDescription('get_artifact'),
+			'read',
+			z.object({ artifactId: artifactId }),
+			(input) => factory.deliverables().getArtifact(actor, input.artifactId)
+		),
+		define(
+			'download_artifact',
+			toolDescription('download_artifact'),
+			'read',
+			z.object({ artifactId: artifactId }),
+			(input) => factory.deliverables().downloadArtifact(actor, input.artifactId)
+		),
+		define(
+			'delete_artifact',
+			toolDescription('delete_artifact'),
+			'mutation',
+			z.object({ artifactId: artifactId }),
+			(input) => factory.deliverables().deleteArtifact(actor, input.artifactId)
+		),
+		define(
+			'regenerate_artifact',
+			toolDescription('regenerate_artifact'),
+			'mutation',
+			z.object({ artifactId: artifactId }),
+			(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId)
+		)
+	];
+	return [
+		...retrieval(),
+		...projects(),
+		...notes(),
+		...todos(),
+		...diagrams(),
+		...suggestions(),
+		...skills(),
+		...account(),
+		...memoryAndPreferences(),
+		...deliverables()
+	];
 };
 
 const agentOnlyDefinitions = (

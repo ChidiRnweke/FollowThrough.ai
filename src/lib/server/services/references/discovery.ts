@@ -9,6 +9,7 @@ import {
 import type { ReferenceCandidate, Url } from '$lib/models/references';
 import type { TextSelection } from '$lib/models/notes';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
+import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 interface OperationObserver {
 	run<T>(
 		name: string,
@@ -49,6 +50,13 @@ const createLanguageModelClient = (
 	new OpenAI({
 		apiKey,
 		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
+		fetch: withWebResearch(
+			globalThis.fetch,
+			openRouterWebSearchTool(
+				webSearchOptionsFromEnvironment(process.env),
+				REFERENCE_WEB_SEARCH_DEFAULTS
+			)
+		),
 		defaultHeaders: {
 			'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
 			'X-OpenRouter-Title': 'FollowThrough'
@@ -201,12 +209,6 @@ export class ReferenceResearch implements IWebReferenceResearch {
 				const response = await this.client.responses.create(
 					{
 						model,
-						tools: [
-							openRouterWebSearchTool(
-								webSearchOptionsFromEnvironment(process.env),
-								REFERENCE_WEB_SEARCH_DEFAULTS
-							) as never
-						],
 						input: [
 							{ role: 'system', content: REFERENCE_PROMPT },
 							{ role: 'user', content: selectionText }

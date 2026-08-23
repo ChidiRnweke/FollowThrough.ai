@@ -41,6 +41,16 @@ describe('OpenRouter web search transport', () => {
 		expect(tools).toHaveLength(1);
 	});
 
+	it('adds web search to Responses API requests', async () => {
+		const recorder = new RecordingFetch();
+		const fetch = withWebResearch(recorder.fetch);
+		await fetch('https://openrouter.ai/api/v1/responses', {
+			method: 'POST',
+			body: JSON.stringify({ model: 'openai/gpt-5.6', input: 'Research this' })
+		});
+		expect(recorder.body).toMatchObject({ tools: [openRouterWebSearchTool()] });
+	});
+
 	it('leaves non-chat requests unchanged', async () => {
 		const recorder = new RecordingFetch();
 		const fetch = withWebResearch(recorder.fetch);

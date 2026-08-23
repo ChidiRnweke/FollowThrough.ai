@@ -11,6 +11,9 @@ describe('source audit rules', () => {
 	it('allows a branded leaf property cast', () => {
 		expect(violations('controller.get(input.noteId as never)')).toHaveLength(0);
 	});
+	it('rejects moving a call result through never', () => {
+		expect(violations('controller.save(buildInput() as never)')).toHaveLength(1);
+	});
 	it('allows const assertions', () => {
 		expect(violations("const value = { kind: 'ok' } as const")).toHaveLength(0);
 	});
