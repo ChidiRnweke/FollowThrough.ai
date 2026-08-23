@@ -20,7 +20,7 @@ export const createNoteLinkRenderer = (): ReturnType<
 	NonNullable<SuggestionOptions<NoteLinkTarget, NoteLinkTarget>['render']>
 > => {
 	let element: HTMLDivElement | undefined;
-	let instance: Record<string, unknown> | undefined;
+	let unmountList: (() => void) | undefined;
 	let unmountFloating: (() => void) | undefined;
 
 	const view = $state<{
@@ -35,7 +35,8 @@ export const createNoteLinkRenderer = (): ReturnType<
 			view.selected = 0;
 			view.onpick = (note) => props.command(note);
 			element = document.createElement('div');
-			instance = mount(NoteLinkList, { target: element, props: view }) as Record<string, unknown>;
+			const mounted = mount(NoteLinkList, { target: element, props: view });
+			unmountList = () => void unmount(mounted);
 			unmountFloating = props.mount?.(element);
 		},
 		onUpdate: (props) => {
@@ -65,8 +66,8 @@ export const createNoteLinkRenderer = (): ReturnType<
 		onExit: () => {
 			unmountFloating?.();
 			unmountFloating = undefined;
-			if (instance) void unmount(instance as never);
-			instance = undefined;
+			unmountList?.();
+			unmountList = undefined;
 			element?.remove();
 			element = undefined;
 			view.items = [];

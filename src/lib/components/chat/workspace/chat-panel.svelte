@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { z } from 'zod';
+	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
 		AgentPreferences,
 		ConversationImageInput,
@@ -527,13 +529,16 @@
 	}
 
 	async function decide(id: string, decision: 'accept' | 'reject') {
+		const suggestionId = z.string().uuid().transform((value) => value as SuggestionId).parse(id);
 		const tray = workbench.focusedNoteId
 			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
 			: undefined;
 		// The tray only exists while a note pane is mounted. In the right panel there
 		// often is none, and routing through it there rejected every decision — so
 		// fall back to the controller, which is what the tray calls anyway.
-		const ok = tray ? await tray.decide(id as never, decision) : await decideDirectly(id, decision);
+		const ok = tray
+			? await tray.decide(suggestionId, decision)
+			: await decideDirectly(suggestionId, decision);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}

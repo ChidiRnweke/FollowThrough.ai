@@ -23,12 +23,20 @@ import type {
 import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
+import type { UserId } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
+import type { DateTime } from '$lib/models/workspace';
+
+const noteId = z.string().uuid().transform((value) => value as NoteId);
+const userId = z.string().uuid().transform((value) => value as UserId);
+const projectId = z.string().uuid().transform((value) => value as ProjectId);
+const dateTime = z.string().datetime().transform((value) => value as DateTime);
 
 const noteSchema = z.object({
-	id: z.string().uuid(),
-	userId: z.string().uuid(),
-	projectId: z.string().uuid(),
-	parentId: z.string().uuid().optional(),
+	id: noteId,
+	userId,
+	projectId,
+	parentId: noteId.optional(),
 	kind: z.enum(['folder', 'note', 'skill']),
 	position: z.number().int(),
 	title: z.string(),
@@ -40,16 +48,16 @@ const noteSchema = z.object({
 	currentRevision: z.number().int(),
 	publishedRevision: z.number().int().default(0),
 	isPinned: z.boolean(),
-	sectionNumbering: z.boolean().nullish(),
-	publishedAt: z.string().optional(),
-	archivedAt: z.string().optional(),
-	createdAt: z.string(),
-	updatedAt: z.string()
+	sectionNumbering: z.boolean().optional(),
+	publishedAt: dateTime.optional(),
+	archivedAt: dateTime.optional(),
+	createdAt: dateTime,
+	updatedAt: dateTime
 });
 
 const textSelection = z
 	.object({
-		noteId: z.string().uuid(),
+		noteId,
 		revision: z.number().int().positive(),
 		from: z.number().int().nonnegative(),
 		to: z.number().int().nonnegative(),
@@ -62,7 +70,7 @@ const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
 export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
 	return AppFactory.controllers()
 		.notes()
-		.save(requestActor(), input as never);
+		.save(requestActor(), input);
 });
 
 export const getNote = query(z.string().uuid(), async (noteId) => {
@@ -208,7 +216,7 @@ export const relateNote = command(z.object({ selection: textSelection }), async 
 export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
 	return AppFactory.controllers()
 		.references()
-		.startSuggestFromSelection(requestActor(), input as never);
+		.startSuggestFromSelection(requestActor(), input);
 });
 
 export const generateDiagram = command(

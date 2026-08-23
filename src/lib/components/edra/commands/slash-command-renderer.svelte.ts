@@ -21,6 +21,7 @@ export const createSlashCommandRenderer = (): ReturnType<
 > => {
 	let element: HTMLDivElement | undefined;
 	let instance: { handleKeyDown?: (event: KeyboardEvent) => boolean } | undefined;
+	let unmountList: (() => void) | undefined;
 	let unmountFloating: (() => void) | undefined;
 
 	const view = $state<{
@@ -33,9 +34,9 @@ export const createSlashCommandRenderer = (): ReturnType<
 			view.items = slashCommandGroups(commands, props.query);
 			view.command = (item) => props.command(item);
 			element = document.createElement('div');
-			instance = mount(SlashCommandList, { target: element, props: view }) as {
-				handleKeyDown?: (event: KeyboardEvent) => boolean;
-			};
+			const mounted = mount(SlashCommandList, { target: element, props: view });
+			instance = mounted;
+			unmountList = () => void unmount(mounted);
 			unmountFloating = props.mount?.(element);
 		},
 		onUpdate: (props) => {
@@ -52,7 +53,8 @@ export const createSlashCommandRenderer = (): ReturnType<
 		onExit: () => {
 			unmountFloating?.();
 			unmountFloating = undefined;
-			if (instance) void unmount(instance as never);
+			unmountList?.();
+			unmountList = undefined;
 			instance = undefined;
 			element?.remove();
 			element = undefined;

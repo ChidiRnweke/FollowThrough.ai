@@ -15,7 +15,7 @@ export const createHeadingLinkRenderer = (): ReturnType<
 	NonNullable<SuggestionOptions<HeadingLinkTarget, HeadingLinkTarget>['render']>
 > => {
 	let element: HTMLDivElement | undefined;
-	let instance: Record<string, unknown> | undefined;
+	let unmountList: (() => void) | undefined;
 	let unmountFloating: (() => void) | undefined;
 
 	const view = $state<{
@@ -30,10 +30,8 @@ export const createHeadingLinkRenderer = (): ReturnType<
 			view.selected = 0;
 			view.onpick = (heading) => props.command(heading);
 			element = document.createElement('div');
-			instance = mount(HeadingLinkList, { target: element, props: view }) as Record<
-				string,
-				unknown
-			>;
+			const mounted = mount(HeadingLinkList, { target: element, props: view });
+			unmountList = () => void unmount(mounted);
 			unmountFloating = props.mount?.(element);
 		},
 		onUpdate: (props) => {
@@ -63,8 +61,8 @@ export const createHeadingLinkRenderer = (): ReturnType<
 		onExit: () => {
 			unmountFloating?.();
 			unmountFloating = undefined;
-			if (instance) void unmount(instance as never);
-			instance = undefined;
+			unmountList?.();
+			unmountList = undefined;
 			element?.remove();
 			element = undefined;
 			view.items = [];
