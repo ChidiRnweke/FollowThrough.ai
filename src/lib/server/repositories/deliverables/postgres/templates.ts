@@ -1,6 +1,10 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
+import {
+	projectTemplateStylesSchema,
+	type ProjectId,
+	type ProjectTemplate
+} from '$lib/models/projects';
 import type { TemplateId } from '$lib/models/deliverables';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
 import type { Database } from '$lib/server/db';
@@ -17,7 +21,9 @@ const toTemplate = (row: typeof schema.projectTemplates.$inferSelect): ProjectTe
 	objectKey: row.objectKey,
 	mediaType: row.mediaType,
 	byteSize: row.byteSize,
-	extractedStyles: row.extractedStyles ?? {},
+	...(row.extractedStyles
+		? { extractedStyles: projectTemplateStylesSchema.parse(row.extractedStyles) }
+		: {}),
 	isDefault: row.isDefault,
 	createdAt: instant(row.createdAt),
 	updatedAt: instant(row.updatedAt)
@@ -37,7 +43,7 @@ export class TemplateRecords implements TemplateRepository {
 				objectKey: template.objectKey,
 				mediaType: template.mediaType,
 				byteSize: template.byteSize,
-				extractedStyles: template.extractedStyles ?? {},
+				extractedStyles: template.extractedStyles,
 				isDefault: template.isDefault,
 				createdAt: new Date(template.createdAt),
 				updatedAt: new Date(template.updatedAt)
@@ -82,7 +88,7 @@ export class TemplateRecords implements TemplateRepository {
 				objectKey: template.objectKey,
 				mediaType: template.mediaType,
 				byteSize: template.byteSize,
-				extractedStyles: template.extractedStyles ?? {},
+				extractedStyles: template.extractedStyles,
 				isDefault: template.isDefault,
 				updatedAt: new Date()
 			})

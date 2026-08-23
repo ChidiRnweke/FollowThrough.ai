@@ -17,6 +17,7 @@ import {
 	uuid
 } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { ProjectTemplateStyles } from '$lib/models/projects';
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 export const todoStatus = pgEnum('todo_status', [
@@ -1032,7 +1033,7 @@ export const projectTemplates = pgTable(
 		objectKey: text('object_key').notNull(),
 		mediaType: text('media_type').notNull(),
 		byteSize: integer('byte_size').notNull(),
-		extractedStyles: jsonb('extracted_styles').$type<JsonObject>().notNull().default({}),
+		extractedStyles: jsonb('extracted_styles').$type<ProjectTemplateStyles>(),
 		isDefault: boolean('is_default').notNull().default(false),
 		...timestamps
 	},

@@ -108,7 +108,7 @@ export class DocumentTemplates {
 			...template,
 			objectKey: destinationKey,
 			byteSize: stored.byteSize,
-			extractedStyles: styles as unknown as Record<string, unknown>,
+			extractedStyles: styles,
 			isDefault: template.isDefault,
 			updatedAt: now()
 		});
@@ -129,8 +129,7 @@ export class DocumentTemplates {
 	async extractStyles(actor: ActorContext, templateId: TemplateId) {
 		const template = await this.templateRepo.findById(actor, templateId);
 		if (!template) throw new NotFoundError('Template not found');
-		if (template.extractedStyles)
-			return template.extractedStyles as unknown as ExtractedTemplateStyles;
+		if (template.extractedStyles) return template.extractedStyles;
 		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
 		return this.styleExtractor(Buffer.from(buffer));
 	}

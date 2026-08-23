@@ -68,6 +68,35 @@ type NoteSummary = Pick<
 	| 'currentRevision'
 >;
 
+export const projectTemplateStylesSchema = z
+	.object({
+		fonts: z.object({
+			heading: z.record(
+				z.string(),
+				z.object({
+					name: z.string(),
+					size: z.number(),
+					bold: z.boolean(),
+					italic: z.boolean(),
+					color: z.string().optional()
+				})
+			),
+			body: z.object({ name: z.string(), size: z.number(), color: z.string().optional() })
+		}),
+		pageMargins: z.object({
+			top: z.number(),
+			bottom: z.number(),
+			left: z.number(),
+			right: z.number()
+		}),
+		headerImages: z.array(z.string()).optional(),
+		footerContent: z.string().optional(),
+		themeColors: z.record(z.string(), z.string())
+	})
+	.strict();
+
+export type ProjectTemplateStyles = z.infer<typeof projectTemplateStylesSchema>;
+
 export interface ProjectTemplate {
 	readonly id: TemplateId;
 	readonly userId: UserId;
@@ -76,7 +105,7 @@ export interface ProjectTemplate {
 	readonly objectKey: string;
 	readonly mediaType: string;
 	readonly byteSize: number;
-	readonly extractedStyles?: Record<string, unknown>;
+	readonly extractedStyles?: ProjectTemplateStyles;
 	readonly isDefault: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
@@ -191,3 +220,4 @@ export interface ArchiveProjectOutput {
 }
 
 export * from './export-entries';
+import { z } from 'zod';

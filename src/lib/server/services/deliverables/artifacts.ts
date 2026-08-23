@@ -192,7 +192,7 @@ export class ArtifactLibrary {
 		if (!templateId) return undefined;
 		const template = await this.templateRepo.findById(actor, templateId);
 		if (!template?.extractedStyles) return undefined;
-		return template.extractedStyles as unknown as ExtractedTemplateStyles;
+		return template.extractedStyles;
 	}
 
 	/** The one place a format picks its generator, so every export path renders alike. */
