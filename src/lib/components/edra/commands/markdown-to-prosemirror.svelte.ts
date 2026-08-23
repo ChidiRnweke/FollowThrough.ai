@@ -25,10 +25,20 @@ export async function markdownToProseMirror(markdown: string): Promise<{
 		}
 
 		editor.commands.setContent(markdown);
-		const json = editor.getJSON() as unknown as EdraDocument;
+		const json = editor.getJSON();
+		if (json.type !== 'doc') {
+			editor.destroy();
+			container.remove();
+			reject(new Error('Editor returned a non-document root'));
+			return;
+		}
+		const edraDocument: EdraDocument = {
+			type: 'doc',
+			...(json.content ? { content: json.content } : {})
+		};
 		const text = editor.getText({ blockSeparator: '\n\n' });
 		editor.destroy();
 		container.remove();
-		resolve({ document: json, plainText: text });
+		resolve({ document: edraDocument, plainText: text });
 	});
 }

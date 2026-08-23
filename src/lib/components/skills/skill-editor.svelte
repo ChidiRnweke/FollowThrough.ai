@@ -49,7 +49,9 @@
 	}
 
 	export function getDocument(): ProseMirrorDocument {
-		return (editor?.getJSON() ?? { type: 'doc', content: [] }) as unknown as ProseMirrorDocument;
+		const document = editor?.getJSON();
+		if (!document || document.type !== 'doc') return { type: 'doc', content: [] };
+		return { type: 'doc', ...(document.content ? { content: document.content } : {}) };
 	}
 
 	export function focus(): void {

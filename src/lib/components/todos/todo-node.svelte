@@ -2,7 +2,6 @@
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
 	import type { TodoId } from '$lib/models/todos';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -19,11 +18,7 @@
 	// for the lifetime of a mounted node view, so it is read once.
 	const editable = untrack(() => editor.isEditable);
 
-	// TipTap's NodeViewProps types `editor` as the base TiptapEditor; our
-	// `perNote` slot lives on the subclass in `CoreEditor.ts`.  Cast through
-	// `unknown` so we read the per-note stores that the owning NoteEditor
-	// attached on mount.
-	const perNote = $derived((editor as unknown as { perNote?: PerNoteEditorSlot }).perNote);
+	const perNote = $derived(editor.perNote);
 	const todoId = $derived(node.attrs.todoId as TodoId | null);
 	const view = $derived(todoId !== null ? perNote?.todos.get(todoId) : undefined);
 	const done = $derived(view?.todo.status === 'done');

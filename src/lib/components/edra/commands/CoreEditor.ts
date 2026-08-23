@@ -19,6 +19,12 @@ export interface PerNoteEditorSlot {
 	readonly sync: NoteSyncStore;
 }
 
+declare module '@tiptap/core' {
+	interface Editor {
+		perNote?: PerNoteEditorSlot;
+	}
+}
+
 export class Editor extends TiptapEditor {
 	public reactiveState: EditorState = this.view.state;
 	public reactiveExtensionStorage: Storage = this.extensionStorage;

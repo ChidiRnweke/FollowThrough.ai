@@ -22,7 +22,7 @@ import type { Component } from 'svelte';
  * until one yields a node, but `MarkdownParseResult` has no member for "declined", so
  * the cast states the runtime contract the type omits.
  */
-const declineToken = null as unknown as MarkdownParseResult;
+const declineToken: MarkdownParseResult = [];
 
 /**
  * Headless definitions for the editor's own nodes and marks.

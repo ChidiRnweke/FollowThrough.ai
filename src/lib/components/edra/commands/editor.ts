@@ -11,8 +11,7 @@ import {
 	useEditor,
 	VideoExtended
 } from './index.js';
-import type { Extensions } from '@tiptap/core';
-import type { Editor as AppEditor } from './CoreEditor.js';
+import type { Editor, Extensions } from '@tiptap/core';
 import { all, createLowlight } from 'lowlight';
 import extensions from './extensions.js';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -81,7 +80,7 @@ export interface EdraEditorProps {
 	 * Opens the project-diagram picker. The editor raises the request; the app
 	 * presents the list and inserts the reference the user chooses.
 	 */
-	onPickProjectDiagram?: (editor: AppEditor) => void;
+	onPickProjectDiagram?: (editor: Editor) => void;
 	/**
 	 * Proactive ghost text at the caret. Injected so the editor stays unaware of
 	 * transports; omitting it disables inline suggestions entirely.

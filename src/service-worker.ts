@@ -5,7 +5,7 @@
 
 import { base, build, files, prerendered, version } from '$service-worker';
 
-const worker = self as unknown as ServiceWorkerGlobalScope;
+const worker: ServiceWorkerGlobalScope = self;
 const CACHE_PREFIX = 'followthrough-';
 const ASSET_CACHE = `${CACHE_PREFIX}assets-${version}`;
 const PAGE_CACHE = `${CACHE_PREFIX}pages-${version}`;

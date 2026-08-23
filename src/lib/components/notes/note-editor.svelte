@@ -414,7 +414,7 @@
 				if (initialized) onchange?.();
 			}
 		},
-		[TodoNode(TodoNodeView as never)]
+		[TodoNode(TodoNodeView)]
 	);
 	$effect(() => {
 		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);

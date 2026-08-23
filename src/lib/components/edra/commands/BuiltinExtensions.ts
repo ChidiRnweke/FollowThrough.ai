@@ -2,7 +2,6 @@ import { Extension, type Editor, type NodeViewProps } from '@tiptap/core';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import type { EdraCommand } from './commands.js';
-import type { Editor as AppEditor } from './CoreEditor.js';
 import type { Component } from 'svelte';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import { CalloutNode, DrawioNode, IFrameNode, MermaidNode, TodoNodeBase } from './nodes.js';
@@ -58,7 +57,7 @@ export const TodoNode = (component: Component<NodeViewProps>) =>
  * the same way every other injected callback does.
  */
 export interface ProjectDiagramPickerStorage {
-	open?: (editor: AppEditor) => void;
+	open?: (editor: Editor) => void;
 }
 
 declare module '@tiptap/core' {
@@ -67,7 +66,7 @@ declare module '@tiptap/core' {
 	}
 }
 
-export const ProjectDiagramPicker = Extension.create<{ open?: (editor: AppEditor) => void }>({
+export const ProjectDiagramPicker = Extension.create<{ open?: (editor: Editor) => void }>({
 	name: 'projectDiagramPicker',
 	addOptions() {
 		return { open: undefined };
@@ -122,7 +121,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
 					// plus the per-note store slot; the plugin hands back the base one. It is
 					// the same instance — the editor the app constructed — so this narrows
 					// rather than converts.
-					props.onClick?.(editor as unknown as AppEditor);
+					props.onClick?.(editor);
 				}
 			})
 		];

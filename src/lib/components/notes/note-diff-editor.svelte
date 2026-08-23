@@ -73,7 +73,7 @@
 					noteId ? `/notes/${noteId}/diagrams/${reference}` : undefined,
 				drawioPreview: SafeSvgPreview
 			},
-			[TodoNode(TodoNodeView as never)]
+			[TodoNode(TodoNodeView)]
 		)
 	);
 

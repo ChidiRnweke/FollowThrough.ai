@@ -1,4 +1,5 @@
 import { config as loadDotenv } from 'dotenv';
+import { InfisicalSDK } from '@infisical/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
 type UserId = string & { readonly __brand: 'UserId' };
@@ -364,7 +365,6 @@ export class SecretsReader implements SecretsBackend {
 				}: ${missing.join(', ')}`
 			);
 
-		const { InfisicalSDK } = await import('@infisical/sdk');
 		const client = new InfisicalSDK({ siteUrl: environment.INFISICAL_URL });
 		const login = () =>
 			client.auth().universalAuth.login({
@@ -372,10 +372,16 @@ export class SecretsReader implements SecretsBackend {
 				clientSecret: environment.INFISICAL_CLIENT_SECRET!
 			});
 		await login();
+		const secretsClient: InfisicalLikeClient = {
+			auth: () => ({ universalAuth: { login } }),
+			secrets: () => ({
+				listSecrets: (options) => client.secrets().listSecrets(options)
+			})
+		};
 
 		return new SecretsReader(
 			new InfisicalSecretsBackend(
-				client as unknown as InfisicalLikeClient,
+				secretsClient,
 				environment.INFISICAL_PROJECT_ID!,
 				environment.INFISICAL_ENVIRONMENT!,
 				DEFAULT_SECRET_TTL_SECONDS,

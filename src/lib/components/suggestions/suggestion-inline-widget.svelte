@@ -2,7 +2,6 @@
 	import type { DiagramSuggestion } from '$lib/models/diagrams';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type { NodeViewProps } from '@tiptap/core';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -15,10 +14,7 @@
 	let { suggestionId, editor }: { suggestionId: SuggestionId; editor: NodeViewProps['editor'] } =
 		$props();
 
-	// See `todo-node.svelte` for the cast rationale: TipTap's NodeViewProps
-	// types `editor` as the base TiptapEditor; our `perNote` slot lives on
-	// the subclass in `CoreEditor.ts`.
-	const perNote = $derived((editor as unknown as { perNote?: PerNoteEditorSlot }).perNote);
+	const perNote = $derived(editor.perNote);
 	const view = $derived(
 		perNote?.suggestions.items.find((item) => item.suggestion.id === suggestionId)
 	);
