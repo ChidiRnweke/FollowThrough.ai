@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -232,6 +234,82 @@ type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 
 export type Suggestion =
 	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
+
+const persistedId = <T extends string>() => z.uuid().transform((value) => value as T);
+const optionalSuggestionProvenance = {
+	sourceAnchorId: persistedId<SourceAnchorId>().optional(),
+	provenanceId: persistedId<ProvenanceId>().optional()
+};
+const suggestionPayloadSchemas = {
+	todo: z
+		.object({
+			projectId: persistedId<ProjectId>(),
+			title: z.string(),
+			description: z.string().optional(),
+			responsibility: z.enum(['mine', 'waiting_on']),
+			waitingOn: z.string().optional(),
+			dueDate: z.string().transform((value) => value as LocalDate).optional(),
+			dueDateVerbatim: z.string().optional(),
+			promiseStrength: z.enum(['explicit', 'implied', 'tentative']).optional(),
+			...optionalSuggestionProvenance
+		})
+		.strict(),
+	backlink: z
+		.object({
+			sourceNoteId: persistedId<NoteId>(),
+			targetNoteId: persistedId<NoteId>(),
+			kind: z.enum(['prior_decision', 'contradicts', 'elaborates', 'mentions']),
+			justification: z.string().optional(),
+			...optionalSuggestionProvenance
+		})
+		.strict(),
+	reference: z
+		.object({
+			noteId: persistedId<NoteId>(),
+			url: z.url().transform((value) => value as Url),
+			title: z.string(),
+			tier: z.enum(['official', 'standard', 'vendor', 'community']),
+			relevanceNote: z.string(),
+			...optionalSuggestionProvenance
+		})
+		.strict(),
+	diagram: z
+		.object({
+			noteId: persistedId<NoteId>(),
+			kind: z.enum(['mermaid', 'drawio']),
+			title: z.string().optional(),
+			source: z.string()
+		})
+		.strict(),
+	memory: z
+		.object({
+			projectId: persistedId<ProjectId>().optional(),
+			operation: z.enum(['add', 'update', 'remove']),
+			memoryEntryId: persistedId<MemoryEntryId>().optional(),
+			content: z.string().optional(),
+			shareWithAgents: z.boolean().optional(),
+			justification: z.string().optional()
+		})
+		.strict()
+} satisfies { readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']> };
+
+export const parseSuggestionPayload = (
+	kind: SuggestionKind,
+	value: unknown
+): Suggestion['payload'] => {
+	switch (kind) {
+		case 'todo':
+			return suggestionPayloadSchemas.todo.parse(value);
+		case 'backlink':
+			return suggestionPayloadSchemas.backlink.parse(value);
+		case 'reference':
+			return suggestionPayloadSchemas.reference.parse(value);
+		case 'diagram':
+			return suggestionPayloadSchemas.diagram.parse(value);
+		case 'memory':
+			return suggestionPayloadSchemas.memory.parse(value);
+	}
+};
 
 /**
  * A durable remembered fact. Entries with a project hold project memory; entries

@@ -1,5 +1,6 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
+import { z } from 'zod';
 import type { NoteRevisionDiff } from './revision-diff';
 import type { SectionNumberingView } from './section-numbering';
 
@@ -45,6 +46,13 @@ export interface ProseMirrorDocument {
 	readonly type: 'doc';
 	readonly content?: readonly Record<string, unknown>[];
 }
+
+export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
+	.object({
+		type: z.literal('doc'),
+		content: z.array(z.record(z.string(), z.unknown())).optional()
+	})
+	.strict();
 
 export interface TextSelection {
 	readonly noteId: NoteId;

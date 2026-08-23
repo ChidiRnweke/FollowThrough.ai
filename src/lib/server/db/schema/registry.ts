@@ -18,6 +18,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ProjectTemplateStyles } from '$lib/models/projects';
+import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
+import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
+import type { ProseMirrorDocument } from '$lib/models/notes';
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 export const todoStatus = pgEnum('todo_status', [
@@ -90,7 +93,6 @@ export const agentRunDecision = pgEnum('agent_run_decision', ['approve', 'reject
 export const conversationKind = pgEnum('conversation_kind', ['chat', 'workflow']);
 export const userRole = pgEnum('user_role', ['USER', 'ADMIN', 'WAITING']);
 
-type ProseMirrorDocument = Record<string, unknown>;
 type JsonObject = Record<string, unknown>;
 
 const timestamps = {
@@ -621,7 +623,7 @@ export const suggestions = pgTable(
 		noteId: uuid('note_id').references(() => notes.id, { onDelete: 'cascade' }),
 		kind: suggestionKind('kind').notNull(),
 		status: suggestionStatus('status').notNull().default('proposed'),
-		payload: jsonb('payload').$type<JsonObject>().notNull(),
+		payload: jsonb('payload').$type<DomainSuggestion['payload']>().notNull(),
 		confidence: integer('confidence'),
 		provenanceId: uuid('provenance_id')
 			.notNull()
@@ -813,7 +815,7 @@ export const agentRuns = pgTable(
 		serializedState: text('serialized_state'),
 		traceparent: text('traceparent'),
 		pendingDecisions: jsonb('pending_decisions')
-			.$type<readonly JsonObject[]>()
+			.$type<readonly PendingAgentDecision[]>()
 			.notNull()
 			.default([]),
 		failure: text('failure'),
@@ -844,7 +846,7 @@ export const agentRunEvents = pgTable(
 			.notNull()
 			.references(() => agentRuns.id, { onDelete: 'cascade' }),
 		attempt: integer('attempt').notNull(),
-		event: jsonb('event').$type<JsonObject>().notNull(),
+		event: jsonb('event').$type<AgentEvent>().notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('agent_run_events_run_cursor_idx').on(table.runId, table.cursor)]

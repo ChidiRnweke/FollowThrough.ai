@@ -60,7 +60,7 @@ const toRunBase = (row: typeof schema.agentRuns.$inferSelect) => ({
 	...(row.provenanceId ? { provenanceId: row.provenanceId as AgentRun['provenanceId'] } : {}),
 	...(row.serializedState ? { serializedState: row.serializedState } : {}),
 	...(row.traceparent ? { traceparent: row.traceparent } : {}),
-	pendingDecisions: row.pendingDecisions as unknown as AgentRun['pendingDecisions'],
+	pendingDecisions: row.pendingDecisions,
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
 	contextSnapshot: row.contextSnapshot,

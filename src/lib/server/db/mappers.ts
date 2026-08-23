@@ -3,11 +3,16 @@ import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
-import type { Note, NoteRelationship, NoteRevision } from '$lib/models/notes';
+import {
+	proseMirrorDocumentSchema,
+	type Note,
+	type NoteRelationship,
+	type NoteRevision
+} from '$lib/models/notes';
 import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
-import type { Suggestion } from '$lib/models/suggestions';
+import { parseSuggestionPayload, type Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
@@ -62,7 +67,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 		parentId: row.parentId ?? undefined,
 		builtInKey: row.builtInKey ?? undefined,
 		sectionNumbering: row.sectionNumbering ?? undefined,
-		document: row.document,
+		document: proseMirrorDocumentSchema.parse(row.document),
 		publishedRevision: row.publishedRevision,
 		publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined,
 		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
@@ -73,7 +78,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 export const toRevision = (row: typeof schema.noteRevisions.$inferSelect): NoteRevision =>
 	domain<NoteRevision>({
 		...row,
-		document: row.document,
+		document: proseMirrorDocumentSchema.parse(row.document),
 		provenanceId: row.provenanceId ?? undefined,
 		createdAt: instant(row.createdAt)
 	});
@@ -188,7 +193,7 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
 	domain<Suggestion>({
 		...row,
 		noteId: row.noteId ?? undefined,
-		payload: row.payload,
+		payload: parseSuggestionPayload(row.kind, row.payload),
 		confidence: row.confidence === null ? undefined : (row.confidence as Suggestion['confidence']),
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
 		decidedAt: row.decidedAt ? instant(row.decidedAt) : undefined,

@@ -37,14 +37,17 @@ export function collectImageSources(doc: ProseMirrorDocument): string[] {
 	const sources: string[] = [];
 	const walk = (node: Record<string, unknown>): void => {
 		if (node.type === 'image') {
-			const src = (node.attrs as Record<string, unknown> | undefined)?.src;
+			const attrs = node.attrs;
+			const src =
+				typeof attrs === 'object' && attrs !== null && 'src' in attrs ? attrs.src : undefined;
 			if (typeof src === 'string' && (isRemoteSource(src) || ATTACHMENT_SRC.test(src)))
 				sources.push(src);
 		}
-		for (const child of (node.content as Array<Record<string, unknown>> | undefined) ?? [])
-			walk(child);
+		if (!Array.isArray(node.content)) return;
+		for (const child of node.content)
+			if (typeof child === 'object' && child !== null) walk(child);
 	};
-	walk(doc as unknown as Record<string, unknown>);
+	walk({ type: doc.type, content: doc.content });
 	return sources;
 }
 

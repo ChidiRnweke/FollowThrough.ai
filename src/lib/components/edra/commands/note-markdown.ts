@@ -1,7 +1,7 @@
 import { generateText } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
 import { noteMarkdownExtensions } from './markdown-extensions.js';
-import type { EdraDocument } from './document.js';
+import { editorContent, parseEdraDocument, type EdraDocument } from './document.js';
 
 /**
  * Markdown ↔ note conversion.
@@ -23,7 +23,7 @@ export interface NoteMarkdownContent {
 /** Convert a compact Markdown payload into the editor's persisted note content. */
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const parsed = markdown.parse(source);
-	const document = parsed as EdraDocument;
+	const document = parseEdraDocument(parsed);
 	return {
 		document,
 		plainText: generateText(parsed, extensions, { blockSeparator: '\n\n' })
@@ -40,4 +40,4 @@ export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => 
  * Markdown has native syntax for.
  */
 export const noteMarkdownFromContent = (document: EdraDocument): string =>
-	markdown.serialize(document as Parameters<typeof markdown.serialize>[0]);
+	markdown.serialize(editorContent(document));

@@ -126,7 +126,7 @@ export class NoteRecords implements NoteRepository {
 				position: note.position,
 				title: note.title,
 				builtInKey: note.builtInKey,
-				document: note.document as unknown as Record<string, unknown>,
+				document: note.document,
 				plainText: note.plainText,
 				currentRevision: note.currentRevision,
 				isPinned: note.isPinned,
@@ -144,7 +144,7 @@ export class NoteRecords implements NoteRepository {
 			.set({
 				kind: note.kind,
 				title: note.title,
-				document: note.document as unknown as Record<string, unknown>,
+				document: note.document,
 				plainText: note.plainText,
 				parentId: note.parentId,
 				position: note.position,
@@ -169,7 +169,7 @@ export class NoteRecords implements NoteRepository {
 			.update(schema.notes)
 			.set({
 				title: note.title,
-				document: note.document as unknown as Record<string, unknown>,
+				document: note.document,
 				plainText: note.plainText,
 				isPinned: note.isPinned,
 				currentRevision: note.currentRevision,
@@ -217,7 +217,7 @@ export class NoteRecords implements NoteRepository {
 				noteId: revision.noteId,
 				revision: revision.revision,
 				title: revision.title,
-				document: revision.document as unknown as Record<string, unknown>,
+				document: revision.document,
 				plainText: revision.plainText,
 				provenanceId: revision.provenanceId,
 				createdAt: new Date(revision.createdAt)

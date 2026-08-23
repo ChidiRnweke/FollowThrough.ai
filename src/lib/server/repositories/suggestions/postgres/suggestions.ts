@@ -45,7 +45,7 @@ export class SuggestionRecords implements SuggestionRepository {
 				noteId: suggestion.noteId,
 				kind: suggestion.kind,
 				status: suggestion.status,
-				payload: suggestion.payload as unknown as Record<string, unknown>,
+				payload: suggestion.payload,
 				confidence: suggestion.confidence,
 				provenanceId: suggestion.provenanceId,
 				sourceAnchorId: suggestion.sourceAnchorId,

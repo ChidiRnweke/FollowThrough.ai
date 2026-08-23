@@ -20,7 +20,7 @@ const toEvent = (row: typeof schema.agentRunEvents.$inferSelect): AgentRunEventR
 	cursor: row.cursor.toString(),
 	runId: row.runId as AgentRunId,
 	attempt: row.attempt,
-	event: row.event as unknown as AgentEvent,
+	event: row.event,
 	createdAt: row.createdAt
 });
 
@@ -43,7 +43,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 	): Promise<AgentRunEventRecord> {
 		const [row] = await this.database
 			.insert(schema.agentRunEvents)
-			.values({ runId, attempt, event: event as unknown as Record<string, unknown> })
+			.values({ runId, attempt, event })
 			.returning();
 		return toEvent(row!);
 	}
@@ -88,7 +88,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return segmentOutput(
 			rows.map(({ cursor, event }) => ({
 				cursor: String(cursor),
-				event: event as unknown as AgentEvent
+				event
 			}))
 		);
 	}
