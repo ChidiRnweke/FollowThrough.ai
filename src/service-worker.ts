@@ -101,6 +101,7 @@ const cacheFirst = async (request: Request, pathname: string): Promise<Response>
 		// are used, so switching proofreading on once makes it work offline after.
 		if (isOnDemandAsset(pathname) && canStore(response)) await store(cache, pathname, response);
 		return response;
+		// audit-allow: silent-catch — the offline path returns cached content only when present, otherwise an explicit redirect or 503.
 	} catch {
 		return unavailable();
 	}
@@ -118,6 +119,7 @@ const networkFirst = async (
 		if (canStore(response, allowPrivatePageData)) await store(cache, cacheKey, response);
 		if (response.status < 500) return response;
 		return (await cache.match(cacheKey)) ?? response;
+		// audit-allow: silent-catch — the offline path returns cached content only when present, otherwise an explicit redirect or 503.
 	} catch {
 		const cached = await cache.match(cacheKey);
 		if (cached) return cached;

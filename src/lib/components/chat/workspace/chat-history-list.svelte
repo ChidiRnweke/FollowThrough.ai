@@ -63,6 +63,7 @@
 			await renameSession({ conversationId: selected.id, title });
 			await invalidateAll();
 			toast.success('Chat renamed.');
+			// audit-allow: silent-catch — rename failure is reported and the existing chat title remains authoritative.
 		} catch {
 			toast.error('Chat could not be renamed.');
 		} finally {
@@ -89,6 +90,7 @@
 			await invalidateAll();
 			deleteOpen = false;
 			toast.success('Chat deleted.');
+			// audit-allow: silent-catch — deletion failure is reported with the recovery action to stop the active run.
 		} catch {
 			toast.error('Chat could not be deleted. Stop its active run and try again.');
 		} finally {

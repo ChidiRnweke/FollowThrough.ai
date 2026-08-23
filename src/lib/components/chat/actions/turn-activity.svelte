@@ -83,6 +83,7 @@
 		let cancelled = false;
 		for (const row of unnamed) {
 			const id = row.id as string;
+			// audit-allow: silent-catch — activity remains usable and labels the unavailable todo title explicitly.
 			void getTodo(id)
 				.then((todo) => {
 					if (!cancelled) todoTitles.set(id, todo.title);

@@ -319,6 +319,7 @@ export class InfisicalSecretsBackend implements SecretsBackend {
 				this.snapshot = snapshotFromResponse(response);
 				this.expiresAt = this.now() + this.ttl;
 				return this.snapshot;
+				// audit-allow: silent-catch — this bounded retry loop re-authenticates between attempts and throws the final backend failure below.
 			} catch (error) {
 				lastError = error;
 				if (attempt === INFISICAL_FETCH_RETRIES - 1) break;

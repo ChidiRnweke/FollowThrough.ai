@@ -33,6 +33,7 @@
 	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
 	import { StudioHandoff } from '$lib/components/diagrams';
+	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
 	import {
@@ -529,7 +530,11 @@
 	}
 
 	async function decide(id: string, decision: 'accept' | 'reject') {
-		const suggestionId = z.string().uuid().transform((value) => value as SuggestionId).parse(id);
+		const suggestionId = z
+			.string()
+			.uuid()
+			.transform((value) => value as SuggestionId)
+			.parse(id);
 		const tray = workbench.focusedNoteId
 			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
 			: undefined;
@@ -550,6 +555,7 @@
 			chat.resolveSuggestion(id);
 			await invalidateAll();
 			return true;
+			// audit-allow: silent-catch — false is the typed decision outcome consumed by the tool card, which keeps the decision available.
 		} catch {
 			return false;
 		}
@@ -558,6 +564,7 @@
 	async function requestRetry(entry: ChatEntry): Promise<void> {
 		try {
 			await chat.retry(entry);
+			// audit-allow: silent-catch — retry failure is shown while the failed run remains available for another attempt.
 		} catch {
 			toast.error('That run could not be retried.');
 		}
@@ -583,11 +590,18 @@
 		</div>
 	{/if}
 	{#if chat.persistenceError}
-		<div class="mb-4 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm" role="alert">
+		<div
+			class="mb-4 flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
+			role="alert"
+		>
 			<span>{chat.persistenceError}</span>
-			<button class="shrink-0 underline" type="button" onclick={() => chat.resetCorruptPersistence()}>
+			<Button
+				variant="link"
+				class="h-11 shrink-0 px-2"
+				onclick={() => chat.resetCorruptPersistence()}
+			>
 				Reset saved state
-			</button>
+			</Button>
 		</div>
 	{/if}
 

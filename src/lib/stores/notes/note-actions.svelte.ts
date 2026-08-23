@@ -27,6 +27,7 @@ class NoteActionsStore {
 		if (run) this.running = true;
 		try {
 			return await fn();
+			// audit-allow: silent-catch — undefined is the typed action failure outcome and lastError supplies the caller's user-visible message.
 		} catch (error) {
 			this.lastError = error instanceof Error ? error.message : 'The request failed.';
 			return undefined;

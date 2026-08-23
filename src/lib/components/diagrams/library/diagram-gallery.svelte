@@ -141,6 +141,7 @@
 			await deleteProjectDiagram({ diagramId: id });
 			if (previous.length === 1 && data.page > 1) await navigate(data.page - 1);
 			else await invalidateAll();
+			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported to the user.
 		} catch {
 			diagrams = previous;
 			toast.error('Could not delete the diagram.');

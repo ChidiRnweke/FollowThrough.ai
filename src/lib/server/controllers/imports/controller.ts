@@ -148,6 +148,7 @@ export class NoteImportsController implements ImportsController {
 				titlesToIds.set(note.title.trim().toLowerCase(), created.note.id);
 				pending.push({ note, created: created.note });
 				importedNoteIds.push(created.note.id);
+				// audit-allow: silent-catch — the per-file failure is returned in ImportNotesResult.failed while independent files continue.
 			} catch (error) {
 				failed.push({
 					path: note.path,
@@ -165,6 +166,7 @@ export class NoteImportsController implements ImportsController {
 						...noteContentFromMarkdown(resolveWikiLinks(note.markdown, titlesToIds))
 					}
 				});
+				// audit-allow: silent-catch — the body failure is returned in ImportNotesResult.failed while other imported notes remain usable.
 			} catch (error) {
 				failed.push({
 					path: note.path,

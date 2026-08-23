@@ -287,6 +287,7 @@ export class WorkbenchStore {
 					this.pinnedTabs = record.pinnedTabs;
 					this.recentlyUsed = record.recentlyUsed;
 				}
+				// audit-allow: silent-catch — corrupt workspace state is reported and URL state remains the explicit recovery source.
 			} catch (error) {
 				toast.error(
 					error instanceof Error ? error.message : 'Workspace state could not be restored'
@@ -337,6 +338,7 @@ export class WorkbenchStore {
 				void this.refreshActiveProjectId(shellProjectOf);
 				return;
 			}
+			// audit-allow: silent-catch — tab restoration failure is reported before URL state is applied as recovery.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
 		}
@@ -718,6 +720,7 @@ export class WorkbenchStore {
 		};
 		try {
 			await this.repository.put(record);
+			// audit-allow: silent-catch — persistence failure is reported while the live workspace remains intact.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Workspace state could not be saved');
 		}

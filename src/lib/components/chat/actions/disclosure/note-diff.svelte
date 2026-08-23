@@ -64,6 +64,7 @@
 			};
 		};
 
+		// audit-allow: silent-catch — the disclosure renders an explicit comparison-unavailable message.
 		void load().catch(() => {
 			if (!cancelled)
 				problem = 'The earlier version could not be loaded, so there is nothing to compare.';

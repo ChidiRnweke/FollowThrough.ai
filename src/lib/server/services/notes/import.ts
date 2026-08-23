@@ -153,6 +153,7 @@ export const readMarkdownArchive = (
 		let text: string;
 		try {
 			text = zip.readAsText(entry);
+			// audit-allow: silent-catch — unreadable entries are returned explicitly in ArchiveResult.skipped with their path and reason.
 		} catch {
 			skipped.push({ path, reason: 'Could not be read' });
 			continue;

@@ -580,6 +580,7 @@
 				return;
 			}
 			await navigator.clipboard.writeText(text);
+			// audit-allow: silent-catch — clipboard write failure is reported while the source text remains selected.
 		} catch {
 			toast.error('The clipboard could not be written');
 		}
@@ -592,6 +593,7 @@
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
 			await navigator.clipboard.write([selectionClipboardItem(state)]);
+			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
 		} catch {
 			toast.error('The clipboard could not be written');
 		}
@@ -616,6 +618,7 @@
 			editor.view.focus();
 			restoreContextRange();
 			editor.view.pasteText(text);
+			// audit-allow: silent-catch — clipboard read failure is reported and the document is not changed.
 		} catch {
 			toast.error('The clipboard could not be read');
 		}
@@ -633,6 +636,7 @@
 			editor.view.focus();
 			restoreContextRange();
 			editor.view.pasteHTML(html);
+			// audit-allow: silent-catch — formatted clipboard read failure is reported and the document is not changed.
 		} catch {
 			toast.error('The clipboard could not be read');
 		}
@@ -1080,6 +1084,7 @@
 				})
 				.run();
 			return true;
+			// audit-allow: silent-catch — false is the typed decision outcome consumed by the suggestion UI, which keeps the action available.
 		} catch {
 			return false;
 		}

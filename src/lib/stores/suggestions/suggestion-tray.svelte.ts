@@ -26,6 +26,7 @@ export class SuggestionTrayStore {
 			this.remove(suggestionId);
 			await invalidateAll();
 			return true;
+			// audit-allow: silent-catch — false is the tray's typed outcome; the suggestion stays visible and actionable.
 		} catch {
 			return false;
 		} finally {

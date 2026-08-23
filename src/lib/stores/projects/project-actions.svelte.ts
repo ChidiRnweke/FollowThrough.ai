@@ -46,6 +46,7 @@ class ProjectActionsStore {
 			const result = await fn();
 			await invalidateAll();
 			return result;
+			// audit-allow: silent-catch — undefined is the typed action failure outcome and lastError preserves any domain message for the caller.
 		} catch (error) {
 			// Domain failures (name taken, folder not empty, …) carry a message worth
 			// showing; unexpected errors fall back to each caller's generic copy.

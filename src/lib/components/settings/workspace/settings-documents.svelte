@@ -18,6 +18,7 @@
 		try {
 			if (await form.submit()) toast.success('Document defaults saved');
 			else toast.error('Could not save document defaults. Check the values and try again.');
+			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save document defaults. Try again.');
 		}

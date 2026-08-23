@@ -186,6 +186,7 @@
 			if (thisRender !== renderCounter) return;
 			target.innerHTML = sanitizeMermaidSvg(svg);
 			error = null;
+			// audit-allow: silent-catch — the diagram node renders the parser error and removes any partial SVG.
 		} catch (err) {
 			if (thisRender !== renderCounter) return;
 			error =
@@ -277,6 +278,7 @@
 				throw new Error('The Mermaid diagram changed while conversion was running. Try again.');
 			setPendingDrawioSuggestion(reference);
 			options.onReview?.(reference);
+			// audit-allow: silent-catch — conversion failure is rendered beside the unchanged Mermaid source.
 		} catch (failure) {
 			conversionError =
 				failure instanceof Error ? failure.message : 'The diagram could not be converted.';
@@ -291,6 +293,7 @@
 		try {
 			await options.onDismiss(pendingDrawioSuggestionId);
 			setPendingDrawioSuggestion(null);
+			// audit-allow: silent-catch — dismissal failure is rendered and the pending conversion remains reviewable.
 		} catch (failure) {
 			conversionError = failure instanceof Error ? failure.message : 'Dismissal failed.';
 		}
@@ -331,6 +334,7 @@
 			isEditing = false;
 			showAiRevision = false;
 			revisionInstruction = '';
+			// audit-allow: silent-catch — revision failure is rendered while the original diagram remains unchanged.
 		} catch (revisionFailure) {
 			revisionError =
 				revisionFailure instanceof Error ? revisionFailure.message : 'Diagram revision failed.';
@@ -427,6 +431,7 @@
 			const png = mermaidPngBlob(source, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
+			// audit-allow: silent-catch — a rejected lazy image promise is reported while clipboard fallback continues below.
 			png.catch((error) =>
 				toast.error(
 					error instanceof Error ? error.message : 'The diagram image could not be copied'
@@ -440,6 +445,7 @@
 			]);
 			copiedImage = true;
 			setTimeout(() => (copiedImage = false), 2000);
+			// audit-allow: silent-catch — image-copy failure falls back to source text and tells the user exactly what was copied.
 		} catch (error) {
 			// A diagram that will not render still has its source to offer.
 			await navigator.clipboard.writeText(source);

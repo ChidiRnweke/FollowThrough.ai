@@ -125,6 +125,7 @@ function waitForTerminalStatus(
 		};
 
 		const check = () => {
+			// audit-allow: silent-catch — the polling Promise propagates lookup failure through its reject continuation.
 			lab.controllers
 				.agent()
 				.getRun(actor, runId)

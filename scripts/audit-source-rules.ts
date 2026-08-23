@@ -18,88 +18,25 @@ const shapeCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAssertion =>
 		(node.type.kind === ts.SyntaxKind.NeverKeyword && ts.isIdentifier(unwrap(node.expression))) ||
 		(node.type.kind === ts.SyntaxKind.UnknownKeyword &&
 			(ts.isAsExpression(node.parent) || ts.isTypeAssertionExpression(node.parent))));
-const assignmentReports = (node: ts.BinaryExpression): boolean => {
-	if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
-	const name = ts.isPropertyAccessExpression(node.left)
-		? node.left.name.text
-		: ts.isIdentifier(node.left)
-			? node.left.text
-			: '';
-	if (
-		/(?:error|failure|failed|status|connection|cancelling|loading|unavailable|problem)$/i.test(name)
-	)
-		return true;
-	return (
-		(ts.isStringLiteral(node.right) || ts.isNoSubstitutionTemplateLiteral(node.right)) &&
-		/(?:error|fail|unavailable)/i.test(node.right.text)
-	);
-};
-const returnReports = (node: ts.ReturnStatement): boolean =>
-	Boolean(
-		node.expression &&
-		(node.expression.kind === ts.SyntaxKind.FalseKeyword ||
-			(ts.isStringLiteral(node.expression) &&
-				/(?:error|fail|unserializable)/i.test(node.expression.text)) ||
-			(ts.isObjectLiteralExpression(node.expression) &&
-				node.expression.properties.some(
-					(field) =>
-						ts.isPropertyAssignment(field) &&
-						ts.isIdentifier(field.name) &&
-						(field.name.text === 'error' ||
-							field.name.text === 'failure' ||
-							field.name.text === 'problems' ||
-							field.name.text === 'raw' ||
-							field.name.text === 'status' ||
-							(field.name.text === 'ok' && field.initializer.kind === ts.SyntaxKind.FalseKeyword))
-				)))
-	);
-const callReports = (node: ts.CallExpression): boolean => {
-	const name = ts.isPropertyAccessExpression(node.expression)
-		? node.expression.name.text
-		: ts.isIdentifier(node.expression)
-			? node.expression.text
-			: '';
-	if (
-		/(?:error|warn|warning|report|capture|notify|toast|announce|invalidate|invalid|unavailable|addIssue|onFailure|setError|fail|failed|reject)$/i.test(
-			name
-		)
-	)
-		return true;
-	if (
-		name === 'push' &&
-		ts.isPropertyAccessExpression(node.expression) &&
-		/(?:errors?|failures?|failed|problems|skipped)$/i.test(
-			ts.isIdentifier(node.expression.expression)
-				? node.expression.expression.text
-				: ts.isPropertyAccessExpression(node.expression.expression)
-					? node.expression.expression.name.text
-					: ''
-		)
-	)
-		return true;
-	return node.arguments.some((argument) => {
-		if (!ts.isObjectLiteralExpression(argument)) return false;
-		return argument.properties.some(
-			(field) =>
-				ts.isPropertyAssignment(field) &&
-				ts.isIdentifier(field.name) &&
-				(['error', 'failure', 'problems'].includes(field.name.text) ||
-					((field.name.text === 'status' || field.name.text.endsWith('Status')) &&
-						(ts.isStringLiteral(field.initializer) ||
-							ts.isNoSubstitutionTemplateLiteral(field.initializer)) &&
-						['error', 'failed', 'failure'].includes(field.initializer.text)))
+const explicitFailureResult = (node: ts.ReturnStatement): boolean => {
+	const expression = node.expression && unwrap(node.expression);
+	if (!expression || !ts.isObjectLiteralExpression(expression)) return false;
+	return expression.properties.some((field) => {
+		if (!ts.isPropertyAssignment(field) || !ts.isIdentifier(field.name)) return false;
+		if (field.name.text === 'ok') return field.initializer.kind === ts.SyntaxKind.FalseKeyword;
+		return (
+			field.name.text === 'kind' &&
+			(ts.isStringLiteral(field.initializer) ||
+				ts.isNoSubstitutionTemplateLiteral(field.initializer)) &&
+			['corrupt', 'error', 'failure'].includes(field.initializer.text)
 		);
 	});
 };
 const recovers = (node: ts.Node): boolean => {
 	let found = false;
 	const visit = (child: ts.Node): void => {
-		if (
-			ts.isThrowStatement(child) ||
-			(ts.isCallExpression(child) && callReports(child)) ||
-			(ts.isBinaryExpression(child) && assignmentReports(child)) ||
-			(ts.isReturnStatement(child) && returnReports(child))
-		)
+		if (child !== node && ts.isFunctionLike(child)) return;
+		if (ts.isThrowStatement(child) || (ts.isReturnStatement(child) && explicitFailureResult(child)))
 			found = true;
 		if (!found) ts.forEachChild(child, visit);
 	};

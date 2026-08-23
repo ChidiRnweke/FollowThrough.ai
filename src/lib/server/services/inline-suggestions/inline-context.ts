@@ -6,7 +6,7 @@ import type {
 } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
-import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
+import { searchDocumentIdSchema, type SearchMatch } from '$lib/models/knowledge-search';
 import type { ProjectId } from '$lib/models/projects';
 import { getEncoding } from 'js-tiktoken';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
@@ -113,7 +113,7 @@ const withinTokenBudget = (values: readonly string[], budget: number): readonly 
 
 const memoryAsMatch = (entry: MemoryEntry, note: Note): SearchMatch => ({
 	document: {
-		id: entry.id as unknown as SearchDocumentId,
+		id: searchDocumentIdSchema.parse(entry.id),
 		projectId: note.projectId,
 		memoryEntryId: entry.id,
 		sourceTitle: 'User memory',

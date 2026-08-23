@@ -28,6 +28,7 @@ class TodoUpdatesStore {
 			applyTodoAcrossHeldStores(output.todo);
 			await invalidateAll();
 			return true;
+			// audit-allow: silent-catch — false is the typed update outcome consumed by the todo UI, which preserves the prior value.
 		} catch {
 			return false;
 		} finally {
@@ -46,6 +47,7 @@ class TodoUpdatesStore {
 			if (rightPanel.todoView?.todo.id === todoId) rightPanel.close();
 			await invalidateAll();
 			return true;
+			// audit-allow: silent-catch — false is the typed removal outcome consumed by the todo UI, which preserves the row.
 		} catch {
 			return false;
 		} finally {
@@ -59,6 +61,7 @@ class TodoUpdatesStore {
 			await createTodo({ title: title, projectId, status });
 			await invalidateAll();
 			return true;
+			// audit-allow: silent-catch — false is the typed creation outcome consumed by the todo UI, which keeps the draft available.
 		} catch {
 			return false;
 		} finally {

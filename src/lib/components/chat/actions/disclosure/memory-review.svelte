@@ -30,6 +30,7 @@
 	$effect(() => {
 		if (existing || unavailable) return;
 		let cancelled = false;
+		// audit-allow: silent-catch — the disclosure renders its unavailable state instead of presenting an empty memory list.
 		void getEntries(projectId)
 			.then((result) => {
 				if (!cancelled) existing = result.entries;

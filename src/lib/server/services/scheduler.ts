@@ -66,6 +66,7 @@ export const startScheduler = (
 				logger.info(
 					`[worker] ${task.name} finished in ${Math.round(performance.now() - startedAt)}ms`
 				);
+				// audit-allow: silent-catch — scheduled task failure is recorded on its trace and log while the scheduler keeps later tasks alive.
 			} catch (error) {
 				span.setStatus({ code: SpanStatusCode.ERROR });
 				span.recordException(error instanceof Error ? error : new Error(String(error)));

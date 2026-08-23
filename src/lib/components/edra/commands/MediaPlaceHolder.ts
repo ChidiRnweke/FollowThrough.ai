@@ -2,6 +2,7 @@ import { mergeAttributes, Node, type NodeViewProps } from '@tiptap/core';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
 import type { Component } from 'svelte';
 import { NodeSelection } from '@tiptap/pm/state';
+import { toast } from 'svelte-sonner';
 
 export interface MediaPlaceholderOptions {
 	HTMLAttributes: Record<string, unknown>;
@@ -130,6 +131,7 @@ export const MediaPlaceholder = (component: Component<NodeViewProps>) =>
 							}
 						}
 
+						// audit-allow: silent-catch — upload failure is shown and the placeholder remains in the document for retry.
 						void onUpload(file)
 							.then((src) => {
 								editor.view.focus();
@@ -143,6 +145,7 @@ export const MediaPlaceholder = (component: Component<NodeViewProps>) =>
 							})
 							.catch((error) => {
 								console.error('Failed to upload media:', error);
+								toast.error(error instanceof Error ? error.message : 'Media upload failed.');
 							});
 
 						return true;

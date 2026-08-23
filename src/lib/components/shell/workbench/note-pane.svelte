@@ -53,6 +53,7 @@
 			const loaded = (await getNoteView(noteId)) as NoteView;
 			if (isNewer(loaded, view)) view = loaded;
 			loadingError = undefined;
+			// audit-allow: silent-catch — the pane renders the load error instead of an empty note.
 		} catch (error) {
 			loadingError = error instanceof Error ? error.message : 'Note could not be loaded.';
 		}

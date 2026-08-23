@@ -40,6 +40,7 @@
 			plaintext = minted.plaintext;
 			name = '';
 			toast.success('Token created. Copy it now — it will not be shown again.');
+			// audit-allow: silent-catch — token creation failure is reported and no credential is presented as created.
 		} catch {
 			toast.error('Could not create the token. Try again.');
 		} finally {
@@ -52,6 +53,7 @@
 		try {
 			await revokeApiToken(token.id);
 			toast.success(`Revoked ${token.name}`);
+			// audit-allow: silent-catch — revocation failure is reported and the token remains listed.
 		} catch {
 			toast.error('Could not revoke the token. Try again.');
 		} finally {
@@ -63,6 +65,7 @@
 		try {
 			await navigator.clipboard.writeText(value);
 			toast.success('Copied to clipboard');
+			// audit-allow: silent-catch — the token remains selected and the toast gives the manual-copy recovery.
 		} catch {
 			toast.error('Could not copy. Select the text and copy manually.');
 		}

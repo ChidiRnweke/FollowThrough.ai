@@ -98,7 +98,11 @@ type PersistedConversationResult =
 	| { readonly kind: 'corrupt'; readonly message: string };
 
 const persistedConversationSchema = z.object({
-	conversationId: z.string().uuid().transform((value) => value as ConversationId).optional(),
+	conversationId: z
+		.string()
+		.uuid()
+		.transform((value) => value as ConversationId)
+		.optional(),
 	modelOverride: z.string().nullable().optional(),
 	visionModelOverride: z.string().nullable().optional(),
 	executionModeOverride: z.enum(['approval_required', 'auto_accept']).optional()
@@ -443,6 +447,7 @@ export class ChatStore {
 				}
 			}
 			this.hydratedConversationId = conversationId;
+			// audit-allow: silent-catch — hydration failure moves the store to an explicit reconnecting/offline state rather than an empty chat.
 		} catch {
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 		} finally {
@@ -570,6 +575,7 @@ export class ChatStore {
 			this.runStatus = receipt.status;
 			this.persistConversationChoices();
 			this.attach(reply, receipt.runId, receipt.latestCursor, 0);
+			// audit-allow: silent-catch — submission failure is attached to the pending reply and connection state exposes uncertainty.
 		} catch (error) {
 			const rejected = rejectionMessage(error);
 			reply.error = rejected ?? 'Submission could not be confirmed. Reconnect to check its status.';
@@ -587,12 +593,14 @@ export class ChatStore {
 		try {
 			const snapshot = await this.transport.cancel(runId);
 			if (reply) this.reconcileSnapshot(reply, snapshot);
+			// audit-allow: silent-catch — an unconfirmed cancel triggers an explicit server reconciliation attempt.
 		} catch {
 			// The cancel may still have landed server-side, so ask before giving up:
 			// `cancelling` gates the composer and must never be a resting state here.
 			try {
 				const snapshot = await this.transport.get(runId);
 				if (reply) this.reconcileSnapshot(reply, snapshot);
+				// audit-allow: silent-catch — failed reconciliation marks cancellation unconfirmed instead of claiming success.
 			} catch {
 				if (reply) reply.error = 'Cancellation has not been confirmed yet.';
 				this.runStatus = undefined;
@@ -679,6 +687,7 @@ export class ChatStore {
 			for (const tool of tools) tool.status = decision === 'approve' ? 'running' : 'rejected';
 			this.reconcileSnapshot(reply, snapshot);
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
+			// audit-allow: silent-catch — every affected tool is marked failed so the decision is never presented as applied.
 		} catch {
 			for (const tool of tools) {
 				tool.status = 'failed';
@@ -759,6 +768,7 @@ export class ChatStore {
 			const snapshot = await this.transport.get(runId);
 			this.reconcileSnapshot(reply, snapshot);
 			if (!activeStatuses.includes(snapshot.run.status)) this.detach();
+			// audit-allow: silent-catch — refresh failure moves the connection into its visible reconnecting/offline state.
 		} catch {
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 		}

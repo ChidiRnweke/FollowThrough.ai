@@ -77,6 +77,7 @@ const rasterise = (svg: string, background: string | undefined, scale: number): 
 				}
 				context.drawImage(image, 0, 0, width, height);
 				resolve(canvas.toDataURL('image/png'));
+				// audit-allow: silent-catch — the Promise executor propagates this exact failure through reject.
 			} catch (error) {
 				reject(error instanceof Error ? error : new Error(String(error)));
 			} finally {

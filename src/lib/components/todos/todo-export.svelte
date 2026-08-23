@@ -59,6 +59,7 @@
 			});
 			const bytes = Uint8Array.from(atob(result.data), (char) => char.charCodeAt(0));
 			download(new Blob([bytes], { type: 'application/pdf' }), result.filename);
+			// audit-allow: silent-catch — PDF generation failure is reported and no download is claimed.
 		} catch {
 			toast.error('Could not generate the PDF. Try again.');
 		} finally {

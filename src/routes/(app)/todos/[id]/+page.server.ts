@@ -10,6 +10,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			.todos()
 			.get(AppFactory.actor(locals), { todoId: params.id as TodoId });
 		return { view, returnTo: safeReturnUrl(url.searchParams.get('returnTo')) };
+		// audit-allow: silent-catch — SvelteKit error() terminates the load with an explicit 404 response.
 	} catch {
 		error(404, 'Todo not found');
 	}

@@ -39,6 +39,7 @@
 		try {
 			if (await form.submit()) toast.success('Agent defaults saved');
 			else toast.error('Could not save agent defaults. Check the values and try again.');
+			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save agent defaults. Try again.');
 		}

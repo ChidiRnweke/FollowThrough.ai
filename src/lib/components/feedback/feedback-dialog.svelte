@@ -27,10 +27,11 @@
 			await submitFeedback({
 				body: trimmed,
 				url: page.url.pathname + page.url.search,
-				appContext: snapshot as unknown as Record<string, unknown>
+				appContext: { ...snapshot }
 			});
 			open = false;
 			toast.success('Feedback sent — thank you!');
+			// audit-allow: silent-catch — the dialog stays open with its content intact and tells the user to retry.
 		} catch {
 			toast.error('Could not send feedback. Try again.');
 		} finally {

@@ -93,6 +93,7 @@
 				textarea?.setSelectionRange(next.caret, next.caret);
 			}
 			await commit();
+			// audit-allow: silent-catch — screenshot upload failure is reported and the description remains editable.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Could not upload the screenshot.');
 		} finally {

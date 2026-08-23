@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	openRouterWebSearchTool,
@@ -76,6 +77,22 @@ interface OpenRouterOutputItem {
 		readonly annotations?: readonly OpenRouterCitation[];
 	}[];
 }
+
+const openRouterCitationSchema: z.ZodType<OpenRouterCitation> = z.looseObject({
+	type: z.string().optional(),
+	url: z.string().optional(),
+	title: z.string().optional(),
+	content: z.string().optional()
+});
+const openRouterOutputSchema: z.ZodType<readonly OpenRouterOutputItem[]> = z.array(
+	z.looseObject({
+		type: z.string().optional(),
+		action: z.looseObject({ sources: z.array(openRouterCitationSchema).optional() }).optional(),
+		content: z
+			.array(z.looseObject({ annotations: z.array(openRouterCitationSchema).optional() }))
+			.optional()
+	})
+);
 
 const STANDARD_HOSTS = [
 	'rfc-editor.org',
@@ -198,7 +215,7 @@ export class ReferenceResearch implements IWebReferenceResearch {
 					options.signal ? { signal: options.signal } : undefined
 				);
 				return referenceCandidatesFrom(
-					response.output as unknown as readonly OpenRouterOutputItem[],
+					openRouterOutputSchema.parse(response.output),
 					selectionText
 				);
 			},

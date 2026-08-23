@@ -58,6 +58,7 @@
 		const id = todoSubjectId;
 		if (!id) return;
 		let cancelled = false;
+		// audit-allow: silent-catch — the approval card labels the missing preview as unavailable without changing the action payload.
 		void getTodo(id)
 			.then((todo) => {
 				if (!cancelled) todoTitle = todo.title;
@@ -79,6 +80,7 @@
 			return;
 		}
 		let cancelled = false;
+		// audit-allow: silent-catch — the approval card disables the note preview by setting its visible baseline-error state.
 		void getNote(id)
 			.then((loaded) => {
 				if (!cancelled) baseline = loaded;

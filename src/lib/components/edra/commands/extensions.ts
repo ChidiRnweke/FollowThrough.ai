@@ -22,7 +22,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { HeadingSpacing } from './heading-spacing.js';
 import { OrderedListNumbering } from './ordered-list-numbering.js';
 import { Markdown } from '@tiptap/markdown';
-import { Marked } from 'marked';
+import { Marked, marked, type MarkedExtension, type MarkedOptions } from 'marked';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
 import type { KatexOptions } from 'katex';
 import Audio from '@tiptap/extension-audio';
@@ -61,6 +61,52 @@ const StrictInlineMath = InlineMath.extend({
 		}
 	},
 	renderMarkdown: (node) => `$$${node.attrs?.latex ?? ''}$$`
+});
+
+const isolatedMarkedInstance = new Marked();
+
+function parseIsolatedMarkdown(
+	source: string,
+	options: MarkedOptions & { async: true }
+): Promise<string>;
+function parseIsolatedMarkdown(source: string, options: MarkedOptions & { async: false }): string;
+function parseIsolatedMarkdown(
+	source: string,
+	options?: MarkedOptions | null
+): string | Promise<string>;
+function parseIsolatedMarkdown(
+	source: string,
+	options?: MarkedOptions | null
+): string | Promise<string> {
+	return isolatedMarkedInstance.parse(source, options);
+}
+
+let isolatedMarkdownParser: typeof marked;
+isolatedMarkdownParser = Object.assign(parseIsolatedMarkdown, marked, {
+	options: (options: MarkedOptions) => {
+		isolatedMarkedInstance.options(options);
+		return isolatedMarkdownParser;
+	},
+	setOptions: (options: MarkedOptions) => {
+		isolatedMarkedInstance.setOptions(options);
+		return isolatedMarkdownParser;
+	},
+	defaults: isolatedMarkedInstance.defaults,
+	use: (...extensions: MarkedExtension[]) => {
+		isolatedMarkedInstance.use(...extensions);
+		return isolatedMarkdownParser;
+	},
+	walkTokens: isolatedMarkedInstance.walkTokens.bind(isolatedMarkedInstance),
+	parseInline: isolatedMarkedInstance.parseInline,
+	Parser: isolatedMarkedInstance.Parser,
+	parser: isolatedMarkedInstance.parser.bind(isolatedMarkedInstance),
+	Renderer: isolatedMarkedInstance.Renderer,
+	TextRenderer: isolatedMarkedInstance.TextRenderer,
+	Lexer: isolatedMarkedInstance.Lexer,
+	lexer: isolatedMarkedInstance.lexer.bind(isolatedMarkedInstance),
+	Tokenizer: isolatedMarkedInstance.Tokenizer,
+	Hooks: isolatedMarkedInstance.Hooks,
+	parse: parseIsolatedMarkdown
 });
 
 /**
@@ -216,12 +262,9 @@ export default [
 	TableHeader,
 	TableRow,
 	TableCell,
-	// Dedicated marked instance: without it, the MarkdownManager registers its
-	// tokenizer-only extensions (inlineMath/blockMath) on the global marked
-	// singleton, breaking every other marked.parse caller in the app. The cast
-	// bridges Tiptap's `typeof marked` option type — the instance has everything
-	// MarkdownManager actually uses (use/setOptions/lexer/Lexer).
-	Markdown.configure({ marked: new Marked() as unknown as (typeof import('marked'))['marked'] }),
+	// Tiptap registers its tokenizers on this callable adapter over a dedicated
+	// Marked instance, leaving the process-wide singleton untouched.
+	Markdown.configure({ marked: isolatedMarkdownParser }),
 	// Listed as the two halves rather than the `Mathematics` bundle, which is only a
 	// wrapper around `[BlockMath, InlineMath]` and leaves no way to harden the inline one.
 	StrictBlockMath.configure({ katexOptions }),

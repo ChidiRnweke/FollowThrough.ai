@@ -46,9 +46,11 @@ class FakeUploadStore implements UploadRetentionRepository {
 class FakeObjectStore implements AttachmentStorage {
 	removed: string[] = [];
 	failOn?: string;
+	absent = new Set<string>();
 
 	async remove(objectKey: string): Promise<void> {
 		if (objectKey === this.failOn) throw new Error('object store unavailable');
+		if (this.absent.has(objectKey)) return;
 		this.removed.push(objectKey);
 	}
 }
@@ -93,14 +95,14 @@ describe('Expired upload sweep', () => {
 	it('still reclaims the row when the object is already gone', async () => {
 		const store = new FakeUploadStore([uploadAt('2026-07-28T09:00:00.000Z')]);
 		const objects = new FakeObjectStore();
-		objects.failOn = 'staging/a';
+		objects.absent.add('staging/a');
 
 		await sweep(store, objects).run();
 
 		expect(store.deleted).toHaveLength(1);
 	});
 
-	it('keeps sweeping after one upload fails', async () => {
+	it('keeps the failed reservation and continues sweeping', async () => {
 		const store = new FakeUploadStore([
 			uploadAt('2026-07-28T09:00:00.000Z', 'a'),
 			uploadAt('2026-07-28T09:00:00.000Z', 'b')
@@ -110,7 +112,7 @@ describe('Expired upload sweep', () => {
 
 		await sweep(store, objects).run();
 
-		expect(store.deleted).toHaveLength(2);
+		expect(store.deleted).toEqual(['00000000-0000-4000-8000-00000000000b']);
 	});
 
 	it('does nothing when no uploads have expired', async () => {

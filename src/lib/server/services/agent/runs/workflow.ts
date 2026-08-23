@@ -112,7 +112,13 @@ export class WorkflowRunner implements WorkflowRunStarter {
 			attempt: 1,
 			reason: 'submitted'
 		});
-		void this.execute(inserted.id, conversation.id, model, task);
+		// audit-allow: silent-catch — detached workflow execution persists its own terminal state; settlement failure is emitted for operational repair.
+		void this.execute(inserted.id, conversation.id, model, task).catch((error) =>
+			console.error(
+				`[workflow-run] Background execution could not be settled for ${inserted.id}:`,
+				error
+			)
+		);
 		return {
 			runId: inserted.id,
 			conversationId: conversation.id,
@@ -136,6 +142,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 				finishedAt: now()
 			});
 			await this.append(runId, { type: 'completed', conversationId, runId, model });
+			// audit-allow: silent-catch — execution failure is converted to a durable cancelled or failed run before this detached task returns.
 		} catch (error) {
 			// `cancel` commits `cancelling` before it aborts, so an aborted signal
 			// always has a row waiting in that state to settle.
@@ -171,9 +178,10 @@ export class WorkflowRunner implements WorkflowRunStarter {
 				retryable: true
 			});
 		} catch (settlementError) {
-			// Without a settled row the run holds its conversation's active slot and
-			// keeps the client's event stream open forever.
-			console.error(`[workflow-run] Could not settle failed run ${runId}:`, settlementError);
+			throw new AggregateError(
+				[error, settlementError],
+				`Workflow run ${runId} failed and its failure could not be persisted`
+			);
 		}
 	}
 

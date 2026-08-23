@@ -62,6 +62,7 @@ export class GlobalSearchStore {
 			if (seq !== this.requestSeq) return;
 			this.hits = result.hits;
 			this.searchError = undefined;
+			// audit-allow: silent-catch — search failure clears stale hits and sets the rendered error state.
 		} catch (error) {
 			if (seq !== this.requestSeq) return;
 			this.hits = [];
@@ -96,6 +97,7 @@ export class GlobalSearchStore {
 				...scope
 			});
 			this.searchError = undefined;
+			// audit-allow: silent-catch — replace failure is rendered and prevents the follow-up search from implying success.
 		} catch (error) {
 			this.searchError = error instanceof Error ? error.message : 'Replace failed';
 			return;

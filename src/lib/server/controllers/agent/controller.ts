@@ -455,6 +455,7 @@ export class Agent implements AgentController {
 	 */
 	private settleCancellationAfterGrace(runId: AgentRunId): void {
 		const timer = setTimeout(() => {
+			// audit-allow: silent-catch — this detached grace timer has no request caller; failure is emitted as an operational error for repair.
 			this.dependencies.executor
 				.finishCancellation(runId)
 				.catch((error) =>
@@ -521,13 +522,18 @@ export class Agent implements AgentController {
 	executeInBackground(runId: AgentRunId): void {
 		const controller = registerActiveRun(runId);
 		const cleanup = () => releaseActiveRun(runId);
-		this.dependencies.executor.execute(runId, controller.signal).then(cleanup, (error) => {
-			cleanup();
-			console.error(`[agent-run] Background execution failed for ${runId}:`, error);
-			// Without this the run stays `running` forever, holding the
-			// conversation's single active-run slot and its open event stream.
-			void this.dependencies.executor.failRun(runId, error);
-		});
+		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
+		void this.dependencies.executor
+			.execute(runId, controller.signal)
+			.then(cleanup, async (error) => {
+				cleanup();
+				// Without this the run stays `running` forever, holding the
+				// conversation's single active-run slot and its open event stream.
+				await this.dependencies.executor.failRun(runId, error);
+			})
+			.catch((error) =>
+				console.error(`[agent-run] Background execution could not be settled for ${runId}:`, error)
+			);
 	}
 
 	/**
@@ -683,10 +689,7 @@ export class Agent implements AgentController {
 		return run;
 	}
 
-	private async requireAgentRun(
-		actor: ActorContext,
-		runId: AgentRunId
-	): Promise<ResolvedAgentRun> {
+	private async requireAgentRun(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun> {
 		const run = await this.dependencies.runs.findAgentById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;

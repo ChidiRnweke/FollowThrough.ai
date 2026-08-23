@@ -116,6 +116,7 @@
 			}
 			aiState = AIState.Confirmation;
 			await generateAIContent(prompt);
+			// audit-allow: silent-catch — the AI menu resets to idle and reports the failed action in a toast.
 		} catch (error) {
 			aiState = AIState.Idle;
 			console.error(error);
@@ -133,6 +134,7 @@
 			if (inputTag) inputTag.style.height = 'auto';
 			aiState = AIState.Confirmation;
 			await generateAIContent(prompt);
+			// audit-allow: silent-catch — the AI menu resets to idle and reports the failed prompt in a toast.
 		} catch (error) {
 			aiState = AIState.Idle;
 			console.error(error);
@@ -250,8 +252,10 @@
 			if (aiContentTo > 1) {
 				editor.commands.setTextSelection(aiContentTo - 1);
 			}
+			// audit-allow: silent-catch — insertion failure is reported while the generated response remains available to copy.
 		} catch (error) {
 			console.error('Error updating editor with AI content:', error);
+			toast.error('AI content could not be inserted. Copy the response before closing.');
 		}
 	}
 
@@ -269,8 +273,10 @@
 					.deleteRange({ from: aiContentFrom, to: aiContentTo })
 					.run();
 				aiContentTo = aiContentFrom;
+				// audit-allow: silent-catch — cleanup failure is reported and the editor undo history remains the recovery path.
 			} catch (error) {
 				console.error('Error cleaning up AI content:', error);
+				toast.error('AI content could not be removed. Use Undo to restore the document.');
 			}
 		}
 	}
@@ -295,6 +301,7 @@
 			removeAIHighlight(editor);
 			aiState = AIState.Idle;
 			aiResponse = '';
+			// audit-allow: silent-catch — replacement failure is reported with manual copy-and-paste as recovery.
 		} catch (error) {
 			console.error(error);
 			toast.error('Unable to replace. Copy content and paste manually.');

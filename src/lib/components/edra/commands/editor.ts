@@ -34,6 +34,7 @@ import TableOfContents, {
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
 import { Proofread, type ProofreadIssueReport } from './Proofread.js';
+import { toast } from 'svelte-sonner';
 import {
 	armLiteralPaste,
 	clipboardImage,
@@ -260,12 +261,17 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 
 					// Reached synchronously, while the keystroke's activation is still live: the
 					// pictures are still being rendered inside the item. See `selectionClipboardItem`.
+					// audit-allow: silent-catch — rich-copy failure falls back to plain text without claiming the image was copied.
 					void navigator.clipboard.write([selectionClipboardItem(view.state)]).catch(() => {
 						// Whatever went wrong, the selection's text still belongs on the clipboard.
 						const fallback = media.lone?.kind === 'mermaid' ? media.lone.source : undefined;
+						// audit-allow: silent-catch — total clipboard failure is reported after both rich and text writes fail.
 						void navigator.clipboard
 							.writeText(fallback ?? selectionPlainText(view.state))
-							.catch((error) => console.error('Clipboard text fallback failed', error));
+							.catch((error) => {
+								console.error('Clipboard text fallback failed', error);
+								toast.error('The selection could not be copied.');
+							});
 					});
 					return true;
 				}

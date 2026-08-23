@@ -10,7 +10,7 @@ import type { SuggestionId } from '$lib/models/suggestions';
 import type { Todo, TodoId, TodoSuggestion } from '$lib/models/todos';
 
 const id = (kind: number, value: number): string =>
-	`00000000-0000-4000-${String(kind).padStart(4, '0')}-${String(value).padStart(12, '0')}`;
+	`00000000-0000-4000-8${String(kind).padStart(3, '0')}-${String(value).padStart(12, '0')}`;
 
 export const testNow = '2026-07-11T09:00:00.000Z' as DateTime;
 

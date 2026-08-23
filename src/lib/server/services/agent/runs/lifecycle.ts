@@ -267,7 +267,10 @@ export class AgentRunLifecycle {
 			// compare-and-set below.
 			await this.finishCancellation(runId);
 		} catch (settlementError) {
-			console.error(`[agent-run] Could not settle failed run ${runId}:`, settlementError);
+			throw new AggregateError(
+				[error, settlementError],
+				`Agent run ${runId} failed and its failure could not be persisted`
+			);
 		}
 	}
 
@@ -293,11 +296,9 @@ export class AgentRunLifecycle {
 		}
 
 		if (!run.contextSnapshot || Object.keys(run.contextSnapshot).length === 0) {
-			const context = await this.deps.contextBuilder.build(
-				actor,
-				run.inputSnapshot,
-				{ provenanceId: run.provenanceId! }
-			);
+			const context = await this.deps.contextBuilder.build(actor, run.inputSnapshot, {
+				provenanceId: run.provenanceId!
+			});
 			run = { ...run, contextSnapshot: context };
 			await this.deps.runs.update(actor, run);
 		}

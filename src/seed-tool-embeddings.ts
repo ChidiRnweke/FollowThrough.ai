@@ -28,6 +28,7 @@ const main = async (): Promise<void> => {
 	);
 };
 
+// audit-allow: silent-catch — this CLI reports startup failure and exits non-zero for its caller.
 main()
 	.then(() => process.exit(0))
 	.catch((error) => {

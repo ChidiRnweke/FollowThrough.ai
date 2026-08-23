@@ -28,6 +28,7 @@
 	async function load(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
+			// audit-allow: silent-catch — settings load failure is reported and the dialog remains editable.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Export settings could not be loaded');
 		}
@@ -39,6 +40,7 @@
 			await updateExportSettings({ projectId, settings });
 			toast.success('Export defaults saved');
 			open = false;
+			// audit-allow: silent-catch — save failure is reported and the dialog remains open with the entered values.
 		} catch {
 			toast.error('Could not save the export defaults.');
 		} finally {

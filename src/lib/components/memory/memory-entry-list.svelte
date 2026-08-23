@@ -101,6 +101,7 @@
 			const [saved, proposed] = await Promise.all([getEntries(id), getPendingSuggestions(id)]);
 			entries = [...saved.entries];
 			pending = [...proposed.suggestions];
+			// audit-allow: silent-catch — load failure is reported instead of presenting an empty list as success.
 		} catch {
 			toast.error('Could not load memory.');
 		} finally {
@@ -130,6 +131,7 @@
 					: [output.artifact as MemoryEntry, ...remaining];
 			await invalidateAll();
 			toast.success('Memory accepted.');
+			// audit-allow: silent-catch — acceptance failure is reported and the suggestion remains pending.
 		} catch {
 			toast.error('Could not accept the memory suggestion.');
 		} finally {
@@ -145,6 +147,7 @@
 			pending = pending.filter((item) => item.suggestion.id !== id);
 			await invalidateAll();
 			toast.success('Memory suggestion dismissed.');
+			// audit-allow: silent-catch — dismissal failure is reported and the suggestion remains pending.
 		} catch {
 			toast.error('Could not dismiss the memory suggestion.');
 		} finally {
@@ -165,6 +168,7 @@
 			draft = '';
 			draftType = 'none';
 			return true;
+			// audit-allow: silent-catch — false is the dialog's typed save outcome and the toast explains that the dialog must stay open.
 		} catch {
 			toast.error('Could not save the memory entry.');
 			return false;
@@ -185,6 +189,7 @@
 		editingId = undefined;
 		try {
 			await updateEntry({ memoryEntryId: entry.id, content });
+			// audit-allow: silent-catch — the optimistic content update is rolled back and reported.
 		} catch {
 			entries = previous;
 			toast.error('Could not update the memory entry.');
@@ -196,6 +201,7 @@
 		entries = entries.map((item) => (item.id === entry.id ? { ...item, shareWithAgents } : item));
 		try {
 			await updateEntry({ memoryEntryId: entry.id, shareWithAgents });
+			// audit-allow: silent-catch — the optimistic sharing update is rolled back and reported.
 		} catch {
 			entries = previous;
 			toast.error('Could not update the memory entry.');
@@ -207,6 +213,7 @@
 		entries = entries.filter((item) => item.id !== entry.id);
 		try {
 			await deleteEntry({ memoryEntryId: entry.id });
+			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported.
 		} catch {
 			entries = previous;
 			toast.error('Could not delete the memory entry.');

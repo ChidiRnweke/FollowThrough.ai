@@ -70,6 +70,7 @@ export class UploadRetention implements ScheduledTask {
 			try {
 				await this.reclaim(entry);
 				swept += 1;
+				// audit-allow: silent-catch — the scheduled batch reports this item as failed and leaves its reservation for the next tick.
 			} catch (error) {
 				this.logger.error(`[expired-upload-sweep] ${entry.upload.id} failed:`, error);
 			}
@@ -81,16 +82,9 @@ export class UploadRetention implements ScheduledTask {
 		const actor: ActorContext = { userId: entry.userId };
 		// The object goes first: a failed delete leaves the row for the next tick to
 		// retry, whereas dropping the row first would lose the only pointer to it.
-		// Already-absent objects are the expected case for a client that gave up
-		// before uploading anything, so a removal failure must not block the row.
-		try {
-			await this.storage.remove(entry.upload.objectKey);
-		} catch (error) {
-			this.logger.error(
-				`[expired-upload-sweep] object ${entry.upload.objectKey} could not be removed, dropping the reservation anyway:`,
-				error
-			);
-		}
+		// The storage adapter treats an already-absent object as success. Any other
+		// removal failure must retain the row so a later sweep can retry it.
+		await this.storage.remove(entry.upload.objectKey);
 		await this.repository.deleteUpload(actor, entry.upload.id);
 	}
 }

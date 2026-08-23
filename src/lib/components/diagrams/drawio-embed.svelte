@@ -224,6 +224,7 @@
 			onmodifiedchange?.(false);
 			phase = 'saved';
 			if (output.exit) onclose?.();
+			// audit-allow: silent-catch — the embedded editor enters a visible failed phase and retains the diagram for retry.
 		} catch (error) {
 			failure = userFacingMessage(error, 'The diagram could not be saved.');
 			phase = 'failed';

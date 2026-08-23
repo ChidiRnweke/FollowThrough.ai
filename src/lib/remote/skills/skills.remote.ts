@@ -46,6 +46,7 @@ const jsonStringMap = z.string().transform((raw, ctx) => {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw.trim() || '{}');
+		// audit-allow: silent-catch — Zod receives a concrete validation issue and aborts this transform with z.NEVER.
 	} catch {
 		ctx.addIssue({ code: 'custom', message: 'Metadata must be valid JSON' });
 		return z.NEVER;
@@ -151,6 +152,7 @@ export const saveSkillBundle = form(
 					}
 				});
 			return { saved: true };
+			// audit-allow: silent-catch — SvelteKit invalid() returns the failure through the slug field without committing a save.
 		} catch (error) {
 			invalid(issue.slug(error instanceof Error ? error.message : 'Skill could not be saved'));
 		}
@@ -169,6 +171,7 @@ export const saveSkillRaw = form(
 					raw: input.raw
 				});
 			return { saved: true };
+			// audit-allow: silent-catch — SvelteKit invalid() returns the failure through the raw field without committing a save.
 		} catch (error) {
 			invalid(issue.raw(error instanceof Error ? error.message : 'Skill could not be saved'));
 		}

@@ -52,6 +52,7 @@ const failed = (failure: string | RecoverableUseToolFailure) => ({
 const attempt = async (run: () => Promise<unknown>) => {
 	try {
 		return ok(await run());
+		// audit-allow: silent-catch — the MCP adapter converts every thrown domain failure into its explicit failed tool result.
 	} catch (error) {
 		if (error instanceof DomainError) return failed(`${error.code}: ${error.message}`);
 		return failed(error instanceof Error ? error.message : String(error));

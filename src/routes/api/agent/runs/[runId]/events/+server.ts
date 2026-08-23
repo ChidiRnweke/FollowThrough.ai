@@ -80,6 +80,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 							return;
 						}
 					} while (pendingFlush && !closed);
+					// audit-allow: silent-catch — the SSE controller receives the stream failure, and cleanup closes every subscription.
 				} catch (error) {
 					if (!closed) {
 						cleanup();

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type ProjectId = Brand<string, 'ProjectId'>;
@@ -9,6 +11,8 @@ type DiagramId = Brand<string, 'DiagramId'>;
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 export type SearchDocumentId = Brand<string, 'SearchDocumentId'>;
+
+export const searchDocumentIdSchema = z.uuid().transform((value) => value as SearchDocumentId);
 
 type AttachmentId = Brand<string, 'AttachmentId'>;
 

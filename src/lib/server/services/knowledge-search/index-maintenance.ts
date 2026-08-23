@@ -70,6 +70,7 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 		for (const entry of pending) {
 			try {
 				embedded += await this.backfill(entry);
+				// audit-allow: silent-catch — the scheduled batch counts and reports this failed source while leaving it pending for retry.
 			} catch (error) {
 				failed += 1;
 				this.logger.error(

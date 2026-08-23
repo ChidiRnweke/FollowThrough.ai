@@ -123,6 +123,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 			const origin = view.state.selection.$from.pos;
 			const controller = new AbortController();
 			inFlight = controller;
+			// audit-allow: silent-catch — failed speculative suggestions are announced as unavailable and never alter the document.
 			void fetchSuggestion(caretWindowOf(view.state), controller.signal)
 				.then(({ text }) => {
 					// The caret moved or another request started while we waited:

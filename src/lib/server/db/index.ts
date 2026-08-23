@@ -1,4 +1,5 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import postgres from 'postgres';
 import * as schema from './schema';
 import { createTransactionContext } from './transaction-context';
@@ -7,7 +8,8 @@ function createDatabase(databaseUrl: string) {
 	return drizzle(postgres(databaseUrl), { schema });
 }
 
-export type Database = ReturnType<typeof createDatabase>;
+/** Query-builder surface shared by the postgres-js and PGlite drivers. */
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 let database: Database | undefined;
 

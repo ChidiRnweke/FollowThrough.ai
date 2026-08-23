@@ -52,6 +52,7 @@
 				if (cancelled) return;
 				target.innerHTML = sanitizeMermaidSvg(svg);
 				failed = false;
+				// audit-allow: silent-catch — the preview clears partial DOM and renders its explicit failed state.
 			} catch {
 				if (cancelled) return;
 				target.replaceChildren();

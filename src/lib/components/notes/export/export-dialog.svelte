@@ -67,6 +67,7 @@
 	async function loadSettings(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
+			// audit-allow: silent-catch — the dialog renders the settings load error and does not claim defaults loaded.
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
@@ -125,6 +126,7 @@
 			clearPreview();
 			previewUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
 			previewOpen = true;
+			// audit-allow: silent-catch — preview failure is rendered and the preview is not opened.
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Preview failed';
 		} finally {
@@ -155,6 +157,7 @@
 				diagramSizes
 			});
 			result = { url: output.downloadUrl, artifactId: output.artifact.id };
+			// audit-allow: silent-catch — export failure is rendered and no download result is produced.
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Export failed';
 		} finally {

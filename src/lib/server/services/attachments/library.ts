@@ -206,6 +206,7 @@ export class AttachmentLibrary {
 	}
 
 	startProcessing(actor: ActorContext, attachment: AttachmentView): void {
+		// audit-allow: silent-catch — process() persists ordinary failures on the attachment; this terminal handler reports failure of that persistence.
 		void this.process(actor, attachment).catch((error) =>
 			console.error('Could not persist attachment processing failure', error)
 		);
@@ -244,6 +245,7 @@ export class AttachmentLibrary {
 			processingFailure: undefined,
 			processedAt: undefined
 		});
+		// audit-allow: silent-catch — process() persists ordinary retry failures; this terminal handler reports failure of that persistence.
 		void this.process(actor, queued).catch((error) =>
 			console.error('Could not persist attachment retry failure', error)
 		);
@@ -320,6 +322,7 @@ export class AttachmentLibrary {
 				processingStatus: status,
 				processedAt: now()
 			});
+			// audit-allow: silent-catch — the attachment row records a typed failed status and message for the owning UI.
 		} catch (error) {
 			await this.attachments.updateVersion(actor, {
 				...view.version,

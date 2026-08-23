@@ -78,6 +78,7 @@ export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS):
 	else {
 		try {
 			rendered = JSON.stringify(value) ?? String(value);
+			// audit-allow: silent-catch — telemetry formatting must not fail the operation; the explicit marker states that the value was lost.
 		} catch {
 			return '[unserializable]';
 		}

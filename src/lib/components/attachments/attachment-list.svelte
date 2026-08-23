@@ -81,6 +81,7 @@
 				listAttachments(owner)
 			);
 			toast.success('Attachment queued for processing');
+			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Upload failed');
 		} finally {
@@ -92,6 +93,7 @@
 		try {
 			const { url } = await downloadAttachment({ attachmentId });
 			window.open(url, '_blank', 'noopener,noreferrer');
+			// audit-allow: silent-catch — the attachment action failure is reported in a toast.
 		} catch {
 			toast.error('The attachment action failed');
 		}
@@ -100,6 +102,7 @@
 	async function retry(attachmentId: string): Promise<void> {
 		try {
 			await retryAttachment({ attachmentId }).updates(listAttachments(owner));
+			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
 		} catch {
 			toast.error('The attachment action failed');
 		}
@@ -119,6 +122,7 @@
 	async function remove(attachmentId: string): Promise<void> {
 		try {
 			await removeAttachment({ attachmentId }).updates(listAttachments(owner));
+			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
 		} catch {
 			toast.error('The attachment could not be removed');
 		}

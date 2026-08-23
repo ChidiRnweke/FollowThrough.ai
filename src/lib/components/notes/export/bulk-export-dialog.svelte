@@ -72,6 +72,7 @@
 	async function loadSettings(): Promise<void> {
 		try {
 			settings = { ...(await getExportSettings(projectId)) };
+			// audit-allow: silent-catch — the dialog renders the settings load error and does not pretend defaults were loaded.
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
@@ -80,6 +81,7 @@
 	async function loadDocuments(): Promise<void> {
 		try {
 			documents = await listNoteDocuments(offered.map((entry) => entry.id));
+			// audit-allow: silent-catch — the dialog renders the document load error and blocks export.
 		} catch (cause) {
 			documents = [];
 			error = cause instanceof Error ? cause.message : 'Note contents could not be loaded.';
@@ -152,6 +154,7 @@
 				});
 				result = { url: output.downloadUrl, fileCount: 1 };
 			}
+			// audit-allow: silent-catch — the dialog renders the export failure and remains open for retry.
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Export failed';
 		} finally {

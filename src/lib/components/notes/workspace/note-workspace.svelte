@@ -140,6 +140,7 @@
 			});
 			sectionNumbering = output.sectionNumbering;
 			await refreshView();
+			// audit-allow: silent-catch — numbering failure is reported and refreshed server state remains authoritative.
 		} catch {
 			toast.error('Could not update section numbering. Try again.');
 		}
@@ -324,6 +325,7 @@
 	async function refreshView(): Promise<void> {
 		try {
 			await invalidateAll();
+			// audit-allow: silent-catch — the save succeeded; refresh failure is explicitly reported with reload as recovery.
 		} catch {
 			toast.error('Saved, but this note’s view could not be refreshed. Reload to catch up.');
 		}
@@ -730,6 +732,7 @@
 			editorRef?.replaceDocument(local.document);
 			toast.success('Published');
 			await refreshView();
+			// audit-allow: silent-catch — publish failure is reported and the draft remains available.
 		} catch {
 			toast.error('Could not publish. Try again.');
 		} finally {
@@ -753,6 +756,7 @@
 			historySelectedId = preferred.id;
 			historySelected = (await getNoteRevision({ noteId: note.id, revisionId: preferred.id }))
 				.revision;
+			// audit-allow: silent-catch — history load failure is reported and no empty history is presented as success.
 		} catch {
 			toast.error('Could not load the version history. Try again.');
 		} finally {
@@ -765,6 +769,7 @@
 		historySelected = undefined;
 		try {
 			historySelected = (await getNoteRevision({ noteId: note.id, revisionId })).revision;
+			// audit-allow: silent-catch — revision load failure is reported and the current selection remains intact.
 		} catch {
 			toast.error('Could not load that version. Try again.');
 		} finally {
@@ -785,6 +790,7 @@
 			dirty = false;
 			toast.success('Restored that version');
 			await refreshView();
+			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
 		} catch {
 			toast.error('Could not restore that version. Try again.');
 		}
@@ -806,6 +812,7 @@
 			dirty = false;
 			toast.success('Reverted to last published version');
 			await refreshView();
+			// audit-allow: silent-catch — discard failure is reported and the local draft remains available.
 		} catch {
 			toast.error('Could not discard changes. Try again.');
 		}

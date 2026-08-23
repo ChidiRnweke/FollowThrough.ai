@@ -124,6 +124,7 @@
 				try {
 					await saveSkillDescription({ noteId: note.id, description });
 					savedDescription = description;
+					// audit-allow: silent-catch — the editor retains dirty content, marks save failure, and reports manual saves.
 				} catch {
 					saveFailed = true;
 					dirty = true;
@@ -208,6 +209,7 @@
 		// The note sync carries the title to the notes table; the skills row gets
 		// its own rename so the two never wait on each other.
 		markDirty();
+		// audit-allow: silent-catch — inline rename failure is reported while the editor keeps the entered title for retry.
 		renameSkill({ noteId: note.id, name: title }).catch(() =>
 			toast.error('Could not rename the skill. Try again.')
 		);
@@ -248,6 +250,7 @@
 			anchor.download = `${slug}.skill.md`;
 			anchor.click();
 			URL.revokeObjectURL(url);
+			// audit-allow: silent-catch — export failure is reported and the skill remains unchanged.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Skill could not be exported');
 		} finally {
@@ -269,6 +272,7 @@
 			dirty = false;
 			editorEpoch += 1;
 			toast.success('Skill imported');
+			// audit-allow: silent-catch — invalid import is reported and the existing skill remains unchanged.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'That file is not a valid SKILL.md');
 		} finally {

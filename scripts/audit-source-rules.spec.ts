@@ -28,18 +28,31 @@ describe('source audit rules', () => {
 			0
 		);
 	});
-	it('allows an explicit failure string', () => {
-		expect(violations("try { work() } catch { return '[unserializable]' }")).toHaveLength(0);
+	it('allows a discriminated corrupt result', () => {
+		expect(
+			violations("try { work() } catch (error) { return { kind: 'corrupt', error } }")
+		).toHaveLength(0);
 	});
-	it('allows an explicit false failure result', () => {
-		expect(violations('try { work() } catch { return false }')).toHaveLength(0);
+	it('rejects a plausible weaker string result', () => {
+		expect(violations("try { work() } catch { return '[unserializable]' }")).toHaveLength(1);
 	});
-	it('allows a persisted failed status', () => {
+	it('rejects a bare false result', () => {
+		expect(violations('try { work() } catch { return false }')).toHaveLength(1);
+	});
+	it('rejects logging as failure handling', () => {
+		expect(violations('try { work() } catch (error) { logger.warn(error) }')).toHaveLength(1);
+	});
+	it('rejects renamed reporting variables and calls', () => {
 		expect(
 			violations(
-				"try { await work() } catch (error) { await repository.update({ status: 'failed', error }) }"
+				"try { await work() } catch (problem) { state.outcome = 'failed'; reportProblem(problem) }"
 			)
-		).toHaveLength(0);
+		).toHaveLength(1);
+	});
+	it('does not count a nested callback throw as propagation', () => {
+		expect(violations('try { work() } catch { queue(() => { throw new Error() }) }')).toHaveLength(
+			1
+		);
 	});
 	it('requires a reason on allowances', () => {
 		expect(violations('// audit-allow: silent-catch\ntry {} catch {}')).toHaveLength(2);

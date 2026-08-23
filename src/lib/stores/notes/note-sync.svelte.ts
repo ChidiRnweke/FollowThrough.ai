@@ -48,6 +48,7 @@ export class NoteSyncStore {
 			this.setRecord(await this.coordinator.open(version));
 			if (this.record?.state === 'pending') await this.retry();
 			return this.record?.local ?? version.note;
+			// audit-allow: silent-catch — device-storage failure is explicit in sync status while the server note remains available.
 		} catch (error) {
 			this.status = 'error';
 			this.lastError = error instanceof Error ? error.message : 'Device storage is unavailable.';
@@ -60,6 +61,7 @@ export class NoteSyncStore {
 		try {
 			this.setRecord(await this.coordinator.stage(plain(note)));
 			return await this.retry();
+			// audit-allow: silent-catch — save failure is explicit in sync status and the unsaved local record remains retryable.
 		} catch (error) {
 			this.status = 'error';
 			this.lastError = error instanceof Error ? error.message : 'The note could not be saved.';
@@ -81,6 +83,7 @@ export class NoteSyncStore {
 		try {
 			this.setRecord(await this.coordinator.flush(this.record.userId, this.record.noteId));
 			return this.record;
+			// audit-allow: silent-catch — synchronization failure is explicit in sync status and preserves the current conflict state.
 		} catch (error) {
 			this.status = 'error';
 			this.lastError = error instanceof Error ? error.message : 'Synchronization failed.';

@@ -45,6 +45,7 @@
 			}
 			report = payload as ImportMarkdownArchiveOutput;
 			await invalidateAll();
+			// audit-allow: silent-catch — submission failure is rendered and the selected files remain available for retry.
 		} catch {
 			error = 'The import could not be sent. Check your connection and try again.';
 		} finally {

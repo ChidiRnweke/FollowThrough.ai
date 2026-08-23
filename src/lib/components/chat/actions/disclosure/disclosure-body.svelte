@@ -38,6 +38,7 @@
 		try {
 			await navigator.clipboard.writeText(payload);
 			toast.success('Copied to clipboard');
+			// audit-allow: silent-catch — the user is told to copy the still-visible expanded text manually.
 		} catch {
 			toast.error('Could not copy. Expand the row and copy the text manually.');
 		}

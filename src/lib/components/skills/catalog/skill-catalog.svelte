@@ -52,6 +52,7 @@
 			createOpen = false;
 			resetWizard();
 			await goto(`/skills/${skill.note.id}`);
+			// audit-allow: silent-catch — creation failure is reported and navigation does not occur.
 		} catch {
 			toast.error('Could not create the skill. Try again.');
 		} finally {
@@ -64,6 +65,7 @@
 		try {
 			await toggleSkill({ noteId, enabled });
 			await invalidateAll();
+			// audit-allow: silent-catch — update failure is reported and the catalog refresh remains authoritative.
 		} catch {
 			toast.error('Could not update the skill. Try again.');
 		} finally {

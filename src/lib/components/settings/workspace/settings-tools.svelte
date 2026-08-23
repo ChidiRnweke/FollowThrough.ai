@@ -129,6 +129,7 @@
 		busy = preference.name;
 		try {
 			await setToolEnabled({ ...scope, toolName: preference.name, enabled });
+			// audit-allow: silent-catch — the failed authority change is reported and refreshed state remains authoritative.
 		} catch {
 			toast.error(`Could not change ${readable(preference.name)}. Try again.`);
 		} finally {
@@ -142,6 +143,7 @@
 		try {
 			await resetToolOverride({ toolName: preference.name, projectId });
 			toast.success(`${readable(preference.name)} follows your default again`);
+			// audit-allow: silent-catch — the failed authority reset is reported and the existing override remains visible.
 		} catch {
 			toast.error(`Could not reset ${readable(preference.name)}. Try again.`);
 		} finally {

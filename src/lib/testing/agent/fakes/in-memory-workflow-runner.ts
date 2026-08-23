@@ -28,6 +28,7 @@ export class InMemoryWorkflowRunner implements WorkflowRunStarter {
 		this.started.push({ action: task.action, runId });
 		try {
 			this.results.push(await task.run(controller.signal));
+			// audit-allow: silent-catch — this recording fake exposes captured failures to assertions instead of converting them to results.
 		} catch (error) {
 			this.failures.push(error);
 		}

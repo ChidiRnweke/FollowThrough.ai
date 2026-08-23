@@ -52,14 +52,12 @@ export async function createPGliteDatabase(): Promise<{
 		);
 	}
 
-	// The PGlite drizzle adapter is structurally compatible with postgres-js for
-	// all query-builder and transaction operations. The cast is safe because
-	// drizzle's Pg types share the same runtime interface.
-	const { database, transactionRunner } = createTransactionContext(db as unknown as Database);
+	const database: Database = db;
+	const transactions = createTransactionContext(database);
 
 	return {
-		database,
-		transactionRunner,
+		database: transactions.database,
+		transactionRunner: transactions.transactionRunner,
 		close: () => client.close()
 	};
 }

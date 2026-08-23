@@ -55,6 +55,7 @@
 		try {
 			const { url } = await downloadArtifact({ artifactId: id });
 			window.location.assign(url);
+			// audit-allow: silent-catch — the toast tells the user that no download was prepared.
 		} catch {
 			toast.error('Could not prepare the download.');
 		} finally {
@@ -68,6 +69,7 @@
 			const output = await regenerateArtifact({ artifactId: id });
 			window.location.assign(output.downloadUrl);
 			toast.success('Document regenerated');
+			// audit-allow: silent-catch — the toast reports regeneration failure and the artifact remains unchanged.
 		} catch {
 			toast.error('Could not regenerate the document.');
 		} finally {
@@ -85,6 +87,7 @@
 			} else {
 				await invalidateAll();
 			}
+			// audit-allow: silent-catch — the optimistic deletion is rolled back and its failure is shown to the user.
 		} catch {
 			artifacts = previous;
 			toast.error('Could not delete the artifact.');

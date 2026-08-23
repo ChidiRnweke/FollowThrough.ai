@@ -41,6 +41,7 @@
 		try {
 			if (await form.submit()) toast.success('Model defaults saved');
 			else toast.error('Could not save model defaults. Check the values and try again.');
+			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save model defaults. Try again.');
 		}

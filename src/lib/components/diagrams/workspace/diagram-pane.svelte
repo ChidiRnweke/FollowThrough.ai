@@ -114,6 +114,7 @@
 			etag = diagramEtag(renamed);
 			store.describe({ title: renamed.title, projectId: renamed.projectId, kind: renamed.kind });
 			toast.success('Diagram title saved');
+			// audit-allow: silent-catch — the optimistic title is discarded and the save failure is shown.
 		} catch (error) {
 			titleOverride = undefined;
 			toast.error(userFacingMessage(error, 'The diagram title could not be saved.'));

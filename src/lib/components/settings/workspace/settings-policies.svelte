@@ -16,6 +16,7 @@
 			// The policies come from the page load, so that is what has to be re-read.
 			await invalidateAll();
 			toast.success('Policy updated');
+			// audit-allow: silent-catch — policy failure is reported and the persisted policy remains authoritative.
 		} catch {
 			toast.error('Could not update the policy. Try again.');
 		} finally {

@@ -164,6 +164,7 @@ export class DrawioEmbedAdapter {
 		let value: unknown;
 		try {
 			value = JSON.parse(event.data);
+			// audit-allow: silent-catch — the embed failure callback renders this protocol error in the owning diagram UI.
 		} catch (error) {
 			this.callbacks.onFailure?.(
 				error instanceof Error ? error.message : 'draw.io sent an unreadable response'
@@ -234,6 +235,7 @@ export class DrawioEmbedAdapter {
 			const xml = await uncompressDrawioXml(raw);
 			this.xml = xml;
 			this.callbacks.onAutosave?.(xml);
+			// audit-allow: silent-catch — autosave failures are surfaced through the embed failure callback and the editor stays open for retry.
 		} catch (error) {
 			this.callbacks.onFailure?.(
 				error instanceof Error ? error.message : 'draw.io autosave failed.'
@@ -256,6 +258,7 @@ export class DrawioEmbedAdapter {
 				reason: pending.reason,
 				exit: pending.exit
 			});
+			// audit-allow: silent-catch — export failures are surfaced through the embed failure callback without closing the editor.
 		} catch (error) {
 			this.callbacks.onFailure?.(error instanceof Error ? error.message : 'draw.io export failed.');
 		}

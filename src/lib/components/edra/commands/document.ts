@@ -1,11 +1,19 @@
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
-import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
 
-export type EdraDocument = ProseMirrorDocument;
+export interface EdraDocument {
+	readonly type: 'doc';
+	readonly content?: readonly Readonly<Record<string, unknown>>[];
+}
 
-export const parseEdraDocument = (value: unknown): EdraDocument =>
-	proseMirrorDocumentSchema.parse(value);
+const edraDocumentSchema: z.ZodType<EdraDocument> = z
+	.object({
+		type: z.literal('doc'),
+		content: z.array(z.record(z.string(), z.unknown())).optional()
+	})
+	.strict();
+
+export const parseEdraDocument = (value: unknown): EdraDocument => edraDocumentSchema.parse(value);
 
 const editorMarkSchema = z
 	.object({
