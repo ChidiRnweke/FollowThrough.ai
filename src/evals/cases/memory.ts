@@ -6,6 +6,7 @@ import { PERSONA_NAME, personaWorkspace } from '../fixtures/workspaces/profile';
 import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
 import { findCall, scoreToolCalling } from '../assertions/tool-calls';
 import { judgeAdherenceConsensus } from '../judges/consensus';
+import { expectSuggestionPending } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
 
 const ENGLISH_ONLY = 'Always answer in English.';
@@ -239,6 +240,44 @@ export const memoryCases: readonly EvalCase[] = [
 		}
 	},
 	{
+		id: 'memory-capture-negative-bounded-preference',
+		name: 'does not remember a preference explicitly bounded to one incident',
+		splits: [ARCHETYPES.memoryCapture, 'negative', 'ambiguity'],
+		input: {
+			prompt:
+				'For this incident review only, use terse bullets. What does my Background note say about my role?'
+		},
+		expected: { forbiddenTools: ['propose_memory_change'] },
+		metadata: {
+			note: 'The wording resembles a preference, but "this incident review only" makes it transient.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			const verdict = scoreToolCalling(result, {
+				forbidden: this.expected.forbiddenTools as string[]
+			});
+			px.logOutput({
+				model: result.model,
+				response: result.finalResponse,
+				toolCalls: result.calledToolNames
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.memoryCapture,
+				score: verdict.passed ? 1 : 0,
+				label: verdict.passed ? 'correctly_bounded' : 'over_captured',
+				explanation: verdict.explanation
+			});
+			expect(
+				{ status: result.status, skippedCapture: verdict.passed },
+				verdict.explanation
+			).toEqual({ status: 'completed', skippedCapture: true });
+		}
+	},
+	{
 		id: 'memory-proactive-embedded-fact',
 		name: 'proposes a memory when a durable fact arrives embedded in a task',
 		splits: [ARCHETYPES.memoryProactiveProposal],
@@ -436,6 +475,118 @@ export const memoryCases: readonly EvalCase[] = [
 				result.failure ??
 					`the hidden project convention requires Given/When/Then; found ${keywords.join(', ') || 'none'} (tools: ${result.calledToolNames.join(', ') || 'none'})`
 			).toEqual({ status: 'completed', followed: true });
+		}
+	},
+	{
+		id: 'memory-implied-preference-inside-note-task',
+		name: 'captures an implied durable preference while completing the useful task',
+		splits: [ARCHETYPES.memoryProactiveProposal, ARCHETYPES.multiStep, 'ambiguity'],
+		input: {
+			prompt:
+				'Weekly updates are only useful to me when they close with an owner and the date we will check again. Put a short Launch update in a new note: rollout is green, Maya owns it, next check is 28 August.'
+		},
+		expected: { suggestionKind: 'memory', noteContains: ['maya', '28 august'] },
+		metadata: {
+			note: 'The durable preference is stated as task rationale, with no remember/future-reference cue.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, { projects: [{ name: 'Launch' }] });
+			const projectId = workspace.projectIds.get('Launch');
+			if (!projectId) throw new Error('Launch project was not seeded');
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				projectId
+			});
+			const shell = await lab.controllers.workspace().getShellContext(workspace.actor);
+			const created = shell.noteTree.find(
+				(note) => note.projectId === projectId && note.kind === 'note'
+			);
+			const body = created
+				? (
+						await lab.controllers.notes().get(workspace.actor, { noteId: created.id })
+					).note.plainText.toLowerCase()
+				: '';
+			const queued = await expectSuggestionPending(lab, workspace.actor, 'memory');
+			const noteComplete = (this.expected.noteContains as string[]).every((part) =>
+				body.includes(part)
+			);
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				createdNote: created?.title,
+				memoryEffect: queued.explanation
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.memoryProactiveProposal,
+				score: queued.passed ? 1 : 0,
+				label: queued.passed ? 'captured' : 'missed',
+				explanation: queued.explanation
+			});
+			expect(
+				{
+					status: result.status,
+					usefulTaskLanded: noteComplete,
+					memoryIsReviewable: queued.passed
+				},
+				`${queued.explanation}; note=${created?.title ?? 'missing'}`
+			).toEqual({ status: 'completed', usefulTaskLanded: true, memoryIsReviewable: true });
+		}
+	},
+	{
+		id: 'memory-indirect-project-convention-edit',
+		name: 'infers that an indirect local-standard request requires project memory',
+		splits: [ARCHETYPES.memoryTaskRead, ARCHETYPES.multiStep, 'ambiguity'],
+		input: { prompt: 'Tidy this decision note so it matches how we do architecture here.' },
+		expected: { markers: ['Owner:', 'Revisit when:'] },
+		metadata: {
+			note: 'Only project memory explains what "how we do architecture here" means.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Architecture',
+						memories: [
+							'Architecture convention: every decision summary ends with an "Owner:" line and a "Revisit when:" line.'
+						],
+						notes: [
+							{
+								title: 'Queue decision',
+								body: '# Queue decision\n\nWe chose NATS for low-latency fan-out.\n'
+							}
+						]
+					}
+				]
+			});
+			const projectId = workspace.projectIds.get('Architecture');
+			const noteId = workspace.noteIds.get('Queue decision');
+			if (!projectId || !noteId) throw new Error('Architecture decision fixture was not seeded');
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept',
+				projectId,
+				noteId
+			});
+			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const applied = (this.expected.markers as string[]).every((marker) =>
+				view.note.plainText.includes(marker)
+			);
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				appliedMarkers: applied
+			});
+			px.logAnnotation({
+				name: ARCHETYPES.memoryTaskRead,
+				score: applied ? 1 : 0,
+				label: applied ? 'applied_project_convention' : 'missed_project_convention',
+				explanation: `tools: ${result.calledToolNames.join(', ') || 'none'}`
+			});
+			expect(
+				{ status: result.status, applied },
+				result.failure ?? 'project-memory convention must land in the persisted note'
+			).toEqual({ status: 'completed', applied: true });
 		}
 	}
 ];

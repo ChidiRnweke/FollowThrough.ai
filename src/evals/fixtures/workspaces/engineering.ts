@@ -102,6 +102,30 @@ export const retrievalCorpusWorkspace: WorkspaceFixture = {
 						'If renewal fails, check the ACME challenge path is reachable through the ingress.',
 						'Expired certificates surface as handshake failures in the gateway logs.'
 					].join('\n\n')
+				},
+				{
+					title: 'API connection pool saturation runbook',
+					body: [
+						'Writes can stall even while every database health check and replica remains healthy.',
+						'Inspect checked-out connections and lower request concurrency before recycling API workers.',
+						'Do not promote a replica when the writer endpoint is reachable and the pool is merely exhausted.'
+					].join('\n\n')
+				},
+				{
+					title: 'Worker memory leak runbook',
+					body: [
+						'A worker with steadily growing resident memory must be drained and restarted.',
+						'The shared cache hit rate remains stable during this failure and cached data must not be evicted.',
+						'Capture a heap profile before recycling the affected worker.'
+					].join('\n\n')
+				},
+				{
+					title: 'OAuth client-secret rotation runbook',
+					body: [
+						'OAuth client secrets expire after sixty days and surface as HTTP 401 responses.',
+						'Rotate the secret in the identity provider and update the application secret store.',
+						'This procedure does not address browser certificate warnings or TLS handshake failures.'
+					].join('\n\n')
 				}
 			]
 		}

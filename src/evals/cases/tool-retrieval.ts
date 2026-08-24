@@ -164,6 +164,11 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		expected: 'promote_diagram'
 	},
 	{
+		id: 'diagram-promote-implicit',
+		goal: 'I need to move the boxes around myself after you finish the chart you already made',
+		expected: 'promote_diagram'
+	},
+	{
 		id: 'diagram-canvas-read',
 		goal: 'read the source of the diagram currently shown on the canvas',
 		expected: 'read_canvas_diagram'
@@ -196,6 +201,11 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		goal: 'undo the proposal I accepted earlier',
 		expected: 'revert_suggestion'
 	},
+	{
+		id: 'suggestions-revert-implicit',
+		goal: 'that change I approved was a mistake; put things back the way they were',
+		expected: 'revert_suggestion'
+	},
 
 	// Skills
 	{ id: 'skills-list', goal: 'which skills are available to you', expected: 'list_skills' },
@@ -207,6 +217,11 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 	{
 		id: 'skills-from-selection',
 		goal: 'turn this highlighted procedure into a reusable skill',
+		expected: 'create_skill_from_selection'
+	},
+	{
+		id: 'skills-from-selection-implicit',
+		goal: 'this highlighted routine is how I work every week; make it reusable next time',
 		expected: 'create_skill_from_selection'
 	},
 	{
@@ -289,6 +304,11 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		expected: 'update_trust_policy'
 	},
 	{
+		id: 'trust-update-implicit',
+		goal: 'that pipeline should ask me again before it applies anything',
+		expected: 'update_trust_policy'
+	},
+	{
 		id: 'prefs-get',
 		goal: 'which chat model am I defaulting to',
 		expected: 'get_agent_preferences'
@@ -337,6 +357,16 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		id: 'artifact-regenerate',
 		goal: 'rebuild that document from its source notes',
 		expected: 'regenerate_artifact'
+	},
+	{
+		id: 'artifact-regenerate-implicit',
+		goal: 'the source notes changed, so the file we generated is stale; refresh it',
+		expected: 'regenerate_artifact'
+	},
+	{
+		id: 'notes-versions-diff-implicit',
+		goal: 'what drifted since the copy of this note we published',
+		expected: 'diff_note_versions'
 	},
 
 	// Time

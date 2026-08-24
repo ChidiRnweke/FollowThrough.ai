@@ -325,6 +325,8 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'create_skill_from_selection',
 		classification: 'mutation',
+		retrievalText:
+			'turn highlighted or selected note text describing a repeatable routine, process, checklist, or workflow into a reusable skill for future use',
 		description: 'Create a skill from selected note text.'
 	},
 	{

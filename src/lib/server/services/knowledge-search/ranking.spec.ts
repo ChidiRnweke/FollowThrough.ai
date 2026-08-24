@@ -25,7 +25,9 @@ const match: SearchMatch = {
 
 describe('reranker document context', () => {
 	it('includes the source title and section with passage content', () => {
-		expect(rerankDocumentText(match)).toBe('The Odyssey\nCyclops\nNobody escapes the cave.');
+		expect(rerankDocumentText(match)).toBe(
+			'Title: "The Odyssey"\nSection: "Cyclops"\nContent: |-\n  Nobody escapes the cave.'
+		);
 	});
 });
 
@@ -55,7 +57,7 @@ describe('reranker trace semantics', () => {
 			inputAttributes[
 				`${SemanticConventions.RERANKER_INPUT_DOCUMENTS}.0.${SemanticConventions.DOCUMENT_CONTENT}`
 			]
-		).toBe('The Odyssey\nCyclops\nNobody escapes the cave.');
+		).toBe('Title: "The Odyssey"\nSection: "Cyclops"\nContent: |-\n  Nobody escapes the cave.');
 	});
 
 	it('records output document scores under the reranker convention', () => {

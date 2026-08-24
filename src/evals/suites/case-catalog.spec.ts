@@ -4,8 +4,8 @@ import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 
 describe('eval case selection', () => {
-	it('keeps the expanded inventory at 193 cases', () => {
-		expect(ALL_EVAL_CASES).toHaveLength(193);
+	it('keeps the ambiguity-hardened inventory at 211 cases', () => {
+		expect(ALL_EVAL_CASES).toHaveLength(211);
 	});
 
 	it('keeps every stable case id unique', () => {
@@ -23,7 +23,11 @@ describe('eval case selection', () => {
 		expect(selectEvalCases({ section: 'retrieval' }).map((evalCase) => evalCase.id)).toEqual([
 			'retrieval-postgres-failover',
 			'retrieval-cache-pressure',
-			'retrieval-tls-expiry'
+			'retrieval-tls-expiry',
+			'retrieval-hard-failover-with-pool-distractor',
+			'retrieval-hard-cache-pressure-with-leak-distractor',
+			'retrieval-hard-certificate-with-secret-distractor',
+			'retrieval-hard-failover-negative-evidence'
 		]);
 	});
 

@@ -33,9 +33,9 @@ class TopNReranker implements Reranker {
 	}
 }
 
-class ThrowingReranker implements Reranker {
-	async rerank(): Promise<readonly SearchMatch[]> {
-		throw new Error('reranker should not be called');
+class ReverseReranker implements Reranker {
+	async rerank(_query: string, matches: readonly SearchMatch[], topN: number) {
+		return [...matches].reverse().slice(0, topN);
 	}
 }
 
@@ -67,13 +67,13 @@ describe('RerankingKnowledgeSearcher', () => {
 		expect(results).toHaveLength(0);
 	});
 
-	it('skips reranking when the candidate set is already within the limit', async () => {
+	it('honors reranker order when the candidate set is already within the limit', async () => {
 		const inner = new RecordingSearcher([match('a', 0.9), match('b', 0.8)]);
-		const results = await new RerankingKnowledgeSearcher(inner, new ThrowingReranker()).search(
+		const results = await new RerankingKnowledgeSearcher(inner, new ReverseReranker()).search(
 			actor,
 			'query',
 			10
 		);
-		expect(results).toHaveLength(2);
+		expect(results[0]?.document.content).toBe('b');
 	});
 });

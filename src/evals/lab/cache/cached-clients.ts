@@ -5,7 +5,25 @@ import type {
 	EmbeddingClient,
 	Reranker
 } from '$lib/server/services/knowledge-search/contracts';
+import {
+	DEFAULT_RERANK_MODEL,
+	RERANKING_STRATEGY,
+	rerankDocumentText
+} from '$lib/server/services/knowledge-search/ranking';
 import { DiskCache, decodeVector, encodeVector } from './disk-cache';
+
+export const rerankerCacheKey = (
+	query: string,
+	matches: readonly SearchMatch[],
+	topN: number
+): string =>
+	DiskCache.key('rerank', {
+		model: DEFAULT_RERANK_MODEL,
+		strategy: RERANKING_STRATEGY,
+		query,
+		topN,
+		documents: matches.map(rerankDocumentText)
+	});
 
 /**
  * Embeds one content string at a time so that a batch of five where one string
@@ -53,20 +71,20 @@ export class CachedReranker implements Reranker {
 		matches: readonly SearchMatch[],
 		topN: number
 	): Promise<readonly SearchMatch[]> {
-		// Cache the resulting order, not the matches themselves — the documents
-		// come back from the database and rehydrate from the ids on replay.
-		const key = DiskCache.key('rerank', {
-			query,
-			topN,
-			ids: matches.map((match) => match.document.id)
-		});
+		// Cache input positions rather than generated document ids. Eval workspaces
+		// get fresh ids on every run, while the ordered serialized documents in the
+		// cache key remain stable and still invalidate when their content changes.
+		const key = rerankerCacheKey(query, matches, topN);
 		const order = await this.cache.resolve(key, async () => {
 			const ranked = await this.inner.rerank(query, matches, topN);
-			return ranked.map((match) => match.document.id);
+			return ranked.map((rankedMatch) => {
+				const index = matches.findIndex((match) => match.document.id === rankedMatch.document.id);
+				if (index < 0) throw new Error('Reranker returned a document outside its candidate set');
+				return index;
+			});
 		});
-		const byId = new Map(matches.map((match) => [match.document.id, match]));
 		return order
-			.map((id) => byId.get(id))
+			.map((index) => matches[index])
 			.filter((match): match is SearchMatch => match !== undefined);
 	}
 }
