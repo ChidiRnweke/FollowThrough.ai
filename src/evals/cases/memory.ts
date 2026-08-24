@@ -252,10 +252,31 @@ export const memoryCases: readonly EvalCase[] = [
 			note: 'Production regression: 51/51 sessions never called propose_memory_change even though users repeatedly stated durable work preferences mid-task ("the knowledge layer is the gold standard"). The existing capture case uses the explicit "For future reference:" cue; this variant hides the fact as the stated reason for a bulk task, which is how it actually arrived.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Knowledge Platform',
+						notes: [
+							{
+								title: 'Reference Architecture',
+								body: Array.from(
+									{ length: 13 },
+									(_, index) => `## Section ${index + 1}\n\nDraft architecture guidance.`
+								).join('\n\n')
+							}
+						]
+					}
+				]
+			});
+			const projectId = workspace.projectIds.get('Knowledge Platform');
+			const noteId = workspace.noteIds.get('Reference Architecture');
+			if (!projectId || !noteId)
+				throw new Error('Proactive-memory fixture is missing its reference architecture note.');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
+				mode: 'auto_accept',
+				projectId,
+				noteId
 			});
 			px.logOutput({
 				model: result.model,

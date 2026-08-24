@@ -1423,6 +1423,28 @@ describe('Agent tool coverage invariants', () => {
 			}).success
 		).toBe(false);
 	});
+
+	it('advertises confidence as an integer percentage', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'propose_memory_change');
+		expect(definition?.parameters.shape.confidence.description).toContain(
+			'integer percentage from 0 to 100'
+		);
+	});
+
+	it('advertises which memory proposal identifiers must be omitted', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'propose_memory_change');
+		expect({
+			projectId: definition?.parameters.shape.projectId.description,
+			memoryEntryId: definition?.parameters.shape.memoryEntryId.description
+		}).toEqual({
+			projectId: 'Required for project scope; omit entirely for user scope.',
+			memoryEntryId: 'Required for update or remove; omit entirely for add.'
+		});
+	});
 });
 
 describe('Doomed note edits never reach the approval boundary', () => {

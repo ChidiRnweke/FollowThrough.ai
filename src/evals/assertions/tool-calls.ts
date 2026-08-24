@@ -41,14 +41,16 @@ export function scoreToolCalling(
 	const failed =
 		expectation.requireNoFailures === false
 			? []
-			: result.toolCalls.filter((call) => call.failure).map((call) => call.name);
+			: result.toolCalls
+					.filter((call) => call.failure)
+					.map((call) => `${call.name}: ${call.failure}`);
 	const overBudget =
 		expectation.maxCalls !== undefined && result.toolCalls.length > expectation.maxCalls;
 
 	const problems = [
 		missing.length > 0 ? `did not call ${missing.join(', ')}` : undefined,
 		forbidden.length > 0 ? `called forbidden ${forbidden.join(', ')}` : undefined,
-		failed.length > 0 ? `tool failures from ${failed.join(', ')}` : undefined,
+		failed.length > 0 ? `tool failures: ${failed.join('; ')}` : undefined,
 		overBudget
 			? `${result.toolCalls.length} calls exceeds budget of ${expectation.maxCalls}`
 			: undefined

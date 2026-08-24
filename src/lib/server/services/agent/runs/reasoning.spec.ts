@@ -164,6 +164,12 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('requires durable facts embedded in multi-step work to be captured independently', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'scan the current message for any durable fact even when it is embedded inside the task'
+		);
+	});
+
 	const systemPromptWithNotes = () =>
 		buildAgentInstructions({
 			contextNotes: [

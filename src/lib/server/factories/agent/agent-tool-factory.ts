@@ -540,6 +540,7 @@ const confidence = z
 	.int()
 	.min(0)
 	.max(100)
+	.describe('Optional integer percentage from 0 to 100; use 90, never 0.9.')
 	.transform((value) => value as Confidence);
 /** One anchored replacement in a note or skill body. */
 const noteEdit = z.object({
@@ -1508,12 +1509,21 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'proposal',
 			z.object({
 				scope: z.enum(['project', 'user']),
-				projectId: projectId.optional(),
+				projectId: projectId
+					.optional()
+					.describe('Required for project scope; omit entirely for user scope.'),
 				operation: z.enum(['add', 'update', 'remove']),
-				memoryEntryId: memoryEntryId.optional(),
-				content: z.string().optional(),
+				memoryEntryId: memoryEntryId
+					.optional()
+					.describe('Required for update or remove; omit entirely for add.'),
+				content: z
+					.string()
+					.optional()
+					.describe('Required for add or update; omit entirely for remove.'),
 				justification: z.string().optional(),
-				confidence: confidence.optional()
+				confidence: confidence
+					.optional()
+					.describe('Optional integer percentage from 0 to 100; use 90, never 0.9.')
 			}),
 			(input) => factory.memory().propose(actor, input)
 		),
@@ -1531,7 +1541,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			z.object({
 				pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
 				autoAcceptEnabled: z.boolean(),
-				minimumConfidence: confidence.optional()
+				minimumConfidence: confidence
+					.optional()
+					.describe('Optional integer percentage from 0 to 100; use 90, never 0.9.')
 			}),
 			(input) => factory.trustPolicies().update(actor, input)
 		),
