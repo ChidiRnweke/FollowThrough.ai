@@ -47,7 +47,8 @@ describe('Reading the diagram on the canvas', () => {
 	it('carries a verified revision target from the revision tool', async () => {
 		const diagramId = '6e000c5e-6679-44ef-a9f0-efee14f32310';
 		const reader = new PresentedCanvasSource(itemsOf(revision('<mxfile>one</mxfile>', diagramId)));
-		expect((await reader.latest(actor, conversation))?.diagramId).toBe(diagramId);
+		const found = await reader.latest(actor, conversation);
+		expect(found?.kind === 'revision' ? found.diagramId : undefined).toBe(diagramId);
 	});
 
 	it('ignores a legacy target emitted by the new-diagram tool', async () => {
@@ -59,7 +60,9 @@ describe('Reading the diagram on the canvas', () => {
 			}
 		};
 		const reader = new PresentedCanvasSource(itemsOf(legacy));
-		expect((await reader.latest(actor, conversation))?.diagramId).toBeUndefined();
+		// The arm itself is the assertion now: a draft has nowhere to keep a target,
+		// so a stray one cannot be carried rather than merely being left undefined.
+		expect((await reader.latest(actor, conversation))?.kind).toBe('draft');
 	});
 
 	it('says nothing when the conversation has drawn nothing', async () => {

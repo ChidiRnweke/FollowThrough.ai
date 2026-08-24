@@ -20,7 +20,7 @@ describe('What the conversation put on the canvas', () => {
 	it('is the draft the agent presented', () => {
 		expect(canvasSubject([DRAFT])).toEqual({
 			kind: 'draft',
-			draft: { source: '<mxfile>one</mxfile>' }
+			draft: { kind: 'draft', source: '<mxfile>one</mxfile>' }
 		});
 	});
 
@@ -39,7 +39,7 @@ describe('What the conversation put on the canvas', () => {
 		});
 		expect(canvasSubject([legacy])).toEqual({
 			kind: 'draft',
-			draft: { source: '<mxfile/>' }
+			draft: { kind: 'draft', source: '<mxfile/>' }
 		});
 	});
 

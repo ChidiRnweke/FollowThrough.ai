@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { DiagramId } from '$lib/models/diagrams';
 import {
 	presentedDiagram,
@@ -16,11 +17,22 @@ export type CanvasSubject =
 	| { readonly kind: 'draft'; readonly draft: PresentedDiagram }
 	| { readonly kind: 'saved'; readonly diagramId: DiagramId };
 
-const nonEmpty = (value: unknown): value is string =>
-	typeof value === 'string' && value.trim() !== '';
+const diagramIdField = z
+	.string()
+	.refine((value) => value.trim() !== '')
+	.transform((value) => value as DiagramId);
 
-const record = (value: unknown): Record<string, unknown> | undefined =>
-	typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+/**
+ * A saved diagram named by its id.
+ *
+ * The `kind` check is what makes this a *diagram* reader rather than an artifact
+ * reader: `accept_suggestion` answers for every kind of suggestion, so without it
+ * accepting a todo would put that todo on the diagram canvas.
+ */
+const savedDiagramFields = z.object({
+	id: diagramIdField,
+	kind: z.enum(['drawio', 'mermaid'])
+});
 
 const readDraft = (output: unknown): CanvasSubject | undefined => {
 	const draft = presentedDiagram(output);
@@ -32,25 +44,17 @@ const readRevision = (output: unknown): CanvasSubject | undefined => {
 	return draft ? { kind: 'draft', draft } : undefined;
 };
 
-/**
- * A saved diagram named by its id.
- *
- * The `kind` check is what makes this a *diagram* reader rather than an artifact
- * reader: `accept_suggestion` answers for every kind of suggestion, so without it
- * accepting a todo would put that todo on the diagram canvas.
- */
-const savedById = (fields: Record<string, unknown> | undefined): CanvasSubject | undefined => {
-	if (!fields || !nonEmpty(fields.id)) return undefined;
-	if (fields.kind !== 'drawio' && fields.kind !== 'mermaid') return undefined;
-	return { kind: 'saved', diagramId: fields.id as DiagramId };
+/** A diagram the agent read: the tool answers with the diagram itself. */
+const readSavedDiagram = (output: unknown): CanvasSubject | undefined => {
+	const parsed = savedDiagramFields.safeParse(output);
+	return parsed.success ? { kind: 'saved', diagramId: parsed.data.id } : undefined;
 };
 
-/** A diagram the agent read: the tool answers with the diagram itself. */
-const readSavedDiagram = (output: unknown): CanvasSubject | undefined => savedById(record(output));
-
 /** A diagram the user accepted: the tool answers with the suggestion it applied. */
-const readAcceptedArtifact = (output: unknown): CanvasSubject | undefined =>
-	savedById(record(record(output)?.artifact));
+const readAcceptedArtifact = (output: unknown): CanvasSubject | undefined => {
+	const parsed = z.object({ artifact: savedDiagramFields }).safeParse(output);
+	return parsed.success ? { kind: 'saved', diagramId: parsed.data.artifact.id } : undefined;
+};
 
 /**
  * Every way a conversation can end up with something to show on the canvas.

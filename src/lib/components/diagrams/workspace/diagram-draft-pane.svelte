@@ -58,7 +58,7 @@
 	let projectDialogOpen = $state(false);
 	const effectiveProjectId = $derived(projectId ?? selectedProjectId);
 	/** The diagram a revision names — which the user may since have deleted. */
-	const target = $derived(draft?.diagramId);
+	const target = $derived(draft?.kind === 'revision' ? draft.diagramId : undefined);
 	// A transcript is history: it keeps naming the diagram long after the row is
 	// gone. Asking for it is what stops the canvas offering to replace something
 	// that is not there any more.
