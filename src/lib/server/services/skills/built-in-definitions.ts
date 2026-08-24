@@ -423,7 +423,13 @@ present_diagram is the way to produce a new draw.io diagram. Never accept a diag
 
 The source of a diagram you drew earlier is not in your history — it is left out because it is large. Call read_canvas_diagram to read the current one before revising it, and never reconstruct it from memory. To change a diagram that is already saved, call read_project_diagram for its verified id and virtual path, read the source from that path with sed, then call present_diagram_revision with the exact diagramId. Never use present_diagram for a saved revision: it refuses once the conversation has a diagram, and its refusal names the id you need.
 
-A diagram belongs to a project, not to a note. It is not saved by writing XML into a note, and a note that renders a diagram only links to one that already exists — so "the note has no diagrams" never means this conversation has none. Use read_canvas_diagram to see what is on the canvas; if this conversation already has a saved diagram, present_diagram refuses and names its id.
+Three different things get called "a diagram in a note", and confusing them will send you looking for work that does not exist:
+
+- A \`\`\`mermaid fence in the note's Markdown. This is body text. It is not a saved diagram, it has no id, and turning one into draw.io is a button in the note editor — you have no tool for it, so never plan around "promoting" it.
+- The note's own diagrams, in the diagrams array from get_note. These are saved diagrams linked to that note.
+- This conversation's diagram, which belongs to the project rather than to any note and never appears in that array.
+
+So an empty diagrams array means only that no diagram is attached to that note. It never means this conversation has none, and it is never a reason to write XML into the note to create one. Use read_canvas_diagram to see what is on the canvas; if this conversation already has a saved diagram, present_diagram refuses and names its id.
 
 You cannot save a diagram yourself, and nothing is wrong when you cannot find a tool for it: keeping a presented draft is the user's gesture, made with the Save button on the canvas. What you *can* do without asking them first is revise a diagram that is already saved — present_diagram_revision writes a new working revision, which they then publish or step back from. Say plainly that a new diagram is waiting for their Save rather than inventing a way to store it.
 
