@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/models/workspace';
-	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+	import type { FailedToolActivity } from '$lib/stores/agent/chat-tools';
 	import { Button } from '$lib/components/ui/button';
 	import { FtWarning } from '$lib/components/icons';
 	import { explainToolFailure, toolStatusParts } from '$lib/components/agent';
@@ -12,14 +12,14 @@
 		onretry
 	}: {
 		/** The call that failed. A bare message cannot say what it failed on. */
-		tool: ChatToolActivity;
+		tool: FailedToolActivity;
 		shell?: ShellContext;
 		retryable?: boolean;
 		onretry?: () => void;
 	} = $props();
 
 	const parts = $derived(toolStatusParts(tool, shell));
-	const cause = $derived(tool.failure ? explainToolFailure(tool.failure) : undefined);
+	const cause = $derived(explainToolFailure(tool.failure));
 </script>
 
 <!--

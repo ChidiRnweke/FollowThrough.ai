@@ -8,11 +8,26 @@ import {
 	toolStatusParts
 } from './tool-presentation';
 
-const tool = (name: string, status: 'succeeded' | 'failed' | 'rejected') => ({
+// Generic on the status so the literal survives into `ChatToolActivity`'s arms:
+// a builder answering the whole status union can only produce a value that is
+// none of them. `failed` gets its own builder because its arm needs a message —
+// which is the point, a failure has to say what went wrong.
+const tool = <Status extends 'succeeded' | 'rejected' | 'running'>(
+	name: string,
+	status: Status
+) => ({
 	callId: 'call-1',
 	name,
 	arguments: {},
 	status
+});
+
+const failedTool = (name: string, failure: string) => ({
+	callId: 'call-1',
+	name,
+	arguments: {},
+	failure,
+	status: 'failed' as const
 });
 
 describe('Tool presentation invariants', () => {
@@ -34,7 +49,7 @@ describe('A read names the note it read', () => {
 	const shell = {
 		noteTree: [{ id: noteId, title: 'Runtime notes' }]
 	} as unknown as ShellContext;
-	const read = (status: 'succeeded' | 'failed' | 'rejected') => ({
+	const read = <Status extends 'succeeded' | 'rejected' | 'running'>(status: Status) => ({
 		...tool('get_note', status),
 		arguments: { noteId }
 	});
@@ -113,9 +128,8 @@ describe('Tool disclosure detail', () => {
 	it('shows the failure instead of the arguments when a tool failed', () => {
 		expect(
 			toolDetailLines({
-				...tool('save_note', 'failed'),
-				arguments: { title: 'Notes' },
-				failure: 'The note was locked.'
+				...failedTool('save_note', 'The note was locked.'),
+				arguments: { title: 'Notes' }
 			})
 		).toEqual(['The note was locked.']);
 	});

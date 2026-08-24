@@ -1,5 +1,9 @@
 import type { ShellContext } from '$lib/models/workspace';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import {
+	toolOutput,
+	type ChatToolActivity,
+	type FailedToolActivity
+} from '$lib/stores/agent/chat-tools';
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
 
 /**
@@ -37,7 +41,7 @@ export interface TurnActivity {
 	 * rather than its message, so the failure can be stated as what happened to which thing
 	 * instead of as the sentence the run happened to produce.
 	 */
-	readonly failures: readonly ChatToolActivity[];
+	readonly failures: readonly FailedToolActivity[];
 	/** Every call the turn made, mechanism included — what the details door is for. */
 	readonly callCount: number;
 }
@@ -138,8 +142,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const identify = (tool: ChatToolActivity, subject: ToolSubject): string | undefined => {
 	const fromArguments = subject.idKey ? asString(tool.arguments[subject.idKey]) : undefined;
 	if (fromArguments) return fromArguments;
-	if (!isRecord(tool.output)) return undefined;
-	return asString(tool.output.noteId) ?? asString(tool.output.todoId) ?? asString(tool.output.id);
+	const output = toolOutput(tool);
+	if (!isRecord(output)) return undefined;
+	return asString(output.noteId) ?? asString(output.todoId) ?? asString(output.id);
 };
 
 const nameOf = (
@@ -156,12 +161,11 @@ const nameOf = (
 		const project = shell?.projects.find((candidate) => candidate.id === id);
 		if (project) return project.name;
 	}
+	const output = toolOutput(tool);
 	return (
 		asString(tool.arguments.title) ??
 		asString(tool.arguments.name) ??
-		(isRecord(tool.output)
-			? (asString(tool.output.title) ?? asString(tool.output.name))
-			: undefined)
+		(isRecord(output) ? (asString(output.title) ?? asString(output.name)) : undefined)
 	);
 };
 
@@ -259,8 +263,9 @@ export function turnActivity(
 	// A failure earns a sentence only when nothing later put it right. The wrapper rejection
 	// that precedes a successful save is the agent correcting itself mid-turn.
 	const failures = tools
-		.filter((tool): tool is ChatToolActivity & { failure: string } => {
-			if (!tool.failure || mechanismTools.has(tool.name)) return false;
+		.filter((tool) => tool.status === 'failed')
+		.filter((tool) => {
+			if (mechanismTools.has(tool.name)) return false;
 			const subject = subjects[tool.name];
 			if (!subject) return true;
 			const id = identify(tool, subject);

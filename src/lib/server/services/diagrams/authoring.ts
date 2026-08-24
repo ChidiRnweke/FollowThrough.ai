@@ -591,14 +591,25 @@ export class DiagramAuthoring {
 								status: 'running'
 							});
 						if (toolEvent?.type === 'tool_completed')
-							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
-								callId: toolEvent.callId,
-								name: toolEvent.name,
-								input: {},
-								output: toolEvent.output,
-								failure: toolEvent.failure,
-								status: toolEvent.failure ? 'failed' : 'succeeded'
-							});
+							await this.dependencies.conversations.recordToolActivity(
+								actor,
+								conversation.id,
+								toolEvent.failure
+									? {
+											callId: toolEvent.callId,
+											name: toolEvent.name,
+											input: {},
+											failure: toolEvent.failure,
+											status: 'failed'
+										}
+									: {
+											callId: toolEvent.callId,
+											name: toolEvent.name,
+											input: {},
+											output: toolEvent.output,
+											status: 'succeeded'
+										}
+							);
 						if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
 							assistantText += event.data.delta;
 					}

@@ -13,8 +13,15 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
+import type { Note, NoteId } from '$lib/models/notes';
 import { BaseAgentContext } from './base-context';
 import { AgentContext } from './context';
+
+/** The slice of the note reader `AgentContext` depends on. */
+interface NoteReader {
+	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
+}
 
 const skill = (project = testProjectId()): Skill => ({
 	note: noteBuilder({
@@ -56,7 +63,11 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Create an architecture decision'
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items[0]).not.toHaveProperty('instructions');
@@ -66,7 +77,11 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup(testProjectId(2));
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Create an architecture decision'
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
@@ -121,7 +136,11 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Why does it keep asking me to approve things?' },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Why does it keep asking me to approve things?'
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
@@ -132,7 +151,11 @@ describe('Agent grounding invariants', () => {
 		skills.skills = [{ ...skill(), allowImplicitInvocation: false }];
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Create an architecture decision'
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(catalog(context).items).toEqual([]);
@@ -203,7 +226,12 @@ describe('Agent grounding invariants', () => {
 		];
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(5)] },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Draft an ADR',
+				contextNoteIds: [testNoteId(5)]
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.contextNotes).toEqual([
@@ -225,7 +253,12 @@ describe('Agent grounding invariants', () => {
 		];
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Summarize it', contextNoteIds: [testNoteId(6)] },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Summarize it',
+				contextNoteIds: [testNoteId(6)]
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		return (context.contextNotes as { content?: string; tokenCount: number }[])[0];
@@ -243,17 +276,54 @@ describe('Agent grounding invariants', () => {
 		const { builder } = await setup();
 		const context = await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Draft an ADR', contextNoteIds: [testNoteId(9)] },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Draft an ADR',
+				contextNoteIds: [testNoteId(9)]
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(context.contextNotes).toEqual([]);
+	});
+
+	// The other half of the rule the skip depends on: a reader that is failing is
+	// not a note that is gone, and quietly dropping it would answer the user with a
+	// thinner context than they attached and never say so.
+	it('fails the turn when a context note cannot be read at all', async () => {
+		const notes = new InMemoryNoteContent();
+		notes.notes = [noteBuilder()];
+		const unreachable: NoteReader = {
+			get: () => Promise.reject(new Error('The note store is unreachable.'))
+		};
+		const builder = new AgentContext(
+			new BaseAgentContext(notes),
+			new InMemorySkills(),
+			unreachable
+		);
+		await expect(
+			builder.build(
+				testActor(),
+				{
+					conversationId: testConversationId(),
+					noteId: testNoteId(),
+					prompt: 'Draft an ADR',
+					contextNoteIds: [testNoteId(9)]
+				},
+				{ provenanceId: testProvenanceId() }
+			)
+		).rejects.toThrow('The note store is unreachable.');
 	});
 
 	it('does not record skill usage before the agent loads it', async () => {
 		const { builder, skills } = await setup();
 		await builder.build(
 			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Create an architecture decision' },
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Create an architecture decision'
+			},
 			{ provenanceId: testProvenanceId() }
 		);
 		expect(skills.usages).toEqual([]);

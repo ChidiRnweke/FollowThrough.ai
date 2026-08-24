@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import type { NoteSummary } from '$lib/models/notes';
 import type { ShellContext } from '$lib/models/workspace';
 import { opensInPlace, toolDisclosure, toolFamily } from './tool-disclosure';
@@ -13,7 +14,7 @@ const shell = {
 	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
 } as unknown as ShellContext;
 
-const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
+const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
 	name: 'get_note',
 	arguments: {},
@@ -21,8 +22,7 @@ const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
 	...over
 });
 
-const familyOf = (over: Partial<ChatToolActivity>): string =>
-	toolDisclosure(call(over), shell).kind;
+const familyOf = (over: ToolActivityOverrides): string => toolDisclosure(call(over), shell).kind;
 
 describe('Every tool in the catalog knows what it opens onto', () => {
 	// The server keeps `AgentToolCoverage` total over controller methods so a capability cannot

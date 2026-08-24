@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/models/workspace';
-	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+	import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import type { ToolDisclosure } from '$lib/components/agent';
 	import { summariseToolResult } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
@@ -22,15 +22,16 @@
 	} = $props();
 
 	/** What a proposal that is not about memory came back with — the count, in its own words. */
-	const summary = $derived(summariseToolResult(tool.output, tool.name));
+	const output = $derived(toolOutput(tool));
+	const summary = $derived(summariseToolResult(output, tool.name));
 
 	async function copyRaw(): Promise<void> {
 		const payload = JSON.stringify(
 			{
 				tool: tool.name,
 				arguments: tool.arguments,
-				...(tool.output === undefined ? {} : { result: tool.output }),
-				...(tool.failure ? { failure: tool.failure } : {})
+				...(output === undefined ? {} : { result: output }),
+				...(toolFailure(tool) ? { failure: toolFailure(tool) } : {})
 			},
 			null,
 			2

@@ -60,7 +60,18 @@ export class ProofreadingStore {
 	hydrate(): void {
 		if (typeof localStorage === 'undefined') return;
 		this.enabled = localStorage.getItem(ENABLED_KEY) !== 'false';
-		for (const word of readWords()) this.dictionary.add(word);
+		const stored = readWords();
+		if (stored.kind === 'corrupt') {
+			// Dropped rather than left in place: nothing can recover it, and leaving it
+			// means failing this way on every mount from here on. That loses the
+			// writer's accepted words, so it is said out loud — they are about to see
+			// underlines return under names they had approved, and this is the only
+			// thing that explains why.
+			console.warn('The saved proofreading dictionary could not be read; it has been reset.');
+			localStorage.removeItem(DICTIONARY_KEY);
+			return;
+		}
+		for (const word of stored.words) this.dictionary.add(word);
 	}
 
 	/**
@@ -108,13 +119,29 @@ export class ProofreadingStore {
 	}
 }
 
-const readWords = (): readonly string[] => {
+/**
+ * What the stored dictionary turned out to be.
+ *
+ * Corruption is a value rather than an exception or an empty list. As a throw it
+ * escaped `hydrate`, which runs on every note editor mount — so one bad entry in
+ * one browser broke proofreading on that device for good. As an empty list it
+ * would be indistinguishable from a writer who has accepted no words, and the
+ * entry would sit there failing the same way on every mount forever.
+ */
+type StoredDictionary =
+	{ readonly kind: 'words'; readonly words: readonly string[] } | { readonly kind: 'corrupt' };
+
+const readWords = (): StoredDictionary => {
 	const raw = localStorage.getItem(DICTIONARY_KEY);
-	if (raw === null) return [];
-	const stored: unknown = JSON.parse(raw);
-	if (!Array.isArray(stored) || stored.some((word) => typeof word !== 'string'))
-		throw new Error('Stored proofreading dictionary is invalid');
-	return stored;
+	if (raw === null) return { kind: 'words', words: [] };
+	try {
+		const stored: unknown = JSON.parse(raw);
+		if (!Array.isArray(stored) || stored.some((word) => typeof word !== 'string'))
+			return { kind: 'corrupt' };
+		return { kind: 'words', words: stored };
+	} catch {
+		return { kind: 'corrupt' };
+	}
 };
 
 export const proofreading = new ProofreadingStore();

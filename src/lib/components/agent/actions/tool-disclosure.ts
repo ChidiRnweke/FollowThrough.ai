@@ -1,5 +1,5 @@
 import type { ShellContext } from '$lib/models/workspace';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import {
 	argumentLabel,
 	isIdentifierArgument,
@@ -336,7 +336,8 @@ const entityFrom = (value: unknown, kind: EntityKind, shell?: ShellContext): Ent
  * only on the way back — the id it can be opened by exists in the output and nowhere else.
  */
 const subjectOf = (tool: ChatToolActivity, kind: EntityKind, shell?: ShellContext): EntityRef => {
-	const output = isRecord(tool.output) ? tool.output : {};
+	const returned = toolOutput(tool);
+	const output = isRecord(returned) ? returned : {};
 	const merged = { ...tool.arguments, ...output };
 	return entityFrom(merged, kind, shell);
 };
@@ -347,8 +348,8 @@ const subjectOf = (tool: ChatToolActivity, kind: EntityKind, shell?: ShellContex
  * of it moved. `previous`, where a tool troubles to return it, supplies the before.
  */
 const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
-	const previous =
-		isRecord(tool.output) && isRecord(tool.output.previous) ? tool.output.previous : undefined;
+	const output = toolOutput(tool);
+	const previous = isRecord(output) && isRecord(output.previous) ? output.previous : undefined;
 	return Object.entries(tool.arguments)
 		.filter(
 			([key, value]) => !isIdentifierArgument(key, value) && value !== undefined && value !== null
@@ -364,15 +365,17 @@ const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
 };
 
 const shapeGuess = (tool: ChatToolActivity): Family => {
-	if (collectionOf(tool.output)) return 'collection';
-	if (isRecord(tool.output) && Object.keys(tool.output).length > 0) return 'record';
+	const output = toolOutput(tool);
+	if (collectionOf(output)) return 'collection';
+	if (isRecord(output) && Object.keys(output).length > 0) return 'record';
 	return 'none';
 };
 
 export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): ToolDisclosure {
 	// A failure outranks the family. Whatever the call was going to show, what it has to say now
 	// is that it did not happen, and what the reader can do about that.
-	if (tool.failure) return { kind: 'failure', explanation: explainToolFailure(tool.failure) };
+	const failure = toolFailure(tool);
+	if (failure) return { kind: 'failure', explanation: explainToolFailure(failure) };
 
 	const family = families[tool.name] ?? shapeGuess(tool);
 	const kind = kinds[tool.name] ?? 'plain';
@@ -385,7 +388,7 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 			return { kind: 'link', entity: subjectOf(tool, kind, shell) };
 
 		case 'collection': {
-			const items = collectionOf(tool.output) ?? [];
+			const items = collectionOf(toolOutput(tool)) ?? [];
 			return {
 				kind: 'collection',
 				entities: items.slice(0, ITEM_CAP).map((item) => entityFrom(item, kind, shell)),
@@ -394,7 +397,8 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 		}
 
 		case 'note-diff': {
-			const output = isRecord(tool.output) ? tool.output : {};
+			const returned = toolOutput(tool);
+			const output = isRecord(returned) ? returned : {};
 			const noteId = asString(output.noteId) ?? asString(tool.arguments.noteId);
 			// Without a note to diff there is nothing this family can render, so it falls back to
 			// stating what was sent rather than opening onto an apology.
@@ -417,7 +421,7 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 		}
 
 		case 'created': {
-			const items = collectionOf(tool.output);
+			const items = collectionOf(toolOutput(tool));
 			return {
 				kind: 'created',
 				entities: items

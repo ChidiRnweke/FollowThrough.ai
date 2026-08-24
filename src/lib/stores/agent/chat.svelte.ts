@@ -18,7 +18,12 @@ import type {
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
-import { reconcileToolActivity, type ChatToolActivity, type ChatToolStatus } from './chat-tools';
+import {
+	matchToolActivity,
+	mergeToolActivity,
+	type ChatToolActivity,
+	type ChatToolStatus
+} from './chat-tools';
 import { suggestionToView } from '../suggestions/suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
@@ -217,19 +222,28 @@ const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivit
 	const content = message.content;
 	const status = String(content.status ?? 'succeeded') as ChatToolStatus;
 	const abandoned = status === 'approval_required' && message.runId !== awaitingRunId;
-	return {
+	const base = {
 		callId: String(content.callId ?? ''),
 		name: String(content.name ?? 'tool'),
 		arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
-		...(message.runId ? { runId: message.runId } : {}),
-		...(content.output !== null && content.output !== undefined ? { output: content.output } : {}),
-		...(typeof content.failure === 'string'
-			? { failure: content.failure }
-			: abandoned
-				? { failure: ABANDONED_APPROVAL }
-				: {}),
-		status: abandoned ? 'failed' : status
+		...(message.runId ? { runId: message.runId } : {})
 	};
+	const failure = typeof content.failure === 'string' ? content.failure : undefined;
+	if (abandoned) return { ...base, failure: failure ?? ABANDONED_APPROVAL, status: 'failed' };
+	// Journal content is untyped JSON, so a `failed` row with no message is not
+	// something the type system can rule out here. Every writer supplies one; a row
+	// that somehow does not still has to say it failed rather than say nothing.
+	if (status === 'failed')
+		return { ...base, failure: failure ?? 'The tool call failed.', status: 'failed' };
+	if (status === 'succeeded')
+		return {
+			...base,
+			...(content.output !== null && content.output !== undefined
+				? { output: content.output }
+				: {}),
+			status: 'succeeded'
+		};
+	return { ...base, status };
 };
 
 /** Where a message sat in its run's event stream. Messages without one keep their order. */
@@ -237,7 +251,6 @@ const cursorOf = (message: Message): number =>
 	message.eventCursor === undefined ? Number.MAX_SAFE_INTEGER : Number(message.eventCursor);
 
 const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): ChatPart[] => {
-	const tools: ChatToolActivity[] = [];
 	const parts: ChatPart[] = [];
 	// Sorted by cursor, because a turn's messages are not written in the order they happened:
 	// tool activity is journalled as each call settles, while the agent's own output is
@@ -245,10 +258,7 @@ const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): Chat
 	// all of the work followed by all of the words.
 	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
 		if (message.role === 'tool') {
-			const tool = restoredTool(message, awaitingRunId);
-			if (reconcileToolActivity(tools, tool)) continue;
-			tools.push(tool);
-			parts.push({ kind: 'tool', tool });
+			applyToolActivity(parts, restoredTool(message, awaitingRunId));
 			continue;
 		}
 		const text = typeof message.content.text === 'string' ? message.content.text : '';
@@ -316,9 +326,36 @@ const restoreEntries = (messages: readonly Message[], awaitingRunId?: string): C
 	return entries;
 };
 
-const applyToolActivity = (entry: ChatEntry, raw: ChatToolActivity): void => {
-	if (!reconcileToolActivity(entryTools(entry), raw)) entry.parts.push({ kind: 'tool', tool: raw });
+/**
+ * Fold a tool event into the row that already holds its call, or open a new row.
+ *
+ * The *part* is what changes, not the activity inside it. A settled call is a
+ * different arm of `ChatToolActivity` from a running one, so the row becomes a
+ * new value rather than being edited into place — and writing it back through
+ * the part is what makes it stick, since `entryTools` builds a fresh array and
+ * assigning into that would update nothing.
+ */
+const applyToolActivity = (parts: ChatPart[], incoming: ChatToolActivity): void => {
+	const toolParts = parts.filter((part) => part.kind === 'tool');
+	const index = matchToolActivity(
+		toolParts.map((part) => part.tool),
+		incoming
+	);
+	if (index === undefined) {
+		parts.push({ kind: 'tool', tool: incoming });
+		return;
+	}
+	const part = toolParts[index]!;
+	part.tool = mergeToolActivity(part.tool, incoming);
 };
+
+/** What a row keeps across a change of state: which call it is, and what it was asked. */
+const toolIdentity = (tool: ChatToolActivity) => ({
+	callId: tool.callId,
+	name: tool.name,
+	arguments: tool.arguments,
+	...(tool.runId ? { runId: tool.runId } : {})
+});
 
 const appendText = (entry: ChatEntry, text: string): void => {
 	const last = entry.parts.at(-1);
@@ -684,15 +721,23 @@ export class ChatStore {
 				callIds: tools.map((tool) => tool.callId),
 				decision
 			});
-			for (const tool of tools) tool.status = decision === 'approve' ? 'running' : 'rejected';
+			// Replaced, not edited: an approved call is `running` and a refused one is
+			// `rejected`, and neither is the arm the parked row was in.
+			for (const tool of tools)
+				applyToolActivity(reply.parts, {
+					...toolIdentity(tool),
+					status: decision === 'approve' ? 'running' : 'rejected'
+				});
 			this.reconcileSnapshot(reply, snapshot);
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
 			// audit-allow: silent-catch — every affected tool is marked failed so the decision is never presented as applied.
 		} catch {
-			for (const tool of tools) {
-				tool.status = 'failed';
-				tool.failure = 'The decision could not be applied.';
-			}
+			for (const tool of tools)
+				applyToolActivity(reply.parts, {
+					...toolIdentity(tool),
+					failure: 'The decision could not be applied.',
+					status: 'failed'
+				});
 		} finally {
 			this.deciding = false;
 		}
@@ -783,7 +828,7 @@ export class ChatStore {
 		else if (snapshot.run.status === 'awaiting_approval') {
 			reply.status = 'awaiting_approval';
 			for (const pending of snapshot.pendingDecisions)
-				applyToolActivity(reply, {
+				applyToolActivity(reply.parts, {
 					callId: pending.callId,
 					name: pending.toolName,
 					arguments: pending.arguments,
@@ -826,25 +871,35 @@ export class ChatStore {
 			appendReasoning(reply, event.text);
 		} else if (event.type === 'tool_started') {
 			reply.status = 'streaming';
-			applyToolActivity(reply, {
+			applyToolActivity(reply.parts, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,
 				status: 'running'
 			});
 		} else if (event.type === 'tool_completed') {
-			applyToolActivity(reply, {
-				callId: event.callId,
-				name: event.name,
-				arguments: {},
-				...(event.output === undefined ? {} : { output: event.output }),
-				...(event.failure === undefined ? {} : { failure: event.failure }),
-				status: event.failure ? 'failed' : 'succeeded'
-			});
+			applyToolActivity(
+				reply.parts,
+				event.failure
+					? {
+							callId: event.callId,
+							name: event.name,
+							arguments: {},
+							failure: event.failure,
+							status: 'failed'
+						}
+					: {
+							callId: event.callId,
+							name: event.name,
+							arguments: {},
+							...(event.output === undefined ? {} : { output: event.output }),
+							status: 'succeeded'
+						}
+			);
 		} else if (event.type === 'approval_required') {
 			this.runStatus = 'awaiting_approval';
 			reply.status = 'awaiting_approval';
-			applyToolActivity(reply, {
+			applyToolActivity(reply.parts, {
 				callId: event.callId,
 				name: event.name,
 				arguments: event.arguments,

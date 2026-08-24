@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import type { NoteSummary } from '$lib/models/notes';
 import type { ShellContext } from '$lib/models/workspace';
 import ToolRow from './tool-row.svelte';
@@ -12,7 +13,7 @@ const shell = {
 	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
 } as unknown as ShellContext;
 
-const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
+const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
 	name: 'get_note',
 	arguments: { noteId: NOTE_ID },
@@ -78,8 +79,7 @@ describe('A failed call says what went wrong in the reader terms', () => {
 			call({
 				name: 'edit_note',
 				status: 'failed',
-				failure: 'oldText was not found in the note.',
-				output: undefined
+				failure: 'oldText was not found in the note.'
 			})
 		);
 		await screen.getByRole('button', { name: /Note was not saved/ }).click();

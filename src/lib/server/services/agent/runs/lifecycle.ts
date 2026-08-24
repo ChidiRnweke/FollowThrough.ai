@@ -412,15 +412,25 @@ export class AgentRunLifecycle {
 				input: event.arguments,
 				status: 'running'
 			};
+		// Branch on the outcome rather than spreading both payloads and labelling the
+		// result: a `succeeded` row has no failure to carry and a `failed` row has no
+		// output, and each arm now says only what it has.
 		if (event.type === 'tool_completed')
-			return {
-				callId: event.callId,
-				name: event.name,
-				input: {},
-				...(event.output === undefined ? {} : { output: event.output }),
-				...(event.failure ? { failure: event.failure } : {}),
-				status: event.failure ? 'failed' : 'succeeded'
-			};
+			return event.failure
+				? {
+						callId: event.callId,
+						name: event.name,
+						input: {},
+						failure: event.failure,
+						status: 'failed'
+					}
+				: {
+						callId: event.callId,
+						name: event.name,
+						input: {},
+						...(event.output === undefined ? {} : { output: event.output }),
+						status: 'succeeded'
+					};
 		if (event.type === 'approval_required')
 			return {
 				callId: event.callId,

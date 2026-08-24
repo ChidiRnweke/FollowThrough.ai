@@ -15,9 +15,19 @@ import type {
 	StoredAgentRunClientStateResult
 } from '$lib/client/agent/runs/contracts';
 import type { NoteId } from '$lib/models/notes';
-import { ChatStore, entryText, type ContextChip, type SelectionChip } from './chat.svelte';
+import {
+	ChatStore,
+	entryText,
+	entryTools,
+	type ChatEntry,
+	type ContextChip,
+	type SelectionChip
+} from './chat.svelte';
 
 const runId = '10000000-0000-4000-8000-000000000001' as AgentRunId;
+
+/** The turn's tool rows as they stand now — never a copy taken before a decision. */
+const toolsOf = (entry: ChatEntry) => entryTools(entry);
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 
 class MemoryStorage implements AgentRunClientStorage {
@@ -320,9 +330,11 @@ describe('chat event projection', () => {
 		await store.send({ prompt: 'do both' });
 		await Promise.resolve();
 		const reply = store.entries.at(-1)!;
-		const tools = reply.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
-		await store.decideAll(reply, tools, 'approve');
-		expect({ decided, statuses: tools.map((tool) => tool.status) }).toEqual({
+		// Read back off the entry rather than off the array captured before the
+		// decision: a decided call is a new row, so the values taken beforehand are
+		// the parked ones and always will be.
+		await store.decideAll(reply, toolsOf(reply), 'approve');
+		expect({ decided, statuses: toolsOf(reply).map((tool) => tool.status) }).toEqual({
 			decided: [{ callIds: ['call-a', 'call-b'], decision: 'approve' }],
 			statuses: ['running', 'running']
 		});
@@ -340,9 +352,8 @@ describe('chat event projection', () => {
 		await store.send({ prompt: 'do both' });
 		await Promise.resolve();
 		const reply = store.entries.at(-1)!;
-		const tools = reply.parts.filter((part) => part.kind === 'tool').map((part) => part.tool);
-		await store.decideAll(reply, tools, 'approve');
-		expect(tools.map((tool) => tool.status)).toEqual(['failed', 'failed']);
+		await store.decideAll(reply, toolsOf(reply), 'approve');
+		expect(toolsOf(reply).map((tool) => tool.status)).toEqual(['failed', 'failed']);
 	});
 
 	it('keeps reasoning out of the turn prose', async () => {

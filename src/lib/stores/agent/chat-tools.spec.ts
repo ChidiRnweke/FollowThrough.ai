@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reconcileToolActivity, type ChatToolActivity } from './chat-tools';
+import { matchToolActivity, mergeToolActivity, type ChatToolActivity } from './chat-tools';
 
 const runningTool = (callId = 'call-1'): ChatToolActivity => ({
 	callId,
@@ -8,56 +8,69 @@ const runningTool = (callId = 'call-1'): ChatToolActivity => ({
 	status: 'running'
 });
 
-describe('chat tool activity reconciliation', () => {
-	it('updates a completed call in place', () => {
-		const tools = [runningTool()];
-		reconcileToolActivity(tools, {
-			callId: 'call-1',
-			name: 'find_references',
-			arguments: {},
-			output: { count: 2 },
-			status: 'succeeded'
-		});
-		expect(tools).toEqual([
-			{
-				callId: 'call-1',
-				name: 'find_references',
-				arguments: { query: 'agent skills' },
-				output: { count: 2 },
-				status: 'succeeded'
-			}
-		]);
+const completed = (callId: string, output: unknown): ChatToolActivity => ({
+	callId,
+	name: 'find_references',
+	arguments: {},
+	output,
+	status: 'succeeded'
+});
+
+describe('Matching a tool event to the row it settles', () => {
+	it('finds the row the call already occupies', () => {
+		expect(matchToolActivity([runningTool()], completed('call-1', { count: 2 }))).toBe(0);
 	});
 
-	it('deduplicates repeated start events', () => {
-		const tools = [runningTool()];
-		reconcileToolActivity(tools, runningTool());
-		expect(tools).toHaveLength(1);
+	it('opens a new row for a call it has not seen', () => {
+		expect(matchToolActivity([], runningTool())).toBeUndefined();
 	});
 
-	it('returns undefined for an unseen call so the caller can place it in the flow', () => {
-		expect(reconcileToolActivity([], runningTool())).toBeUndefined();
-	});
-
+	// Falling back on an id that matches nothing would fold a second parked approval
+	// onto the first and lose it.
 	it('keeps a second parked call apart from the first', () => {
-		const tools = [{ ...runningTool('call-1'), status: 'approval_required' as const }];
-		const merged = reconcileToolActivity(tools, {
+		const parked: ChatToolActivity = { ...runningTool('call-1'), status: 'approval_required' };
+		const second: ChatToolActivity = {
 			callId: 'call-2',
 			name: 'archive_note',
 			arguments: {},
 			status: 'approval_required'
-		});
-		expect(merged).toBeUndefined();
+		};
+		expect(matchToolActivity([parked], second)).toBeUndefined();
 	});
 
-	it('reconciles a provider completion without an id to the only active call', () => {
-		const tools = [runningTool()];
-		reconcileToolActivity(tools, {
-			callId: '',
-			name: 'tool',
-			arguments: {},
+	// Some providers report an outcome with no id at all.
+	it('settles an id-less completion onto the only call still active', () => {
+		expect(matchToolActivity([runningTool()], completed('', { count: 2 }))).toBe(0);
+	});
+});
+
+describe('Merging a tool event into its row', () => {
+	it('takes the outcome from the event', () => {
+		expect(mergeToolActivity(runningTool(), completed('call-1', { count: 2 }))).toEqual({
+			callId: 'call-1',
+			name: 'find_references',
+			arguments: { query: 'agent skills' },
+			output: { count: 2 },
 			status: 'succeeded'
 		});
-		expect(tools[0]?.status).toBe('succeeded');
+	});
+
+	// A completion arrives with empty arguments, and the arguments are the only
+	// record of what was called.
+	it('keeps the arguments the event does not restate', () => {
+		expect(mergeToolActivity(runningTool(), completed('call-1', {})).arguments).toEqual({
+			query: 'agent skills'
+		});
+	});
+
+	// The row moves to an arm with nowhere to keep one, which is the point: a call
+	// running again has not produced anything yet.
+	it('drops the output of an attempt when the call runs again', () => {
+		const settled = completed('call-1', { count: 2 });
+		expect(mergeToolActivity(settled, runningTool())).not.toHaveProperty('output');
+	});
+
+	it('takes the id from an event that carries one', () => {
+		expect(mergeToolActivity(runningTool(), completed('', {})).callId).toBe('call-1');
 	});
 });

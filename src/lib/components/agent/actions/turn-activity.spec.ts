@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
 import type { ShellContext } from '$lib/models/workspace';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import { turnActivity, turnSteps } from './turn-activity';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
@@ -16,7 +17,7 @@ const shell = {
 } as unknown as ShellContext;
 
 let nextCall = 0;
-const call = (over: Partial<ChatToolActivity>): ChatToolActivity => ({
+const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: `call-${++nextCall}`,
 	name: 'get_note',
 	arguments: { noteId: NOTE_ID },

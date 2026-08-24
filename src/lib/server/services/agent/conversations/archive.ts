@@ -231,9 +231,10 @@ export class ConversationArchive {
 				callId: activity.callId,
 				name: activity.name,
 				input: activity.input,
-				output: activity.output ?? null,
-				failure: activity.failure ?? null,
-				decision: activity.decision ?? null,
+				// Read off the arm that can have it. `decision` is gone: no writer ever
+				// set it, so every row ever journalled carried its `null`.
+				output: activity.status === 'succeeded' ? (activity.output ?? null) : null,
+				failure: activity.status === 'failed' ? activity.failure : null,
 				status: activity.status
 			},
 			undefined,

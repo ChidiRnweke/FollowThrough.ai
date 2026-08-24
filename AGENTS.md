@@ -124,6 +124,33 @@ Judgement rules, not audited. They exist because each has already cost this code
 - **Optionality must be honest.** A type describing something already decided carries no optional
   fields for things that were decided. Request shapes and frozen/resolved shapes are different
   types even when they look alike.
+- **Two optional fields that are always absent together are one fact, and must be one field.**
+  Apply the test mechanically, to every type you write or touch: for each pair of optional
+  fields, ask whether a value with one present and the other absent is producible. If it is not,
+  the pair is illegal-states-representable and the type is wrong. There are exactly two fixes and
+  no third:
+  1. They vary together and carry no separate meaning — make the _containing thing_ optional and
+     both fields required. `SessionCanvas` had `subject?` and `tab?` where `tab` was absent
+     exactly when `subject` was; it became `SessionCanvas | undefined` with neither optional.
+  2. Which fields are present depends on a state — make that state a discriminated union and hang
+     each payload off the arm that can have it. `ToolActivity` had `output?`, `failure?` and
+     `decision?` beside a five-value `status`; a `succeeded` row could carry a `failure` and did.
+
+  This is not a style preference, and `strict` mode cannot see it. The symptoms are all
+  downstream and all expensive: call sites narrowing the same fact twice
+  (`canvas.subject && canvas.tab && …`), hand-written type predicates recovering a pairing the
+  type gave away (`tool is ChatToolActivity & { failure: string }`), and `undefined` propagating
+  through function after function that each grow a branch for a case they cannot act on. A
+  boolean beside an optional payload is the same defect: `{ ready: boolean; tab?: TabId }` makes
+  `{ ready: false, tab }` sayable, and is three states, so it is three arms.
+
+- **Push the disjunction up, never down.** The caller that knows whether a value exists is the
+  caller that decides. A function must not accept `T | undefined` merely so its caller can skip
+  an `if`: that hands every function below it a case it can do nothing about, and each one
+  answers by inventing a passive default — `canvasSubjectKey(undefined)` returned `undefined`,
+  `shouldOpenCanvas(state, undefined)` returned `false`, `markCanvasShown(undefined)` returned
+  `{}`. Three functions, three invented answers, for a question none of them was equipped to ask.
+  Make the function total over what it actually needs, and narrow once at the top.
 - **A missing value is usually a data bug, not a plumbing bug.** Before adding a field or a channel
   to carry it, find where it is produced and ask why it is not recorded there.
 - **Blast radius is a signal, not a score.** If fixing one call site means adding a required field

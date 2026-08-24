@@ -1,5 +1,5 @@
 import type { ShellContext } from '$lib/models/workspace';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import {
 	argumentLabel,
 	isIdentifierArgument,
@@ -196,7 +196,8 @@ export const approvalConsequence = (name: string): string | undefined => consequ
  * failure, otherwise the arguments the tool actually ran with.
  */
 export function toolDetailLines(tool: ChatToolActivity): string[] {
-	if (tool.failure) return [tool.failure];
+	const failure = toolFailure(tool);
+	if (failure) return [failure];
 	const summaries = scalarSummaries(tool.arguments);
 	if (summaries.length > 0) return summaries;
 	// Identifiers and structured payloads are filtered out, so "no arguments" would be a

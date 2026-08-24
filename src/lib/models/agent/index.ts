@@ -130,15 +130,38 @@ export interface Message {
 	readonly createdAt: DateTime;
 }
 
-export interface ToolActivity {
+/** What every tool call carries, whatever became of it. */
+interface ToolActivityBase {
 	readonly callId: string;
 	readonly name: string;
 	readonly input: Readonly<Record<string, unknown>>;
-	readonly output?: unknown;
-	readonly failure?: string;
-	readonly decision?: 'approved' | 'rejected';
-	readonly status: 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
 }
+
+/**
+ * One tool call, in the state the run left it.
+ *
+ * `status` is the discriminant, and the payload belongs to the arm that can
+ * have it. As three independent optionals beside a status it was possible —
+ * and, in `DiagramAuthoring`, actual — to write a `succeeded` row carrying a
+ * `failure` and a `failed` row carrying an `output`, because nothing tied the
+ * fields to the state they described. Readers then rediscovered the pairing by
+ * hand, down to a `tool is ToolActivity & { failure: string }` predicate.
+ *
+ * `failure` is required on `failed`: a failure with nothing to say is a row
+ * that reports something went wrong and refuses to say what. `output` stays
+ * optional on `succeeded`, because a tool may legitimately return nothing —
+ * and that is a different fact from having failed.
+ *
+ * There is no `rejected` arm and no `decision` field. Nothing on this side of
+ * the wire ever produced either; a rejection is a client-side state that lives
+ * on `ChatToolActivity`, and `decision` was set by no writer at all while
+ * `archive` faithfully persisted its `null` on every row.
+ */
+export type ToolActivity =
+	| (ToolActivityBase & { readonly status: 'running' })
+	| (ToolActivityBase & { readonly status: 'approval_required' })
+	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: unknown })
+	| (ToolActivityBase & { readonly status: 'failed'; readonly failure: string });
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 
