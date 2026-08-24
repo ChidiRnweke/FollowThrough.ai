@@ -28,7 +28,10 @@ export class DiskCache {
 	private dirty = false;
 	private readonly counters = { hits: 0, misses: 0, live: 0 };
 
-	constructor(private readonly path: string) {}
+	constructor(
+		private readonly path: string,
+		private readonly strictDeterministic = strictCacheEnabled()
+	) {}
 
 	static recording(): boolean {
 		return process.env.EVAL_RECORD === '1';
@@ -51,7 +54,7 @@ export class DiskCache {
 		}
 		this.counters.misses += 1;
 		if (!DiskCache.recording()) {
-			if (options.deterministic && process.env.EVAL_STRICT_DETERMINISTIC_CACHE === '1')
+			if (options.deterministic && this.strictDeterministic)
 				throw new Error(
 					`Deterministic eval cache miss for "${key}". Re-run test:evals:cache or record the cache intentionally.`
 				);
@@ -94,6 +97,10 @@ export class DiskCache {
 		return this.entries;
 	}
 }
+
+export const strictCacheEnabled = (
+	environment: Readonly<Record<string, string | undefined>> = process.env
+): boolean => environment.EVAL_STRICT_CACHE === '1';
 
 /**
  * Embedding vectors dominate the cache file — 3072 float64s per string is about
