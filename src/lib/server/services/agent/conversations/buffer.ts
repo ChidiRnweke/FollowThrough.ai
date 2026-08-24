@@ -72,14 +72,58 @@ const withElidedSource = (json: string): string => {
 	return JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
 };
 
+const isDiagramPresentation = (name: string): boolean =>
+	name === 'present_diagram' || name === 'present_diagram_revision';
+
+/** The text half of a tool result, whichever of the three shapes it arrived in. */
+const outputText = (
+	output: AgentInputItem & { type: 'function_call_result' }
+): string | undefined =>
+	typeof output.output === 'string'
+		? output.output
+		: !Array.isArray(output.output) && output.output.type === 'text'
+			? output.output.text
+			: undefined;
+
+/**
+ * A failure envelope, recognised without parsing.
+ *
+ * `buildTool` builds these with `JSON.stringify({ failure, recovery })`, so the
+ * key is always first. Matching the prefix rather than parsing keeps this total:
+ * there is no malformed-JSON branch to invent an answer for.
+ */
+const isFailureEnvelope = (text: string): boolean => text.trimStart().startsWith('{"failure":');
+
+/**
+ * Presentations the model has to be able to re-read, because they failed.
+ *
+ * Eliding a *failed* call's source left the model unable to see what it had
+ * sent: `read_canvas_diagram` only answers with the last version that worked, so
+ * a rejected document was gone. It re-sent the same broken XML twice before
+ * getting it right. The size argument for eliding does not apply here — this is
+ * the one call it actually needs to read.
+ */
+const failedPresentations = (items: readonly AgentInputItem[]): ReadonlySet<string> => {
+	const failed = new Set<string>();
+	for (const item of items) {
+		if (item.type !== 'function_call_result' || !isDiagramPresentation(item.name)) continue;
+		const text = outputText(item);
+		if (text !== undefined && isFailureEnvelope(text)) failed.add(item.callId);
+	}
+	return failed;
+};
+
 /** Both halves of a `present_diagram` exchange carry the whole document. */
-const withoutDiagramSource = (item: AgentInputItem): AgentInputItem => {
+const withoutDiagramSource = (
+	item: AgentInputItem,
+	failed: ReadonlySet<string>
+): AgentInputItem => {
 	switch (item.type) {
 		case 'function_call':
-			if (item.name !== 'present_diagram' && item.name !== 'present_diagram_revision') return item;
+			if (!isDiagramPresentation(item.name) || failed.has(item.callId)) return item;
 			return { ...item, arguments: withElidedSource(item.arguments) };
 		case 'function_call_result':
-			if (item.name !== 'present_diagram' && item.name !== 'present_diagram_revision') return item;
+			if (!isDiagramPresentation(item.name) || failed.has(item.callId)) return item;
 			if (typeof item.output === 'string') {
 				return { ...item, output: withElidedSource(item.output) };
 			}
@@ -114,7 +158,10 @@ export class ConversationBuffer implements Session {
 		// document: this is what the model is shown, not what is kept. Memoised
 		// beside `items` because it re-parses and re-serialises every diagram in the
 		// conversation, and it runs once per model turn.
-		this.shown ??= items.map(withoutDiagramSource);
+		if (!this.shown) {
+			const failed = failedPresentations(items);
+			this.shown = items.map((item) => withoutDiagramSource(item, failed));
+		}
 		return limit === undefined ? [...this.shown] : this.shown.slice(-limit);
 	}
 

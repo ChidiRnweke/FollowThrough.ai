@@ -30,6 +30,28 @@ describe('Untrusted draw.io XML invariants', () => {
 		expect(() => new DrawioXmlValidator().validate('<mxfile>')).toThrow('malformed');
 	});
 
+	// The failure this check exists for: a model that escapes its own output sends
+	// a document that is one long text node, and the parser could only answer
+	// "text data outside of root node" at 1:1 — true, and no help to anyone.
+	it('says so when the whole document arrived HTML-escaped', () => {
+		expect(() =>
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+			)
+		).toThrow('HTML-escaped');
+	});
+
+	it('still accepts escaped markup inside a label', () => {
+		expect(
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="e" parent="1" value="&lt;b&gt;A&lt;/b&gt;"/></root>'
+				)
+			)
+		).toContain('&lt;b&gt;');
+	});
+
 	it('rejects document type declarations', () => {
 		expect(() => new DrawioXmlValidator().validate(`<!DOCTYPE mxfile>${VALID_DRAWIO_XML}`)).toThrow(
 			'declarations'

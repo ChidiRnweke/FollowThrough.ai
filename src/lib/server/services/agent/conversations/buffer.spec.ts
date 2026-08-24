@@ -140,6 +140,28 @@ describe('ConversationBuffer', () => {
 		expect(JSON.stringify(await buffer.getItems())).not.toContain('<mxfile>huge</mxfile>');
 	});
 
+	// The source of a call that *failed* stays, because nothing else can hand it
+	// back: `read_canvas_diagram` only answers with the last version that worked.
+	// Eliding it left the agent re-sending the same rejected XML twice.
+	it('keeps the source of a presentation that failed', async () => {
+		const buffer = await bufferWith([
+			{
+				callId: 'diagram-call',
+				name: 'present_diagram',
+				type: 'function_call',
+				arguments: JSON.stringify({ source: '<mxfile>rejected</mxfile>' })
+			} as unknown as AgentInputItem,
+			{
+				callId: 'diagram-call',
+				name: 'present_diagram',
+				status: 'completed',
+				type: 'function_call_result',
+				output: { type: 'text', text: JSON.stringify({ failure: 'draw.io XML is malformed' }) }
+			} satisfies AgentInputItem
+		]);
+		expect(JSON.stringify(await buffer.getItems())).toContain('<mxfile>rejected</mxfile>');
+	});
+
 	it('points the agent at the tool that reads it back', async () => {
 		const buffer = await bufferWith([
 			{

@@ -68,6 +68,21 @@ const normalizeEntities = (source: string): string =>
 			.join('');
 	});
 
+/**
+ * A document whose markup arrived as character references rather than markup.
+ *
+ * A model that HTML-escapes its own output sends `&lt;mxfile&gt;…`, which is a
+ * well-formed *text node* and nothing else, so the parser answers
+ * "text data outside of root node" at 1:1 — true, and useless to whoever has to
+ * fix it. `normalizeEntities` cannot help: `lt` is one of the five references
+ * XML defines, so it is deliberately left alone.
+ *
+ * Detected by absence: real draw.io XML opens with a literal `<`, and no amount
+ * of escaped content inside labels changes that.
+ */
+const isEscapedMarkup = (source: string): boolean =>
+	!source.includes('<') && /&(?:lt|#0*60|#x0*3c);/i.test(source);
+
 const parseXml = (source: string, label: string): JSDOM => {
 	try {
 		return new JSDOM(normalizeEntities(source), { contentType: 'text/xml' });
@@ -138,6 +153,13 @@ export class DrawioXmlValidator {
 		if (!normalized) throw new ValidationError('draw.io XML is required.');
 		if (normalized.length > MAX_DRAWIO_SOURCE_LENGTH)
 			throw new ValidationError('draw.io XML is too large.');
+		// Checked before parsing so the answer names the mistake. Deliberately not
+		// unescaped and retried: that would repair a document nobody verified, and
+		// `assertSafeAttributes` below relies on escaped values staying escaped.
+		if (isEscapedMarkup(normalized))
+			throw new ValidationError(
+				'draw.io XML is HTML-escaped: the source begins with "&lt;" rather than "<". Send the raw XML, escaping only inside attribute values.'
+			);
 		if (/<!DOCTYPE|<!ENTITY|<\?xml-stylesheet/i.test(normalized))
 			throw new ValidationError('draw.io XML cannot contain declarations or entities.');
 

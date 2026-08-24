@@ -851,8 +851,16 @@ export class AgentTools {
 						this.mode === 'approval_required' &&
 						(await gate(definition.parameters.parse(input)))
 				: definition.classification === 'mutation' && this.mode === 'approval_required',
+			// `failure` first, and always: `ConversationBuffer` recognises the envelope
+			// by that prefix to decide which calls the model still needs to re-read.
+			// `recovery` because a bare message left the model guessing — it re-sent
+			// the same rejected document twice rather than inspecting what it sent.
 			errorFunction: (_context, error) =>
-				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+				JSON.stringify({
+					failure: error instanceof Error ? error.message : String(error),
+					recovery:
+						'Read the failure and fix the arguments before retrying. Retrying the same arguments will fail the same way.'
+				}),
 			execute: async (input, _runContext, details) => {
 				const parsed = definition.parameters.parse(input);
 				return this.toolExecutor.execute(

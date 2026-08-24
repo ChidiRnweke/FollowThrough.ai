@@ -321,7 +321,7 @@ describe('Agent runtime boundary', () => {
 
 	it('points selection actions to discoverable selection-scoped capabilities', () => {
 		expect(selectionsBlock(pinnedSelection())).toContain(
-			'use search_tools to discover the selection-scoped capability'
+			'no direct tool matches, use search_tools to discover the selection-scoped capability'
 		);
 	});
 
