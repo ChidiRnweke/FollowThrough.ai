@@ -19,20 +19,24 @@ const implicitCommitmentWorkspace = {
 	]
 };
 
-const architectureProject = architectureWorkspace.projects[0]!;
-const relatedArchitectureWorkspace = {
-	projects: [
-		{
-			...architectureProject,
-			notes: [
-				...architectureProject.notes,
-				{
-					title: 'Payment integration decision',
-					body: 'Decision: the Checkout API sends card authorisation requests to the Payment Gateway and waits for the gateway result before writing to the ledger.'
-				}
-			]
-		}
-	]
+const relatedArchitectureWorkspace = () => {
+	const architectureProject = architectureWorkspace.projects?.[0];
+	if (!architectureProject?.notes)
+		throw new Error('Architecture fixture is missing its project notes.');
+	return {
+		projects: [
+			{
+				...architectureProject,
+				notes: [
+					...architectureProject.notes,
+					{
+						title: 'Payment integration decision',
+						body: 'Decision: the Checkout API sends card authorisation requests to the Payment Gateway and waits for the gateway result before writing to the ledger.'
+					}
+				]
+			}
+		]
+	};
 };
 
 /**
@@ -165,7 +169,7 @@ export const selectionCases: readonly EvalCase[] = [
 			note: 'Indirect curation language asks for a reviewable internal relationship, not external evidence or a chat-only search summary.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, relatedArchitectureWorkspace);
+			const workspace = await seedWorkspace(lab, relatedArchitectureWorkspace());
 			const noteId = workspace.noteIds.get('Checkout architecture');
 			if (!noteId) throw new Error('Checkout architecture note was not seeded');
 			const result = await runCase(lab, workspace.actor, {

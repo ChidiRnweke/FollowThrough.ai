@@ -6,7 +6,7 @@
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { canvasSubjectKey } from '$lib/stores/diagrams/canvas-subject';
-	import { canvasFor, studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasPlacement } from '$lib/stores/diagrams/canvas.svelte';
 	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -56,23 +56,22 @@
 		conversationProjectId(conversation, shell.noteTree) ?? diagramRegistry.draftProject(sessionKey)
 	);
 
-	// The canvas opens when the conversation has drafted something the canvas has
+	// The canvas opens when the conversation has put something on it the canvas has
 	// not shown yet, and never for a background tab — a chat the user is not looking
 	// at must not take the split out from under the one they are.
-	const canvas = $derived(canvasFor(sessionKey));
-	// A kept diagram is shown by its own tab, not by the draft one the transcript
-	// still names. The offer in `chat-panel.svelte` reads the same lookup, so the
-	// two cannot disagree about where the studio is.
-	const kept = $derived(studioTabFor(chat.conversationId));
+	//
+	// Where it belongs is resolved once, in `canvasPlacement`. `chat-panel.svelte`
+	// reads the same value, so the split and the offer cannot disagree.
+	const placement = $derived(canvasPlacement(sessionKey, chat.conversationId));
 	$effect(() => {
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
-		// Waiting on the lookup rather than falling back to the draft tab: opening
-		// the wrong tab is not a slower answer, it is a different one.
-		if (kept.kind === 'pending' || !canvas) return;
-		const key = canvasSubjectKey(canvas.subject);
+		// `pending` waits rather than falling back to the draft tab: opening the
+		// wrong tab is not a slower answer, it is a different one.
+		if (placement.kind !== 'showing') return;
+		const key = canvasSubjectKey(placement.subject);
 		if (!canvasOpenings.shouldOpen(sessionKey, key)) return;
 		canvasOpenings.markShown(sessionKey, key);
-		void workbench.setSplit(kept.kind === 'kept' ? kept.tab : canvas.tab);
+		void workbench.setSplit(placement.tab);
 	});
 
 	let releaseContext: (() => void) | undefined;

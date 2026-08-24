@@ -24,12 +24,15 @@ describe('What the conversation put on the canvas', () => {
 		});
 	});
 
-	it('carries the diagram a revision replaces', () => {
+	// A revision is written onto the row before the tool answers, so the diagram's
+	// own tab already holds it — and that tab is the one carrying History and
+	// Publish. Routing it to a canvas of its own is what hid it from the user.
+	it('is the saved diagram a revision was written onto', () => {
 		const revision = call('present_diagram_revision', {
 			source: '<mxfile/>',
 			diagramId: DIAGRAM_ID
 		});
-		expect(canvasSubject([revision])).toMatchObject({ draft: { diagramId: DIAGRAM_ID } });
+		expect(canvasSubject([revision])).toEqual({ kind: 'saved', diagramId: DIAGRAM_ID });
 	});
 
 	it('does not trust a persistence id returned by the new-diagram tool', () => {

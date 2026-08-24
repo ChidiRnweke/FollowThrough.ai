@@ -357,6 +357,14 @@ export interface PresentDiagramInput {
 	 */
 	readonly source: string;
 	readonly title?: string;
+	/**
+	 * The conversation drawing it, so a new diagram can be told from a change to
+	 * the one this conversation already has. Without it, presenting a "new"
+	 * diagram in a conversation that had kept one produced a draft with nowhere to
+	 * go: the canvas shows the saved diagram, so the agent reported a change the
+	 * user could not see.
+	 */
+	readonly conversationId: ConversationId;
 }
 
 /**

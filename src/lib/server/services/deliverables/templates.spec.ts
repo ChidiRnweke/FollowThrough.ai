@@ -141,9 +141,7 @@ describe('template library behavior', () => {
 
 	it('returns already extracted styles without reading the object again', async () => {
 		const { service, templates } = setup();
-		templates.templates = [
-			template({ extractedStyles })
-		];
+		templates.templates = [template({ extractedStyles })];
 		expect(await service.extractStyles(testActor(), templateId)).toEqual(extractedStyles);
 	});
 });

@@ -248,7 +248,10 @@ const suggestionPayloadSchemas = {
 			description: z.string().optional(),
 			responsibility: z.enum(['mine', 'waiting_on']),
 			waitingOn: z.string().optional(),
-			dueDate: z.string().transform((value) => value as LocalDate).optional(),
+			dueDate: z
+				.string()
+				.transform((value) => value as LocalDate)
+				.optional(),
 			dueDateVerbatim: z.string().optional(),
 			promiseStrength: z.enum(['explicit', 'implied', 'tentative']).optional(),
 			...optionalSuggestionProvenance
@@ -291,7 +294,9 @@ const suggestionPayloadSchemas = {
 			justification: z.string().optional()
 		})
 		.strict()
-} satisfies { readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']> };
+} satisfies {
+	readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']>;
+};
 
 export const parseSuggestionPayload = (
 	kind: SuggestionKind,

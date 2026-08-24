@@ -44,8 +44,7 @@ export function collectImageSources(doc: ProseMirrorDocument): string[] {
 				sources.push(src);
 		}
 		if (!Array.isArray(node.content)) return;
-		for (const child of node.content)
-			if (typeof child === 'object' && child !== null) walk(child);
+		for (const child of node.content) if (typeof child === 'object' && child !== null) walk(child);
 	};
 	walk({ type: doc.type, content: doc.content });
 	return sources;

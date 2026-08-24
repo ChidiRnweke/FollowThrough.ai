@@ -3,8 +3,15 @@ import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { entryTools } from '$lib/stores/agent/chat.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 import { canvasSubject, type CanvasSubject } from '$lib/stores/diagrams/canvas-subject';
+import {
+	canvasPlacementOf,
+	type CanvasPlacement,
+	type KeptStudioTab
+} from '$lib/stores/diagrams/canvas-placement';
 import { findConversationDiagram } from '$lib/remote/diagrams/diagrams.remote';
 import { diagramTab, draftTab, type TabId } from '$lib/stores/workbench/tab-ref';
+
+export type { CanvasPlacement };
 
 /**
  * A canvas that has something on it.
@@ -62,15 +69,26 @@ export const canvasFor = (sessionKey: ChatSessionKey): SessionCanvas | undefined
  * `{ ready: false, tab: … }` sayable, and leaves every caller re-deriving which
  * of the three cases it is out of two that do not mean anything apart.
  */
-export type StudioTab =
-	/** The lookup is still out. Not the same as having none, and must not act like it. */
-	| { readonly kind: 'pending' }
-	/** Asked and answered: this conversation has kept nothing. */
-	| { readonly kind: 'unkept' }
-	| { readonly kind: 'kept'; readonly tab: TabId };
+export type StudioTab = KeptStudioTab;
 
 const PENDING: StudioTab = { kind: 'pending' };
 const UNKEPT: StudioTab = { kind: 'unkept' };
+
+/**
+ * Where this conversation's canvas belongs, as one value.
+ *
+ * The rule itself is pure and lives in `canvas-placement.ts`, next to the test
+ * that pins it. This is the part that has to read live state: the transcript,
+ * through `canvasFor`, and the kept-diagram lookup.
+ */
+export const canvasPlacement = (
+	sessionKey: ChatSessionKey,
+	conversationId: ConversationId | undefined
+): CanvasPlacement => {
+	const kept = studioTabFor(conversationId);
+	const canvas = canvasFor(sessionKey);
+	return canvasPlacementOf(canvas?.subject, canvas?.tab ?? draftTab(sessionKey), kept);
+};
 
 export const studioTabFor = (conversationId: ConversationId | undefined): StudioTab => {
 	// A conversation with no id has sent nothing, so it can have kept nothing.

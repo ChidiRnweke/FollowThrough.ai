@@ -16,7 +16,7 @@ describe('filtered eval acceptance criteria', () => {
 
 	it('keeps the lower canary threshold for a selected canary archetype', () => {
 		const [criterion] = acceptanceCriteriaFor([{ splits: [ARCHETYPES.memoryTaskRead] }]);
-		expect(criterion?.minPassRate).toBe(0.8);
+		expect(criterion && 'minPassRate' in criterion ? criterion.minPassRate : undefined).toBe(0.8);
 	});
 
 	it('returns no gates when selected cases have no scored archetype', () => {

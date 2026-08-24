@@ -33,6 +33,7 @@ const setup = () => {
 			capabilityDependencies<DiagramStudioDependencies>({
 				diagramFinder: library,
 				diagramDraftWriter: library,
+				diagramConversations: library,
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index: async () => {} },
 				drawioXmlValidator: { validate: (source: string) => source },
@@ -59,19 +60,26 @@ describe('Presenting a diagram on the studio canvas', () => {
 	// it, which is what stops an abandoned conversation leaving a row behind.
 	it('returns the draft without storing it', async () => {
 		const { controller, diagrams } = setup();
-		await controller.presentDiagram(testActor(), { source: VALID_DRAWIO_XML });
+		await controller.presentDiagram(testActor(), {
+			source: VALID_DRAWIO_XML,
+			conversationId: testConversationId()
+		});
 		expect(diagrams.diagrams).toEqual([]);
 	});
 
 	it('presents the source it was given', async () => {
 		const { controller } = setup();
-		const result = await controller.presentDiagram(testActor(), { source: VALID_DRAWIO_XML });
+		const result = await controller.presentDiagram(testActor(), {
+			source: VALID_DRAWIO_XML,
+			conversationId: testConversationId()
+		});
 		expect(result.source).toBe(VALID_DRAWIO_XML);
 	});
 
 	it('validates draw.io XML before the canvas tries to load it', async () => {
 		const controller = new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
+				diagramConversations: { findByConversation: async () => undefined },
 				drawioXmlValidator: {
 					validate: () => {
 						throw new Error('bad xml');
@@ -79,7 +87,25 @@ describe('Presenting a diagram on the studio canvas', () => {
 				}
 			})
 		);
-		await expect(controller.presentDiagram(testActor(), { source: '<mxfile/>' })).rejects.toThrow();
+		await expect(
+			controller.presentDiagram(testActor(), {
+				source: '<mxfile/>',
+				conversationId: testConversationId()
+			})
+		).rejects.toThrow();
+	});
+
+	// A conversation keeps at most one diagram, so once it has one a "new" diagram
+	// is really a change to that one. Accepting it silently is what produced the
+	// original defect: the draft had no row and no tab, the canvas went on showing
+	// the saved diagram, and the agent reported a change nobody could see.
+	it('refuses a new diagram once the conversation already has one', async () => {
+		const { controller, diagrams } = setup();
+		const conversationId = testConversationId();
+		diagrams.diagrams = [drawioBuilder({ conversationId })];
+		await expect(
+			controller.presentDiagram(testActor(), { source: VALID_DRAWIO_XML, conversationId })
+		).rejects.toThrow('present_diagram_revision');
 	});
 
 	it('carries the diagram a revision is meant to replace', async () => {
@@ -88,7 +114,8 @@ describe('Presenting a diagram on the studio canvas', () => {
 		diagrams.diagrams = [target];
 		const result = await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: target.id
+			diagramId: target.id,
+			conversationId: testConversationId()
 		});
 		expect(result.diagramId).toBe(target.id);
 	});
@@ -102,7 +129,8 @@ describe('Presenting a diagram on the studio canvas', () => {
 		diagrams.diagrams = [target];
 		await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: target.id
+			diagramId: target.id,
+			conversationId: testConversationId()
 		});
 		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
 	});
@@ -115,7 +143,8 @@ describe('Presenting a diagram on the studio canvas', () => {
 		diagrams.diagrams = [target];
 		await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: target.id
+			diagramId: target.id,
+			conversationId: testConversationId()
 		});
 		expect(diagrams.diagrams[0]).toMatchObject({
 			publishedRevision: target.publishedRevision
@@ -127,7 +156,8 @@ describe('Presenting a diagram on the studio canvas', () => {
 		await expect(
 			controller.presentDiagramRevision(testActor(), {
 				source: VALID_DRAWIO_XML,
-				diagramId: drawioBuilder().id
+				diagramId: drawioBuilder().id,
+				conversationId: testConversationId()
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});

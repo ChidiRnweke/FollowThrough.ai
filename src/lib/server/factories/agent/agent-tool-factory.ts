@@ -1793,7 +1793,10 @@ const agentOnlyDefinitions = (
 			toolDescription('present_diagram'),
 			'read',
 			z.object({ source: z.string().min(1), title: z.string().min(1).optional() }),
-			(fields) => factory.diagramStudio().presentDiagram(actor, fields)
+			(fields) =>
+				factory
+					.diagramStudio()
+					.presentDiagram(actor, { ...fields, conversationId: input.conversationId })
 		),
 		defineTool(
 			'present_diagram_revision',
@@ -1804,7 +1807,10 @@ const agentOnlyDefinitions = (
 				title: z.string().min(1).optional(),
 				diagramId
 			}),
-			(fields) => factory.diagramStudio().presentDiagramRevision(actor, fields)
+			(fields) =>
+				factory
+					.diagramStudio()
+					.presentDiagramRevision(actor, { ...fields, conversationId: input.conversationId })
 		),
 		defineTool(
 			'read_canvas_diagram',

@@ -220,10 +220,34 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: PresentDiagramInput
 	): Promise<PresentDiagramOutput> {
-		void actor;
-		// Validated even though nothing is stored: the canvas is about to load this
-		// into a draw.io embed, and a malformed source would fail there, in front of
-		// the user, rather than here.
+		// A conversation keeps at most one diagram — `keepStudioDiagram` is
+		// idempotent on `conversationId` — so once it has one, a "new" diagram here
+		// is a change to that one, sent through the wrong tool. It used to be
+		// accepted: the draft had no row and no tab of its own, the canvas went on
+		// showing the saved diagram, and the agent reported a diagram it had
+		// changed while the user looked at the version before it. Refusing says so
+		// instead, and names the id the revision needs.
+		const existing = await this.dependencies.diagramConversations.findByConversation(
+			actor,
+			input.conversationId
+		);
+		if (existing)
+			throw new UnsupportedDiagramOperationError(
+				`This conversation already has a saved diagram (${existing.id}). Call present_diagram_revision with that diagramId to change it; present_diagram only draws a diagram that does not exist yet.`
+			);
+		return this.validated(input);
+	}
+
+	/**
+	 * Validated even though nothing is stored here: the canvas is about to load
+	 * this into a draw.io embed, and a malformed source would fail there, in front
+	 * of the user, rather than here.
+	 *
+	 * Shared by both presentation tools, and deliberately not `presentDiagram`
+	 * itself — a revision must not be measured against the "this conversation has
+	 * no diagram yet" rule that `presentDiagram` enforces.
+	 */
+	private validated(input: PresentDiagramInput): PresentDiagramOutput {
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
 		return {
 			source,
@@ -253,7 +277,7 @@ export class DiagramStudio implements DiagramStudioController {
 		const target = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		if (target.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be revised here');
-		const presented = await this.presentDiagram(actor, input);
+		const presented = this.validated(input);
 		// Base version sent with the write, so a diagram the user edited meanwhile
 		// reports a conflict instead of being overwritten (ADR 0010).
 		await this.saveProjectDiagramDraft(actor, {

@@ -39,9 +39,18 @@ const readDraft = (output: unknown): CanvasSubject | undefined => {
 	return draft ? { kind: 'draft', draft } : undefined;
 };
 
+/**
+ * A revision is shown by the diagram it revised, not by a canvas of its own.
+ *
+ * It is written onto that row as a working revision before the tool answers, so
+ * the diagram's tab already holds it — and that tab is the one carrying History
+ * and Publish, which is how the version is accepted or abandoned.
+ */
 const readRevision = (output: unknown): CanvasSubject | undefined => {
-	const draft = presentedDiagramRevision(output);
-	return draft ? { kind: 'draft', draft } : undefined;
+	const revision = presentedDiagramRevision(output);
+	return revision?.kind === 'revision'
+		? { kind: 'saved', diagramId: revision.diagramId }
+		: undefined;
 };
 
 /** A diagram the agent read: the tool answers with the diagram itself. */

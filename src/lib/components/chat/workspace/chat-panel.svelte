@@ -30,7 +30,7 @@
 		chatRegistry,
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { canvasFor, studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasPlacement } from '$lib/stores/diagrams/canvas.svelte';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
@@ -82,19 +82,18 @@
 	// what that token is for.
 	const reducedMotion = new PrefersReducedMotion();
 	const offerMotion = $derived(reducedMotion.current ? { duration: 0 } : { duration: 200 });
-	const canvas = $derived(canvasFor(chat.sessionKey));
-	const kept = $derived(studioTabFor(chat.conversationId));
 	/**
-	 * Whether this conversation's diagram is already on screen somewhere.
+	 * Where this conversation's canvas belongs, and whether it is already there.
 	 *
-	 * Two tabs can be showing it, and which one depends on history the canvas
-	 * cannot see: the draft tab before it was kept, the saved diagram's tab after.
-	 * Asking only the first is what left the offer standing beside the studio it
-	 * had just opened, for the rest of the conversation.
+	 * `canvasPlacement` resolves the tab once — the draft tab before a diagram was
+	 * kept, the saved diagram's tab after, and the revised diagram's own tab for a
+	 * revision. This used to ask two lookups and accept either, which meant a
+	 * conversation with a kept diagram counted as "on screen" no matter what the
+	 * agent had since drawn, and the offer was withheld for the rest of it.
 	 */
+	const placement = $derived(canvasPlacement(chat.sessionKey, chat.conversationId));
 	const canvasOnScreen = $derived(
-		(canvas !== undefined && workbench.openTabs.includes(canvas.tab)) ||
-			(kept.kind === 'kept' && workbench.openTabs.includes(kept.tab))
+		placement.kind === 'showing' && workbench.openTabs.includes(placement.tab)
 	);
 	/**
 	 * The diagram this conversation produced, when this chat has nowhere to show it.
@@ -108,8 +107,8 @@
 		// Offering while the lookup is still out flashes the card onto every mount
 		// of an already-kept conversation — which is the whole reason `pending` is
 		// an arm of its own rather than an absent tab.
-		canvas && kept.kind !== 'pending' && !canvasOnScreen
-			? { subject: canvas.subject, canvasTab: canvas.tab }
+		placement.kind === 'showing' && !canvasOnScreen
+			? { subject: placement.subject, canvasTab: placement.tab }
 			: undefined
 	);
 	$effect(() => chat.persistConversationChoices());

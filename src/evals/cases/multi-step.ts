@@ -16,13 +16,16 @@ import { expectSuggestionPending } from '../assertions/effects';
 export const multiStepCases: readonly EvalCase[] = [
 	{
 		id: 'multi-step-search-then-read',
-		name: 'searches, then reads the found note for a detailed question',
+		name: 'resolves, reads, and grounds an answer from a named note',
 		splits: [ARCHETYPES.multiStep, ARCHETYPES.toolCalling],
 		input: {
 			prompt: 'What does the Checkout architecture note say about how the Ledger Service is called?'
 		},
-		expected: { requiredTools: ['search'] },
-		metadata: { layer: 'agent', note: 'Needs search to find, then get_note or read detail.' },
+		expected: { requiredSequence: ['get_workspace_context', 'get_note', 'sed'] },
+		metadata: {
+			layer: 'agent',
+			note: 'A named note should be resolved from workspace context and read authoritatively; semantic search is optional.'
+		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
 			const result = await runCase(lab, workspace.actor, {
@@ -35,17 +38,26 @@ export const multiStepCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 300)
 			});
 
-			// Must at least search; may also get_note for full content.
-			const tools = scoreToolCalling(result, { required: ['search'] });
+			const names = result.calledToolNames;
+			const contextIndex = names.indexOf('get_workspace_context');
+			const searchIndex = names.indexOf('search');
+			const noteIndex = names.indexOf('get_note');
+			const sedIndex = names.indexOf('sed');
+			const grounded = /balanced double-entry posting/i.test(result.finalResponse);
+			const evidenceRead =
+				searchIndex > contextIndex || (noteIndex > contextIndex && sedIndex > noteIndex);
+			const passed = contextIndex >= 0 && evidenceRead && grounded;
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
-				score: tools.passed ? 1 : 0,
-				label: tools.passed ? 'pass' : 'fail',
-				explanation: tools.explanation
+				score: passed ? 1 : 0,
+				label: passed ? 'pass' : 'fail',
+				explanation: `context=${contextIndex}; search=${searchIndex}; note=${noteIndex}; sed=${sedIndex}; grounded=${grounded}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
+			expect({ status: result.status, resolvedReadAndGrounded: passed }).toEqual({
+				status: 'completed',
+				resolvedReadAndGrounded: true
+			});
 		}
 	},
 	{
@@ -133,21 +145,36 @@ export const multiStepCases: readonly EvalCase[] = [
 	},
 	{
 		id: 'multi-step-read-then-propose',
-		name: 'reads a note then proposes action items from it',
+		name: 'reads a note then creates its action items',
 		splits: [ARCHETYPES.multiStep, ARCHETYPES.toolDiscovery],
-		input: {
-			prompt: 'Extract action items from my "Checkout architecture" note.'
+		input: { prompt: 'Turn the commitments in my "Release follow-up" note into todos.' },
+		expected: { requiredTools: ['create_todos'], todoMarkers: ['runbook', 'alert'] },
+		metadata: {
+			layer: 'agent',
+			note: 'The note is not preselected, so the agent must read it before using the bulk todo capability.'
 		},
-		expected: { requiredTools: ['extract_promises'] },
-		metadata: { layer: 'agent', note: 'Needs to read note content then call extract_promises.' },
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, architectureWorkspace);
-			const noteId = workspace.noteIds.get('Checkout architecture');
-			if (!noteId) throw new Error('Checkout architecture note was not seeded');
+			const workspace = await seedWorkspace(lab, {
+				projects: [
+					{
+						name: 'Release',
+						notes: [
+							{
+								title: 'Release follow-up',
+								body: 'I will clean up the runbook by Tuesday. Maya will wire the release alert before Friday.'
+							}
+						]
+					}
+				]
+			});
+			const projectId = workspace.projectIds.get('Release');
+			const noteId = workspace.noteIds.get('Release follow-up');
+			if (!projectId || !noteId) throw new Error('Release follow-up note was not seeded');
 
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
+				projectId,
 				noteId
 			});
 			px.logOutput({
@@ -156,17 +183,27 @@ export const multiStepCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 300)
 			});
 
-			// Must discover and call extract_promises.
-			const verdict = scoreToolDiscovery(result, 'extract_promises');
+			const verdict = scoreToolDiscovery(result, 'create_todos');
+			const names = result.calledToolNames;
+			const readIndex = names.indexOf('sed');
+			const createIndex = names.indexOf('create_todos');
+			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
+			const titles = todos.map((view) => view.todo.title.toLowerCase());
+			const persisted = (this.expected.todoMarkers as string[]).every((marker) =>
+				titles.some((title) => title.includes(marker))
+			);
+			const passed = verdict.passed && readIndex >= 0 && createIndex > readIndex && persisted;
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'pass' : 'fail',
-				explanation: verdict.explanation
+				score: passed ? 1 : 0,
+				label: passed ? 'pass' : 'fail',
+				explanation: `${verdict.explanation}; read=${readIndex}; create=${createIndex}; todos=${titles.join(' | ')}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, readThenCreatedBoth: passed }).toEqual({
+				status: 'completed',
+				readThenCreatedBoth: true
+			});
 		}
 	},
 	{
@@ -265,13 +302,13 @@ export const multiStepCases: readonly EvalCase[] = [
 	},
 	{
 		id: 'multi-step-diagram-and-review-reminder',
-		name: 'creates a diagram proposal and a dated review todo from one natural request',
+		name: 'presents a diagram and creates a dated review todo from one natural request',
 		splits: [ARCHETYPES.multiStep, ARCHETYPES.effect, ARCHETYPES.toolDiscovery, 'ambiguity'],
 		input: {
 			prompt:
 				'Turn this into a picture I can review, and leave me a reminder for Friday to check it.'
 		},
-		expected: { suggestionKind: 'diagram', dueDate: '2026-08-28' },
+		expected: { canvasKind: 'draft', dueDate: '2026-08-28' },
 		metadata: {
 			observedAt: '2026-08-24',
 			note: 'Compound production-style request: create the visual and persist the follow-up, then stop.'
@@ -290,7 +327,9 @@ export const multiStepCases: readonly EvalCase[] = [
 				noteId,
 				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
-			const diagram = await expectSuggestionPending(lab, workspace.actor, 'diagram');
+			const canvas = await lab.controllers
+				.diagramStudio()
+				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
 			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
 			const reminder = todos.find(
 				(view) =>
@@ -300,24 +339,30 @@ export const multiStepCases: readonly EvalCase[] = [
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
-				diagram: diagram.explanation,
+				canvasKind: canvas.kind,
 				reminder: reminder?.todo.title
 			});
-			const complete = diagram.passed && Boolean(reminder);
+			const complete = canvas.kind === this.expected.canvasKind && Boolean(reminder);
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
 				score: complete ? 1 : 0,
 				label: complete ? 'both_effects' : 'partial_or_missing',
-				explanation: `${diagram.explanation}; reminder=${reminder?.todo.title ?? 'missing'}`
+				explanation: `canvas=${canvas.kind}; reminder=${reminder?.todo.title ?? 'missing'}`
 			});
 			expect(
 				{
 					status: result.status,
-					diagramPending: diagram.passed,
+					diagramPresented: canvas.kind === this.expected.canvasKind,
 					reminderPersisted: Boolean(reminder)
 				},
-				result.failure ?? `${diagram.explanation}; reminder=${reminder?.todo.title ?? 'missing'}`
-			).toEqual({ status: 'completed', diagramPending: true, reminderPersisted: true });
+				result.failure ??
+					`canvas=${canvas.kind}; reminder=${reminder?.todo.title ?? 'missing'}; tools=${result.calledToolNames.join(', ')}; failures=${
+						result.toolCalls
+							.filter((call) => call.failure)
+							.map((call) => `${call.name}: ${call.failure}`)
+							.join(' | ') || 'none'
+					}`
+			).toEqual({ status: 'completed', diagramPresented: true, reminderPersisted: true });
 		}
 	},
 	{
