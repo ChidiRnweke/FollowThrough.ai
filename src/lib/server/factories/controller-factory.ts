@@ -1,4 +1,5 @@
 import type { AgentController } from '../controllers/agent/controller';
+import type { AgentFilesController } from '../controllers/agent-files/controller';
 import type { AgentSettingsController } from '../controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '../controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '../controllers/agent/trust-policies/controller';
@@ -23,6 +24,7 @@ import type { UserSettingsController } from '../controllers/user-settings/contro
 import type { WorkspaceController } from '../controllers/workspace/controller';
 
 export interface ControllerFactory {
+	agentFiles(): AgentFilesController;
 	workspace(): WorkspaceController;
 	projects(): ProjectsController;
 	notes(): NotesController;

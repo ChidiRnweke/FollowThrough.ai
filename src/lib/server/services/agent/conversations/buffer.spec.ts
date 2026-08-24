@@ -4,13 +4,20 @@ import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { ConversationBuffer } from './buffer';
+import { AgentReplayVirtualizer } from './replay-virtualizer';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 
 const conversationId = 'conversation-1' as ConversationId;
 const actor: ActorContext = { userId: 'user-1' as ActorContext['userId'] };
 const emptyRepository = { list: async () => [] } as unknown as AgentSessionRepository;
 
 const bufferWith = async (items: AgentInputItem[]): Promise<ConversationBuffer> => {
-	const buffer = new ConversationBuffer(emptyRepository, actor, conversationId);
+	const buffer = new ConversationBuffer(
+		emptyRepository,
+		actor,
+		conversationId,
+		new AgentReplayVirtualizer(new InMemoryAgentFiles())
+	);
 	await buffer.addItems(items);
 	return buffer;
 };
@@ -84,7 +91,12 @@ describe('ConversationBuffer', () => {
 				}
 			]
 		} as unknown as AgentSessionRepository;
-		const buffer = new ConversationBuffer(repository, actor, conversationId);
+		const buffer = new ConversationBuffer(
+			repository,
+			actor,
+			conversationId,
+			new AgentReplayVirtualizer(new InMemoryAgentFiles())
+		);
 		expect(JSON.stringify(await buffer.getItems())).not.toContain('input_image');
 	});
 

@@ -101,17 +101,18 @@ const families: Readonly<Record<string, Family>> = {
 	// Mechanism: the agent orienting itself. Never earns a row, let alone a chevron.
 	search_tools: 'none',
 	use_tool: 'none',
+	ls: 'none',
+	grep: 'none',
+	sed: 'none',
 
 	// One thing, read. The row is the link.
 	get_note: 'link',
 	get_project: 'link',
 	get_artifact: 'link',
 	load_skill: 'link',
-	read_attachment: 'link',
 	// Many things, read: a list of icons to choose from.
 	search_icons: 'collection',
 	// One stored version, read back whole.
-	read_note_version: 'link',
 	read_canvas_diagram: 'link',
 	read_project_diagram: 'link',
 	download_artifact: 'link',
@@ -212,7 +213,6 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	search_note: 'note',
 	list_trashed_notes: 'note',
 	list_note_versions: 'note',
-	read_note_version: 'note',
 	diff_note_versions: 'note',
 	create_note: 'note',
 	archive_note: 'note',
@@ -246,7 +246,6 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	regenerate_artifact: 'artifact',
 	delete_artifact: 'artifact',
 	list_attachments: 'artifact',
-	read_attachment: 'artifact',
 	list_project_memory: 'memory',
 	list_user_memory: 'memory',
 	propose_memory_change: 'memory',

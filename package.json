@@ -166,6 +166,7 @@
 		"openai": "^6.46.0",
 		"pdfmake": "^0.3.11",
 		"postgres": "^3.4.9",
+		"re2js": "^2.8.6",
 		"svelte-dnd-action": "^0.9.74",
 		"svelte-sonner": "^1.1.1",
 		"yaml": "^2.9.0",

@@ -9,12 +9,14 @@ import {
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	drawioBuilder,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();
@@ -38,6 +40,18 @@ const setup = () => {
 };
 
 describe('Presenting a diagram on the studio canvas', () => {
+	it('reports an empty canvas as an explicit state', async () => {
+		const controller = new DiagramStudio(
+			capabilityDependencies<DiagramStudioDependencies>({
+				canvasSource: new PresentedCanvasSource(new InMemoryAgentSessionRepository())
+			})
+		);
+
+		expect(
+			await controller.readCanvasDiagram(testActor(), { conversationId: testConversationId() })
+		).toMatchObject({ kind: 'empty', nextActions: [{ tool: 'present_diagram' }] });
+	});
+
 	// The canvas shows what the agent drew; nothing is written until the user keeps
 	// it, which is what stops an abandoned conversation leaving a row behind.
 	it('returns the draft without storing it', async () => {
@@ -125,24 +139,11 @@ describe('Reading a saved diagram', () => {
 		expect(result.title).toBe('Ingest pipeline');
 	});
 
-	// The one time the XML earns its place: a revision has to be written against
-	// the real thing rather than against a list of labels.
-	it('hands over draw.io XML when it was asked for', async () => {
-		const { controller, diagrams } = setup();
-		const diagram = drawioBuilder({ source: VALID_DRAWIO_XML });
-		diagrams.diagrams = [diagram];
-		const result = await controller.readProjectDiagram(testActor(), {
-			diagramId: diagram.id,
-			includeSource: true
-		});
-		expect(result.source).toBe(VALID_DRAWIO_XML);
-	});
-
-	it('withholds the XML by default', async () => {
+	it('returns the project needed to derive its virtual path', async () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder({ source: VALID_DRAWIO_XML });
 		diagrams.diagrams = [diagram];
 		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(result.source).toBeUndefined();
+		expect(result.projectId).toBe(diagram.projectId);
 	});
 });

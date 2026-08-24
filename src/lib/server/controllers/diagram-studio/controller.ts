@@ -247,7 +247,18 @@ export class DiagramStudio implements DiagramStudioController {
 		input: ReadCanvasDiagramInput
 	): Promise<ReadCanvasDiagramOutput> {
 		const presented = await this.dependencies.canvasSource.latest(actor, input.conversationId);
-		return presented ?? {};
+		return presented
+			? { kind: 'present', ...presented }
+			: {
+					kind: 'empty',
+					message: 'This conversation has not presented a diagram on its canvas.',
+					nextActions: [
+						{
+							tool: 'present_diagram',
+							reason: 'Present a new diagram only if the user asked to create one.'
+						}
+					]
+				};
 	}
 
 	async readProjectDiagram(
@@ -257,15 +268,13 @@ export class DiagramStudio implements DiagramStudioController {
 		const diagram = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		return {
 			id: diagram.id,
+			projectId: diagram.projectId,
 			kind: diagram.kind,
 			...(diagram.title ? { title: diagram.title } : {}),
 			labels:
 				diagram.kind === 'drawio'
 					? await this.dependencies.drawioTextExtractor.extract(diagram)
-					: diagram.source,
-			// Only when asked for. A Mermaid diagram's source is already its labels,
-			// so there is nothing extra to hand back for one.
-			...(input.includeSource && diagram.kind === 'drawio' ? { source: diagram.source } : {})
+					: diagram.source
 		};
 	}
 

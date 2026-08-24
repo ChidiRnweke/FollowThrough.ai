@@ -41,6 +41,8 @@ import { traceAgentTurn } from '$lib/server/services/telemetry';
 import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
 import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
+import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
+import { AgentReplayVirtualizer } from '$lib/server/services/agent/conversations/replay-virtualizer';
 
 export interface AgentCapabilityInput {
 	readonly db: Database;
@@ -52,6 +54,7 @@ export interface AgentCapabilityInput {
 	readonly projects: ProjectCatalog;
 	readonly memory: MemoryLibrary;
 	readonly provenance: ProvenanceRecorder;
+	readonly files: AgentFileRepository;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
@@ -114,7 +117,12 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		input.appURL,
 		undefined,
 		(repository, actor, conversationId) =>
-			new ConversationBuffer(repository, actor, conversationId),
+			new ConversationBuffer(
+				repository,
+				actor,
+				conversationId,
+				new AgentReplayVirtualizer(input.files)
+			),
 		traceAgentTurn,
 		webSearchOptionsFromEnvironment(process.env)
 	);

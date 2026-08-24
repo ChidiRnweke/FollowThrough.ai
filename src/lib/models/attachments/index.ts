@@ -34,7 +34,7 @@ export interface Attachment {
 /**
  * One stored object and what was extracted from it. `processingStatus` is the
  * only place the extraction pipeline's progress is observable; `extractedText`
- * is what indexing and the agent's `read_attachment` tool both read from.
+ * is what indexing and the agent's virtual attachment file both read from.
  */
 export interface AttachmentVersion {
 	readonly id: AttachmentVersionId;

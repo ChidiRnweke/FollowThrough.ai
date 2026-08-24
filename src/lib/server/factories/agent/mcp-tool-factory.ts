@@ -12,11 +12,6 @@ import {
 	type AgentToolDefinition,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
-import {
-	invalidUseToolPayload,
-	unknownUseToolName,
-	type RecoverableUseToolFailure
-} from '$lib/server/services/agent/runs/tool-recovery';
 
 export interface McpToolSurfaceOptions {
 	readonly controllers: ControllerFactory;
@@ -29,18 +24,21 @@ export interface McpToolSurfaceOptions {
 }
 
 /** MCP carries results as content blocks; every tool here returns JSON text. */
-const ok = (result: unknown) => ({
-	content: [{ type: 'text' as const, text: JSON.stringify(result ?? null) }]
-});
+const ok = (result: unknown) => {
+	if (result === undefined)
+		throw new Error('Tool returned undefined instead of an explicit result');
+	return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+};
 
-const failed = (failure: string | RecoverableUseToolFailure) => ({
+interface McpToolFailure {
+	readonly kind: 'error';
+	readonly code: string;
+	readonly message: string;
+}
+
+const failed = (failure: McpToolFailure) => ({
 	isError: true,
-	content: [
-		{
-			type: 'text' as const,
-			text: JSON.stringify(typeof failure === 'string' ? { failure } : failure)
-		}
-	]
+	content: [{ type: 'text' as const, text: JSON.stringify(failure) }]
 });
 
 /**
@@ -53,8 +51,13 @@ const attempt = async (run: () => Promise<unknown>) => {
 		return ok(await run());
 		// audit-allow: silent-catch — the MCP adapter converts every thrown domain failure into its explicit failed tool result.
 	} catch (error) {
-		if (error instanceof DomainError) return failed(`${error.code}: ${error.message}`);
-		return failed(error instanceof Error ? error.message : String(error));
+		if (error instanceof DomainError)
+			return failed({ kind: 'error', code: error.code, message: error.message });
+		return failed({
+			kind: 'error',
+			code: 'INTERNAL_ERROR',
+			message: error instanceof Error ? error.message : String(error)
+		});
 	}
 };
 
@@ -70,13 +73,14 @@ const annotationsFor = (definition: AgentToolDefinition) => ({
 /**
  * Exposes the agent's capabilities to an external MCP host, mirroring the
  * in-app surface built by `AgentTools.agentTools()`: a handful of
- * first-class tools, plus `search_tools`/`use_tool` for the long tail. That
+ * first-class tools, plus `search_tools` for the long tail. Search promotes a
+ * result into a real top-level MCP tool and emits tools/list_changed. That
  * keeps the advertised tool list small enough to sit in a host's context
  * alongside its own tools.
  *
  * The scope filter and the user's tool selection are applied to a single
- * `permitted` list that both the direct registrations and `use_tool` dispatch
- * from, so neither a `read` token nor a deselected tool can be reached by name.
+ * `permitted` list that both direct registration and search promotion use, so
+ * neither a `read` token nor a deselected tool can be reached by name.
  */
 export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer => {
 	const registry = new McpTools(
@@ -92,21 +96,19 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		options.scope === 'read' ? { classifications: ['read'] } : {}
 	);
 	const byName = new Map(permitted.map((definition) => [definition.name, definition]));
-	const names = permitted.map((definition) => definition.name);
-
 	const server = new McpServer(
 		{ name: 'followthrough', version: '1.0.0' },
 		{
 			instructions:
 				'FollowThrough is a connected workspace of notes, projects, todos and references. ' +
 				'Ground yourself with `search` or `get_workspace_context` before acting. ' +
-				'Tools beyond the ones listed here are available: find them with `search_tools`, inspect the returned `input_schema`, then call `use_tool` as {"name":"exact_name","payload":{...}} without nesting or stringifying it.'
+				'Tools beyond the ones listed here are available: find them with `search_tools`. Each result is then registered as a real top-level tool; call that exact name with the flat arguments in its `input_schema`. There is no wrapper tool.'
 		}
 	);
 
-	for (const name of FIRST_CLASS_TOOL_NAMES) {
-		const definition = byName.get(name);
-		if (!definition) continue;
+	const registered = new Set<string>();
+	const register = (definition: AgentToolDefinition): void => {
+		if (registered.has(definition.name)) return;
 		server.registerTool(
 			definition.name,
 			{
@@ -116,6 +118,13 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 			},
 			(input: Record<string, unknown>) => attempt(() => definition.execute(input))
 		);
+		registered.add(definition.name);
+	};
+
+	for (const name of FIRST_CLASS_TOOL_NAMES) {
+		const definition = byName.get(name);
+		if (!definition) continue;
+		register(definition);
 	}
 
 	// First-class tools are already registered above and carry no stored embedding,
@@ -128,7 +137,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 		'search_tools',
 		{
 			description:
-				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Returns each match with the exact input schema; call it via use_tool.',
+				'Find more FollowThrough tools relevant to what you want to do. Every returned match is registered as a real top-level tool; call its exact name with flat arguments matching input_schema.',
 			inputSchema: {
 				query: z.string().min(1),
 				limit: z.number().int().min(1).max(15).optional()
@@ -141,45 +150,19 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 				description: definition.description
 			}));
 			const ranked = await options.toolRetriever.retrieve(catalog, input.query, input.limit ?? 5);
+			const matches = ranked
+				.map((name) => byName.get(name))
+				.filter((definition): definition is AgentToolDefinition => definition !== undefined);
+			for (const definition of matches) register(definition);
 			return ok(
-				ranked
-					.map((name) => byName.get(name))
-					.filter((definition): definition is AgentToolDefinition => definition !== undefined)
-					.map((definition) => ({
-						name: definition.name,
-						description: definition.description,
-						classification: definition.classification,
-						input_schema: z.toJSONSchema(definition.parameters, { io: 'input' })
-					}))
+				matches.map((definition) => ({
+					name: definition.name,
+					description: definition.description,
+					classification: definition.classification,
+					input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
+					callable_directly: true
+				}))
 			);
-		}
-	);
-
-	server.registerTool(
-		'use_tool',
-		{
-			description:
-				'Execute a FollowThrough tool using the exact name and input_schema returned by search_tools. Pass {"name":"exact_name","payload":{...}} directly; never nest or stringify that object under arguments.',
-			inputSchema: {
-				name: z.string().min(1),
-				payload: z.record(z.string(), z.unknown()).optional()
-			},
-			// The target decides what actually happens, so claim neither.
-			annotations: { readOnlyHint: false, destructiveHint: options.scope !== 'read' }
-		},
-		async (input) => {
-			const target = byName.get(input.name);
-			if (!target) return failed(unknownUseToolName(input.name, names));
-			const validation = target.parameters.safeParse(input.payload ?? {});
-			if (!validation.success)
-				return failed(
-					invalidUseToolPayload(
-						target.name,
-						validation.error,
-						z.toJSONSchema(target.parameters, { io: 'input' })
-					)
-				);
-			return attempt(() => target.execute(validation.data as Record<string, unknown>));
 		}
 	);
 

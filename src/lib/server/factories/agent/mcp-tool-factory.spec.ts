@@ -40,16 +40,18 @@ describe('MCP tool surface', () => {
 			'edit_note',
 			'get_note',
 			'get_workspace_context',
+			'grep',
 			'list_project_memory',
 			'list_todos',
 			'list_user_memory',
 			'load_skill',
+			'ls',
 			'propose_memory_change',
 			'save_note',
 			'search',
 			'search_note',
 			'search_tools',
-			'use_tool'
+			'sed'
 		]);
 	});
 
@@ -69,49 +71,55 @@ describe('MCP tool surface', () => {
 		expect(note?.inputSchema.required).toEqual(['noteId']);
 	});
 
-	it('refuses a mutation through use_tool on a read-scoped token', async () => {
-		const client = await connect('read');
+	it('does not promote a mutation on a read-scoped token', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_todo'];
+		const client = await connect('read', { retriever });
 		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'create_todo', payload: { title: 'Write it down' } }
+			name: 'search_tools',
+			arguments: { query: 'create a todo' }
 		});
-		expect(result.isError).toBe(true);
+		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
 	});
 
 	it('refuses to revoke an access token on a read-scoped token', async () => {
-		const client = await connect('read');
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['revoke_api_token'];
+		const client = await connect('read', { retriever });
 		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'revoke_api_token', payload: { tokenId: crypto.randomUUID() } }
+			name: 'search_tools',
+			arguments: { query: 'revoke token' }
 		});
-		expect(result.isError).toBe(true);
+		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
 	});
 
 	it('offers no tool that creates an access token', async () => {
-		const client = await connect('full');
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_api_token'];
+		const client = await connect('full', { retriever });
 		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'create_api_token', payload: { name: 'Mine', scope: 'full' } }
+			name: 'search_tools',
+			arguments: { query: 'create token' }
 		});
-		expect(result.isError).toBe(true);
+		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
 	});
 
-	it('suggests a near miss when use_tool is given an unknown name', async () => {
+	it('has no free-form wrapper tool', async () => {
 		const client = await connect('full');
-		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'create_todos' }
-		});
-		expect(JSON.stringify(result.content)).toContain('create_todo');
+		const { tools } = await client.listTools();
+		expect(tools.map((tool) => tool.name)).not.toContain('use_tool');
 	});
 
 	it('rejects a payload that does not match the target schema', async () => {
-		const client = await connect('full');
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['create_todo'];
+		const client = await connect('full', { retriever });
+		await client.callTool({ name: 'search_tools', arguments: { query: 'create a todo' } });
 		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'create_todo', payload: {} }
+			name: 'create_todo',
+			arguments: {}
 		});
-		expect(JSON.stringify(result.content)).toContain('Invalid payload');
+		expect(result.isError).toBe(true);
 	});
 
 	it('returns discoverable tools from search_tools with their schemas', async () => {
@@ -124,6 +132,7 @@ describe('MCP tool surface', () => {
 		});
 		const matches = JSON.parse((result.content as { text: string }[])[0].text);
 		expect(Object.keys(matches[0]).sort()).toEqual([
+			'callable_directly',
 			'classification',
 			'description',
 			'input_schema',
@@ -162,12 +171,14 @@ describe('Deselected tools over MCP', () => {
 		expect(tools.map((tool) => tool.name)).not.toContain('get_note');
 	});
 
-	it('refuses a deselected tool called by name through use_tool', async () => {
-		const client = await connect('full', { disabled: ['archive_project'] });
+	it('does not promote a deselected tool', async () => {
+		const retriever = new InMemoryToolRetriever();
+		retriever.names = ['archive_project'];
+		const client = await connect('full', { disabled: ['archive_project'], retriever });
 		const result = await client.callTool({
-			name: 'use_tool',
-			arguments: { name: 'archive_project', payload: {} }
+			name: 'search_tools',
+			arguments: { query: 'archive project' }
 		});
-		expect(result.isError).toBe(true);
+		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
 	});
 });

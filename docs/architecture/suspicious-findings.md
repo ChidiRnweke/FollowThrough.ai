@@ -54,13 +54,13 @@ worktree changes.
 
 - **Conversation condensation remains in retrieval code and docs.** Workspace retrieval should use
   an agent-chosen query.
-- **Old `use_tool` helpers and documentation remain.** The current tool search exposes the found
-  tool with its real schema.
 - **Old inline-image repair paths remain.** The current product does not need this compatibility
   layer.
 - **Old anchored-edit fallback comments remain.** They do not match the current failure rule.
 - **Inline suggestions are incomplete.** Do not record their current behavior as intended design.
 - **Accepted context can be truncated.** Limits can silently discard context the user supplied.
+- **The in-app agent adapter erases thrown typed failures.** It reduces a thrown domain error to one
+  failure string. Read-plane failures avoid that adapter path by returning typed result unions.
 
 ## Skills and Trash
 

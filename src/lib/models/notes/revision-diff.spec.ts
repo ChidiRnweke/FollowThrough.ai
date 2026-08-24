@@ -56,6 +56,6 @@ describe('Diffing note revision texts', () => {
 	it('points a truncated patch at the full-content read', () => {
 		const before = revisionText({ plainText: longText('old') });
 		const after = revisionText({ revision: 2, plainText: longText('new') });
-		expect(diffNoteRevisionTexts(before, after).patch).toContain('read_note_version');
+		expect(diffNoteRevisionTexts(before, after).patch).toContain('note versions directory');
 	});
 });

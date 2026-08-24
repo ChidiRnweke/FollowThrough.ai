@@ -183,7 +183,7 @@ const GOALS: readonly RetrievalGoal[] = [
 	{
 		id: 'attachments-read',
 		goal: 'read the contents of the PDF I uploaded',
-		expected: 'read_attachment'
+		expected: 'list_attachments'
 	},
 
 	// Note: the memory tools are first-class, so they are deliberately absent

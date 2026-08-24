@@ -7,6 +7,7 @@ export {
 	agentRuns,
 	agentRunStatus,
 	agentSessionItems,
+	agentFiles,
 	conversationKind,
 	conversations,
 	messageRole,

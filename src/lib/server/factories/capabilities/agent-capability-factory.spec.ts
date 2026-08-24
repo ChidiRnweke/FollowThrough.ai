@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '$lib/server/db';
 import { createAgentCapability } from './agent-capability-factory';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 
 const db = {} as Database;
 
@@ -20,6 +21,7 @@ describe('createAgentCapability wiring', () => {
 			projects: {} as never,
 			memory: {} as never,
 			provenance: {} as never,
+			files: new InMemoryAgentFiles(),
 			openRouterApiKey: 'test',
 			openRouterBaseURL: 'http://127.0.0.1:9',
 			appURL: 'http://localhost:5173',

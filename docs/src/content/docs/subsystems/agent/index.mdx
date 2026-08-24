@@ -17,20 +17,20 @@ Exclusions are deliberate and carry written reasons. Deleting todos stays a deli
 
 Users shape the surface further: any non-locked tool can be disabled per user or per project. Four tools are locked on (`LOCKED_TOOL_NAMES`, `factories/agent/agent-tool-factory.ts:85-90`): `get_workspace_context`, `load_skill`, `list_tool_preferences`, `set_tool_enabled`. Without the first two the agent loses its grounding; without the preference pair it could disable its own way back from a deselection.
 
-The same definitions drive the MCP server (`src/lib/server/factories/agent/mcp-tool-factory.ts`), one capability surface serving two protocols. The user's tool selection is applied in exactly one place (`AgentTools.definitions()`), so a deselected tool vanishes from the in-app agent, from `search_tools` ranking, from `use_tool` dispatch, and from MCP at once.
+The same definitions drive the MCP server (`src/lib/server/factories/agent/mcp-tool-factory.ts`), one capability surface serving two protocols. The user's tool selection is applied in exactly one place (`AgentTools.definitions()`), so a deselected tool vanishes from the in-app agent, from `search_tools` ranking, and from MCP promotion at once.
 
 The second principle follows from the classifications: **agents propose, users accept.** `proposal` tools (`extract_promises`, `propose_memory_change`, `generate_mermaid_diagram`, …) produce reviewable suggestions rather than edits. `mutation` tools run directly in `auto_accept` mode but require per-call approval in `approval_required` mode (`needsApproval`, `factories/agent/agent-tool-factory.ts:510`).
 
 ## The tool catalog
 
-The in-app agent gets a context-reducing surface. Nine first-class tools are registered directly (`FIRST_CLASS_TOOL_NAMES`, `factories/agent/agent-tool-factory.ts:63-73`): `search`, `search_note`, `list_user_memory`, `list_project_memory`, `get_workspace_context`, `get_note`, `list_todos`, `load_skill`, `propose_memory_change`. Everything else (the long tail of note, todo, project, skill, diagram, suggestion, and settings operations) stays out of the prompt until discovered: `search_tools` runs semantic retrieval over the catalog and returns exact names with input schemas, and `use_tool` dispatches by exact name. An unknown name returns a recoverable error with near-name suggestions instead of failing the turn. `search_note` is first-class because injected prompt text names it: an attached context note over `CONTEXT_NOTE_TOKEN_LIMIT` (4,000 tokens by default) is not included in the user message; the model gets a pointer to call `search_note` with that noteId instead.
+The in-app agent gets a context-reducing surface. Frequently used grounding and editing tools are registered directly, including `ls`, `grep`, and read-only `sed`. Everything else stays out of the prompt until `search_tools` returns its exact name and input schema; the harness then promotes that real, flat-schema tool for the next generation. Large notes, attachments, diagram sources, published note versions, and persisted tool results are addressed as virtual files rather than repeated inside tool results or replay.
 
 <Mermaid
 	source={`
 flowchart LR
 	prompt["Prompt"] --> direct["First-class tools registered directly"]
 	prompt --> discover["search_tools: semantic retrieval over the catalog"]
-	discover --> dispatch["use_tool: dispatch by exact name"]
+	discover --> dispatch["promote exact tool and schema"]
 	direct --> ctrl["Controller method"]
 	dispatch --> ctrl
 `}
@@ -40,7 +40,7 @@ Because the catalog is controller-backed, tool calls go through the same busines
 
 ## MCP: the same catalog, a second protocol
 
-`createMcpToolSurface` (`src/lib/server/factories/agent/mcp-tool-factory.ts:80`) exposes this exact tool catalog to any MCP client (Claude Desktop, Cursor, or a custom integration) over one stateless JSON-RPC endpoint, `POST /mcp` (`src/routes/mcp/+server.ts`). It registers the same nine first-class tools directly and the same `search_tools`/`use_tool` pair for everything else, so an external client discovers and calls tools identically to the in-app agent. There is exactly one place a tool gets classified or filtered (`AgentTools.definitions()`), so a tool disabled in Settings disappears from MCP, `search_tools` ranking, and the in-app chat at the same time.
+`createMcpToolSurface` exposes this catalog over `POST /mcp`. It registers the same first-class tools directly. `search_tools` dynamically registers each returned long-tail definition as a real top-level MCP tool and emits `tools/list_changed`; the client then calls that exact name with flat arguments. There is no `use_tool` envelope.
 
 Authentication is deliberately separate from user sign-in. MCP requests carry a Bearer token (`Authorization: Bearer ftm_...`), verified by `AccessTokens.verify` (`src/lib/server/services/identity/api-tokens.ts`) against a SHA-256 hash, never the plaintext, which exists only in the return value of the mint call. A token carries a scope, `read` or `full`: `read` restricts `permitted` tools to the `read` classification (`factories/agent/mcp-tool-factory.ts:102`), so a read-scoped client can search and list but never propose or mutate anything. Tokens are minted only through the Settings UI (`Settings → MCP access`), never programmatically, and a missing or invalid token gets a `401` with `www-authenticate: Bearer realm="followthrough"`.
 

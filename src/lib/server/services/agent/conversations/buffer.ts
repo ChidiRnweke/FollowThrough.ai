@@ -3,6 +3,14 @@ import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 
+export interface ReplayVirtualizer {
+	virtualize(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		item: Readonly<Record<string, unknown>>
+	): Promise<Readonly<Record<string, unknown>>>;
+}
+
 /**
  * An attached image is worth its tokens on the turn it arrives, when the model
  * is being asked about it. Persisting the data URL makes every later turn of
@@ -92,7 +100,8 @@ export class ConversationBuffer implements Session {
 	constructor(
 		private readonly repository: AgentSessionRepository,
 		private readonly actor: ActorContext,
-		private readonly conversationId: ConversationId
+		private readonly conversationId: ConversationId,
+		private readonly virtualizer: ReplayVirtualizer
 	) {}
 
 	async getSessionId(): Promise<string> {
@@ -126,8 +135,14 @@ export class ConversationBuffer implements Session {
 	}
 
 	async snapshot(): Promise<readonly Readonly<Record<string, unknown>>[]> {
-		return (await this.load()).map((item) =>
-			withoutInlineImages({ ...(item as Record<string, unknown>) })
+		return Promise.all(
+			(await this.load()).map((item) =>
+				this.virtualizer.virtualize(
+					this.actor,
+					this.conversationId,
+					withoutInlineImages({ ...(item as Record<string, unknown>) })
+				)
+			)
 		);
 	}
 

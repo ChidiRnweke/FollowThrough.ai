@@ -5,6 +5,7 @@ import type { SkillView } from '$lib/models/skills';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { User } from '$lib/models/identity';
+import type { AgentFileMetadata } from '$lib/models/agent-files';
 
 /**
  * Agent-facing projections of domain models.
@@ -145,8 +146,8 @@ export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection 
 export interface NoteViewProjection {
 	readonly noteId: string;
 	readonly title: string;
-	/** The note body as Markdown — the string edit_note patches and save_note replaces. */
-	readonly markdown: string;
+	/** The authoritative Markdown is a file, not an unbounded tool-result field. */
+	readonly body: { readonly kind: 'file'; readonly file: AgentFileMetadata };
 	/** Kept because publish_note requires the base ETag. */
 	readonly etag: string;
 	backlinks: NoteView['backlinks'];
@@ -157,16 +158,16 @@ export interface NoteViewProjection {
 }
 
 /**
- * The agent's read surface for a note. The body is the same Markdown the write
- * tools anchor against; the ProseMirror `document` and the redundant
+ * The agent's read surface for a note. Its body points at the same Markdown the
+ * write tools anchor against; the ProseMirror `document` and the redundant
  * `plainText` are storage formats the model never uses, so they stay off the
  * wire. Constructed explicitly (see {@link projectNoteSummary}) so the
  * declared shape is true on the wire.
  */
-export const projectNoteView = (view: NoteView, markdown: string): NoteViewProjection => ({
+export const projectNoteView = (view: NoteView, file: AgentFileMetadata): NoteViewProjection => ({
 	noteId: view.note.id,
 	title: view.note.title,
-	markdown,
+	body: { kind: 'file', file },
 	etag: view.etag,
 	backlinks: view.backlinks,
 	references: view.references,

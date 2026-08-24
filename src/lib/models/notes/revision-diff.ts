@@ -65,7 +65,7 @@ export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText)
 	}
 	const truncatedPatch = [
 		...lines.slice(0, REVISION_DIFF_LINE_LIMIT),
-		'... diff truncated; use read_note_version for full content'
+		'... diff truncated; use ls on the note versions directory, then sed the required version file'
 	].join('\n');
 	return { patch: titleLine + truncatedPatch, addedLines, removedLines, truncated: true };
 }

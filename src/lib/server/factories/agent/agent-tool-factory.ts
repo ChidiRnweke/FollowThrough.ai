@@ -2,6 +2,7 @@
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
+import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
 import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
@@ -57,6 +58,7 @@ import {
 	TOOL_CATALOG,
 	toolDescription
 } from '$lib/models/agent/tool-catalog';
+import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
 
 export { FIRST_CLASS_TOOL_NAMES };
 
@@ -93,6 +95,7 @@ export type AgentToolClassification =
 type Coverage<T> = { readonly [Method in keyof T]: AgentToolClassification };
 
 export interface AgentToolCoverage {
+	readonly agentFiles: Coverage<AgentFilesController>;
 	readonly workspace: Coverage<WorkspaceController>;
 	readonly projects: Coverage<ProjectsController>;
 	readonly notes: Coverage<NotesController>;
@@ -121,6 +124,11 @@ const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
 
 export const agentToolCoverage = {
+	agentFiles: {
+		ls: { kind: 'read' },
+		grep: { kind: 'read' },
+		sed: { kind: 'read' }
+	},
 	workspace: { getShellContext: { kind: 'read' }, getTodayView: { kind: 'read' } },
 	projects: {
 		list: { kind: 'read' },
@@ -169,7 +177,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Diff rendering detail; the agent reads note content with get_note.'
 		},
-		readRevision: { kind: 'read' },
+		readRevision: {
+			kind: 'excluded',
+			reason: 'Published version bodies are mounted under the note versions directory for sed.'
+		},
 		compareRevisions: { kind: 'read' },
 		restoreRevision: { kind: 'mutation' },
 		setSectionNumbering: {
@@ -291,8 +302,7 @@ export const agentToolCoverage = {
 		},
 		getProjectDiagram: {
 			kind: 'excluded',
-			reason:
-				'The studio canvas loads its own diagram; the agent reads one through read_project_diagram, which does not hand back raw draw.io XML.'
+			reason: 'The studio canvas loads its own diagram; agent source is mounted for sed.'
 		},
 		listProjectDiagrams: {
 			kind: 'excluded',
@@ -356,7 +366,10 @@ export const agentToolCoverage = {
 		},
 		retry: { kind: 'excluded', reason: 'Attachment processing is managed by the user.' },
 		removeById: { kind: 'excluded', reason: 'Project attachments are managed by the user.' },
-		read: { kind: 'read' },
+		read: {
+			kind: 'excluded',
+			reason: 'Extracted attachment text is mounted under the project attachments directory.'
+		},
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	deliverables: {
@@ -857,6 +870,51 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 	const define = defineTool;
 	const retrieval = (): Definition[] => [
 		define(
+			'ls',
+			toolDescription('ls'),
+			'read',
+			z.object({ path: z.string().min(1).optional() }),
+			(input) => factory.agentFiles().ls(actor, input.path)
+		),
+		define(
+			'grep',
+			toolDescription('grep'),
+			'read',
+			z.object({
+				pattern: z.string(),
+				path: z.string().min(1),
+				fixed: z.boolean().optional(),
+				ignoreCase: z.boolean().optional()
+			}),
+			(input) =>
+				factory.agentFiles().grep(actor, {
+					pattern: input.pattern,
+					path: input.path,
+					fixed: input.fixed ?? false,
+					ignoreCase: input.ignoreCase ?? false
+				})
+		),
+		define(
+			'sed',
+			toolDescription('sed'),
+			'read',
+			z.object({
+				path: z.string().min(1),
+				range: z.discriminatedUnion('kind', [
+					z.object({
+						kind: z.literal('lines'),
+						startLine: z.number().int().positive(),
+						endLine: z.number().int().positive()
+					}),
+					z.object({
+						kind: z.literal('to_end'),
+						startLine: z.number().int().positive()
+					})
+				])
+			}),
+			(input) => factory.agentFiles().sed(actor, input.path, input.range)
+		),
+		define(
 			'search',
 			toolDescription('search'),
 			'read',
@@ -967,11 +1025,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			z.object({ noteId: noteId }),
 			async (input) => {
 				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-				// The read and write surfaces must share one representation: the Markdown
-				// string edit_note patches and save_note replaces, produced by the same
-				// serializer the patch anchors against. ProseMirror JSON is the storage
-				// format and the model never needs it, so it stays off the wire.
-				return projectNoteView(view, noteMarkdownFromContent(view.note.document));
+				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
+				const markdown = noteMarkdownFromContent(view.note.document);
+				return projectNoteView(view, agentFileOf(path, 'text/markdown', markdown).metadata);
 			}
 		),
 		define(
@@ -1093,13 +1149,6 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'read',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().listRevisions(actor, input)
-		),
-		define(
-			'read_note_version',
-			toolDescription('read_note_version'),
-			'read',
-			z.object({ noteId: noteId, revisionId: noteRevisionId }),
-			(input) => factory.notes().readRevision(actor, input)
 		),
 		define(
 			'diff_note_versions',
@@ -1236,8 +1285,17 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'read_project_diagram',
 			toolDescription('read_project_diagram'),
 			'read',
-			z.object({ diagramId: diagramId, includeSource: z.boolean().optional() }),
-			(input) => factory.diagramStudio().readProjectDiagram(actor, input)
+			z.object({ diagramId: diagramId }),
+			async (input) => {
+				const diagram = await factory.diagramStudio().readProjectDiagram(actor, input);
+				return {
+					id: diagram.id,
+					kind: diagram.kind,
+					...(diagram.title ? { title: diagram.title } : {}),
+					labels: diagram.labels,
+					path: `/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`
+				};
+			}
 		),
 		define(
 			'promote_diagram',
@@ -1415,21 +1473,6 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'read',
 			temporal({ noteId: noteId }),
 			(input) => factory.attachments().list(actor, input.noteId as NoteId)
-		),
-		define(
-			'read_attachment',
-			toolDescription('read_attachment'),
-			'read',
-			z.object({
-				noteId: noteId,
-				path: z.string().min(1).max(512),
-				offset: z.number().int().nonnegative().optional(),
-				limit: z.number().int().positive().max(20_000).optional()
-			}),
-			(input) =>
-				factory
-					.attachments()
-					.read(actor, input.noteId as NoteId, input.path, input.offset, input.limit)
 		)
 	];
 	const memoryAndPreferences = (): Definition[] => [

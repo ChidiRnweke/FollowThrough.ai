@@ -31,6 +31,7 @@ import { createDeliverablesCapability } from './factories/capabilities/deliverab
 import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
 import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
 import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
+import { createAgentFilesCapability } from './factories/capabilities/agent-files-capability-factory';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -184,6 +185,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		linkFinder
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
+	const agentFilesCapability = createAgentFilesCapability({
+		db,
+		projects: projectRepository,
+		notes: noteRepository
+	});
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
@@ -200,6 +206,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects,
 		memory,
 		provenance,
+		files: agentFilesCapability.repository,
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
@@ -301,6 +308,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	});
 	const drawioReview = diagramCapability.review;
 	const dependencies: ProductionControllerDependencies = {
+		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
 			todoLister: todos,
 			todoViewAssembler: todos,

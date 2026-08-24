@@ -244,6 +244,9 @@ describe('Agent tool coverage invariants', () => {
 			retriever
 		).agentTools();
 		expect(await enabledToolNames(selected)).toEqual([
+			'ls',
+			'grep',
+			'sed',
 			'search',
 			'search_note',
 			'list_user_memory',
@@ -318,7 +321,13 @@ describe('Agent tool coverage invariants', () => {
 		const conversationId = testConversationId(7);
 		const diagramStudio = capabilityDependencies<DiagramStudioController>({
 			readCanvasDiagram: async (_actor, input) =>
-				input.conversationId === conversationId ? { source: '<mxfile />', title: 'Current' } : {}
+				input.conversationId === conversationId
+					? { kind: 'present', source: '<mxfile />', title: 'Current' }
+					: {
+							kind: 'empty',
+							message: 'Empty',
+							nextActions: [{ tool: 'present_diagram', reason: 'Create one' }]
+						}
 		});
 		const factory = capabilityDependencies<ControllerFactory>({
 			diagramStudio: () => diagramStudio
@@ -330,7 +339,11 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'read_canvas_diagram');
-		expect(await tool?.execute({})).toEqual({ source: '<mxfile />', title: 'Current' });
+		expect(await tool?.execute({})).toEqual({
+			kind: 'present',
+			source: '<mxfile />',
+			title: 'Current'
+		});
 	});
 
 	it('returns exact long-tail schemas from tool search', async () => {
@@ -484,7 +497,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(getNote?.parameters.shape ?? {}).sort()).toEqual(['noteId']);
 	});
 
-	it('returns the note body as Markdown, not ProseMirror, by default', () => {
+	it('returns the note body as a virtual Markdown file descriptor', () => {
 		const note = noteBuilder({
 			id: crypto.randomUUID() as never,
 			document: {
@@ -516,7 +529,16 @@ describe('Agent tool coverage invariants', () => {
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note),
-			markdown: expect.stringContaining('Hello world.')
+			body: {
+				kind: 'file',
+				file: {
+					path: `/projects/${note.projectId}/notes/${note.id}.md`,
+					mediaType: 'text/markdown',
+					byteSize: expect.any(Number),
+					lineCount: expect.any(Number),
+					tokenCount: expect.any(Number)
+				}
+			}
 		});
 	});
 
@@ -1358,7 +1380,11 @@ describe('Agent tool coverage invariants', () => {
 		} as unknown as ControllerFactory;
 		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Find references', selection: authoritativeSelection },
+			input: {
+				conversationId: testConversationId(),
+				prompt: 'Find references',
+				selection: authoritativeSelection
+			},
 			model: 'anthropic/claude-sonnet-4.5'
 		})
 			.tools()
@@ -1532,7 +1558,11 @@ describe('Deselected tools', () => {
 			{} as ControllerFactory,
 			testActor(),
 			'auto_accept',
-			{ provenanceId: testProvenanceId(), input: { conversationId: testConversationId(), prompt: 'Help' }, model: 'openai/gpt-5.6' },
+			{
+				provenanceId: testProvenanceId(),
+				input: { conversationId: testConversationId(), prompt: 'Help' },
+				model: 'openai/gpt-5.6'
+			},
 			undefined,
 			undefined,
 			policy

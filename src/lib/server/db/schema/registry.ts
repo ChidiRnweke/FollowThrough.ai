@@ -437,7 +437,9 @@ export const diagramRevisions = pgTable(
 	'diagram_revisions',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
-		diagramId: uuid('diagram_id').notNull().references(() => diagrams.id, { onDelete: 'cascade' }),
+		diagramId: uuid('diagram_id')
+			.notNull()
+			.references(() => diagrams.id, { onDelete: 'cascade' }),
 		revision: integer('revision').notNull(),
 		title: text('title'),
 		source: text('source').notNull(),
@@ -882,6 +884,33 @@ export const agentSessionItems = pgTable(
 	(table) => [
 		uniqueIndex('agent_session_items_position_unique').on(table.conversationId, table.position),
 		index('agent_session_items_conversation_idx').on(table.conversationId, table.position)
+	]
+);
+
+/** Large tool arguments/results removed from provider replay but still available through ls/grep/sed. */
+export const agentFiles = pgTable(
+	'agent_files',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		conversationId: uuid('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		path: text('path').notNull(),
+		mediaType: text('media_type').notNull(),
+		content: text('content').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		tokenCount: integer('token_count').notNull(),
+		lineCount: integer('line_count').notNull(),
+		checksumSha256: text('checksum_sha256').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('agent_files_conversation_path_unique').on(table.conversationId, table.path),
+		index('agent_files_user_path_idx').on(table.userId, table.path)
 	]
 );
 

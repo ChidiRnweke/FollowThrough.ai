@@ -382,14 +382,25 @@ export interface ReadCanvasDiagramInput {
 	readonly conversationId: ConversationId;
 }
 
-/** Undefined `source` means the conversation has not drawn anything yet. */
-export interface ReadCanvasDiagramOutput {
-	readonly title?: string;
-	/** Uncompressed draw.io XML; the canvas holds nothing else. */
-	readonly source?: string;
-	/** The saved diagram this canvas draft revises, when it names a real row. */
-	readonly diagramId?: DiagramId;
-}
+export type ReadCanvasDiagramOutput =
+	| {
+			readonly kind: 'present';
+			readonly title?: string;
+			/** Uncompressed draw.io XML; the canvas holds nothing else. */
+			readonly source: string;
+			/** The saved diagram this canvas draft revises, when it names a real row. */
+			readonly diagramId?: DiagramId;
+	  }
+	| {
+			readonly kind: 'empty';
+			readonly message: string;
+			readonly nextActions: readonly [
+				{
+					readonly tool: 'present_diagram';
+					readonly reason: string;
+				}
+			];
+	  };
 
 export interface SearchDiagramIconsInput {
 	/**
@@ -406,24 +417,15 @@ export interface SearchDiagramIconsOutput {
 
 export interface ReadProjectDiagramInput {
 	readonly diagramId: DiagramId;
-	/**
-	 * Ask for draw.io's XML as well as its labels.
-	 *
-	 * Off by default, and it should stay off: draw.io source is thousands of
-	 * tokens of markup that tells a model nothing about the diagram. The one time
-	 * it earns its place is immediately before revising that diagram, because a
-	 * revision has to be written against the real thing.
-	 */
-	readonly includeSource?: boolean;
 }
 
-/** A saved diagram as the agent sees it: draw.io XML only when it asked for it. */
+/** A saved diagram as the agent sees it; source is read through its virtual file. */
 export interface ReadProjectDiagramOutput {
 	readonly id: DiagramId;
+	readonly projectId: ProjectId;
 	readonly kind: DiagramKind;
 	readonly title?: string;
 	readonly labels: string;
-	readonly source?: string;
 }
 
 export interface SaveProjectDrawioInput {

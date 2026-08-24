@@ -40,5 +40,3 @@ We will keep this design while the tool catalog is large enough to compete with 
 - `FIRST_CLASS_TOOL_NAMES` defines the small direct tool set.
 - `search_tools` retrieves other tool definitions and promotes their real schemas.
 - Tool-search tests check discovery and direct calls.
-- Agent subsystem docs still mention the removed `use_tool` wrapper and are tracked as stale in the
-  suspicious-code ledger.

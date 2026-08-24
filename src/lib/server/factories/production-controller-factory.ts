@@ -1,4 +1,5 @@
 import { Agent, type AgentDependencies } from '../controllers/agent/controller';
+import { AgentFiles, type AgentFilesDependencies } from '../controllers/agent-files/controller';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -49,6 +50,7 @@ import type { ControllerFactory } from './controller-factory';
 import { instrumentedController } from '../controllers/instrumentation';
 
 export interface ProductionControllerDependencies {
+	agentFiles: AgentFilesDependencies;
 	workspace: WorkspaceDependencies;
 	projects: ProjectsDependencies;
 	notes: NotesDependencies;
@@ -77,6 +79,9 @@ export class ProductionControllerFactory implements ControllerFactory {
 	constructor(private readonly dependencies: ProductionControllerDependencies) {}
 	// Every controller is wrapped at construction: one `domain.method` span plus
 	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
+	agentFiles() {
+		return instrumentedController('agentFiles', new AgentFiles(this.dependencies.agentFiles));
+	}
 	workspace() {
 		return instrumentedController('workspace', new Workspace(this.dependencies.workspace));
 	}

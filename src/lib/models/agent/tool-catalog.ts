@@ -21,6 +21,9 @@
  * cheaper price than losing the user's edit.
  */
 export const FIRST_CLASS_TOOL_NAMES = [
+	'ls',
+	'grep',
+	'sed',
 	'search',
 	'search_note',
 	'list_user_memory',
@@ -57,6 +60,24 @@ export interface ToolCatalogEntry {
 
 /** Every tool defined by AgentTools.buildDefinitions(), first-class included. */
 export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
+	{
+		name: 'ls',
+		classification: 'read',
+		description:
+			'List a virtual directory or inspect one virtual file. Defaults to ".". File entries always include byte, token, and line counts, media type, checksum, and stable id so you can choose a precise grep or sed read.'
+	},
+	{
+		name: 'grep',
+		classification: 'read',
+		description:
+			'Search a virtual file or directory recursively. Pattern uses safe RE2 regular-expression syntax by default; set fixed for literal text and ignoreCase for case-insensitive matching. Returns Unix-like exitCode 0 for matches and 1 for a valid search with no matches.'
+	},
+	{
+		name: 'sed',
+		classification: 'read',
+		description:
+			'Read an explicit inclusive line range from one virtual file. Use range kind "lines" with startLine/endLine or "to_end" with startLine. This tool is read-only and never clamps an invalid starting line or guesses a path.'
+	},
 	{
 		name: 'search',
 		classification: 'read',
@@ -118,7 +139,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		name: 'get_note',
 		classification: 'read',
 		description:
-			'Read a note with backlinks, references, diagrams, todos, and proposals. The note body is returned as Markdown, which is the text edit_note anchors against and save_note replaces. Call this before your first edit_note or save_note on a note each turn.'
+			'Read a note with backlinks, references, diagrams, todos, proposals, and the authoritative Markdown file descriptor. Call this before your first edit_note or save_note, then use sed or grep on body.file.path; that exact text is what edits anchor against.'
 	},
 	{
 		name: 'create_note',
@@ -138,7 +159,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		retrievalText:
 			'change one sentence, phrase, typo, line, or section in an existing note and leave the rest unchanged; preserve all unrelated note content',
 		description:
-			'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note on that noteId and copy every oldText verbatim from its returned markdown — do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet of the note\'s Markdown, and every edit must apply or none do. Use this for any change short of a full rewrite. If a call fails with "oldText was not found", re-run get_note and copy the closest text from the error verbatim — never retry the same oldText. If it fails a second time, stop and report exactly which anchor could not be matched: do not fall back to save_note, which would replace the whole body and discard the sections you were told to leave alone. Skill bodies are edited with edit_skill or save_skill, not this tool.'
+			'Mutating tool. Before the first edit to a note in any turn, you MUST call get_note, then sed or grep its body.file.path and copy every oldText verbatim from that authoritative Markdown. Do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet, and every edit must apply or none do. If an anchor is not found, re-read the file; never retry the same oldText or fall back to save_note.'
 	},
 	{
 		name: 'rename_note',
@@ -182,13 +203,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		name: 'diff_note_versions',
 		classification: 'read',
 		description:
-			"Show what changed between a note's published version and another version (the current published one by default) as a compact unified diff, reading from the baseline to the requested version — i.e. the change restoring it would apply. Prefer this over read_note_version to inspect history without loading full content."
-	},
-	{
-		name: 'read_note_version',
-		classification: 'read',
-		description:
-			'Read the full plain text of one published version of a note. Use only when diff_note_versions is not enough, for example to check the exact wording before restore_note_version.'
+			"Show what changed between a note's published version and another version (the current published one by default) as a compact unified diff. Full version bodies are files under the note's versions directory; use ls then sed when the diff is insufficient."
 	},
 	{
 		name: 'restore_note_version',
@@ -349,12 +364,6 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		description: 'List the immutable resources attached to a note or skill bundle.'
 	},
 	{
-		name: 'read_attachment',
-		classification: 'read',
-		description:
-			'Read a bounded chunk from a safely parsed text or PDF attachment. Scripts are returned as text and never executed.'
-	},
-	{
 		name: 'list_project_memory',
 		classification: 'read',
 		description:
@@ -430,7 +439,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		classification: 'read',
 		surface: 'app',
 		description:
-			'Show a revised version of an existing saved draw.io diagram on the studio canvas. First call read_project_diagram with includeSource, then pass that exact returned diagramId with the revised mxfile XML. The server verifies the target before the canvas can offer to replace it.',
+			'Show a revised version of an existing saved draw.io diagram on the studio canvas. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. The server verifies the target before the canvas can offer to replace it.',
 		retrievalText: 'show a verified revision of an existing saved diagram on the canvas'
 	},
 	{
@@ -454,7 +463,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		name: 'read_project_diagram',
 		classification: 'read',
 		description:
-			'Read a saved project diagram: its title, kind, and the labels it contains. Pass includeSource only when you are about to revise a draw.io diagram and need its XML — otherwise it is thousands of tokens of markup that says nothing.',
+			'Read a saved project diagram metadata, labels, and its exact virtual file path. Use sed on that path only when you need the Mermaid or draw.io source.',
 		retrievalText: 'inspect read an existing saved diagram in this project'
 	},
 	{

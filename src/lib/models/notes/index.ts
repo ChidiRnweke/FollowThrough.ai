@@ -627,8 +627,8 @@ export interface ReadNoteRevisionInput {
 }
 
 /**
- * One revision's plain text. Deliberately without the ProseMirror document:
- * the agent's `read_note_version` tool needs the words, not the editor JSON.
+ * One revision's plain text. Deliberately without the ProseMirror document;
+ * agent reads mount the Markdown revision in the virtual file tree.
  */
 export interface ReadNoteRevisionOutput {
 	readonly revision: number;
