@@ -49,6 +49,16 @@ describe('IndexedDB workspace storage', () => {
 		expect(stored).toEqual(original);
 	});
 
+	it('round-trips a workspace record that arrives as reactive state', async () => {
+		const { repository } = setup();
+		const original = record();
+		const reactive = $state(original);
+		await repository.put(reactive);
+		const stored = await repository.get();
+		repository.close();
+		expect(stored).toEqual(original);
+	});
+
 	it('returns undefined when no record has been written', async () => {
 		const { repository } = setup();
 		const stored = await repository.get();

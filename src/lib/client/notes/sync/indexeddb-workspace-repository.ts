@@ -40,6 +40,18 @@ export interface WorkspaceRecord {
 const STORE_NAME = 'workspace';
 const RECORD_KEY = 'current';
 
+/**
+ * IndexedDB structured-clones values at `put`. Workbench arrays originate in
+ * Svelte `$state`, whose proxies are not cloneable; copying the three arrays is
+ * the complete protocol adaptation because every member is a primitive tab id.
+ */
+const storedRecord = (record: WorkspaceRecord): WorkspaceRecord => ({
+	...record,
+	openTabs: [...record.openTabs],
+	pinnedTabs: [...record.pinnedTabs],
+	recentlyUsed: [...record.recentlyUsed]
+});
+
 const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
 	new Promise((resolve, reject) => {
 		request.onsuccess = () => resolve(request.result);
@@ -73,7 +85,7 @@ export class IndexedDbWorkspaceRepository {
 	async put(record: WorkspaceRecord): Promise<void> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readwrite');
-		transaction.objectStore(STORE_NAME).put(record);
+		transaction.objectStore(STORE_NAME).put(storedRecord(record));
 		await transactionDone(transaction);
 	}
 
