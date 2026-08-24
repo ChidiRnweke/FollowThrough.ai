@@ -245,16 +245,22 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'extract_promises',
 		classification: 'proposal',
+		retrievalText:
+			'selected highlighted passage with implied commitments obligations promises or action items; propose todos for review',
 		description: 'Propose todos from a text selection without bypassing review.'
 	},
 	{
 		name: 'relate_selection',
 		classification: 'proposal',
+		retrievalText:
+			'selected highlighted passage; find related internal notes connections or backlinks and propose relationships for review',
 		description: 'Propose relationships for a text selection.'
 	},
 	{
 		name: 'find_references',
 		classification: 'proposal',
+		retrievalText:
+			'substantiate or verify a selected highlighted claim with external sources citations references or web evidence; propose ranked references for review',
 		description: 'Propose ranked references for a text selection.'
 	},
 	{

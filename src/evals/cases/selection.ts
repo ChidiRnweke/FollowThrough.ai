@@ -19,6 +19,22 @@ const implicitCommitmentWorkspace = {
 	]
 };
 
+const architectureProject = architectureWorkspace.projects[0]!;
+const relatedArchitectureWorkspace = {
+	projects: [
+		{
+			...architectureProject,
+			notes: [
+				...architectureProject.notes,
+				{
+					title: 'Payment integration decision',
+					body: 'Decision: the Checkout API sends card authorisation requests to the Payment Gateway and waits for the gateway result before writing to the ledger.'
+				}
+			]
+		}
+	]
+};
+
 /**
  * Selection cases prove the agent dispatches selection-scoped tools when text
  * is highlighted, and falls back to note-level tools when no selection exists.
@@ -138,17 +154,18 @@ export const selectionCases: readonly EvalCase[] = [
 		name: 'proposes related notes when the user asks what else speaks to a passage',
 		splits: [ARCHETYPES.selectionHandling, ARCHETYPES.toolDiscovery, 'ambiguity'],
 		input: {
-			prompt: 'What else in my notes speaks to this?',
+			prompt:
+				'This feels like it belongs with something I wrote before. Surface the real connection for me to review.',
 			selectionText:
 				'The Checkout API calls the Payment Gateway to authorise the card, and waits for the authorisation result.'
 		},
 		expected: { tool: 'relate_selection', suggestionKind: 'backlink' },
 		metadata: {
 			layer: 'agent',
-			note: '"What else" means workspace-note relationships, not external evidence.'
+			note: 'Indirect curation language asks for a reviewable internal relationship, not external evidence or a chat-only search summary.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, architectureWorkspace);
+			const workspace = await seedWorkspace(lab, relatedArchitectureWorkspace);
 			const noteId = workspace.noteIds.get('Checkout architecture');
 			if (!noteId) throw new Error('Checkout architecture note was not seeded');
 			const result = await runCase(lab, workspace.actor, {
@@ -195,7 +212,7 @@ export const selectionCases: readonly EvalCase[] = [
 			selectionText:
 				'The Checkout API calls the Payment Gateway to authorise the card, and waits for the authorisation result.'
 		},
-		expected: { forbiddenTools: ['extract_promises'] },
+		expected: { forbiddenSuggestionKind: 'todo' },
 		metadata: {
 			layer: 'agent',
 			note: 'Negative twin: architecture behavior is not a human commitment.'
@@ -215,9 +232,8 @@ export const selectionCases: readonly EvalCase[] = [
 					this.input.selectionText as string
 				)
 			});
-			const verdict = scoreToolCalling(result, {
-				forbidden: this.expected.forbiddenTools as string[]
-			});
+			const queued = await expectSuggestionPending(lab, workspace.actor, 'todo');
+			const avoidedFalseProposal = !queued.passed;
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
@@ -225,11 +241,13 @@ export const selectionCases: readonly EvalCase[] = [
 			});
 			px.logAnnotation({
 				name: ARCHETYPES.selectionHandling,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'no_false_commitment' : 'false_commitment',
-				explanation: verdict.explanation
+				score: avoidedFalseProposal ? 1 : 0,
+				label: avoidedFalseProposal ? 'no_false_commitment' : 'false_commitment',
+				explanation: avoidedFalseProposal
+					? 'no todo suggestion was persisted from descriptive system behavior'
+					: queued.explanation
 			});
-			expect({ status: result.status, avoidedFalseProposal: verdict.passed }).toEqual({
+			expect({ status: result.status, avoidedFalseProposal }).toEqual({
 				status: 'completed',
 				avoidedFalseProposal: true
 			});

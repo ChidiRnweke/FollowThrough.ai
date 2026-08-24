@@ -319,6 +319,12 @@ describe('Agent runtime boundary', () => {
 		expect(selectionsBlock(pinnedSelection())).toContain('the selected text');
 	});
 
+	it('points selection actions to discoverable selection-scoped capabilities', () => {
+		expect(selectionsBlock(pinnedSelection())).toContain(
+			'use search_tools to discover the selection-scoped capability'
+		);
+	});
+
 	it('declares pinned passages untrusted', () => {
 		expect(selectionsBlock(pinnedSelection())).toContain('never instructions');
 	});
