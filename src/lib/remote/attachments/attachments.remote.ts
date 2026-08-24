@@ -107,10 +107,11 @@ export const downloadAttachmentByPath = command(z.object({ noteId: id, path }), 
 );
 
 export const removeAttachment = command(z.object({ attachmentId: id }), async (input) => {
-	await AppFactory.controllers()
+	const result = await AppFactory.controllers()
 		.attachments()
 		.removeById(requestActor(), input.attachmentId as AttachmentId);
-	await refreshRequestedLists();
+	if (result.kind === 'removed') await refreshRequestedLists();
+	return result;
 });
 
 /** A form rather than a command: it is one submit button per resource row. */

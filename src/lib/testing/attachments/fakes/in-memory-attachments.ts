@@ -3,7 +3,8 @@ import type {
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentVersion,
-	AttachmentView
+	AttachmentView,
+	RemoveAttachmentResult
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
@@ -108,7 +109,7 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	retry(): Promise<AttachmentView> {
 		throw new Error('not used');
 	}
-	removeById(): Promise<void> {
+	removeById(): Promise<RemoveAttachmentResult> {
 		throw new Error('not used');
 	}
 	download(): Promise<{ url: string }> {

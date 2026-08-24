@@ -74,6 +74,7 @@ const view = (mediaType: string, path = 'doc.pdf'): AttachmentView => ({
 class StubAttachmentRepository implements AttachmentRepository {
 	readonly updates: AttachmentVersion[] = [];
 	readonly removed: string[] = [];
+	found?: AttachmentView;
 	/** Set by the tests that drive `complete()`; the rest never look one up. */
 	upload?: AttachmentUpload;
 
@@ -106,8 +107,8 @@ class StubAttachmentRepository implements AttachmentRepository {
 	listForTodo(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
 	}
-	findById(): Promise<AttachmentView | undefined> {
-		throw new Error('not used');
+	async findById(): Promise<AttachmentView | undefined> {
+		return this.found;
 	}
 	async findByPath(): Promise<AttachmentView | undefined> {
 		return undefined;
@@ -121,9 +122,10 @@ class StubAttachmentRepository implements AttachmentRepository {
 	}
 	async remove(_actor: ActorContext, _noteId: NoteId, path: string): Promise<void> {
 		this.removed.push(path);
+		this.found = undefined;
 	}
-	removeById(): Promise<void> {
-		throw new Error('not used');
+	async removeById(): Promise<void> {
+		this.found = undefined;
 	}
 	async updateVersion(_actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView> {
 		this.updates.push(version);
@@ -135,6 +137,7 @@ class StubAttachmentRepository implements AttachmentRepository {
 }
 
 class StubStorage implements IAttachmentStorage {
+	readonly objects = new Set(['objects/doc']);
 	createUploadUrl(): Promise<string> {
 		throw new Error('not used');
 	}
@@ -151,8 +154,8 @@ class StubStorage implements IAttachmentStorage {
 		return new Uint8Array([1, 2, 3]);
 	}
 	async promote(): Promise<void> {}
-	remove(): Promise<void> {
-		throw new Error('not used');
+	async remove(objectKey: string): Promise<void> {
+		this.objects.delete(objectKey);
 	}
 }
 
@@ -193,6 +196,7 @@ interface Harness {
 	textParser: StubTextParser;
 	ocr: StubDocumentOcr;
 	describer: StubImageDescriber;
+	storage: StubStorage;
 }
 
 const setup = (): Harness => {
@@ -201,15 +205,16 @@ const setup = (): Harness => {
 	const textParser = new StubTextParser();
 	const ocr = new StubDocumentOcr();
 	const describer = new StubImageDescriber();
+	const storage = new StubStorage();
 	const service = new AttachmentLibrary(
 		repository,
 		notes,
-		new StubStorage(),
+		storage,
 		new AttachmentParserRegistry([textParser]),
 		ocr,
 		describer
 	);
-	return { service, repository, notes, textParser, ocr, describer };
+	return { service, repository, notes, textParser, ocr, describer, storage };
 };
 
 /** process() is private and fire-and-forget in production; tests drive it directly. */
@@ -264,6 +269,80 @@ describe('attachments and the note document revision', () => {
 		await service.remove(testActor(), note.id, 'pasted-diagram.png');
 
 		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
+	});
+});
+
+describe('removing an attachment without breaking its containing note', () => {
+	const noteAttachment = (noteId: NoteId): AttachmentView => ({
+		...view('image/png', 'architecture.png'),
+		attachment: { ...view('image/png', 'architecture.png').attachment, noteId }
+	});
+
+	it('returns the containing note when its document still embeds the attachment', async () => {
+		const { service, repository, notes } = setup();
+		const note = noteBuilder({
+			title: 'Solution design',
+			document: {
+				type: 'doc',
+				content: [
+					{
+						type: 'image',
+						attrs: { src: `/api/attachments/${ATTACHMENT_ID}/content` }
+					}
+				]
+			}
+		});
+		notes.notes.push(note);
+		repository.found = noteAttachment(note.id);
+
+		const result = await service.removeById(testActor(), ATTACHMENT_ID);
+
+		expect(result).toEqual({
+			kind: 'referenced-by-note',
+			note: { id: note.id, title: 'Solution design' }
+		});
+	});
+
+	it('keeps a referenced attachment downloadable', async () => {
+		const { service, repository, notes } = setup();
+		const note = noteBuilder({
+			document: {
+				type: 'doc',
+				content: [
+					{
+						type: 'image',
+						attrs: { src: `/api/attachments/${ATTACHMENT_ID}/content` }
+					}
+				]
+			}
+		});
+		notes.notes.push(note);
+		repository.found = noteAttachment(note.id);
+		await service.removeById(testActor(), ATTACHMENT_ID);
+
+		expect(await service.downloadById(testActor(), ATTACHMENT_ID)).toEqual({
+			url: 'https://storage.test/presigned'
+		});
+	});
+
+	it('preserves note attachment bytes after the image leaves the current document', async () => {
+		const { service, repository, notes, storage } = setup();
+		const note = noteBuilder();
+		notes.notes.push(note);
+		repository.found = noteAttachment(note.id);
+
+		await service.removeById(testActor(), ATTACHMENT_ID);
+
+		expect(storage.objects.has('objects/doc')).toBe(true);
+	});
+
+	it('deletes project attachment bytes', async () => {
+		const { service, repository, storage } = setup();
+		repository.found = view('image/png');
+
+		await service.removeById(testActor(), ATTACHMENT_ID);
+
+		expect(storage.objects.has('objects/doc')).toBe(false);
 	});
 });
 
@@ -408,6 +487,28 @@ describe('attachment processing image branch', () => {
 		await process(service, view('image/png', 'chart.png'));
 
 		expect(finalUpdate(repository).extractedText).toBe('ocr text');
+	});
+
+	it('marks image processing partial when the description fails', async () => {
+		const { service, repository, describer } = setup();
+		describer.describe = async () => {
+			throw new Error('Vision unavailable');
+		};
+
+		await process(service, view('image/png', 'chart.png'));
+
+		expect(finalUpdate(repository).processingStatus).toBe('partial');
+	});
+
+	it('reports the image-description failure when OCR text survives', async () => {
+		const { service, repository, describer } = setup();
+		describer.describe = async () => {
+			throw new Error('Vision unavailable');
+		};
+
+		await process(service, view('image/png', 'chart.png'));
+
+		expect(finalUpdate(repository).processingFailure).toBe('Vision unavailable');
 	});
 
 	it('resolves the vision model from OPENROUTER_ATTACHMENT_VISION_MODEL', async () => {

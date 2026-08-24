@@ -75,6 +75,14 @@ export interface AttachmentView {
 	readonly version: AttachmentVersion;
 }
 
+/** The only two truthful outcomes of an explicit attachment removal request. */
+export type RemoveAttachmentResult =
+	| { readonly kind: 'removed' }
+	| {
+			readonly kind: 'referenced-by-note';
+			readonly note: { readonly id: NoteId; readonly title: string };
+	  };
+
 export interface InitiateTemplateUploadInput {
 	readonly projectId: ProjectId;
 	readonly name: string;

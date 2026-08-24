@@ -10,6 +10,7 @@
 	import { attachmentStatusStyle, formatBytes } from '../shared/labels';
 	import { toast } from 'svelte-sonner';
 	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
+	import { userFacingMessage } from '$lib/errors';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
 		listAttachments,
@@ -38,7 +39,8 @@
 	} = $props();
 
 	let busy = $state(false);
-	let removeTarget = $state<string | undefined>(undefined);
+	let removeTarget = $state<AttachmentView | undefined>(undefined);
+	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
 	const owner = $derived<{ projectId?: string; noteId?: string }>(
@@ -108,23 +110,31 @@
 		}
 	}
 
-	function askRemove(attachmentId: string): void {
-		removeTarget = attachmentId;
+	function askRemove(item: AttachmentView): void {
+		removeTarget = item;
+		blockedByNote = undefined;
 		removeOpen = true;
 	}
 
 	async function confirmRemove(): Promise<void> {
-		if (removeTarget) await remove(removeTarget);
+		if (!removeTarget) return;
+		const result = await remove(removeTarget.attachment.id);
+		if (!result) return;
+		if (result.kind === 'referenced-by-note') {
+			blockedByNote = result.note;
+			return;
+		}
 		removeOpen = false;
 		removeTarget = undefined;
 	}
 
-	async function remove(attachmentId: string): Promise<void> {
+	async function remove(attachmentId: string) {
 		try {
-			await removeAttachment({ attachmentId }).updates(listAttachments(owner));
+			return await removeAttachment({ attachmentId });
 			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
-		} catch {
-			toast.error('The attachment could not be removed');
+		} catch (error) {
+			toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
+			return undefined;
 		}
 	}
 </script>
@@ -235,7 +245,7 @@
 							Retry
 						</DropdownMenu.Item>
 					{/if}
-					<DropdownMenu.Item variant="destructive" onclick={() => askRemove(item.attachment.id)}>
+					<DropdownMenu.Item variant="destructive" onclick={() => askRemove(item)}>
 						Remove
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
@@ -247,16 +257,29 @@
 <AlertDialog.Root bind:open={removeOpen}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Remove this attachment?</AlertDialog.Title>
-			<AlertDialog.Description>
-				It will no longer be available to this project or its agents.
-			</AlertDialog.Description>
+			{#if blockedByNote}
+				<AlertDialog.Title>Remove the image from “{blockedByNote.title}” first.</AlertDialog.Title>
+				<AlertDialog.Description>
+					This attachment is still embedded in that note. Remove the image there, let the note save,
+					then remove the attachment here.
+				</AlertDialog.Description>
+			{:else}
+				<AlertDialog.Title>Remove this attachment?</AlertDialog.Title>
+				<AlertDialog.Description>
+					It will no longer be available to this project or its agents.
+				</AlertDialog.Description>
+			{/if}
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={() => void confirmRemove()}>
-				Remove
-			</AlertDialog.Action>
+			{#if blockedByNote}
+				<AlertDialog.Cancel>Close</AlertDialog.Cancel>
+				<Button href="/notes/{blockedByNote.id}">Open {blockedByNote.title}</Button>
+			{:else}
+				<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+				<AlertDialog.Action variant="destructive" onclick={() => void confirmRemove()}>
+					Remove
+				</AlertDialog.Action>
+			{/if}
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

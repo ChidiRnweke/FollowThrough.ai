@@ -1,5 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { AttachmentId, AttachmentUpload, AttachmentView } from '$lib/models/attachments';
+import type {
+	AttachmentId,
+	AttachmentUpload,
+	AttachmentView,
+	RemoveAttachmentResult
+} from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
@@ -69,7 +74,7 @@ export interface AttachmentManager {
 	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
 	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
 	retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
-	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
+	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<RemoveAttachmentResult>;
 	download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }>;
 	read(
 		actor: ActorContext,

@@ -67,8 +67,11 @@ export interface AttachmentsController {
 	): ReturnType<AttachmentManager['downloadById']>;
 	/** Re-run processing for an attachment whose earlier attempt failed, returning the refreshed view. */
 	retry(actor: ActorContext, attachmentId: AttachmentId): ReturnType<AttachmentManager['retry']>;
-	/** Permanently delete an attachment by id, atomically. */
-	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
+	/** Remove an attachment unless its containing note still embeds it. */
+	removeById(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): ReturnType<AttachmentManager['removeById']>;
 	/** Return a presigned URL that streams the original file at a note-relative path. */
 	download(
 		actor: ActorContext,

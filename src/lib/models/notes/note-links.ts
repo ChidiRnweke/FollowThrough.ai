@@ -21,6 +21,26 @@ export interface NoteLinkTarget {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null;
 
+/** True only for an image node whose source is this attachment's content endpoint. */
+export const documentReferencesAttachment = (
+	document: ProseMirrorDocument | Record<string, unknown>,
+	attachmentId: string
+): boolean => {
+	const expectedSource = `/api/attachments/${attachmentId}/content`;
+	let found = false;
+	const walk = (node: unknown): void => {
+		if (found || !isRecord(node)) return;
+		const attrs = node.attrs;
+		if (node.type === 'image' && isRecord(attrs) && attrs.src === expectedSource) {
+			found = true;
+			return;
+		}
+		if (Array.isArray(node.content)) for (const child of node.content) walk(child);
+	};
+	walk(document);
+	return found;
+};
+
 /**
  * Every distinct note this document links to, in document order.
  *

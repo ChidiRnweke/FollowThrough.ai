@@ -6,10 +6,11 @@ import type {
 	AttachmentUploadId,
 	AttachmentVersion,
 	AttachmentVersionId,
-	AttachmentView
+	AttachmentView,
+	RemoveAttachmentResult
 } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
-import type { NoteId } from '$lib/models/notes';
+import { documentReferencesAttachment, type NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -252,11 +253,25 @@ export class AttachmentLibrary {
 		return queued;
 	}
 
-	async removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
-		if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
+	async removeById(
+		actor: ActorContext,
+		attachmentId: AttachmentId
+	): Promise<RemoveAttachmentResult> {
 		const found = await this.attachments.findById(actor, attachmentId);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		if (found.attachment.noteId) {
+			const note = await this.notes.findById(actor, found.attachment.noteId);
+			if (!note) throw new NotFoundError('Containing note was not found');
+			if (documentReferencesAttachment(note.document, attachmentId))
+				return { kind: 'referenced-by-note', note: { id: note.id, title: note.title } };
+			if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
+			await this.attachments.remove(actor, note.id, found.attachment.path);
+			return { kind: 'removed' };
+		}
+		if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
 		await this.attachments.removeById(actor, attachmentId);
-		if (found) await this.storage.remove(found.version.objectKey);
+		await this.storage.remove(found.version.objectKey);
+		return { kind: 'removed' };
 	}
 
 	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
@@ -310,7 +325,9 @@ export class AttachmentLibrary {
 				return;
 			}
 			const extractedText = extraction.text;
-			let status: AttachmentVersion['processingStatus'] = 'ready';
+			let status: AttachmentVersion['processingStatus'] = extraction.processingFailure
+				? 'partial'
+				: 'ready';
 			if (this.indexer) {
 				const result = await this.indexer.index(actor, view.attachment, extractedText);
 				if (result.truncated) status = 'partial';
@@ -320,6 +337,7 @@ export class AttachmentLibrary {
 				parserKind: extraction.parserKind,
 				extractedText,
 				processingStatus: status,
+				processingFailure: extraction.processingFailure,
 				processedAt: now()
 			});
 			// audit-allow: silent-catch — the attachment row records a typed failed status and message for the owning UI.
@@ -345,7 +363,11 @@ export class AttachmentLibrary {
 	private async extractText(
 		view: AttachmentView,
 		visionModel: string
-	): Promise<{ text: string; parserKind: string } | undefined> {
+	): Promise<
+		| { text: string; parserKind: string; processingFailure?: undefined }
+		| { text: string; parserKind: string; processingFailure: string }
+		| undefined
+	> {
 		const { mediaType, byteSize, objectKey } = view.version;
 		const path = view.attachment.path;
 		const parseLimit = maxParseBytes();
@@ -375,8 +397,19 @@ export class AttachmentLibrary {
 		});
 		// A photo can carry very little text, so an image keeps a description of
 		// the image itself alongside whatever text OCR recovered.
-		const sections = image ? [text.trim(), await this.describeImage(view, visionModel)] : [text];
-		return { text: sections.filter(Boolean).join('\n\n'), parserKind: 'ocr' };
+		if (!image) return { text, parserKind: 'ocr' };
+
+		try {
+			const description = await this.describeImage(view, visionModel);
+			return { text: [text.trim(), description].filter(Boolean).join('\n\n'), parserKind: 'ocr' };
+			// audit-allow: silent-catch — OCR text remains valid; the typed partial result persists this failure for the owning UI.
+		} catch (error) {
+			return {
+				text: text.trim(),
+				parserKind: 'ocr',
+				processingFailure: error instanceof Error ? error.message : 'Image description failed'
+			};
+		}
 	}
 
 	private async describeImage(view: AttachmentView, visionModel: string): Promise<string> {

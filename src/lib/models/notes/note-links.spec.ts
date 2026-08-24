@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
-import { collectNoteLinkTargets, resolveWikiLinks } from './index';
+import { collectNoteLinkTargets, documentReferencesAttachment, resolveWikiLinks } from './index';
 
 const linked = (noteId: string, text = 'the decision') => ({
 	type: 'text',
@@ -62,6 +62,29 @@ describe('Finding the notes a document links to', () => {
 
 	it('finds nothing in an empty document', () => {
 		expect(collectNoteLinkTargets(doc())).toEqual([]);
+	});
+});
+
+describe('Finding an embedded attachment in a note document', () => {
+	it('finds the exact attachment in a nested image node', () => {
+		const document = doc({
+			type: 'blockquote',
+			content: [
+				{
+					type: 'image',
+					attrs: { src: '/api/attachments/attachment-7/content' }
+				}
+			]
+		});
+		expect(documentReferencesAttachment(document, 'attachment-7')).toBe(true);
+	});
+
+	it('does not treat the same url in prose as an embedded image', () => {
+		const document = doc({
+			type: 'paragraph',
+			content: [{ type: 'text', text: '/api/attachments/attachment-7/content' }]
+		});
+		expect(documentReferencesAttachment(document, 'attachment-7')).toBe(false);
 	});
 });
 
