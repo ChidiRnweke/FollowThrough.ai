@@ -44,9 +44,19 @@ export function groupChatParts(parts: readonly ChatPart[]): ChatPartGroup[] {
 	return groups;
 }
 
-/** A stable key for the `{#each}` that renders the groups. */
+/**
+ * A stable key for the `{#each}` that renders the groups.
+ *
+ * The empty string is not a call id. A restored row gets
+ * `callId: String(content.callId ?? '')`, and providers that report an outcome
+ * without an id leave it empty — so `?? index` was not enough: it catches an
+ * absent id and passes an empty one straight through. Two groups whose first
+ * tool had no id both keyed as `activity-`, and a duplicate key in a keyed
+ * `{#each}` throws — which the `ErrorBoundary` around the thread then turned
+ * into the whole turn rendering as nothing.
+ */
 export const chatPartGroupKey = (group: ChatPartGroup, index: number): string => {
-	if (group.kind !== 'part') return `${group.kind}-${group.tools[0]?.callId ?? index}`;
+	if (group.kind !== 'part') return `${group.kind}-${group.tools[0]?.callId || index}`;
 	return group.part.kind === 'tool' && group.part.tool.callId
 		? group.part.tool.callId
 		: `part-${index}`;

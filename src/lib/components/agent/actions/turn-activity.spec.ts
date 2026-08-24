@@ -3,7 +3,17 @@ import type { NoteSummary } from '$lib/models/notes';
 import type { ShellContext } from '$lib/models/workspace';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
-import { turnActivity, turnSteps } from './turn-activity';
+// `TOOL_DESCRIPTIONS`, not `TOOL_CATALOG`: the latter drops the first-class tools, which
+// are exactly the ones the agent reaches for most and so the ones that most need a row.
+import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
+import {
+	mechanismTools,
+	quietTools,
+	turnActivity,
+	turnSteps,
+	type TouchedThing,
+	type TurnRow
+} from './turn-activity';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const OTHER_NOTE_ID = '2c9b0b53-9c2f-4c1a-9f0b-6b7c9b1f2a34';
@@ -25,6 +35,19 @@ const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	...over
 });
 
+/**
+ * The row as a touched thing, for the assertions that are about one.
+ *
+ * A row is a thing that was touched *or* work that was done, and only the first
+ * has a title, an id and a verb. Narrowing here rather than asserting at each
+ * `expect` keeps the union honest and makes a row that turns out to be an action
+ * fail loudly instead of reading `undefined`.
+ */
+const thing = (row: TurnRow | undefined): TouchedThing => {
+	if (!row || row.kind === 'action') throw new Error(`Expected a touched thing, got ${row?.kind}`);
+	return row;
+};
+
 describe('A turn reports things, not calls', () => {
 	it('folds repeated work on one note into a single entry', () => {
 		const activity = turnActivity([call({}), call({}), call({ name: 'save_note' })], shell);
@@ -33,11 +56,11 @@ describe('A turn reports things, not calls', () => {
 
 	it('reports the strongest thing that happened to it', () => {
 		const activity = turnActivity([call({}), call({ name: 'save_note' }), call({})], shell);
-		expect(activity.touched[0]?.verb).toBe('edited');
+		expect(thing(activity.touched[0]).verb).toBe('edited');
 	});
 
 	it('names the note so the reader recognises it', () => {
-		expect(turnActivity([call({})], shell).touched[0]?.title).toBe('Infrastructure');
+		expect(thing(turnActivity([call({})], shell).touched[0]).title).toBe('Infrastructure');
 	});
 
 	it('keeps two different notes apart', () => {
@@ -49,7 +72,7 @@ describe('A turn reports things, not calls', () => {
 	});
 
 	it('offers the id so the entry can be opened', () => {
-		expect(turnActivity([call({})], shell).touched[0]?.id).toBe(NOTE_ID);
+		expect(thing(turnActivity([call({})], shell).touched[0]).id).toBe(NOTE_ID);
 	});
 });
 
@@ -116,7 +139,7 @@ describe('A failure is news only when nothing put it right', () => {
 			[call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })],
 			shell
 		);
-		expect(activity.touched[0]?.failed).toBe(true);
+		expect(activity.touched[0]?.outcome).toBe('failed');
 	});
 });
 
@@ -132,7 +155,7 @@ describe('Something the agent just made is still openable', () => {
 			],
 			shell
 		);
-		expect(activity.touched[0]?.id).toBe(OTHER_NOTE_ID);
+		expect(thing(activity.touched[0]).id).toBe(OTHER_NOTE_ID);
 	});
 
 	it('names it from the arguments when the tree has not caught up', () => {
@@ -140,12 +163,12 @@ describe('Something the agent just made is still openable', () => {
 			[call({ name: 'create_note', arguments: { title: 'Reviewed draft' } })],
 			shell
 		);
-		expect(activity.touched[0]?.title).toBe('Reviewed draft');
+		expect(thing(activity.touched[0]).title).toBe('Reviewed draft');
 	});
 
 	it('falls back to a plain label rather than an id nobody can read', () => {
 		const activity = turnActivity([call({ arguments: { noteId: 'unknown-note' } })], shell);
-		expect(activity.touched[0]?.title).toBe('A note');
+		expect(thing(activity.touched[0]).title).toBe('A note');
 	});
 });
 
@@ -154,13 +177,57 @@ describe('A running turn shows its steps as they arrive', () => {
 		expect(turnSteps([call({}), call({}), call({ name: 'save_note' })], shell)).toHaveLength(3);
 	});
 
-	it('marks the call in flight as pending', () => {
-		expect(turnSteps([call({ status: 'running' })], shell)[0]?.pending).toBe(true);
+	it('marks the call in flight as running', () => {
+		expect(turnSteps([call({ status: 'running' })], shell)[0]?.outcome).toBe('running');
+	});
+
+	// It shares no value with a genuine failure any more, which is what used to drop it
+	// from the rows and from the failure sentences alike.
+	it('keeps a refused call as its own outcome rather than a failure', () => {
+		expect(turnSteps([call({ name: 'save_note', status: 'rejected' })], shell)[0]?.outcome).toBe(
+			'rejected'
+		);
 	});
 
 	it('leaves a change awaiting approval to the approval, which shows it in full', () => {
 		expect(turnSteps([call({ name: 'save_note', status: 'approval_required' })], shell)).toEqual(
 			[]
 		);
+	});
+});
+
+/**
+ * The guarantee this file exists to keep, and the one it did not keep before.
+ *
+ * A row appeared only for the 22 names in `subjects`; the catalogue's other 46
+ * tools ran and reported nothing. `present_diagram` was one of them, so a studio
+ * turn that drew a diagram summarised itself as having done nothing at all.
+ *
+ * The default is visible now, and this is what holds it that way — the same idea
+ * as `AgentToolCoverage` keeping the server total over its controller methods.
+ */
+describe('Every tool the agent can call reports itself', () => {
+	const rowFor = (name: string) => turnSteps([call({ name })], shell)[0];
+	// Both lists hide a call on purpose; the test is that hiding is always on purpose.
+	const quietNames = new Set([...quietTools, ...mechanismTools]);
+
+	it.each(TOOL_DESCRIPTIONS.map((entry) => entry.name))(
+		'%s produces a row or is deliberately quiet',
+		(name) => {
+			expect(rowFor(name) !== undefined || quietNames.has(name)).toBe(true);
+		}
+	);
+
+	// A name in the quiet list that no longer exists is a rule guarding nothing, and it
+	// hides whichever tool inherits that name next. `search_tools` and `use_tool` are the
+	// discovery mechanism rather than entries in what it discovers, so they are the two
+	// names legitimately absent from the catalogue.
+	it('keeps no quiet entry for a tool the catalogue has dropped', () => {
+		const known = new Set([
+			...TOOL_DESCRIPTIONS.map((entry) => entry.name),
+			'search_tools',
+			'use_tool'
+		]);
+		expect([...quietNames].filter((name) => !known.has(name))).toEqual([]);
 	});
 });

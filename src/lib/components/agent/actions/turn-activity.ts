@@ -5,6 +5,7 @@ import {
 	type FailedToolActivity
 } from '$lib/stores/agent/chat-tools';
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
+import { toolStatusParts } from './tool-presentation';
 
 /**
  * What a turn did, in terms of the user's own things.
@@ -21,6 +22,26 @@ import { noteTitle } from '../../chat/actions/tool-approval-fields';
 
 export type TouchedKind = 'note' | 'todo' | 'project' | 'skill';
 
+/**
+ * What became of the call a row stands for.
+ *
+ * One field, because it is one fact. As `pending` and `failed` side by side it
+ * was two booleans over four states: `{ pending: true, failed: true }` was
+ * sayable and meaningless, and — the reason this matters — `rejected` had no
+ * value of its own. It shared `failed: true` with a genuine failure, so the row
+ * filter dropped it as "the failure sentence will restate this", and the failure
+ * list never collected it because that only takes `status === 'failed'`. A call
+ * the user refused disappeared from the transcript entirely.
+ */
+export type StepOutcome = 'running' | 'done' | 'failed' | 'rejected';
+
+const stepOutcome = (status: ChatToolActivity['status']): StepOutcome => {
+	if (status === 'running') return 'running';
+	if (status === 'failed') return 'failed';
+	if (status === 'rejected') return 'rejected';
+	return 'done';
+};
+
 export interface TouchedThing {
 	readonly kind: TouchedKind;
 	/** Set only when the thing can actually be opened. */
@@ -30,12 +51,37 @@ export interface TouchedThing {
 	readonly named: boolean;
 	/** What became of it: `edited`, `read`, `created`, … */
 	readonly verb: string;
-	readonly pending: boolean;
-	readonly failed: boolean;
+	readonly outcome: StepOutcome;
 }
 
+/**
+ * Work the turn did that is not one of the user's own things.
+ *
+ * `subjects` maps the tools whose subject is a note, todo, project or skill —
+ * 22 of the catalogue's 79. Everything else used to be `continue`d past and
+ * vanish: every diagram tool, every memory, artifact, suggestion and reference
+ * tool, `search`, `create_todos`. A studio turn that drew a diagram reported
+ * nothing it had done, because `present_diagram` is not in the map.
+ *
+ * A separate arm rather than optional fields on {@link TouchedThing}: an action
+ * has no id, no resolvable name and no verb of its own — `label` is the whole
+ * phrase, already in the user's language. Bolting `verb?` and `id?` onto the
+ * other shape would make an unopenable thing indistinguishable from a note
+ * whose title had not resolved yet.
+ */
+export interface TurnAction {
+	readonly kind: 'action';
+	/** The whole phrase, from `toolStatusParts` — verb included. */
+	readonly label: string;
+	readonly outcome: StepOutcome;
+}
+
+/** One row of a turn's summary: a thing that was touched, or work that was done. */
+export type TurnRow = TouchedThing | TurnAction;
+
 export interface TurnActivity {
-	readonly touched: readonly TouchedThing[];
+	/** What the turn did, deduplicated and in the order it happened. */
+	readonly touched: readonly TurnRow[];
 	/**
 	 * Calls that failed and that nothing later made good. The whole activity is returned
 	 * rather than its message, so the failure can be stated as what happened to which thing
@@ -50,7 +96,7 @@ export interface TurnActivity {
  * Calls that are the agent finding its footing rather than work on the workspace. A row
  * reading "Search tools" is not reassurance, and it is not something anyone can act on.
  */
-const mechanismTools = new Set([
+export const mechanismTools = new Set([
 	'search_tools',
 	'use_tool',
 	'get_workspace_context',
@@ -64,6 +110,46 @@ const mechanismTools = new Set([
 	'update_trust_policy',
 	'list_api_tokens',
 	'revoke_api_token'
+]);
+
+/**
+ * Reads and searches that tell the reader nothing they can act on.
+ *
+ * The rule dividing this from an action row is whether the call *changed*
+ * anything. A search that found nine notes is the agent orienting itself, the
+ * same as a tool search; the answer it produced is the thing worth reading.
+ *
+ * Stated as an explicit list because the default is now the other way round.
+ * Rows used to appear only for the 22 names in `subjects`, so all 46 of the
+ * catalogue's other tools were dropped in silence — including every diagram
+ * tool, which is why a studio turn that drew a diagram reported nothing it had
+ * done. Anything unlisted now gets a row, so a tool added tomorrow is visible
+ * by default and hiding one is a decision somebody has to write down here.
+ */
+export const quietTools = new Set([
+	'search',
+	'search_note',
+	'search_icons',
+	'find_references',
+	'get_today_view',
+	'get_artifact',
+	'get_export_settings',
+	'diff_note_versions',
+	'read_attachment',
+	'read_note_version',
+	'read_canvas_diagram',
+	'read_project_diagram',
+	'list_projects',
+	'list_todos',
+	'list_skills',
+	'list_skill_versions',
+	'list_artifacts',
+	'list_attachments',
+	'list_templates',
+	'list_suggestions',
+	'list_trashed_notes',
+	'list_user_memory',
+	'list_project_memory'
 ]);
 
 interface ToolSubject {
@@ -184,15 +270,25 @@ const placeholder: Readonly<Record<TouchedKind, string>> = {
 export function turnSteps(
 	tools: readonly ChatToolActivity[],
 	shell?: ShellContext
-): readonly TouchedThing[] {
-	const steps: TouchedThing[] = [];
+): readonly TurnRow[] {
+	const steps: TurnRow[] = [];
 	for (const tool of tools) {
-		if (mechanismTools.has(tool.name)) continue;
+		if (mechanismTools.has(tool.name) || quietTools.has(tool.name)) continue;
 		// A call parked on approval is already on screen in full, as the change the reader is
 		// being asked to decide on. Listing it again underneath says the same thing twice.
 		if (tool.status === 'approval_required') continue;
 		const subject = subjects[tool.name];
-		if (!subject) continue;
+		// Not a note, todo, project or skill — but still work, and it says so in its own
+		// words rather than not appearing. `toolStatusParts` is total over the catalogue,
+		// falling back to a readable form of the tool's name, so there is always a phrase.
+		if (!subject) {
+			steps.push({
+				kind: 'action',
+				label: toolStatusParts(tool, shell).label,
+				outcome: stepOutcome(tool.status)
+			});
+			continue;
+		}
 		const id = identify(tool, subject);
 		const name = nameOf(tool, subject, id, shell);
 		steps.push({
@@ -201,8 +297,7 @@ export function turnSteps(
 			title: name ?? placeholder[subject.kind],
 			named: name !== undefined,
 			verb: subject.verb,
-			pending: tool.status === 'running',
-			failed: tool.status === 'failed' || tool.status === 'rejected'
+			outcome: stepOutcome(tool.status)
 		});
 	}
 	return steps;
@@ -212,7 +307,8 @@ export function turnSteps(
  * Identity for deduplication. Things with an id fold onto that id; things without one fold
  * onto their name, so two calls creating the same todo do not read as two todos.
  */
-const identityOf = (thing: TouchedThing): string => `${thing.kind}:${thing.id ?? thing.title}`;
+const identityOf = (row: TurnRow): string =>
+	row.kind === 'action' ? `action:${row.label}` : `${row.kind}:${row.id ?? row.title}`;
 
 export function turnActivity(
 	tools: readonly ChatToolActivity[],
@@ -227,13 +323,20 @@ export function turnActivity(
 	turnTools: readonly ChatToolActivity[] = tools
 ): TurnActivity {
 	const order: string[] = [];
-	const byIdentity = new Map<string, TouchedThing>();
+	const byIdentity = new Map<string, TurnRow>();
 
 	for (const step of turnSteps(tools, shell)) {
 		const key = identityOf(step);
 		const existing = byIdentity.get(key);
 		if (!existing) {
 			order.push(key);
+			byIdentity.set(key, step);
+			continue;
+		}
+		// Two actions with the same phrase are one row, and the last one is what it says.
+		// There is nothing else to fold: an action has no name to resolve and no verb to
+		// strengthen.
+		if (existing.kind === 'action' || step.kind === 'action') {
 			byIdentity.set(key, step);
 			continue;
 		}
@@ -244,9 +347,9 @@ export function turnActivity(
 			title: step.named ? step.title : existing.title,
 			named: existing.named || step.named,
 			verb: strongerVerb(existing.verb, step.verb),
-			pending: step.pending,
-			// A failure that a later call on the same thing made good is a retry, not news.
-			failed: step.failed
+			// A failure that a later call on the same thing made good is a retry, not news,
+			// so the last call on a thing is what its row reports.
+			outcome: step.outcome
 		});
 	}
 
@@ -276,8 +379,7 @@ export function turnActivity(
 				title: nameOf(tool, subject, id, shell) ?? placeholder[subject.kind],
 				named: false,
 				verb: subject.verb,
-				pending: false,
-				failed: true
+				outcome: 'failed'
 			});
 			return !recovered.has(key);
 		})

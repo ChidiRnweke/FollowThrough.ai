@@ -20,4 +20,11 @@ export {
 	type FieldChange,
 	type ToolDisclosure
 } from './actions/tool-disclosure';
-export { turnActivity, turnSteps, type TouchedThing } from './actions/turn-activity';
+export {
+	turnActivity,
+	turnSteps,
+	type StepOutcome,
+	type TouchedThing,
+	type TurnAction,
+	type TurnRow
+} from './actions/turn-activity';

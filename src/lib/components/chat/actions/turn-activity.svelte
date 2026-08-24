@@ -16,9 +16,10 @@
 		FtFolder,
 		FtLoader,
 		FtSkills,
-		FtTodos
+		FtTodos,
+		FtWorkflow
 	} from '$lib/components/icons';
-	import { turnActivity, turnSteps, type TouchedThing } from '$lib/components/agent';
+	import { turnActivity, turnSteps, type TouchedThing, type TurnRow } from '$lib/components/agent';
 	import ToolRow from './tool-row.svelte';
 	import TurnFailure from './turn-failure.svelte';
 	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
@@ -55,7 +56,7 @@
 	// and what to do about it. A red row above saying the same name is the duplication all
 	// over again.
 	const rows = $derived(
-		(settled ? activity.touched : turnSteps(tools, shell)).filter((row) => !row.failed)
+		(settled ? activity.touched : turnSteps(tools, shell)).filter((row) => row.outcome !== 'failed')
 	);
 
 	/** Every call of the turn, which is what the log opens onto. */
@@ -77,12 +78,16 @@
 	 */
 	const todoTitles = new SvelteMap<string, string>();
 	$effect(() => {
+		// A predicate rather than a cast: the narrowing is real — an action row has no
+		// `kind: 'todo'` and no id — and stating it here is what lets the loop below read
+		// `row.id` without asserting anything.
 		const unnamed = rows.filter(
-			(row) => row.kind === 'todo' && row.id && !row.named && !todoTitles.has(row.id)
+			(row): row is TouchedThing & { id: string } =>
+				row.kind === 'todo' && row.id !== undefined && !row.named && !todoTitles.has(row.id)
 		);
 		let cancelled = false;
 		for (const row of unnamed) {
-			const id = row.id as string;
+			const id = row.id;
 			// audit-allow: silent-catch — activity remains usable and labels the unavailable todo title explicitly.
 			void getTodo(id)
 				.then((todo) => {
@@ -105,7 +110,10 @@
 		note: FtDocument,
 		todo: FtTodos,
 		project: FtFolder,
-		skill: FtSkills
+		skill: FtSkills,
+		// An action is not one of the workspace's own things, so it takes the neutral mark
+		// rather than borrowing a note's or a project's.
+		action: FtWorkflow
 	};
 
 	/**
@@ -128,17 +136,31 @@
 	}
 </script>
 
-{#snippet rowBody(row: TouchedThing)}
-	{@const Icon = icons[row.kind]}
-	{#if row.pending}
+{#snippet rowBody(row: TurnRow)}
+	{@const Icon = icons[row.kind satisfies keyof typeof icons]}
+	{#if row.outcome === 'running'}
 		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
 	{:else}
 		<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
 	{/if}
 	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
 	     entries scan as the columns of a table that has no other rows. -->
-	<span class="min-w-0 truncate {row.failed ? 'text-destructive' : ''}">{titleOf(row)}</span>
-	<span class="shrink-0 text-muted-foreground">· {row.verb}</span>
+	<span class="min-w-0 truncate {row.outcome === 'failed' ? 'text-destructive' : ''}">
+		{row.kind === 'action' ? row.label : titleOf(row)}
+	</span>
+	{#if row.kind !== 'action'}
+		<!--
+			A refusal reports itself here and nowhere else: it is not a failure, so no
+			`TurnFailure` sentence explains it, and it is not what the verb says happened —
+			the note was not edited, the user declined to let it be. Muted rather than
+			destructive, because nothing went wrong; the reader did this on purpose.
+		-->
+		<span class="shrink-0 text-muted-foreground">
+			· {row.outcome === 'rejected' ? 'declined' : row.verb}
+		</span>
+	{:else if row.outcome === 'rejected'}
+		<span class="shrink-0 text-muted-foreground">· declined</span>
+	{/if}
 {/snippet}
 
 {#if rows.length > 0 || activity.failures.length > 0 || hasLog}
@@ -151,14 +173,14 @@
 	<div class="flex flex-col gap-2">
 		<!-- What went wrong leads: it is the one thing here that might need something from the
 		     reader. The record of what did work, and the door to the evidence, follow. -->
-		{#each activity.failures as failed (failed.callId)}
+		{#each activity.failures as failed, index (failed.callId || index)}
 			<TurnFailure tool={failed} {shell} {retryable} {onretry} />
 		{/each}
 
 		<ul class="flex flex-col">
-			{#each rows as row, index (`${row.kind}-${row.id ?? row.title}-${index}`)}
+			{#each rows as row, index (`${row.kind}-${index}`)}
 				<li>
-					{#if row.id}
+					{#if row.kind !== 'action' && row.id}
 						<!-- `CHAT_ROW` neutralises the variant's centring and weight explicitly:
 						     they have no counterpart in a bare geometry class and would otherwise
 						     survive into a row that has to read as a list item. -->
