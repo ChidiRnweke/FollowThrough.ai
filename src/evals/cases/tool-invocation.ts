@@ -30,10 +30,18 @@ interface InvocationCase {
 	/** Score as a direct required-tool check even though the tool is searchable. */
 	readonly direct?: boolean;
 	readonly firstClass?: boolean;
+	/** Optional seeded context that makes entity resolution part of the fixture, not this tool-choice case. */
+	readonly projectName?: string;
+	readonly noteTitle?: string;
 }
 
 const usableString = (value: unknown): boolean =>
 	typeof value === 'string' && value.trim().length > 0;
+
+const invocationWorkspace = {
+	...personaWorkspace,
+	todos: [{ title: 'Renew the TLS certificates', projectName: 'Profile' }]
+};
 
 const CASES: readonly InvocationCase[] = [
 	{
@@ -41,6 +49,7 @@ const CASES: readonly InvocationCase[] = [
 		name: 'creates a note when asked to start one',
 		prompt: 'Start a new note in my Profile project called "Weekly platform sync".',
 		tool: 'create_note',
+		projectName: 'Profile',
 		payload: (args) => (usableString(args.title) ? undefined : 'title was missing or empty')
 	},
 	{
@@ -100,18 +109,21 @@ const CASES: readonly InvocationCase[] = [
 		name: 'reads project memory when scoped to a project',
 		prompt: 'What has this project recorded about how we do things? Check the project memory.',
 		tool: 'list_project_memory',
-		firstClass: true
+		firstClass: true,
+		projectName: 'Profile'
 	},
 	{
 		id: 'invoke-list-suggestions',
 		name: 'lists pending suggestions for review',
-		prompt: 'Is there anything waiting for me to review or approve?',
+		prompt:
+			'List the actual pending review suggestions with their kinds and payloads, not just a count.',
 		tool: 'list_suggestions'
 	},
 	{
 		id: 'invoke-today-view',
 		name: 'reads the day view when asked about today',
-		prompt: 'What is due today? Today is 2026-07-20.',
+		prompt:
+			'Show my complete Today view for 2026-07-20, including due and overdue work, waiting-on items, pending approvals, pinned notes, and recent notes.',
 		tool: 'get_today_view'
 	},
 	{
@@ -126,6 +138,7 @@ const CASES: readonly InvocationCase[] = [
 		prompt: 'Find my notes about Postgres failover procedures.',
 		tool: 'search',
 		firstClass: true,
+		projectName: 'Profile',
 		payload: (args) => (usableString(args.query) ? undefined : 'query was missing or empty')
 	},
 	{
@@ -139,8 +152,9 @@ const CASES: readonly InvocationCase[] = [
 	{
 		id: 'invoke-publish-note',
 		name: 'publishes a note when asked to create a versioned snapshot',
-		prompt: 'Publish my "Checkout architecture" note so the team can reference it.',
+		prompt: 'Publish my "Background" note so the team can reference a versioned snapshot.',
 		tool: 'publish_note',
+		noteTitle: 'Background',
 		payload: (args) => (typeof args.noteId === 'string' ? undefined : 'noteId was missing')
 	},
 	{
@@ -190,10 +204,20 @@ export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 	expected: { tool: entry.tool, firstClass: entry.firstClass ?? false },
 	metadata: { layer: 'agent', tool: entry.tool },
 	async run(lab) {
-		const workspace = await seedWorkspace(lab, personaWorkspace);
+		const workspace = await seedWorkspace(lab, invocationWorkspace);
+		const projectId = entry.projectName ? workspace.projectIds.get(entry.projectName) : undefined;
+		if (entry.projectName && !projectId)
+			throw new Error(
+				`Invocation fixture is missing project ${JSON.stringify(entry.projectName)}.`
+			);
+		const noteId = entry.noteTitle ? workspace.noteIds.get(entry.noteTitle) : undefined;
+		if (entry.noteTitle && !noteId)
+			throw new Error(`Invocation fixture is missing note ${JSON.stringify(entry.noteTitle)}.`);
 		const result = await runCase(lab, workspace.actor, {
 			prompt: entry.prompt,
-			mode: 'auto_accept'
+			mode: 'auto_accept',
+			...(projectId ? { projectId } : {}),
+			...(noteId ? { noteId } : {})
 		});
 
 		const call = findCall(result, entry.tool);
@@ -256,9 +280,13 @@ export const toolSearchTriggerCases: readonly EvalCase[] = [
 		metadata: { layer: 'agent', note: 'archive_project is not first-class.' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, conflictingScopeWorkspace);
+			const projectId = workspace.projectIds.get('Data Platform');
+			if (!projectId)
+				throw new Error('Search-trigger fixture is missing the Data Platform project.');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
+				mode: 'auto_accept',
+				projectId
 			});
 			px.logOutput({ model: result.model, toolCalls: result.calledToolNames });
 
