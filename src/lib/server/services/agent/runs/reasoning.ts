@@ -26,6 +26,7 @@ import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
+import { withReasoning } from '$lib/server/repositories/agent/reasoning-transport';
 import type { ContextNote, ContextSelection, ConversationId } from '$lib/models/agent';
 
 /**
@@ -681,9 +682,11 @@ export class AgentReasoning {
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,
 			timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
-			fetch: withWebResearch(
-				this.providerFetch ?? globalThis.fetch,
-				openRouterWebSearchTool(webSearch)
+			// Two OpenRouter-only body fields, both added at the transport because the
+			// agents SDK has nowhere to put them. Reasoning is what makes the model's
+			// thinking arrive as deltas rather than one block per generation.
+			fetch: withReasoning(
+				withWebResearch(this.providerFetch ?? globalThis.fetch, openRouterWebSearchTool(webSearch))
 			),
 			defaultHeaders: {
 				'HTTP-Referer': this.appURL,

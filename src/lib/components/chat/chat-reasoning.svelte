@@ -10,13 +10,32 @@
 	let sections = $derived(parseReasoning(text));
 	let title = $derived(reasoningTitle(sections));
 
-	// Reasoning is the model's scratch work, not the answer, so it stays folded and the
-	// row's title carries what happened. `open` is state rather than derived: the previous
-	// version bound a `$derived(streaming)`, so every delta threw away the user's click.
-	let open = $state(false);
+	/**
+	 * The reader's own decision, once they have made one. `undefined` until then.
+	 *
+	 * What is remembered is the *choice*, not the open state. Binding
+	 * `$derived(streaming)` — the version before this one — recomputed on every
+	 * delta and threw the reader's click away each time; holding plain state
+	 * instead meant the panel could never open itself. Keeping the choice apart
+	 * from the default lets both hold: the default follows the turn, and a reader
+	 * who has decided overrules it in either direction, for good.
+	 */
+	let choice = $state<boolean | undefined>(undefined);
+
+	/**
+	 * Open while the turn is thinking, folded once it has finished.
+	 *
+	 * Reasoning is scratch work rather than the answer, so at rest it stays folded
+	 * behind its title. While it is being written it is the only thing happening,
+	 * and a collapsed row cannot show that — the label is the last bold heading the
+	 * model wrote, or the first sentence of its first block, so on unstructured
+	 * reasoning it is one line that never changes. Streaming was working and looked
+	 * identical to not streaming.
+	 */
+	const open = $derived(choice ?? streaming);
 </script>
 
-<Collapsible.Root bind:open>
+<Collapsible.Root {open} onOpenChange={(next) => (choice = next)}>
 	<Collapsible.Trigger>
 		{#snippet child({ props })}
 			<Button
@@ -31,7 +50,10 @@
 			</Button>
 		{/snippet}
 	</Collapsible.Trigger>
-	<Collapsible.Content>
+	<!-- The turn's own opening and closing is a block of content arriving, which is what
+	     `--duration-disclosure` is the budget for. Pure CSS, so the reduced-motion guard
+	     in `@layer base` already neutralises it. -->
+	<Collapsible.Content class="chat-disclosure">
 		<div class="flex flex-col gap-2 pl-6 text-muted-foreground">
 			{#each sections as section, index (index)}
 				<div class="flex flex-col gap-0.5">
