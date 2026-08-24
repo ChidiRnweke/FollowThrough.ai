@@ -3,9 +3,8 @@
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, isDraftTab, type TabId } from '$lib/stores/workbench/tab-ref';
-	import { diagramTab } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { findConversationDiagram } from '$lib/remote/diagrams/diagrams.remote';
+	import { studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -29,6 +28,11 @@
 	const keepableIn = $derived(projectId ?? workbench.activeProjectId);
 	const unkeepable = $derived(isDraftTab(canvasTab) && keepableIn === undefined);
 
+	// The tab a kept diagram already has, so the studio opens onto the saved row
+	// rather than re-opening the draft the transcript still names.
+	const kept = $derived(studioTabFor(chatRegistry.peek(sessionKey)?.conversationId));
+	let opening = $state(false);
+
 	/**
 	 * Move this conversation into the studio, canvas and all.
 	 *
@@ -37,16 +41,17 @@
 	 * rather than forking, and nothing has to be asked twice.
 	 */
 	async function openStudio(): Promise<void> {
-		const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
-		const persisted = conversationId
-			? (await findConversationDiagram(conversationId)).diagram
-			: undefined;
-		if (keepableIn) diagramRegistry.startDraft(sessionKey, keepableIn);
-		rightPanel.close();
-		await workbench.openSplit(
-			chatTab(sessionKey),
-			persisted ? diagramTab(persisted.id) : canvasTab
-		);
+		opening = true;
+		try {
+			if (keepableIn) diagramRegistry.startDraft(sessionKey, keepableIn);
+			rightPanel.close();
+			await workbench.openSplit(chatTab(sessionKey), kept.kind === 'kept' ? kept.tab : canvasTab);
+		} finally {
+			// The card usually unmounts on the navigation above, but not always — a
+			// failed navigation leaves it standing, and a button stuck on "Opening"
+			// is a dead control rather than a busy one.
+			opening = false;
+		}
 	}
 </script>
 
@@ -64,5 +69,12 @@
 				: 'Diagrams open side by side with the conversation, where you can edit and keep them.'}
 		</p>
 	</div>
-	<Button size="sm" onclick={() => void openStudio()}>Open in studio</Button>
+	<!--
+		Disabled while the split navigates: the pane geometry takes 300ms to arrive,
+		and without this the button sits unchanged over a screen that has not moved
+		yet, which reads as a press that did nothing.
+	-->
+	<Button size="sm" disabled={opening || kept.kind === 'pending'} onclick={() => void openStudio()}>
+		{opening ? 'Opening…' : 'Open in studio'}
+	</Button>
 </div>

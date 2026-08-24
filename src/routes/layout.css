@@ -780,6 +780,35 @@
 		display: none;
 	}
 
+	/* Opening a split is a whole surface moving, which is what --duration-panel
+	   is the budget for. The primary pane yields its right half and the studio
+	   slides in from the edge, rather than both endpoints appearing at once with
+	   no account of where the second pane came from.
+
+	   `allow-discrete` and @starting-style are what make the incoming pane
+	   animate at all: it arrives from `display: none`, and a transition has no
+	   start value to run from without them. This is CSS, so the reduced-motion
+	   guard in @layer base already neutralises it — no separate opt-out. */
+	.workspace-pane-layer {
+		transition:
+			inset-inline-start var(--duration-panel) var(--ease-standard),
+			inset-inline-end var(--duration-panel) var(--ease-standard),
+			display var(--duration-panel) allow-discrete;
+	}
+
+	@starting-style {
+		.workspace-panes[data-split-active='true'] .workspace-pane-layer[data-pane-role='split'] {
+			inset-inline-start: 100%;
+		}
+	}
+
+	/* The divider drags the ratio live, and a 300ms transition on it means the
+	   pane trails the pointer for the whole gesture. Same idea as the sidebar's
+	   [data-resizing] rule above: the handle already marks itself while held. */
+	.workspace-panes:has(.workspace-split-resizer-handle[data-active]) .workspace-pane-layer {
+		transition: none;
+	}
+
 	.workspace-pane-scroll-content {
 		display: flex;
 		min-width: 100%;

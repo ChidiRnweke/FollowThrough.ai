@@ -30,7 +30,9 @@
 		chatRegistry,
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasFor, studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { slide } from 'svelte/transition';
+	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
 	import { StudioHandoff } from '$lib/components/diagrams';
 	import { Button } from '$lib/components/ui/button';
@@ -74,7 +76,26 @@
 		agentAvailable: boolean;
 		registerComposerFocus?: (focus: () => void) => () => void;
 	} = $props();
+	// Svelte's JS transitions run outside `layout.css`'s reduced-motion guard, so
+	// the duration is read rather than assumed. `--duration-disclosure` in ms: the
+	// offer is a block of content arriving under the transcript, which is exactly
+	// what that token is for.
+	const reducedMotion = new PrefersReducedMotion();
+	const offerMotion = $derived(reducedMotion.current ? { duration: 0 } : { duration: 200 });
 	const canvas = $derived(canvasFor(chat.sessionKey));
+	const kept = $derived(studioTabFor(chat.conversationId));
+	/**
+	 * Whether this conversation's diagram is already on screen somewhere.
+	 *
+	 * Two tabs can be showing it, and which one depends on history the canvas
+	 * cannot see: the draft tab before it was kept, the saved diagram's tab after.
+	 * Asking only the first is what left the offer standing beside the studio it
+	 * had just opened, for the rest of the conversation.
+	 */
+	const canvasOnScreen = $derived(
+		(canvas.tab !== undefined && workbench.openTabs.includes(canvas.tab)) ||
+			(kept.kind === 'kept' && workbench.openTabs.includes(kept.tab))
+	);
 	/**
 	 * The diagram this conversation produced, when this chat has nowhere to show it.
 	 *
@@ -84,7 +105,10 @@
 	 * this conversation along.
 	 */
 	const studioOffer = $derived(
-		canvas.subject && canvas.tab && !workbench.openTabs.includes(canvas.tab)
+		// Offering while the lookup is still out flashes the card onto every mount
+		// of an already-kept conversation — which is the whole reason `pending` is
+		// an arm of its own rather than an absent tab.
+		canvas.subject && canvas.tab && kept.kind !== 'pending' && !canvasOnScreen
 			? { subject: canvas.subject, canvasTab: canvas.tab }
 			: undefined
 	);
@@ -647,7 +671,13 @@
 			onjumptolatest={jumpToLatest}
 		/>
 		{#if studioOffer}
-			<div class="shrink-0 pt-4">
+			<!--
+				The card's own top padding is inside the animated element, not a gap
+				above it: `slide` animates padding, so the offer and the air over it
+				leave as one movement rather than the transcript snapping down 16px
+				after the card has gone.
+			-->
+			<div class="shrink-0 pt-4" transition:slide|local={offerMotion}>
 				<StudioHandoff
 					sessionKey={chat.sessionKey}
 					projectId={activeProjectId}

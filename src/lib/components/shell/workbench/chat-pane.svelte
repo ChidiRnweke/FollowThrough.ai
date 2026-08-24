@@ -6,12 +6,11 @@
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { canvasSubjectKey } from '$lib/stores/diagrams/canvas-subject';
-	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasFor, studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
 	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
-	import { findConversationDiagram } from '$lib/remote/diagrams/diagrams.remote';
+	import { chatTab } from '$lib/stores/workbench/tab-ref';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
 	import { ChatPanel } from '$lib/components/chat';
 	import { AgentSettingsPopover } from '$lib/components/agent';
@@ -61,22 +60,19 @@
 	// not shown yet, and never for a background tab — a chat the user is not looking
 	// at must not take the split out from under the one they are.
 	const canvas = $derived(canvasFor(sessionKey));
-	let openingGeneration = 0;
+	// A kept diagram is shown by its own tab, not by the draft one the transcript
+	// still names. The offer in `chat-panel.svelte` reads the same lookup, so the
+	// two cannot disagree about where the studio is.
+	const kept = $derived(studioTabFor(chat.conversationId));
 	$effect(() => {
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
+		// Waiting on the lookup rather than falling back to the draft tab: opening
+		// the wrong tab is not a slower answer, it is a different one.
+		if (kept.kind === 'pending') return;
 		const key = canvasSubjectKey(canvas.subject);
 		if (!canvasOpenings.shouldOpen(sessionKey, key) || !canvas.tab) return;
-		const generation = ++openingGeneration;
-		const conversationId = chat.conversationId;
-		void (async () => {
-			const persisted = conversationId
-				? (await findConversationDiagram(conversationId)).diagram
-				: undefined;
-			if (generation !== openingGeneration || workbench.focusedTabId !== chatTab(sessionKey))
-				return;
-			canvasOpenings.markShown(sessionKey, key);
-			await workbench.setSplit(persisted ? diagramTab(persisted.id) : canvas.tab!);
-		})();
+		canvasOpenings.markShown(sessionKey, key);
+		void workbench.setSplit(kept.kind === 'kept' ? kept.tab : canvas.tab);
 	});
 
 	let releaseContext: (() => void) | undefined;

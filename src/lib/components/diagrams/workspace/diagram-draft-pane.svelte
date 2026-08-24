@@ -226,19 +226,27 @@
 			</Button>
 		{/if}
 		{#if onCloseSplit}
-			<Tip text="Close split view">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						aria-label="Close split view"
-						onclick={close}
-					>
-						<X />
-					</Button>
-				{/snippet}
-			</Tip>
+			<!--
+				24px, not the row's 8px. Closing the split is a different kind of thing
+				from the actions to its left — 8px says "same group", and it put an
+				irreversible control one gap away from the one the user actually came
+				to press.
+			-->
+			<div class="ms-4 flex shrink-0 items-center">
+				<Tip text="Close split view">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Close split view"
+							onclick={close}
+						>
+							<X />
+						</Button>
+					{/snippet}
+				</Tip>
+			</div>
 		{/if}
 	</header>
 

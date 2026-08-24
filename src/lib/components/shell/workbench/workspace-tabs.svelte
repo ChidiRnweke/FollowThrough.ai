@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { page } from '$app/state';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -143,14 +142,15 @@
 
 	const tabCount = $derived(workbench.openTabs.length);
 	const hasTabs = $derived(tabCount > 0);
-	// The focused tab persists when the user navigates to a non-note route
-	// (Today, Todos, …) so the working set survives; the "you are here"
-	// highlight must not — only colour a tab while actually on its route.
-	const onNoteRoute = $derived(
-		page.url.pathname.startsWith('/notes/') ||
-			page.url.pathname.startsWith('/chats/') ||
-			page.url.pathname.startsWith('/search')
-	);
+	// The focused tab persists when the user navigates to a non-workbench route
+	// (Today, Todos, …) so the working set survives; the "you are here" highlight
+	// must not — only mark a tab while its pane is actually rendered.
+	//
+	// `isWorkbenchPath` rather than a list of path prefixes: it is the same
+	// predicate that decides whether these tabs have panes at all, so the strip
+	// cannot fall behind a new host the way the old list had — `/diagrams/*` was
+	// missing from it, and on a studio URL nothing in the strip was marked at all.
+	const onWorkbenchRoute = $derived(workbench.isWorkbenchPath);
 	let noteDragOver = $state(false);
 
 	function onDragOver(event: DragEvent): void {
@@ -289,7 +289,12 @@
 						</div>
 						{#each group.tabs as noteId, tabIndex (noteId)}
 							{@const tabVisible = showTab(group.projectId, noteId)}
-							{@const active = onNoteRoute && workbench.focusedTabId === noteId}
+							{@const focused = onWorkbenchRoute && workbench.focusedTabId === noteId}
+							<!-- Both panes of a split are on screen, so both tabs are seated. Only
+						     one of them has focus, and only that one is `aria-selected`. -->
+							{@const split =
+								onWorkbenchRoute && workbench.splitActive && workbench.splitTabId === noteId}
+							{@const active = focused || split}
 							<div
 								class="flex shrink-0 overflow-hidden"
 								data-project-tab={noteId}
@@ -318,7 +323,7 @@
 													{...props}
 													type="button"
 													role="tab"
-													aria-selected={active}
+													aria-selected={focused}
 													draggable="true"
 													class="group relative flex h-full min-w-32 max-w-64 shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
 														? 'bg-background font-medium text-foreground'
@@ -333,9 +338,15 @@
 								     bottom edge so it reads as a tab indicator rather than a
 								     strip-wide line. The inset keeps the green off the very top
 								     edge of the sticky strip where it would visually clip against
-								     the viewport. -->
+								     the viewport.
+
+							     Teal marks the live thing, and in a split both panes are live — so
+							     the split tab takes the same bar at 40%: "also on screen", without
+							     competing with "where you are". -->
 														<span
-															class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm bg-primary"
+															class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm {focused
+																? 'bg-primary'
+																: 'bg-primary/40'}"
 															aria-hidden="true"
 														></span>
 													{/if}
