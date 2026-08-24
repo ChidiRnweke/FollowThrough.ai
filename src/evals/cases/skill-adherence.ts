@@ -418,7 +418,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			note: 'Production regression: only 9 of 51 agent sessions loaded any skill. The "Weekly status update" skill is advertised in the system prompt with trigger hints that match this request, so the agent should load it without the user naming it.'
 		},
 		async run(lab) {
-			const { actor } = await seedWorkspace(lab, {
+			const workspace = await seedWorkspace(lab, {
 				projects: [{ name: 'Launch' }],
 				skills: [
 					{
@@ -438,14 +438,25 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 					}
 				]
 			});
-			const result = await runCase(lab, actor, {
+			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
 			});
+			const projectId = workspace.projectIds.get('Launch');
+			if (!projectId) throw new Error('Launch project was not seeded');
+			const shell = await lab.controllers.workspace().getShellContext(workspace.actor);
+			const createdNote = shell.noteTree.find(
+				(note) => note.projectId === projectId && note.kind === 'note'
+			);
+			const savedBody = createdNote
+				? (await lab.controllers.notes().get(workspace.actor, { noteId: createdNote.id })).note
+						.plainText
+				: '';
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
-				response: result.finalResponse.slice(0, 400)
+				response: result.finalResponse.slice(0, 400),
+				createdNote: createdNote?.title
 			});
 
 			const tools = scoreToolCalling(result, {
@@ -458,18 +469,20 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const follows = result.finalResponse.includes(this.expected.stamp as string);
+			const follows = savedBody.includes(this.expected.stamp as string);
 			px.logAnnotation({
 				name: ARCHETYPES.skillAdherence,
 				score: follows ? 1 : 0,
 				label: follows ? 'follows_skill' : 'ignored_skill',
 				explanation: follows
-					? 'response carries the skill-required stamp'
-					: 'response does not carry the skill-required stamp'
+					? 'persisted note carries the skill-required stamp'
+					: 'persisted note does not carry the skill-required stamp'
 			});
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
+			expect(
+				{ status: result.status, loaded: tools.passed, followed: follows },
+				`${tools.explanation}; persisted note must contain ${String(this.expected.stamp)}`
+			).toEqual({ status: 'completed', loaded: true, followed: true });
 		}
 	}
 ];
