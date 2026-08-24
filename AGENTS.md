@@ -6,6 +6,9 @@
 
 For UI design decisions (tokens, style, components) and UX patterns, see @DESIGN_SYSTEM.md.
 
+Before architecture work, run `ls docs/src/content/docs/decisions` and read any ADR whose title may
+explain the rationale behind the area you are changing.
+
 Run `pnpm test:architecture` after structural or test changes. Its project-specific topology and
 test-quality audits supplement Chisel; do not silence one checker to satisfy another.
 
