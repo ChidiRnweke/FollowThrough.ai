@@ -2,6 +2,8 @@ import type { ConversationId } from '$lib/models/agent';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { entryTools } from '$lib/stores/agent/chat.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+import type { DiagramId } from '$lib/models/diagrams';
+import { presentedDiagramRevision } from '$lib/models/diagrams/presented-canvas';
 import { canvasSubject, type CanvasSubject } from '$lib/stores/diagrams/canvas-subject';
 import {
 	canvasPlacementOf,
@@ -52,6 +54,37 @@ export const canvasFor = (sessionKey: ChatSessionKey): SessionCanvas | undefined
 	const chat = chatRegistry.peek(sessionKey);
 	const subject = canvasSubject((chat?.entries ?? []).flatMap((entry) => entryTools(entry)));
 	return subject ? { subject, tab: tabFor(subject, sessionKey) } : undefined;
+};
+
+/**
+ * The last revision this conversation wrote, named by the call that wrote it.
+ *
+ * The diagram a pane renders comes from `getProjectDiagram`, a cached query that
+ * every *client* write refreshes by pairing itself with `.updates(...)`. The
+ * agent's revision is written server-side inside a tool, so nothing invalidates
+ * that cache and the pane goes on showing the source from before the revision —
+ * the diagram changes in the database and not on screen.
+ *
+ * Identified by `callId` rather than by the diagram or its source: two revisions
+ * of one diagram share an id, and the source is elided from replayed history, so
+ * neither can tell a second revision from the first. The call can.
+ */
+export interface AppliedRevision {
+	readonly callId: string;
+	readonly diagramId: DiagramId;
+}
+
+export const latestAppliedRevision = (sessionKey: ChatSessionKey): AppliedRevision | undefined => {
+	const chat = chatRegistry.peek(sessionKey);
+	const tools = (chat?.entries ?? []).flatMap((entry) => entryTools(entry));
+	for (let index = tools.length - 1; index >= 0; index -= 1) {
+		const tool = tools[index]!;
+		if (tool.name !== 'present_diagram_revision' || tool.status !== 'succeeded') continue;
+		const revision = presentedDiagramRevision(tool.output);
+		if (revision?.kind === 'revision' && tool.callId)
+			return { callId: tool.callId, diagramId: revision.diagramId };
+	}
+	return undefined;
 };
 
 /**

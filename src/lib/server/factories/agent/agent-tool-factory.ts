@@ -236,7 +236,11 @@ export const agentToolCoverage = {
 		}
 	},
 	diagrams: {
-		generateMermaid: { kind: 'proposal' },
+		generateMermaid: {
+			kind: 'excluded',
+			reason:
+				'Mermaid generation is the inline note editor flow; the agent presents a canvas diagram with present_diagram.'
+		},
 		reviseMermaid: { kind: 'mutation' },
 		reviseInlineMermaid: {
 			kind: 'excluded',
