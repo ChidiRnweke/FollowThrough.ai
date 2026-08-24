@@ -36,11 +36,41 @@ import type { ContextNote, ContextSelection, ConversationId } from '$lib/models/
  */
 export const DEFAULT_MAX_TURNS = DEFAULT_AGENT_MAX_TURNS;
 
+/**
+ * The provider item underneath a stream event, as the fields this reader probes.
+ *
+ * Every field is `unknown` on purpose, and the set is closed to what is actually
+ * read below. Providers disagree about these — `callId` against `call_id`
+ * against `id`, `rawContent` against `content` against `summary` — so the
+ * tolerance is the point, and each value is coerced at the place that uses it.
+ * `Record<string, unknown>` said the same thing while inviting any key at all,
+ * which is how a probe for a field nobody produces reads as valid code.
+ */
+interface RawToolItem {
+	readonly name?: unknown;
+	readonly arguments?: unknown;
+	readonly callId?: unknown;
+	readonly call_id?: unknown;
+	readonly id?: unknown;
+	readonly output?: unknown;
+	readonly rawContent?: unknown;
+	readonly content?: unknown;
+	readonly summary?: unknown;
+}
+
+/** The serialised form of a stream item, which carries the same facts again. */
+interface SerializedToolItem {
+	readonly rawItem?: RawToolItem;
+	readonly toolName?: string;
+	readonly type?: string;
+	readonly output?: unknown;
+}
+
 type ToolStreamEvent = {
 	readonly type: string;
 	readonly name?: string;
 	readonly item?: {
-		readonly rawItem?: Record<string, unknown>;
+		readonly rawItem?: RawToolItem;
 		readonly callId?: string;
 		readonly toolName?: string;
 		readonly arguments?: string;

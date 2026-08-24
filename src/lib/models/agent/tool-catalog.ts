@@ -264,13 +264,6 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		description: 'Propose ranked references for a text selection.'
 	},
 	{
-		name: 'generate_mermaid_diagram',
-		classification: 'proposal',
-		retrievalText:
-			'generate create draw a new Mermaid architecture flowchart diagram from selected text',
-		description: 'Propose a Mermaid diagram from a text selection.'
-	},
-	{
 		name: 'revise_mermaid_diagram',
 		classification: 'mutation',
 		description: 'Revise a durable Mermaid diagram.'

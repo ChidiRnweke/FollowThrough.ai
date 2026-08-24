@@ -149,9 +149,9 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 
 	// Diagrams
 	{
-		id: 'diagram-generate',
-		goal: 'draw a diagram of this architecture',
-		expected: 'generate_mermaid_diagram'
+		id: 'relate-selection-implicit-review',
+		goal: 'this highlighted decision feels connected to something I wrote elsewhere; surface the relationship for review',
+		expected: 'relate_selection'
 	},
 	{
 		id: 'diagram-revise',

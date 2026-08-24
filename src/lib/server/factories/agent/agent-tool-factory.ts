@@ -1761,13 +1761,6 @@ const agentOnlyDefinitions = (
 					() => factory.references().suggestFromSelection(actor, { selection }, { model })
 				),
 				defineTool(
-					'generate_mermaid_diagram',
-					toolDescription('generate_mermaid_diagram'),
-					'proposal',
-					z.object({ instruction: z.string().optional() }),
-					(instruction) => factory.diagrams().generateMermaid(actor, { ...instruction, selection })
-				),
-				defineTool(
 					'create_skill_from_selection',
 					toolDescription('create_skill_from_selection'),
 					'mutation',
