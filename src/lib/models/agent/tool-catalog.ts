@@ -260,6 +260,8 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'generate_mermaid_diagram',
 		classification: 'proposal',
+		retrievalText:
+			'generate create draw a new Mermaid architecture flowchart diagram from selected text',
 		description: 'Propose a Mermaid diagram from a text selection.'
 	},
 	{
@@ -361,6 +363,8 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 	{
 		name: 'list_attachments',
 		classification: 'read',
+		retrievalText:
+			'list find access open or read uploaded attached files, PDF documents, and immutable resources on a note or skill bundle',
 		description: 'List the immutable resources attached to a note or skill bundle.'
 	},
 	{

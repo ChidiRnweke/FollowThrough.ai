@@ -34,7 +34,7 @@ interface RetrievalGoal {
 	readonly expected: string;
 }
 
-const GOALS: readonly RetrievalGoal[] = [
+export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 	// Projects and structure
 	{
 		id: 'projects-create',
@@ -83,10 +83,41 @@ const GOALS: readonly RetrievalGoal[] = [
 	},
 	{ id: 'notes-rename', goal: 'give this note a better title', expected: 'rename_note' },
 	{ id: 'notes-archive', goal: 'remove a note I do not need any more', expected: 'archive_note' },
+	{ id: 'notes-restore', goal: 'restore a note I moved to the trash', expected: 'restore_note' },
+	{
+		id: 'notes-trash-list',
+		goal: 'show me the notes currently in the trash',
+		expected: 'list_trashed_notes'
+	},
+	{
+		id: 'notes-delete-forever',
+		goal: 'permanently delete one note that is already in the trash',
+		expected: 'delete_note_forever'
+	},
+	{
+		id: 'notes-empty-trash',
+		goal: 'permanently empty the note trash',
+		expected: 'empty_note_trash'
+	},
 	{
 		id: 'notes-publish',
 		goal: 'publish this note as a versioned snapshot',
 		expected: 'publish_note'
+	},
+	{
+		id: 'notes-versions-list',
+		goal: 'show me the published version history of this note',
+		expected: 'list_note_versions'
+	},
+	{
+		id: 'notes-versions-diff',
+		goal: 'show what changed between two published versions of this note',
+		expected: 'diff_note_versions'
+	},
+	{
+		id: 'notes-version-restore',
+		goal: 'roll this note back to an earlier published version',
+		expected: 'restore_note_version'
 	},
 	{
 		id: 'notes-discard',
@@ -132,6 +163,21 @@ const GOALS: readonly RetrievalGoal[] = [
 		goal: 'turn this mermaid chart into an editable draw.io file',
 		expected: 'promote_diagram'
 	},
+	{
+		id: 'diagram-canvas-read',
+		goal: 'read the source of the diagram currently shown on the canvas',
+		expected: 'read_canvas_diagram'
+	},
+	{
+		id: 'diagram-icons-search',
+		goal: 'find a Kubernetes logo icon to use in a diagram shape',
+		expected: 'search_icons'
+	},
+	{
+		id: 'diagram-project-read',
+		goal: 'inspect an existing saved diagram in this project',
+		expected: 'read_project_diagram'
+	},
 
 	// Suggestions
 	{
@@ -172,6 +218,48 @@ const GOALS: readonly RetrievalGoal[] = [
 		id: 'skills-restore',
 		goal: 'roll that skill back to the previous version',
 		expected: 'restore_skill_version'
+	},
+	{
+		id: 'skills-save',
+		goal: 'rewrite the complete instruction body of this skill',
+		expected: 'save_skill'
+	},
+	{
+		id: 'skills-edit',
+		goal: 'change one instruction in this skill and preserve the rest',
+		expected: 'edit_skill'
+	},
+	{
+		id: 'skills-update',
+		goal: 'change the summary and trigger hints for this skill',
+		expected: 'update_skill'
+	},
+	{
+		id: 'skills-pin',
+		goal: 'pin this skill to the current project',
+		expected: 'set_skill_pinned'
+	},
+
+	// API access and tool availability
+	{
+		id: 'api-tokens-list',
+		goal: 'show me the MCP access tokens for this workspace',
+		expected: 'list_api_tokens'
+	},
+	{
+		id: 'api-token-revoke',
+		goal: 'revoke an MCP access token so its client loses access',
+		expected: 'revoke_api_token'
+	},
+	{
+		id: 'tool-preferences-list',
+		goal: 'show which assistant tools are enabled or disabled',
+		expected: 'list_tool_preferences'
+	},
+	{
+		id: 'tool-enabled-set',
+		goal: 'disable one assistant tool for this project',
+		expected: 'set_tool_enabled'
 	},
 
 	// Attachments
@@ -257,7 +345,7 @@ const GOALS: readonly RetrievalGoal[] = [
 
 const TOP_K = 5;
 
-export const toolRetrievalCases: readonly EvalCase[] = GOALS.filter(
+export const toolRetrievalCases: readonly EvalCase[] = TOOL_RETRIEVAL_GOALS.filter(
 	(entry) => !FIRST_CLASS_TOOL_NAMES.includes(entry.expected)
 ).map((entry) => ({
 	id: `tool-retrieval-${entry.id}`,

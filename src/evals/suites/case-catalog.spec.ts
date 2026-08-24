@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
+import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 
 describe('eval case selection', () => {
-	it('keeps the calibrated inventory at 175 cases', () => {
-		expect(ALL_EVAL_CASES).toHaveLength(175);
+	it('keeps the expanded inventory at 193 cases', () => {
+		expect(ALL_EVAL_CASES).toHaveLength(193);
 	});
 
 	it('keeps every stable case id unique', () => {
 		expect(new Set(ALL_EVAL_CASES.map((evalCase) => evalCase.id)).size).toBe(ALL_EVAL_CASES.length);
+	});
+
+	it('covers every long-tail tool with a retrieval goal', () => {
+		const covered = new Set(TOOL_RETRIEVAL_GOALS.map((goal) => goal.expected));
+		expect(TOOL_CATALOG.filter((tool) => !covered.has(tool.name)).map((tool) => tool.name)).toEqual(
+			[]
+		);
 	});
 
 	it('selects every case in an exact section', () => {
