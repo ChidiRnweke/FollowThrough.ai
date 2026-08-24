@@ -91,8 +91,12 @@ export const canvasSubject = (tools: readonly ChatToolActivity[]): CanvasSubject
  * A draft is identified by its source, so re-rendering the same draft never
  * re-opens the canvas but a revision does; a saved diagram is identified by its
  * id, so reading it twice is one subject rather than two.
+ *
+ * Total over a subject. It used to accept and return `undefined`, which meant
+ * "there is nothing on the canvas" travelled down through here and into
+ * `shouldOpenCanvas` and `markCanvasShown`, each of which then needed a branch
+ * for a case it could do nothing about. The caller that knows whether there is
+ * a subject is the caller that should decide.
  */
-export const canvasSubjectKey = (subject: CanvasSubject | undefined): string | undefined => {
-	if (!subject) return undefined;
-	return subject.kind === 'draft' ? `draft:${subject.draft.source}` : `saved:${subject.diagramId}`;
-};
+export const canvasSubjectKey = (subject: CanvasSubject): string =>
+	subject.kind === 'draft' ? `draft:${subject.draft.source}` : `saved:${subject.diagramId}`;

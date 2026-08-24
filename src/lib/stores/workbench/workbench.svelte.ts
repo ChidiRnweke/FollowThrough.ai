@@ -406,7 +406,7 @@ export class WorkbenchStore {
 		// cannot answer for it, so the diagram's own pane does, through the registry.
 		const diagramId = diagramIdOf(this.focusedTabId);
 		this._activeProjectId =
-			diagramId === undefined ? undefined : diagramRegistry.peek(diagramId)?.projectId;
+			diagramId === undefined ? undefined : diagramRegistry.peek(diagramId)?.description?.projectId;
 	}
 
 	/** Returns the user's working set in URL-state form. */

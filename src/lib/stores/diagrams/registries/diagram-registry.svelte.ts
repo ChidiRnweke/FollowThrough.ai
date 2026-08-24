@@ -13,22 +13,36 @@ import { Registry } from '$lib/stores/notes/registries/registry';
  * that loads a diagram publishes what the chrome needs here, and the tab strip
  * and the workbench read it back without holding a reference of their own.
  */
+/**
+ * What a loaded diagram tells the chrome about itself.
+ *
+ * `title` is the one honest optional: a diagram row may have no title, and the
+ * chrome supplies its own word for that. `projectId` and `kind` are read off a
+ * row that exists, so they are not.
+ */
+export interface DiagramDescription {
+	readonly title?: string;
+	readonly projectId: ProjectId;
+	readonly kind: DiagramKind;
+}
+
 export class DiagramStore {
 	constructor(readonly diagramId: DiagramId) {}
 
-	title = $state<string | undefined>(undefined);
-	projectId = $state<ProjectId | undefined>(undefined);
-	kind = $state<DiagramKind | undefined>(undefined);
+	/**
+	 * What the pane published, or nothing until it has loaded.
+	 *
+	 * One field, because there is one fact. Three separate optionals let a reader
+	 * ask for the project of a diagram whose kind it had not established, and made
+	 * "not loaded yet" indistinguishable from "loaded, and untitled" — both of
+	 * which came out of `?.title` as the same `undefined` and collapsed into one
+	 * `?? 'Untitled diagram'`. `describe` only ever set all three together.
+	 */
+	description = $state<DiagramDescription | undefined>(undefined);
 
 	/** Called by the pane once its diagram has loaded, and after a rename. */
-	describe(description: {
-		readonly title?: string;
-		readonly projectId: ProjectId;
-		readonly kind: DiagramKind;
-	}): void {
-		this.title = description.title;
-		this.projectId = description.projectId;
-		this.kind = description.kind;
+	describe(description: DiagramDescription): void {
+		this.description = description;
 	}
 }
 

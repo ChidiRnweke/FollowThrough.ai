@@ -71,7 +71,7 @@
 		if (isSearchTab(tabId)) return 'Search';
 		const diagramId = diagramIdOf(tabId);
 		if (diagramId !== undefined)
-			return diagramRegistry.peek(diagramId)?.title ?? 'Untitled diagram';
+			return diagramRegistry.peek(diagramId)?.description?.title ?? 'Untitled diagram';
 		if (isDraftTab(tabId)) return 'Diagram draft';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {

@@ -78,19 +78,20 @@ describe('What the conversation put on the canvas', () => {
 });
 
 describe('The key the canvas remembers a subject by', () => {
+	// `canvasSubject` answers `CanvasSubject | undefined`; `canvasSubjectKey` takes
+	// a subject. Narrowing here is the same narrowing every caller now does.
+	const keyOf = (tools: readonly ChatToolActivity[]): string | undefined => {
+		const subject = canvasSubject(tools);
+		return subject ? canvasSubjectKey(subject) : undefined;
+	};
+
 	it('separates one draft revision from the next', () => {
-		expect(canvasSubjectKey(canvasSubject([DRAFT]))).not.toBe(
-			canvasSubjectKey(canvasSubject([call('present_diagram', { kind: 'mermaid', source: 'x' })]))
+		expect(keyOf([DRAFT])).not.toBe(
+			keyOf([call('present_diagram', { kind: 'mermaid', source: 'x' })])
 		);
 	});
 
 	it('is the same for the same saved diagram read twice', () => {
-		expect(canvasSubjectKey(canvasSubject([SAVED]))).toBe(
-			canvasSubjectKey(canvasSubject([SAVED, SAVED]))
-		);
-	});
-
-	it('is undefined when the conversation has produced nothing', () => {
-		expect(canvasSubjectKey(undefined)).toBeUndefined();
+		expect(keyOf([SAVED])).toBe(keyOf([SAVED, SAVED]));
 	});
 });

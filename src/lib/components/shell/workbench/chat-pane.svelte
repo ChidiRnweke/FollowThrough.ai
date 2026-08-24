@@ -68,9 +68,9 @@
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
 		// Waiting on the lookup rather than falling back to the draft tab: opening
 		// the wrong tab is not a slower answer, it is a different one.
-		if (kept.kind === 'pending') return;
+		if (kept.kind === 'pending' || !canvas) return;
 		const key = canvasSubjectKey(canvas.subject);
-		if (!canvasOpenings.shouldOpen(sessionKey, key) || !canvas.tab) return;
+		if (!canvasOpenings.shouldOpen(sessionKey, key)) return;
 		canvasOpenings.markShown(sessionKey, key);
 		void workbench.setSplit(kept.kind === 'kept' ? kept.tab : canvas.tab);
 	});

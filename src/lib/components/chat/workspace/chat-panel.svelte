@@ -93,7 +93,7 @@
 	 * had just opened, for the rest of the conversation.
 	 */
 	const canvasOnScreen = $derived(
-		(canvas.tab !== undefined && workbench.openTabs.includes(canvas.tab)) ||
+		(canvas !== undefined && workbench.openTabs.includes(canvas.tab)) ||
 			(kept.kind === 'kept' && workbench.openTabs.includes(kept.tab))
 	);
 	/**
@@ -108,7 +108,7 @@
 		// Offering while the lookup is still out flashes the card onto every mount
 		// of an already-kept conversation — which is the whole reason `pending` is
 		// an arm of its own rather than an absent tab.
-		canvas.subject && canvas.tab && kept.kind !== 'pending' && !canvasOnScreen
+		canvas && kept.kind !== 'pending' && !canvasOnScreen
 			? { subject: canvas.subject, canvasTab: canvas.tab }
 			: undefined
 	);

@@ -53,7 +53,7 @@
 			case 'search':
 				return 'Search notes';
 			case 'diagram':
-				return diagramRegistry.peek(ref.diagramId)?.title ?? 'Untitled diagram';
+				return diagramRegistry.peek(ref.diagramId)?.description?.title ?? 'Untitled diagram';
 			case 'draft':
 				return 'Diagram draft';
 			case 'chat': {

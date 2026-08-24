@@ -44,9 +44,9 @@
 	} = $props();
 
 	const chat = $derived(chatRegistry.peek(sessionKey));
-	const subject = $derived(canvasFor(sessionKey).subject);
+	const subject = $derived(canvasFor(sessionKey)?.subject);
 	const draft = $derived(subject?.kind === 'draft' ? subject.draft : undefined);
-	const draftKey = $derived(canvasSubjectKey(subject));
+	const draftKey = $derived(subject ? canvasSubjectKey(subject) : undefined);
 	let titleOverride = $state<{ readonly key: string; readonly title: string } | undefined>();
 	const title = $derived.by(() => {
 		const override = titleOverride;
@@ -181,7 +181,10 @@
 	 * diagram reopened the split the user had just dismissed.
 	 */
 	function close(): void {
-		canvasOpenings.markShown(sessionKey, canvasSubjectKey(subject));
+		// Only a canvas with something on it has a subject to mark. Closing an empty
+		// one has nothing to remember, which is a decision here rather than a branch
+		// three calls down in `markCanvasShown`.
+		if (subject) canvasOpenings.markShown(sessionKey, canvasSubjectKey(subject));
 		onCloseSplit?.();
 	}
 

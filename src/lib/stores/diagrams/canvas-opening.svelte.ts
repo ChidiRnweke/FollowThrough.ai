@@ -16,12 +16,12 @@ class CanvasOpenings {
 	private readonly bySession = new SvelteMap<ChatSessionKey, CanvasOpening>();
 
 	/** True when this conversation's canvas should open for what is on it now. */
-	shouldOpen(sessionKey: ChatSessionKey, subjectKey: string | undefined): boolean {
+	shouldOpen(sessionKey: ChatSessionKey, subjectKey: string): boolean {
 		return shouldOpenCanvas(this.bySession.get(sessionKey) ?? {}, subjectKey);
 	}
 
 	/** Records a subject as shown — whether it was opened for, or dismissed. */
-	markShown(sessionKey: ChatSessionKey, subjectKey: string | undefined): void {
+	markShown(sessionKey: ChatSessionKey, subjectKey: string): void {
 		this.bySession.set(sessionKey, markCanvasShown(subjectKey));
 	}
 

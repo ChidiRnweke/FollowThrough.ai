@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { markCanvasShown, shouldOpenCanvas } from './canvas-opening';
 
 describe('When the diagram canvas opens beside a chat', () => {
-	// The studio is a chat until there is something to show.
-	it('stays closed while the conversation has drafted nothing', () => {
-		expect(shouldOpenCanvas({}, undefined)).toBe(false);
-	});
-
+	// The studio is a chat until there is something to show. Nothing asserts that
+	// here any more: `shouldOpenCanvas` takes a subject key, so "the conversation
+	// has drafted nothing" is a case its callers settle and its type rules out.
 	it('opens when the agent presents a diagram', () => {
 		expect(shouldOpenCanvas({}, 'flowchart LR\nA --> B')).toBe(true);
 	});
@@ -21,9 +19,5 @@ describe('When the diagram canvas opens beside a chat', () => {
 
 	it('opens again when the agent revises the diagram', () => {
 		expect(shouldOpenCanvas(markCanvasShown('first version'), 'second version')).toBe(true);
-	});
-
-	it('forgets the shown draft when there is none', () => {
-		expect(markCanvasShown(undefined)).toEqual({});
 	});
 });

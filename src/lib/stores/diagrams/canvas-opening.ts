@@ -19,9 +19,8 @@ export interface CanvasOpening {
 	readonly shownKey?: string;
 }
 
-export const shouldOpenCanvas = (state: CanvasOpening, subjectKey: string | undefined): boolean =>
-	subjectKey !== undefined && subjectKey !== state.shownKey;
+export const shouldOpenCanvas = (state: CanvasOpening, subjectKey: string): boolean =>
+	subjectKey !== state.shownKey;
 
 /** Records a subject as shown, whether it was opened for or dismissed. */
-export const markCanvasShown = (subjectKey: string | undefined): CanvasOpening =>
-	subjectKey === undefined ? {} : { shownKey: subjectKey };
+export const markCanvasShown = (subjectKey: string): CanvasOpening => ({ shownKey: subjectKey });
