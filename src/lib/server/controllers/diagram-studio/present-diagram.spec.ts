@@ -32,6 +32,9 @@ const setup = () => {
 		controller: new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
 				diagramFinder: library,
+				diagramDraftWriter: library,
+				// Indexing is a downstream effect, not part of what these tests state.
+				diagramIndexer: { index: async () => {} },
 				drawioXmlValidator: { validate: (source: string) => source },
 				drawioTextExtractor: { extract: async () => 'Ingest Index Answer' }
 			})
@@ -90,15 +93,33 @@ describe('Presenting a diagram on the studio canvas', () => {
 		expect(result.diagramId).toBe(target.id);
 	});
 
-	it('stores nothing even when it is a revision of something saved', async () => {
+	// A revision lands on the row it names. It used to only echo, leaving the write
+	// to a button in a canvas the user could not reach once the diagram was kept —
+	// so the agent could report a diagram changed and change nothing.
+	it('saves a revision onto the diagram it names', async () => {
 		const { controller, diagrams } = setup();
-		const target = drawioBuilder();
+		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
 		await controller.presentDiagramRevision(testActor(), {
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id
 		});
-		expect(diagrams.diagrams).toEqual([target]);
+		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
+	});
+
+	// ADR 0003: the write is a working revision, so publishing stays the user's
+	// decision even though the agent no longer needs a gesture to be seen.
+	it('leaves what the user published untouched', async () => {
+		const { controller, diagrams } = setup();
+		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
+		diagrams.diagrams = [target];
+		await controller.presentDiagramRevision(testActor(), {
+			source: VALID_DRAWIO_XML,
+			diagramId: target.id
+		});
+		expect(diagrams.diagrams[0]).toMatchObject({
+			publishedRevision: target.publishedRevision
+		});
 	});
 
 	it('rejects a revision target that the actor cannot read', async () => {

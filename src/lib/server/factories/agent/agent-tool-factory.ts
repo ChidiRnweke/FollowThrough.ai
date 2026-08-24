@@ -273,7 +273,10 @@ export const agentToolCoverage = {
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
 		presentDiagram: { kind: 'read' },
-		presentDiagramRevision: { kind: 'read' },
+		// A revision writes a working revision onto the diagram it names, so it asks
+		// first. `read` would mean no prompt, which is how the agent came to change a
+		// saved diagram with neither permission asked nor anything shown.
+		presentDiagramRevision: { kind: 'mutation' },
 		readCanvasDiagram: { kind: 'read' },
 		readProjectDiagram: { kind: 'read' },
 		searchDiagramIcons: { kind: 'read' },
@@ -1795,7 +1798,7 @@ const agentOnlyDefinitions = (
 		defineTool(
 			'present_diagram_revision',
 			toolDescription('present_diagram_revision'),
-			'read',
+			'mutation',
 			z.object({
 				source: z.string().min(1),
 				title: z.string().min(1).optional(),

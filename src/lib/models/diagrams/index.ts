@@ -382,14 +382,29 @@ export interface ReadCanvasDiagramInput {
 	readonly conversationId: ConversationId;
 }
 
+/**
+ * The three states a conversation's canvas can be in.
+ *
+ * `present` used to be one arm carrying an optional `diagramId`, absent exactly
+ * when the canvas held a new diagram — one fact stated twice, and the same
+ * pairing that let a revision be read as a draft. The arms mirror
+ * `PresentedDiagram`, which they cannot name: a model domain is self-contained,
+ * so `presented-canvas` is not importable from here.
+ */
 export type ReadCanvasDiagramOutput =
 	| {
-			readonly kind: 'present';
+			readonly kind: 'draft';
 			readonly title?: string;
 			/** Uncompressed draw.io XML; the canvas holds nothing else. */
 			readonly source: string;
-			/** The saved diagram this canvas draft revises, when it names a real row. */
-			readonly diagramId?: DiagramId;
+	  }
+	| {
+			readonly kind: 'revision';
+			readonly title?: string;
+			/** Uncompressed draw.io XML; the canvas holds nothing else. */
+			readonly source: string;
+			/** The saved diagram this canvas version revises. */
+			readonly diagramId: DiagramId;
 	  }
 	| {
 			readonly kind: 'empty';

@@ -443,16 +443,16 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		classification: 'read',
 		surface: 'app',
 		description:
-			'Show a new diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML and saves nothing: the user chooses whether and where to keep what they see. This tool never revises a saved diagram; use present_diagram_revision for that.',
+			'Show a new diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML and saves nothing: the user chooses whether and where to keep what they see. Send raw XML, never HTML-escaped: the source must start with a literal "<". This tool never revises a saved diagram; use present_diagram_revision for that.',
 		retrievalText: 'show render draw a diagram on the canvas for the user to look at'
 	},
 	{
 		name: 'present_diagram_revision',
-		classification: 'read',
+		classification: 'mutation',
 		surface: 'app',
 		description:
-			'Show a revised version of an existing saved draw.io diagram on the studio canvas. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. The server verifies the target before the canvas can offer to replace it.',
-		retrievalText: 'show a verified revision of an existing saved diagram on the canvas'
+			'Revise an existing saved draw.io diagram. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. Send raw XML, never HTML-escaped: the source must start with a literal "<". The revision is saved onto that diagram as a new working revision and appears in its tab; what the user has published does not change until they publish it. This is the only way to change a saved diagram — present_diagram cannot.',
+		retrievalText: 'revise change update an existing saved diagram'
 	},
 	{
 		name: 'read_canvas_diagram',

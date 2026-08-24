@@ -322,7 +322,7 @@ describe('Agent tool coverage invariants', () => {
 		const diagramStudio = capabilityDependencies<DiagramStudioController>({
 			readCanvasDiagram: async (_actor, input) =>
 				input.conversationId === conversationId
-					? { kind: 'present', source: '<mxfile />', title: 'Current' }
+					? { kind: 'draft', source: '<mxfile />', title: 'Current' }
 					: {
 							kind: 'empty',
 							message: 'Empty',
@@ -340,7 +340,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'read_canvas_diagram');
 		expect(await tool?.execute({})).toEqual({
-			kind: 'present',
+			kind: 'draft',
 			source: '<mxfile />',
 			title: 'Current'
 		});

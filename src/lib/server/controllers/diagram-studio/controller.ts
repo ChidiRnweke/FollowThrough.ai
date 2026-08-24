@@ -231,6 +231,21 @@ export class DiagramStudio implements DiagramStudioController {
 		};
 	}
 
+	/**
+	 * A revision lands on the row it names, as a working revision.
+	 *
+	 * It used to only validate and echo, leaving the version to be applied by a
+	 * button in the draft canvas. That canvas is a tab of its own, and a
+	 * conversation whose diagram was already kept opens the *saved* diagram's tab
+	 * instead — so the button was unreachable and the agent could report a diagram
+	 * changed while the user looked at the version before it.
+	 *
+	 * Saving here does not decide anything for the user (ADR 0003): the write is a
+	 * working revision, `publishedRevision` is untouched, and History and Publish
+	 * remain how a version is accepted or abandoned. The approval boundary asks
+	 * before the call, which is where consent belongs — the tool is classified a
+	 * mutation for exactly that reason.
+	 */
 	async presentDiagramRevision(
 		actor: ActorContext,
 		input: PresentDiagramRevisionInput
@@ -239,6 +254,13 @@ export class DiagramStudio implements DiagramStudioController {
 		if (target.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be revised here');
 		const presented = await this.presentDiagram(actor, input);
+		// Base version sent with the write, so a diagram the user edited meanwhile
+		// reports a conflict instead of being overwritten (ADR 0010).
+		await this.saveProjectDiagramDraft(actor, {
+			diagramId: target.id,
+			source: presented.source,
+			baseEtag: diagramEtag(target)
+		});
 		return { ...presented, diagramId: target.id };
 	}
 
@@ -248,7 +270,7 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<ReadCanvasDiagramOutput> {
 		const presented = await this.dependencies.canvasSource.latest(actor, input.conversationId);
 		return presented
-			? { kind: 'present', ...presented }
+			? presented
 			: {
 					kind: 'empty',
 					message: 'This conversation has not presented a diagram on its canvas.',
