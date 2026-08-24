@@ -4,27 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createLab, type Lab } from '../lab/application';
 import { ARCHETYPES } from '../cases/types';
-import { evalModel, passRate, suiteConfig, suiteName } from '../lab/phoenix';
+import { evalModel, suiteConfig, suiteName } from '../lab/phoenix';
 import { EVAL_SECTIONS, selectEvalCases } from './case-catalog';
 import { appendEvalResult, buildEvalResultRecord } from '../lab/result-log';
+import { acceptanceCriteriaFor } from './acceptance-criteria';
 
 let lab: Lab;
-
-// New-feature archetypes measure behaviour the model is still learning: the
-// createdAfter canary fails differently each run (no filter, then a cross-channel
-// citation), which is exactly the variance a canary should surface. Gate them a
-// notch below 1 so the trend is readable without a single-run flake killing CI.
-const acceptanceCriteria = Object.values(ARCHETYPES).map((archetype) =>
-	archetype === ARCHETYPES.timeAwareness ||
-	archetype === ARCHETYPES.parallelExecution ||
-	archetype === ARCHETYPES.memoryProactiveProposal ||
-	archetype === ARCHETYPES.memoryTaskRead ||
-	archetype === ARCHETYPES.skillProactiveLoad ||
-	archetype === ARCHETYPES.taskCompletion ||
-	archetype === ARCHETYPES.reworkAvoidance
-		? passRate(archetype, 0.8)
-		: passRate(archetype)
-);
 
 const profile = process.env.EVAL_PROFILE ?? 'exploratory';
 const selectedSection = process.env.EVAL_SECTION;
@@ -54,6 +39,7 @@ const configuredRepetitions = Math.max(1, Number.parseInt(process.env.EVAL_REPET
 const repetitionsFor = (evalCase: (typeof profiledCases)[number]): number =>
 	evalCase.splits.some((split) => exactInvariantSplits.has(split)) ? 1 : configuredRepetitions;
 const resultsPath = process.env.EVAL_RESULTS_PATH ?? '/tmp/followthrough-eval-results.json';
+const acceptanceCriteria = acceptanceCriteriaFor(profiledCases);
 
 /**
  * Every case in the app is registered into this one suite, which is what makes
