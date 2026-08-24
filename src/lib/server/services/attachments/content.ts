@@ -94,15 +94,34 @@ export class AttachmentContent implements DocumentOcr {
 		return rendered.filter(Boolean).join('\n\n');
 	}
 
+	/**
+	 * One image's line, described if the vision model could and marked if it could not.
+	 *
+	 * A failure used to escape here and take the whole parse with it, so one
+	 * unreadable image cost the reader every other image in the document and the
+	 * text around them. The image is still in the document either way; what is in
+	 * doubt is only whether anything can be said about it.
+	 *
+	 * The placeholder is not a default dressed as a success — it says, in the text
+	 * the agent goes on to read, that this image was not described. Silently
+	 * dropping the line would have been the dishonest fix: the agent would have
+	 * answered about a document it could not see all of, and never known.
+	 */
 	private async describeImage(
 		image: { dataUrl: string; index: number; context?: string },
 		model: string
 	): Promise<string> {
-		const description = await this.describer.describe({
-			imageDataUrl: image.dataUrl,
-			...(image.context ? { context: image.context } : {}),
-			model
-		});
-		return `> **Image ${image.index}:** ${description}`;
+		try {
+			const description = await this.describer.describe({
+				imageDataUrl: image.dataUrl,
+				...(image.context ? { context: image.context } : {}),
+				model
+			});
+			return `> **Image ${image.index}:** ${description}`;
+			// audit-allow: silent-catch — the returned placeholder states the failure in the rendered document, and the warn names it for an operator.
+		} catch (error) {
+			console.warn(`[attachments] Image ${image.index} could not be described.`, error);
+			return `> **Image ${image.index}:** (description unavailable)`;
+		}
 	}
 }

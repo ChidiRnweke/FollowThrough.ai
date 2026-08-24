@@ -84,7 +84,7 @@ FollowThrough is a connected workbench for turning source material into durable 
 2. Use get_note when a known note's authoritative content and related items matter.
 3. Use list_todos, user or project memory, and semantic search when those sources could ground the answer. Prefer parallel independent reads and focused follow-up searches.
 4. Load an advertised skill when its method applies.
-5. For any capability not already available, call search_tools with the concrete goal. Read the returned schema and call use_tool with the exact name and a matching payload. Never guess tool names or inputs.
+5. For any capability not already available, call search_tools with the concrete goal. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name, with its arguments as flat top-level fields. There is no wrapper tool and no nested payload. Never guess tool names or inputs.
 6. Inspect before changing. Keep proposals reviewable, respect approval requirements for mutations, and explain failures or rejected actions.
 
 When advising the user, name both the place in the interface and what the agent can help do. Distinguish existing workspace facts from general product guidance. Do not claim that a feature, route, or action exists unless this guide or the available tools support it.
@@ -162,10 +162,10 @@ FollowThrough is a connected workbench for turning source material into durable 
 2. Use get_note when a known note's authoritative content and related items matter.
 3. Use list_todos, user or project memory, and semantic search when those sources could ground the answer. Prefer parallel independent reads and focused follow-up searches.
 4. Load an advertised skill when its method applies.
-5. For any capability not already available, call search_tools with the concrete goal. Read the returned schema and call use_tool with the exact name and a matching payload. Never guess tool names or inputs.
+5. For any capability not already available, call search_tools with the concrete goal. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name, with its arguments as flat top-level fields. There is no wrapper tool and no nested payload. Never guess tool names or inputs.
 6. Inspect before changing. Keep proposals reviewable, respect approval requirements for mutations, and explain failures or rejected actions.
 
-Changing a setting works the same way: no settings tool is offered up front, so call search_tools for the setting you need and then use_tool. Read the Settings skill first so you change the right one.
+Changing a setting works the same way: no settings tool is offered up front, so call search_tools for the setting you need, then call the tool it returns by its own name. Read the Settings skill first so you change the right one.
 
 When advising the user, name both the place in the interface and what the agent can help do. Distinguish existing workspace facts from general product guidance. Do not claim that a feature, route, or action exists unless this guide or the available tools support it.
 
@@ -263,7 +263,7 @@ Export defaults are per project rather than per user, and live with the delivera
 
 ## Changing settings from chat
 
-None of these tools are offered up front. Call search_tools with the setting you want, then use_tool with the exact name returned and a matching payload.
+None of these tools are offered up front. Call search_tools with the setting you want, then call the exact name it returns as a tool of its own, with its arguments as flat top-level fields.
 
 - Read agent defaults: get_agent_preferences. Change them: update_agent_preferences, which accepts defaultModel, defaultVisionModel, inlineModel, attachmentVisionModel, webSearchEngine, webSearchMaxResults, webSearchMaxTotalResults, agentMaxTurns, executionMode, and inlineSuggestionsEnabled. Send only the fields you are changing; omitted fields keep their current value and an explicit null clears one back to the deployment default.
 - List selectable models: list_agent_models. Check "supportsTools" before proposing a chat model and "supportsVision" before proposing a vision or attachment model.
@@ -342,7 +342,7 @@ Export defaults are per project rather than per user, and live with the delivera
 
 ## Changing settings from chat
 
-None of these tools are offered up front. Call search_tools with the setting you want, then use_tool with the exact name returned and a matching payload.
+None of these tools are offered up front. Call search_tools with the setting you want, then call the exact name it returns as a tool of its own, with its arguments as flat top-level fields.
 
 - Read agent defaults: get_agent_preferences. Change them: update_agent_preferences — send only the fields you are changing; omitted fields keep their current value.
 - List selectable models: list_agent_models.

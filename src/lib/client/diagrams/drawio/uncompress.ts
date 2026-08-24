@@ -25,10 +25,26 @@ const inflateRaw = async (bytes: Uint8Array): Promise<string> => {
 	return new Response(stream).text();
 };
 
-const decompressBody = async (body: string): Promise<string> => {
-	const binary = atob(body.trim());
-	const inflated = await inflateRaw(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
-	return decodeURIComponent(inflated);
+/**
+ * An inflated body, or the news that this one is not inflatable.
+ *
+ * A value rather than a throw, because the caller's answer to "this will not
+ * inflate" is to keep what it already had — which it cannot do from inside a
+ * rejected promise. `atob` throws on anything that is not base64, and
+ * `DecompressionStream` throws on bytes that are not a deflate stream; both used
+ * to escape `uncompressDrawioXml` and fail the save with a decode error, in
+ * place of the server message that actually says what is wrong with the payload.
+ */
+type Inflated = { readonly kind: 'inflated'; readonly body: string } | { readonly kind: 'corrupt' };
+
+const decompressBody = async (body: string): Promise<Inflated> => {
+	try {
+		const binary = atob(body.trim());
+		const inflated = await inflateRaw(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+		return { kind: 'inflated', body: decodeURIComponent(inflated) };
+	} catch {
+		return { kind: 'corrupt' };
+	}
 };
 
 /**
@@ -46,7 +62,10 @@ export async function uncompressDrawioXml(xml: string): Promise<string> {
 		matches.map(async (match) => {
 			const body = match[2]!;
 			if (isXml(body) || !body.trim()) return body;
-			return decompressBody(body);
+			const inflated = await decompressBody(body);
+			// Untouched, so the server's validator is what reports it — it can say what
+			// is wrong with the payload, and a decode error here cannot.
+			return inflated.kind === 'inflated' ? inflated.body : body;
 		})
 	);
 	let index = 0;

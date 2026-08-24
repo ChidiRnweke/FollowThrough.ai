@@ -169,15 +169,41 @@ interface Frontmatter {
 	readonly body: string;
 }
 
+/**
+ * The keys a frontmatter block declares, or the news that it declares none.
+ *
+ * `corrupt` covers both ways a block can fail to name any: YAML that will not
+ * parse, and YAML that parses to something other than a mapping. They are one
+ * answer here, because the
+ * caller does the same thing with both: strip the block and record no keys.
+ * Only the first used to be an exception, and it escaped `splitFrontmatter`
+ * entirely \u2014 so one file with a malformed block failed the import it was part
+ * of, rather than being imported with its frontmatter stripped like every other
+ * file whose frontmatter says nothing usable.
+ */
+type FrontmatterBlock =
+	{ readonly kind: 'keys'; readonly keys: readonly string[] } | { readonly kind: 'corrupt' };
+
+const frontmatterBlock = (block: string): FrontmatterBlock => {
+	try {
+		const parsed: unknown = parseYaml(block);
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+			return { kind: 'corrupt' };
+		return { kind: 'keys', keys: Object.keys(parsed as Record<string, unknown>) };
+	} catch {
+		return { kind: 'corrupt' };
+	}
+};
+
 /** Split and parse a leading YAML frontmatter block, tolerating a malformed one. */
 export const splitFrontmatter = (source: string): Frontmatter => {
 	const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
 	if (!match) return { keys: [], body: source };
 	const body = source.slice(match[0].length);
-	const parsed: unknown = parseYaml(match[1]);
-	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-		return { keys: [], body };
-	return { keys: Object.keys(parsed as Record<string, unknown>), body };
+	// Stripped either way: a reader who sees `: : :` at the top of their note has
+	// been shown the delimiter's contents, which is worse than showing nothing.
+	const parsed = frontmatterBlock(match[1]!);
+	return { keys: parsed.kind === 'keys' ? parsed.keys : [], body };
 };
 
 const titleFromFileName = (fileName: string): string => {

@@ -4,6 +4,7 @@ import {
 	EnvSecretsBackend,
 	InfisicalSecretsBackend,
 	type InfisicalLikeClient,
+	SecretsBackendError,
 	SecretsNotFoundError,
 	SecretsReader,
 	hydrateEnvironment,
@@ -112,11 +113,25 @@ describe('secrets backends', () => {
 		expect(await backend.readSecret('DATABASE_URL')).toBe('postgresql://app');
 	});
 
-	test('an exhausted retry budget surfaces as not found', async () => {
+	// This test used to require the opposite, and required a bug. `readOptional`
+	// turns `SecretsNotFoundError` into `undefined` and every `readOrDefault` then
+	// falls back — so an unreachable Infisical reported as "not found" would boot
+	// the whole application on default configuration, against a dead secret store,
+	// with nothing anywhere saying so. An outage is not an absent secret.
+	test('an exhausted retry budget surfaces as a backend failure, not as absence', async () => {
 		const client = new FakeSecretsClient(applicationSecrets());
 		client.failures = 3;
 		const backend = infisicalBackend(client);
-		await expect(backend.readSecret('DATABASE_URL')).rejects.toThrow(SecretsNotFoundError);
+		await expect(backend.readSecret('DATABASE_URL')).rejects.toThrow(SecretsBackendError);
+	});
+
+	// The consequence that makes the distinction worth keeping.
+	test('an unreachable backend is never read as an unset optional secret', async () => {
+		const client = new FakeSecretsClient(applicationSecrets());
+		client.failures = 3;
+		await expect(infisicalBackend(client).readOptional('DATABASE_URL')).rejects.toThrow(
+			SecretsBackendError
+		);
 	});
 
 	test('a retry re-authenticates in case the access token expired', async () => {

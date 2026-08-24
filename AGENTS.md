@@ -107,8 +107,14 @@ diff where a human can audit it. An allowance is not a migration mechanism.
   `conversationId` came to be fed an optional one, compiled clean, and failed against the database
   on every new chat's first message.
 - **No silent `catch`** (`silent-catch`). A `catch` that neither rethrows nor does anything
-  observable swallows the failure. Any call inside it — a log, a toast, a metric, a recovery that
-  reports itself — satisfies the rule.
+  observable swallows the failure. The checker accepts exactly two things, and a log is not one
+  of them: **rethrow**, or **return an explicit failure result** — an object literal whose `kind`
+  is `'corrupt'`, `'error'` or `'failure'`. A `console.warn` and a bare `return null` still fail
+  the audit, so the shape of the fix is decided for you: make the failure a value the caller has
+  to read, and let the caller decide. Add a toast or a log _as well_ where an operator or a user
+  needs to know; it is never the thing that satisfies the rule. `audit-allow` is for the case
+  where the recovery genuinely reports itself somewhere the type cannot show — say the returned
+  placeholder that lands in a rendered document — and the reason must name where.
 
 ## Defaults, limits, and blast radius
 

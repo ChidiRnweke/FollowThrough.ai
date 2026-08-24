@@ -874,7 +874,15 @@ const textSelectionSchema = z
 	.strict();
 const conversationImageSchema = z
 	.object({
-		id: z.string(),
+		/**
+		 * A uuid, and both producers mint one deliberately because of it —
+		 * `rememberCanvasRender` says so in as many words, having been changed from a
+		 * readable `canvas-<key>` that this boundary rejected and that failed the
+		 * whole message. Loosening this to a bare string left that comment describing
+		 * a rule nothing enforced any more, so the next id to be minted readably
+		 * would reach the server and fail somewhere further in.
+		 */
+		id: z.string().uuid(),
 		mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
 		dataUrl: z.string(),
 		name: z.string()

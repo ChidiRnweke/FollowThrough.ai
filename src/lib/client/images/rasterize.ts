@@ -19,17 +19,33 @@
 const withoutForeignObjects = (svgMarkup: string): string =>
 	svgMarkup.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
 
-/** Invalid SVG input rejects; a missing canvas context is the only unsupported result. */
+/**
+ * The PNG, or `null` when this markup cannot be rasterized at all.
+ *
+ * One answer for every way it can fail — markup the browser will not load as an
+ * image, or a canvas that hands back no 2D context. Every caller already treats
+ * `null` as "embed the SVG instead", which is the better outcome and was sitting
+ * unreachable: an unloadable SVG rejected instead, and in `renderDiagrams` that
+ * rejection escapes a `Promise.all` and fails the entire export — three lines
+ * above the fallback that would have handled it.
+ */
 export async function rasterizeSvg(svgMarkup: string, scale = 2): Promise<string | null> {
 	const drawable = withoutForeignObjects(svgMarkup);
 	const url = URL.createObjectURL(new Blob([drawable], { type: 'image/svg+xml' }));
 	try {
 		const image = new Image();
-		await new Promise<void>((resolve, reject) => {
-			image.onload = () => resolve();
-			image.onerror = () => reject(new Error('SVG rasterization failed'));
+		const loaded = await new Promise<boolean>((resolve) => {
+			image.onload = () => resolve(true);
+			image.onerror = () => resolve(false);
 			image.src = url;
 		});
+		if (!loaded) {
+			// Said out loud, because the caller's fallback is silent by design: the
+			// reader gets a diagram either way and nothing else would record that the
+			// raster path is failing.
+			console.warn('[rasterize] The markup could not be loaded as an image.');
+			return null;
+		}
 		// Mermaid SVGs size themselves through max-width, not width/height, so the
 		// viewBox is the only reliable natural size.
 		const viewBox = /viewBox="([\d.\s-]+)"/.exec(drawable)?.[1]?.trim().split(/\s+/).map(Number);
