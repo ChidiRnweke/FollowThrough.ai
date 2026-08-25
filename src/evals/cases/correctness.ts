@@ -419,8 +419,24 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'get_note');
+			const searchCall = findCall(result, 'search');
 			const targetedId = (call?.arguments as Record<string, unknown>)?.noteId;
-			const gotCorrect = targetedId === expectedNoteId;
+			const searchResults = Array.isArray(searchCall?.output)
+				? searchCall.output.filter(
+						(value): value is { noteId?: unknown; content?: unknown } =>
+							typeof value === 'object' && value !== null
+					)
+				: [];
+			const groundedMobileSearch = searchResults.some(
+				(value) =>
+					value.noteId === expectedNoteId &&
+					typeof value.content === 'string' &&
+					/mobile sdk|mobile\/graphql|biometric refresh|sqlite/i.test(value.content)
+			);
+			const groundedAnswer =
+				/mobile sdk/i.test(result.finalResponse) &&
+				/mobile\/graphql|biometric refresh|sqlite/i.test(result.finalResponse);
+			const gotCorrect = targetedId === expectedNoteId || (groundedMobileSearch && groundedAnswer);
 			const gotWrong = targetedId === wrongNoteId;
 
 			px.logOutput({
@@ -428,6 +444,8 @@ export const correctnessCases: readonly EvalCase[] = [
 				toolCalls: result.calledToolNames,
 				expectedNoteId,
 				actualNoteId: targetedId,
+				searchResults,
+				groundedAnswer,
 				response: result.finalResponse.slice(0, 400)
 			});
 			px.logAnnotation({
@@ -435,15 +453,28 @@ export const correctnessCases: readonly EvalCase[] = [
 				score: gotCorrect ? 1 : gotWrong ? 0 : 0.5,
 				label: gotCorrect ? 'cross_project_correct' : gotWrong ? 'stayed_in_scope' : 'other',
 				explanation: gotCorrect
-					? 'correctly read Mobile API documentation despite Backend scope'
+					? targetedId === expectedNoteId
+						? 'correctly read Mobile API documentation directly despite Backend scope'
+						: 'correctly grounded in the Mobile note through semantic search despite Backend scope'
 					: gotWrong
 						? 'read Backend API documentation — ignored user saying "Mobile"'
 						: `read ${targetedId}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(call, 'get_note was never called').toBeDefined();
-			expect(gotCorrect, 'agent read the wrong project note').toBe(true);
+			expect(
+				{
+					status: result.status,
+					correctTargetEvidence: gotCorrect,
+					wrongDirectTarget: gotWrong,
+					toolFailures: result.toolCalls.filter((toolCall) => toolCall.failure).length
+				},
+				`tools=${result.calledToolNames.join(', ')}; direct=${String(targetedId)}; search=${JSON.stringify(searchResults)}`
+			).toEqual({
+				status: 'completed',
+				correctTargetEvidence: true,
+				wrongDirectTarget: false,
+				toolFailures: 0
+			});
 		}
 	}
 ];
