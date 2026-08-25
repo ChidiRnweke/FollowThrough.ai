@@ -96,12 +96,19 @@ export const effectCases: readonly EvalCase[] = [
 		metadata: { layer: 'end-state' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const projectId = workspace.projectIds.get('Profile');
+			if (!projectId) throw new Error('Profile project was not seeded');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
 			});
 
-			const verdict = await expectNoteCreated(lab, workspace.actor, 'Weekly platform sync');
+			const verdict = await expectNoteCreated(
+				lab,
+				workspace.actor,
+				'Weekly platform sync',
+				projectId
+			);
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
@@ -250,12 +257,14 @@ export const effectCases: readonly EvalCase[] = [
 		metadata: { layer: 'end-state', note: 'Tests that the projectId arg actually persists.' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, todosWorkspace);
+			const projectId = workspace.projectIds.get('Platform');
+			if (!projectId) throw new Error('Platform project was not seeded');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
 			});
 
-			const verdict = await expectTodoCreated(lab, workspace.actor, 'deploy');
+			const verdict = await expectTodoCreated(lab, workspace.actor, 'deploy', projectId);
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,

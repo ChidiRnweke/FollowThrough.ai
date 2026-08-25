@@ -30,16 +30,21 @@ const matches = (candidate: string, expected: string): boolean =>
 export async function expectTodoCreated(
 	lab: Lab,
 	actor: ActorContext,
-	titleFragment: string
+	titleFragment: string,
+	projectId?: ProjectId
 ): Promise<EffectVerdict> {
 	const { todos } = await lab.controllers.todos().list(actor, {});
-	const titles = todos.map((view) => view.todo.title);
-	const hit = titles.find((title) => matches(title, titleFragment));
+	const matchingTitles = todos.filter((view) => matches(view.todo.title, titleFragment));
+	const hit = matchingTitles.find(
+		(view) => projectId === undefined || view.todo.projectId === projectId
+	);
 	return {
 		passed: Boolean(hit),
 		explanation: hit
-			? `todo persisted as "${hit}"`
-			: `no todo matching "${titleFragment}"; found ${titles.length ? titles.map((t) => `"${t}"`).join(', ') : 'none'}`
+			? `todo persisted as "${hit.todo.title}"${projectId ? ' in the expected project' : ''}`
+			: matchingTitles.length
+				? `todo matching "${titleFragment}" persisted only in the wrong project`
+				: `no todo matching "${titleFragment}"; found ${todos.length ? todos.map((view) => `"${view.todo.title}"`).join(', ') : 'none'}`
 	};
 }
 
@@ -62,16 +67,21 @@ export async function expectProjectCreated(
 export async function expectNoteCreated(
 	lab: Lab,
 	actor: ActorContext,
-	titleFragment: string
+	titleFragment: string,
+	projectId?: ProjectId
 ): Promise<EffectVerdict> {
 	const shell = await lab.controllers.workspace().getShellContext(actor);
-	const titles = shell.noteTree.map((note) => note.title);
-	const hit = titles.find((title) => matches(title, titleFragment));
+	const matchingTitles = shell.noteTree.filter((note) => matches(note.title, titleFragment));
+	const hit = matchingTitles.find(
+		(note) => projectId === undefined || note.projectId === projectId
+	);
 	return {
 		passed: Boolean(hit),
 		explanation: hit
-			? `note persisted as "${hit}"`
-			: `no note matching "${titleFragment}"; found ${titles.map((t) => `"${t}"`).join(', ')}`
+			? `note persisted as "${hit.title}"${projectId ? ' in the expected project' : ''}`
+			: matchingTitles.length
+				? `note matching "${titleFragment}" persisted only in the wrong project`
+				: `no note matching "${titleFragment}"; found ${shell.noteTree.map((note) => `"${note.title}"`).join(', ')}`
 	};
 }
 
