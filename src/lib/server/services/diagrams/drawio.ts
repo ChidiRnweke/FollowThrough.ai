@@ -2,6 +2,7 @@ import createDOMPurify from 'dompurify';
 import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
+import { drawioLabels } from '$lib/models/diagrams/drawio-labels';
 
 export interface IDiagramContent {
 	extract(diagram: { readonly source: string }): Promise<string>;
@@ -249,28 +250,27 @@ export class DrawioSvgSanitizer {
 }
 
 export class DrawioLabelExtractor {
-	extract(source: string): string {
+	/** The labels themselves, which the approval card shows and `extract` joins. */
+	read(source: string): readonly string[] {
 		const xmlDom = parseXml(source, 'draw.io XML');
 		const htmlDom = new JSDOM('');
 		try {
 			const body = htmlDom.window.document.body;
-			const labels = Array.from(
-				xmlDom.window.document.querySelectorAll('mxCell, object, UserObject')
-			)
-				.flatMap((element) => [element.getAttribute('label'), element.getAttribute('value')])
-				.filter((value): value is string => Boolean(value?.trim()))
-				.map((value) => {
-					body.textContent = '';
-					body.innerHTML = value;
-					return body.textContent ?? '';
-				})
-				.map((value) => value.replace(/\s+/g, ' ').trim())
-				.filter(Boolean);
-			return [...new Set(labels)].join('\n');
+			// draw.io labels come from a rich-text editor, so the value is HTML. The
+			// walk is shared with the browser; only this decoding differs.
+			return drawioLabels(xmlDom.window.document, (html) => {
+				body.textContent = '';
+				body.innerHTML = html;
+				return body.textContent ?? '';
+			});
 		} finally {
 			xmlDom.window.close();
 			htmlDom.window.close();
 		}
+	}
+
+	extract(source: string): string {
+		return this.read(source).join('\n');
 	}
 }
 

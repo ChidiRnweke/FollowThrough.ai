@@ -4,6 +4,8 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { getNote } from '$lib/remote/notes/notes.remote';
+	import { getProjectDiagram } from '$lib/remote/diagrams/diagrams.remote';
+	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
 	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -15,7 +17,12 @@
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
 	import { approvalConsequence, friendlyToolLabel } from '../../agent/actions/tool-presentation';
-	import { approvalPreview, isNoteBodyTool, targetNoteId } from './tool-approval-preview';
+	import {
+		approvalPreview,
+		isNoteBodyTool,
+		targetNoteId,
+		type ApprovalBaseline
+	} from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 
 	let {
@@ -42,6 +49,12 @@
 	} = $props();
 
 	const noteId = $derived(targetNoteId(tool.name, tool.arguments));
+	/** An edit_diagram call names the diagram it changes; its labels are the before-image. */
+	const editedDiagramId = $derived(
+		tool.name === 'edit_diagram' && typeof tool.arguments.diagramId === 'string'
+			? tool.arguments.diagramId
+			: undefined
+	);
 	let baseline = $state<Note | undefined>(undefined);
 	let baselineError = $state(false);
 	let expanded = $state(false);
@@ -93,16 +106,51 @@
 		};
 	});
 
-	const preview = $derived(approvalPreview(tool.name, tool.arguments, baseline, preferences));
+	/**
+	 * The diagram an edit is changing, read as a query rather than fetched in an
+	 * effect. `getProjectDiagram` is reactive, so `$derived` tracks it directly and
+	 * there is no cancellation flag to get wrong when the pending call changes.
+	 */
+	const editedDiagram = $derived(editedDiagramId ? getProjectDiagram(editedDiagramId) : undefined);
+
+	const diagramBaseline = $derived.by((): ApprovalBaseline => {
+		const query = editedDiagram;
+		if (!query?.ready || query.error !== undefined) return { kind: 'none' };
+		const read = readDrawioLabels(query.current.source);
+		// An unreadable stored diagram leaves the card describing what the edit will
+		// contain, which is still true, rather than a diff against nothing.
+		return read.kind === 'labels'
+			? { kind: 'diagram', labels: read.labels, title: query.current.title ?? 'Untitled diagram' }
+			: { kind: 'none' };
+	});
+
+	/**
+	 * One baseline, chosen by what the tool actually changes.
+	 *
+	 * A note baseline said nothing about a settings change and a diagram cannot be
+	 * diffed against a note, so passing all three and letting the preview sort it
+	 * out made shapes sayable that mean nothing.
+	 */
+	const approvalBaseline = $derived.by((): ApprovalBaseline => {
+		if (tool.name === 'update_agent_preferences')
+			return preferences ? { kind: 'preferences', preferences } : { kind: 'none' };
+		if (editedDiagramId) return diagramBaseline;
+		return baseline ? { kind: 'note', note: baseline } : { kind: 'none' };
+	});
+
+	const preview = $derived(approvalPreview(tool.name, tool.arguments, approvalBaseline));
 	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
+	const loadingDiagram = $derived(editedDiagram !== undefined && !editedDiagram.ready);
 	const fields = $derived(approvalFields(tool.arguments, shell));
 	const subject = $derived(
 		preview.kind === 'note'
 			? preview.change.title
-			: preview.kind === 'settings'
-				? // The tool's own name is the whole subject; the fields below are the change.
-					undefined
-				: (fields.headline ?? todoTitle)
+			: preview.kind === 'diagram'
+				? preview.change.title
+				: preview.kind === 'settings'
+					? // The tool's own name is the whole subject; the fields below are the change.
+						undefined
+					: (fields.headline ?? todoTitle)
 	);
 
 	/** How many items the compact card shows before it starts counting the rest. */
@@ -153,8 +201,44 @@
 	);
 </script>
 
+{#snippet labelList(title: string, labels: readonly string[])}
+	<p class="text-sm">
+		<span class="text-muted-foreground">{title}</span>
+		{labels.join(', ')}
+	</p>
+{/snippet}
+
 {#snippet changeBody(compact: boolean)}
-	{#if preview.kind === 'note'}
+	{#if preview.kind === 'diagram'}
+		<!--
+			Labels, not a picture. The server cannot render draw.io, so a card that waited
+			for one would show nothing at the moment the user is deciding — and the labels
+			are the part of a diagram a person recognises anyway.
+		-->
+		{#if preview.change.kind === 'unreadable'}
+			<p class="text-sm text-destructive">
+				This diagram could not be read, so there is nothing to show. Rejecting is safe.
+			</p>
+		{:else if preview.change.kind === 'created'}
+			{@render labelList('Contains:', preview.change.labels)}
+		{:else}
+			{#if preview.change.added.length}
+				{@render labelList('Adds:', preview.change.added)}
+			{/if}
+			{#if preview.change.removed.length}
+				{@render labelList('Removes:', preview.change.removed)}
+			{/if}
+			{#if !preview.change.added.length && !preview.change.removed.length}
+				<p class="text-sm text-muted-foreground">
+					No labels change. This alters layout or styling only.
+				</p>
+			{:else}
+				<p class="text-xs text-muted-foreground">
+					{preview.change.kept} unchanged
+				</p>
+			{/if}
+		{/if}
+	{:else if preview.kind === 'note'}
 		{#if preview.change.titleChange}
 			<p class="text-sm">
 				<span class="text-muted-foreground">Title:</span>
@@ -279,6 +363,8 @@
 	{/if}
 	{#if loadingNote}
 		<p class="text-sm text-muted-foreground">Loading the current note…</p>
+	{:else if loadingDiagram}
+		<p class="text-sm text-muted-foreground">Loading the current diagram…</p>
 	{:else}
 		<!-- A baseline that failed to load is not a reason to show nothing: the preview falls
 		     back to the body that would be written, and says so. Approve/Reject live outside

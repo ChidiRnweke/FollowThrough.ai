@@ -3,6 +3,8 @@ import type { AgentPreferences } from '$lib/models/agent';
 import type { FieldChange } from '$lib/components/agent';
 import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-patch-preview';
 import { argumentLabel } from './tool-approval-fields';
+import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
+import { drawioLabelDiff } from '$lib/models/diagrams/drawio-labels';
 
 /**
  * What an approval card should show for a pending tool call.
@@ -19,8 +21,50 @@ const NOTE_BODY_TOOLS = new Set(['save_note', 'edit_note']);
 /** The tool that rewrites the agent's own defaults, whose before-image the card already holds. */
 const PREFERENCES_TOOL = 'update_agent_preferences';
 
+/**
+ * What the card was given to compare the proposal against.
+ *
+ * One value rather than a `Note` beside an `AgentPreferences`, because those two
+ * were never both meaningful: a note baseline says nothing about a settings
+ * change, and the pair made `{ note, preferences }` sayable for a tool that
+ * touches neither. The arm names which tool is being approved, so a diagram edit
+ * cannot be handed a note to diff against.
+ */
+export type ApprovalBaseline =
+	/** Nothing to compare — still loading, or this tool has no before-image. */
+	| { readonly kind: 'none' }
+	| { readonly kind: 'note'; readonly note: Note }
+	| { readonly kind: 'diagram'; readonly labels: readonly string[]; readonly title: string }
+	| { readonly kind: 'preferences'; readonly preferences: AgentPreferences };
+
+/**
+ * What a diagram approval shows.
+ *
+ * Labels, not a picture: the server cannot render draw.io, and a card that waited
+ * for the browser to draw one would show nothing at the moment the user decides.
+ * Labels are the part of a diagram a person recognises anyway.
+ *
+ * Two arms because creating and editing are different questions. Creating asks
+ * "should this exist", so it lists what the diagram will contain. Editing asks
+ * "should this change", so it shows the delta. One shape with an optional
+ * `removed` would make an empty removal mean both "nothing was removed" and
+ * "there was nothing to remove from".
+ */
+export type DiagramChange =
+	| { readonly kind: 'created'; readonly title: string; readonly labels: readonly string[] }
+	| {
+			readonly kind: 'edited';
+			readonly title: string;
+			readonly added: readonly string[];
+			readonly removed: readonly string[];
+			readonly kept: number;
+	  }
+	/** The proposed source did not parse, so there is nothing truthful to show. */
+	| { readonly kind: 'unreadable'; readonly title: string };
+
 export type ApprovalPreview =
 	| { readonly kind: 'note'; readonly change: NoteChange }
+	| { readonly kind: 'diagram'; readonly change: DiagramChange }
 	/**
 	 * A change to the agent's own settings. "Default model: openai/gpt-5.6" cannot be
 	 * approved on its own terms — it does not say whether that is a change at all, let
@@ -170,35 +214,65 @@ const uncomparableSave = (args: Readonly<Record<string, unknown>>): ApprovalPrev
 	};
 };
 
+/** Tools whose payload is a whole draw.io document. */
+const DIAGRAM_TOOLS = new Set(['create_diagram', 'edit_diagram']);
+
+const diagramTitle = (args: Readonly<Record<string, unknown>>, fallback: string): string =>
+	typeof args.title === 'string' && args.title.trim() ? args.title : fallback;
+
+const diagramChange = (
+	name: string,
+	args: Readonly<Record<string, unknown>>,
+	baseline: ApprovalBaseline
+): DiagramChange => {
+	const source = typeof args.source === 'string' ? args.source : '';
+	const read = readDrawioLabels(source);
+	const before = baseline.kind === 'diagram' ? baseline : undefined;
+	const title = diagramTitle(args, before?.title ?? 'Untitled diagram');
+	if (read.kind === 'unreadable') return { kind: 'unreadable', title };
+	// An edit without its before-image cannot claim anything was added, so it
+	// reports what the diagram will contain — the same answer creating gives.
+	if (name !== 'edit_diagram' || !before) return { kind: 'created', title, labels: read.labels };
+	return { kind: 'edited', title, ...drawioLabelDiff(before.labels, read.labels) };
+};
+
 export const approvalPreview = (
 	name: string,
 	args: Readonly<Record<string, unknown>>,
-	baseline: Note | undefined,
-	preferences?: AgentPreferences
+	baseline: ApprovalBaseline
 ): ApprovalPreview => {
 	if (name === PREFERENCES_TOOL)
-		return { kind: 'settings', change: settingsChange(args, preferences) };
+		return {
+			kind: 'settings',
+			change: settingsChange(
+				args,
+				baseline.kind === 'preferences' ? baseline.preferences : undefined
+			)
+		};
+	if (DIAGRAM_TOOLS.has(name))
+		return { kind: 'diagram', change: diagramChange(name, args, baseline) };
 	if (!NOTE_BODY_TOOLS.has(name)) return { kind: 'arguments' };
-	if (!baseline) return uncomparableSave(args) ?? { kind: 'arguments' };
+	if (baseline.kind !== 'note') return uncomparableSave(args) ?? { kind: 'arguments' };
+	const note = baseline.note;
 
-	const result = candidateBody(name, args, baseline);
+	const result = candidateBody(name, args, note);
 	if ('problems' in result)
 		return {
 			kind: 'note',
-			change: { title: baseline.title, problems: result.problems, notices: [], comparable: true }
+			change: { title: note.title, problems: result.problems, notices: [], comparable: true }
 		};
 
 	const notices: string[] = [];
-	if (result.plainText === baseline.plainText)
+	if (result.plainText === note.plainText)
 		notices.push('This changes formatting only — the words stay the same.');
 
 	return {
 		kind: 'note',
 		change: {
-			title: baseline.title || 'Untitled',
-			...(result.plainText === baseline.plainText
+			title: note.title || 'Untitled',
+			...(result.plainText === note.plainText
 				? {}
-				: { body: { base: baseline.document, candidate: result.document } }),
+				: { body: { base: note.document, candidate: result.document } }),
 			comparable: true,
 			problems: [],
 			notices
