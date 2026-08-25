@@ -170,6 +170,12 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('requires independent request parts to share one concurrent read turn', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'issue their read tool calls together in the same model turn so they can run concurrently'
+		);
+	});
+
 	it('requires durable facts embedded in multi-step work to be captured independently', () => {
 		expect(buildAgentInstructions({})).toContain(
 			'scan the current message for any durable fact even when it is embedded inside the task'

@@ -35,21 +35,36 @@ const longLocalDate = (now: Date, timeZone: string): string =>
 	new Intl.DateTimeFormat('en-US', { timeZone, dateStyle: 'full' }).format(now);
 
 /** Locale-aware but deterministic: accepts equivalent en-GB renderings, including 10 August 2026. */
-const statesLocalCalendarDate = (response: string, now: Date, timeZone: string): boolean => {
-	const normalized = response.toLocaleLowerCase('en-GB');
+export const statesLocalCalendarDate = (response: string, now: Date, timeZone: string): boolean => {
+	// Presentation Markdown is not part of the date. Models commonly emphasize
+	// the answer, so compare the visible text rather than its source delimiters.
+	const normalized = response.replace(/[*_~`]/g, '').toLocaleLowerCase('en-GB');
 	const formats: Intl.DateTimeFormatOptions[] = [
 		{ dateStyle: 'full' },
 		{ dateStyle: 'long' },
 		{ dateStyle: 'medium' },
 		{ dateStyle: 'short' }
 	];
-	const candidates = formats.map((options) =>
-		new Intl.DateTimeFormat('en-GB', { timeZone, ...options })
-			.format(now)
-			.toLocaleLowerCase('en-GB')
+	const candidates = ['en-GB', 'en-US'].flatMap((locale) =>
+		formats.map((options) =>
+			new Intl.DateTimeFormat(locale, { timeZone, ...options })
+				.format(now)
+				.toLocaleLowerCase(locale)
+		)
 	);
 	candidates.push(isoLocalDate(now, timeZone));
 	return candidates.some((candidate) => normalized.includes(candidate));
+};
+
+export const hasCreatedRange = (arguments_: Record<string, unknown> | undefined): boolean =>
+	typeof arguments_?.createdAfter === 'string' || typeof arguments_?.createdBefore === 'string';
+
+export const isReasonableLastMonthStart = (value: unknown, now: Date): boolean => {
+	if (typeof value !== 'string') return false;
+	const parsed = Date.parse(value);
+	if (!Number.isFinite(parsed)) return false;
+	const startOfPreviousCalendarMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+	return parsed >= startOfPreviousCalendarMonth && parsed <= now.getTime() - 20 * DAY_MS;
 };
 
 const appContextFor = (timeZone: string): AppContextSnapshotV1 => {
@@ -215,13 +230,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 
 			const search = findCall(result, 'search');
 			const rawRange = search?.arguments?.createdAfter;
-			const parsedRange = typeof rawRange === 'string' ? Date.parse(rawRange) : NaN;
-			// A "last month" window can reasonably be 30 days back or the start of
-			// the previous calendar month (up to ~31 days), so allow 25–40 days.
-			const rangeOk =
-				Number.isFinite(parsedRange) &&
-				parsedRange >= now.getTime() - 40 * DAY_MS &&
-				parsedRange <= now.getTime() - 20 * DAY_MS;
+			// "Last month" can mean a rolling month or the previous calendar month.
+			// Keep the natural-language ambiguity, but reject a window that starts
+			// before the previous month or so recently that it drops most of a month.
+			const rangeOk = isReasonableLastMonthStart(rawRange, now);
 			const toolVerdict = findCall(result, 'search')
 				? rangeOk
 					? `search called with createdAfter ${rawRange as string}`
@@ -351,10 +363,7 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			logOutput(result);
 
 			const search = findCall(result, 'search');
-			const inventedWindow = Boolean(
-				search?.arguments?.createdAfter !== undefined ||
-				search?.arguments?.createdBefore !== undefined
-			);
+			const inventedWindow = hasCreatedRange(search?.arguments);
 			px.logAnnotation({
 				name: ARCHETYPES.timeAwareness,
 				score: inventedWindow ? 0 : 1,

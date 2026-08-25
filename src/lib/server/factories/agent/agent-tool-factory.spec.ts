@@ -883,6 +883,21 @@ describe('Agent tool coverage invariants', () => {
 		expect(String(result)).toContain('createdAfter must be before or equal to createdBefore');
 	});
 
+	it('advertises creation ranges as opt-in user-requested scope', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'search');
+		expect({
+			createdAfter: definition?.parameters.shape.createdAfter.description,
+			createdBefore: definition?.parameters.shape.createdBefore.description
+		}).toEqual({
+			createdAfter:
+				'Inclusive artifact creation-time lower bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.',
+			createdBefore:
+				'Inclusive artifact creation-time upper bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
+		});
+	});
+
 	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
 		const projectId = crypto.randomUUID();
 		const calls: { projectId: string; title: string }[] = [];

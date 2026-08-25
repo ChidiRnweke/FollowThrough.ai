@@ -459,8 +459,16 @@ const temporal = <T extends z.ZodRawShape>(shape: T) =>
 	z
 		.object({
 			...shape,
-			createdAfter: dateTime.optional(),
-			createdBefore: dateTime.optional()
+			createdAfter: dateTime
+				.optional()
+				.describe(
+					'Inclusive artifact creation-time lower bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
+				),
+			createdBefore: dateTime
+				.optional()
+				.describe(
+					'Inclusive artifact creation-time upper bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
+				)
 		})
 		.superRefine((value, context) => {
 			const range = value as { createdAfter?: string; createdBefore?: string };
