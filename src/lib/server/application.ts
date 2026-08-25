@@ -377,6 +377,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramDraftWriter: diagrams,
 			diagramRevisionReader: diagrams,
 			diagramDeleter: diagrams,
+			diagramArchiver: diagrams,
 			diagramWriter: diagrams,
 			diagramIndexer,
 			drawioWrites: diagramCapability.drawioWrites,

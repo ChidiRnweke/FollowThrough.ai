@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
@@ -56,6 +57,26 @@ export class InMemoryReferenceRepository implements ReferenceRepository {
 		);
 	}
 }
+
+/**
+ * Set or clear `archivedAt`, keeping each arm of the `Diagram` union intact.
+ *
+ * Written per-arm because spreading a union and asserting the result is exactly
+ * the shape-cast the source audit rejects: it would let this fake produce a row
+ * with a Mermaid discriminant and draw.io fields, which production cannot.
+ */
+const withArchivedAt = (diagram: Diagram, archived: boolean): Diagram => {
+	const archivedAt = archived ? (new Date().toISOString() as Diagram['createdAt']) : undefined;
+	const stamp = archivedAt === undefined ? {} : { archivedAt };
+	if (diagram.kind === 'drawio') {
+		const { archivedAt: _cleared, ...rest } = diagram;
+		void _cleared;
+		return { ...rest, ...stamp };
+	}
+	const { archivedAt: _cleared, ...rest } = diagram;
+	void _cleared;
+	return { ...rest, ...stamp };
+};
 
 export class InMemoryDiagramRepository implements DiagramRepository {
 	diagrams: Diagram[] = [];
@@ -134,6 +155,29 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 			(revision) => revision.diagramId === id && revision.id === revisionId
 		);
 	}
+	async setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram> {
+		const index = this.diagrams.findIndex(
+			(diagram) => diagram.id === id && diagram.userId === actor.userId
+		);
+		if (index === -1) throw new NotFoundError('Diagram was not found', { diagramId: id });
+		// Narrowed on `kind` rather than spread-and-asserted. `Diagram` is a union, so
+		// `{ ...current, … } as Diagram` would turn off the field checking that keeps
+		// this fake honest — and a fake that can hold a shape production cannot
+		// teaches the bug to everyone who copies it.
+		const updated = withArchivedAt(this.diagrams[index]!, archived);
+		this.diagrams[index] = updated;
+		return updated;
+	}
+
+	async listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {
+		return this.diagrams.filter(
+			(diagram) =>
+				diagram.userId === actor.userId &&
+				diagram.archivedAt !== undefined &&
+				(projectId === undefined || diagram.projectId === projectId)
+		);
+	}
+
 	async delete(actor: ActorContext, id: DiagramId) {
 		this.diagrams = this.diagrams.filter((item) => item.id !== id || item.userId !== actor.userId);
 	}

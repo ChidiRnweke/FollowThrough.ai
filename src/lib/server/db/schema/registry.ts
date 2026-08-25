@@ -440,11 +440,17 @@ export const diagrams = pgTable(
 			onDelete: 'set null'
 		}),
 		provenanceId: uuid('provenance_id').references(() => provenance.id, { onDelete: 'set null' }),
+		// Soft delete, as notes have. Removing a diagram used to be permanent and
+		// immediate, which is a poor match for something an agent can produce: the
+		// cost of an unwanted one has to be recoverable before it is reasonable to
+		// let a conversation create it at all.
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		...timestamps
 	},
 	(table) => [
 		index('diagrams_source_note_idx').on(table.sourceNoteId),
 		index('diagrams_project_idx').on(table.projectId),
+		index('diagrams_project_archived_idx').on(table.projectId, table.archivedAt),
 		uniqueIndex('diagrams_conversation_unique').on(table.conversationId)
 	]
 );

@@ -39,6 +39,7 @@ import { UnsupportedDiagramOperationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramConversationFinder,
+	DiagramArchiver,
 	DiagramDeleter,
 	DiagramDraftWriter,
 	DiagramFinder,
@@ -181,6 +182,22 @@ export interface DiagramStudioController {
 		actor: ActorContext,
 		input: RenameProjectDiagramInput
 	): Promise<DrawioDiagram>;
+	/**
+	 * Move a diagram to the trash, restorable with `restoreProjectDiagram`.
+	 *
+	 * Permanent deletion below still means what it says. This is the reversible
+	 * removal notes already have, and diagrams did not — which matters most for a
+	 * diagram a conversation produced, where the cost of an unwanted one has to be
+	 * recoverable.
+	 */
+	archiveProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram>;
+	/** Bring a diagram back from the trash. */
+	restoreProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram>;
+	/** The diagrams in the trash, most recently discarded first. */
+	listTrashedProjectDiagrams(
+		actor: ActorContext,
+		input: ListProjectDiagramsInput
+	): Promise<readonly Diagram[]>;
 	/** Permanently delete a project diagram. Notes referencing it show it as unavailable. */
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void>;
 	/** How many notes render this diagram, for the delete confirmation. */
@@ -197,6 +214,7 @@ export interface DiagramStudioDependencies {
 	diagramDraftWriter: DiagramDraftWriter;
 	diagramRevisionReader: DiagramRevisionReader;
 	diagramDeleter: DiagramDeleter;
+	diagramArchiver: DiagramArchiver;
 	diagramWriter: DiagramWriter;
 	diagramIndexer: DiagramIndexer;
 	drawioWrites: DrawioWrites;
@@ -516,6 +534,21 @@ export class DiagramStudio implements DiagramStudioController {
 
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {
 		return this.dependencies.diagramDeleter.delete(actor, input.diagramId);
+	}
+
+	archiveProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram> {
+		return this.dependencies.diagramArchiver.archive(actor, input.diagramId);
+	}
+
+	restoreProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram> {
+		return this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
+	}
+
+	listTrashedProjectDiagrams(
+		actor: ActorContext,
+		input: ListProjectDiagramsInput
+	): Promise<readonly Diagram[]> {
+		return this.dependencies.diagramArchiver.listArchived(actor, input.projectId);
 	}
 
 	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number> {

@@ -162,6 +162,17 @@ export interface DiagramRevisionReader {
 export interface DiagramDeleter {
 	delete(actor: ActorContext, diagramId: DiagramId): Promise<void>;
 }
+/**
+ * Soft delete, so an unwanted diagram is recoverable the way an unwanted note is.
+ *
+ * Separate from `DiagramDeleter`: permanent deletion still exists and still means
+ * what it says. These three are the reversible half.
+ */
+export interface DiagramArchiver {
+	archive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
+	unarchive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
+	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
+}
 export interface DiagramIndexer {
 	index(actor: ActorContext, diagram: Diagram): Promise<void>;
 }

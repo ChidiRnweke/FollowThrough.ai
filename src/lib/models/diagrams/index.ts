@@ -66,6 +66,8 @@ interface DiagramBase {
 	readonly searchableText: string;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
+	/** Set while the diagram is in the trash; absent means active. */
+	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }

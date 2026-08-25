@@ -289,6 +289,13 @@ export const agentToolCoverage = {
 		// user saying what the project holds; the studio and the gallery own those
 		// gates, and the agent's part is to put a version on the canvas.
 		keepStudioDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		archiveProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		restoreProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
+		listTrashedProjectDiagrams: {
+			kind: 'excluded',
+			reason:
+				'The trash is a place the user looks, not a source the agent reads: a diagram in it has been taken out of the project on purpose.'
+		},
 		findConversationDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		renameProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		saveProjectDiagramDraft: { kind: 'excluded', reason: STUDIO_GESTURE },

@@ -103,6 +103,24 @@ export class DiagramLibrary {
 		await this.get(actor, diagramId);
 		return this.diagrams.delete(actor, diagramId);
 	}
+
+	/** Reversible removal. `delete` above stays what it says: permanent. */
+	async archive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+		const current = await this.get(actor, diagramId);
+		if (current.archivedAt) throw new ValidationError('The diagram is already in the trash');
+		return this.diagrams.setArchived(actor, diagramId, true);
+	}
+
+	/** Named `unarchive` because `restore` already means restoring a revision here. */
+	async unarchive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+		const current = await this.get(actor, diagramId);
+		if (!current.archivedAt) throw new ValidationError('The diagram is not in the trash');
+		return this.diagrams.setArchived(actor, diagramId, false);
+	}
+
+	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {
+		return this.diagrams.listArchived(actor, projectId);
+	}
 	/** The diagram a studio conversation already produced, if it has been promoted. */
 	findByConversation(
 		actor: ActorContext,

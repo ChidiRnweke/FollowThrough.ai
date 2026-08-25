@@ -129,6 +129,12 @@ describe('Agent runtime boundary', () => {
 		expect(instructions).toContain('<application_context version="1">');
 	});
 
+	it('does not treat a vague note cleanup as permission to discard facts', () => {
+		expect(buildAgentInstructions({ surface: 'note' })).toContain(
+			'An underspecified request to tidy, refresh, or improve a note is not permission for a whole-body rewrite'
+		);
+	});
+
 	it('formats the server clock in the client IANA timezone', () => {
 		const instructions = buildAgentInstructions(
 			{ appContext: { client: { timeZone: 'Europe/Brussels', localDate: 'stale' } } },

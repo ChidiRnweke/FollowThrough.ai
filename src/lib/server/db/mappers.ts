@@ -165,6 +165,7 @@ export const toDiagram = (row: typeof schema.diagrams.$inferSelect): Diagram =>
 		conversationId: row.conversationId ?? undefined,
 		title: row.title ?? undefined,
 		renderedSvg: row.renderedSvg ?? undefined,
+		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
 		...(row.kind === 'drawio'
 			? {
 					currentRevision: row.currentRevision,

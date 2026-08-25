@@ -60,4 +60,7 @@ export interface DiagramRepository {
 		revisionId: DiagramRevisionId
 	): Promise<DiagramRevision | undefined>;
 	delete(actor: ActorContext, id: DiagramId): Promise<void>;
+	/** Soft delete: sets or clears `archivedAt` and answers the stored row. */
+	setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram>;
+	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
 }

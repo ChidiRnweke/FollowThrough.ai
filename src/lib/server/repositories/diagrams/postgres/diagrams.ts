@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, isNotNull, or, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -250,6 +250,29 @@ export class DiagramRecords implements DiagramRepository {
 			);
 		return row ? toDiagramRevision(row) : undefined;
 	}
+	async setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram> {
+		const [row] = await this.database
+			.update(schema.diagrams)
+			.set({ archivedAt: archived ? new Date() : null })
+			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.returning();
+		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: id });
+		return toDiagram(row);
+	}
+
+	async listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {
+		const scope = projectId
+			? and(eq(schema.diagrams.userId, actor.userId), eq(schema.diagrams.projectId, projectId))
+			: eq(schema.diagrams.userId, actor.userId);
+		return (
+			await this.database
+				.select()
+				.from(schema.diagrams)
+				.where(and(scope, isNotNull(schema.diagrams.archivedAt)))
+				.orderBy(desc(schema.diagrams.archivedAt))
+		).map(toDiagram);
+	}
+
 	async delete(actor: ActorContext, id: DiagramId): Promise<void> {
 		const [row] = await this.database
 			.delete(schema.diagrams)
