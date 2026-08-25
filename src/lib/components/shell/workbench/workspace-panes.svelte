@@ -6,7 +6,6 @@
 		diagramIdOf,
 		isChatTab,
 		isDiagramTab,
-		isDraftTab,
 		isSearchTab,
 		noteIdOf,
 		type TabId
@@ -72,7 +71,6 @@
 		const diagramId = diagramIdOf(tabId);
 		if (diagramId !== undefined)
 			return diagramRegistry.peek(diagramId)?.description?.title ?? 'Untitled diagram';
-		if (isDraftTab(tabId)) return 'Diagram draft';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
@@ -227,7 +225,7 @@
 						onCloseSplit={isSplit ? closeSplit : undefined}
 					/>
 				{/snippet}
-				{#if isChatTab(noteId) || isDiagramTab(noteId) || isDraftTab(noteId)}
+				{#if isChatTab(noteId) || isDiagramTab(noteId)}
 					<div class="workspace-pane-scroll-content flex h-full min-h-0 flex-col">
 						{@render pane()}
 					</div>

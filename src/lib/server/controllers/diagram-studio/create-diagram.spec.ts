@@ -9,7 +9,13 @@ import {
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	projectBuilder,
+	testActor,
+	testConversationId,
+	testNow,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	drawioBuilder,
 	mermaidBuilder
@@ -20,12 +26,16 @@ import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memo
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();
+	const projects = new InMemoryProjects();
+	// A diagram is created in a project, and creating one verifies the project is
+	// there — the same rule that stopped notes being filed wherever sorted first.
+	projects.projects = [projectBuilder({ id: testProjectId() })];
 	const library = new DiagramLibrary(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
 		new InMemoryProvenanceRepository(),
-		new InMemoryProjects()
+		projects
 	);
 	return {
 		diagrams,
@@ -34,6 +44,8 @@ const setup = () => {
 				diagramFinder: library,
 				diagramDraftWriter: library,
 				diagramConversations: library,
+				diagramWriter: library,
+				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index: async () => {} },
 				drawioXmlValidator: { validate: (source: string) => source },
@@ -43,43 +55,61 @@ const setup = () => {
 	};
 };
 
-describe('Presenting a diagram on the studio canvas', () => {
-	it('reports an empty canvas as an explicit state', async () => {
-		const controller = new DiagramStudio(
-			capabilityDependencies<DiagramStudioDependencies>({
-				canvasSource: new PresentedCanvasSource(new InMemoryAgentSessionRepository())
-			})
-		);
-
-		expect(
-			await controller.readCanvasDiagram(testActor(), { conversationId: testConversationId() })
-		).toMatchObject({ kind: 'empty', nextActions: [{ tool: 'create_diagram' }] });
+describe('Creating a diagram', () => {
+	const creating = () => ({
+		source: VALID_DRAWIO_XML,
+		projectId: testProjectId(),
+		conversationId: testConversationId()
 	});
 
-	// The canvas shows what the agent drew; nothing is written until the user keeps
-	// it, which is what stops an abandoned conversation leaving a row behind.
-	it('returns the draft without storing it', async () => {
+	// It used to store nothing and hand the XML back for a canvas to show, so a
+	// diagram was the one agent output that could vanish when a chat closed.
+	it('writes the diagram it was asked to create', async () => {
 		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), {
-			source: VALID_DRAWIO_XML,
-			conversationId: testConversationId()
-		});
-		expect(diagrams.diagrams).toEqual([]);
+		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams).toHaveLength(1);
 	});
 
-	it('presents the source it was given', async () => {
-		const { controller } = setup();
-		const result = await controller.createDiagram(testActor(), {
-			source: VALID_DRAWIO_XML,
-			conversationId: testConversationId()
-		});
-		expect(result.source).toBe(VALID_DRAWIO_XML);
+	it('answers with the diagram it created', async () => {
+		const { controller, diagrams } = setup();
+		const output = await controller.createDiagram(testActor(), creating());
+		expect(output.diagramId).toBe(diagrams.diagrams[0]?.id);
 	});
 
-	it('validates draw.io XML before the canvas tries to load it', async () => {
+	it('stores the source it was given', async () => {
+		const { controller, diagrams } = setup();
+		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
+	});
+
+	// Publishing stays the user's decision, exactly as it does for a note, which is
+	// also born at published revision 0.
+	it('creates the diagram unpublished', async () => {
+		const { controller, diagrams } = setup();
+		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams[0]).toMatchObject({ publishedRevision: 0 });
+	});
+
+	// Only the draw.io embed can draw a preview, so the row waits for the canvas
+	// rather than storing a blank one it could never tell apart from a real one.
+	it('creates the diagram with no preview yet', async () => {
+		const { controller, diagrams } = setup();
+		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams[0]?.renderedSvg).toBeUndefined();
+	});
+
+	// A chat is provenance, not ownership. Asking one conversation for two diagrams
+	// used to be refused because the row was unique on the conversation.
+	it('lets one conversation create more than one diagram', async () => {
+		const { controller, diagrams } = setup();
+		await controller.createDiagram(testActor(), creating());
+		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams).toHaveLength(2);
+	});
+
+	it('validates draw.io XML before storing it', async () => {
 		const controller = new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
-				diagramConversations: { findByConversation: async () => undefined },
 				drawioXmlValidator: {
 					validate: () => {
 						throw new Error('bad xml');
@@ -87,52 +117,31 @@ describe('Presenting a diagram on the studio canvas', () => {
 				}
 			})
 		);
-		await expect(
-			controller.createDiagram(testActor(), {
-				source: '<mxfile/>',
-				conversationId: testConversationId()
-			})
-		).rejects.toThrow();
+		await expect(controller.createDiagram(testActor(), creating())).rejects.toThrow();
 	});
+});
 
-	// A conversation keeps at most one diagram, so once it has one a "new" diagram
-	// is really a change to that one. Accepting it silently is what produced the
-	// original defect: the draft had no row and no tab, the canvas went on showing
-	// the saved diagram, and the agent reported a change nobody could see.
-	it('refuses a new diagram once the conversation already has one', async () => {
-		const { controller, diagrams } = setup();
-		const conversationId = testConversationId();
-		diagrams.diagrams = [drawioBuilder({ conversationId })];
-		await expect(
-			controller.createDiagram(testActor(), { source: VALID_DRAWIO_XML, conversationId })
-		).rejects.toThrow('edit_diagram');
-	});
-
-	it('carries the diagram a revision is meant to replace', async () => {
-		const { controller, diagrams } = setup();
-		const target = drawioBuilder();
-		diagrams.diagrams = [target];
-		const result = await controller.editDiagram(testActor(), {
-			source: VALID_DRAWIO_XML,
-			diagramId: target.id,
-			conversationId: testConversationId()
-		});
-		expect(result.diagramId).toBe(target.id);
-	});
-
-	// A revision lands on the row it names. It used to only echo, leaving the write
-	// to a button in a canvas the user could not reach once the diagram was kept —
-	// so the agent could report a diagram changed and change nothing.
-	it('saves a revision onto the diagram it names', async () => {
+describe('Editing a diagram', () => {
+	it('writes the new source onto the diagram it names', async () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
 		await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: target.id,
-			conversationId: testConversationId()
+			diagramId: target.id
 		});
 		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
+	});
+
+	it('answers with the diagram it edited', async () => {
+		const { controller, diagrams } = setup();
+		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
+		diagrams.diagrams = [target];
+		const output = await controller.editDiagram(testActor(), {
+			source: VALID_DRAWIO_XML,
+			diagramId: target.id
+		});
+		expect(output.diagramId).toBe(target.id);
 	});
 
 	// ADR 0003: the write is a working revision, so publishing stays the user's
@@ -143,21 +152,19 @@ describe('Presenting a diagram on the studio canvas', () => {
 		diagrams.diagrams = [target];
 		await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
-			diagramId: target.id,
-			conversationId: testConversationId()
+			diagramId: target.id
 		});
 		expect(diagrams.diagrams[0]).toMatchObject({
 			publishedRevision: target.publishedRevision
 		});
 	});
 
-	it('rejects a revision target that the actor cannot read', async () => {
+	it('rejects a diagram the actor cannot read', async () => {
 		const { controller } = setup();
 		await expect(
 			controller.editDiagram(testActor(), {
 				source: VALID_DRAWIO_XML,
-				diagramId: drawioBuilder().id,
-				conversationId: testConversationId()
+				diagramId: drawioBuilder().id
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});

@@ -277,7 +277,7 @@ export const agentToolCoverage = {
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
-		createDiagram: { kind: 'read' },
+		createDiagram: { kind: 'mutation' },
 		// A revision writes a working revision onto the diagram it names, so it asks
 		// first. `read` would mean no prompt, which is how the agent came to change a
 		// saved diagram with neither permission asked nor anything shown.
@@ -288,7 +288,6 @@ export const agentToolCoverage = {
 		// Everything below is a user gesture. Keeping, renaming and deleting are the
 		// user saying what the project holds; the studio and the gallery own those
 		// gates, and the agent's part is to put a version on the canvas.
-		keepStudioDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		archiveProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		restoreProjectDiagram: { kind: 'excluded', reason: STUDIO_GESTURE },
 		listTrashedProjectDiagrams: {
@@ -1879,12 +1878,29 @@ const agentOnlyDefinitions = (
 		defineTool(
 			'create_diagram',
 			toolDescription('create_diagram'),
-			'read',
-			z.object({ source: z.string().min(1), title: z.string().min(1).optional() }),
-			(fields) =>
-				factory
-					.diagramStudio()
-					.createDiagram(actor, { ...fields, conversationId: input.conversationId })
+			'mutation',
+			// `projectId` is optional here and required on `CreateDiagramInput`, for the
+			// reason `create_note` is: a bare schema rejection would tell the model only
+			// that a field is missing, and `requireProject` names the projects instead.
+			z.object({
+				source: z.string().min(1),
+				title: z.string().min(1).optional(),
+				projectId: projectId.optional()
+			}),
+			async (fields) => {
+				const chosenProjectId = await requireProject(
+					factory,
+					actor,
+					fields.projectId,
+					'create a diagram'
+				);
+				return factory.diagramStudio().createDiagram(actor, {
+					source: fields.source,
+					projectId: chosenProjectId,
+					conversationId: input.conversationId,
+					...(fields.title === undefined ? {} : { title: fields.title })
+				});
+			}
 		),
 		defineTool(
 			'edit_diagram',
@@ -1895,10 +1911,7 @@ const agentOnlyDefinitions = (
 				title: z.string().min(1).optional(),
 				diagramId
 			}),
-			(fields) =>
-				factory
-					.diagramStudio()
-					.editDiagram(actor, { ...fields, conversationId: input.conversationId })
+			(fields) => factory.diagramStudio().editDiagram(actor, fields)
 		),
 		defineTool(
 			'read_canvas_diagram',

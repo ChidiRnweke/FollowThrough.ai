@@ -358,7 +358,8 @@ export interface CountDiagramReferencesInput {
 	readonly diagramId: DiagramId;
 }
 
-export interface CreateDiagramInput {
+/** The document both writing tools carry. */
+interface DiagramDocument {
 	/**
 	 * Uncompressed draw.io XML.
 	 *
@@ -370,33 +371,36 @@ export interface CreateDiagramInput {
 	 */
 	readonly source: string;
 	readonly title?: string;
-	/**
-	 * The conversation drawing it, so a new diagram can be told from a change to
-	 * the one this conversation already has. Without it, presenting a "new"
-	 * diagram in a conversation that had kept one produced a draft with nowhere to
-	 * go: the canvas shows the saved diagram, so the agent reported a change the
-	 * user could not see.
-	 */
+}
+
+export interface CreateDiagramInput extends DiagramDocument {
+	/** Required for the reason `CreateNoteInput.projectId` is: no default can honestly say where a diagram belongs. */
+	readonly projectId: ProjectId;
+	/** Provenance, so the diagram can reopen the conversation that drew it. */
 	readonly conversationId: ConversationId;
 }
 
 /**
- * A diagram the agent has put on the studio canvas. It is not stored: the canvas
- * shows it, and the user keeps it — as a new diagram, or in place of the one it
- * names in `diagramId`.
+ * Editing needs the diagram and nothing else.
+ *
+ * It does not extend the create input. It used to, and so inherited a `projectId`
+ * an edit has no business supplying — the diagram already knows which project it
+ * is in, and a second answer could only disagree with the first.
  */
-export interface CreateDiagramOutput {
-	readonly source: string;
+export interface EditDiagramInput extends DiagramDocument {
+	readonly diagramId: DiagramId;
+}
+
+/**
+ * What both writing tools answer: which diagram, and what it is called.
+ *
+ * Not the diagram itself. The source is thousands of tokens of markup the agent
+ * just sent, and handing it straight back doubles the cost of every write for
+ * something it already has.
+ */
+export interface DiagramWriteOutput {
+	readonly diagramId: DiagramId;
 	readonly title?: string;
-}
-
-/** A canvas version explicitly tied to an existing, actor-owned saved diagram. */
-export interface EditDiagramInput extends CreateDiagramInput {
-	readonly diagramId: DiagramId;
-}
-
-export interface EditDiagramOutput extends CreateDiagramOutput {
-	readonly diagramId: DiagramId;
 }
 
 export interface ReadCanvasDiagramInput {
@@ -404,28 +408,19 @@ export interface ReadCanvasDiagramInput {
 }
 
 /**
- * The three states a conversation's canvas can be in.
+ * What a conversation's canvas is showing.
  *
- * `present` used to be one arm carrying an optional `diagramId`, absent exactly
- * when the canvas held a new diagram — one fact stated twice, and the same
- * pairing that let a revision be read as a draft. The arms mirror
- * `PresentedDiagram`, which they cannot name: a model domain is self-contained,
- * so `presented-canvas` is not importable from here.
+ * Two states, not three. It used to have an arm for a diagram that existed only
+ * on a canvas, because creating one stored nothing; both writing tools store now,
+ * so the canvas either names a saved diagram or is empty.
  */
 export type ReadCanvasDiagramOutput =
 	| {
-			readonly kind: 'draft';
-			readonly title?: string;
-			/** Uncompressed draw.io XML; the canvas holds nothing else. */
-			readonly source: string;
-	  }
-	| {
-			readonly kind: 'revision';
-			readonly title?: string;
-			/** Uncompressed draw.io XML; the canvas holds nothing else. */
-			readonly source: string;
-			/** The saved diagram this canvas version revises. */
+			readonly kind: 'present';
 			readonly diagramId: DiagramId;
+			readonly title?: string;
+			/** Uncompressed draw.io XML, as stored — not as the agent last sent it. */
+			readonly source: string;
 	  }
 	| {
 			readonly kind: 'empty';

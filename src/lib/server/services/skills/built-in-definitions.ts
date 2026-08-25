@@ -415,13 +415,13 @@ const DIAGRAMMING_V2: BuiltInSkillDefinition = {
 
 Think in Mermaid, in your reply. It is quick to write and quick for the user to read, so a sketch in the conversation is the cheapest way to agree on what the diagram says before it is worth drawing properly. Infer the relationships that matter before choosing a diagram family: flowcharts for processes and dependency maps, sequence diagrams for ordered interactions, state diagrams for lifecycle transitions, class diagrams for stable structures, and other families only when they communicate the material more clearly.
 
-Draw a new diagram on the canvas by calling create_diagram, once per version. It takes uncompressed draw.io mxfile XML, because the canvas is where the user reads, edits and keeps the diagram, and draw.io is the only form that can be edited there, previewed, and linked into a note. Say what you drew and what you assumed, briefly, alongside the call.
+Create a diagram by calling create_diagram, which takes uncompressed draw.io mxfile XML and a projectId. It saves the diagram, so the user is asked to approve it first and the approval shows them its labels. Say what you drew and what you assumed, briefly, alongside the call.
 
 Present when the shape is settled — when the user asks for a diagram outright, when they have agreed to a sketch, or when they ask for something a sketch cannot express. Do not narrate the switch as a conversion; say what you are drawing.
 
 create_diagram is the way to produce a new draw.io diagram. Never accept a diagram suggestion on the user's behalf: one accepted that way has no preview and can never gain one.
 
-The source of a diagram you drew earlier is not in your history — it is left out because it is large. Call read_canvas_diagram to read the current one before revising it, and never reconstruct it from memory. To change a diagram that is already saved, call read_project_diagram for its verified id and virtual path, read the source from that path with sed, then call edit_diagram with the exact diagramId. Never use create_diagram for a saved revision: it refuses once the conversation has a diagram, and its refusal names the id you need.
+The source of a diagram you wrote earlier is not in your history — it is left out because it is large. Call read_canvas_diagram to read the current one before changing it, and never reconstruct it from memory. To change a diagram that already exists, call read_project_diagram for its verified id and virtual path, read the source from that path with sed, then call edit_diagram with the exact diagramId. Use create_diagram only for a diagram that does not exist yet; a conversation may create several, so creating one again makes a second diagram rather than changing the first.
 
 Three different things get called "a diagram in a note", and confusing them will send you looking for work that does not exist:
 
@@ -429,9 +429,9 @@ Three different things get called "a diagram in a note", and confusing them will
 - The note's own diagrams, in the diagrams array from get_note. These are saved diagrams linked to that note.
 - This conversation's diagram, which belongs to the project rather than to any note and never appears in that array.
 
-So an empty diagrams array means only that no diagram is attached to that note. It never means this conversation has none, and it is never a reason to write XML into the note to create one. Use read_canvas_diagram to see what is on the canvas; if this conversation already has a saved diagram, create_diagram refuses and names its id.
+So an empty diagrams array means only that no diagram is attached to that note. It never means this conversation has none, and it is never a reason to write XML into the note to create one. Use read_canvas_diagram to see which diagram this conversation last wrote.
 
-You cannot save a diagram yourself, and nothing is wrong when you cannot find a tool for it: keeping a presented draft is the user's gesture, made with the Save button on the canvas. What you *can* do without asking them first is revise a diagram that is already saved — edit_diagram writes a new working revision, which they then publish or step back from. Say plainly that a new diagram is waiting for their Save rather than inventing a way to store it.
+Both diagram tools save, and both ask the user first — the same rule create_note and edit_note follow. What they save is a working revision: the user publishes it, or steps back through History, so nothing you write is visible to anyone else until they say so. There is no separate Save gesture to wait for, and no draft that disappears when the chat closes.
 
 Preserve uncertainty and do not invent systems, people, steps, or dependencies that the source does not support. Prefer a small coherent diagram over an exhaustive one. Use concise, readable labels and stable identifiers. When revising, preserve correct information and change only what the instruction requires.
 

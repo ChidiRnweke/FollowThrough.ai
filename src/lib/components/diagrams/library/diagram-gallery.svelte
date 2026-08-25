@@ -28,7 +28,7 @@
 	} from '$lib/remote/diagrams/diagrams.remote';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, diagramTab, draftTab } from '$lib/stores/workbench/tab-ref';
+	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 
 	export interface DiagramGalleryData {
@@ -94,7 +94,10 @@
 		if (!data.selectedProjectId) return;
 		const sessionKey = chatRegistry.mint();
 		diagramRegistry.startDraft(sessionKey, data.selectedProjectId);
-		await workbench.openSplit(chatTab(sessionKey), draftTab(sessionKey));
+		// Just the chat. There is no canvas to open yet: the diagram exists once the
+		// agent creates it, and its own tab opens then. Opening an empty canvas first
+		// showed a pane with nothing in it and a Save button that could not be used.
+		await workbench.openTab(chatTab(sessionKey));
 	}
 
 	/**

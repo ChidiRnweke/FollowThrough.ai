@@ -15,13 +15,16 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
+	import type { ProjectId } from '$lib/models/projects';
 	import { createSkill } from '$lib/remote/projects/projects.remote';
 	import { saveSkillDraft, toggleSkill } from '$lib/remote/skills/skills.remote';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ListSkillsOutput } from '$lib/models/skills';
 
-	let { data }: { data: ListSkillsOutput } = $props();
+	// The inbox rides with the skills because a skill created here names no project
+	// — the page shows none — and the server no longer invents one.
+	let { data }: { data: ListSkillsOutput & { readonly inboxProjectId: ProjectId } } = $props();
 
 	let createOpen = $state(false);
 	let creating = $state(false);

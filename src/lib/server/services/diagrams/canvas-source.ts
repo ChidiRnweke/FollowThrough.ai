@@ -1,32 +1,23 @@
 import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
-import {
-	presentedDiagramFromText,
-	type PresentedDiagram
-} from '$lib/models/diagrams/presented-canvas';
+import type { DiagramId } from '$lib/models/diagrams';
 
 /**
- * The diagram currently on a conversation's canvas, read back on demand.
+ * The diagram currently on a conversation's canvas, found in its transcript.
  *
- * Diagram source is elided from replayed history — an mxfile is 5–8 KB and rode
- * along on every later turn, several times over, for a document the agent rarely
- * needed to re-read. It is still stored in full; this is how the agent gets it
- * when it actually does, which is immediately before revising.
- *
- * A draft has no diagram row behind it, so `read_project_diagram` cannot answer
- * for one. The session items can.
+ * The transcript is what makes this survive a reload: tool calls are replayed, so
+ * the last diagram a conversation wrote is still the last one after a reconnect.
+ * It answers with an id rather than a document — the row holds the source, and
+ * reading it from there means the agent gets what is stored rather than what was
+ * sent.
  */
 export interface CanvasSourceItems {
 	/**
-	 * Mirrors `AgentSessionItem.item`, which is what the adapter has.
-	 *
-	 * The precise type for a session row is the SDK's `AgentInputItem` union, and
-	 * `ConversationBuffer` narrows on it directly. It cannot be named here: this
-	 * port is satisfied by `AgentSessionRepository`, whose row type lives in
-	 * `models/agent`, and a model may not import a framework. Precision is
-	 * recovered at the only place that needs it — `fromResult` parses the row into
-	 * `PresentationResult` rather than indexing into unchecked fields.
+	 * Mirrors `AgentSessionItem.item`, which is what the adapter has. The precise
+	 * type for a session row is the SDK's `AgentInputItem` union, and it cannot be
+	 * named here: this port is satisfied by `AgentSessionRepository`, whose row
+	 * type lives in `models/agent`, and a model may not import a framework.
 	 */
 	list(
 		actor: ActorContext,
@@ -35,42 +26,32 @@ export interface CanvasSourceItems {
 	): Promise<readonly { readonly item: Readonly<Record<string, unknown>> }[]>;
 }
 
-export type PresentedCanvasDiagram = PresentedDiagram;
-
-const PRESENT_DIAGRAM = 'create_diagram';
-const PRESENT_DIAGRAM_REVISION = 'edit_diagram';
+const WRITING_TOOLS = ['create_diagram', 'edit_diagram'] as const;
 
 /**
- * A session row that carries a presentation result, and nothing else.
+ * A session row that is a diagram write's result, and nothing else.
  *
  * Parsed rather than cast: the rows are stored JSON, so `item.output.text` is a
- * claim until something checks it. The name is part of the schema because which
- * reader the text needs depends on which tool produced it.
+ * claim until something checks it.
  */
-const presentationResult = z.object({
+const diagramWriteResult = z.object({
 	type: z.literal('function_call_result'),
-	name: z.enum([PRESENT_DIAGRAM, PRESENT_DIAGRAM_REVISION]),
+	name: z.enum(WRITING_TOOLS),
 	output: z.object({ text: z.string() })
 });
 
-/**
- * A session row that is a presentation result — the narrow shape this service
- * actually deals in, recovered from the row's untyped JSON exactly once.
- */
-type PresentationResult = z.infer<typeof presentationResult>;
+const writtenDiagramId = z.object({
+	diagramId: z
+		.string()
+		.refine((value) => value.trim() !== '')
+		.transform((value) => value as DiagramId)
+});
 
-/** The tool's own result, which is the validated source rather than what it proposed. */
-const presentedFrom = (result: PresentationResult): PresentedCanvasDiagram | undefined =>
-	presentedDiagramFromText(
-		result.output.text,
-		result.name === PRESENT_DIAGRAM_REVISION ? 'revision' : 'draft'
-	);
-
-const fromResult = (
-	item: Readonly<Record<string, unknown>>
-): PresentedCanvasDiagram | undefined => {
-	const parsed = presentationResult.safeParse(item);
-	return parsed.success ? presentedFrom(parsed.data) : undefined;
+const fromResult = (item: Readonly<Record<string, unknown>>): DiagramId | undefined => {
+	const parsed = diagramWriteResult.safeParse(item);
+	if (!parsed.success) return undefined;
+	const payload: unknown = JSON.parse(parsed.data.output.text);
+	return writtenDiagramId.safeParse(payload).data?.diagramId;
 };
 
 export class PresentedCanvasSource {
@@ -79,9 +60,9 @@ export class PresentedCanvasSource {
 	async latest(
 		actor: ActorContext,
 		conversationId: ConversationId
-	): Promise<PresentedCanvasDiagram | undefined> {
+	): Promise<DiagramId | undefined> {
 		// The whole transcript, deliberately unbounded. A window would mean a diagram
-		// presented long enough ago simply vanishes from the canvas, with nothing to
+		// written long enough ago simply vanishes from the canvas, with nothing to
 		// tell anyone it happened.
 		const rows = await this.items.list(actor, conversationId);
 		for (let index = rows.length - 1; index >= 0; index -= 1) {

@@ -30,7 +30,7 @@
 		chatRegistry,
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { canvasPlacement, latestAppliedRevision } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
 	import { getProjectDiagram } from '$lib/remote/diagrams/diagrams.remote';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
@@ -92,10 +92,8 @@
 	 * conversation with a kept diagram counted as "on screen" no matter what the
 	 * agent had since drawn, and the offer was withheld for the rest of it.
 	 */
-	const placement = $derived(canvasPlacement(chat.sessionKey, chat.conversationId));
-	const canvasOnScreen = $derived(
-		placement.kind === 'showing' && workbench.openTabs.includes(placement.tab)
-	);
+	const canvas = $derived(canvasFor(chat.sessionKey));
+	const canvasOnScreen = $derived(canvas !== undefined && workbench.openTabs.includes(canvas.tab));
 	/**
 	 * Pull a diagram the agent revised back into the pane showing it.
 	 *
@@ -109,7 +107,7 @@
 	 */
 	let refreshedRevisionCallId = $state<string | undefined>(undefined);
 	$effect(() => {
-		const applied = latestAppliedRevision(chat.sessionKey);
+		const applied = latestDiagramWrite(chat.sessionKey);
 		if (!applied || applied.callId === refreshedRevisionCallId) return;
 		refreshedRevisionCallId = applied.callId;
 		void getProjectDiagram(applied.diagramId).refresh();
@@ -126,9 +124,7 @@
 		// Offering while the lookup is still out flashes the card onto every mount
 		// of an already-kept conversation — which is the whole reason `pending` is
 		// an arm of its own rather than an absent tab.
-		placement.kind === 'showing' && !canvasOnScreen
-			? { subject: placement.subject, canvasTab: placement.tab }
-			: undefined
+		canvas && !canvasOnScreen ? { diagramId: canvas.diagramId, canvasTab: canvas.tab } : undefined
 	);
 	$effect(() => chat.persistConversationChoices());
 	onMount(() => {
@@ -700,7 +696,6 @@
 					sessionKey={chat.sessionKey}
 					projectId={activeProjectId}
 					canvasTab={studioOffer.canvasTab}
-					title={studioOffer.subject.kind === 'draft' ? studioOffer.subject.draft.title : undefined}
 				/>
 			</div>
 		{/if}

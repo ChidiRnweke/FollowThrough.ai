@@ -451,7 +451,10 @@ export const diagrams = pgTable(
 		index('diagrams_source_note_idx').on(table.sourceNoteId),
 		index('diagrams_project_idx').on(table.projectId),
 		index('diagrams_project_archived_idx').on(table.projectId, table.archivedAt),
-		uniqueIndex('diagrams_conversation_unique').on(table.conversationId)
+		// Provenance, not ownership: a conversation may draw several diagrams, and a
+		// diagram outlives the chat that drew it. This was unique, which made asking
+		// one chat for a second diagram impossible rather than merely unusual.
+		index('diagrams_conversation_idx').on(table.conversationId)
 	]
 );
 

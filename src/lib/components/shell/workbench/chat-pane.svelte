@@ -5,8 +5,7 @@
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
-	import { canvasSubjectKey } from '$lib/stores/diagrams/canvas-subject';
-	import { canvasPlacement } from '$lib/stores/diagrams/canvas.svelte';
+	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
 	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -56,22 +55,20 @@
 		conversationProjectId(conversation, shell.noteTree) ?? diagramRegistry.draftProject(sessionKey)
 	);
 
-	// The canvas opens when the conversation has put something on it the canvas has
+	// The canvas opens when the conversation has written a diagram the canvas has
 	// not shown yet, and never for a background tab — a chat the user is not looking
 	// at must not take the split out from under the one they are.
 	//
-	// Where it belongs is resolved once, in `canvasPlacement`. `chat-panel.svelte`
-	// reads the same value, so the split and the offer cannot disagree.
-	const placement = $derived(canvasPlacement(sessionKey, chat.conversationId));
+	// There is one tab it could be: the diagram's own. This used to choose between
+	// that and a draft canvas, and choosing wrong is what let the agent report a
+	// diagram changed while the user looked at the version before it.
+	const canvas = $derived(canvasFor(sessionKey));
 	$effect(() => {
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
-		// `pending` waits rather than falling back to the draft tab: opening the
-		// wrong tab is not a slower answer, it is a different one.
-		if (placement.kind !== 'showing') return;
-		const key = canvasSubjectKey(placement.subject);
-		if (!canvasOpenings.shouldOpen(sessionKey, key)) return;
-		canvasOpenings.markShown(sessionKey, key);
-		void workbench.setSplit(placement.tab);
+		if (!canvas) return;
+		if (!canvasOpenings.shouldOpen(sessionKey, canvas.diagramId)) return;
+		canvasOpenings.markShown(sessionKey, canvas.diagramId);
+		void workbench.setSplit(canvas.tab);
 	});
 
 	let releaseContext: (() => void) | undefined;

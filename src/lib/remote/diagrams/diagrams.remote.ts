@@ -60,20 +60,6 @@ export const listProjectDiagrams = query(projectIdSchema, async (projectId) =>
 		.listProjectDiagrams(requestActor(), { projectId, kind: 'drawio' })
 );
 
-/** Turn what the studio canvas is showing into a durable project diagram. */
-export const keepStudioDiagram = command(
-	z.object({
-		projectId: projectIdSchema,
-		conversationId: conversationIdSchema,
-		// draw.io XML: the canvas holds nothing else.
-		source: z.string().trim().min(1).max(2_000_000),
-		title: z.string().trim().min(1).max(200).optional(),
-		// Required: the embed's export is the only preview a draw.io diagram can have.
-		renderedSvg: z.string().trim().min(1).max(2_000_000)
-	}),
-	async (input) => AppFactory.controllers().diagramStudio().keepStudioDiagram(requestActor(), input)
-);
-
 export const renameProjectDiagram = command(
 	z.object({
 		diagramId: diagramIdSchema,

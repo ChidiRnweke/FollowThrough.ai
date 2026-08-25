@@ -2,9 +2,8 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, isDraftTab, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { chatTab, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { studioTabFor } from '$lib/stores/diagrams/canvas.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -23,14 +22,12 @@
 		title?: string;
 	} = $props();
 
-	// A draft can only be kept into a project, and the route the chat is docked on
-	// may not name one. The workbench's focused tab is the other place that knows.
+	// The route the chat is docked on may not name a project; the workbench's
+	// focused tab is the other place that knows.
 	const keepableIn = $derived(projectId ?? workbench.activeProjectId);
-	const unkeepable = $derived(isDraftTab(canvasTab) && keepableIn === undefined);
-
-	// The tab a kept diagram already has, so the studio opens onto the saved row
-	// rather than re-opening the draft the transcript still names.
-	const kept = $derived(studioTabFor(chatRegistry.peek(sessionKey)?.conversationId));
+	// The canvas tab always names a saved diagram now, so there is no unkeepable
+	// state left: what the offer points at already exists.
+	const unkeepable = false;
 	let opening = $state(false);
 
 	/**
@@ -45,7 +42,7 @@
 		try {
 			if (keepableIn) diagramRegistry.startDraft(sessionKey, keepableIn);
 			rightPanel.close();
-			await workbench.openSplit(chatTab(sessionKey), kept.kind === 'kept' ? kept.tab : canvasTab);
+			await workbench.openSplit(chatTab(sessionKey), canvasTab);
 		} finally {
 			// The card usually unmounts on the navigation above, but not always — a
 			// failed navigation leaves it standing, and a button stuck on "Opening"
@@ -74,7 +71,7 @@
 		and without this the button sits unchanged over a screen that has not moved
 		yet, which reads as a press that did nothing.
 	-->
-	<Button size="sm" disabled={opening || kept.kind === 'pending'} onclick={() => void openStudio()}>
+	<Button size="sm" disabled={opening} onclick={() => void openStudio()}>
 		{opening ? 'Opening…' : 'Open in studio'}
 	</Button>
 </div>

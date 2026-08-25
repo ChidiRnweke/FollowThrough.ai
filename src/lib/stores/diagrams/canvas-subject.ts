@@ -1,26 +1,20 @@
 import { z } from 'zod';
 import type { DiagramId } from '$lib/models/diagrams';
-import {
-	presentedDiagram,
-	presentedDiagramRevision,
-	type PresentedDiagram
-} from '$lib/models/diagrams/presented-canvas';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 
-export type { PresentedDiagram };
-
 /**
- * What the canvas should be showing: something the agent drew and the user has
- * not kept, or a diagram that is already saved.
+ * A diagram id, parsed rather than asserted.
+ *
+ * Tool output is whatever crossed the wire, so a malformed record reads as
+ * nothing and leaves the last good diagram on the canvas.
  */
-export type CanvasSubject =
-	| { readonly kind: 'draft'; readonly draft: PresentedDiagram }
-	| { readonly kind: 'saved'; readonly diagramId: DiagramId };
-
 const diagramIdField = z
 	.string()
 	.refine((value) => value.trim() !== '')
 	.transform((value) => value as DiagramId);
+
+/** What both writing tools answer with. */
+const writtenDiagram = z.object({ diagramId: diagramIdField });
 
 /**
  * A saved diagram named by its id.
@@ -29,87 +23,55 @@ const diagramIdField = z
  * reader: `accept_suggestion` answers for every kind of suggestion, so without it
  * accepting a todo would put that todo on the diagram canvas.
  */
-const savedDiagramFields = z.object({
+const namedDiagram = z.object({
 	id: diagramIdField,
 	kind: z.enum(['drawio', 'mermaid'])
 });
 
-const readDraft = (output: unknown): CanvasSubject | undefined => {
-	const draft = presentedDiagram(output);
-	return draft ? { kind: 'draft', draft } : undefined;
-};
-
-/**
- * A revision is shown by the diagram it revised, not by a canvas of its own.
- *
- * It is written onto that row as a working revision before the tool answers, so
- * the diagram's tab already holds it — and that tab is the one carrying History
- * and Publish, which is how the version is accepted or abandoned.
- */
-const readRevision = (output: unknown): CanvasSubject | undefined => {
-	const revision = presentedDiagramRevision(output);
-	return revision?.kind === 'revision'
-		? { kind: 'saved', diagramId: revision.diagramId }
-		: undefined;
-};
+const readWritten = (output: unknown): DiagramId | undefined =>
+	writtenDiagram.safeParse(output).data?.diagramId;
 
 /** A diagram the agent read: the tool answers with the diagram itself. */
-const readSavedDiagram = (output: unknown): CanvasSubject | undefined => {
-	const parsed = savedDiagramFields.safeParse(output);
-	return parsed.success ? { kind: 'saved', diagramId: parsed.data.id } : undefined;
-};
+const readNamed = (output: unknown): DiagramId | undefined =>
+	namedDiagram.safeParse(output).data?.id;
 
 /** A diagram the user accepted: the tool answers with the suggestion it applied. */
-const readAcceptedArtifact = (output: unknown): CanvasSubject | undefined => {
-	const parsed = z.object({ artifact: savedDiagramFields }).safeParse(output);
-	return parsed.success ? { kind: 'saved', diagramId: parsed.data.artifact.id } : undefined;
+const readAccepted = (output: unknown): DiagramId | undefined =>
+	z.object({ artifact: namedDiagram }).safeParse(output).data?.artifact.id;
+
+/**
+ * Every way a conversation can end up with a diagram to show.
+ *
+ * Writing one is the direct route. The other two matter because a diagram the
+ * agent reached some other way is still the diagram the user is talking about,
+ * and leaving them out is what made a whole request end at "Accept suggestion
+ * completed" with nothing to look at.
+ */
+const CANVAS_READERS: Readonly<Record<string, (output: unknown) => DiagramId | undefined>> = {
+	create_diagram: readWritten,
+	edit_diagram: readWritten,
+	accept_suggestion: readAccepted,
+	read_project_diagram: readNamed
 };
 
 /**
- * Every way a conversation can end up with something to show on the canvas.
+ * The diagram on this conversation's canvas: the last one it touched.
  *
- * `create_diagram` is the direct one. The other two matter because a diagram
- * the agent saved through some other route is still a diagram the user is
- * talking about, and leaving it out is what made a whole request end at
- * "Accept suggestion completed" with nothing to look at.
- */
-const SUBJECT_READERS: Readonly<Record<string, (output: unknown) => CanvasSubject | undefined>> = {
-	create_diagram: readDraft,
-	edit_diagram: readRevision,
-	accept_suggestion: readAcceptedArtifact,
-	read_project_diagram: readSavedDiagram
-};
-
-/**
- * The diagram currently on the canvas: the last one this conversation produced.
+ * A diagram id and nothing else. It used to be a union — a draft the user had not
+ * kept, or a saved diagram — because creating one stored nothing and lived only
+ * on a canvas. Both tools write now, so there is one kind of answer, and the two
+ * representations that could disagree about what the canvas held are one.
  *
- * The transcript is the studio's storage before anything is kept, so this reads
- * back out of it rather than holding separate state — which is also what makes a
- * reload or a reconnect show the same canvas, since tool calls are replayed with
- * everything else.
+ * Read out of the transcript rather than held as separate state, which is what
+ * makes a reload or a reconnect show the same canvas: tool calls are replayed
+ * with everything else.
  */
-export const canvasSubject = (tools: readonly ChatToolActivity[]): CanvasSubject | undefined => {
+export const canvasDiagramId = (tools: readonly ChatToolActivity[]): DiagramId | undefined => {
 	for (let index = tools.length - 1; index >= 0; index -= 1) {
 		const tool = tools[index]!;
 		if (tool.status !== 'succeeded') continue;
-		const subject = SUBJECT_READERS[tool.name]?.(tool.output);
-		if (subject) return subject;
+		const diagramId = CANVAS_READERS[tool.name]?.(tool.output);
+		if (diagramId) return diagramId;
 	}
 	return undefined;
 };
-
-/**
- * What the canvas has been opened for, as one comparable value.
- *
- * A draft is identified by its source, so re-rendering the same draft never
- * re-opens the canvas but a revision does; a saved diagram is identified by its
- * id, so reading it twice is one subject rather than two.
- *
- * Total over a subject. It used to accept and return `undefined`, which meant
- * "there is nothing on the canvas" travelled down through here and into
- * `shouldOpenCanvas` and `markCanvasShown`, each of which then needed a branch
- * for a case it could do nothing about. The caller that knows whether there is
- * a subject is the caller that should decide.
- */
-export const canvasSubjectKey = (subject: CanvasSubject): string =>
-	subject.kind === 'draft' ? `draft:${subject.draft.source}` : `saved:${subject.diagramId}`;

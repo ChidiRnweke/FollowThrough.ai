@@ -16,7 +16,9 @@
 	} from '$lib/remote/diagrams/diagrams.remote';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
+	import type { Diagram } from '$lib/models/diagrams';
 	import { toast } from 'svelte-sonner';
+	import { invalidateAll } from '$app/navigation';
 	import {
 		FtMemory as Brain,
 		FtChevronRight as ChevronRight,

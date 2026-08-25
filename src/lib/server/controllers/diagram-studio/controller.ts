@@ -19,9 +19,8 @@ import type {
 	PublishProjectDiagramInput,
 	PublishProjectDiagramOutput,
 	CreateDiagramInput,
-	CreateDiagramOutput,
+	DiagramWriteOutput,
 	EditDiagramInput,
-	EditDiagramOutput,
 	ReadCanvasDiagramInput,
 	ReadCanvasDiagramOutput,
 	ReadProjectDiagramInput,
@@ -77,9 +76,9 @@ export interface DiagramStudioController {
 	 * shows it and the user is who keeps it, so an abandoned conversation leaves no
 	 * diagram behind.
 	 */
-	createDiagram(actor: ActorContext, input: CreateDiagramInput): Promise<CreateDiagramOutput>;
+	createDiagram(actor: ActorContext, input: CreateDiagramInput): Promise<DiagramWriteOutput>;
 	/** Present a revision only after proving its replacement target exists and is editable. */
-	editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<EditDiagramOutput>;
+	editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<DiagramWriteOutput>;
 	/**
 	 * Read the diagram currently on this conversation's canvas.
 	 *
@@ -113,18 +112,6 @@ export interface DiagramStudioController {
 		actor: ActorContext,
 		input: SearchDiagramIconsInput
 	): Promise<SearchDiagramIconsOutput>;
-	/**
-	 * Turn what the canvas is showing into a durable project diagram.
-	 *
-	 * The one way a studio diagram comes into being. A presented draft lives in the
-	 * conversation and is never persisted, so this has no ancestor diagram to
-	 * supersede — it creates the row. Idempotent on `conversationId`, so a replayed
-	 * event cannot produce two diagrams.
-	 */
-	keepStudioDiagram(
-		actor: ActorContext,
-		input: KeepStudioDiagramInput
-	): Promise<KeepStudioDiagramOutput>;
 	/**
 	 * Fetch one project diagram, for the studio canvas.
 	 *
@@ -228,93 +215,87 @@ export interface DiagramStudioDependencies {
 export class DiagramStudio implements DiagramStudioController {
 	constructor(private readonly dependencies: DiagramStudioDependencies) {}
 
-	// `createDiagram` and `searchDiagramIcons` cross no service seam — they
-	// validate, or they ask one collaborator and hand the answer back. They live
-	// here because the agent's tools are bound to controllers, not because there is
-	// orchestration to do; hence the `void actor` in both.
-	async createDiagram(
-		actor: ActorContext,
-		input: CreateDiagramInput
-	): Promise<CreateDiagramOutput> {
-		// A conversation keeps at most one diagram — `keepStudioDiagram` is
-		// idempotent on `conversationId` — so once it has one, a "new" diagram here
-		// is a change to that one, sent through the wrong tool. It used to be
-		// accepted: the draft had no row and no tab of its own, the canvas went on
-		// showing the saved diagram, and the agent reported a diagram it had
-		// changed while the user looked at the version before it. Refusing says so
-		// instead, and names the id the revision needs.
-		const existing = await this.dependencies.diagramConversations.findByConversation(
-			actor,
-			input.conversationId
-		);
-		if (existing)
-			throw new UnsupportedDiagramOperationError(
-				`This conversation already has a saved diagram (${existing.id}). Call edit_diagram with that diagramId to change it; create_diagram only draws a diagram that does not exist yet.`
-			);
-		return this.validated(input);
-	}
-
 	/**
-	 * Validated even though nothing is stored here: the canvas is about to load
-	 * this into a draw.io embed, and a malformed source would fail there, in front
-	 * of the user, rather than here.
+	 * Create a diagram, the way `create_note` creates a note.
 	 *
-	 * Shared by both presentation tools, and deliberately not `createDiagram`
-	 * itself — a revision must not be measured against the "this conversation has
-	 * no diagram yet" rule that `createDiagram` enforces.
+	 * It used to store nothing and hand the XML back for a canvas to show, with a
+	 * Save button as the only approval. That made a diagram the one agent output
+	 * that could vanish when a chat closed, and put its consent somewhere the
+	 * approval boundary could not see. Now the tool is a mutation: the boundary
+	 * asks, and approving writes the row.
+	 *
+	 * Created unpublished — `publishedRevision` 0, no `publishedAt` — exactly as a
+	 * note is. Publishing is still the user's decision, and until they make it the
+	 * diagram is a working revision nobody else sees.
 	 */
-	private validated(input: CreateDiagramInput): CreateDiagramOutput {
+	async createDiagram(actor: ActorContext, input: CreateDiagramInput): Promise<DiagramWriteOutput> {
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
-		return {
+		const timestamp = this.dependencies.now();
+		const diagram = await this.dependencies.diagramWriter.create(actor, {
+			id: crypto.randomUUID() as Diagram['id'],
+			userId: actor.userId,
+			projectId: input.projectId,
+			conversationId: input.conversationId,
+			kind: 'drawio',
+			title: input.title,
 			source,
-			...(input.title ? { title: input.title } : {})
-		};
+			// No preview yet. Only the draw.io embed can draw one, so the gallery says
+			// "No preview yet" until the canvas opens this and exports it.
+			searchableText: await this.dependencies.drawioTextExtractor.extract({ source }),
+			currentRevision: 1,
+			publishedRevision: 0,
+			createdAt: timestamp,
+			updatedAt: timestamp
+		});
+		await this.dependencies.diagramIndexer.index(actor, diagram);
+		return { diagramId: diagram.id, ...(input.title ? { title: input.title } : {}) };
 	}
 
 	/**
-	 * A revision lands on the row it names, as a working revision.
+	 * Edit a diagram, the way `edit_note` edits a note.
 	 *
-	 * It used to only validate and echo, leaving the version to be applied by a
-	 * button in the draft canvas. That canvas is a tab of its own, and a
-	 * conversation whose diagram was already kept opens the *saved* diagram's tab
-	 * instead — so the button was unreachable and the agent could report a diagram
-	 * changed while the user looked at the version before it.
-	 *
-	 * Saving here does not decide anything for the user (ADR 0003): the write is a
-	 * working revision, `publishedRevision` is untouched, and History and Publish
-	 * remain how a version is accepted or abandoned. The approval boundary asks
-	 * before the call, which is where consent belongs — the tool is classified a
-	 * mutation for exactly that reason.
+	 * The write is a working revision: `publishedRevision` is untouched, and
+	 * History and Publish remain how a version is accepted or abandoned (ADR 0003).
+	 * The base version goes with it, so a diagram the user changed meanwhile
+	 * reports a conflict instead of being overwritten (ADR 0010).
 	 */
-	async editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<EditDiagramOutput> {
+	async editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<DiagramWriteOutput> {
 		const target = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		if (target.kind !== 'drawio')
-			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be revised here');
-		const presented = this.validated(input);
-		// Base version sent with the write, so a diagram the user edited meanwhile
-		// reports a conflict instead of being overwritten (ADR 0010).
+			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
+		const source = this.dependencies.drawioXmlValidator.validate(input.source);
 		await this.saveProjectDiagramDraft(actor, {
 			diagramId: target.id,
-			source: presented.source,
+			source,
 			baseEtag: diagramEtag(target)
 		});
-		return { ...presented, diagramId: target.id };
+		return { diagramId: target.id, ...(input.title ? { title: input.title } : {}) };
 	}
 
 	async readCanvasDiagram(
 		actor: ActorContext,
 		input: ReadCanvasDiagramInput
 	): Promise<ReadCanvasDiagramOutput> {
-		const presented = await this.dependencies.canvasSource.latest(actor, input.conversationId);
-		return presented
-			? presented
+		const diagramId = await this.dependencies.canvasSource.latest(actor, input.conversationId);
+		// Read from the row rather than the transcript: the agent gets what is
+		// stored, which is what the user is looking at, not what was last sent.
+		const diagram = diagramId
+			? await this.dependencies.diagramFinder.get(actor, diagramId)
+			: undefined;
+		return diagram
+			? {
+					kind: 'present',
+					diagramId: diagram.id,
+					source: diagram.source,
+					...(diagram.title ? { title: diagram.title } : {})
+				}
 			: {
 					kind: 'empty',
-					message: 'This conversation has not presented a diagram on its canvas.',
+					message: 'This conversation has no diagram on its canvas.',
 					nextActions: [
 						{
 							tool: 'create_diagram',
-							reason: 'Present a new diagram only if the user asked to create one.'
+							reason: 'Create a diagram only if the user asked for one.'
 						}
 					]
 				};
@@ -344,48 +325,6 @@ export class DiagramStudio implements DiagramStudioController {
 		void actor;
 		const icons = await this.dependencies.iconSearch.search(input.query, input.limit);
 		return { icons };
-	}
-
-	keepStudioDiagram(
-		actor: ActorContext,
-		input: KeepStudioDiagramInput
-	): Promise<KeepStudioDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			// One conversation owns one diagram, so the conversation is the idempotency
-			// key a replayed keep collides on. Returning the existing diagram is what
-			// keeps a reconnect from producing a second artifact.
-			const existing = await this.dependencies.diagramConversations.findByConversation(
-				actor,
-				input.conversationId
-			);
-			if (existing) return { diagram: existing, created: false };
-			const source = this.dependencies.drawioXmlValidator.validate(input.source);
-			// The preview comes from the embed's own export, which is the only thing
-			// that can draw draw.io. The sanitizer throws on empty input, so a diagram
-			// can never be stored with a blank preview it could never recover from.
-			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-			const timestamp = this.dependencies.now();
-			const diagram = await this.dependencies.diagramWriter.create(actor, {
-				id: crypto.randomUUID() as Diagram['id'],
-				userId: actor.userId,
-				projectId: input.projectId,
-				conversationId: input.conversationId,
-				kind: 'drawio',
-				title: input.title,
-				source,
-				renderedSvg,
-				searchableText: await this.dependencies.drawioTextExtractor.extract({ source }),
-				currentRevision: 1,
-				publishedRevision: 1,
-				publishedAt: timestamp,
-				createdAt: timestamp,
-				updatedAt: timestamp
-			});
-			await this.dependencies.diagramIndexer.index(actor, diagram);
-			if (diagram.kind === 'drawio')
-				await this.dependencies.diagramDraftWriter.recordRevision(actor, diagram);
-			return { diagram, created: true };
-		});
 	}
 
 	getProjectDiagram(actor: ActorContext, input: GetProjectDiagramInput): Promise<Diagram> {

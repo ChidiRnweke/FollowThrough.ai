@@ -22,7 +22,6 @@ export type TabRef =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey }
 	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
-	| { readonly kind: 'draft'; readonly sessionKey: ChatSessionKey }
 	| { readonly kind: 'search' };
 
 const CHAT_PREFIX = 'chat:';
@@ -36,7 +35,6 @@ const DIAGRAM_PREFIX = 'diagram:';
  * there is no diagram: the draft lives in the transcript, and the canvas reads it
  * from there.
  */
-const DRAFT_PREFIX = 'draft:';
 
 /**
  * The one search tab's id. Unlike a chat there is never more than one global
@@ -55,8 +53,6 @@ export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${s
 
 export const diagramTab = (diagramId: DiagramId): TabId => `${DIAGRAM_PREFIX}${diagramId}`;
 
-export const draftTab = (sessionKey: ChatSessionKey): TabId => `${DRAFT_PREFIX}${sessionKey}`;
-
 export const searchTab = (): TabId => SEARCH_TAB_ID;
 
 /**
@@ -70,10 +66,6 @@ export function parseTabId(raw: string): TabRef | undefined {
 	if (trimmed.startsWith(CHAT_PREFIX)) {
 		const sessionKey = trimmed.slice(CHAT_PREFIX.length);
 		return isUuid(sessionKey) ? { kind: 'chat', sessionKey } : undefined;
-	}
-	if (trimmed.startsWith(DRAFT_PREFIX)) {
-		const sessionKey = trimmed.slice(DRAFT_PREFIX.length);
-		return isUuid(sessionKey) ? { kind: 'draft', sessionKey } : undefined;
 	}
 	if (trimmed.startsWith(DIAGRAM_PREFIX)) {
 		const diagramId = trimmed.slice(DIAGRAM_PREFIX.length);
@@ -89,8 +81,6 @@ export const isSearchTab = (id: TabId): boolean => parseTabId(id)?.kind === 'sea
 export const isNoteTab = (id: TabId): boolean => parseTabId(id)?.kind === 'note';
 
 export const isDiagramTab = (id: TabId): boolean => parseTabId(id)?.kind === 'diagram';
-
-export const isDraftTab = (id: TabId): boolean => parseTabId(id)?.kind === 'draft';
 
 /** The note behind a tab, or `undefined` for a chat tab. */
 export function noteIdOf(id: TabId | undefined): NoteId | undefined {

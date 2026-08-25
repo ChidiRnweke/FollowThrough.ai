@@ -12,6 +12,7 @@ import {
 	noteBuilder,
 	testProjectId,
 	testConversationId,
+	testDiagramId,
 	testActor,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -323,7 +324,12 @@ describe('Agent tool coverage invariants', () => {
 		const diagramStudio = capabilityDependencies<DiagramStudioController>({
 			readCanvasDiagram: async (_actor, input) =>
 				input.conversationId === conversationId
-					? { kind: 'draft', source: '<mxfile />', title: 'Current' }
+					? {
+							kind: 'present',
+							diagramId: testDiagramId(),
+							source: '<mxfile />',
+							title: 'Current'
+						}
 					: {
 							kind: 'empty',
 							message: 'Empty',
@@ -341,7 +347,8 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'read_canvas_diagram');
 		expect(await tool?.execute({})).toEqual({
-			kind: 'draft',
+			kind: 'present',
+			diagramId: testDiagramId(),
 			source: '<mxfile />',
 			title: 'Current'
 		});

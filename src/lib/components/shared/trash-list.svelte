@@ -119,7 +119,9 @@
 					The icon is decorative: the kind is already written in the line beneath,
 					so a screen reader that announced both would say "Diagram" twice.
 				-->
-				<Icon class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+				<span aria-hidden="true" class="contents"
+					><Icon class="size-4 shrink-0 text-muted-foreground" /></span
+				>
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-sm font-medium">{entry.title}</p>
 					<p class="truncate text-xs text-muted-foreground">

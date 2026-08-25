@@ -26,7 +26,7 @@ export const diagramCases: readonly EvalCase[] = [
 				'Read my "Checkout architecture" note and draw a diagram of how the components talk to each other.',
 			sourceNote: 'Checkout architecture'
 		},
-		expected: { tool: 'present_diagram', canvasKind: 'draft' },
+		expected: { tool: 'create_diagram', canvasKind: 'present' },
 		metadata: {
 			layer: 'agent',
 			axes: 'production-valid editable artifact + component coverage + directed faithfulness'
@@ -45,7 +45,7 @@ export const diagramCases: readonly EvalCase[] = [
 			const canvas = await lab.controllers
 				.diagramStudio()
 				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
-			const inspection = canvas.kind === 'draft' ? inspectDrawio(canvas.source) : undefined;
+			const inspection = canvas.kind === 'present' ? inspectDrawio(canvas.source) : undefined;
 			const labels = inspection?.kind === 'valid' ? inspection.labels : [];
 			const edges = inspection?.kind === 'valid' ? inspection.edges : [];
 			const normalizedLabels = labels.map((label) => label.toLocaleLowerCase());
@@ -80,7 +80,7 @@ export const diagramCases: readonly EvalCase[] = [
 			expect(
 				{
 					status: result.status,
-					presented: result.calledToolNames.includes('present_diagram'),
+					presented: result.calledToolNames.includes('create_diagram'),
 					canvasKind: canvas.kind,
 					productionValid: inspection?.kind === 'valid',
 					namedComponentsPresent,
@@ -91,7 +91,7 @@ export const diagramCases: readonly EvalCase[] = [
 			).toEqual({
 				status: 'completed',
 				presented: true,
-				canvasKind: 'draft',
+				canvasKind: 'present',
 				productionValid: true,
 				namedComponentsPresent: true,
 				edgeCountAtLeastFour: true,
@@ -104,7 +104,7 @@ export const diagramCases: readonly EvalCase[] = [
 		name: 'interprets an implicit picture request as a canvas artifact rather than chat art',
 		splits: [ARCHETYPES.toolDiscovery, 'ambiguity'],
 		input: { prompt: 'Turn this into a picture I can move around and clean up later.' },
-		expected: { tool: 'present_diagram', canvasKind: 'draft' },
+		expected: { tool: 'create_diagram', canvasKind: 'present' },
 		metadata: {
 			layer: 'agent',
 			note: 'The user names the desired affordance, not diagrams, Mermaid, draw.io, canvas, or any tool.'
@@ -123,8 +123,8 @@ export const diagramCases: readonly EvalCase[] = [
 			const canvas = await lab.controllers
 				.diagramStudio()
 				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
-			const call = findCall(result, 'present_diagram');
-			const inspection = canvas.kind === 'draft' ? inspectDrawio(canvas.source) : undefined;
+			const call = findCall(result, 'create_diagram');
+			const inspection = canvas.kind === 'present' ? inspectDrawio(canvas.source) : undefined;
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
@@ -136,7 +136,7 @@ export const diagramCases: readonly EvalCase[] = [
 			const passed =
 				result.status === 'completed' &&
 				Boolean(call) &&
-				canvas.kind === 'draft' &&
+				canvas.kind === 'present' &&
 				inspection?.kind === 'valid' &&
 				inspection.edges.length >= 4;
 			px.logAnnotation({

@@ -436,7 +436,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		classification: 'read',
 		surface: 'app',
 		description:
-			'Show a new diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML and saves nothing: the user chooses whether and where to keep what they see. Send raw XML, never HTML-escaped: the source must start with a literal "<". This tool never revises a saved diagram; use edit_diagram for that.',
+			'Create a diagram in a project. Takes a projectId and uncompressed mxfile XML, and saves it as an unpublished working revision — the user approves the call first and publishes when they are ready. Send raw XML, never HTML-escaped: the source must start with a literal "<". Use edit_diagram to change one that already exists.',
 		retrievalText: 'show render draw a diagram on the canvas for the user to look at'
 	},
 	{
@@ -444,7 +444,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		classification: 'mutation',
 		surface: 'app',
 		description:
-			'Revise an existing saved draw.io diagram. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. Send raw XML, never HTML-escaped: the source must start with a literal "<". The revision is saved onto that diagram as a new working revision and appears in its tab; what the user has published does not change until they publish it. This is the only way to change a saved diagram — create_diagram cannot.',
+			'Change an existing draw.io diagram. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. Send raw XML, never HTML-escaped: the source must start with a literal "<". The change is saved onto that diagram as a new working revision and appears in its tab; what the user has published does not change until they publish it. This is the only way to change a diagram — create_diagram makes a new one.',
 		retrievalText: 'revise change update an existing saved diagram'
 	},
 	{
@@ -454,7 +454,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		// could only ever fail there.
 		surface: 'app',
 		description:
-			'Read the diagram currently on this conversation\u2019s canvas, including its full source. Diagram source is left out of your history because it is large, so read it here before revising a diagram you drew earlier.',
+			'Read the diagram this conversation last wrote, including its id and full source as stored. Diagram source is left out of your history because it is large, so read it here before changing a diagram you wrote earlier.',
 		retrievalText: 'read the current diagram source on the canvas before revising it'
 	},
 	{

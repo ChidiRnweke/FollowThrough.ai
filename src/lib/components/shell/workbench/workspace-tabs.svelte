@@ -54,8 +54,6 @@
 				return 'Search notes';
 			case 'diagram':
 				return diagramRegistry.peek(ref.diagramId)?.description?.title ?? 'Untitled diagram';
-			case 'draft':
-				return 'Diagram draft';
 			case 'chat': {
 				const conversationId = chatRegistry.peek(ref.sessionKey)?.conversationId;
 				return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
@@ -92,7 +90,7 @@
 				searchTabs.push(id);
 				continue;
 			}
-			if (kind === 'diagram' || kind === 'draft') {
+			if (kind === 'diagram') {
 				diagramTabs.push(id);
 				continue;
 			}

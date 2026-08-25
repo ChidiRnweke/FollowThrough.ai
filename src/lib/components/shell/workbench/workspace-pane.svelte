@@ -6,7 +6,7 @@
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';
 	import GlobalSearchPanel from '$lib/components/search/global-search-panel.svelte';
-	import { DiagramDraftPane, DiagramPane } from '$lib/components/diagrams';
+	import { DiagramPane } from '$lib/components/diagrams';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -35,20 +35,6 @@
 	} = $props();
 
 	const ref = $derived(parseTabId(tabId));
-	const draftConversation = $derived(
-		ref?.kind === 'draft'
-			? sessions.find(
-					(conversation) => conversation.id === chatRegistry.peek(ref.sessionKey)?.conversationId
-				)
-			: undefined
-	);
-	const draftProjectId = $derived(
-		ref?.kind === 'draft'
-			? (conversationProjectId(draftConversation, shell.noteTree) ??
-					diagramRegistry.draftProject(ref.sessionKey) ??
-					workbench.activeProjectId)
-			: undefined
-	);
 </script>
 
 <!--
@@ -68,13 +54,6 @@
 	/>
 {:else if ref?.kind === 'diagram'}
 	<DiagramPane diagramId={ref.diagramId} {onCloseSplit} />
-{:else if ref?.kind === 'draft'}
-	<DiagramDraftPane
-		sessionKey={ref.sessionKey}
-		projectId={draftProjectId}
-		projects={shell.projects}
-		{onCloseSplit}
-	/>
 {:else if ref?.kind === 'search'}
 	<div class="h-full overflow-hidden p-4">
 		<GlobalSearchPanel projects={shell.projects} />

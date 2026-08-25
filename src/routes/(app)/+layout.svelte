@@ -17,6 +17,7 @@
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { toast } from 'svelte-sonner';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
@@ -151,8 +152,22 @@
 		keyboard.handle(event);
 	}
 
+	/**
+	 * The strip's "+" names no project, so it uses the inbox — the destination the
+	 * quick-capture field advertises. Note creation used to answer a missing project
+	 * itself, filing the note wherever the sort order happened to land.
+	 */
+	const inboxProjectId = $derived(
+		data.shell.projects.find((project) => project.role === 'inbox')?.id
+	);
+
 	async function createNoteFromStrip(): Promise<void> {
-		const output = await projectActions.createNote('Untitled');
+		const projectId = inboxProjectId;
+		if (!projectId) {
+			toast.error('This workspace has no inbox yet. Open Today to create your first note.');
+			return;
+		}
+		const output = await projectActions.createNote('Untitled', projectId);
 		if (output) await workbench.openTab(output.note.id);
 	}
 </script>
