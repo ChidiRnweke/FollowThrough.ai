@@ -79,6 +79,21 @@ describe('Promise extraction orchestration invariants', () => {
 		).toEqual(['Send it', 'Review it']);
 	});
 
+	it('limits suggestions to the requested responsibility', async () => {
+		const { extractor, controller } = setup();
+		extractor.candidates = [
+			candidate('Clean up the runbook'),
+			candidate('Wire the alert', { responsibility: 'waiting_on', ownerName: 'Maya' })
+		];
+		const result = await controller.extractPromises(testActor(), {
+			selection,
+			responsibility: 'mine'
+		});
+		expect(
+			result.suggestions.map((item) => (item.kind === 'todo' ? item.payload.title : ''))
+		).toEqual(['Clean up the runbook']);
+	});
+
 	it('creates a todo when the pipeline trust policy authorizes it', async () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send it')];

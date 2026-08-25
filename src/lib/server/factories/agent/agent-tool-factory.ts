@@ -521,6 +521,7 @@ const id = z.string().uuid();
 const projectId = z
 	.string()
 	.uuid()
+	.describe('Exact project UUID returned by a FollowThrough tool; never pass a project name.')
 	.transform((value) => value as ProjectId);
 const noteId = z
 	.string()
@@ -977,7 +978,14 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'search',
 			toolDescription('search'),
 			'read',
-			temporal({ query: z.string().min(1), projectId: projectId.optional() }),
+			temporal({
+				query: z.string().min(1),
+				projectId: projectId
+					.optional()
+					.describe(
+						'Exact project UUID returned by a FollowThrough tool; never pass a project name. Omit to search all projects.'
+					)
+			}),
 			(input) =>
 				factory.retrieval().search(actor, {
 					query: input.query,
@@ -1811,8 +1819,19 @@ const agentOnlyDefinitions = (
 					'extract_promises',
 					toolDescription('extract_promises'),
 					'proposal',
-					z.object({}),
-					() => factory.todos().extractPromises(actor, { selection })
+					z.object({
+						responsibility: z
+							.enum(['mine', 'waiting_on'])
+							.optional()
+							.describe(
+								'Use mine for commitments made by the user (I/my), waiting_on for commitments made by someone else, or omit only when the user asked for every actor.'
+							)
+					}),
+					(fields) =>
+						factory.todos().extractPromises(actor, {
+							selection,
+							...(fields.responsibility ? { responsibility: fields.responsibility } : {})
+						})
 				),
 				defineTool(
 					'relate_selection',

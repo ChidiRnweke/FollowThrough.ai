@@ -228,6 +228,8 @@ export interface PromiseCandidate {
 
 export interface ExtractPromisesInput {
 	readonly selection: TextSelection;
+	/** Limit extracted commitments to one responsibility; omit to keep every actor. */
+	readonly responsibility?: TodoResponsibility;
 }
 
 /** `createdTodos` is populated only for auto-accepted candidates; everything else stays in `suggestions`, pending review. */

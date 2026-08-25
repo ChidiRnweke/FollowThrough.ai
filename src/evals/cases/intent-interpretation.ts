@@ -14,7 +14,53 @@ import { skillsWorkspace, SKILL_HASH } from '../fixtures/workspaces/skills';
 import { scoreIntentInterpretation } from '../assertions/intent';
 import { scoreStoppingBehavior } from '../assertions/stopping';
 import { scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
+import {
+	expectSuggestionPending,
+	expectTodoCreated,
+	expectTodoProposed,
+	expectTodoStatus
+} from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
+
+const completedCleanupTitle = 'TLS certificate renewal completed';
+const cleanupWorkspace = {
+	...todosWorkspace,
+	todos: [
+		...(todosWorkspace.todos ?? []),
+		{ title: completedCleanupTitle, projectName: 'Platform' }
+	]
+};
+
+const implicitCommitments =
+	"Maya thinks the retry notes are nearly there. I can take the runbook cleanup, and she said she'd wire the alert before Friday; the rest can wait.";
+const commitmentWorkspace = {
+	projects: [
+		{
+			name: 'Checkout',
+			notes: [{ title: 'Incident follow-up', body: implicitCommitments }]
+		}
+	]
+};
+
+const relatedPaymentDetail = 'AUTH-RETRY-17';
+const relatedArchitectureWorkspace = () => {
+	const project = architectureWorkspace.projects?.[0];
+	if (!project?.notes) throw new Error('Architecture project notes were not seeded');
+	return {
+		projects: [
+			{
+				...project,
+				notes: [
+					...project.notes,
+					{
+						title: 'Payment retry decision',
+						body: `Payment authorisation retries use decision code ${relatedPaymentDetail}; the Checkout API waits for the Payment Gateway result before retrying.`
+					}
+				]
+			}
+		]
+	};
+};
 
 /**
  * Intent interpretation: the hardest tier. These prompts are deliberately vague,
@@ -90,9 +136,14 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			});
 
 			const verdict = scoreIntentInterpretation(result, {
-				atLeastOneOf: [['list_todos', 'get_workspace_context', 'search']],
-				maxCalls: 6
+				atLeastOneOf: [['list_todos', 'get_workspace_context', 'search']]
 			});
+			const noRepeatedCalls =
+				new Set(result.calledToolNames).size === result.calledToolNames.length;
+			const response = result.finalResponse.toLowerCase();
+			const grounded =
+				response.includes('platform') &&
+				/tls certificate|kubernetes|terraform drift/.test(response);
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -100,8 +151,17 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({
+				status: result.status,
+				interpreted: verdict.passed,
+				noRepeatedCalls,
+				grounded
+			}).toEqual({
+				status: 'completed',
+				interpreted: true,
+				noRepeatedCalls: true,
+				grounded: true
+			});
 		}
 	},
 	{
@@ -113,11 +173,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				'Just got out of the architecture review — we decided to split the payment service and I need to follow up with Sarah about timelines'
 		},
 		expected: {
-			atLeastOneOf: [['create_note', 'create_todo', 'propose_memory_change']]
+			required: ['create_todo', 'propose_memory_change']
 		},
 		metadata: {
 			layer: 'agent',
-			note: 'Multi-intent buried in narrative. ANY write is acceptable — create_note, create_todo, or memory.'
+			note: 'Multi-intent buried in narrative: persist the follow-up and preserve the decision as a reviewable memory proposal.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, personaWorkspace);
@@ -135,6 +195,8 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				atLeastOneOf: [['create_note', 'create_todo', 'propose_memory_change']],
 				maxCalls: 10
 			});
+			const followUp = await expectTodoCreated(lab, workspace.actor, 'follow up with Sarah');
+			const decision = await expectSuggestionPending(lab, workspace.actor, 'memory');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -142,8 +204,12 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({
+				status: result.status,
+				interpreted: verdict.passed,
+				followUp: followUp.passed,
+				decision: decision.passed
+			}).toEqual({ status: 'completed', interpreted: true, followUp: true, decision: true });
 		}
 	},
 	{
@@ -160,7 +226,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			note: 'Hardest case: read → reason about completion state → mutate → summarize.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, todosWorkspace);
+			const workspace = await seedWorkspace(lab, cleanupWorkspace);
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
@@ -176,6 +242,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				atLeastOneOf: [['update_todo']],
 				maxCalls: 12
 			});
+			const status = await expectTodoStatus(lab, workspace.actor, completedCleanupTitle, 'done');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -183,8 +250,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({
+				status: result.status,
+				interpreted: verdict.passed,
+				persisted: status.passed
+			}).toEqual({ status: 'completed', interpreted: true, persisted: true });
 		}
 	},
 	{
@@ -195,7 +265,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			prompt:
 				'The checkout architecture thing is ready, make it available for the team and also turn it into something I can attach to the email'
 		},
-		expected: { minDistinctTools: 2, atLeastOneOf: [['publish_note', 'export_document']] },
+		expected: { required: ['publish_note', 'export_document'] },
 		metadata: {
 			layer: 'agent',
 			note: 'Two separate intents: "available for team" = publish, "attach to email" = export. Both should fire.'
@@ -214,14 +284,12 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 400)
 			});
 
-			// Ideally BOTH publish and export, but at minimum one of them
 			const verdict = scoreIntentInterpretation(result, {
 				atLeastOneOf: [['publish_note', 'export_document']],
 				minDistinctTools: 2,
 				maxCalls: 10
 			});
 
-			// Bonus: did it get BOTH?
 			const calledSet = new Set(result.calledToolNames);
 			const gotBoth = calledSet.has('publish_note') && calledSet.has('export_document');
 			px.logAnnotation({
@@ -231,8 +299,10 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: gotBoth ? 'both publish_note and export_document called' : verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, bothIntents: gotBoth }).toEqual({
+				status: 'completed',
+				bothIntents: true
+			});
 		}
 	},
 	{
@@ -243,7 +313,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			prompt:
 				"I wrote about this before somewhere... if I did can you add today's finding: the latency spike was caused by connection pool exhaustion"
 		},
-		expected: { required: ['search'], atLeastOneOf: [['save_note', 'create_note']] },
+		expected: { required: ['search'], atLeastOneOf: [['edit_note', 'save_note', 'create_note']] },
 		metadata: {
 			layer: 'agent',
 			note: 'Conditional: search first, then write. Tests search → write sequencing with uncertain user.'
@@ -262,9 +332,15 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 
 			const verdict = scoreIntentInterpretation(result, {
 				required: ['search'],
-				atLeastOneOf: [['save_note', 'create_note']],
+				atLeastOneOf: [['edit_note', 'save_note', 'create_note']],
 				maxCalls: 10
 			});
+			const targetId = workspace.noteIds.get('API connection pool saturation runbook');
+			if (!targetId) throw new Error('Connection pool runbook was not seeded');
+			const { note } = await lab.controllers.notes().get(workspace.actor, { noteId: targetId });
+			const findingPersisted = note.plainText
+				.toLowerCase()
+				.includes('latency spike was caused by connection pool exhaustion');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -272,8 +348,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({
+				status: result.status,
+				interpreted: verdict.passed,
+				findingPersisted
+			}).toEqual({ status: 'completed', interpreted: true, findingPersisted: true });
 		}
 	},
 	{
@@ -325,10 +404,13 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			prompt:
 				"I'm onboarding someone onto the platform stuff next week, pull together everything they'd need to see"
 		},
-		expected: { required: ['search'], minDistinctTools: 2 },
+		expected: {
+			minDistinctTools: 2,
+			contains: ['Platform', 'deployment', 'Kubernetes']
+		},
 		metadata: {
 			layer: 'agent',
-			note: 'Wide-scope gathering: should search + read multiple sources. Tests breadth of retrieval.'
+			note: 'Wide-scope gathering: cover the seeded overview and pending work through multiple authoritative reads, without prescribing one retrieval route.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, todosWorkspace);
@@ -343,10 +425,14 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			});
 
 			const verdict = scoreIntentInterpretation(result, {
-				required: ['search'],
 				minDistinctTools: 2,
 				maxCalls: 10
 			});
+			const response = result.finalResponse.toLowerCase();
+			const covered =
+				response.includes('platform') &&
+				response.includes('deployment') &&
+				response.includes('kubernetes');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -354,8 +440,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, breadth: verdict.passed, covered }).toEqual({
+				status: 'completed',
+				breadth: true,
+				covered: true
+			});
 		}
 	},
 
@@ -481,6 +570,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			});
 
 			const verdict = scoreToolCalling(result, { required: ['search'] });
+			const grounded = /rolling|api pods/i.test(result.finalResponse);
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -488,8 +578,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, searched: verdict.passed, grounded }).toEqual({
+				status: 'completed',
+				searched: true,
+				grounded: true
+			});
 		}
 	},
 	{
@@ -675,18 +768,18 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 		name: 'extracts commitments from a selection with casual phrasing',
 		splits: [ARCHETYPES.intentInterpretation, ARCHETYPES.selectionHandling],
 		input: {
-			prompt: 'What did I commit to here?',
-			selectionText: 'The Checkout API then publishes an order-confirmed event'
+			prompt: "Don't let me lose what I committed to here.",
+			selectionText: implicitCommitments
 		},
 		expected: { tool: 'extract_promises' },
 		metadata: {
 			layer: 'agent',
-			note: 'Vaguer version of selection-triggers-extract-promises.'
+			note: 'Implicit action intent over a multi-actor passage: preserve only the user commitment as a reviewable todo proposal.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, architectureWorkspace);
-			const noteId = workspace.noteIds.get('Checkout architecture');
-			if (!noteId) throw new Error('Checkout architecture note was not seeded');
+			const workspace = await seedWorkspace(lab, commitmentWorkspace);
+			const noteId = workspace.noteIds.get('Incident follow-up');
+			if (!noteId) throw new Error('Incident follow-up note was not seeded');
 
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
@@ -706,6 +799,10 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			});
 
 			const verdict = scoreToolDiscovery(result, 'extract_promises');
+			const ownCommitment = await expectTodoCreated(lab, workspace.actor, 'runbook cleanup');
+			const otherCommitment = await expectTodoCreated(lab, workspace.actor, 'wire the alert');
+			const ownProposal = await expectTodoProposed(lab, workspace.actor, 'runbook cleanup');
+			const otherProposal = await expectTodoProposed(lab, workspace.actor, 'wire the alert');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -713,26 +810,35 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({
+				status: result.status,
+				discovered: verdict.passed,
+				ownCommitment: ownCommitment.passed || ownProposal.passed,
+				otherCommitmentAbsent: !otherCommitment.passed && !otherProposal.passed
+			}).toEqual({
+				status: 'completed',
+				discovered: true,
+				ownCommitment: true,
+				otherCommitmentAbsent: true
+			});
 		}
 	},
 	{
 		id: 'natural-selection-find-related',
-		name: 'finds references for a selection without naming the tool',
+		name: 'finds related saved material for a selection without naming the tool',
 		splits: [ARCHETYPES.intentInterpretation, ARCHETYPES.selectionHandling],
 		input: {
 			prompt: 'Do I have anything else about this?',
 			selectionText:
 				'The Checkout API calls the Payment Gateway to authorise the card, and waits for the authorisation result.'
 		},
-		expected: { tool: 'find_references' },
+		expected: { requiredTools: ['search'], contains: relatedPaymentDetail },
 		metadata: {
 			layer: 'agent',
-			note: 'Vaguer version of selection-triggers-find-references.'
+			note: 'Ambiguous related-material request: search saved knowledge and ground the answer in a distinct matching note.'
 		},
 		async run(lab) {
-			const workspace = await seedWorkspace(lab, architectureWorkspace);
+			const workspace = await seedWorkspace(lab, relatedArchitectureWorkspace());
 			const noteId = workspace.noteIds.get('Checkout architecture');
 			if (!noteId) throw new Error('Checkout architecture note was not seeded');
 
@@ -753,7 +859,8 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 300)
 			});
 
-			const verdict = scoreToolDiscovery(result, 'find_references');
+			const verdict = scoreToolCalling(result, { required: ['search'] });
+			const grounded = result.finalResponse.includes(relatedPaymentDetail);
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
 				score: verdict.passed ? 1 : 0,
@@ -761,8 +868,11 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				explanation: verdict.explanation
 			});
 
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ status: result.status, searched: verdict.passed, grounded }).toEqual({
+				status: 'completed',
+				searched: true,
+				grounded: true
+			});
 		}
 	},
 	{
@@ -777,7 +887,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, retrievalCorpusWorkspace);
-			const noteIds = [...workspace.noteIds.values()].slice(0, 2);
+			const noteIds = [...new Set(workspace.noteIds.values())].slice(0, 2);
 			if (noteIds.length < 2) throw new Error('Need at least 2 notes');
 
 			const result = await runCase(lab, workspace.actor, {

@@ -1432,6 +1432,15 @@ describe('Agent tool coverage invariants', () => {
 		expect(received).toEqual({ selection: authoritativeSelection });
 	});
 
+	it('offers actor scoping for extracted commitments', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'extract_promises');
+		expect(definition?.parameters.shape.responsibility.description).toContain(
+			'Use mine for commitments made by the user'
+		);
+	});
+
 	it('rejects an empty todo due date at the agent boundary', () => {
 		const definition = registry('auto_accept')
 			.definitions()
@@ -1444,6 +1453,15 @@ describe('Agent tool coverage invariants', () => {
 				dueDate: ''
 			}).success
 		).toBe(false);
+	});
+
+	it('tells the model that project ids are tool-returned UUIDs rather than names', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'search');
+		expect(definition?.parameters.shape.projectId.description).toContain(
+			'never pass a project name'
+		);
 	});
 
 	it('advertises confidence as an integer percentage', () => {

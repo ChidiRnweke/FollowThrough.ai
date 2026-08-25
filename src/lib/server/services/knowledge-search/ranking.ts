@@ -38,8 +38,8 @@ export interface ISearchRanking {
  * Reranker backed by Cohere models served through OpenRouter's `/rerank`
  * endpoint, so it runs on the single OpenRouter key rather than a separate
  * Cohere key. The vector search casts a wide net (cheap recall); the reranker
- * shrinks the candidate set to the final few (precision). No fallback: if
- * reranking fails the caller fails rather than returning unranked candidates.
+ * shrinks the candidate set to the final few (precision). This adapter reports
+ * provider failures; RerankingKnowledgeSearcher owns the vector-order fallback.
  */
 
 export const DEFAULT_RERANK_MODEL = 'cohere/rerank-4-fast';

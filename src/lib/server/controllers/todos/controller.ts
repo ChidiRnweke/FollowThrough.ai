@@ -184,11 +184,14 @@ export class Todos implements TodosController {
 				this.dependencies.anchorCreator.create(actor, input.selection),
 				this.dependencies.noteReader.get(actor, input.selection.noteId)
 			]);
-			const candidates = await this.dependencies.promiseExtractor.extract(
+			const extracted = await this.dependencies.promiseExtractor.extract(
 				actor,
 				input.selection,
 				signal
 			);
+			const candidates = input.responsibility
+				? extracted.filter((candidate) => candidate.responsibility === input.responsibility)
+				: extracted;
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
 				producerKind: 'pipeline',
 				producerName: 'Extract Promises',

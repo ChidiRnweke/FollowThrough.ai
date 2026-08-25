@@ -97,7 +97,12 @@ export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
 		const wideLimit = Math.max(this.minCandidates, limit * this.candidateMultiplier);
 		const candidates = await this.inner.search(actor, query, wideLimit, projectId, signal, filter);
 		if (candidates.length <= 1) return candidates;
-		return this.reranker.rerank(query, candidates, limit, signal);
+		try {
+			return await this.reranker.rerank(query, candidates, limit, signal);
+		} catch (error) {
+			if (signal?.aborted) throw error;
+			return candidates.slice(0, limit);
+		}
 	}
 }
 

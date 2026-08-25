@@ -36,6 +36,10 @@ applies when search returns K or fewer candidates.
 
 We do not rerank one candidate because its position cannot change.
 
+If the reranker is unavailable, search returns the requested number of candidates in vector order.
+The rerank trace retains the provider failure. Reranking may improve ordering, but its availability
+must not decide whether already-retrieved knowledge reaches the agent.
+
 We use a low-latency reranker by default. We send the query as the agent wrote it. We do not add
 extra strategy text to the query.
 
@@ -55,6 +59,7 @@ This decision covers search over saved knowledge. It does not cover discovery of
 - Every search with two or more candidates makes one rerank request.
 - Search pays the cost and delay of that request.
 - Earlier positions contain stronger evidence than vector order alone can provide.
+- A failed rerank degrades ordering to vector order instead of failing knowledge search.
 - The agent can still need more than the first result when documents share symptoms.
 - Search tests must prove that the reranker ran. A result list alone cannot prove this.
 - A model change needs results from realistic retrieval cases.
@@ -68,7 +73,7 @@ delay.
 - `src/lib/server/services/knowledge-search/semantic.ts` reranks every set with at least two
   candidates.
 - `src/lib/server/services/knowledge-search/reranking.spec.ts` proves that reranker order is used
-  when the candidate count is below K.
+  when the candidate count is below K and that provider failure preserves vector candidates.
 - `src/lib/server/services/knowledge-search/ranking.ts` sends the original query and YAML fields.
 - `src/evals/lab/cache/cached-clients.spec.ts` proves that a cached order works with new document IDs
   and changes when document content changes.

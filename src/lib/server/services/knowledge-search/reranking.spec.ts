@@ -39,6 +39,12 @@ class ReverseReranker implements Reranker {
 	}
 }
 
+class FailingReranker implements Reranker {
+	async rerank(): Promise<readonly SearchMatch[]> {
+		throw new Error('reranker unavailable');
+	}
+}
+
 const wide = Array.from({ length: 60 }, (_, i) => match(`c${i}`, 1 - i / 100));
 
 describe('RerankingKnowledgeSearcher', () => {
@@ -75,5 +81,14 @@ describe('RerankingKnowledgeSearcher', () => {
 			10
 		);
 		expect(results[0]?.document.content).toBe('b');
+	});
+
+	it('falls back to vector order when reranking is unavailable', async () => {
+		const candidates = [match('first', 0.9), match('second', 0.8), match('third', 0.7)];
+		const results = await new RerankingKnowledgeSearcher(
+			new RecordingSearcher(candidates),
+			new FailingReranker()
+		).search(actor, 'query', 2);
+		expect(results).toEqual(candidates.slice(0, 2));
 	});
 });

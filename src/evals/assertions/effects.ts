@@ -106,6 +106,26 @@ export async function expectSuggestionPending(
 	};
 }
 
+export async function expectTodoProposed(
+	lab: Lab,
+	actor: ActorContext,
+	titleFragment: string
+): Promise<EffectVerdict> {
+	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
+	const titles = groups.flatMap((group) =>
+		group.suggestions.flatMap((view) =>
+			view.suggestion.kind === 'todo' ? [view.suggestion.payload.title] : []
+		)
+	);
+	const hit = titles.find((title) => matches(title, titleFragment));
+	return {
+		passed: Boolean(hit),
+		explanation: hit
+			? `todo proposed as "${hit}"`
+			: `no todo proposal matching "${titleFragment}"; found ${titles.length ? titles.map((title) => `"${title}"`).join(', ') : 'none'}`
+	};
+}
+
 export async function expectMemoryAbsent(
 	lab: Lab,
 	actor: ActorContext,
