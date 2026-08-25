@@ -10,7 +10,7 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
+	import { conversationProjectId } from '$lib/stores/diagrams/chat-project';
 
 	let {
 		tabId,

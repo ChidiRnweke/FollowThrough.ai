@@ -40,7 +40,7 @@
 	async function openStudio(): Promise<void> {
 		opening = true;
 		try {
-			if (keepableIn) diagramRegistry.startDraft(sessionKey, keepableIn);
+			if (keepableIn) diagramRegistry.useProject(sessionKey, keepableIn);
 			rightPanel.close();
 			await workbench.openSplit(chatTab(sessionKey), canvasTab);
 		} finally {

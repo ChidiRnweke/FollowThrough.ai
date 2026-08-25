@@ -55,22 +55,22 @@ const registry = new Registry<DiagramId, DiagramStore>((id) => new DiagramStore(
  * hang the project on — the user simply started it from a project's gallery. This
  * remembers that until promotion turns it into a real row.
  */
-const draftProjects = new SvelteMap<ChatSessionKey, ProjectId>();
+const chatProjects = new SvelteMap<ChatSessionKey, ProjectId>();
 
 export class DiagramRegistry {
 	/** Records the project a newly started draft belongs to. */
-	startDraft(sessionKey: ChatSessionKey, projectId: ProjectId): void {
-		draftProjects.set(sessionKey, projectId);
+	useProject(sessionKey: ChatSessionKey, projectId: ProjectId): void {
+		chatProjects.set(sessionKey, projectId);
 	}
 
 	/** The project a draft belongs to, if this session started one. */
-	draftProject(sessionKey: ChatSessionKey): ProjectId | undefined {
-		return draftProjects.get(sessionKey);
+	projectFor(sessionKey: ChatSessionKey): ProjectId | undefined {
+		return chatProjects.get(sessionKey);
 	}
 
 	/** Forgets a draft once it has been kept or abandoned. */
-	endDraft(sessionKey: ChatSessionKey): void {
-		draftProjects.delete(sessionKey);
+	forgetProject(sessionKey: ChatSessionKey): void {
+		chatProjects.delete(sessionKey);
 	}
 
 	/** Acquires the store for a diagram, bumping its refcount. */

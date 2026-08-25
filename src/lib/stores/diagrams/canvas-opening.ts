@@ -12,7 +12,7 @@
  * it means a re-render of the same diagram never fights the user.
  *
  * The subject is an opaque key rather than a source string, because what the canvas
- * shows may be a saved diagram rather than a draft — see `canvasSubjectKey`.
+ * shows is a saved diagram, keyed by its id.
  */
 export interface CanvasOpening {
 	/** The subject the canvas has already been opened for, if any. */

@@ -93,7 +93,7 @@
 	async function startDiagram(): Promise<void> {
 		if (!data.selectedProjectId) return;
 		const sessionKey = chatRegistry.mint();
-		diagramRegistry.startDraft(sessionKey, data.selectedProjectId);
+		diagramRegistry.useProject(sessionKey, data.selectedProjectId);
 		// Just the chat. There is no canvas to open yet: the diagram exists once the
 		// agent creates it, and its own tab opens then. Opening an empty canvas first
 		// showed a pane with nothing in it and a Save button that could not be used.

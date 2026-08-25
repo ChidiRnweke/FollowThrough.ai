@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation } from '$lib/models/agent';
-import { conversationProjectId } from './draft-project';
+import { conversationProjectId } from './chat-project';
 import { noteBuilder, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('Conversation diagram project resolution', () => {

@@ -6,7 +6,7 @@
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
-	import { conversationProjectId } from '$lib/stores/diagrams/draft-project';
+	import { conversationProjectId } from '$lib/stores/diagrams/chat-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab } from '$lib/stores/workbench/tab-ref';
@@ -51,8 +51,8 @@
 	// run's `projectId`, which becomes the conversation's own project on its first
 	// turn — without it a studio chat is scoped to nothing and its diagram has no
 	// project to be kept in.
-	const draftProjectId = $derived(
-		conversationProjectId(conversation, shell.noteTree) ?? diagramRegistry.draftProject(sessionKey)
+	const chatProjectId = $derived(
+		conversationProjectId(conversation, shell.noteTree) ?? diagramRegistry.projectFor(sessionKey)
 	);
 
 	// The canvas opens when the conversation has written a diagram the canvas has
@@ -120,7 +120,7 @@
 			{sessions}
 			{agentPreferences}
 			{agentAvailable}
-			activeProjectId={draftProjectId}
+			activeProjectId={chatProjectId}
 			showHistory={false}
 		/>
 	</div>
