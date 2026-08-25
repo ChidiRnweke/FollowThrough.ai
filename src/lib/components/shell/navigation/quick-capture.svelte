@@ -2,10 +2,14 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Form } from '$lib/components/ui/form';
 	import { captureNote } from '$lib/remote/notes/notes.remote';
+	import type { ProjectId } from '$lib/models/projects';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
-	let { target = 'Inbox', focusOnMount = false }: { target?: string; focusOnMount?: boolean } =
-		$props();
+	let {
+		projectId,
+		target = 'Inbox',
+		focusOnMount = false
+	}: { projectId: ProjectId; target?: string; focusOnMount?: boolean } = $props();
 </script>
 
 <Form {...captureNote}>
@@ -13,6 +17,7 @@
 		<InputGroup.Addon align="inline-start">
 			<InputGroup.Text class="text-muted-foreground">{target}</InputGroup.Text>
 		</InputGroup.Addon>
+		<input type="hidden" name="projectId" value={projectId} />
 		<InputGroup.Input
 			id="quick-capture-input"
 			{@attach (node: HTMLElement) => {

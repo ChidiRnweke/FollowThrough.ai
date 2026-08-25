@@ -5,6 +5,7 @@ import { runCase } from '../lab/run-case';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { scoreToolCalling } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
+import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
 
 /**
  * Note-tool choice: edit_note and save_note are deliberately different
@@ -70,12 +71,14 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const applied = view.note.plainText.includes('leads platform engineering');
+			const markdown = noteMarkdownFromContent(view.note.document).trim();
+			const applied = markdown === 'Robin leads platform engineering at Northwind Analytics.';
 			noteEffect(view.note.plainText, 'leads platform engineering');
 
-			expect(result.status).toBe('completed');
-			expect(tools.passed, tools.explanation).toBe(true);
-			expect(applied, 'note body must contain the replacement text').toBe(true);
+			expect(
+				{ status: result.status, tools: tools.passed, exactReplacement: applied },
+				tools.explanation
+			).toEqual({ status: 'completed', tools: true, exactReplacement: true });
 		}
 	},
 	{
@@ -98,6 +101,11 @@ export const noteEditingCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, personaWorkspace);
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
+			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const expectedMarkdown = noteMarkdownFromContent(before.note.document).replace(
+				'Kubernetes',
+				'K8s'
+			);
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
@@ -121,8 +129,9 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const changed = view.note.plainText.includes('K8s');
-			const preserved = view.note.plainText.includes('Utrecht');
+			const actualMarkdown = noteMarkdownFromContent(view.note.document);
+			const changed = actualMarkdown.includes('K8s');
+			const preserved = actualMarkdown === expectedMarkdown;
 			noteEffect(view.note.plainText, 'K8s');
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
@@ -180,7 +189,15 @@ export const noteEditingCases: readonly EvalCase[] = [
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
 			const changed = view.note.plainText !== seeded.note.plainText;
-			const preserved = view.note.plainText.includes('Utrecht');
+			const facts = [
+				'Robin Aldridge',
+				'eight years',
+				'Terraform',
+				'public-sector research funding',
+				'nine product teams'
+			];
+			const missingFacts = facts.filter((fact) => !view.note.plainText.includes(fact));
+			const preserved = missingFacts.length === 0;
 			noteEffect(view.note.plainText, 'Utrecht');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
@@ -189,10 +206,10 @@ export const noteEditingCases: readonly EvalCase[] = [
 				explanation: changed ? 'note body changed' : 'note body is unchanged after the request'
 			});
 
-			expect(result.status).toBe('completed');
-			expect(usedEditTool, 'must edit the note through an edit tool').toBe(true);
-			expect(changed, 'the tidy-up must actually change the note').toBe(true);
-			expect(preserved, 'a tidy-up must not drop untargeted facts').toBe(true);
+			expect(
+				{ status: result.status, usedEditTool, changed, preserved },
+				missingFacts.length ? `dropped seeded facts: ${missingFacts.join(', ')}` : undefined
+			).toEqual({ status: 'completed', usedEditTool: true, changed: true, preserved: true });
 		}
 	},
 	{
@@ -257,7 +274,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const actualBody = view.note.plainText.trim();
+			const actualBody = noteMarkdownFromContent(view.note.document).trim();
 			const exact = actualBody === expectedBody.trim();
 			noteEffect(view.note.plainText, 'event-driven scheduler');
 			px.logAnnotation({

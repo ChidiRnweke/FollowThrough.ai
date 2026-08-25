@@ -150,6 +150,20 @@ describe('AgentVirtualFiles grep', () => {
 });
 
 describe('AgentVirtualFiles sed', () => {
+	it('returns typed recovery for a malformed id instead of querying a repository', async () => {
+		const malformed = `/projects/${projectId}/notes/77e6cf7b-e4a8-4343-bd11-41bdbd7859290.md`;
+		const result = await reader().sed(testActor(), malformed, {
+			kind: 'to_end',
+			startLine: 1
+		});
+
+		expect(result).toMatchObject({
+			kind: 'error',
+			code: 'path_not_found',
+			requestedPath: malformed
+		});
+	});
+
 	it('reads an inclusive line range', async () => {
 		const result = await reader().sed(testActor(), notePath, {
 			kind: 'lines',

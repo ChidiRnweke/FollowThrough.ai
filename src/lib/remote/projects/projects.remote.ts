@@ -8,18 +8,33 @@ import type {
 	ArchiveProjectInput,
 	CreateFolderInput,
 	MoveProjectEntryInput,
+	ProjectId,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type {
-	CreateNoteInput,
 	RenameNoteInput,
 	ArchiveNoteInput,
 	DeleteNoteForeverInput,
 	EmptyNoteTrashInput,
 	ListNoteTrashInput,
+	NoteId,
 	RestoreNoteInput
 } from '$lib/models/notes';
-import type { CreateSkillInput } from '$lib/models/skills';
+
+/**
+ * Parsed, branded ids — the schema establishes the type instead of a cast
+ * asserting it. Declared before the commands that use them: a `z.object(...)`
+ * runs at module load, so a schema defined further down the file is still in its
+ * temporal dead zone when the first command is built.
+ */
+const projectIdSchema = z
+	.string()
+	.uuid()
+	.transform((value) => value as ProjectId);
+const noteIdSchema = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteId);
 
 export const createProject = command(z.object({ name: z.string().min(1) }), async (input) => {
 	return AppFactory.controllers()
@@ -85,14 +100,21 @@ export const moveEntry = command(
 export const createNote = command(
 	z.object({
 		title: z.string().min(1),
-		projectId: z.string().uuid().optional(),
-		parentId: z.string().uuid().optional()
+		// Required, and parsed into the id type rather than asserted into it. While
+		// this was optional the `as CreateNoteInput` below silenced the compiler:
+		// `projectId` became required on the input type and nothing here failed,
+		// because a cast answers the question instead of asking it.
+		projectId: projectIdSchema,
+		parentId: noteIdSchema.optional()
 	}),
-	async (input) => {
-		return AppFactory.controllers()
+	async (input) =>
+		AppFactory.controllers()
 			.notes()
-			.create(requestActor(), input as CreateNoteInput);
-	}
+			.create(requestActor(), {
+				title: input.title,
+				projectId: input.projectId,
+				...(input.parentId === undefined ? {} : { parentId: input.parentId })
+			})
 );
 
 export const renameNote = command(
@@ -144,12 +166,26 @@ export const createSkill = command(
 	z.object({
 		name: z.string().min(1),
 		description: z.string().optional(),
-		projectId: z.string().uuid().optional(),
-		parentId: z.string().uuid().optional()
+		// Branded where they are parsed, so what comes out of the schema is already
+		// the id type the controller wants. The alternative is a cast at the call
+		// site, which asserts the very thing the schema is here to establish.
+		//
+		// Required, like `createNote` above. The skills catalog shows no project, so
+		// it sends the inbox — which it can name, because the role is on the project
+		// it already lists. Nothing on this side of the wire invents one.
+		projectId: projectIdSchema,
+		parentId: noteIdSchema.optional()
 	}),
-	async (input) => {
-		return AppFactory.controllers()
+	async (input) =>
+		// Built field by field rather than spread and asserted: `{ ...input } as
+		// CreateSkillInput` turns off exactly the checking that catches a field
+		// arriving in the wrong shape.
+		AppFactory.controllers()
 			.skills()
-			.create(requestActor(), input as CreateSkillInput);
-	}
+			.create(requestActor(), {
+				name: input.name,
+				projectId: input.projectId,
+				...(input.description === undefined ? {} : { description: input.description }),
+				...(input.parentId === undefined ? {} : { parentId: input.parentId })
+			})
 );

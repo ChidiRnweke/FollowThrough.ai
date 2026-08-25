@@ -1,9 +1,9 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
+import type { Project, ProjectId } from '$lib/models/projects';
 import type { Skill, SkillSummary } from '$lib/models/skills';
-import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
+import { INBOX_PROJECT_NAME } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
@@ -32,14 +32,27 @@ export class BuiltInSkills {
 	) {}
 
 	async ensure(actor: ActorContext): Promise<void> {
+		const inbox = await this.ensureInbox(actor);
 		const projects = await this.projects.listActive(actor);
-		const defaultProject =
-			projects.find((candidate) => candidate.name === DEFAULT_PROJECT_NAME) ??
-			(await this.projects.insert(actor, { name: DEFAULT_PROJECT_NAME }));
 		const activeProjectIds = new Set(projects.map((project) => project.id));
-		activeProjectIds.add(defaultProject.id);
+		activeProjectIds.add(inbox.id);
 		for (const definition of this.definitions.active)
-			await this.ensureDefinition(actor, definition, defaultProject.id, activeProjectIds);
+			await this.ensureDefinition(actor, definition, inbox.id, activeProjectIds);
+	}
+
+	/**
+	 * Provisioning is the only thing that creates an inbox.
+	 *
+	 * It used to be found by name and created by whichever write ran first — a
+	 * note, a skill, an import — so a workspace grew projects as a side effect of
+	 * saving something. Now the role says which project it is, and this runs on the
+	 * provisioning path that every actor already goes through.
+	 */
+	private async ensureInbox(actor: ActorContext): Promise<Project> {
+		const existing = await this.projects.findInbox(actor);
+		return (
+			existing ?? (await this.projects.insert(actor, { name: INBOX_PROJECT_NAME, role: 'inbox' }))
+		);
 	}
 
 	async load(actor: ActorContext, key: string): Promise<Skill> {

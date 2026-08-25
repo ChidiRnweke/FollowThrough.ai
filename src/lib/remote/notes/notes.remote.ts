@@ -27,10 +27,22 @@ import type { UserId } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
 
-const noteId = z.string().uuid().transform((value) => value as NoteId);
-const userId = z.string().uuid().transform((value) => value as UserId);
-const projectId = z.string().uuid().transform((value) => value as ProjectId);
-const dateTime = z.string().datetime().transform((value) => value as DateTime);
+const noteId = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteId);
+const userId = z
+	.string()
+	.uuid()
+	.transform((value) => value as UserId);
+const projectId = z
+	.string()
+	.uuid()
+	.transform((value) => value as ProjectId);
+const dateTime = z
+	.string()
+	.datetime()
+	.transform((value) => value as DateTime);
 
 const noteSchema = z.object({
 	id: noteId,
@@ -68,9 +80,7 @@ const textSelection = z
 const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
 
 export const saveNote = command(z.object({ note: noteSchema }), async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.save(requestActor(), input);
+	return AppFactory.controllers().notes().save(requestActor(), input);
 });
 
 export const getNote = query(z.string().uuid(), async (noteId) => {
@@ -214,9 +224,7 @@ export const relateNote = command(z.object({ selection: textSelection }), async 
 });
 
 export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllers()
-		.references()
-		.startSuggestFromSelection(requestActor(), input);
+	return AppFactory.controllers().references().startSuggestFromSelection(requestActor(), input);
 });
 
 export const generateDiagram = command(
@@ -256,9 +264,16 @@ export const convertDiagram = command(
 );
 
 export const captureNote = form(
-	z.object({ title: z.string().trim().min(1, 'Give the note a title first.') }),
-	async ({ title }) => {
-		const { note } = await AppFactory.controllers().notes().create(requestActor(), { title });
+	z.object({
+		title: z.string().trim().min(1, 'Give the note a title first.'),
+		projectId
+	}),
+	async ({ title, projectId }) => {
+		const actor = requestActor();
+		// The page passes the inbox, found by role. Note creation used to answer a
+		// missing project itself with `findFirstActive`, filing the note wherever
+		// the sort order happened to land.
+		const { note } = await AppFactory.controllers().notes().create(actor, { title, projectId });
 		redirect(303, `/notes/${note.id}`);
 	}
 );

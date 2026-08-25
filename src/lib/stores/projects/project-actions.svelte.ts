@@ -78,9 +78,9 @@ class ProjectActionsStore {
 		this.withInvalidation<MoveProjectEntryOutput>(() =>
 			moveEntry({ projectId, entryId, parentId, position })
 		);
-	createNote = (title: string, projectId?: ProjectId, parentId?: NoteId) =>
+	createNote = (title: string, projectId: ProjectId, parentId?: NoteId) =>
 		this.withInvalidation<CreateNoteOutput>(() => createNote({ title, projectId, parentId }));
-	createSkill = (name: string, projectId?: ProjectId, parentId?: NoteId) =>
+	createSkill = (name: string, projectId: ProjectId, parentId?: NoteId) =>
 		this.withInvalidation<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
 	renameNote = (noteId: NoteId, title: string) =>
 		this.withInvalidation<RenameNoteOutput>(() => renameNote({ noteId, title }));

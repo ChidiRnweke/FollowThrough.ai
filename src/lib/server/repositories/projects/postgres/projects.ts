@@ -19,6 +19,7 @@ import { toNote, toProject } from '$lib/server/db/mappers';
 import { isUniqueViolation } from '$lib/server/db/postgres-errors';
 
 const PROJECT_NAME_CONSTRAINT = 'projects_user_name_unique';
+const PROJECT_INBOX_CONSTRAINT = 'projects_user_inbox_unique';
 
 export class ProjectRecords implements ProjectRepository, ProjectTreeRepository {
 	constructor(private readonly database: Database) {}
@@ -28,14 +29,42 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		try {
 			const [row] = await this.database
 				.insert(schema.projects)
-				.values({ userId: actor.userId, name: input.name, description: input.description })
+				.values({
+					userId: actor.userId,
+					name: input.name,
+					role: input.role ?? 'workspace',
+					description: input.description
+				})
 				.returning();
 			return toProject(row!);
 		} catch (error) {
 			if (isUniqueViolation(error, PROJECT_NAME_CONSTRAINT))
 				throw new ConflictError('An active project with this name already exists');
+			if (isUniqueViolation(error, PROJECT_INBOX_CONSTRAINT))
+				throw new ConflictError('This workspace already has an inbox');
 			throw error;
 		}
+	}
+
+	/**
+	 * The user's inbox, found by role.
+	 *
+	 * Not by name: the name is the user's to change, and matching on it is what
+	 * let a renamed project stop being the inbox while a new one silently became
+	 * it. Absent only before provisioning has run.
+	 */
+	async findInbox(actor: ActorContext): Promise<Project | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.projects)
+			.where(
+				and(
+					eq(schema.projects.userId, actor.userId),
+					eq(schema.projects.role, 'inbox'),
+					isNull(schema.projects.archivedAt)
+				)
+			);
+		return row ? toProject(row) : undefined;
 	}
 
 	async findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {

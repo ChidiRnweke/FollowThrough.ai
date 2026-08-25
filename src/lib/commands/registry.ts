@@ -28,13 +28,16 @@ export interface AppCommand {
 export const commandRegistry: readonly AppCommand[] = [
 	{
 		id: 'new-note',
-		label: 'Create untitled note',
+		label: 'Create a note',
 		shortcut: '⌘K N',
 		icon: FilePlus,
 		async run() {
+			// Sends the user to quick capture rather than creating a note here. A note
+			// belongs to a project and the palette knows none, so this used to leave
+			// the choice to the server, which answered with whichever project sorted
+			// first. Capture names the inbox, and the user sees where it is going.
 			palette.close();
-			const result = await projectActions.createNote('Untitled');
-			if (result) await workbench.openTab(result.note.id);
+			await goto('/today?quickCapture=1');
 		}
 	},
 	{

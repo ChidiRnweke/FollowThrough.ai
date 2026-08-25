@@ -5,8 +5,14 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { RejectSuggestionInput, SuggestionId } from '$lib/models/suggestions';
 import type { NoteId } from '$lib/models/notes';
 
-const suggestionId = z.string().uuid().transform((value) => value as SuggestionId);
-const noteId = z.string().uuid().transform((value) => value as NoteId);
+const suggestionId = z
+	.string()
+	.uuid()
+	.transform((value) => value as SuggestionId);
+const noteId = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteId);
 
 export const acceptSuggestion = command(
 	z.object({
@@ -20,17 +26,12 @@ export const acceptSuggestion = command(
 			.optional()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
-			.suggestions()
-			.acceptReviewed(requestActor(), input);
+		return AppFactory.controllers().suggestions().acceptReviewed(requestActor(), input);
 	}
 );
 
-export const rejectSuggestion = command(
-	z.object({ suggestionId }),
-	async (input) => {
-		return AppFactory.controllers()
-			.suggestions()
-			.reject(requestActor(), input as RejectSuggestionInput);
-	}
-);
+export const rejectSuggestion = command(z.object({ suggestionId }), async (input) => {
+	return AppFactory.controllers()
+		.suggestions()
+		.reject(requestActor(), input as RejectSuggestionInput);
+});

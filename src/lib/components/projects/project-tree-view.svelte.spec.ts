@@ -11,6 +11,7 @@ const project: Project = {
 	id: projectId,
 	userId: '30000000-0000-4000-8000-000000000001' as Project['userId'],
 	name: 'FollowThrough',
+	role: 'workspace',
 	createdAt: '2026-07-12T08:00:00.000Z' as Project['createdAt'],
 	updatedAt: '2026-07-12T08:00:00.000Z' as Project['updatedAt']
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
+import { INBOX_PROJECT_NAME } from '$lib/models/projects';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
@@ -17,7 +17,7 @@ Discover the available action tools before answering. Prefer read tools to inspe
 
 const setup = () => {
 	const projects = new InMemoryProjectRepository();
-	projects.projects = [projectBuilder({ name: DEFAULT_PROJECT_NAME })];
+	projects.projects = [projectBuilder({ name: INBOX_PROJECT_NAME, role: 'inbox' })];
 	const notes = new InMemoryNoteRepository();
 	const skills = new InMemorySkillRepository();
 	return {

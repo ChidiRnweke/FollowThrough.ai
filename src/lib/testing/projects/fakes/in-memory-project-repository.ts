@@ -59,6 +59,13 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		);
 	}
 
+	async findInbox(actor: ActorContext): Promise<Project | undefined> {
+		return this.projects.find(
+			(project) =>
+				project.userId === actor.userId && project.role === 'inbox' && !project.archivedAt
+		);
+	}
+
 	async findFirstActive(actor: ActorContext): Promise<Project | undefined> {
 		return (await this.listActive(actor))[0];
 	}

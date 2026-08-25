@@ -14,7 +14,7 @@ import type { DateTime } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
 import type { Provenance, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { TrashedNote } from '$lib/models/notes';
-import { DEFAULT_PROJECT_NAME } from '$lib/models/projects';
+
 import { NOTE_REVISION_HISTORY_LIMIT, findProseMirrorDocumentIssue } from '$lib/models/notes';
 import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -160,7 +160,7 @@ export class NoteCatalog {
 				createdAt: note.createdAt,
 				updatedAt: note.updatedAt,
 				archivedAt: note.archivedAt as DateTime,
-				projectName: names.get(note.projectId) ?? DEFAULT_PROJECT_NAME
+				projectName: names.get(note.projectId) ?? 'Unknown project'
 			}));
 	}
 
@@ -349,16 +349,29 @@ export class NoteCatalog {
 		});
 	}
 
+	/**
+	 * The project a note is created in, which the caller must have decided.
+	 *
+	 * It used to answer a missing `projectId` by taking the first active project
+	 * and, failing that, creating one called "General". Neither is a decision
+	 * anyone made: the first active project is an accident of sort order, and
+	 * writing a note is no reason to bring a project into existence. A caller that
+	 * does not know where the note goes has a missing fact, and a default turns
+	 * that into a note filed somewhere nobody chose.
+	 *
+	 * So it fails rather than choosing. Giving the caller what it needs to choose
+	 * is a separate job and belongs at the boundary that knows who is asking:
+	 * `requireProject` in `agent-tool-factory.ts` answers a missing project by
+	 * naming every project the actor has. A service throwing "required" into a
+	 * conversation would leave the model doing exactly the guessing this removes.
+	 */
 	private async resolveProject(
 		actor: ActorContext,
-		projectId?: Note['projectId']
+		projectId: Note['projectId']
 	): Promise<Project> {
-		const project = projectId
-			? await this.projects.findById(actor, projectId)
-			: await this.projects.findFirstActive(actor);
-		if (project) return project;
-		if (projectId) throw new NotFoundError('Project was not found');
-		return this.projects.insert(actor, { name: DEFAULT_PROJECT_NAME });
+		const project = await this.projects.findById(actor, projectId);
+		if (!project) throw new NotFoundError('Project was not found', { projectId });
+		return project;
 	}
 
 	private isUnchanged(current: Note, candidate: Note): boolean {

@@ -87,9 +87,9 @@ describe('describeError', () => {
 
 describe('userFacingMessage', () => {
 	it("uses a remote function's domain message, which is not an Error", () => {
-		expect(userFacingMessage({ message: 'Diagram is malformed', code: 'VALIDATION' }, 'fallback')).toBe(
-			'Diagram is malformed'
-		);
+		expect(
+			userFacingMessage({ message: 'Diagram is malformed', code: 'VALIDATION' }, 'fallback')
+		).toBe('Diagram is malformed');
 	});
 
 	it('uses the fallback when the failure says nothing', () => {

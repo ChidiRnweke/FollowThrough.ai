@@ -23,6 +23,16 @@ import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
+/**
+ * What a project is for, so the inbox stops being a project that happens to be
+ * called "General".
+ *
+ * The name used to carry this: capture resolved its destination by string match,
+ * so renaming the project moved the inbox and creating one called "General"
+ * silently became it. A role is renameable, unmissable, and cannot be claimed by
+ * accident.
+ */
+export const projectRole = pgEnum('project_role', ['inbox', 'workspace']);
 export const todoStatus = pgEnum('todo_status', [
 	'backlog',
 	'open',
@@ -165,6 +175,7 @@ export const projects = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
 		description: text('description'),
+		role: projectRole('role').notNull().default('workspace'),
 		// Null defers to the app default in user_preferences.
 		sectionNumberingDefault: boolean('section_numbering_default'),
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
@@ -174,6 +185,11 @@ export const projects = pgTable(
 		uniqueIndex('projects_user_name_unique')
 			.on(table.userId, sql`lower(${table.name})`)
 			.where(sql`${table.archivedAt} is null`),
+		// One inbox per user, so "where does an uncategorised capture go" has exactly
+		// one answer and the database is what guarantees it.
+		uniqueIndex('projects_user_inbox_unique')
+			.on(table.userId)
+			.where(sql`${table.role} = 'inbox'`),
 		index('projects_user_updated_idx').on(table.userId, table.updatedAt)
 	]
 );

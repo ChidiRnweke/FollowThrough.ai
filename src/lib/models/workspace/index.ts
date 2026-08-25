@@ -72,6 +72,8 @@ interface Project {
 	readonly id: ProjectId;
 	readonly userId: UserId;
 	readonly name: string;
+	/** Mirrors `ProjectRole`; a model domain is self-contained so it cannot import it. */
+	readonly role: 'inbox' | 'workspace';
 	readonly description?: string;
 	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;

@@ -63,9 +63,9 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				score: mutated ? 1 : 0,
 				label: mutated ? 'mutated' : 'narration_only',
 				explanation: mutated
-					? `mutated through ${result.calledToolNames.filter((name) =>
-							(this.expected.mutation as string[]).includes(name)
-						).join(', ')}`
+					? `mutated through ${result.calledToolNames
+							.filter((name) => (this.expected.mutation as string[]).includes(name))
+							.join(', ')}`
 					: `no mutation tool called (${result.calledToolNames.join(', ') || 'no tools'})`
 			});
 
@@ -121,8 +121,10 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				model: turn2.model,
 				turn1Tools: turn1.calledToolNames,
 				turn2Tools: turn2.calledToolNames,
-				createdTurn1: findCall(turn1, 'create_todo')?.arguments ?? findCall(turn1, 'create_todos')?.arguments,
-				createdTurn2: findCall(turn2, 'create_todo')?.arguments ?? findCall(turn2, 'create_todos')?.arguments
+				createdTurn1:
+					findCall(turn1, 'create_todo')?.arguments ?? findCall(turn1, 'create_todos')?.arguments,
+				createdTurn2:
+					findCall(turn2, 'create_todo')?.arguments ?? findCall(turn2, 'create_todos')?.arguments
 			});
 
 			const after = await lab.controllers.todos().count(workspace.actor, { projectId });

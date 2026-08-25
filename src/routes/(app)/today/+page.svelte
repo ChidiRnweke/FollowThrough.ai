@@ -29,6 +29,9 @@
 	{#snippet actions()}
 		<AgentAction action={agentActions.today} />
 	{/snippet}
-	<QuickCapture focusOnMount={page.url.searchParams.has('quickCapture')} />
+	<QuickCapture
+		projectId={data.inboxProjectId}
+		focusOnMount={page.url.searchParams.has('quickCapture')}
+	/>
 	<TodayTriage view={data.view} projects={data.shell.projects} />
 </PageShell>

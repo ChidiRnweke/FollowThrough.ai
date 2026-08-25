@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { getEncoding } from 'js-tiktoken';
+import { z } from 'zod';
 import {
 	RE2JS,
 	RE2JSCompileException,
@@ -40,6 +41,10 @@ export interface AgentVirtualFilesDependencies {
 }
 
 const encoding = getEncoding('cl100k_base');
+const uuid = z.uuid();
+
+const validIds = (...values: readonly (string | undefined)[]): boolean =>
+	values.every((value) => value !== undefined && uuid.safeParse(value).success);
 
 const normalizePath = (input: string): string => {
 	const absolute = input === '.' ? '/' : input.startsWith('/') ? input : `/${input}`;
@@ -97,6 +102,7 @@ export class AgentVirtualFiles {
 
 		const note = path.match(/^\/projects\/([^/]+)\/notes\/([^/]+)\.md$/);
 		if (note) {
+			if (!validIds(note[1], note[2])) return undefined;
 			const found = await this.dependencies.notes.findById(actor, note[2] as NoteId);
 			if (!found || found.projectId !== (note[1] as ProjectId) || found.kind === 'folder')
 				return undefined;
@@ -105,6 +111,7 @@ export class AgentVirtualFiles {
 
 		const version = path.match(/^\/projects\/([^/]+)\/notes\/([^/]+)\/versions\/(\d+)\.md$/);
 		if (version) {
+			if (!validIds(version[1], version[2])) return undefined;
 			const found = await this.dependencies.notes.findById(actor, version[2] as NoteId);
 			if (!found || found.projectId !== (version[1] as ProjectId)) return undefined;
 			const revision = (await this.dependencies.notes.listRevisions(actor, found.id)).find(
@@ -117,6 +124,7 @@ export class AgentVirtualFiles {
 
 		const attachment = path.match(/^\/projects\/([^/]+)\/attachments\/([^/]+)\.txt$/);
 		if (attachment) {
+			if (!validIds(attachment[1], attachment[2])) return undefined;
 			const found = await this.dependencies.attachments.findById(
 				actor,
 				attachment[2] as AttachmentId
@@ -132,6 +140,7 @@ export class AgentVirtualFiles {
 
 		const diagram = path.match(/^\/projects\/([^/]+)\/diagrams\/([^/]+)\.(mmd|drawio)$/);
 		if (diagram) {
+			if (!validIds(diagram[1], diagram[2])) return undefined;
 			const found = await this.dependencies.diagrams.findById(actor, diagram[2] as DiagramId);
 			if (
 				!found ||

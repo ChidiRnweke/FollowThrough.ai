@@ -117,7 +117,8 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 	}
 	async updateIfRevision(_actor: ActorContext, diagram: DrawioDiagram, expected: number) {
 		const current = this.diagrams.find((item) => item.id === diagram.id);
-		if (!current || current.kind !== 'drawio' || current.currentRevision !== expected) return undefined;
+		if (!current || current.kind !== 'drawio' || current.currentRevision !== expected)
+			return undefined;
 		await this.update(_actor, diagram);
 		return diagram;
 	}
@@ -129,7 +130,9 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		return this.diagramRevisions.filter((revision) => revision.diagramId === id).reverse();
 	}
 	async findRevision(_actor: ActorContext, id: DiagramId, revisionId: DiagramRevisionId) {
-		return this.diagramRevisions.find((revision) => revision.diagramId === id && revision.id === revisionId);
+		return this.diagramRevisions.find(
+			(revision) => revision.diagramId === id && revision.id === revisionId
+		);
 	}
 	async delete(actor: ActorContext, id: DiagramId) {
 		this.diagrams = this.diagrams.filter((item) => item.id !== id || item.userId !== actor.userId);

@@ -116,7 +116,8 @@ export interface CreateSkillInput {
 	readonly name: string;
 	readonly description?: string;
 	readonly triggerHints?: readonly string[];
-	readonly projectId?: ProjectId;
+	/** Required for the reason `CreateNoteInput.projectId` is: a skill is a note, and no default can honestly say where it belongs. */
+	readonly projectId: ProjectId;
 	readonly parentId?: NoteId;
 }
 

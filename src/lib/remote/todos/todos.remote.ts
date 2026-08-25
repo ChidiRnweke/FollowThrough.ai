@@ -7,9 +7,18 @@ import type { ProjectId } from '$lib/models/projects';
 import type { NoteId } from '$lib/models/notes';
 import type { LocalDate } from '$lib/models/workspace';
 
-const todoId = z.string().uuid().transform((value) => value as TodoId);
-const projectId = z.string().uuid().transform((value) => value as ProjectId);
-const noteId = z.string().uuid().transform((value) => value as NoteId);
+const todoId = z
+	.string()
+	.uuid()
+	.transform((value) => value as TodoId);
+const projectId = z
+	.string()
+	.uuid()
+	.transform((value) => value as ProjectId);
+const noteId = z
+	.string()
+	.uuid()
+	.transform((value) => value as NoteId);
 const localDate = z.iso.date().transform((value) => value as LocalDate);
 
 /** The board's shareable URL filters; the title search stays client-only, so the PDF
@@ -21,16 +30,12 @@ export const exportBoardPdf = query(
 		category: z.string().trim().max(100).optional()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
-			.todos()
-			.exportBoardPdf(requestActor(), input);
+		return AppFactory.controllers().todos().exportBoardPdf(requestActor(), input);
 	}
 );
 
 export const getTodo = query(todoId, async (todoId) => {
-	const view = await AppFactory.controllers()
-		.todos()
-		.get(requestActor(), { todoId });
+	const view = await AppFactory.controllers().todos().get(requestActor(), { todoId });
 	return view.todo;
 });
 
@@ -52,18 +57,14 @@ export const updateTodo = command(
 			message: 'A todo update requires at least one edit'
 		}),
 	async (input) => {
-		return AppFactory.controllers()
-			.todos()
-			.update(requestActor(), input);
+		return AppFactory.controllers().todos().update(requestActor(), input);
 	}
 );
 
 export const updateTodoStatus = updateTodo;
 
 export const deleteTodo = command(z.object({ todoId }), async (input) => {
-	await AppFactory.controllers()
-		.todos()
-		.remove(requestActor(), input.todoId);
+	await AppFactory.controllers().todos().remove(requestActor(), input.todoId);
 });
 
 export const createTodo = command(
@@ -80,9 +81,7 @@ export const createTodo = command(
 			const { projects } = await factory.projects().list(actor);
 			const general = projects.find((p) => p.name === 'General');
 			if (general) projectId = general.id;
-			else
-				projectId = (await factory.projects().create(actor, { name: 'General' })).project
-					.id;
+			else projectId = (await factory.projects().create(actor, { name: 'General' })).project.id;
 		}
 		let result = await factory.todos().create(actor, {
 			projectId,

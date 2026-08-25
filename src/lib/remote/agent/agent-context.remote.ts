@@ -36,9 +36,7 @@ export const getCapabilityCounts = query(
 						.listForProject(actor, projectId)
 						.then((views) => views.length)
 				: Promise.resolve(0),
-			projectId
-				? factory.todos().count(actor, { projectId, status: 'open' })
-				: Promise.resolve(0)
+			projectId ? factory.todos().count(actor, { projectId, status: 'open' }) : Promise.resolve(0)
 		]);
 
 		return { memory, attachments, todos };

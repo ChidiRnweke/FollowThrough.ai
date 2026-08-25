@@ -36,13 +36,16 @@ const setup = () => {
 describe('Create skill invariants', () => {
 	it('creates a skill named after the input', async () => {
 		const { controller } = setup();
-		const output = await controller.create(testActor(), { name: 'ADR writing' });
+		const output = await controller.create(testActor(), {
+			name: 'ADR writing',
+			projectId: testProjectId()
+		});
 		expect(output.skill.name).toBe('ADR writing');
 	});
 
 	it('inserts a skill record for the new note', async () => {
 		const { controller, skills } = setup();
-		await controller.create(testActor(), { name: 'ADR writing' });
+		await controller.create(testActor(), { name: 'ADR writing', projectId: testProjectId() });
 		expect(skills.skills).toHaveLength(1);
 	});
 
@@ -59,7 +62,9 @@ describe('Create skill invariants', () => {
 
 	it('rejects an empty skill name', async () => {
 		const { controller } = setup();
-		await expect(controller.create(testActor(), { name: '  ' })).rejects.toMatchObject({
+		await expect(
+			controller.create(testActor(), { name: '  ', projectId: testProjectId() })
+		).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
 	});

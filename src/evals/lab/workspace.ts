@@ -8,6 +8,19 @@ import type { TodoId } from '$lib/models/todos';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type { Lab } from './application';
 
+/**
+ * The inbox provisioning created for this lab's actor.
+ *
+ * Seeds that name no project still have to name one — `create` requires it — so
+ * they get the same destination a real capture would, found by role.
+ */
+async function labInboxProjectId(lab: Lab, actor: ActorContext): Promise<ProjectId> {
+	const { projects } = await lab.controllers.projects().list(actor);
+	const inbox = projects.find((project) => project.role === 'inbox');
+	if (!inbox) throw new Error('The lab workspace has no inbox; provisioning did not run.');
+	return inbox.id;
+}
+
 export interface SeedNote {
 	readonly title: string;
 	/** Plain text body; indexed for `search` exactly as a saved note would be. */
@@ -148,12 +161,15 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 	}
 
 	for (const seedSkill of fixture.skills ?? []) {
-		const projectId = seedSkill.projectName ? projectIds.get(seedSkill.projectName) : undefined;
+		// A seeded skill names its project, or goes to the inbox this lab provisioned.
+		// Nothing here may leave the project unstated: `create` requires it.
+		const named = seedSkill.projectName ? projectIds.get(seedSkill.projectName) : undefined;
+		const projectId = named ?? (await labInboxProjectId(lab, actor));
 		const { skill } = await lab.controllers.skills().create(actor, {
 			name: seedSkill.name,
+			projectId,
 			...(seedSkill.description ? { description: seedSkill.description } : {}),
-			...(seedSkill.triggerHints ? { triggerHints: seedSkill.triggerHints } : {}),
-			...(projectId ? { projectId } : {})
+			...(seedSkill.triggerHints ? { triggerHints: seedSkill.triggerHints } : {})
 		});
 		skillIds.set(seedSkill.name, skill.note.id);
 		// Save the skill body through the note path — the same write edit_skill and

@@ -14,9 +14,7 @@ export const getEntries = query(projectId.optional(), async (projectId) => {
 });
 
 export const getPendingSuggestions = query(projectId.optional(), async (projectId) =>
-	AppFactory.controllers()
-		.suggestions()
-		.listPendingMemory(requestActor(), { projectId })
+	AppFactory.controllers().suggestions().listPendingMemory(requestActor(), { projectId })
 );
 
 export const createEntry = command(
@@ -27,9 +25,7 @@ export const createEntry = command(
 		shareWithAgents: z.boolean().optional()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
-			.memory()
-			.create(requestActor(), input);
+		return AppFactory.controllers().memory().create(requestActor(), input);
 	}
 );
 
@@ -41,17 +37,10 @@ export const updateEntry = command(
 		shareWithAgents: z.boolean().optional()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
-			.memory()
-			.update(requestActor(), input);
+		return AppFactory.controllers().memory().update(requestActor(), input);
 	}
 );
 
-export const deleteEntry = command(
-	z.object({ memoryEntryId }),
-	async (input) => {
-		await AppFactory.controllers()
-			.memory()
-			.remove(requestActor(), input);
-	}
-);
+export const deleteEntry = command(z.object({ memoryEntryId }), async (input) => {
+	await AppFactory.controllers().memory().remove(requestActor(), input);
+});

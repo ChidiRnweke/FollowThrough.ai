@@ -17,14 +17,35 @@ interface ProseMirrorDocument {
 
 type NoteKind = 'folder' | 'note' | 'skill';
 
-/** Name of the auto-created project that holds unsorted notes and todos. */
-export const DEFAULT_PROJECT_NAME = 'General';
+/**
+ * The inbox's name when provisioning creates it.
+ *
+ * A display string and nothing more. It used to be an identifier — code matched
+ * on it to find "the default project" — which meant renaming the project moved
+ * the inbox out from under the app. `Project.role` carries that now, so the user
+ * may call this whatever they like.
+ */
+export const INBOX_PROJECT_NAME = 'Inbox';
 
 /** The scoping unit every other capability keys off. Archiving is one-way; there is no delete. */
+/**
+ * What a project is for.
+ *
+ * `inbox` is where a capture that names no project goes — the Today field and
+ * the workspace-wide skills catalog both mean to name none. Exactly one per
+ * user, guaranteed by a partial unique index rather than by convention.
+ *
+ * It is a role and not a name because the name used to do this job:
+ * the name was string-matched, so renaming the project relocated
+ * the inbox and a user creating their own "General" quietly inherited it.
+ */
+export type ProjectRole = 'inbox' | 'workspace';
+
 export interface Project {
 	readonly id: ProjectId;
 	readonly userId: UserId;
 	readonly name: string;
+	readonly role: ProjectRole;
 	readonly description?: string;
 	/** Project-level default for H1–H4 section numbering; absent inherits the app default. */
 	readonly sectionNumberingDefault?: boolean;
@@ -124,6 +145,8 @@ export interface ProjectView {
 
 export interface CreateProjectInput {
 	readonly name: string;
+	/** Omitted means `workspace`; only provisioning creates the single `inbox`. */
+	readonly role?: ProjectRole;
 	readonly description?: string;
 }
 

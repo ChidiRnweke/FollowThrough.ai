@@ -505,7 +505,13 @@ export interface ListNoteDocumentsInput {
 export const MAX_NOTE_DOCUMENTS = 50;
 
 export interface CreateNoteInput {
-	readonly projectId?: ProjectId;
+	/**
+	 * Required, because there is no honest way to fill it in. It was optional, and
+	 * a note created without one landed in whichever project sorted first — or in a
+	 * project brought into existence to receive it. Neither is a choice anyone
+	 * made, and both look like success.
+	 */
+	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly parentId?: NoteId;
 }

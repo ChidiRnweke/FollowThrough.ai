@@ -40,10 +40,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const userPreferences = await factory.userSettings().getPreferences(actor);
 	// The model catalogue is the only outbound call on this page, so it is worth
 	// skipping entirely when the tab that renders it is not the one being viewed.
-	let models =
-		tab === 'models'
-			? await factory.agentSettings().listModels(actor)
-			: [];
+	let models = tab === 'models' ? await factory.agentSettings().listModels(actor) : [];
 	if (
 		tab === 'models' &&
 		preferences.defaultModel &&

@@ -3,11 +3,7 @@ import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
-import type {
-	ArtifactId,
-	PreviewDocumentInput,
-	TemplateId
-} from '$lib/models/deliverables';
+import type { ArtifactId, PreviewDocumentInput, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 import type { NoteId } from '$lib/models/notes';
 
@@ -35,21 +31,15 @@ export const initiateTemplateUpload = command(
 export const completeTemplateUpload = command(
 	z.object({ templateId: templateIdSchema }),
 	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.completeTemplateUpload(requestActor(), input.templateId)
+		AppFactory.controllers().deliverables().completeTemplateUpload(requestActor(), input.templateId)
 );
 
 export const listTemplates = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers()
-		.deliverables()
-		.listTemplates(requestActor(), projectId)
+	AppFactory.controllers().deliverables().listTemplates(requestActor(), projectId)
 );
 
 export const deleteTemplate = command(z.object({ templateId: templateIdSchema }), async (input) =>
-	AppFactory.controllers()
-		.deliverables()
-		.deleteTemplate(requestActor(), input.templateId)
+	AppFactory.controllers().deliverables().deleteTemplate(requestActor(), input.templateId)
 );
 
 const exportSettingsSchema = z.object({
@@ -76,10 +66,7 @@ export const generateDocument = command(
 		diagramPngs: z.record(z.string(), z.string()).optional(),
 		diagramSizes: diagramSizesSchema
 	}),
-	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.generateDocument(requestActor(), input)
+	async (input) => AppFactory.controllers().deliverables().generateDocument(requestActor(), input)
 );
 
 export const generateBundle = command(
@@ -97,10 +84,7 @@ export const generateBundle = command(
 		diagramPngs: z.record(z.string(), z.string()).optional(),
 		diagramSizes: diagramSizesSchema
 	}),
-	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.generateBundle(requestActor(), input)
+	async (input) => AppFactory.controllers().deliverables().generateBundle(requestActor(), input)
 );
 
 export const previewDocument = command(
@@ -120,9 +104,7 @@ export const previewDocument = command(
 );
 
 export const getExportSettings = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers()
-		.deliverables()
-		.getExportSettings(requestActor(), projectId)
+	AppFactory.controllers().deliverables().getExportSettings(requestActor(), projectId)
 );
 
 export const updateExportSettings = command(
@@ -134,29 +116,19 @@ export const updateExportSettings = command(
 );
 
 export const listArtifacts = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers()
-		.deliverables()
-		.listArtifacts(requestActor(), projectId)
+	AppFactory.controllers().deliverables().listArtifacts(requestActor(), projectId)
 );
 
-export const downloadArtifact = command(
-	z.object({ artifactId: artifactIdSchema }),
-	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.downloadArtifact(requestActor(), input.artifactId)
+export const downloadArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>
+	AppFactory.controllers().deliverables().downloadArtifact(requestActor(), input.artifactId)
 );
 
 export const deleteArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>
-	AppFactory.controllers()
-		.deliverables()
-		.deleteArtifact(requestActor(), input.artifactId)
+	AppFactory.controllers().deliverables().deleteArtifact(requestActor(), input.artifactId)
 );
 
 export const regenerateArtifact = command(
 	z.object({ artifactId: artifactIdSchema }),
 	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.regenerateArtifact(requestActor(), input.artifactId)
+		AppFactory.controllers().deliverables().regenerateArtifact(requestActor(), input.artifactId)
 );

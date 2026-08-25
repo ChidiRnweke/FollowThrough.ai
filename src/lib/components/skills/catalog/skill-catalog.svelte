@@ -43,7 +43,7 @@
 		if (!name || creating) return;
 		creating = true;
 		try {
-			const { skill } = await createSkill({ name });
+			const { skill } = await createSkill({ name, projectId: data.inboxProjectId });
 			const description = draftDescription.trim();
 			const instructions = draftInstructions.trim();
 			if (description || instructions) {

@@ -39,6 +39,7 @@ export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	id: testProjectId(),
 	userId: testActor().userId,
 	name: 'Project Alpha',
+	role: 'workspace',
 	createdAt: testNow,
 	updatedAt: testNow,
 	...overrides

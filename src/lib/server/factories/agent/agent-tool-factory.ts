@@ -29,6 +29,7 @@ import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
+import { ValidationError } from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -640,6 +641,33 @@ const defineTool = <T extends z.ZodObject>(
 const declaresNoFields = (schema: z.ZodObject): boolean => Object.keys(schema.shape).length === 0;
 
 /**
+ * Refuse a write that did not say which project, naming the ones it could mean.
+ *
+ * The services no longer answer a missing project by taking the first active one
+ * or creating a "General" — neither was a decision anyone made. That leaves the
+ * model with a fact it has to supply and no way to guess it, so the refusal
+ * carries the candidates rather than only the word "required". A failure the
+ * caller can act on is the whole difference between this and a schema rejection.
+ */
+const requireProject = async (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	chosen: ProjectId | undefined,
+	action: string
+): Promise<ProjectId> => {
+	if (chosen) return chosen;
+	const { projects } = await factory.projects().list(actor);
+	if (!projects.length)
+		throw new ValidationError(
+			`projectId is required to ${action}, and this workspace has no projects yet. Call create_project first, then retry with its id.`
+		);
+	const candidates = projects.map((project) => `${project.name} (${project.id})`).join(', ');
+	throw new ValidationError(
+		`projectId is required to ${action}. Retry naming one of these projects: ${candidates}.`
+	);
+};
+
+/**
  * The Agents SDK uses a different Zod major, so it cannot consume this app's
  * Zod objects directly. Keep Zod as the execution validator and publish the
  * exact strict object schema Zod generates for the model-facing protocol.
@@ -1050,12 +1078,25 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'create_note',
 			toolDescription('create_note'),
 			'mutation',
+			// Optional here and required in `CreateNoteInput` on purpose. The service
+			// will not invent a project, and a bare schema rejection would tell the
+			// model only that a field is missing — which is what left it guessing in
+			// the first place. Accepting the absence lets the failure carry the
+			// projects it can choose from, which is an adapter's job.
 			z.object({
 				title: z.string().min(1),
 				projectId: projectId.optional(),
 				parentId: noteId.optional()
 			}),
-			(input) => factory.notes().create(actor, input)
+			async (input) => {
+				const chosenProjectId = await requireProject(
+					factory,
+					actor,
+					input.projectId,
+					'create a note'
+				);
+				return factory.notes().create(actor, { ...input, projectId: chosenProjectId });
+			}
 		),
 		define(
 			'save_note',
@@ -1435,7 +1476,15 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				projectId: projectId.optional(),
 				parentId: noteId.optional()
 			}),
-			(input) => factory.skills().create(actor, input)
+			async (input) => {
+				const chosenProjectId = await requireProject(
+					factory,
+					actor,
+					input.projectId,
+					'create a skill'
+				);
+				return factory.skills().create(actor, { ...input, projectId: chosenProjectId });
+			}
 		),
 		define(
 			'list_skill_versions',

@@ -37,10 +37,7 @@ export class InMemoryAgentRunPersistence
 		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
 	}
 
-	async findAgentById(
-		actor: ActorContext,
-		id: AgentRunId
-	): Promise<ResolvedAgentRun | undefined> {
+	async findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined> {
 		return this.runs.find(
 			(run): run is ResolvedAgentRun =>
 				run.kind === 'agent' && run.id === id && run.userId === actor.userId
