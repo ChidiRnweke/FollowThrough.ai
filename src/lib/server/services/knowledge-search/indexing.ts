@@ -399,7 +399,11 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 
 	async index(actor: ActorContext, diagram: Diagram): Promise<void> {
 		const contents = this.chunker.chunk(diagram.searchableText);
-		if (!contents.length) {
+		// A diagram in the trash answers no searches, for the same reason one with no
+		// labels does not: the index describes what the project currently holds. Both
+		// conditions land here rather than in a second port, so "make the index agree
+		// with this row" stays one call whatever changed about the row.
+		if (diagram.archivedAt !== undefined || !contents.length) {
 			await this.repository.deleteForDiagram(actor, diagram.id);
 			return;
 		}

@@ -132,6 +132,19 @@ describe('Diagram indexing invariants', () => {
 		expect(repository.documents[0]?.document.diagramId).toBe(diagram.id);
 	});
 
+	// A diagram in the trash is out of the project, so a search that still returned
+	// it would offer the user something they cannot open.
+	it('indexes no chunks for a diagram that is in the trash', async () => {
+		const repository = new InMemorySearchRepository();
+		const notes = new InMemoryNoteContent();
+		notes.notes = [noteBuilder()];
+		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		const diagram = diagramBuilder();
+		await indexer.index(testActor(), diagram);
+		await indexer.index(testActor(), { ...diagram, archivedAt: testNow });
+		expect(repository.documents).toHaveLength(0);
+	});
+
 	it('keeps note chunks when replacing diagram chunks', async () => {
 		const repository = new InMemorySearchRepository();
 		const notes = new InMemoryNoteContent();

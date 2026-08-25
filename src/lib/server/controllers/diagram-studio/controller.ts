@@ -537,12 +537,25 @@ export class DiagramStudio implements DiagramStudioController {
 		return this.dependencies.diagramDeleter.delete(actor, input.diagramId);
 	}
 
-	archiveProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram> {
-		return this.dependencies.diagramArchiver.archive(actor, input.diagramId);
+	async archiveProjectDiagram(
+		actor: ActorContext,
+		input: DeleteProjectDiagramInput
+	): Promise<Diagram> {
+		const archived = await this.dependencies.diagramArchiver.archive(actor, input.diagramId);
+		// Re-indexed rather than left alone: a diagram in the trash is out of the
+		// project, and a search that still returns it offers the user something they
+		// cannot open.
+		await this.dependencies.diagramIndexer.index(actor, archived);
+		return archived;
 	}
 
-	restoreProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<Diagram> {
-		return this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
+	async restoreProjectDiagram(
+		actor: ActorContext,
+		input: DeleteProjectDiagramInput
+	): Promise<Diagram> {
+		const restored = await this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
+		await this.dependencies.diagramIndexer.index(actor, restored);
+		return restored;
 	}
 
 	listTrashedProjectDiagrams(

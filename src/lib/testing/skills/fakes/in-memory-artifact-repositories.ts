@@ -88,7 +88,10 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 	}
 	async findByConversation(actor: ActorContext, conversationId: ConversationId) {
 		return this.diagrams.find(
-			(item) => item.conversationId === conversationId && item.userId === actor.userId
+			(item) =>
+				item.conversationId === conversationId &&
+				item.userId === actor.userId &&
+				item.archivedAt === undefined
 		);
 	}
 	async countReferencingNotes(_actor: ActorContext, id: DiagramId) {
@@ -96,7 +99,10 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 	}
 	async listForNote(actor: ActorContext, noteId: NoteId) {
 		return this.diagrams.filter(
-			(item) => item.sourceNoteId === noteId && item.userId === actor.userId
+			(item) =>
+				item.sourceNoteId === noteId &&
+				item.userId === actor.userId &&
+				item.archivedAt === undefined
 		);
 	}
 	async countForProject(
@@ -116,6 +122,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 			(item) =>
 				item.userId === actor.userId &&
 				item.projectId === projectId &&
+				item.archivedAt === undefined &&
 				(!params.kind || item.kind === params.kind) &&
 				(!term ||
 					(item.title ?? '').toLowerCase().includes(term) ||

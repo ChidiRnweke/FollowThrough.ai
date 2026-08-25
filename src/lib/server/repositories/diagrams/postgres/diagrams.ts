@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, isNotNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -36,7 +36,11 @@ export class DiagramRecords implements DiagramRepository {
 			.where(
 				and(
 					eq(schema.diagrams.conversationId, conversationId),
-					eq(schema.diagrams.userId, actor.userId)
+					eq(schema.diagrams.userId, actor.userId),
+					// A conversation whose diagram is in the trash has none as far as the
+					// studio is concerned: refusing a new one by naming a diagram the user
+					// threw away would be worse than the guess it replaced.
+					isNull(schema.diagrams.archivedAt)
 				)
 			);
 		return row ? toDiagram(row) : undefined;
@@ -63,7 +67,13 @@ export class DiagramRecords implements DiagramRepository {
 				.select()
 				.from(schema.diagrams)
 				.where(
-					and(eq(schema.diagrams.userId, actor.userId), eq(schema.diagrams.sourceNoteId, noteId))
+					and(
+					eq(schema.diagrams.userId, actor.userId),
+					eq(schema.diagrams.sourceNoteId, noteId),
+					// A note renders a trashed diagram as unavailable, which is what the
+					// gallery's own confirmation promises before it moves one.
+					isNull(schema.diagrams.archivedAt)
+				)
 				)
 				.orderBy(asc(schema.diagrams.createdAt))
 		).map(toDiagram);
@@ -85,6 +95,9 @@ export class DiagramRecords implements DiagramRepository {
 		return and(
 			eq(schema.diagrams.projectId, projectId),
 			eq(schema.diagrams.userId, actor.userId),
+			// The gallery and its count both build from here, so one filter keeps the
+			// number and the grid telling the same story about what is in the project.
+			isNull(schema.diagrams.archivedAt),
 			params.kind ? eq(schema.diagrams.kind, params.kind) : undefined,
 			search
 		);

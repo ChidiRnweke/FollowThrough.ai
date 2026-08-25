@@ -7,16 +7,23 @@ import {
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	testActor,
+	testConversationId,
+	testNoteId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();
+	const notes = new InMemoryNoteRepository();
 	return {
 		diagrams,
+		notes,
 		library: new DiagramLibrary(
 			diagrams,
-			new InMemoryNoteRepository(),
+			notes,
 			new InMemoryAnchorRepository(),
 			new InMemoryProvenanceRepository(),
 			new InMemoryProjects()
@@ -70,5 +77,57 @@ describe('Diagram soft delete', () => {
 		await expect(library.unarchive(testActor(), diagram.id)).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
+	});
+
+	// The defect this whole block exists for: archiving marked the row and hid it
+	// from nothing, so the gallery still listed it. Pressing "Move to trash" again
+	// then failed, because the diagram was already there.
+	it('takes an archived diagram out of the project listing', async () => {
+		const { library, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		await library.archive(testActor(), diagram.id);
+		const listed = await library.listForProject(testActor(), diagram.projectId);
+		expect(listed.diagrams).toHaveLength(0);
+	});
+
+	it('stops counting an archived diagram', async () => {
+		const { library, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		await library.archive(testActor(), diagram.id);
+		expect(await library.countForProject(testActor(), diagram.projectId)).toBe(0);
+	});
+
+	it('puts a restored diagram back in the project listing', async () => {
+		const { library, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		await library.archive(testActor(), diagram.id);
+		await library.unarchive(testActor(), diagram.id);
+		const listed = await library.listForProject(testActor(), diagram.projectId);
+		expect(listed.diagrams).toHaveLength(1);
+	});
+
+	// The gallery's confirmation promises a note shows the diagram as unavailable
+	// until it is restored, so the note's own listing has to agree.
+	it('takes an archived diagram out of its note listing', async () => {
+		const { library, diagrams, notes } = setup();
+		// The note has to exist: listing a note's diagrams verifies the note first.
+		notes.notes = [noteBuilder({ id: testNoteId() })];
+		const diagram = drawioBuilder({ sourceNoteId: testNoteId() });
+		diagrams.diagrams = [diagram];
+		await library.archive(testActor(), diagram.id);
+		expect(await library.listForNote(testActor(), testNoteId())).toHaveLength(0);
+	});
+
+	// Otherwise `present_diagram` refuses a new diagram by naming one the user threw
+	// away, which is worse than the guess that refusal replaced.
+	it('treats a conversation whose diagram is archived as having none', async () => {
+		const { library, diagrams } = setup();
+		const diagram = drawioBuilder({ conversationId: testConversationId() });
+		diagrams.diagrams = [diagram];
+		await library.archive(testActor(), diagram.id);
+		expect(await library.findByConversation(testActor(), testConversationId())).toBeUndefined();
 	});
 });
