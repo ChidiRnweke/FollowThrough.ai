@@ -53,14 +53,14 @@ describe('Presenting a diagram on the studio canvas', () => {
 
 		expect(
 			await controller.readCanvasDiagram(testActor(), { conversationId: testConversationId() })
-		).toMatchObject({ kind: 'empty', nextActions: [{ tool: 'present_diagram' }] });
+		).toMatchObject({ kind: 'empty', nextActions: [{ tool: 'create_diagram' }] });
 	});
 
 	// The canvas shows what the agent drew; nothing is written until the user keeps
 	// it, which is what stops an abandoned conversation leaving a row behind.
 	it('returns the draft without storing it', async () => {
 		const { controller, diagrams } = setup();
-		await controller.presentDiagram(testActor(), {
+		await controller.createDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			conversationId: testConversationId()
 		});
@@ -69,7 +69,7 @@ describe('Presenting a diagram on the studio canvas', () => {
 
 	it('presents the source it was given', async () => {
 		const { controller } = setup();
-		const result = await controller.presentDiagram(testActor(), {
+		const result = await controller.createDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			conversationId: testConversationId()
 		});
@@ -88,7 +88,7 @@ describe('Presenting a diagram on the studio canvas', () => {
 			})
 		);
 		await expect(
-			controller.presentDiagram(testActor(), {
+			controller.createDiagram(testActor(), {
 				source: '<mxfile/>',
 				conversationId: testConversationId()
 			})
@@ -104,15 +104,15 @@ describe('Presenting a diagram on the studio canvas', () => {
 		const conversationId = testConversationId();
 		diagrams.diagrams = [drawioBuilder({ conversationId })];
 		await expect(
-			controller.presentDiagram(testActor(), { source: VALID_DRAWIO_XML, conversationId })
-		).rejects.toThrow('present_diagram_revision');
+			controller.createDiagram(testActor(), { source: VALID_DRAWIO_XML, conversationId })
+		).rejects.toThrow('edit_diagram');
 	});
 
 	it('carries the diagram a revision is meant to replace', async () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder();
 		diagrams.diagrams = [target];
-		const result = await controller.presentDiagramRevision(testActor(), {
+		const result = await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id,
 			conversationId: testConversationId()
@@ -127,7 +127,7 @@ describe('Presenting a diagram on the studio canvas', () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
-		await controller.presentDiagramRevision(testActor(), {
+		await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id,
 			conversationId: testConversationId()
@@ -141,7 +141,7 @@ describe('Presenting a diagram on the studio canvas', () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
-		await controller.presentDiagramRevision(testActor(), {
+		await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id,
 			conversationId: testConversationId()
@@ -154,7 +154,7 @@ describe('Presenting a diagram on the studio canvas', () => {
 	it('rejects a revision target that the actor cannot read', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.presentDiagramRevision(testActor(), {
+			controller.editDiagram(testActor(), {
 				source: VALID_DRAWIO_XML,
 				diagramId: drawioBuilder().id,
 				conversationId: testConversationId()

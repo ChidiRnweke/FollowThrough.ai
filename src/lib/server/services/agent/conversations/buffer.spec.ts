@@ -116,7 +116,7 @@ describe('ConversationBuffer', () => {
 	it('elides diagram source from what the model is shown', async () => {
 		const buffer = await bufferWith([
 			{
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call',
 				arguments: JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mxfile>' })
 			} as unknown as AgentInputItem
@@ -128,7 +128,7 @@ describe('ConversationBuffer', () => {
 		const buffer = await bufferWith([
 			{
 				callId: 'diagram-call',
-				name: 'present_diagram',
+				name: 'create_diagram',
 				status: 'completed',
 				type: 'function_call_result',
 				output: {
@@ -147,13 +147,13 @@ describe('ConversationBuffer', () => {
 		const buffer = await bufferWith([
 			{
 				callId: 'diagram-call',
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call',
 				arguments: JSON.stringify({ source: '<mxfile>rejected</mxfile>' })
 			} as unknown as AgentInputItem,
 			{
 				callId: 'diagram-call',
-				name: 'present_diagram',
+				name: 'create_diagram',
 				status: 'completed',
 				type: 'function_call_result',
 				output: { type: 'text', text: JSON.stringify({ failure: 'draw.io XML is malformed' }) }
@@ -165,7 +165,7 @@ describe('ConversationBuffer', () => {
 	it('points the agent at the tool that reads it back', async () => {
 		const buffer = await bufferWith([
 			{
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call',
 				arguments: JSON.stringify({ source: '<mxfile>huge</mxfile>' })
 			} as unknown as AgentInputItem
@@ -178,7 +178,7 @@ describe('ConversationBuffer', () => {
 	it('keeps the whole document in what is persisted', async () => {
 		const buffer = await bufferWith([
 			{
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call',
 				arguments: JSON.stringify({ source: '<mxfile>huge</mxfile>' })
 			} as unknown as AgentInputItem

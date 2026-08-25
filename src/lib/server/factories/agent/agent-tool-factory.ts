@@ -240,7 +240,7 @@ export const agentToolCoverage = {
 		generateMermaid: {
 			kind: 'excluded',
 			reason:
-				'Mermaid generation is the inline note editor flow; the agent presents a canvas diagram with present_diagram.'
+				'Mermaid generation is the inline note editor flow; the agent presents a canvas diagram with create_diagram.'
 		},
 		reviseMermaid: { kind: 'mutation' },
 		reviseInlineMermaid: {
@@ -277,11 +277,11 @@ export const agentToolCoverage = {
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
-		presentDiagram: { kind: 'read' },
+		createDiagram: { kind: 'read' },
 		// A revision writes a working revision onto the diagram it names, so it asks
 		// first. `read` would mean no prompt, which is how the agent came to change a
 		// saved diagram with neither permission asked nor anything shown.
-		presentDiagramRevision: { kind: 'mutation' },
+		editDiagram: { kind: 'mutation' },
 		readCanvasDiagram: { kind: 'read' },
 		readProjectDiagram: { kind: 'read' },
 		searchDiagramIcons: { kind: 'read' },
@@ -1877,18 +1877,18 @@ const agentOnlyDefinitions = (
 			}
 		),
 		defineTool(
-			'present_diagram',
-			toolDescription('present_diagram'),
+			'create_diagram',
+			toolDescription('create_diagram'),
 			'read',
 			z.object({ source: z.string().min(1), title: z.string().min(1).optional() }),
 			(fields) =>
 				factory
 					.diagramStudio()
-					.presentDiagram(actor, { ...fields, conversationId: input.conversationId })
+					.createDiagram(actor, { ...fields, conversationId: input.conversationId })
 		),
 		defineTool(
-			'present_diagram_revision',
-			toolDescription('present_diagram_revision'),
+			'edit_diagram',
+			toolDescription('edit_diagram'),
 			'mutation',
 			z.object({
 				source: z.string().min(1),
@@ -1898,7 +1898,7 @@ const agentOnlyDefinitions = (
 			(fields) =>
 				factory
 					.diagramStudio()
-					.presentDiagramRevision(actor, { ...fields, conversationId: input.conversationId })
+					.editDiagram(actor, { ...fields, conversationId: input.conversationId })
 		),
 		defineTool(
 			'read_canvas_diagram',

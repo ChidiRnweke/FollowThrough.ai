@@ -8,7 +8,7 @@ const encoding = getEncoding('cl100k_base');
 
 /** Reuses the measured boundary already enforced for attached context notes. */
 const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
-const DIAGRAM_TOOLS = new Set(['present_diagram', 'present_diagram_revision']);
+const DIAGRAM_TOOLS = new Set(['create_diagram', 'edit_diagram']);
 
 const safeSegment = (value: string): string => {
 	const safe = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);

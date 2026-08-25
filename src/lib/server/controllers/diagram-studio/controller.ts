@@ -18,10 +18,10 @@ import type {
 	ListDiagramRevisionsOutput,
 	PublishProjectDiagramInput,
 	PublishProjectDiagramOutput,
-	PresentDiagramInput,
-	PresentDiagramOutput,
-	PresentDiagramRevisionInput,
-	PresentDiagramRevisionOutput,
+	CreateDiagramInput,
+	CreateDiagramOutput,
+	EditDiagramInput,
+	EditDiagramOutput,
 	ReadCanvasDiagramInput,
 	ReadCanvasDiagramOutput,
 	ReadProjectDiagramInput,
@@ -77,12 +77,9 @@ export interface DiagramStudioController {
 	 * shows it and the user is who keeps it, so an abandoned conversation leaves no
 	 * diagram behind.
 	 */
-	presentDiagram(actor: ActorContext, input: PresentDiagramInput): Promise<PresentDiagramOutput>;
+	createDiagram(actor: ActorContext, input: CreateDiagramInput): Promise<CreateDiagramOutput>;
 	/** Present a revision only after proving its replacement target exists and is editable. */
-	presentDiagramRevision(
-		actor: ActorContext,
-		input: PresentDiagramRevisionInput
-	): Promise<PresentDiagramRevisionOutput>;
+	editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<EditDiagramOutput>;
 	/**
 	 * Read the diagram currently on this conversation's canvas.
 	 *
@@ -231,14 +228,14 @@ export interface DiagramStudioDependencies {
 export class DiagramStudio implements DiagramStudioController {
 	constructor(private readonly dependencies: DiagramStudioDependencies) {}
 
-	// `presentDiagram` and `searchDiagramIcons` cross no service seam — they
+	// `createDiagram` and `searchDiagramIcons` cross no service seam — they
 	// validate, or they ask one collaborator and hand the answer back. They live
 	// here because the agent's tools are bound to controllers, not because there is
 	// orchestration to do; hence the `void actor` in both.
-	async presentDiagram(
+	async createDiagram(
 		actor: ActorContext,
-		input: PresentDiagramInput
-	): Promise<PresentDiagramOutput> {
+		input: CreateDiagramInput
+	): Promise<CreateDiagramOutput> {
 		// A conversation keeps at most one diagram — `keepStudioDiagram` is
 		// idempotent on `conversationId` — so once it has one, a "new" diagram here
 		// is a change to that one, sent through the wrong tool. It used to be
@@ -252,7 +249,7 @@ export class DiagramStudio implements DiagramStudioController {
 		);
 		if (existing)
 			throw new UnsupportedDiagramOperationError(
-				`This conversation already has a saved diagram (${existing.id}). Call present_diagram_revision with that diagramId to change it; present_diagram only draws a diagram that does not exist yet.`
+				`This conversation already has a saved diagram (${existing.id}). Call edit_diagram with that diagramId to change it; create_diagram only draws a diagram that does not exist yet.`
 			);
 		return this.validated(input);
 	}
@@ -262,11 +259,11 @@ export class DiagramStudio implements DiagramStudioController {
 	 * this into a draw.io embed, and a malformed source would fail there, in front
 	 * of the user, rather than here.
 	 *
-	 * Shared by both presentation tools, and deliberately not `presentDiagram`
+	 * Shared by both presentation tools, and deliberately not `createDiagram`
 	 * itself — a revision must not be measured against the "this conversation has
-	 * no diagram yet" rule that `presentDiagram` enforces.
+	 * no diagram yet" rule that `createDiagram` enforces.
 	 */
-	private validated(input: PresentDiagramInput): PresentDiagramOutput {
+	private validated(input: CreateDiagramInput): CreateDiagramOutput {
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
 		return {
 			source,
@@ -289,10 +286,7 @@ export class DiagramStudio implements DiagramStudioController {
 	 * before the call, which is where consent belongs — the tool is classified a
 	 * mutation for exactly that reason.
 	 */
-	async presentDiagramRevision(
-		actor: ActorContext,
-		input: PresentDiagramRevisionInput
-	): Promise<PresentDiagramRevisionOutput> {
+	async editDiagram(actor: ActorContext, input: EditDiagramInput): Promise<EditDiagramOutput> {
 		const target = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		if (target.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be revised here');
@@ -319,7 +313,7 @@ export class DiagramStudio implements DiagramStudioController {
 					message: 'This conversation has not presented a diagram on its canvas.',
 					nextActions: [
 						{
-							tool: 'present_diagram',
+							tool: 'create_diagram',
 							reason: 'Present a new diagram only if the user asked to create one.'
 						}
 					]

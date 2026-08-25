@@ -55,7 +55,7 @@ describe('AgentReplayVirtualizer', () => {
 	it('preserves diagram rows for the canvas recovery reader', async () => {
 		const item = {
 			type: 'function_call_result',
-			name: 'present_diagram',
+			name: 'create_diagram',
 			callId: 'call-4',
 			output: 'diagram source '.repeat(5000)
 		};

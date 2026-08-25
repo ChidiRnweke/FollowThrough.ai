@@ -68,12 +68,12 @@ export class DiagramRecords implements DiagramRepository {
 				.from(schema.diagrams)
 				.where(
 					and(
-					eq(schema.diagrams.userId, actor.userId),
-					eq(schema.diagrams.sourceNoteId, noteId),
-					// A note renders a trashed diagram as unavailable, which is what the
-					// gallery's own confirmation promises before it moves one.
-					isNull(schema.diagrams.archivedAt)
-				)
+						eq(schema.diagrams.userId, actor.userId),
+						eq(schema.diagrams.sourceNoteId, noteId),
+						// A note renders a trashed diagram as unavailable, which is what the
+						// gallery's own confirmation promises before it moves one.
+						isNull(schema.diagrams.archivedAt)
+					)
 				)
 				.orderBy(asc(schema.diagrams.createdAt))
 		).map(toDiagram);

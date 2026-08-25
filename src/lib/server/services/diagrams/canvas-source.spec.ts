@@ -8,7 +8,7 @@ const conversation = 'conversation-1' as ConversationId;
 
 const result = (source: string, title = 'Architecture') => ({
 	item: {
-		name: 'present_diagram',
+		name: 'create_diagram',
 		type: 'function_call_result',
 		output: { text: JSON.stringify({ source, title }) }
 	}
@@ -16,7 +16,7 @@ const result = (source: string, title = 'Architecture') => ({
 
 const revision = (source: string, diagramId: string) => ({
 	item: {
-		name: 'present_diagram_revision',
+		name: 'edit_diagram',
 		type: 'function_call_result',
 		output: { text: JSON.stringify({ source, diagramId }) }
 	}
@@ -54,7 +54,7 @@ describe('Reading the diagram on the canvas', () => {
 	it('ignores a legacy target emitted by the new-diagram tool', async () => {
 		const legacy = {
 			item: {
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call_result',
 				output: { text: JSON.stringify({ source: '<mxfile/>', diagramId: 'placeholder' }) }
 			}
@@ -74,7 +74,7 @@ describe('Reading the diagram on the canvas', () => {
 	it('ignores the call and reads the result', async () => {
 		const call = {
 			item: {
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call',
 				arguments: JSON.stringify({ source: '<mxfile>proposed</mxfile>' })
 			}
@@ -86,7 +86,7 @@ describe('Reading the diagram on the canvas', () => {
 	it('skips a presentation that failed validation', async () => {
 		const failed = {
 			item: {
-				name: 'present_diagram',
+				name: 'create_diagram',
 				type: 'function_call_result',
 				output: { text: JSON.stringify({ failure: 'draw.io XML is malformed' }) }
 			}

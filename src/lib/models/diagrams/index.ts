@@ -358,7 +358,7 @@ export interface CountDiagramReferencesInput {
 	readonly diagramId: DiagramId;
 }
 
-export interface PresentDiagramInput {
+export interface CreateDiagramInput {
 	/**
 	 * Uncompressed draw.io XML.
 	 *
@@ -385,17 +385,17 @@ export interface PresentDiagramInput {
  * shows it, and the user keeps it — as a new diagram, or in place of the one it
  * names in `diagramId`.
  */
-export interface PresentDiagramOutput {
+export interface CreateDiagramOutput {
 	readonly source: string;
 	readonly title?: string;
 }
 
 /** A canvas version explicitly tied to an existing, actor-owned saved diagram. */
-export interface PresentDiagramRevisionInput extends PresentDiagramInput {
+export interface EditDiagramInput extends CreateDiagramInput {
 	readonly diagramId: DiagramId;
 }
 
-export interface PresentDiagramRevisionOutput extends PresentDiagramOutput {
+export interface EditDiagramOutput extends CreateDiagramOutput {
 	readonly diagramId: DiagramId;
 }
 
@@ -432,7 +432,7 @@ export type ReadCanvasDiagramOutput =
 			readonly message: string;
 			readonly nextActions: readonly [
 				{
-					readonly tool: 'present_diagram';
+					readonly tool: 'create_diagram';
 					readonly reason: string;
 				}
 			];

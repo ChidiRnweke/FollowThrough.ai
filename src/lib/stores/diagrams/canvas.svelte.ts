@@ -79,7 +79,7 @@ export const latestAppliedRevision = (sessionKey: ChatSessionKey): AppliedRevisi
 	const tools = (chat?.entries ?? []).flatMap((entry) => entryTools(entry));
 	for (let index = tools.length - 1; index >= 0; index -= 1) {
 		const tool = tools[index]!;
-		if (tool.name !== 'present_diagram_revision' || tool.status !== 'succeeded') continue;
+		if (tool.name !== 'edit_diagram' || tool.status !== 'succeeded') continue;
 		const revision = presentedDiagramRevision(tool.output);
 		if (revision?.kind === 'revision' && tool.callId)
 			return { callId: tool.callId, diagramId: revision.diagramId };
@@ -92,7 +92,7 @@ export const latestAppliedRevision = (sessionKey: ChatSessionKey): AppliedRevisi
  *
  * `SessionCanvas.tab` cannot answer this. The canvas is read out of the
  * transcript, and keeping a draft does not rewrite the transcript — the
- * `present_diagram` call still says `draft`, so the canvas keeps naming
+ * `create_diagram` call still says `draft`, so the canvas keeps naming
  * `draftTab(sessionKey)` long after `keep()` swapped that tab for the saved
  * diagram's. Anything asking "is the studio already open for this chat" has to
  * ask the row, not the transcript.

@@ -63,7 +63,7 @@ const withTitle = (title: string | undefined): { title?: string } =>
 	title === undefined ? {} : { title };
 
 /**
- * Read a `present_diagram` payload, wherever it is being read from.
+ * Read a `create_diagram` payload, wherever it is being read from.
  *
  * One reader, because there were three — the client store walking tool activity,
  * the server reading session rows for `read_canvas_diagram`, and the conversation

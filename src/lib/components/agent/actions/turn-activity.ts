@@ -61,7 +61,7 @@ export interface TouchedThing {
  * 22 of the catalogue's 79. Everything else used to be `continue`d past and
  * vanish: every diagram tool, every memory, artifact, suggestion and reference
  * tool, `search`, `create_todos`. A studio turn that drew a diagram reported
- * nothing it had done, because `present_diagram` is not in the map.
+ * nothing it had done, because `create_diagram` is not in the map.
  *
  * A separate arm rather than optional fields on {@link TouchedThing}: an action
  * has no id, no resolvable name and no verb of its own — `label` is the whole

@@ -39,8 +39,8 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	// in front of the user, and every turn of a studio conversation is about to
 	// need it. Nothing here is seeded into `tool_embeddings` — see `TOOL_CATALOG` —
 	// because a first-class tool is offered outright and never retrieved.
-	'present_diagram',
-	'present_diagram_revision'
+	'create_diagram',
+	'edit_diagram'
 ];
 
 export interface ToolCatalogEntry {
@@ -432,19 +432,19 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 			'Generate an artifact document (DOCX or PDF) from one or more project notes. Optionally apply a project template.'
 	},
 	{
-		name: 'present_diagram',
+		name: 'create_diagram',
 		classification: 'read',
 		surface: 'app',
 		description:
-			'Show a new diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML and saves nothing: the user chooses whether and where to keep what they see. Send raw XML, never HTML-escaped: the source must start with a literal "<". This tool never revises a saved diagram; use present_diagram_revision for that.',
+			'Show a new diagram on the studio canvas beside the conversation. Takes uncompressed mxfile XML and saves nothing: the user chooses whether and where to keep what they see. Send raw XML, never HTML-escaped: the source must start with a literal "<". This tool never revises a saved diagram; use edit_diagram for that.',
 		retrievalText: 'show render draw a diagram on the canvas for the user to look at'
 	},
 	{
-		name: 'present_diagram_revision',
+		name: 'edit_diagram',
 		classification: 'mutation',
 		surface: 'app',
 		description:
-			'Revise an existing saved draw.io diagram. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. Send raw XML, never HTML-escaped: the source must start with a literal "<". The revision is saved onto that diagram as a new working revision and appears in its tab; what the user has published does not change until they publish it. This is the only way to change a saved diagram — present_diagram cannot.',
+			'Revise an existing saved draw.io diagram. First call read_project_diagram for its verified id and file path, then sed that file for the exact mxfile XML. Send raw XML, never HTML-escaped: the source must start with a literal "<". The revision is saved onto that diagram as a new working revision and appears in its tab; what the user has published does not change until they publish it. This is the only way to change a saved diagram — create_diagram cannot.',
 		retrievalText: 'revise change update an existing saved diagram'
 	},
 	{

@@ -61,5 +61,5 @@ under me"; it never says "the user agreed to this".
 - `src/lib/models/notes/index.ts` and `src/lib/models/diagrams/index.ts` build the base version the
   same way, in `noteEtag` and `diagramEtag`.
 - `src/lib/server/controllers/diagram-studio/controller.ts` takes a base version on
-  `saveProjectDiagramDraft`, `publishProjectDiagram`, and the agent's `presentDiagramRevision`.
+  `saveProjectDiagramDraft`, `publishProjectDiagram`, and the agent's `editDiagram`.
 - `src/lib/server/services/diagrams/library.ts` rejects a stale base version on a diagram write.

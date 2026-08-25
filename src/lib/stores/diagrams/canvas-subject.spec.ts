@@ -11,7 +11,7 @@ const call = (name: string, output: unknown, index = 0): ChatToolActivity => ({
 });
 
 const DIAGRAM_ID = '6e000c5e-6679-44ef-a9f0-efee14f32310';
-const DRAFT = call('present_diagram', { source: '<mxfile>one</mxfile>' });
+const DRAFT = call('create_diagram', { source: '<mxfile>one</mxfile>' });
 const SAVED = call('accept_suggestion', {
 	artifact: { id: DIAGRAM_ID, kind: 'drawio', title: 'Architecture' }
 });
@@ -28,7 +28,7 @@ describe('What the conversation put on the canvas', () => {
 	// own tab already holds it — and that tab is the one carrying History and
 	// Publish. Routing it to a canvas of its own is what hid it from the user.
 	it('is the saved diagram a revision was written onto', () => {
-		const revision = call('present_diagram_revision', {
+		const revision = call('edit_diagram', {
 			source: '<mxfile/>',
 			diagramId: DIAGRAM_ID
 		});
@@ -36,7 +36,7 @@ describe('What the conversation put on the canvas', () => {
 	});
 
 	it('does not trust a persistence id returned by the new-diagram tool', () => {
-		const legacy = call('present_diagram', {
+		const legacy = call('create_diagram', {
 			source: '<mxfile/>',
 			diagramId: DIAGRAM_ID
 		});
@@ -66,7 +66,7 @@ describe('What the conversation put on the canvas', () => {
 	});
 
 	it('falls back to the last good subject when output is malformed', () => {
-		const broken = call('present_diagram', { source: '   ' }, 1);
+		const broken = call('create_diagram', { source: '   ' }, 1);
 		expect(canvasSubject([DRAFT, broken])).toMatchObject({ kind: 'draft' });
 	});
 
@@ -90,7 +90,7 @@ describe('The key the canvas remembers a subject by', () => {
 
 	it('separates one draft revision from the next', () => {
 		expect(keyOf([DRAFT])).not.toBe(
-			keyOf([call('present_diagram', { kind: 'mermaid', source: 'x' })])
+			keyOf([call('create_diagram', { kind: 'mermaid', source: 'x' })])
 		);
 	});
 

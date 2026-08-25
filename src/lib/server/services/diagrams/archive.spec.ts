@@ -121,7 +121,7 @@ describe('Diagram soft delete', () => {
 		expect(await library.listForNote(testActor(), testNoteId())).toHaveLength(0);
 	});
 
-	// Otherwise `present_diagram` refuses a new diagram by naming one the user threw
+	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
 	it('treats a conversation whose diagram is archived as having none', async () => {
 		const { library, diagrams } = setup();

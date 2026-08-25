@@ -197,8 +197,8 @@ const families: Readonly<Record<string, Family>> = {
 	// happened — not the approval classification of the same name in
 	// `agentToolCoverage`, where this tool is `read` because it mutates nothing.
 	// The two answer different questions and are meant to differ.
-	present_diagram: 'proposal',
-	present_diagram_revision: 'proposal',
+	create_diagram: 'proposal',
+	edit_diagram: 'proposal',
 	revise_mermaid_diagram: 'proposal',
 	propose_memory_change: 'proposal',
 	accept_suggestion: 'proposal',
@@ -251,8 +251,8 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	propose_memory_change: 'memory',
 	list_suggestions: 'suggestion',
 	promote_diagram: 'note',
-	present_diagram: 'note',
-	present_diagram_revision: 'note',
+	create_diagram: 'note',
+	edit_diagram: 'note',
 	read_project_diagram: 'note',
 	read_canvas_diagram: 'note',
 	search_icons: 'note',

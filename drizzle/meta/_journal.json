@@ -328,7 +328,14 @@
       "idx": 46,
       "version": "7",
       "when": 1787620083645,
-			"tag": "0046_project_roles_and_diagram_trash",
+      "tag": "0046_project_roles_and_diagram_trash",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787620084645,
+      "tag": "0047_rename_diagram_tools",
       "breakpoints": true
     }
   ]

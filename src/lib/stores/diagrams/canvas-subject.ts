@@ -68,14 +68,14 @@ const readAcceptedArtifact = (output: unknown): CanvasSubject | undefined => {
 /**
  * Every way a conversation can end up with something to show on the canvas.
  *
- * `present_diagram` is the direct one. The other two matter because a diagram
+ * `create_diagram` is the direct one. The other two matter because a diagram
  * the agent saved through some other route is still a diagram the user is
  * talking about, and leaving it out is what made a whole request end at
  * "Accept suggestion completed" with nothing to look at.
  */
 const SUBJECT_READERS: Readonly<Record<string, (output: unknown) => CanvasSubject | undefined>> = {
-	present_diagram: readDraft,
-	present_diagram_revision: readRevision,
+	create_diagram: readDraft,
+	edit_diagram: readRevision,
 	accept_suggestion: readAcceptedArtifact,
 	read_project_diagram: readSavedDiagram
 };

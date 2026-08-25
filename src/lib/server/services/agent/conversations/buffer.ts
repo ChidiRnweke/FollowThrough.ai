@@ -57,7 +57,7 @@ const withoutInlineImages = <T>(value: T): T => {
 /**
  * Diagram source is elided from replayed history, not from storage.
  *
- * An mxfile is 5–8 KB and `present_diagram` carries it twice — once in the call's
+ * An mxfile is 5–8 KB and `create_diagram` carries it twice — once in the call's
  * arguments, once in its result — so a conversation with five revisions replayed
  * eighty kilobytes of markup on every later turn, for a document the agent almost
  * never needed to re-read. The row keeps the source; `read_canvas_diagram` hands
@@ -72,8 +72,8 @@ const withElidedSource = (json: string): string => {
 	return JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
 };
 
-const isDiagramPresentation = (name: string): boolean =>
-	name === 'present_diagram' || name === 'present_diagram_revision';
+const isDiagramWrite = (name: string): boolean =>
+	name === 'create_diagram' || name === 'edit_diagram';
 
 /** The text half of a tool result, whichever of the three shapes it arrived in. */
 const outputText = (
@@ -95,7 +95,7 @@ const outputText = (
 const isFailureEnvelope = (text: string): boolean => text.trimStart().startsWith('{"failure":');
 
 /**
- * Presentations the model has to be able to re-read, because they failed.
+ * Diagram calls the model has to be able to re-read, because they failed.
  *
  * Eliding a *failed* call's source left the model unable to see what it had
  * sent: `read_canvas_diagram` only answers with the last version that worked, so
@@ -103,27 +103,27 @@ const isFailureEnvelope = (text: string): boolean => text.trimStart().startsWith
  * getting it right. The size argument for eliding does not apply here — this is
  * the one call it actually needs to read.
  */
-const failedPresentations = (items: readonly AgentInputItem[]): ReadonlySet<string> => {
+const failedDiagramCalls = (items: readonly AgentInputItem[]): ReadonlySet<string> => {
 	const failed = new Set<string>();
 	for (const item of items) {
-		if (item.type !== 'function_call_result' || !isDiagramPresentation(item.name)) continue;
+		if (item.type !== 'function_call_result' || !isDiagramWrite(item.name)) continue;
 		const text = outputText(item);
 		if (text !== undefined && isFailureEnvelope(text)) failed.add(item.callId);
 	}
 	return failed;
 };
 
-/** Both halves of a `present_diagram` exchange carry the whole document. */
+/** Both halves of a diagram write carry the whole document. */
 const withoutDiagramSource = (
 	item: AgentInputItem,
 	failed: ReadonlySet<string>
 ): AgentInputItem => {
 	switch (item.type) {
 		case 'function_call':
-			if (!isDiagramPresentation(item.name) || failed.has(item.callId)) return item;
+			if (!isDiagramWrite(item.name) || failed.has(item.callId)) return item;
 			return { ...item, arguments: withElidedSource(item.arguments) };
 		case 'function_call_result':
-			if (!isDiagramPresentation(item.name) || failed.has(item.callId)) return item;
+			if (!isDiagramWrite(item.name) || failed.has(item.callId)) return item;
 			if (typeof item.output === 'string') {
 				return { ...item, output: withElidedSource(item.output) };
 			}
@@ -159,7 +159,7 @@ export class ConversationBuffer implements Session {
 		// beside `items` because it re-parses and re-serialises every diagram in the
 		// conversation, and it runs once per model turn.
 		if (!this.shown) {
-			const failed = failedPresentations(items);
+			const failed = failedDiagramCalls(items);
 			this.shown = items.map((item) => withoutDiagramSource(item, failed));
 		}
 		return limit === undefined ? [...this.shown] : this.shown.slice(-limit);

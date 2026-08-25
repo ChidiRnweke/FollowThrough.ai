@@ -200,7 +200,7 @@ describe('A running turn shows its steps as they arrive', () => {
  * The guarantee this file exists to keep, and the one it did not keep before.
  *
  * A row appeared only for the 22 names in `subjects`; the catalogue's other 46
- * tools ran and reported nothing. `present_diagram` was one of them, so a studio
+ * tools ran and reported nothing. `create_diagram` was one of them, so a studio
  * turn that drew a diagram summarised itself as having done nothing at all.
  *
  * The default is visible now, and this is what holds it that way — the same idea

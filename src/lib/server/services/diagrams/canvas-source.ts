@@ -37,8 +37,8 @@ export interface CanvasSourceItems {
 
 export type PresentedCanvasDiagram = PresentedDiagram;
 
-const PRESENT_DIAGRAM = 'present_diagram';
-const PRESENT_DIAGRAM_REVISION = 'present_diagram_revision';
+const PRESENT_DIAGRAM = 'create_diagram';
+const PRESENT_DIAGRAM_REVISION = 'edit_diagram';
 
 /**
  * A session row that carries a presentation result, and nothing else.

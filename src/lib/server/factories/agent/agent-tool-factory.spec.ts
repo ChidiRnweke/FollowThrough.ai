@@ -212,7 +212,7 @@ describe('Agent tool coverage invariants', () => {
 	// The studio is a chat with a canvas beside it, not a place. Gating this on a
 	// surface hid it from the very screen the studio runs on, and a capability the
 	// model cannot reach is one nobody discovers.
-	it('offers present_diagram in an ordinary chat', () => {
+	it('offers create_diagram in an ordinary chat', () => {
 		const chat = createAgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
@@ -222,7 +222,7 @@ describe('Agent tool coverage invariants', () => {
 			},
 			model: 'openai/gpt-5.6'
 		});
-		expect(chat.tools().map((tool) => tool.name)).toContain('present_diagram');
+		expect(chat.tools().map((tool) => tool.name)).toContain('create_diagram');
 	});
 
 	it('exposes the user profile as a read tool', async () => {
@@ -259,8 +259,8 @@ describe('Agent tool coverage invariants', () => {
 			'propose_memory_change',
 			'edit_note',
 			'save_note',
-			'present_diagram',
-			'present_diagram_revision',
+			'create_diagram',
+			'edit_diagram',
 			'search_tools'
 		]);
 	});
@@ -327,7 +327,7 @@ describe('Agent tool coverage invariants', () => {
 					: {
 							kind: 'empty',
 							message: 'Empty',
-							nextActions: [{ tool: 'present_diagram', reason: 'Create one' }]
+							nextActions: [{ tool: 'create_diagram', reason: 'Create one' }]
 						}
 		});
 		const factory = capabilityDependencies<ControllerFactory>({
