@@ -3,50 +3,34 @@ import { expect } from 'vitest';
 import { seedWorkspace, selectionFromSeededNote } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { architectureWorkspace } from '../fixtures/workspaces/architecture';
-import { findCall, scoreToolDiscovery } from '../assertions/tool-calls';
-import { validateMermaid } from '../assertions/mermaid';
+import { inspectDrawio } from '../assertions/drawio';
+import { findCall } from '../assertions/tool-calls';
 import { judgeRubricConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
-/**
- * Diagram generation is scored on two axes because they fail independently:
- * syntax (deterministic — it either parses as Mermaid or it does not) and
- * faithfulness (a judge — whether the picture actually describes the system).
- * A diagram can be perfectly valid Mermaid and still depict the wrong thing,
- * and a single score would let one hide the other.
- */
-
-const extractMermaid = (result: {
-	finalResponse: string;
-	toolCalls: readonly { name: string; arguments: Record<string, unknown>; output?: unknown }[];
-}): string => {
-	// Prefer the tool payload; fall back to a fenced block in the prose.
-	const call = result.toolCalls.find(
-		(entry) => entry.name === 'generate_mermaid_diagram' || entry.name === 'revise_mermaid_diagram'
-	);
-	const fromOutput =
-		call?.output && typeof call.output === 'object' && call.output !== null
-			? (call.output as { source?: string; diagram?: { source?: string } })
-			: undefined;
-	const candidate = fromOutput?.source ?? fromOutput?.diagram?.source;
-	if (typeof candidate === 'string' && candidate.trim()) return candidate;
-
-	const fenced = result.finalResponse.match(/```mermaid\s*([\s\S]*?)```/i);
-	return fenced?.[1]?.trim() ?? '';
-};
+const components = [
+	'storefront',
+	'checkout api',
+	'payment gateway',
+	'ledger service',
+	'notification worker'
+] as const;
 
 export const diagramCases: readonly EvalCase[] = [
 	{
-		id: 'diagram-generates-valid-mermaid',
-		name: 'produces syntactically valid Mermaid for a described system',
+		id: 'diagram-presents-faithful-editable-canvas',
+		name: 'turns a described system into a faithful editable canvas diagram',
 		splits: [ARCHETYPES.diagramQuality, ARCHETYPES.toolDiscovery],
 		input: {
 			prompt:
 				'Read my "Checkout architecture" note and draw a diagram of how the components talk to each other.',
 			sourceNote: 'Checkout architecture'
 		},
-		expected: { tool: 'generate_mermaid_diagram', syntacticallyValid: true },
-		metadata: { layer: 'agent', axes: 'syntax + faithfulness' },
+		expected: { tool: 'present_diagram', canvasKind: 'draft' },
+		metadata: {
+			layer: 'agent',
+			axes: 'production-valid editable artifact + component coverage + directed faithfulness'
+		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
 			const noteId = workspace.noteIds.get('Checkout architecture');
@@ -58,45 +42,33 @@ export const diagramCases: readonly EvalCase[] = [
 				noteId,
 				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
-
-			const source = extractMermaid(result);
-			const syntax = validateMermaid(source);
-			const normalizedSource = source.toLocaleLowerCase();
-			const namedComponentsPresent = [
-				'storefront',
-				'checkout api',
-				'payment gateway',
-				'ledger service',
-				'notification worker'
-			].every((component) => normalizedSource.includes(component));
-			const connectedFlow = syntax.edgeCount >= 4;
+			const canvas = await lab.controllers
+				.diagramStudio()
+				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
+			const inspection = canvas.kind === 'draft' ? inspectDrawio(canvas.source) : undefined;
+			const labels = inspection?.kind === 'valid' ? inspection.labels : [];
+			const edges = inspection?.kind === 'valid' ? inspection.edges : [];
+			const normalizedLabels = labels.map((label) => label.toLocaleLowerCase());
+			const namedComponentsPresent = components.every((component) =>
+				normalizedLabels.some((label) => label.includes(component))
+			);
+			const faithful = await judgeRubricConsensus({
+				subject: 'the labels and directed edges extracted from an editable draw.io diagram',
+				criteria: [
+					'All five named system components are represented.',
+					'The Storefront flows to the Checkout API, which reaches both the Payment Gateway and Ledger Service.',
+					'The order-confirmed event flows from the Checkout API to the Notification Worker.',
+					'There is no direct Notification Worker to Payment Gateway edge.'
+				],
+				context: sourceText,
+				artefact: JSON.stringify({ labels, edges })
+			});
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
-				mermaid: source,
-				diagramType: syntax.diagramType,
-				nodeCount: syntax.nodeCount,
-				edgeCount: syntax.edgeCount
-			});
-
-			px.logAnnotation({
-				name: 'diagram_syntax',
-				score: syntax.valid ? 1 : 0,
-				label: syntax.valid ? 'valid' : 'invalid',
-				explanation: syntax.valid
-					? `${syntax.diagramType} with ${syntax.nodeCount} elements and ${syntax.edgeCount} relationships`
-					: syntax.problems.join('; ')
-			});
-
-			const faithful = await judgeRubricConsensus({
-				subject: 'a Mermaid diagram generated from a note describing a system',
-				criteria: [
-					'The diagram depicts the components described in the source material, not invented ones.',
-					'The direction of the relationships matches the description.',
-					'No component described as central to the flow is missing.'
-				],
-				context: architectureWorkspace.projects?.[0]?.notes?.[0]?.body ?? '',
-				artefact: source
+				canvasKind: canvas.kind,
+				inspection,
+				response: result.finalResponse.slice(0, 300)
 			});
 			px.logAnnotation({
 				name: ARCHETYPES.diagramQuality,
@@ -105,28 +77,38 @@ export const diagramCases: readonly EvalCase[] = [
 				label: faithful.verdict,
 				explanation: `${faithful.agreement} agreement across ${faithful.judges} judges (${faithful.votes.join(', ')}): ${faithful.reasoning}`
 			});
-			expect({
-				produced: source !== '',
-				syntax: syntax.valid,
-				namedComponentsPresent,
-				connectedFlow,
-				faithful: faithful.followed
-			}).toEqual({
-				produced: true,
-				syntax: true,
+			expect(
+				{
+					status: result.status,
+					presented: result.calledToolNames.includes('present_diagram'),
+					canvasKind: canvas.kind,
+					productionValid: inspection?.kind === 'valid',
+					namedComponentsPresent,
+					edgeCountAtLeastFour: edges.length >= 4,
+					faithful: faithful.followed
+				},
+				inspection?.kind === 'failure' ? inspection.reason : result.failure
+			).toEqual({
+				status: 'completed',
+				presented: true,
+				canvasKind: 'draft',
+				productionValid: true,
 				namedComponentsPresent: true,
-				connectedFlow: true,
+				edgeCountAtLeastFour: true,
 				faithful: true
 			});
 		}
 	},
 	{
-		id: 'diagram-reaches-generation-tool',
-		name: 'discovers the diagram tool rather than drawing ASCII art',
-		splits: [ARCHETYPES.toolDiscovery],
-		input: { prompt: 'Make me a flowchart of the checkout flow described in my notes.' },
-		expected: { tool: 'generate_mermaid_diagram' },
-		metadata: { layer: 'agent' },
+		id: 'diagram-implicit-picture-reaches-canvas',
+		name: 'interprets an implicit picture request as a canvas artifact rather than chat art',
+		splits: [ARCHETYPES.toolDiscovery, 'ambiguity'],
+		input: { prompt: 'Turn this into a picture I can move around and clean up later.' },
+		expected: { tool: 'present_diagram', canvasKind: 'draft' },
+		metadata: {
+			layer: 'agent',
+			note: 'The user names the desired affordance, not diagrams, Mermaid, draw.io, canvas, or any tool.'
+		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
 			const noteId = workspace.noteIds.get('Checkout architecture');
@@ -138,20 +120,32 @@ export const diagramCases: readonly EvalCase[] = [
 				noteId,
 				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
+			const canvas = await lab.controllers
+				.diagramStudio()
+				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
+			const call = findCall(result, 'present_diagram');
+			const inspection = canvas.kind === 'draft' ? inspectDrawio(canvas.source) : undefined;
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
-				arguments: findCall(result, 'generate_mermaid_diagram')?.arguments
+				canvasKind: canvas.kind,
+				inspection,
+				arguments: call?.arguments,
+				response: result.finalResponse.slice(0, 300)
 			});
-
-			const verdict = scoreToolDiscovery(result, 'generate_mermaid_diagram');
+			const passed =
+				result.status === 'completed' &&
+				Boolean(call) &&
+				canvas.kind === 'draft' &&
+				inspection?.kind === 'valid' &&
+				inspection.edges.length >= 4;
 			px.logAnnotation({
 				name: ARCHETYPES.toolDiscovery,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'pass' : 'fail',
-				explanation: verdict.explanation
+				score: passed ? 1 : 0,
+				label: passed ? 'editable_canvas_presented' : 'missing_or_invalid_canvas',
+				explanation: `tools=${result.calledToolNames.join(', ')}; canvas=${canvas.kind}; inspection=${inspection?.kind ?? 'absent'}`
 			});
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect(passed, result.failure ?? JSON.stringify(inspection)).toBe(true);
 		}
 	}
 ];
