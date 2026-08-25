@@ -10,6 +10,7 @@ import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	appContextBuilder,
 	noteBuilder,
+	testProjectId,
 	testConversationId,
 	testActor,
 	testProvenanceId
@@ -1360,8 +1361,14 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.tools()
 			.find((candidate) => candidate.name === 'create_note') as FunctionTool;
-		await selected.invoke({} as never, JSON.stringify({ title: 'Agent draft' }));
-		expect(received).toEqual({ actor: testActor(), input: { title: 'Agent draft' } });
+		await selected.invoke(
+			{} as never,
+			JSON.stringify({ title: 'Agent draft', projectId: testProjectId() })
+		);
+		expect(received).toEqual({
+			actor: testActor(),
+			input: { title: 'Agent draft', projectId: testProjectId() }
+		});
 	});
 
 	it('uses the effective conversation model for reference search', async () => {
