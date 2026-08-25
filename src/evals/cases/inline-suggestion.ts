@@ -1,11 +1,13 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { seedWorkspace } from '../lab/workspace';
 import { inlineSuggestionWorkspace } from '../fixtures/workspaces/inline-suggestion';
 import { ARCHETYPES, type EvalCase } from './types';
+import type { Lab } from '../lab/application';
 
 /**
  * Inline suggestion cases. These bypass the agent loop entirely and drive the
@@ -34,6 +36,10 @@ const requestFor = (
 	heading: 'Migration plan'
 });
 
+const useSubjectModel = async (lab: Lab, actor: ActorContext): Promise<void> => {
+	await lab.controllers.agentSettings().updatePreferences(actor, { inlineModel: lab.model });
+};
+
 export const inlineSuggestionCases: readonly EvalCase[] = [
 	{
 		id: 'inline-suggestion-shape',
@@ -44,6 +50,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 		metadata: { layer: 'inline', note: 'Drives the completion generator directly.' },
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, inlineSuggestionWorkspace);
+			await useSubjectModel(lab, workspace.actor);
 			const projectId = workspace.projectIds.get('Platform')!;
 			const noteId = workspace.noteIds.get('Migration plan|Platform')!;
 			const prefix = this.input.prefix as string;
@@ -91,6 +98,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, inlineSuggestionWorkspace);
+			await useSubjectModel(lab, workspace.actor);
 			const projectId = workspace.projectIds.get('Platform')!;
 			const noteId = workspace.noteIds.get('Migration plan|Platform')!;
 			const prefix = this.input.prefix as string;
@@ -107,7 +115,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 			const hasProjectContext =
 				suggestion.outcome === 'suggested' && suggestion.grounding.projectPassageCount > 0;
 			const mentionsOwner = text.toLowerCase().includes('ana');
-			px.logOutput({ prefix, suggestion: text, hasProjectContext });
+			px.logOutput({ prefix, outcome: suggestion, suggestion: text, hasProjectContext });
 			px.logAnnotation({
 				name: ARCHETYPES.inlineGrounding,
 				score: hasProjectContext && mentionsOwner ? 1 : hasProjectContext ? 0.5 : 0,
