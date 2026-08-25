@@ -16,7 +16,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		diagramCount,
 		attachments,
 		trash,
-		userPreferences
+		userPreferences,
+		trashedDiagrams
 	] = await Promise.all([
 		factory.projects().get(actor, { projectId }),
 		factory.todos().list(actor, { projectId, status: 'open' }),
@@ -25,7 +26,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		factory.diagramStudio().countProjectDiagrams(actor, { projectId, kind: 'drawio' }),
 		factory.attachments().listForProject(actor, projectId),
 		factory.notes().listTrash(actor, { projectId }),
-		factory.userSettings().getPreferences(actor)
+		factory.userSettings().getPreferences(actor),
+		factory.diagramStudio().listTrashedProjectDiagrams(actor, { projectId })
 	]);
 
 	// Overdue is a clock comparison, so it happens here rather than in a $derived.
@@ -39,6 +41,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		view,
 		trashed: trash.notes,
+		trashedDiagrams,
 		overdueTodoCount,
 		// The project menu labels its inherit choice with the app default it falls back to.
 		sectionNumberingAppDefault: userPreferences.sectionNumberingDefault ?? false,

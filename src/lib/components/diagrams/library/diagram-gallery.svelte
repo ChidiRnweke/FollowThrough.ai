@@ -24,7 +24,7 @@
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import {
 		countDiagramReferences,
-		deleteProjectDiagram
+		archiveProjectDiagram
 	} from '$lib/remote/diagrams/diagrams.remote';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -134,17 +134,24 @@
 		if (target) void remove(target.id);
 	}
 
+	/**
+	 * Moves the diagram to the trash rather than destroying it.
+	 *
+	 * The row disappears either way, which is why the wording matters: a diagram
+	 * used to be gone for good from here, with nothing to undo it. The trash page
+	 * is where it goes, and where it comes back from.
+	 */
 	async function remove(id: DiagramId): Promise<void> {
 		const previous = diagrams;
 		diagrams = diagrams.filter((item) => item.id !== id);
 		try {
-			await deleteProjectDiagram({ diagramId: id });
+			await archiveProjectDiagram({ diagramId: id });
 			if (previous.length === 1 && data.page > 1) await navigate(data.page - 1);
 			else await invalidateAll();
 			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported to the user.
 		} catch {
 			diagrams = previous;
-			toast.error('Could not delete the diagram.');
+			toast.error('Could not move the diagram to the trash.');
 		}
 	}
 </script>
@@ -294,7 +301,7 @@
 											Open
 										</DropdownMenu.Item>
 										<DropdownMenu.Item variant="destructive" onclick={() => askRemove(diagram)}>
-											Delete
+											Move to trash
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -336,8 +343,8 @@
 
 <!--
 	One dialog for the whole grid rather than one per row, and it says what the
-	delete will break before it happens: a diagram can be rendered by notes that
-	will show it as unavailable afterwards.
+	removal will break before it happens: a diagram can be rendered by notes that
+	will show it as unavailable until it is restored.
 -->
 <AlertDialog.Root
 	open={removeOpen}
@@ -350,20 +357,20 @@
 >
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete this diagram?</AlertDialog.Title>
+			<AlertDialog.Title>Move this diagram to the trash?</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if references?.current}
 					{references.current === 1
-						? 'One note renders this diagram and will show it as unavailable.'
-						: `${references.current} notes render this diagram and will show it as unavailable.`}
+						? 'One note renders this diagram and will show it as unavailable until you restore it.'
+						: `${references.current} notes render this diagram and will show it as unavailable until you restore it.`}
 				{:else}
-					No note renders this diagram. Deleting it cannot be undone.
+					No note renders this diagram. You can restore it from the trash.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={confirmRemove}>Delete</AlertDialog.Action>
+			<AlertDialog.Action onclick={confirmRemove}>Move to trash</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

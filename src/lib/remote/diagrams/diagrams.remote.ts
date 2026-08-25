@@ -125,6 +125,26 @@ export const restoreDiagramRevision = command(
 		AppFactory.controllers().diagramStudio().restoreDiagramRevision(requestActor(), input)
 );
 
+/** Move a diagram to the trash. Reversible, unlike `deleteProjectDiagram` below. */
+export const archiveProjectDiagram = command(
+	z.object({ diagramId: diagramIdSchema }),
+	async (input) =>
+		AppFactory.controllers().diagramStudio().archiveProjectDiagram(requestActor(), input)
+);
+
+export const restoreProjectDiagram = command(
+	z.object({ diagramId: diagramIdSchema }),
+	async (input) =>
+		AppFactory.controllers().diagramStudio().restoreProjectDiagram(requestActor(), input)
+);
+
+/** Every project when `projectId` is omitted, matching the global trash page. */
+export const listTrashedDiagrams = query(
+	z.object({ projectId: projectIdSchema.optional() }),
+	async (input) =>
+		AppFactory.controllers().diagramStudio().listTrashedProjectDiagrams(requestActor(), input)
+);
+
 export const deleteProjectDiagram = command(
 	z.object({ diagramId: diagramIdSchema }),
 	async (input) =>

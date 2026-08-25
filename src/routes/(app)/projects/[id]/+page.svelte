@@ -152,6 +152,7 @@
 			view={data.view}
 			counts={data.counts}
 			trashed={data.trashed}
+			trashedDiagrams={data.trashedDiagrams}
 			overdueTodoCount={data.overdueTodoCount}
 			tipSeed={data.tipSeed}
 			renderedAt={data.renderedAt}

@@ -4,7 +4,16 @@
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import NoteTrashList from '../../notes/note-trash-list.svelte';
+	import TrashList from '../../shared/trash-list.svelte';
+	import {
+		diagramTrashEntry,
+		noteTrashEntry,
+		type TrashEntry
+	} from '$lib/components/shared/trash-entry';
+	import {
+		deleteProjectDiagram,
+		restoreProjectDiagram
+	} from '$lib/remote/diagrams/diagrams.remote';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import { toast } from 'svelte-sonner';
@@ -45,6 +54,7 @@
 		view,
 		counts,
 		trashed = [],
+		trashedDiagrams = [],
 		overdueTodoCount = 0,
 		tipSeed = 0,
 		renderedAt,
@@ -56,6 +66,7 @@
 		counts: ProjectCounts;
 		/** This project's deleted notes, so they can be brought back from where they were lost. */
 		trashed?: readonly TrashedNote[];
+		trashedDiagrams?: readonly Diagram[];
 		overdueTodoCount?: number;
 		// Comes from the loader so SSR and hydration pick the same tips.
 		tipSeed?: number;
@@ -144,13 +155,34 @@
 		else toast.success('Moved to trash');
 	}
 
-	async function restoreEntry(id: NoteId): Promise<void> {
+	// Notes and this project's diagrams share the section, so each handler narrows
+	// once on the kind rather than being handed an id whose type it has to assume.
+	const trashEntries = $derived([
+		...trashed.map(noteTrashEntry),
+		...trashedDiagrams.map((diagram) => diagramTrashEntry(diagram, view.project.name))
+	]);
+
+	async function restoreEntry(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'diagram') {
+			await restoreProjectDiagram({ diagramId: entry.id });
+			await invalidateAll();
+			toast.success('Restored');
+			return;
+		}
+		const id = entry.id;
 		const output = await projectActions.restoreNote(id);
 		if (!output) toast.error(projectActions.lastError ?? 'Could not restore. Try again.');
 		else toast.success('Restored');
 	}
 
-	async function deleteEntryForever(id: NoteId): Promise<void> {
+	async function deleteEntryForever(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'diagram') {
+			await deleteProjectDiagram({ diagramId: entry.id });
+			await invalidateAll();
+			toast.success('Deleted permanently');
+			return;
+		}
+		const id = entry.id;
 		const output = await projectActions.deleteNoteForever(id);
 		if (!output) toast.error(projectActions.lastError ?? 'Could not delete. Try again.');
 		else toast.success('Deleted permanently');
@@ -388,7 +420,7 @@
 	Collapsed, and absent entirely when the trash is empty: a project that has never
 	deleted anything should not carry a permanent reminder that deleting is possible.
 -->
-{#if trashed.length > 0}
+{#if trashEntries.length > 0}
 	<Collapsible.Root class="pt-6">
 		<Collapsible.Trigger>
 			{#snippet child({ props })}
@@ -402,15 +434,16 @@
 						class="size-3.5 transition-transform data-[state=open]:rotate-90"
 						data-state={props['data-state']}
 					/>
-					Trash · {trashed.length}
+					Trash · {trashEntries.length}
 				</Button>
 			{/snippet}
 		</Collapsible.Trigger>
 		<Collapsible.Content>
 			<div class="pt-2">
-				<NoteTrashList
-					notes={trashed}
+				<TrashList
+					entries={trashEntries}
 					showProject={false}
+					emptyHint="Notes you move to the trash land here, and can be restored from it."
 					onrestore={restoreEntry}
 					ondelete={deleteEntryForever}
 					onempty={emptyTrash}

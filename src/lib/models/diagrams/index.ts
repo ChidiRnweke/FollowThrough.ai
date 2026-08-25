@@ -245,6 +245,17 @@ export interface GetProjectDiagramInput {
 	readonly diagramId: DiagramId;
 }
 
+/**
+ * The trash, for one project or for all of them.
+ *
+ * Its own input rather than reusing `ListProjectDiagramsInput`, whose `projectId`
+ * is required: the global trash page is asking across every project, and casting
+ * that absence past a required field would be inventing an answer.
+ */
+export interface ListTrashedDiagramsInput {
+	readonly projectId?: ProjectId;
+}
+
 export interface ListProjectDiagramsInput {
 	readonly projectId: ProjectId;
 	readonly kind?: DiagramKind;

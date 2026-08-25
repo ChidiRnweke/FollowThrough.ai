@@ -13,6 +13,7 @@ import type {
 	KeepStudioDiagramOutput,
 	ListProjectDiagramsInput,
 	ListProjectDiagramsOutput,
+	ListTrashedDiagramsInput,
 	ListDiagramRevisionsInput,
 	ListDiagramRevisionsOutput,
 	PublishProjectDiagramInput,
@@ -196,7 +197,7 @@ export interface DiagramStudioController {
 	/** The diagrams in the trash, most recently discarded first. */
 	listTrashedProjectDiagrams(
 		actor: ActorContext,
-		input: ListProjectDiagramsInput
+		input: ListTrashedDiagramsInput
 	): Promise<readonly Diagram[]>;
 	/** Permanently delete a project diagram. Notes referencing it show it as unavailable. */
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void>;
@@ -546,7 +547,7 @@ export class DiagramStudio implements DiagramStudioController {
 
 	listTrashedProjectDiagrams(
 		actor: ActorContext,
-		input: ListProjectDiagramsInput
+		input: ListTrashedDiagramsInput
 	): Promise<readonly Diagram[]> {
 		return this.dependencies.diagramArchiver.listArchived(actor, input.projectId);
 	}
