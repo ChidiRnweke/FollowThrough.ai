@@ -296,33 +296,40 @@
       "tag": "0041_demonic_union_jack",
       "breakpoints": true
     },
-		{
-			"idx": 42,
+    {
+      "idx": 42,
       "version": "7",
       "when": 1787491438697,
-			"tag": "0042_resolve_agent_run_inputs",
-			"breakpoints": true
-		},
-		{
-			"idx": 43,
-			"version": "7",
-			"when": 1787526000000,
-			"tag": "0043_distinguish_agent_and_workflow_runs",
-			"breakpoints": true
-		},
-		{
-			"idx": 44,
-			"version": "7",
-			"when": 1787533200000,
-			"tag": "0044_validate_template_styles",
-			"breakpoints": true
-		},
-		{
-			"idx": 45,
-			"version": "7",
-			"when": 1787600000000,
-			"tag": "0045_virtual_agent_files",
-			"breakpoints": true
-		}
+      "tag": "0042_resolve_agent_run_inputs",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787526000000,
+      "tag": "0043_distinguish_agent_and_workflow_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787533200000,
+      "tag": "0044_validate_template_styles",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0045_virtual_agent_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787620083645,
+			"tag": "0046_project_roles_and_diagram_trash",
+      "breakpoints": true
+    }
   ]
 }
