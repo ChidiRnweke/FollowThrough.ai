@@ -38,4 +38,10 @@ describe('tool catalog', () => {
 			'Tool description missing from catalog: not_a_tool'
 		);
 	});
+
+	it('routes vague note cleanup away from whole-body replacement', () => {
+		expect(toolDescription('save_note')).toContain(
+			'A request to tidy, refresh, polish, or improve an existing note is not a full rewrite'
+		);
+	});
 });
