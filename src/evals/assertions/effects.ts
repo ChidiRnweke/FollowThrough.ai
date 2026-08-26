@@ -126,6 +126,26 @@ export async function expectTodoProposed(
 	};
 }
 
+export async function expectMemoryProposed(
+	lab: Lab,
+	actor: ActorContext,
+	contentFragment: string
+): Promise<EffectVerdict> {
+	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
+	const payloads = groups.flatMap((group) =>
+		group.suggestions.flatMap((view) =>
+			view.suggestion.kind === 'memory' ? [JSON.stringify(view.suggestion.payload)] : []
+		)
+	);
+	const hit = payloads.find((payload) => matches(payload, contentFragment));
+	return {
+		passed: Boolean(hit),
+		explanation: hit
+			? `memory proposal contains "${contentFragment}"`
+			: `no memory proposal contains "${contentFragment}"`
+	};
+}
+
 export async function expectMemoryAbsent(
 	lab: Lab,
 	actor: ActorContext,

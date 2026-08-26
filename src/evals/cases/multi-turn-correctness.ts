@@ -4,6 +4,7 @@ import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
+import { expectMemoryAbsent, expectMemoryProposed } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -32,6 +33,9 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, disambiguationWorkspace);
 			const projectId = workspace.projectIds.get('Backend')!;
 			const expectedNoteId = workspace.noteIds.get('API documentation|Backend')!;
+			const before = await lab.controllers.notes().get(workspace.actor, {
+				noteId: expectedNoteId
+			});
 
 			// Turn 1: read the note
 			const turn1 = await runCase(lab, workspace.actor, {
@@ -40,7 +44,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				projectId,
 				noteId: expectedNoteId
 			});
-			expect(turn1.status).toBe('completed');
+			if (turn1.status !== 'completed') throw new Error('The read turn did not complete');
 
 			// Turn 2: edit it — must target the right noteId via edit_note or save_note
 			const turn2 = await runCase(lab, workspace.actor, {
@@ -56,6 +60,12 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				(call?.arguments as Record<string, unknown>)?.noteId ??
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
 			const gotCorrect = targetedId === expectedNoteId;
+			const after = await lab.controllers.notes().get(workspace.actor, {
+				noteId: expectedNoteId
+			});
+			const persisted =
+				after.note.plainText.includes(before.note.plainText) &&
+				after.note.plainText.includes('hello world from agent');
 
 			px.logOutput({
 				model: turn2.model,
@@ -82,12 +92,12 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 					: `no note edit tool was called (${turn2.calledToolNames.join(', ') || 'no tools'})`
 			});
 
-			expect(turn2.status).toBe('completed');
-			expect(
-				call,
-				'neither edit_note nor save_note was ever called on the write turn'
-			).toBeDefined();
-			expect(gotCorrect, `agent edited wrong note: ${targetedId}`).toBe(true);
+			expect({
+				status: turn2.status,
+				calledEdit: Boolean(call),
+				gotCorrect,
+				persisted
+			}).toEqual({ status: 'completed', calledEdit: true, gotCorrect: true, persisted: true });
 		}
 	},
 	{
@@ -108,6 +118,12 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const mobileProjectId = workspace.projectIds.get('Mobile')!;
 			const backendNoteId = workspace.noteIds.get('API documentation|Backend')!;
 			const mobileNoteId = workspace.noteIds.get('API documentation|Mobile')!;
+			const backendBefore = await lab.controllers.notes().get(workspace.actor, {
+				noteId: backendNoteId
+			});
+			const mobileBefore = await lab.controllers.notes().get(workspace.actor, {
+				noteId: mobileNoteId
+			});
 
 			// Turn 1: read Backend API documentation
 			const turn1 = await runCase(lab, workspace.actor, {
@@ -116,7 +132,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				projectId: backendProjectId,
 				noteId: backendNoteId
 			});
-			expect(turn1.status).toBe('completed');
+			if (turn1.status !== 'completed') throw new Error('The first read turn did not complete');
 
 			// Turn 2: switch to Mobile API documentation
 			const turn2 = await runCase(lab, workspace.actor, {
@@ -126,7 +142,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				noteId: mobileNoteId,
 				conversationId: turn1.conversationId
 			});
-			expect(turn2.status).toBe('completed');
+			if (turn2.status !== 'completed') throw new Error('The second read turn did not complete');
 
 			// Turn 3: "edit the first one" — must target Backend noteId
 			const turn3 = await runCase(lab, workspace.actor, {
@@ -143,6 +159,16 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
 			const gotCorrect = targetedId === backendNoteId;
 			const gotWrong = targetedId === mobileNoteId;
+			const backendAfter = await lab.controllers.notes().get(workspace.actor, {
+				noteId: backendNoteId
+			});
+			const mobileAfter = await lab.controllers.notes().get(workspace.actor, {
+				noteId: mobileNoteId
+			});
+			const intendedPersisted =
+				backendAfter.note.plainText.includes(backendBefore.note.plainText) &&
+				backendAfter.note.plainText.toLowerCase().includes('cach');
+			const otherUnchanged = mobileAfter.note.plainText === mobileBefore.note.plainText;
 
 			px.logOutput({
 				model: turn3.model,
@@ -164,9 +190,19 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 						: `targeted ${targetedId}`
 			});
 
-			expect(turn3.status).toBe('completed');
-			expect(call, 'neither edit_note nor save_note was ever called').toBeDefined();
-			expect(gotCorrect, 'agent edited the wrong note').toBe(true);
+			expect({
+				status: turn3.status,
+				calledEdit: Boolean(call),
+				gotCorrect,
+				intendedPersisted,
+				otherUnchanged
+			}).toEqual({
+				status: 'completed',
+				calledEdit: true,
+				gotCorrect: true,
+				intendedPersisted: true,
+				otherUnchanged: true
+			});
 		}
 	},
 	{
@@ -193,7 +229,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 				projectId,
 				noteId
 			});
-			expect(turn1.status).toBe('completed');
+			if (turn1.status !== 'completed') throw new Error('The setup read turn did not complete');
 
 			// Turn 2: user reveals a durable fact
 			const turn2 = await runCase(lab, workspace.actor, {
@@ -207,6 +243,8 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const hasMemoryCall = call !== undefined;
 			const contentMentionsId =
 				hasMemoryCall && JSON.stringify(call.arguments).toLowerCase().includes('e-4821');
+			const proposed = await expectMemoryProposed(lab, workspace.actor, 'E-4821');
+			const absent = await expectMemoryAbsent(lab, workspace.actor, 'E-4821');
 
 			px.logOutput({
 				model: turn2.model,
@@ -227,9 +265,19 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 							: 'never called propose_memory_change'
 			});
 
-			expect(turn2.status).toBe('completed');
-			expect(call, 'propose_memory_change was never called').toBeDefined();
-			expect(contentMentionsId, 'memory proposal does not contain E-4821').toBe(true);
+			expect({
+				status: turn2.status,
+				calledProposal: Boolean(call),
+				contentMentionsId,
+				proposed: proposed.passed,
+				notCommitted: absent.passed
+			}).toEqual({
+				status: 'completed',
+				calledProposal: true,
+				contentMentionsId: true,
+				proposed: true,
+				notCommitted: true
+			});
 		}
 	}
 ];
