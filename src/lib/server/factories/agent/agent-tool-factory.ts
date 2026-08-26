@@ -525,7 +525,10 @@ const projectId = z
 const noteId = z
 	.string()
 	.uuid()
-	.transform((value) => value as NoteId);
+	.transform((value) => value as NoteId)
+	.describe(
+		'Exact note UUID returned in a FollowThrough note id field; never pass a title or project id.'
+	);
 const todoId = z
 	.string()
 	.uuid()

@@ -172,7 +172,19 @@ describe('Agent runtime boundary', () => {
 
 	it('requires independent request parts to share one concurrent read turn', () => {
 		expect(buildAgentInstructions({})).toContain(
-			'issue their read tool calls together in the same model turn so they can run concurrently'
+			'do not wait for one independent read before starting another'
+		);
+	});
+
+	it('requires exact typed identifiers from tool results', () => {
+		expect(buildAgentInstructions({})).toContain(
+			"never substitute a human-readable name or a different entity's id"
+		);
+	});
+
+	it('requires an authoritative memory read when the user asks what is stored', () => {
+		expect(buildAgentInstructions({ userMemory: ['Role: Engineer.'] })).toContain(
+			'If the user asks what is actually stored, call list_user_memory'
 		);
 	});
 
@@ -339,7 +351,19 @@ describe('Agent runtime boundary', () => {
 
 	it('points selection actions to discoverable selection-scoped capabilities', () => {
 		expect(selectionsBlock(pinnedSelection())).toContain(
-			'no direct tool matches, use search_tools to discover the selection-scoped capability'
+			'Use search_tools to discover the selection-scoped capability'
+		);
+	});
+
+	it('routes selected commitments to reviewable todo proposals', () => {
+		expect(selectionsBlock(pinnedSelection())).toContain(
+			'pull out, capture, or identify commitments in selected text asks for reviewable todo proposals'
+		);
+	});
+
+	it('routes substantiation to reviewable external references', () => {
+		expect(selectionsBlock(pinnedSelection())).toContain(
+			'substantiate or verify a selected claim asks for reviewable external references'
 		);
 	});
 

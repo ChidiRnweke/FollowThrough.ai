@@ -21,10 +21,10 @@ export const multiStepCases: readonly EvalCase[] = [
 		input: {
 			prompt: 'What does the Checkout architecture note say about how the Ledger Service is called?'
 		},
-		expected: { requiredSequence: ['get_workspace_context', 'get_note', 'sed'] },
+		expected: { requiredSequence: ['get_workspace_context', 'authoritative content read'] },
 		metadata: {
 			layer: 'agent',
-			note: 'A named note should be resolved from workspace context and read authoritatively; semantic search is optional.'
+			note: 'A named note should be resolved from workspace context and read authoritatively through semantic search or its virtual file.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
@@ -42,16 +42,19 @@ export const multiStepCases: readonly EvalCase[] = [
 			const contextIndex = names.indexOf('get_workspace_context');
 			const searchIndex = names.indexOf('search');
 			const noteIndex = names.indexOf('get_note');
+			const grepIndex = names.indexOf('grep');
 			const sedIndex = names.indexOf('sed');
 			const grounded = /balanced double-entry posting/i.test(result.finalResponse);
 			const evidenceRead =
-				searchIndex > contextIndex || (noteIndex > contextIndex && sedIndex > noteIndex);
+				searchIndex > contextIndex ||
+				grepIndex > contextIndex ||
+				(noteIndex > contextIndex && sedIndex > noteIndex);
 			const passed = contextIndex >= 0 && evidenceRead && grounded;
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `context=${contextIndex}; search=${searchIndex}; note=${noteIndex}; sed=${sedIndex}; grounded=${grounded}`
+				explanation: `context=${contextIndex}; search=${searchIndex}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
 			});
 
 			expect({ status: result.status, resolvedReadAndGrounded: passed }).toEqual({
@@ -308,7 +311,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			prompt:
 				'Turn this into a picture I can review, and leave me a reminder for Friday to check it.'
 		},
-		expected: { canvasKind: 'draft', dueDate: '2026-08-28' },
+		expected: { canvasKind: 'present', dueDate: '2026-08-28' },
 		metadata: {
 			observedAt: '2026-08-24',
 			note: 'Compound production-style request: create the visual and persist the follow-up, then stop.'

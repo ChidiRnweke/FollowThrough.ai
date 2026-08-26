@@ -1471,6 +1471,15 @@ describe('Agent tool coverage invariants', () => {
 		);
 	});
 
+	it('tells the model that note ids cannot be titles or project ids', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'get_note');
+		expect(definition?.parameters.shape.noteId.description).toContain(
+			'never pass a title or project id'
+		);
+	});
+
 	it('advertises confidence as an integer percentage', () => {
 		const definition = registry('auto_accept')
 			.definitions()

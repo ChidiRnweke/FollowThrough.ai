@@ -204,7 +204,10 @@ export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 	expected: { tool: entry.tool, firstClass: entry.firstClass ?? false },
 	metadata: { layer: 'agent', tool: entry.tool },
 	async run(lab) {
-		const workspace = await seedWorkspace(lab, invocationWorkspace);
+		const workspace = await seedWorkspace(
+			lab,
+			entry.id === 'invoke-create-todos' ? personaWorkspace : invocationWorkspace
+		);
 		const projectId = entry.projectName ? workspace.projectIds.get(entry.projectName) : undefined;
 		if (entry.projectName && !projectId)
 			throw new Error(
