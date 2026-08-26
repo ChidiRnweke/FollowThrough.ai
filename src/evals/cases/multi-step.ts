@@ -28,6 +28,8 @@ export const multiStepCases: readonly EvalCase[] = [
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
+			const expectedNoteId = workspace.noteIds.get('Checkout architecture');
+			if (!expectedNoteId) throw new Error('Checkout architecture note was not seeded');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
@@ -45,16 +47,25 @@ export const multiStepCases: readonly EvalCase[] = [
 			const grepIndex = names.indexOf('grep');
 			const sedIndex = names.indexOf('sed');
 			const grounded = /balanced double-entry posting/i.test(result.finalResponse);
-			const evidenceRead =
-				searchIndex > contextIndex ||
-				grepIndex > contextIndex ||
-				(noteIndex > contextIndex && sedIndex > noteIndex);
-			const passed = contextIndex >= 0 && evidenceRead && grounded;
+			const search = findCall(result, 'search');
+			const searchResults = Array.isArray(search?.output) ? search.output : [];
+			const groundedSearch = searchResults.some(
+				(value) =>
+					typeof value === 'object' &&
+					value !== null &&
+					(value as { noteId?: unknown }).noteId === expectedNoteId &&
+					typeof (value as { content?: unknown }).content === 'string' &&
+					/balanced double-entry posting/i.test((value as { content: string }).content)
+			);
+			const groundedFileRead =
+				contextIndex >= 0 &&
+				(grepIndex > contextIndex || (noteIndex > contextIndex && sedIndex > noteIndex));
+			const passed = (groundedSearch || groundedFileRead) && grounded;
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `context=${contextIndex}; search=${searchIndex}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
+				explanation: `context=${contextIndex}; search=${searchIndex}; groundedSearch=${groundedSearch}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
 			});
 
 			expect({ status: result.status, resolvedReadAndGrounded: passed }).toEqual({

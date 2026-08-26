@@ -420,7 +420,9 @@ export const correctnessCases: readonly EvalCase[] = [
 
 			const call = findCall(result, 'get_note');
 			const searchCall = findCall(result, 'search');
+			const searchNoteCall = findCall(result, 'search_note');
 			const targetedId = (call?.arguments as Record<string, unknown>)?.noteId;
+			const targetedSearchNoteId = searchNoteCall?.arguments.noteId;
 			const searchResults = Array.isArray(searchCall?.output)
 				? searchCall.output.filter(
 						(value): value is { noteId?: unknown; content?: unknown } =>
@@ -436,14 +438,18 @@ export const correctnessCases: readonly EvalCase[] = [
 			const groundedAnswer =
 				/mobile sdk/i.test(result.finalResponse) &&
 				/mobile\/graphql|biometric refresh|sqlite/i.test(result.finalResponse);
-			const gotCorrect = targetedId === expectedNoteId || (groundedMobileSearch && groundedAnswer);
-			const gotWrong = targetedId === wrongNoteId;
+			const gotCorrect =
+				targetedId === expectedNoteId ||
+				(targetedSearchNoteId === expectedNoteId && groundedAnswer) ||
+				(groundedMobileSearch && groundedAnswer);
+			const gotWrong = targetedId === wrongNoteId || targetedSearchNoteId === wrongNoteId;
 
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
 				expectedNoteId,
 				actualNoteId: targetedId,
+				searchNoteId: targetedSearchNoteId,
 				searchResults,
 				groundedAnswer,
 				response: result.finalResponse.slice(0, 400)
@@ -453,7 +459,7 @@ export const correctnessCases: readonly EvalCase[] = [
 				score: gotCorrect ? 1 : gotWrong ? 0 : 0.5,
 				label: gotCorrect ? 'cross_project_correct' : gotWrong ? 'stayed_in_scope' : 'other',
 				explanation: gotCorrect
-					? targetedId === expectedNoteId
+					? targetedId === expectedNoteId || targetedSearchNoteId === expectedNoteId
 						? 'correctly read Mobile API documentation directly despite Backend scope'
 						: 'correctly grounded in the Mobile note through semantic search despite Backend scope'
 					: gotWrong
@@ -468,7 +474,7 @@ export const correctnessCases: readonly EvalCase[] = [
 					wrongDirectTarget: gotWrong,
 					toolFailures: result.toolCalls.filter((toolCall) => toolCall.failure).length
 				},
-				`tools=${result.calledToolNames.join(', ')}; direct=${String(targetedId)}; search=${JSON.stringify(searchResults)}`
+				`tools=${result.calledToolNames.join(', ')}; direct=${String(targetedId)}; searchNote=${String(targetedSearchNoteId)}; search=${JSON.stringify(searchResults)}`
 			).toEqual({
 				status: 'completed',
 				correctTargetEvidence: true,

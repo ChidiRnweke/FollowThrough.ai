@@ -118,6 +118,16 @@ Final gate evidence:
   guidance for authoritative stored-memory reads, typed identifiers, selected commitment/reference
   actions, and concurrent independent reads. These are one-sample behavior recoveries, not
   statistical stability claims.
+- `20260826-full-final-133ad5c`: 204/211. All nine first-round reds recovered, but seven other
+  cases exposed provider variance and remaining contracts. Direct grounded search and exact-note
+  `search_note` were valid evidence paths rejected by their oracles. The other unchanged prompts
+  missed a reviewable related-note link, a real creation-time filter, a stored response language,
+  one of two narrated effects, or authoritative project conventions.
+- All seven passed isolated runs after strengthening valid-path evidence checks and adding generic
+  production guidance. The Dutch/English case's three-judge evaluation took about 21 minutes in
+  the full run before agreeing the Dutch response violated memory; its recovered isolated run
+  passed in 9.8 seconds. This is both genuine behavior recovery and severe provider/judge latency
+  evidence, not a reason to relax the timeout or the language criterion.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.

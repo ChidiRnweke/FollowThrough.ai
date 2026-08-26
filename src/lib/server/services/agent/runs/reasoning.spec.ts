@@ -200,6 +200,28 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('preserves narrated decisions separately from their follow-ups', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'contains both a durable decision and a follow-up, preserve both as independent effects'
+		);
+	});
+
+	it('applies stored response language across input languages', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'A standing response-language preference governs even when the user writes in another language'
+		);
+	});
+
+	it('requires creation-time constraints in read arguments', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'must carry that range in the read tool arguments'
+		);
+	});
+
+	it('reads project memory for usual-practice questions', () => {
+		expect(buildAgentInstructions({})).toContain('require list_project_memory before answering');
+	});
+
 	const systemPromptWithNotes = () =>
 		buildAgentInstructions({
 			contextNotes: [
@@ -376,6 +398,12 @@ describe('Agent runtime boundary', () => {
 	it('routes related-material requests beyond the selected source note', () => {
 		expect(selectionsBlock(pinnedSelection())).toContain(
 			'use broad search to look beyond the source note'
+		);
+	});
+
+	it('turns reviewable selected connections into relationship proposals', () => {
+		expect(selectionsBlock(pinnedSelection())).toContain(
+			'discover and call the selection relationship proposal capability'
 		);
 	});
 
