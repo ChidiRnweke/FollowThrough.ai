@@ -46,47 +46,53 @@ export async function judgeAgainstRubric(input: JudgeRubricInput): Promise<Rubri
 	const client = createLanguageModelClient(apiKey, { baseURL: openRouterBaseUrl() });
 
 	const criteria = input.criteria.map((item, index) => `${index + 1}. ${item}`).join('\n');
-	const completion = await client.chat.completions.create({
-		model,
-		messages: [
-			{
-				role: 'system',
-				content:
-					'You grade an artefact against a fixed rubric. Every criterion must hold for a pass. ' +
-					'Judge only the criteria given — not style, length, or anything unstated. ' +
-					'If a criterion cannot be checked from what you were given, treat it as failed and say so.'
-			},
-			{
-				role: 'user',
-				content: [
-					`<subject>${input.subject}</subject>`,
-					`<criteria>\n${criteria}\n</criteria>`,
-					...(input.context ? [`<source_material>\n${input.context}\n</source_material>`] : []),
-					`<artefact>\n${input.artefact}\n</artefact>`,
-					'Does the artefact satisfy every criterion?'
-				].join('\n\n')
-			}
-		],
-		response_format: {
-			type: 'json_schema',
-			json_schema: {
-				name: 'rubric_verdict',
-				strict: true,
-				schema: {
-					type: 'object',
-					additionalProperties: false,
-					required: ['verdict', 'reasoning'],
-					properties: {
-						verdict: { type: 'string', enum: ['pass', 'fail'] },
-						reasoning: {
-							type: 'string',
-							description: 'One or two sentences naming the criterion that decided it.'
+	const completion = await client.chat.completions.create(
+		{
+			model,
+			messages: [
+				{
+					role: 'system',
+					content:
+						'You grade an artefact against a fixed rubric. Every criterion must hold for a pass. ' +
+						'Judge only the criteria given — not style, length, or anything unstated. ' +
+						'If a criterion cannot be checked from what you were given, treat it as failed and say so.'
+				},
+				{
+					role: 'user',
+					content: [
+						`<subject>${input.subject}</subject>`,
+						`<criteria>\n${criteria}\n</criteria>`,
+						...(input.context ? [`<source_material>\n${input.context}\n</source_material>`] : []),
+						`<artefact>\n${input.artefact}\n</artefact>`,
+						'Does the artefact satisfy every criterion?'
+					].join('\n\n')
+				}
+			],
+			response_format: {
+				type: 'json_schema',
+				json_schema: {
+					name: 'rubric_verdict',
+					strict: true,
+					schema: {
+						type: 'object',
+						additionalProperties: false,
+						required: ['verdict', 'reasoning'],
+						properties: {
+							verdict: { type: 'string', enum: ['pass', 'fail'] },
+							reasoning: {
+								type: 'string',
+								description: 'One or two sentences naming the criterion that decided it.'
+							}
 						}
 					}
 				}
 			}
+		},
+		{
+			timeout: Number(process.env.EVAL_JUDGE_TIMEOUT_MS ?? 45_000),
+			maxRetries: 0
 		}
-	});
+	);
 
 	const content = completion.choices[0]?.message?.content;
 	if (!content) throw new Error('The rubric judge returned no content.');

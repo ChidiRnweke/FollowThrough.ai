@@ -454,20 +454,18 @@ export const agentToolCoverage = {
 
 const none = z.object({});
 const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
+const optionalModelField = <T extends z.ZodType>(schema: T) =>
+	z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 const temporal = <T extends z.ZodRawShape>(shape: T) =>
 	z
 		.object({
 			...shape,
-			createdAfter: dateTime
-				.optional()
-				.describe(
-					'Inclusive artifact creation-time lower bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
-				),
-			createdBefore: dateTime
-				.optional()
-				.describe(
-					'Inclusive artifact creation-time upper bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
-				)
+			createdAfter: optionalModelField(dateTime).describe(
+				'Inclusive artifact creation-time lower bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
+			),
+			createdBefore: optionalModelField(dateTime).describe(
+				'Inclusive artifact creation-time upper bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
+			)
 		})
 		.superRefine((value, context) => {
 			const range = value as { createdAfter?: string; createdBefore?: string };
@@ -982,11 +980,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			'read',
 			temporal({
 				query: z.string().min(1),
-				projectId: projectId
-					.optional()
-					.describe(
-						'Exact project UUID returned by a FollowThrough tool; never pass a project name. Omit to search all projects.'
-					)
+				projectId: optionalModelField(projectId).describe(
+					'Exact project UUID returned by a FollowThrough tool; never pass a project name. Omit to search all projects.'
+				)
 			}),
 			(input) =>
 				factory.retrieval().search(actor, {

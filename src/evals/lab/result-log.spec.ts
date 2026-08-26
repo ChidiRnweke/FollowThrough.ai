@@ -43,4 +43,19 @@ describe('eval result log', () => {
 			await rm(directory, { recursive: true });
 		}
 	});
+
+	it('retains every record when cases finish concurrently', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
+		const path = join(directory, 'results.json');
+		const records = Array.from({ length: 24 }, (_, index) => ({
+			...result,
+			caseId: `concurrent-case-${index}`
+		}));
+		try {
+			await Promise.all(records.map((record) => appendEvalResult(path, record)));
+			expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(records);
+		} finally {
+			await rm(directory, { recursive: true });
+		}
+	});
 });

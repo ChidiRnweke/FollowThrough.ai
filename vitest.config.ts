@@ -139,7 +139,10 @@ export default defineConfig({
 					include: ['src/evals/**/*.eval.ts'],
 					fileParallelism: false,
 					maxWorkers: 1,
-					testTimeout: 180_000,
+					// A recorded full gate produced valid late results at 199s and 322s.
+					// Keep the harness alive long enough to observe the production client's
+					// retry outcome; judge requests are separately bounded and retried.
+					testTimeout: 420_000,
 					hookTimeout: 180_000,
 					retry: 0
 				}

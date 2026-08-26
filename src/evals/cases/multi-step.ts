@@ -48,14 +48,19 @@ export const multiStepCases: readonly EvalCase[] = [
 			const sedIndex = names.indexOf('sed');
 			const grounded = /balanced double-entry posting/i.test(result.finalResponse);
 			const search = findCall(result, 'search');
-			const searchResults = Array.isArray(search?.output) ? search.output : [];
+			const scopedSearch = findCall(result, 'search_note');
+			const authoritativeSearch = scopedSearch ?? search;
+			const searchResults = Array.isArray(authoritativeSearch?.output)
+				? authoritativeSearch.output
+				: [];
 			const groundedSearch = searchResults.some(
 				(value) =>
 					typeof value === 'object' &&
 					value !== null &&
 					(value as { noteId?: unknown }).noteId === expectedNoteId &&
 					typeof (value as { content?: unknown }).content === 'string' &&
-					/balanced double-entry posting/i.test((value as { content: string }).content)
+					/balanced double-entry posting/i.test((value as { content: string }).content) &&
+					(scopedSearch === undefined || scopedSearch.arguments.noteId === expectedNoteId)
 			);
 			const groundedFileRead =
 				contextIndex >= 0 &&
@@ -65,7 +70,7 @@ export const multiStepCases: readonly EvalCase[] = [
 				name: ARCHETYPES.multiStep,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `context=${contextIndex}; search=${searchIndex}; groundedSearch=${groundedSearch}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
+				explanation: `context=${contextIndex}; search=${searchIndex}; searchNote=${names.indexOf('search_note')}; groundedSearch=${groundedSearch}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
 			});
 
 			expect({ status: result.status, resolvedReadAndGrounded: passed }).toEqual({

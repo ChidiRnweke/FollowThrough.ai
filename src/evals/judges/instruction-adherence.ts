@@ -50,37 +50,43 @@ export async function judgeInstructionAdherence(
 	const model = judgeModel();
 	const client = createLanguageModelClient(apiKey, { baseURL: openRouterBaseUrl() });
 
-	const completion = await client.chat.completions.create({
-		model,
-		messages: [
-			{ role: 'system', content: SYSTEM },
-			{
-				role: 'user',
-				content: [
-					`<standing_instruction>\n${input.instruction}\n</standing_instruction>`,
-					`<user_prompt>\n${input.prompt}\n</user_prompt>`,
-					`<assistant_response>\n${input.response}\n</assistant_response>`,
-					'Did the assistant response obey the standing instruction?'
-				].join('\n\n')
-			}
-		],
-		response_format: {
-			type: 'json_schema',
-			json_schema: {
-				name: 'adherence_verdict',
-				strict: true,
-				schema: {
-					type: 'object',
-					additionalProperties: false,
-					required: ['verdict', 'reasoning'],
-					properties: {
-						verdict: { type: 'string', enum: ['followed', 'violated', 'not_applicable'] },
-						reasoning: { type: 'string', description: 'One sentence of justification.' }
+	const completion = await client.chat.completions.create(
+		{
+			model,
+			messages: [
+				{ role: 'system', content: SYSTEM },
+				{
+					role: 'user',
+					content: [
+						`<standing_instruction>\n${input.instruction}\n</standing_instruction>`,
+						`<user_prompt>\n${input.prompt}\n</user_prompt>`,
+						`<assistant_response>\n${input.response}\n</assistant_response>`,
+						'Did the assistant response obey the standing instruction?'
+					].join('\n\n')
+				}
+			],
+			response_format: {
+				type: 'json_schema',
+				json_schema: {
+					name: 'adherence_verdict',
+					strict: true,
+					schema: {
+						type: 'object',
+						additionalProperties: false,
+						required: ['verdict', 'reasoning'],
+						properties: {
+							verdict: { type: 'string', enum: ['followed', 'violated', 'not_applicable'] },
+							reasoning: { type: 'string', description: 'One sentence of justification.' }
+						}
 					}
 				}
 			}
+		},
+		{
+			timeout: Number(process.env.EVAL_JUDGE_TIMEOUT_MS ?? 45_000),
+			maxRetries: 0
 		}
-	});
+	);
 
 	const content = completion.choices[0]?.message?.content;
 	if (!content) throw new Error('The adherence judge returned no content.');

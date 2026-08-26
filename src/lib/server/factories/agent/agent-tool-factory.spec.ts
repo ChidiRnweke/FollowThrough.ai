@@ -905,6 +905,28 @@ describe('Agent tool coverage invariants', () => {
 		});
 	});
 
+	it('treats blank optional search scope fields as omitted', async () => {
+		let received: unknown;
+		const factory = {
+			retrieval: () => ({
+				search: async (_actor: unknown, input: unknown) => {
+					received = input;
+					return [];
+				}
+			})
+		} as unknown as ControllerFactory;
+		await directToolFor('auto_accept', 'search', { factory }).invoke(
+			{} as never,
+			JSON.stringify({
+				query: 'deployment procedures',
+				projectId: '',
+				createdAfter: '',
+				createdBefore: ''
+			})
+		);
+		expect(received).toEqual({ query: 'deployment procedures' });
+	});
+
 	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
 		const projectId = crypto.randomUUID();
 		const calls: { projectId: string; title: string }[] = [];

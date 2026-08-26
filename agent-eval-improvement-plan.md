@@ -128,6 +128,27 @@ Final gate evidence:
   the full run before agreeing the Dutch response violated memory; its recovered isolated run
   passed in 9.8 seconds. This is both genuine behavior recovery and severe provider/judge latency
   evidence, not a reason to relax the timeout or the language criterion.
+- `20260826-full-final-5dc7323`: the runner reported 169/211 with 45 failed Vitest tests, but that
+  headline is not a model pass rate. Four cases produced genuine zero-score annotations: broad
+  search repeatedly sent blank optional scope fields, the named-note oracle ignored an exact
+  `search_note` evidence path, one authoritative-clock response lost a 3/5 judge vote, and one
+  independent-read run serialized its calls. Three other cases exceeded the 180-second Vitest
+  timeout yet later completed and wrote passing records (the slowest took 321.6 seconds). The
+  remaining 38 failures were result-ledger artifacts after concurrent late completions corrupted
+  the shared JSON file and every later append failed to parse it.
+- The result ledger now serializes same-process appends and has a 24-writer regression test. Judge
+  attempts are bounded to 45 seconds and retried by the existing consensus policy; the enclosing
+  eval timeout is 420 seconds, based on the observed 321.6-second valid completion rather than a
+  desired result. Blank strings in optional search scope fields are normalized to omission while
+  the advertised schema remains UUID/date typed. The named-note oracle now accepts exact-ID,
+  content-bearing `search_note` evidence as its own metadata already promised.
+- Unchanged targeted runs passed for broad search (`20260826-target-context-postfix`, 1/1), named
+  note grounding (`20260826-target-multistep-postfix`, 1/1), independent parallel reads
+  (`20260826-target-parallel-postfix`, 1/1), editable diagram faithfulness
+  (`20260826-target-diagram-postfix`, 1/1 in 69.3 seconds), and the authoritative clock
+  (`20260826-target-time-stale-audit`, 1/1). The latter two recoveries are provider/judge variance,
+  not production improvement. Focused Vitest passed 106/106; architecture audits passed at zero
+  violations; deterministic cache verification passed with 63 tool embeddings.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.
