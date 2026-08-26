@@ -74,7 +74,13 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				const noteId = workspace.noteIds.get(`Backlog ${index}`);
 				if (!noteId) continue;
 				const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-				if (view.note.plainText.toLowerCase().includes('outcome')) landed += 1;
+				if (
+					view.note.plainText.toLowerCase().includes('outcome') &&
+					view.note.plainText.includes(
+						`Intro line for backlog ${index}: the migration milestone and its acceptance criteria live here.`
+					)
+				)
+					landed += 1;
 			}
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
@@ -83,9 +89,11 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				explanation: `${landed}/6 notes carry an Outcome section`
 			});
 
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(mutated, 'the run must perform a mutation, not end in narration').toBe(true);
-			expect(landed, `expected an Outcome section in all 6 notes, landed in ${landed}`).toBe(6);
+			expect({ status: result.status, mutated, preservedOutcomes: landed }).toEqual({
+				status: 'completed',
+				mutated: true,
+				preservedOutcomes: 6
+			});
 		}
 	},
 	{
@@ -109,7 +117,7 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				mode: 'auto_accept',
 				projectId
 			});
-			expect(turn1.status).toBe('completed');
+			if (turn1.status !== 'completed') throw new Error('The first todo creation did not complete');
 
 			const turn2 = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
@@ -135,8 +143,10 @@ export const completionRegressionCases: readonly EvalCase[] = [
 				explanation: `project holds ${after} todos after the request ran twice`
 			});
 
-			expect(turn2.status).toBe('completed');
-			expect(after, `expected 2 todos, found ${after}`).toBe(2);
+			expect({ status: turn2.status, todoCount: after }).toEqual({
+				status: 'completed',
+				todoCount: 2
+			});
 		}
 	}
 ];
