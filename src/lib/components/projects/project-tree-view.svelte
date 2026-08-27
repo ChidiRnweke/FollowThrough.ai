@@ -379,7 +379,7 @@
 			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<ul
-						class="ml-3.5 flex min-h-1.5 min-w-0 flex-col gap-1 border-l border-sidebar-border py-0.5 pl-2.5"
+						class="ml-2 flex min-h-1.5 min-w-0 flex-col gap-0 border-l border-sidebar-border py-1 pl-2"
 						use:dragHandleZone={{
 							items: zoneItems(entry.projectId, entry.id),
 							type: `tree-${entry.projectId}`,
@@ -394,14 +394,14 @@
 						{/each}
 					</ul>
 					{#if inlineEdit?.mode === 'create' && isCreatingIn(entry.projectId, entry.id)}
-						<div class="ml-3.5 pl-2.5">
+						<div class="ml-2 pl-2">
 							{@render inlineCreateRow(inlineEdit, 'inline')}
 						</div>
 					{/if}
 					<!-- Creation lives on the row's hover `+`; the dashed button survives only
 					     as an empty state, where there is nothing else to aim at. -->
 					{#if !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
-						<div class="ml-3.5 pl-2.5">
+						<div class="ml-2 pl-2">
 							<Button
 								variant="ghost"
 								type="button"
@@ -428,7 +428,19 @@
 	</Menu.Item>
 {/snippet}
 
-<Sidebar.Menu>
+<!-- The tree's spacing ladder. Gaps step rather than repeat, because in a flat-surface
+     Swiss layout the gap between two rows is the primary statement about whether they
+     belong together — a tree whose every gap is equal has no hierarchy however well its
+     content is grouped, which is exactly what Obsidian's sidebar gets wrong.
+
+       0px  peer rows (notes, skills, folders under one parent) — the `ul`s below
+       4px  a folder's open subtree, and the project's Todos row vs its note list
+       8px  project against project — `gap-2` here
+      24px  region against region — `Sidebar.Content`'s `gap-4` plus each group's `py-1`
+
+     `Sidebar.Menu` defaults to 2px for nav destinations; the tree wants 8px, so it
+     overrides once here rather than the primitive growing a variant. -->
+<Sidebar.Menu class="gap-2">
 	{#each projects as project (project.id)}
 		{@const isOpen = isProjectOpen(project.id)}
 		{@const entries = zoneItems(project.id)}
@@ -509,9 +521,9 @@
 			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<div
-						class="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden"
+						class="mx-2 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2 py-1 group-data-[collapsible=icon]:hidden"
 					>
-						<ul class="flex min-w-0 flex-col gap-1">
+						<ul class="flex min-w-0 flex-col gap-0">
 							<Sidebar.MenuSubItem>
 								<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
 									{#snippet child({ props })}
@@ -524,7 +536,7 @@
 							</Sidebar.MenuSubItem>
 						</ul>
 						<ul
-							class="flex min-h-1.5 min-w-0 flex-col gap-1"
+							class="flex min-h-1.5 min-w-0 flex-col gap-0"
 							use:dragHandleZone={{
 								items: entries,
 								type: `tree-${project.id}`,

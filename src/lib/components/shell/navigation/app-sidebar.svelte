@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { NoteId } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -10,15 +9,14 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { cn } from '$lib/utils';
 	import {
+		FtArrowRight as ArrowRight,
 		FtToday as House,
 		FtChat as MessageSquare,
 		FtChatAlert as MessageSquareWarning,
 		FtPlus as Plus,
 		FtSearch as Search,
-		FtSettings as Settings,
 		FtTheme as SunMoon,
 		FtTrash as Trash,
-		FtProfile as UserRound,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
@@ -30,6 +28,7 @@
 	import ProjectTree from '../../projects/project-tree.svelte';
 	import MemoryNotificationMenu from '../../memory/memory-notification-menu.svelte';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
+	import AccountMenu from './account-menu.svelte';
 
 	let {
 		shell,
@@ -46,13 +45,10 @@
 		squeezed?: boolean;
 	} = $props();
 
-	const secondaryItems = $derived([
-		{ href: '/skills', label: 'Skills', icon: Wrench, badge: 0 },
-		{ href: '/trash', label: 'Trash', icon: Trash, badge: 0 },
-		{ href: '/profile', label: 'Profile', icon: UserRound, badge: 0 },
-		{ href: '/settings', label: 'Settings', icon: Settings, badge: 0 }
-	]);
-
+	// The rail is sorted by what a thing *is*: destinations at the top, your projects
+	// filling the middle, and you at the bottom. Tools (find, trash) and account chrome
+	// (profile, settings) are neither, so they live in the footer — the icon bar and the
+	// account menu respectively — rather than as rows beside content.
 	function isActive(href: string): boolean {
 		return activePath.startsWith(href);
 	}
@@ -106,25 +102,30 @@
 				{/snippet}
 			</Tip>
 		</div>
+		<!-- "Go to…", not "Search…". This navigates — to a note by name, or to an
+		     action — which is the opposite pole from finding text inside notes. The
+		     two wore the same word and did different jobs; naming this one for what
+		     it does is what keeps them apart. Full-text search is "Find in notes",
+		     down in TOOLS. -->
 		<Button
 			variant="outline"
 			type="button"
 			class="tactile flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground group-data-[collapsible=icon]:hidden"
-			aria-label="Search notes, todos and commands"
+			aria-label="Go to a note or run an action"
 			onclick={() => palette.open()}
 		>
-			<Search class="size-4 shrink-0" />
-			<span class="truncate">Search…</span>
+			<ArrowRight class="size-4 shrink-0" />
+			<span class="truncate">Go to…</span>
 			<Kbd class="ml-auto">⌘K</Kbd>
 		</Button>
 		<Button
 			variant="ghost"
 			size="icon-sm"
 			class="hidden self-center group-data-[collapsible=icon]:flex"
-			aria-label="Search notes, todos and commands"
+			aria-label="Go to a note or run an action"
 			onclick={() => palette.open()}
 		>
-			<Search class="size-4" />
+			<ArrowRight class="size-4" />
 		</Button>
 	</Sidebar.Header>
 	<Sidebar.Separator />
@@ -153,13 +154,13 @@
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
 					<Sidebar.MenuItem>
-						<Sidebar.MenuButton
-							isActive={rightPanel.mode === 'search'}
-							tooltipContent="Search notes (⌘⇧F)"
-							onclick={() => rightPanel.toggle('search')}
-						>
-							<Search class="size-4" />
-							<span>Search</span>
+						<Sidebar.MenuButton isActive={isActive('/skills')} tooltipContent="Skills">
+							{#snippet child({ props })}
+								<a {...props} href="/skills">
+									<Wrench class="size-4" />
+									<span>Skills</span>
+								</a>
+							{/snippet}
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
 				</Sidebar.Menu>
@@ -174,7 +175,7 @@
 				{#snippet children({ props })}
 					<Sidebar.GroupAction
 						{...props}
-						class="top-2.5 rounded-full"
+						class="top-3 rounded-full"
 						onclick={() => tree?.openNewProject()}
 					>
 						<Plus class="size-4" />
@@ -202,41 +203,52 @@
 				{/if}
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
-		<Sidebar.Group class="mt-auto pt-1 pb-2">
-			<Sidebar.GroupContent>
-				<Sidebar.Menu>
-					{#each secondaryItems as item (item.href)}
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton isActive={isActive(item.href)} tooltipContent={item.label}>
-								{#snippet child({ props })}
-									<a href={item.href} {...props}>
-										<item.icon class="size-4" />
-										<span>{item.label}</span>
-									</a>
-								{/snippet}
-							</Sidebar.MenuButton>
-							{#if item.badge > 0}
-								<Sidebar.MenuBadge>
-									<Badge variant="secondary">{item.badge}</Badge>
-								</Sidebar.MenuBadge>
-							{/if}
-						</Sidebar.MenuItem>
-					{/each}
-				</Sidebar.Menu>
-			</Sidebar.GroupContent>
-		</Sidebar.Group>
 	</Sidebar.Content>
 	<Sidebar.Separator />
 	<Sidebar.Footer class="pb-3">
-		<div
-			class="flex items-center justify-between group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1"
-		>
-			<span
-				class="truncate px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden"
+		<div class="flex min-w-0 flex-col gap-1 group-data-[collapsible=icon]:items-center">
+			<AccountMenu displayName={shell.user.displayName} email={shell.user.email} />
+			<!-- Search and trash live here rather than in a labelled group of their own: a
+			     region for two links, pinned bottom with `mt-auto` against a `flex-1`
+			     Projects, floated free of everything around it. A magnifier and a bin are
+			     the two glyphs that need no caption, so the bar absorbs them and the tree
+			     gets the height back.
+
+			     `flex-wrap` because six `size-8` buttons need 192px and the rail's floor is
+			     `SIDEBAR_WIDTH_MIN_PX` (192) less the footer's own `p-2` — at the minimum
+			     width they wrap to a second line instead of overflowing. -->
+			<div
+				class="flex flex-wrap items-center justify-between group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1"
 			>
-				{shell.user.displayName}
-			</span>
-			<div class="flex items-center group-data-[collapsible=icon]:flex-col">
+				<Tip text="Find in notes" shortcut="⌘⇧F">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Find in notes"
+							aria-pressed={rightPanel.mode === 'search'}
+							class={rightPanel.mode === 'search' ? 'bg-accent text-brand' : ''}
+							onclick={() => rightPanel.toggle('search')}
+						>
+							<Search class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
+				<Tip text="Trash">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Trash"
+							href="/trash"
+							class={isActive('/trash') ? 'bg-accent text-brand' : ''}
+						>
+							<Trash class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
 				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
 				<Tip text="Toggle chat panel">
 					{#snippet children({ props })}

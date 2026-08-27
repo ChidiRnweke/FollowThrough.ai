@@ -15,12 +15,15 @@
 	}
 </script>
 
+<!-- Copy says what this actually does. The old wording promised todos, which it has
+     never searched: the list below is `commandRegistry` plus note *titles* from
+     `shell.noteTree`. Searching note bodies is "Find in notes", a separate surface. -->
 <Command.Dialog
 	bind:open={palette.isOpen}
-	title="Command palette"
-	description="Search notes, todos and commands"
+	title="Go to"
+	description="Go to a note or run an action"
 >
-	<Command.Input placeholder="Search notes, todos and commands…" />
+	<Command.Input placeholder="Go to a note or run an action…" />
 	<Command.List>
 		<Command.Empty>Nothing found.</Command.Empty>
 		<Command.Group heading="Actions">

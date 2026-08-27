@@ -2,15 +2,23 @@
 	import { tv, type VariantProps } from 'tailwind-variants';
 
 	export const sidebarMenuButtonVariants = tv({
-		base: 'ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground gap-2 rounded-lg px-3 py-2 text-left text-sm transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
+		// Hover is deliberately weaker than the token it used to share with the active
+		// row: at full strength the two states were indistinguishable, so hovering any
+		// row looked exactly as selected as being on it. The active row's own recipe
+		// (brand wash, brand label and icon, edge bar) lives in `layout.css` beside the
+		// accent-discipline rule, so `sidebar-menu-sub-button` can share it.
+		base: 'relative ring-sidebar-ring hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground active:bg-sidebar-accent/60 active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent/60 data-open:hover:text-sidebar-accent-foreground gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
 		variants: {
 			variant: {
-				default: 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+				// Both repeat the base's hover so they must repeat its weakening too:
+				// `tv` appends variant classes after the base, so a full-strength wash
+				// here would win the merge and undo it.
+				default: 'hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
 				outline:
-					'bg-background hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--sidebar-accent)]'
+					'bg-background hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--sidebar-accent)]'
 			},
 			size: {
-				default: 'h-9 text-sm',
+				default: 'h-8 text-sm',
 				sm: 'h-8 text-xs',
 				lg: 'h-14 px-3 text-sm group-data-[collapsible=icon]:p-0!'
 			}
