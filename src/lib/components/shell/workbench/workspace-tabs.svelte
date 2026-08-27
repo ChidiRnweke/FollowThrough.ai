@@ -21,6 +21,8 @@
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import type { Conversation } from '$lib/models/agent';
+	import { cubicOut } from 'svelte/easing';
+	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 
 	let {
 		shell,
@@ -173,11 +175,27 @@
 		void workbench.openTabInBackground(tabId);
 	}
 
-	// `horizontalPanelCollapse` used to animate a tab's width to zero while the wrapper
-	// around it clipped the label. Both are gone: a tweened width leaves the run's outer
-	// radius and its separators mid-recalculation on every frame, so the strip's edges
-	// flicker for the length of the transition. Folding a group now swaps the run's
-	// contents; tabs appear and disappear at once, the way a browser's do.
+	// Folding a group tweens each tab's width to zero rather than swapping the run's
+	// contents outright, so a fold reads as the tabs going away rather than as the strip
+	// jumping to a new arrangement. The wrapper clips while it shrinks; the label inside
+	// keeps its own width and slides out of view instead of reflowing character by
+	// character, which is what makes it read as one panel closing.
+	//
+	// This is the one motion in the strip that a `@media (prefers-reduced-motion)` block
+	// cannot reach. A Svelte transition writes inline styles frame by frame, so the guard
+	// in `layout.css` — which only neutralises CSS transitions — never sees it. The hook
+	// is the same one `chat-panel.svelte` uses for its own JS-driven motion.
+	const reducedMotion = new PrefersReducedMotion();
+
+	function horizontalPanelCollapse(node: HTMLElement) {
+		const width = node.offsetWidth;
+
+		return {
+			duration: reducedMotion.current ? 0 : 300,
+			easing: cubicOut,
+			css: (t: number) => `width: ${t * width}px`
+		};
+	}
 </script>
 
 <!-- The strip is one continuous surface, and it is the only thing here that paints a
@@ -340,15 +358,20 @@
 							     40% — but only one tab per strip takes the pane's fill. -->
 								{@const active = focused || split}
 								{@const raised = focused}
-								<!-- A bare positioning box. It once carried the run's trailing radius and
-								     an `overflow-hidden` to clip the tab's fill to it; both are gone,
-								     because a run of unpainted tabs has no outer corner to round. The
-								     only radius left anywhere in the strip is the on-screen tile's own
-								     `rounded-t-lg`. -->
+								<!-- The box whose width the fold transition tweens, which is why the
+								     `overflow-hidden` is back: the tab inside holds `min-w-32`, so
+								     without a clip it would spill out of the shrinking wrapper instead
+								     of sliding out of view. It no longer carries a radius — a run of
+								     unpainted tabs has no outer corner to round, and the only radius
+								     left anywhere in the strip is the on-screen tile's `rounded-t-lg`.
+
+								     `|local` so the tabs animate when *this* group folds, and not
+								     again every time an ancestor block happens to mount. -->
 								<div
-									class="flex shrink-0"
+									class="flex shrink-0 overflow-hidden"
 									data-project-tab={noteId}
 									data-chat-tab={isChatTab(noteId) ? noteId : undefined}
+									transition:horizontalPanelCollapse|local
 								>
 									<!-- Tab labels truncate at 16rem, so the tooltip is the only way to read
 							     a long title. A longer delay than the default keeps it from flashing
