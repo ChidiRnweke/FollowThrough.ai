@@ -583,10 +583,30 @@
 	&:active {
 		transform: none;
 	}
+	/* Same recipe as a selected sidebar row, for the same reason — see the accent
+	   discipline block. These rows live outside the sidebar primitives but they
+	   answer the same question ("which one am I on?"), so they must answer it the
+	   same way. */
 	&[aria-current='page'] {
-		background-color: var(--color-sidebar-accent);
-		color: var(--color-sidebar-accent-foreground);
+		position: relative;
+		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+		color: var(--color-brand);
 		font-weight: 500;
+	}
+	/* Kept inside the utility rather than in a sibling `@layer components` rule:
+	   the utilities layer wins over components, so an outside override would be
+	   silently dropped and dark mode would keep the light strength. */
+	.dark &[aria-current='page'] {
+		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
+	}
+	&[aria-current='page']::before {
+		content: '';
+		position: absolute;
+		inset-block: 0.25rem;
+		inset-inline-start: 0;
+		width: 2px;
+		border-radius: 1px;
+		background-color: var(--color-brand);
 	}
 }
 
@@ -1270,13 +1290,91 @@
 		@apply text-muted-foreground;
 	}
 
+	/* The rule between two resting tabs. It is here, as a pseudo-element, for exactly one
+	   reason: **it is shorter than the tab.** An inset shadow — which is what every other
+	   edge in the strip uses, and what this rule itself used to be — always spans the
+	   whole edge it sits on and cannot be inset along it. That property is right for a
+	   baseline rule and wrong for this one.
+
+	   The length is the point, not a detail. A rule running the full depth of the strip
+	   reads as a wall between two regions; a short centred one reads as a tick between
+	   two items. `inset-block: 0.625rem` leaves a 20px rule in the 40px strip, matching
+	   the `my-2.5` divider that follows the group label, so every tick in the row is the
+	   same length whether it is drawn by margin or by inset.
+
+	   Teal-tinted rather than `--border`: the neutral hairline is tuned for olive chrome
+	   on paper and all but vanishes against the brand wash it now sits on.
+
+	   Which tabs get one is decided in the markup (`data-tab-separated`), because it
+	   depends on both neighbours: no tick beside an on-screen tile on either side — its
+	   fill and its rounded corner already separate it, and a rule butted against that
+	   corner reads as a stray mark — and none after the last tab in a run. */
+	[data-slot='workspace-tab'][data-tab-separated='true']::after {
+		content: '';
+		position: absolute;
+		inset-inline-end: 0;
+		inset-block: 0.625rem;
+		width: 1px;
+		background-color: color-mix(in oklab, var(--color-brand) 35%, transparent);
+		pointer-events: none;
+	}
+
 	/* Accent discipline — teal marks the live thing, olive-neutral is everything
 	   at rest. Selected navigation and segmented-control states carry the brand
-	   accent instead of reading as another gray fill. */
-	[data-slot='sidebar-menu-button'][data-active='true'],
+	   accent instead of reading as another gray fill.
+
+	   Sidebar rows are matched on `data-sidebar`, not `data-slot`. Both primitives
+	   set both attributes, but every row that passes `tooltipContent` renders
+	   through `Tooltip.Trigger`'s `child` snippet, and `mergeProps` lets the
+	   tooltip's own `data-slot="tooltip-trigger"` win — which is every nav row and
+	   every project row. Keyed on `data-slot` this rule matched none of them, so
+	   the teal it promises never appeared on a selected nav row. `data-sidebar`
+	   has no counterpart on the trigger and survives the merge. */
+	[data-sidebar='menu-button'][data-active='true'],
+	[data-sidebar='menu-sub-button'][data-active='true'],
 	[data-slot='tabs-trigger'][data-state='active'],
 	[data-slot='toggle-group-item'][data-state='on'] {
 		color: var(--color-brand);
+	}
+
+	/* The selected row, for both sidebar row primitives at once — the tree's rows
+	   are `sidebar-menu-sub-button`, and leaving them out of the rule above is why
+	   an open note read as a gray slab while its project read as teal.
+
+	   The wash it replaces was `--sidebar-accent`, which is a step *lighter* than
+	   the rail in dark (0.35 on 0.228 — a pale block) and a step darker by barely
+	   1% in light (0.966 on 0.978 — invisible). One token cannot be both, so the
+	   selected state stops borrowing the neutral and takes the brand wash at the
+	   per-mode strengths DESIGN_SYSTEM already fixes for identity moments. Hover
+	   keeps the neutral, weakened, so the two states no longer look alike. */
+	[data-sidebar='menu-button'][data-active='true'],
+	[data-sidebar='menu-sub-button'][data-active='true'] {
+		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+		font-weight: 500;
+	}
+	.dark [data-sidebar='menu-button'][data-active='true'],
+	.dark [data-sidebar='menu-sub-button'][data-active='true'] {
+		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
+	}
+	/* The icon goes with the label. Tree rows set `text-muted-foreground` on their
+	   own icons, which is right at rest and wrong on the row you are standing on. */
+	[data-sidebar='menu-button'][data-active='true'] > svg,
+	[data-sidebar='menu-sub-button'][data-active='true'] > svg {
+		color: var(--color-brand);
+	}
+	/* A hard left edge, because the wash alone cannot carry it in light mode: 10%
+	   teal on paper is deliberately gentle, and gentle is what made the old light
+	   state unreadable. Only ever one row at a time, so this marks a position
+	   rather than striping the rail. */
+	[data-sidebar='menu-button'][data-active='true']::before,
+	[data-sidebar='menu-sub-button'][data-active='true']::before {
+		content: '';
+		position: absolute;
+		inset-block: 0.25rem;
+		inset-inline-start: 0;
+		width: 2px;
+		border-radius: 1px;
+		background-color: var(--color-brand);
 	}
 
 	/* Breadcrumb links are the way back — they are live, so they carry the brand

@@ -34,6 +34,24 @@
   chat origin lines, artifact format badges, and the project-overview resource icon chips all
   use `--brand` text with the shared `bg-brand/10` wash (`dark:bg-brand/15`). No new wash
   tokens: the badge `brand` variant is the canonical recipe.
+- **The workspace tab strip carries the identity wash; its tabs do not.** The strip surface is
+  `bg-brand/10` (`dark:bg-brand/15`) — the one place that wash appears on chrome rather than on a
+  chip, because the tabs in it belong to projects, which is what the wash means everywhere else.
+  Resting tabs and the group label that heads a run **paint nothing at all**: they are labels on
+  that surface. This is the load-bearing half of the rule. Giving every tab its own tile puts a
+  fence of box edges across the row and the strip stops reading as one surface; with no tiles
+  there are no edges to line up, which is the mechanic a browser's tab strip uses.
+  The only painted tiles are the tabs currently on screen — `bg-brand/20` for a split's second
+  pane, `bg-brand/30` for the focused one (each +5% in dark) — set `h-9 self-end` in the 40px
+  strip, so 4px of strip shows above them. That gap is not padding: anchored at the baseline and
+  open at the ceiling, a tile reads as risen out of the strip rather than wedged into a slot.
+  Accent discipline holds — teal still marks the live thing, by depth of wash rather than by a
+  cap. The two label colours differ (`text-foreground` against `text-muted-foreground`) but the
+  **weight does not**; never bold the active tab. Hairlines in the strip are teal-tinted rather
+  than `--border`, which does not read against the wash: the tick between two tabs is a 35% brand
+  `::after` inset 10px top and bottom (short on purpose — a full-depth rule reads as a wall
+  between regions, a short one as a tick between items), matching the `my-2.5` divider after the
+  group label. See the `[data-slot='workspace-tab']` block in `layout.css`.
 - **The reader's own words carry the accent:** the user's chat turn takes the same `bg-brand/10`
   (`dark:bg-brand/15`) wash. `bg-muted` is the fill of every disabled notice and hover row in the
   app, so it said nothing about whose turn it was; the teal marks the half of the transcript the

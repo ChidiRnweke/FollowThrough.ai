@@ -3,14 +3,12 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { cubicOut } from 'svelte/easing';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import {
 		FtClose as X,
 		FtPin as Pin,
 		FtChevronDown as ChevronDown,
-		FtChevronRight as ChevronRight,
 		FtChevronUp as ChevronUp,
 		FtPlus as Plus
 	} from '$lib/components/icons';
@@ -124,8 +122,8 @@
 		];
 	});
 
-	// Project groups the user has folded away.  Pinned tabs stay visible even
-	// inside a folded group.
+	// Groups the user has folded away. Pinned tabs stay visible even inside a folded
+	// group, so folding a noisy project never hides the one tab you kept.
 	let folded = new SvelteSet<string>();
 
 	function toggleFold(projectId: string): void {
@@ -149,6 +147,7 @@
 	// cannot fall behind a new host the way the old list had — `/diagrams/*` was
 	// missing from it, and on a studio URL nothing in the strip was marked at all.
 	const onWorkbenchRoute = $derived(workbench.isWorkbenchPath);
+
 	let noteDragOver = $state(false);
 
 	function onDragOver(event: DragEvent): void {
@@ -174,27 +173,36 @@
 		void workbench.openTabInBackground(tabId);
 	}
 
-	function horizontalPanelCollapse(node: HTMLElement) {
-		const width = node.offsetWidth;
-
-		return {
-			duration: 300,
-			easing: cubicOut,
-			css: (t: number) => `width: ${t * width}px`
-		};
-	}
-
-	function hasVisiblePredecessor(
-		projectId: string,
-		tabs: readonly TabId[],
-		index: number
-	): boolean {
-		return tabs.slice(0, index).some((noteId) => showTab(projectId, noteId));
-	}
+	// `horizontalPanelCollapse` used to animate a tab's width to zero while the wrapper
+	// around it clipped the label. Both are gone: a tweened width leaves the run's outer
+	// radius and its separators mid-recalculation on every frame, so the strip's edges
+	// flicker for the length of the transition. Folding a group now swaps the run's
+	// contents; tabs appear and disappear at once, the way a browser's do.
 </script>
 
+<!-- The strip is one continuous surface, and it is the only thing here that paints a
+     background across the whole row. A tab that is not on screen paints *nothing*: it
+     is a label sitting directly on this wash. That is the whole model, and it is worth
+     stating plainly because the obvious alternative — give every tab its own tile —
+     is what this replaced. With no tile there are no tile edges, so there is nothing
+     for the eye to line up along the row, and the strip reads as one surface with
+     text on it rather than as a fence of boxes.
+
+     The only painted tiles are the tabs currently on screen: `brand/30` for the
+     focused one, `brand/20` for a split's second, both a step deeper than this wash
+     and both open at the top (see the tab's own comment). Teal still marks the live
+     thing — by depth of wash now, rather than by a bar across the top.
+
+     The wash is the project-identity `bg-brand/10` (`dark:bg-brand/15`), the same
+     recipe as every other identity moment in the app. It used to be `bg-secondary`
+     with the tint on the tabs instead, which is this exact relationship inverted.
+
+     The bottom hairline is an inset shadow rather than a border because a painted tile
+     sits over it and has to repaint it; `overflow-hidden` here and on the scroller
+     clips anything reaching below the box, so the usual -mb-px seam tricks are out,
+     and an inset shadow needs no geometry outside the 40px. -->
 <div
-	class="sticky top-0 z-30 shrink-0 overflow-hidden border-b border-border bg-background transition-[height] duration-(--duration-panel) ease-(--ease-standard) dark:bg-card {hidden
+	class="sticky top-0 z-30 shrink-0 overflow-hidden bg-brand/10 shadow-[inset_0_-1px_0_var(--color-border)] transition-[height] duration-(--duration-panel) ease-(--ease-standard) dark:bg-brand/15 {hidden
 		? 'h-6'
 		: 'h-10'}"
 	role="tablist"
@@ -236,150 +244,212 @@
 					Drop to add tab
 				</div>
 			{/if}
+			<!-- `pr-2`, not `px-2`: the first group band is meant to be fused to the pane's
+			     left edge, not floating 8px in from it. -->
 			<div
 				data-tab-strip-scroller
-				class="flex h-10 flex-1 items-stretch gap-0 overflow-x-auto overflow-y-hidden px-2"
+				class="flex h-10 flex-1 items-stretch gap-0 overflow-x-auto overflow-y-hidden pr-2"
 			>
 				{#if hasTabs}
-					{#each groups as group, groupIndex (group.projectId)}
-						{#if groupIndex > 0}
-							<div class="h-4 w-px shrink-0 self-center" aria-hidden="true"></div>
-						{/if}
-						<div class="group/project flex shrink-0 items-center gap-1 pl-1 pr-1">
-							<Button
-								variant="ghost"
-								type="button"
-								class="tactile flex items-center rounded px-0.5 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-								aria-label={folded.has(group.projectId)
-									? `Expand ${group.projectName} tabs`
-									: `Collapse ${group.projectName} tabs`}
-								aria-expanded={!folded.has(group.projectId)}
-								onclick={() => toggleFold(group.projectId)}
-							>
-								{#if folded.has(group.projectId)}
-									<ChevronRight class="size-3.5" />
-								{:else}
-									<ChevronDown class="size-3.5" />
-								{/if}
-							</Button>
-							<div class="flex items-center gap-1 pr-1">
-								<span class="h-4 w-px shrink-0 bg-primary/40" aria-hidden="true"></span>
-								<span class="eyebrow max-w-40 cursor-default truncate">
-									{group.projectName}
-								</span>
-								<!-- Close every tab of this project. Hover-revealed like the
-							     per-tab close button so the strip stays quiet at rest. -->
-								<Tip text={`Close all ${group.projectName} tabs`} side="bottom">
-									{#snippet children({ props })}
-										<Button
-											variant="ghost"
-											{...props}
-											type="button"
-											aria-label={`Close all ${group.projectName} tabs`}
-											class="tactile hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover/project:flex"
-											onclick={() => void workbench.closeTabs(group.tabs)}
-										>
-											<X class="size-3" />
-										</Button>
-									{/snippet}
-								</Tip>
-							</div>
-						</div>
-						{#each group.tabs as noteId, tabIndex (noteId)}
-							{@const tabVisible = showTab(group.projectId, noteId)}
-							{@const focused = onWorkbenchRoute && workbench.focusedTabId === noteId}
-							<!-- Both panes of a split are on screen, so both tabs are seated. Only
-						     one of them has focus, and only that one is `aria-selected`. -->
-							{@const split =
-								onWorkbenchRoute && workbench.splitActive && workbench.splitTabId === noteId}
-							{@const active = focused || split}
-							<div
-								class="flex shrink-0 overflow-hidden"
-								data-project-tab={noteId}
-								data-chat-tab={isChatTab(noteId) ? noteId : undefined}
-								data-collapsed={!tabVisible}
-								aria-hidden={!tabVisible}
-								inert={!tabVisible}
-							>
-								{#if tabVisible}
-									<div class="flex shrink-0" transition:horizontalPanelCollapse|local>
-										{#if hasVisiblePredecessor(group.projectId, group.tabs, tabIndex)}
-											<!-- Thin vertical divider between adjacent visible tabs in the same project
-									     group. Keeping it inside the animated region prevents orphan rules. -->
-											<div class="h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
-										{/if}
-										<!-- Tab labels truncate at 16rem, so the tooltip is the only way to read a
-								     long title. A longer delay than the default keeps it from flashing
-								     while the pointer sweeps across the strip. -->
-										<Tip text={titleOf(noteId)} side="bottom" delayDuration={700}>
-											{#snippet children({ props })}
-												<!-- Cursor only, not `tactile`: the tab holds a nested close
-											     button, so hovering that would lift both and double the
-											     travel. A tab is seated in the strip, not a free target. -->
-												<Button
-													variant="ghost"
-													{...props}
-													type="button"
-													role="tab"
-													aria-selected={focused}
-													draggable="true"
-													class="group relative flex h-full min-w-32 max-w-64 shrink-0 cursor-pointer items-center gap-1 border-t-2 border-transparent px-2 text-sm transition-colors {active
-														? 'bg-background font-medium text-foreground'
-														: 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground'}"
-													ondragstart={(event) => {
-														if (event.dataTransfer) writeTabDrag(event.dataTransfer, noteId);
-													}}
-													onclick={() => void workbench.focusTab(noteId)}
-												>
-													{#if active}
-														<!-- Inset accent: 4px tall, 2px in from the sides, with a rounded
-								     bottom edge so it reads as a tab indicator rather than a
-								     strip-wide line. The inset keeps the green off the very top
-								     edge of the sticky strip where it would visually clip against
-								     the viewport.
+					<!-- A group is a run of tabs headed by a label pill that folds it. The tint
+					     is on the tabs themselves, not on a band behind them: a band painted the
+					     same wash as its tabs gives the separators nothing to separate, and the
+					     strip reads as one tinted block with text in it rather than as tabs. One
+					     brand tint for every group — DESIGN_SYSTEM is explicit that project
+					     identity is teal only, never per-project hues. -->
+					{#each groups as group (group.projectId)}
+						{@const visibleTabs = group.tabs.filter((id) => showTab(group.projectId, id))}
+						<!-- No tick beside a painted tile, on either side of it: the tile's fill
+						     and its rounded corner already separate it, and a rule butted against
+						     that corner reads as a stray mark rather than a divider.
 
-							     Teal marks the live thing, and in a split both panes are live — so
-							     the split tab takes the same bar at 40%: "also on screen", without
-							     competing with "where you are". -->
-														<span
-															class="absolute inset-x-0.5 top-0 h-1 rounded-b-sm {focused
-																? 'bg-primary'
-																: 'bg-primary/40'}"
-															aria-hidden="true"
-														></span>
-													{/if}
-													{#if workbench.isPinned(noteId)}
-														<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-													{/if}
-													<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
-													<span
-														role="button"
-														tabindex={-1}
-														aria-label={`Close ${titleOf(noteId)}`}
-														class="tactile ml-1 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex {active
-															? 'flex'
-															: ''}"
-														onclick={(event) => {
+						     "Painted tile" means *any* tab on screen, not just the focused one — a
+						     split's second tab is a tile too, and asking only about the focused one
+						     left a tick jammed against the split tile's corner. Both sides matter,
+						     so this is a predicate over the run rather than a question each tab
+						     answers about itself. -->
+						{@const isTile = (id: TabId) =>
+							onWorkbenchRoute &&
+							(workbench.focusedTabId === id ||
+								(workbench.splitActive && workbench.splitTabId === id))}
+						<div data-slot="workspace-tab-group" class="flex shrink-0 items-stretch">
+							<Tip
+								text={folded.has(group.projectId)
+									? `Show ${group.projectName} tabs`
+									: `Collapse ${group.projectName} tabs`}
+								side="bottom"
+							>
+								{#snippet children({ props })}
+									<!-- The label paints nothing, exactly like the resting tabs it heads —
+									     it is text on the strip's own wash, not a chip laid over it. A
+									     filled chip here would be the one tile in the row that is never
+									     a tab, which is precisely the wrong thing to give a surface of
+									     its own. Full height for the click target; the box is invisible
+									     either way.
+
+									     `aria-expanded:bg-muted` and `aria-expanded:text-foreground` live in
+									     the ghost variant, and an expanded group sets `aria-expanded="true"`,
+									     so every open group's label painted itself a neutral chip. Both are
+									     neutralised on the class, where the caller's wins the merge. -->
+									<Button
+										variant="ghost"
+										{...props}
+										type="button"
+										aria-expanded={!folded.has(group.projectId)}
+										class="h-full shrink-0 cursor-pointer gap-1.5 rounded-none border-0 bg-transparent px-3 text-xs tracking-wide text-muted-foreground uppercase hover:translate-y-0 hover:bg-foreground/5 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-foreground/10"
+										onclick={() => toggleFold(group.projectId)}
+									>
+										<span class="truncate">{group.projectName}</span>
+										{#if folded.has(group.projectId)}
+											<ChevronDown class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+										{:else}
+											<ChevronUp class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+										{/if}
+									</Button>
+								{/snippet}
+							</Tip>
+							<!-- Separates the label from the run it heads, and obeys the same rule as
+							     the ticks between tabs: none beside a painted tile. This boundary is
+							     the one place that rule has to be spelled out separately, because the
+							     divider is an element of its own rather than an edge of the tab that
+							     follows it — which is exactly how it came to be drawn hard against
+							     the leading tile's rounded corner when the first tab in the run was
+							     the open one. Nothing after it means nothing to divide either, so a
+							     fully folded group drops it too.
+
+							     Short and centred, not full height: `my-2.5` leaves a 20px rule in the
+							     40px strip, the same length as the ticks between tabs (which get there
+							     via `inset-block` on a pseudo-element, since they cannot use margin).
+							     A rule running the full depth of the strip reads as a wall between two
+							     regions; a short one reads as a tick between two items.
+
+							     Teal-tinted rather than `--border`: the neutral hairline is tuned for
+							     olive chrome on paper and all but vanishes against the brand wash on
+							     both sides of it. -->
+							{#if visibleTabs.length > 0 && !isTile(visibleTabs[0])}
+								<div class="my-2.5 w-px shrink-0 self-stretch bg-brand/40" aria-hidden="true"></div>
+							{/if}
+							{#each visibleTabs as noteId, tabIndex (noteId)}
+								{@const focused = onWorkbenchRoute && workbench.focusedTabId === noteId}
+								<!-- Both panes of a split are on screen, so both tabs are seated. Only
+							     one of them has focus, and only that one is `aria-selected`. -->
+								{@const split =
+									onWorkbenchRoute && workbench.splitActive && workbench.splitTabId === noteId}
+								<!-- `raised` is the focused tab alone. `active` still covers both for the
+							     always-visible close cross — a split's tab is on screen and says so at
+							     40% — but only one tab per strip takes the pane's fill. -->
+								{@const active = focused || split}
+								{@const raised = focused}
+								<!-- A bare positioning box. It once carried the run's trailing radius and
+								     an `overflow-hidden` to clip the tab's fill to it; both are gone,
+								     because a run of unpainted tabs has no outer corner to round. The
+								     only radius left anywhere in the strip is the on-screen tile's own
+								     `rounded-t-lg`. -->
+								<div
+									class="flex shrink-0"
+									data-project-tab={noteId}
+									data-chat-tab={isChatTab(noteId) ? noteId : undefined}
+								>
+									<!-- Tab labels truncate at 16rem, so the tooltip is the only way to read
+							     a long title. A longer delay than the default keeps it from flashing
+							     while the pointer sweeps across the strip. -->
+									<Tip text={titleOf(noteId)} side="bottom" delayDuration={700}>
+										{#snippet children({ props })}
+											<!-- Cursor only, not `tactile`: the tab holds a nested close
+								     button, so hovering that would lift both and double the
+								     travel. A tab is seated in the strip, not a free target.
+
+							     `border-0` is load-bearing, and it is the *opposite* of what used to be
+							     here. The Button base carries `border border-transparent` and
+							     `bg-clip-padding`: a transparent border shows the trough behind it, and
+							     the clip guarantees the fill can never reach past the padding box. This
+							     tab once kept `border-t-2` to reserve a band for its teal cap, which
+							     meant the top 2px of every tab in the strip was trough rather than tab,
+							     and the cap — absolutely positioned, so resolved against the *padding*
+							     box — sat below that band with background showing above it. Every edge
+							     the tab paints is now an inset shadow, which needs no border to sit in.
+							     Do not add one back.
+
+							     Focus is unaffected: `focus-visible:border-ring` in the base has no
+							     border left to colour, but the base's `focus-visible:ring-[3px]` is what
+							     actually shows the ring.
+
+						     A resting tab paints **nothing** — no fill, no radius. It is a label on the
+						     strip's wash, and that is the whole reason the row reads as one surface
+						     instead of a fence of boxes. It still takes the strip's full 40px so the
+						     entire depth is clickable, the way a browser's is; an unpainted box's
+						     height is invisible either way.
+
+						     The tabs that *are* on screen are the only tiles, and `h-9 self-end` is what
+						     makes them tiles: 36px bottom-aligned in a 40px strip leaves 4px of strip
+						     above them. That gap is load-bearing, not padding — anchored at the baseline
+						     and open at the ceiling, the tile reads as having risen out of the strip.
+						     Take the gap away and it reads as a block wedged into a slot.
+
+						     A tile covers the strip's inset bottom hairline, so it repaints it. Resting
+						     tabs have no fill, so the strip's own hairline shows through them untouched;
+						     only the two filled states carry `shadow-[inset_0_-1px_0_…]`, and the strip's
+						     bottom edge comes out as one unbroken rule.
+
+						     Same weight, different colour. `buttonVariants.base` already sets
+						     `font-medium`, so neither state states a weight and both inherit the same
+						     one; `text-foreground` against `text-muted-foreground` is the entire
+						     difference. Do not bold the active tab. -->
+											<Button
+												variant="ghost"
+												{...props}
+												type="button"
+												role="tab"
+												data-slot="workspace-tab"
+												data-tab-state={raised ? 'raised' : split ? 'split' : 'resting'}
+												data-tab-separated={!isTile(noteId) &&
+												tabIndex !== visibleTabs.length - 1 &&
+												!isTile(visibleTabs[tabIndex + 1])
+													? 'true'
+													: undefined}
+												aria-selected={focused}
+												draggable="true"
+												class="group relative flex min-w-32 max-w-52 shrink-0 cursor-pointer items-center gap-1 border-0 px-3.5 text-sm transition-colors hover:translate-y-0 {raised
+													? 'z-10 h-9 self-end rounded-t-lg rounded-b-none bg-brand/30 text-foreground shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-brand/30 dark:bg-brand/35 dark:hover:bg-brand/35'
+													: split
+														? 'h-9 self-end rounded-t-lg rounded-b-none bg-brand/20 text-foreground shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-brand/25 dark:bg-brand/25 dark:hover:bg-brand/30'
+														: 'h-full rounded-none text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10'}"
+												ondragstart={(event) => {
+													if (event.dataTransfer) writeTabDrag(event.dataTransfer, noteId);
+												}}
+												onclick={() => void workbench.focusTab(noteId)}
+											>
+												{#if workbench.isPinned(noteId)}
+													<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+												{/if}
+												<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
+												<span
+													role="button"
+													tabindex={-1}
+													aria-label={`Close ${titleOf(noteId)}`}
+													class="tactile ml-1 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex group-focus-within:flex {active
+														? 'flex'
+														: ''}"
+													onclick={(event) => {
+														event.stopPropagation();
+														void workbench.closeTab(noteId);
+													}}
+													onkeydown={(event) => {
+														if (event.key === 'Enter' || event.key === ' ') {
+															event.preventDefault();
 															event.stopPropagation();
 															void workbench.closeTab(noteId);
-														}}
-														onkeydown={(event) => {
-															if (event.key === 'Enter' || event.key === ' ') {
-																event.preventDefault();
-																event.stopPropagation();
-																void workbench.closeTab(noteId);
-															}
-														}}
-													>
-														<X class="size-3" />
-													</span>
-												</Button>
-											{/snippet}
-										</Tip>
-									</div>
-								{/if}
-							</div>
-						{/each}
+														}
+													}}
+												>
+													<X class="size-3.5" />
+												</span>
+											</Button>
+										{/snippet}
+									</Tip>
+								</div>
+							{/each}
+						</div>
 					{/each}
 				{:else}
 					<!-- Empty strip on non-note routes: keep the 40px height so opening
@@ -396,11 +466,14 @@
 			<!-- Pinned right-edge controls: a sibling of the scroll area (not a
 			     sticky child), so the new-note, close-all, and strip-hide controls
 			     stay reachable even when the tabs overflow. The hairline separates
-			     the cluster from the scrolling tabs; the solid background keeps
-			     the strip's surface continuous across the seam. -->
+			     the cluster from the scrolling tabs. No background of its own — it
+			     sits on the strip's wash like everything else that is not a tile,
+			     the way a browser's `+` and window controls do. It used to repaint
+			     the strip's surface here to cover the seam, which is only necessary
+			     when the tabs scrolling past it are painted. -->
 			<div
 				data-tab-strip-controls
-				class="flex shrink-0 items-center gap-0 border-l border-border bg-background pl-2 dark:bg-card"
+				class="flex shrink-0 items-center gap-0 border-l border-border pl-2"
 			>
 				{#if oncreateNote}
 					<Tip text="New note" side="bottom">
