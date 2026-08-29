@@ -228,3 +228,42 @@ Final gate evidence:
 - [ ] Run all 211 cases with `EVAL_GATE=1`, `EVAL_REPETITIONS=1`, and Luna.
 - [ ] Confirm no unexplained tracked cache changes.
 - [ ] Record before/after results, changes by tuning seam, remaining risks, and final `master` revision.
+
+## Campaign handoff — 2026-08-29
+
+The tuning loop stops here at the user's request. The production and eval implementation revision is
+`30b0e8b03851a15296b41ed69b22fe4046f1cc90`; all campaign commits are local on `master` and nothing
+was pushed.
+
+The final campaign run, `20260829-full-master-30b0e8b`, executed all 211 established Luna cases once
+with `EVAL_GATE=1` and finished in 1,973.33 seconds. Its campaign result is **204/211**. The same
+Vitest invocation also discovered two separately developed DeepSeek diagram suites (six additional
+samples); those are outside this campaign handoff and are explicitly excluded from the 204/211
+result and remaining-work list.
+
+Seven established cases remain red:
+
+- Retrieval: the failover answer gave the right command without reading the competing runbooks, so
+  it failed the evidence-path requirement.
+- Skill adherence: the named-skill flow invented skill and note IDs, producing two `load_skill`
+  failures and one `get_note` failure.
+- Selection: `list_todos` sent the unsupported sentinel values `status: "all"` and
+  `responsibility: "all"`; the earlier blank-string normalization does not cover these values.
+- Multi-step: current-note evidence was read, but neither of the two confusable certificate todos
+  was completed.
+- Note editing: the requested scheduler replacement landed, but the agent also changed unrelated
+  grammar (`a event-driven` to `an event-driven`), correctly failing byte-preservation.
+- Target correctness: the duplicate-title Backend answer was correct but bypassed the required
+  `get_note` call again. The unchanged isolated case has passed before, so this remains visible
+  one-sample variance rather than a weakened oracle.
+- Parallel execution: both required reads completed, but `list_todos` and `get_note` ran serially.
+
+The measured five-replacement edit-batch fix itself held: focused Vitest passed 179/179,
+architecture audits passed at zero violations, the unchanged target passed 1/1, the full memory
+section passed 11/11, and all eleven memory cases also passed inside the final 211-case run. The
+working tree still contains unrelated concurrent documentation, note-model, and diagram-eval work;
+those changes were preserved and are not part of the campaign commits.
+
+Final verification status: focused tests and architecture passed; the deterministic fixture was
+restored with no campaign cache diff; the full Luna gate ran but did not meet 211/211; final
+`pnpm check`, `pnpm lint`, and a post-run cache verification were not run before this handoff.
