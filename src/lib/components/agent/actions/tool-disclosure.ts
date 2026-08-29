@@ -33,6 +33,7 @@ export type EntityKind =
 	| 'todo'
 	| 'project'
 	| 'skill'
+	| 'diagram'
 	| 'artifact'
 	| 'memory'
 	| 'suggestion'
@@ -212,7 +213,10 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	search: 'note',
 	search_note: 'note',
 	list_trashed_notes: 'note',
-	list_note_versions: 'note',
+	// A revision, not the note. Their ids are `NoteRevisionId`s, and typing them as
+	// notes made every row in a history listing offer to open a note tab that
+	// cannot load. `plain` names them without pretending they go anywhere.
+	list_note_versions: 'plain',
 	diff_note_versions: 'note',
 	create_note: 'note',
 	archive_note: 'note',
@@ -235,7 +239,7 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	get_workspace_context: 'project',
 	load_skill: 'skill',
 	list_skills: 'skill',
-	list_skill_versions: 'skill',
+	list_skill_versions: 'plain',
 	update_skill: 'skill',
 	set_skill_pinned: 'skill',
 	get_artifact: 'artifact',
@@ -250,12 +254,17 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	list_user_memory: 'memory',
 	propose_memory_change: 'memory',
 	list_suggestions: 'suggestion',
-	promote_diagram: 'note',
-	create_diagram: 'note',
-	edit_diagram: 'note',
-	read_project_diagram: 'note',
-	read_canvas_diagram: 'note',
-	search_icons: 'note',
+	// Diagrams were typed as notes, so `promote_diagram`'s result — a diagram id —
+	// was offered as a note to open, and `openTab` would have loaded a note that
+	// does not exist. They have their own tab kind and their own route.
+	promote_diagram: 'diagram',
+	create_diagram: 'diagram',
+	edit_diagram: 'diagram',
+	revise_mermaid_diagram: 'diagram',
+	read_project_diagram: 'diagram',
+	read_canvas_diagram: 'diagram',
+	// Not a diagram: it searches an icon set, and its results are icons.
+	search_icons: 'plain',
 	get_agent_preferences: 'setting',
 	update_agent_preferences: 'setting',
 	get_export_settings: 'setting',
@@ -273,6 +282,7 @@ const placeholder: Readonly<Record<EntityKind, string>> = {
 	todo: 'A todo',
 	project: 'A project',
 	skill: 'A skill',
+	diagram: 'A diagram',
 	artifact: 'A file',
 	memory: 'A remembered fact',
 	suggestion: 'A suggestion',
@@ -292,7 +302,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const asString = (value: unknown): string | undefined =>
 	typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 
-const idKeys = ['noteId', 'todoId', 'projectId', 'entryId', 'artifactId', 'suggestionId', 'id'];
+const idKeys = [
+	'noteId',
+	'todoId',
+	'diagramId',
+	'projectId',
+	'entryId',
+	'artifactId',
+	'suggestionId',
+	'id'
+];
 
 const identify = (source: Record<string, unknown>): string | undefined => {
 	for (const key of idKeys) {

@@ -23,6 +23,7 @@ export {
 export {
 	turnActivity,
 	turnSteps,
+	type FailureGroup,
 	type StepOutcome,
 	type TouchedThing,
 	type TurnAction,

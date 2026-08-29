@@ -46,12 +46,15 @@ import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import {
 	projectMemory,
+	projectNoteRevision,
 	projectNoteSummary,
 	projectNoteView,
+	projectNoteWrite,
 	projectProject,
 	projectSkillView,
 	projectSuggestion,
 	projectTodo,
+	projectTodoWrite,
 	projectUser
 } from '../../services/agent/runs/tool-views';
 import {
@@ -1046,28 +1049,31 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('create_project'),
 			'mutation',
 			z.object({ name: z.string().min(1), description: z.string().optional() }),
-			(input) => factory.projects().create(actor, input)
+			async (input) => projectProject((await factory.projects().create(actor, input)).project)
 		),
 		define(
 			'rename_project',
 			toolDescription('rename_project'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1) }),
-			(input) => factory.projects().rename(actor, input)
+			async (input) => projectProject((await factory.projects().rename(actor, input)).project)
 		),
 		define(
 			'archive_project',
 			toolDescription('archive_project'),
 			'mutation',
 			z.object({ projectId: projectId }),
-			(input) => factory.projects().archive(actor, input)
+			async (input) => projectProject((await factory.projects().archive(actor, input)).project)
 		),
 		define(
 			'create_folder',
 			toolDescription('create_folder'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1), parentId: noteId.optional() }),
-			(input) => factory.projects().createFolder(actor, input)
+			// A folder is a note, so it takes the note write projection rather than shipping a
+			// (necessarily empty) ProseMirror document with it.
+			async (input) =>
+				projectNoteWrite((await factory.projects().createFolder(actor, input)).folder)
 		),
 		define(
 			'move_project_entry',
@@ -1120,7 +1126,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					input.projectId,
 					'create a note'
 				);
-				return factory.notes().create(actor, { ...input, projectId: chosenProjectId });
+				const created = await factory
+					.notes()
+					.create(actor, { ...input, projectId: chosenProjectId });
+				return projectNoteWrite(created.note);
 			}
 		),
 		define(
@@ -1137,11 +1146,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				const saved = await factory.notes().save(actor, {
 					note: { ...current.note, ...content }
 				});
-				return {
-					noteId: saved.note.id,
-					title: saved.note.title,
-					currentRevision: saved.note.currentRevision
-				};
+				return projectNoteWrite(saved.note);
 			}
 		),
 		define(
@@ -1167,9 +1172,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					note: { ...current.note, ...content }
 				});
 				return {
-					noteId: saved.note.id,
-					title: saved.note.title,
-					currentRevision: saved.note.currentRevision,
+					...projectNoteWrite(saved.note),
 					appliedEdits: patched.appliedEdits,
 					matchedTexts: patched.matchedTexts
 				};
@@ -1188,21 +1191,21 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('rename_note'),
 			'mutation',
 			z.object({ noteId: noteId, title: z.string().min(1) }),
-			(input) => factory.notes().rename(actor, input)
+			async (input) => projectNoteWrite((await factory.notes().rename(actor, input)).note)
 		),
 		define(
 			'archive_note',
 			toolDescription('archive_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
-			(input) => factory.notes().archive(actor, input)
+			async (input) => projectNoteWrite((await factory.notes().archive(actor, input)).note)
 		),
 		define(
 			'restore_note',
 			toolDescription('restore_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
-			(input) => factory.notes().restore(actor, input)
+			async (input) => projectNoteWrite((await factory.notes().restore(actor, input)).note)
 		),
 		define(
 			'list_trashed_notes',
@@ -1248,14 +1251,22 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('restore_note_version'),
 			'mutation',
 			z.object({ noteId: noteId, revisionId: noteRevisionId }),
-			(input) => factory.notes().restoreRevision(actor, input)
+			async (input) => {
+				// The etag survives the projection: publish_note takes it as an argument, and
+				// restoring a version is the step most likely to be followed by publishing it.
+				const restored = await factory.notes().restoreRevision(actor, input);
+				return { ...projectNoteWrite(restored.note), etag: restored.etag };
+			}
 		),
 		define(
 			'publish_note',
 			toolDescription('publish_note'),
 			'mutation',
 			z.object({ noteId: noteId, baseEtag: noteEtag }),
-			(input) => factory.notes().publish(actor, input)
+			async (input) => {
+				const published = await factory.notes().publish(actor, input);
+				return { ...projectNoteWrite(published.note), etag: published.etag };
+			}
 		),
 		define(
 			'discard_note_draft',
@@ -1295,7 +1306,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				waitingOn: z.string().optional(),
 				dueDate: localDate.optional()
 			}),
-			(input) => factory.todos().create(actor, input)
+			async (input) => projectTodoWrite((await factory.todos().create(actor, input)).todo)
 		),
 		define(
 			'create_todos',
@@ -1320,13 +1331,12 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				const created = [];
 				for (const todo of input.todos) {
 					const { dueDate, ...fields } = todo;
-					created.push(
-						await factory.todos().create(actor, {
-							...fields,
-							projectId: input.projectId,
-							...(dueDate ? { dueDate } : {})
-						})
-					);
+					const result = await factory.todos().create(actor, {
+						...fields,
+						projectId: input.projectId,
+						...(dueDate ? { dueDate } : {})
+					});
+					created.push(projectTodoWrite(result.todo));
 				}
 				return { todos: created };
 			}
@@ -1345,7 +1355,8 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				linkedNoteId: noteId.nullable().optional(),
 				status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
 			}),
-			(input) => factory.todos().update(actor, input)
+			// The controller also returns the whole `TodoView`, which the model never reads.
+			async (input) => projectTodoWrite((await factory.todos().update(actor, input)).todo)
 		)
 	];
 	const diagrams = (): Definition[] => [
@@ -1516,7 +1527,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('list_skill_versions'),
 			'read',
 			temporal({ noteId: noteId }),
-			(input) => factory.skills().listVersions(actor, input)
+			async (input) => {
+				const revisions = await factory.skills().listVersions(actor, input);
+				return { revisions: revisions.map(projectNoteRevision) };
+			}
 		),
 		define(
 			'restore_skill_version',

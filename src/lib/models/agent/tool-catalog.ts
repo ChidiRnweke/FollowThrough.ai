@@ -58,8 +58,17 @@ export interface ToolCatalogEntry {
 	readonly surface?: 'app';
 }
 
-/** Every tool defined by AgentTools.buildDefinitions(), first-class included. */
-export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
+/**
+ * Every tool defined by AgentTools.buildDefinitions(), first-class included.
+ *
+ * `as const satisfies` rather than an annotation: the annotation widened every
+ * `name` to `string`, so nothing downstream could be held total over the
+ * catalog. `satisfies` still checks each entry against {@link ToolCatalogEntry},
+ * while `as const` keeps the literal names — which is what lets
+ * {@link ToolName} exist, and what makes a tool that renders without a label a
+ * compile error rather than a machine name shown to a user.
+ */
+export const TOOL_DESCRIPTIONS = [
 	{
 		name: 'ls',
 		classification: 'read',
@@ -511,7 +520,10 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		classification: 'mutation',
 		description: 'Regenerate an artifact from its source notes and return a fresh download link.'
 	}
-];
+] as const satisfies readonly ToolCatalogEntry[];
+
+/** Every tool name the catalog defines. */
+export type ToolName = (typeof TOOL_DESCRIPTIONS)[number]['name'];
 
 /** The on-demand catalog surfaced through search_tools: everything but first-class tools. */
 export const TOOL_CATALOG: readonly ToolCatalogEntry[] = TOOL_DESCRIPTIONS.filter(

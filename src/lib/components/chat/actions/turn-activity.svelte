@@ -1,27 +1,15 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import { SvelteMap } from 'svelte/reactivity';
-	import type { NoteId } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
-	import {
-		FtChevronRight,
-		FtDocument,
-		FtExternal,
-		FtFolder,
-		FtLoader,
-		FtSkills,
-		FtTodos,
-		FtWorkflow
-	} from '$lib/components/icons';
+	import { FtChevronRight, FtExternal, FtLoader } from '$lib/components/icons';
 	import { turnActivity, turnSteps, type TouchedThing, type TurnRow } from '$lib/components/agent';
 	import ToolRow from './tool-row.svelte';
 	import TurnFailure from './turn-failure.svelte';
+	import { openEntity, rowIcon } from './open-entity';
 	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
 
 	let {
@@ -81,7 +69,10 @@
 		// A predicate rather than a cast: the narrowing is real — an action row has no
 		// `kind: 'todo'` and no id — and stating it here is what lets the loop below read
 		// `row.id` without asserting anything.
-		const unnamed = rows.filter(
+		// Failure subjects too: a todo whose change was abandoned is exactly the row a
+		// reader needs to recognise, and it never appears in `rows`.
+		const named = [...rows, ...activity.failures.flatMap((failure) => failure.subjects)];
+		const unnamed = named.filter(
 			(row): row is TouchedThing & { id: string } =>
 				row.kind === 'todo' && row.id !== undefined && !row.named && !todoTitles.has(row.id)
 		);
@@ -103,41 +94,14 @@
 		};
 	});
 
-	const titleOf = (row: TouchedThing): string =>
-		(row.id ? todoTitles.get(row.id) : undefined) ?? row.title;
-
-	const icons = {
-		note: FtDocument,
-		todo: FtTodos,
-		project: FtFolder,
-		skill: FtSkills,
-		// An action is not one of the workspace's own things, so it takes the neutral mark
-		// rather than borrowing a note's or a project's.
-		action: FtWorkflow
-	};
-
-	/**
-	 * Each kind opens where that kind lives — and none of them may cost the reader the panel
-	 * they clicked in. `openTodoSurface` is the obvious reuse and is wrong here: docked, it
-	 * hands the right panel to the todo and the conversation is gone.
-	 */
-	function open(row: TouchedThing): void {
-		if (!row.id) return;
-		if (row.kind === 'note' || row.kind === 'skill') {
-			void workbench.openTab(row.id as NoteId);
-			return;
-		}
-		if (row.kind === 'todo') {
-			const returnTo = `${page.url.pathname}${page.url.search}`;
-			void goto(`/todos/${row.id}?returnTo=${encodeURIComponent(returnTo)}`);
-			return;
-		}
-		void goto(`/projects/${row.id}`);
-	}
+	const titleOf = (row: TurnRow): string =>
+		row.kind === 'action'
+			? row.label
+			: ((row.id ? todoTitles.get(row.id) : undefined) ?? row.title);
 </script>
 
 {#snippet rowBody(row: TurnRow)}
-	{@const Icon = icons[row.kind satisfies keyof typeof icons]}
+	{@const Icon = rowIcon(row)}
 	{#if row.outcome === 'running'}
 		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
 	{:else}
@@ -146,7 +110,7 @@
 	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
 	     entries scan as the columns of a table that has no other rows. -->
 	<span class="min-w-0 truncate {row.outcome === 'failed' ? 'text-destructive' : ''}">
-		{row.kind === 'action' ? row.label : titleOf(row)}
+		{titleOf(row)}
 	</span>
 	{#if row.kind !== 'action'}
 		<!--
@@ -173,8 +137,8 @@
 	<div class="flex flex-col gap-2">
 		<!-- What went wrong leads: it is the one thing here that might need something from the
 		     reader. The record of what did work, and the door to the evidence, follow. -->
-		{#each activity.failures as failed, index (failed.callId || index)}
-			<TurnFailure tool={failed} {shell} {retryable} {onretry} />
+		{#each activity.failures as failed, index (`${failed.cause}-${index}`)}
+			<TurnFailure failure={failed} titleFor={titleOf} {retryable} {onretry} />
 		{/each}
 
 		<ul class="flex flex-col">
@@ -188,7 +152,7 @@
 							variant="ghost"
 							size="sm"
 							class="group/touched {CHAT_ROW}"
-							onclick={() => open(row)}
+							onclick={() => openEntity(row)}
 						>
 							{@render rowBody(row)}
 							<FtExternal

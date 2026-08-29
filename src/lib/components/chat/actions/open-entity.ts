@@ -1,8 +1,10 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
+import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
-import type { EntityKind, EntityRef } from '$lib/components/agent';
+import type { EntityKind, EntityRef, TurnRow } from '$lib/components/agent';
 import { workbench } from '$lib/stores/workbench/workbench.svelte';
+import { diagramTab } from '$lib/stores/workbench/tab-ref';
 import {
 	FtDocument,
 	FtFolder,
@@ -12,7 +14,8 @@ import {
 	FtSuggestion,
 	FtTodos,
 	FtArtifacts,
-	FtReading
+	FtReading,
+	FtWorkflow
 } from '$lib/components/icons';
 
 /**
@@ -27,6 +30,8 @@ export const entityIcon: Readonly<Record<EntityKind, typeof FtDocument>> = {
 	todo: FtTodos,
 	project: FtFolder,
 	skill: FtSkills,
+	// The same mark the project overview and the sidebar give Diagrams.
+	diagram: FtWorkflow,
 	artifact: FtArtifacts,
 	memory: FtMemory,
 	suggestion: FtSuggestion,
@@ -35,7 +40,7 @@ export const entityIcon: Readonly<Record<EntityKind, typeof FtDocument>> = {
 };
 
 /** Kinds that have somewhere to be opened. The rest are named but not offered as links. */
-const routable = new Set<EntityKind>(['note', 'skill', 'todo', 'project']);
+const routable = new Set<EntityKind>(['note', 'skill', 'todo', 'project', 'diagram']);
 
 export const canOpenEntity = (entity: Pick<EntityRef, 'kind' | 'id'>): boolean =>
 	Boolean(entity.id) && routable.has(entity.kind);
@@ -52,6 +57,12 @@ export function openEntity(entity: Pick<EntityRef, 'kind' | 'id'>): void {
 		void workbench.openTab(id as NoteId);
 		return;
 	}
+	// A diagram is a workbench tab of its own kind, not a note. It was routed as a note
+	// until now, which meant the tab it opened could never load.
+	if (entity.kind === 'diagram') {
+		void workbench.openTab(diagramTab(id as DiagramId));
+		return;
+	}
 	if (entity.kind === 'todo') {
 		const returnTo = `${page.url.pathname}${page.url.search}`;
 		void goto(`/todos/${id}?returnTo=${encodeURIComponent(returnTo)}`);
@@ -59,3 +70,13 @@ export function openEntity(entity: Pick<EntityRef, 'kind' | 'id'>): void {
 	}
 	void goto(`/projects/${id}`);
 }
+
+/**
+ * The mark for a row of a turn's summary. An action is not one of the workspace's own
+ * things, so it takes the neutral workflow mark rather than borrowing a note's or a
+ * project's; everything else shares the map above. Both the touched list and the failure
+ * block read it, which is the point — they each had their own copy, and a diagram was
+ * openable in one of them and not the other.
+ */
+export const rowIcon = (row: TurnRow): typeof FtDocument =>
+	row.kind === 'action' ? FtWorkflow : entityIcon[row.kind];

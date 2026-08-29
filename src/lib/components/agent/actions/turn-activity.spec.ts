@@ -131,7 +131,7 @@ describe('A failure is news only when nothing put it right', () => {
 			[call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })],
 			shell
 		);
-		expect(activity.failures.map((tool) => tool.failure)).toEqual(['The note was locked.']);
+		expect(activity.failures.map((group) => group.raw)).toEqual(['The note was locked.']);
 	});
 
 	it('marks the entry itself as failed so the row can say so', () => {
@@ -229,5 +229,125 @@ describe('Every tool the agent can call reports itself', () => {
 			'use_tool'
 		]);
 		expect([...quietNames].filter((name) => !known.has(name))).toEqual([]);
+	});
+});
+
+/**
+ * The half of a failure block that made it three blocks.
+ *
+ * A cause and its subjects, rather than one entry per failed call. Judged group by
+ * group — which is how `chat-thread.svelte` hands them over — a run abandoned holding
+ * three approvals reported its one cause three times, once per group, with nothing to
+ * tell the three red sentences apart and nothing in any of them to click.
+ */
+describe('A turn states each cause once, and names everything it befell', () => {
+	const abandoned = (noteId: string) =>
+		call({
+			name: 'save_note',
+			arguments: { noteId },
+			status: 'failed',
+			failure: 'The run ended before you answered.'
+		});
+
+	it('folds calls that failed for one reason into one block', () => {
+		const tools = [abandoned(NOTE_ID), abandoned(OTHER_NOTE_ID)];
+		expect(turnActivity(tools, shell, tools).failures).toHaveLength(1);
+	});
+
+	it('keeps every subject of that one cause', () => {
+		const tools = [abandoned(NOTE_ID), abandoned(OTHER_NOTE_ID)];
+		expect(turnActivity(tools, shell, tools).failures[0]?.subjects).toHaveLength(2);
+	});
+
+	it('reports a failure the caller only handed it one group of', () => {
+		const tools = [abandoned(NOTE_ID), abandoned(OTHER_NOTE_ID)];
+		// The group is the second call alone; the turn is both. Both subjects still appear,
+		// so the block does not have to be repeated on the group that carries the other one.
+		expect(turnActivity([tools[1]!], shell, tools).failures[0]?.subjects).toHaveLength(2);
+	});
+
+	it('separates two different causes into two blocks', () => {
+		const tools = [
+			abandoned(NOTE_ID),
+			call({
+				name: 'save_note',
+				arguments: { noteId: OTHER_NOTE_ID },
+				status: 'failed',
+				failure: 'The note was locked.'
+			})
+		];
+		expect(turnActivity(tools, shell, tools).failures).toHaveLength(2);
+	});
+
+	it('gives a failed subject the id that opens it', () => {
+		const tools = [abandoned(NOTE_ID)];
+		const [subject] = turnActivity(tools, shell, tools).failures[0]!.subjects;
+		expect(subject?.kind === 'action' ? undefined : subject?.id).toBe(NOTE_ID);
+	});
+});
+
+/**
+ * `edit_note` returns `{ failure, problems }` as a value rather than throwing, on
+ * purpose: a throw is stringified to a bare message and strips the counts the model
+ * needs to correct itself (ADR 0035). The run journals it `succeeded` all the same, so
+ * nothing downstream saw it — the row read "Edited note" in ordinary colour and the
+ * summary claimed the verb `edited`. ADR 0015: a user must be able to tell.
+ */
+describe('A failure a tool returned as a value is still a failure', () => {
+	const noOpEdit = call({
+		name: 'edit_note',
+		arguments: { noteId: NOTE_ID },
+		status: 'succeeded',
+		output: { failure: 'No edits were applied.', problems: ['Edit 1: oldText was not found.'] }
+	});
+
+	it('does not claim the note was edited', () => {
+		expect(thing(turnSteps([noOpEdit], shell)[0]).outcome).toBe('failed');
+	});
+
+	it('reports it among the turn failures', () => {
+		expect(turnActivity([noOpEdit], shell, [noOpEdit]).failures).toHaveLength(1);
+	});
+
+	it('does not let it stand in as the retry that put itself right', () => {
+		const stillFailed = turnActivity([noOpEdit], shell, [noOpEdit]).failures;
+		expect(stillFailed[0]?.raw).toBe('No edits were applied.');
+	});
+});
+
+/**
+ * Every diagram tool was typed as a note and absent from `subjects`, so the studio's
+ * one output rendered as a row with nothing behind it — and had `promote_diagram`'s id
+ * ever resolved, it would have opened a note tab for an id that is not a note.
+ */
+describe('A diagram the agent made is a diagram, and it opens', () => {
+	const DIAGRAM_ID = '7a1f4d02-6b3e-4f88-9a21-0c5d8e2b7f10';
+
+	it('reports a created diagram as a diagram', () => {
+		const made = call({
+			name: 'create_diagram',
+			arguments: { title: 'Web Application Architecture' },
+			output: { diagramId: DIAGRAM_ID }
+		});
+		expect(thing(turnSteps([made], shell)[0]).kind).toBe('diagram');
+	});
+
+	it('takes the id it can be opened by from what the call returned', () => {
+		const made = call({
+			name: 'create_diagram',
+			arguments: { title: 'Web Application Architecture' },
+			output: { diagramId: DIAGRAM_ID }
+		});
+		expect(thing(turnSteps([made], shell)[0]).id).toBe(DIAGRAM_ID);
+	});
+
+	it('names it rather than describing the call', () => {
+		const revised = call({
+			name: 'edit_diagram',
+			arguments: { diagramId: DIAGRAM_ID, title: 'Web Application Architecture (Azure)' }
+		});
+		expect(thing(turnSteps([revised], shell)[0]).title).toBe(
+			'Web Application Architecture (Azure)'
+		);
 	});
 });

@@ -73,8 +73,14 @@ describe('A disclosure is earned by having something behind it', () => {
 	});
 });
 
-describe('A failed call says what went wrong in the reader terms', () => {
-	it('explains the failure rather than repeating the run own sentence', async () => {
+/**
+ * A row only ever renders behind the turn's log door, and the log is evidence. The
+ * reader-facing sentence is `TurnFailure`'s, stated once above — printing it here as
+ * well put the same words on screen twice, ten pixels apart, which is what
+ * `turn-failure.svelte` has always said this row is *not* for.
+ */
+describe('A failed call shows the run own message as evidence', () => {
+	it('shows the raw failure rather than repeating the sentence stated above it', async () => {
 		const screen = await renderRow(
 			call({
 				name: 'edit_note',
@@ -83,9 +89,7 @@ describe('A failed call says what went wrong in the reader terms', () => {
 			})
 		);
 		await screen.getByRole('button', { name: /Note was not saved/ }).click();
-		await expect
-			.element(screen.getByText(/The text it meant to change was not where it expected/))
-			.toBeVisible();
+		await expect.element(screen.getByText('oldText was not found in the note.')).toBeVisible();
 	});
 
 	it('keeps the raw payload behind an action rather than on the page', async () => {

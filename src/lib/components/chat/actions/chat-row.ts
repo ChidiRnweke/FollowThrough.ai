@@ -11,8 +11,18 @@
  * describes. Spelled out as real utilities they are cancelled properly, whatever the order
  * the stylesheet happens to emit.
  */
+/**
+ * The `aria-expanded` cancellation is load-bearing. `buttonVariants.ghost` paints
+ * `aria-expanded:bg-muted`, which is right for a menu or popover trigger: it stays lit
+ * while a surface it owns is open somewhere else on screen. A disclosure is the opposite
+ * case — what it opened is directly underneath it — and `Collapsible.Trigger` sets the
+ * same attribute. So an open "N steps" row and the open call row inside it each became a
+ * filled rectangle, one nested in the other, which is the one thing the surface rule in
+ * DESIGN_SYSTEM.md ("list before card") exists to prevent. Hover still washes; the row is
+ * still plainly a control.
+ */
 export const CHAT_ROW =
-	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-xs font-normal';
+	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-xs font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
 
 /** Every icon on a chat row, so a column of rows shares one optical grid. */
 export const CHAT_ROW_ICON = 'size-3.5 shrink-0';

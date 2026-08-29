@@ -100,6 +100,30 @@ export type FailedToolActivity = Extract<ChatToolActivity, { readonly status: 'f
 export const toolOutput = (tool: ChatToolActivity): unknown =>
 	tool.status === 'succeeded' ? tool.output : undefined;
 
-/** What went wrong, when something did. */
-export const toolFailure = (tool: ChatToolActivity): string | undefined =>
-	tool.status === 'failed' ? tool.failure : undefined;
+/**
+ * What went wrong, when something did.
+ *
+ * Two ways a call can have failed, and reading only the first is how a failure
+ * came to look like a success. `edit_note` returns `{ failure, problems }` as a
+ * *value* rather than throwing, deliberately and for a good reason — a throw is
+ * stringified to a bare message and strips the occurrence counts and nearest
+ * matches the model needs to correct itself on the next turn (ADR 0035). But
+ * the run still journals that call as `succeeded`, so nothing downstream saw
+ * it: a no-op edit rendered "Edited note · <title>" in ordinary colour and the
+ * turn's touched list claimed the verb `edited`. ADR 0015 forbids exactly that
+ * — the user could not tell whether the requested work happened.
+ *
+ * The server contract does not move. This reads the failure where it actually
+ * is, so a single question — "did this call fail?" — has a single answer.
+ */
+export const toolFailure = (tool: ChatToolActivity): string | undefined => {
+	if (tool.status === 'failed') return tool.failure;
+	if (tool.status !== 'succeeded') return undefined;
+	const output = tool.output;
+	if (typeof output !== 'object' || output === null || Array.isArray(output)) return undefined;
+	const failure = (output as Record<string, unknown>).failure;
+	return typeof failure === 'string' && failure.trim().length > 0 ? failure : undefined;
+};
+
+/** Whether the call failed, by either route. */
+export const toolFailed = (tool: ChatToolActivity): boolean => toolFailure(tool) !== undefined;

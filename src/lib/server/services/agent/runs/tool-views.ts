@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '$lib/models/memory';
-import type { NoteSummary, NoteView } from '$lib/models/notes';
+import type { Note, NoteRevision, NoteSummary, NoteView } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 import type { SkillView } from '$lib/models/skills';
 import type { Suggestion } from '$lib/models/suggestions';
@@ -83,6 +83,73 @@ export const projectNoteSummary = (note: NoteSummary): NoteSummaryProjection => 
 	...(note.parentId ? { parentId: note.parentId } : {}),
 	...(note.isPinned ? { isPinned: true as const } : {}),
 	createdAt: note.createdAt
+});
+
+/**
+ * What a note write leaves behind: the id it can be reached by, and the facts
+ * that changed. Nothing else.
+ *
+ * The same argument as {@link projectNoteSummary}, applied to the write path,
+ * which never got it. `create_note` and friends returned `{ note: Note }`
+ * straight from the controller, so every mutation shipped the whole
+ * ProseMirror `document` and its `plainText` twin — and the replay virtualizer
+ * cannot save us here, because it sinks *strings* over a threshold and a
+ * document is an object of many small ones. It rode in replayed history on
+ * every subsequent turn of the conversation.
+ *
+ * `noteId` rather than `id` on purpose: it is the name the note tools take as
+ * an argument, and the name the transcript looks for when it turns a result
+ * into something the reader can open.
+ *
+ * These three fields and no more: `save_note` already returned exactly this
+ * receipt by hand, and the choice was deliberate. This makes it a name the
+ * other nine writes can share rather than a new, wider shape.
+ */
+export interface NoteWriteProjection {
+	readonly noteId: string;
+	readonly title: string;
+	readonly currentRevision: number;
+}
+
+export const projectNoteWrite = (note: Note): NoteWriteProjection => ({
+	noteId: note.id,
+	title: note.title,
+	currentRevision: note.currentRevision
+});
+
+/** The same, for a todo write. `todoId` for the same reason `noteId` is. */
+export interface TodoWriteProjection {
+	readonly todoId: string;
+	readonly title: string;
+	readonly status: string;
+}
+
+export const projectTodoWrite = (todo: Todo): TodoWriteProjection => ({
+	todoId: todo.id,
+	title: todo.title,
+	status: todo.status
+});
+
+/**
+ * A revision in a history listing. `revisionId` is kept because
+ * `restore_note_version` takes it; the snapshot's own `document` and
+ * `plainText` are not — a history listing is for choosing which revision to
+ * read, and reading one is a separate call.
+ */
+export interface NoteRevisionProjection {
+	readonly revisionId: string;
+	readonly noteId: string;
+	readonly revision: number;
+	readonly title: string;
+	readonly createdAt: string;
+}
+
+export const projectNoteRevision = (revision: NoteRevision): NoteRevisionProjection => ({
+	revisionId: revision.id,
+	noteId: revision.noteId,
+	revision: revision.revision,
+	title: revision.title,
+	createdAt: revision.createdAt
 });
 
 export interface TodoProjection {

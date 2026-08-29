@@ -206,7 +206,17 @@ const restoredImages = (value: unknown): ChatPart[] => {
 		}));
 };
 
-const ABANDONED_APPROVAL = 'This change was never carried out — the run ended before you answered.';
+/**
+ * The cause, and only the cause. It used to read "This change was never carried
+ * out — the run ended before you answered", which said the same thing twice: the
+ * block above it already states that nothing was applied, and to how many things.
+ * What is left is the one fact this line is for.
+ *
+ * It also does not guess *why* the run ended. Stopping it is the common path and
+ * a crash is not, but nothing here can tell them apart — and the journal's own
+ * sentence, which can, is preferred over this whenever there is one.
+ */
+const ABANDONED_APPROVAL = 'The run ended before you answered.';
 
 /**
  * A parked call is only still parked if its own run is still waiting. A conversation has at

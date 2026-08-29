@@ -943,7 +943,7 @@ describe('Agent tool coverage invariants', () => {
 			todos: () => ({
 				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
 					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, ...input } };
+					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
 				}
 			})
 		} as unknown as ControllerFactory;
@@ -969,7 +969,7 @@ describe('Agent tool coverage invariants', () => {
 			todos: () => ({
 				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
 					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, ...input } };
+					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
 				}
 			})
 		} as unknown as ControllerFactory;
@@ -995,7 +995,7 @@ describe('Agent tool coverage invariants', () => {
 			todos: () => ({
 				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
 					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, ...input } };
+					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
 				}
 			})
 		} as unknown as ControllerFactory;
@@ -1011,23 +1011,13 @@ describe('Agent tool coverage invariants', () => {
 				]
 			})
 		);
+		// Flat, and keyed `todoId`: nested under `todo` the id was one level below where
+		// the transcript looks for it, so every todo the agent created was unopenable.
 		expect(result).toEqual({
 			todos: [
-				{
-					todo: { id: 'todo-1', projectId, title: 'Renew TLS certificates', responsibility: 'mine' }
-				},
-				{
-					todo: { id: 'todo-2', projectId, title: 'Book offsite flights', responsibility: 'mine' }
-				},
-				{
-					todo: {
-						id: 'todo-3',
-						projectId,
-						title: 'Review incident postmortem',
-						responsibility: 'waiting_on',
-						waitingOn: 'Sam'
-					}
-				}
+				{ todoId: 'todo-1', title: 'Renew TLS certificates', status: 'open' },
+				{ todoId: 'todo-2', title: 'Book offsite flights', status: 'open' },
+				{ todoId: 'todo-3', title: 'Review incident postmortem', status: 'open' }
 			]
 		});
 	});

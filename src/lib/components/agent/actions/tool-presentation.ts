@@ -5,54 +5,138 @@ import {
 	isIdentifierArgument,
 	noteTitle
 } from '../../chat/actions/tool-approval-fields';
+import { mechanismTools, type RenderedTool } from './rendered-tools';
 
 /** Tools that write the note body, and so speak about the note rather than themselves. */
 const noteBodyTools = new Set(['save_note', 'edit_note']);
 
-const labels: Readonly<Record<string, string>> = {
-	save_note: 'Save note',
-	edit_note: 'Edit note',
-	publish_note: 'Publish note',
-	discard_note_draft: 'Discard note draft',
-	create_note: 'Create note',
-	rename_note: 'Rename note',
-	archive_note: 'Move note to trash',
-	restore_note: 'Restore note',
-	list_trashed_notes: 'Read trash',
-	list_note_versions: 'Read note history',
-	restore_note_version: 'Restore note version',
+/**
+ * What a call is called, in the reader's language, before and after it settles.
+ *
+ * `Record<RenderedTool, string>` and not a lookup with a fallback, which is the
+ * whole point. The fallback un-snake-cased the tool's own function name, and it
+ * covered 25 of the 44 tools that reach the transcript — so the shipped copy for
+ * every diagram, skill, artifact, suggestion and memory action was a machine
+ * name: "Edit diagram completed", "Propose memory change completed", "Revoke api
+ * token completed". Nobody decided that; the map just had no entry and nothing
+ * said so. Now a new tool that renders will not compile until someone writes
+ * what it is called, and a tool that should never be named goes in
+ * `quietTools` or `mechanismTools`, where hiding it is a decision in the diff.
+ */
+const labels: Record<RenderedTool, string> = {
+	get_project: 'Read project',
 	create_project: 'Create project',
 	rename_project: 'Rename project',
 	archive_project: 'Archive project',
+	create_folder: 'Create folder',
+	move_project_entry: 'Move',
+	get_note: 'Read note',
+	create_note: 'Create note',
+	save_note: 'Save note',
+	edit_note: 'Edit note',
+	rename_note: 'Rename note',
+	archive_note: 'Move note to trash',
+	restore_note: 'Restore note',
+	delete_note_forever: 'Delete note permanently',
+	empty_note_trash: 'Empty trash',
+	list_note_versions: 'Read note history',
+	restore_note_version: 'Restore note version',
+	publish_note: 'Publish note',
+	discard_note_draft: 'Discard note draft',
 	create_todo: 'Create todo',
 	create_todos: 'Create todos',
 	update_todo: 'Update todo',
-	get_note: 'Read note'
+	extract_promises: 'Find commitments',
+	relate_selection: 'Link selection',
+	revise_mermaid_diagram: 'Revise diagram',
+	promote_diagram: 'Keep diagram',
+	accept_suggestion: 'Accept suggestion',
+	reject_suggestion: 'Dismiss suggestion',
+	revert_suggestion: 'Undo suggestion',
+	save_skill: 'Save skill',
+	edit_skill: 'Edit skill',
+	create_skill: 'Create skill',
+	create_skill_from_selection: 'Create skill from selection',
+	restore_skill_version: 'Restore skill version',
+	update_skill: 'Update skill',
+	set_skill_pinned: 'Change skill pinning',
+	propose_memory_change: 'Remember',
+	export_document: 'Export document',
+	create_diagram: 'Create diagram',
+	edit_diagram: 'Edit diagram',
+	update_export_settings: 'Update export settings',
+	download_artifact: 'Prepare download',
+	delete_artifact: 'Delete artifact',
+	regenerate_artifact: 'Regenerate artifact'
 };
 
-const completedLabels: Readonly<Record<string, string>> = {
-	create_note: 'Created note',
-	rename_note: 'Renamed note',
-	archive_note: 'Moved note to trash',
-	restore_note: 'Restored note',
-	list_trashed_notes: 'Read trash',
-	list_note_versions: 'Read note history',
-	restore_note_version: 'Restored note version',
+const completedLabels: Record<RenderedTool, string> = {
+	get_project: 'Read project',
 	create_project: 'Created project',
 	rename_project: 'Renamed project',
 	archive_project: 'Archived project',
+	create_folder: 'Created folder',
+	move_project_entry: 'Moved',
+	get_note: 'Read note',
+	create_note: 'Created note',
+	save_note: 'Saved note',
+	edit_note: 'Edited note',
+	rename_note: 'Renamed note',
+	archive_note: 'Moved note to trash',
+	restore_note: 'Restored note',
+	delete_note_forever: 'Deleted note permanently',
+	empty_note_trash: 'Emptied trash',
+	list_note_versions: 'Read note history',
+	restore_note_version: 'Restored note version',
+	publish_note: 'Published note',
+	discard_note_draft: 'Discarded note draft',
 	create_todo: 'Created todo',
 	create_todos: 'Created todos',
 	update_todo: 'Updated todo',
-	get_note: 'Read note'
+	extract_promises: 'Found commitments',
+	relate_selection: 'Linked selection',
+	revise_mermaid_diagram: 'Revised diagram',
+	promote_diagram: 'Kept diagram',
+	accept_suggestion: 'Accepted suggestion',
+	reject_suggestion: 'Dismissed suggestion',
+	revert_suggestion: 'Undid suggestion',
+	save_skill: 'Saved skill',
+	edit_skill: 'Edited skill',
+	create_skill: 'Created skill',
+	create_skill_from_selection: 'Created skill from selection',
+	restore_skill_version: 'Restored skill version',
+	update_skill: 'Updated skill',
+	set_skill_pinned: 'Changed skill pinning',
+	propose_memory_change: 'Remembered',
+	export_document: 'Exported document',
+	create_diagram: 'Created diagram',
+	edit_diagram: 'Edited diagram',
+	update_export_settings: 'Updated export settings',
+	download_artifact: 'Prepared download',
+	delete_artifact: 'Deleted artifact',
+	regenerate_artifact: 'Regenerated artifact'
 };
 
+const isRendered = (name: string): name is RenderedTool => name in labels;
+
+/**
+ * The reader's name for a tool.
+ *
+ * The un-snake-casing survives for exactly one case: a quiet or mechanism tool
+ * that something asks to name anyway, and a name we have genuinely never seen —
+ * an MCP tool from another host. It is no longer how the app's own catalogue
+ * renders, which is what it had quietly become.
+ */
 export const friendlyToolLabel = (name: string): string =>
-	labels[name] ??
-	name
-		.split('_')
-		.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-		.join(' ');
+	isRendered(name)
+		? labels[name]
+		: name
+				.split('_')
+				.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+				.join(' ');
+
+const completedToolLabel = (name: string): string =>
+	isRendered(name) ? completedLabels[name] : `${friendlyToolLabel(name)} completed`;
 
 /**
  * Tools whose `noteId` argument is the subject of the row. "Read note" is true of every
@@ -82,13 +166,21 @@ const stringArgument = (
 	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const outputString = (tool: ChatToolActivity, key: string): string | undefined => {
+	if (tool.status !== 'succeeded' || !isRecord(tool.output)) return undefined;
+	const value = tool.output[key];
+	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+};
+
 /**
  * A row's label says what happened; its subject says what it happened to, and the subject is
  * the only part the reader can act on. They are returned apart so the row can make the
  * subject a control — concatenated into one sentence, a note title is unclickable prose.
  *
- * `noteId` is set only when the note resolves in the tree, i.e. only when opening it in a tab
- * can actually succeed.
+ * `noteId` is set only when opening it in a tab can actually succeed.
  */
 export interface ToolStatusParts {
 	readonly label: string;
@@ -112,14 +204,22 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 		resolvedNote ??
 		(querySubjectTools.has(tool.name) ? stringArgument(tool.arguments, 'query') : undefined) ??
 		stringArgument(tool.arguments, 'title') ??
-		stringArgument(tool.arguments, 'name');
-	const noteId = resolvedNote ? (tool.arguments.noteId as string) : undefined;
+		stringArgument(tool.arguments, 'name') ??
+		// A create names its subject only on the way back. Without this a note the agent
+		// just made was "Created note" with nothing after it.
+		outputString(tool, 'title') ??
+		outputString(tool, 'name');
+	const noteId = resolvedNote
+		? (tool.arguments.noteId as string)
+		: (outputString(tool, 'noteId') ?? undefined);
+	// A failure the tool returned as a value counts. See `toolFailure`.
+	const failure = toolFailure(tool);
 	const parts = (label: string): ToolStatusParts => ({
 		label,
 		...(subject ? { subject } : {}),
 		...(noteId ? { noteId } : {}),
 		pending: tool.status === 'running',
-		failed: tool.status === 'failed' || tool.status === 'rejected'
+		failed: failure !== undefined || tool.status === 'rejected'
 	});
 
 	if (tool.status === 'rejected')
@@ -128,17 +228,11 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 				? 'Note change rejected'
 				: `${friendlyToolLabel(tool.name)} rejected`
 		);
-	if (tool.status === 'failed')
+	if (failure !== undefined)
 		return parts(
 			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${friendlyToolLabel(tool.name)} failed`
 		);
-	if (tool.status === 'succeeded') {
-		if (tool.name === 'save_note') return parts('Saved note');
-		if (tool.name === 'edit_note') return parts('Edited note');
-		if (tool.name === 'publish_note') return parts('Published note');
-		if (tool.name === 'discard_note_draft') return parts('Discarded note draft');
-		return parts(completedLabels[tool.name] ?? `${friendlyToolLabel(tool.name)} completed`);
-	}
+	if (tool.status === 'succeeded') return parts(completedToolLabel(tool.name));
 	return parts(friendlyToolLabel(tool.name));
 }
 
@@ -149,37 +243,34 @@ export function toolStatusLabel(tool: ChatToolActivity, shell?: ShellContext): s
 	return pending ? `${named}…` : named;
 }
 
-/** Tools that change something the user owns, as opposed to just reading it. */
-const writeTools = new Set([
-	'save_note',
-	'edit_note',
-	'publish_note',
-	'discard_note_draft',
-	'create_note',
-	'rename_note',
-	'archive_note',
-	'restore_note',
-	'restore_note_version',
-	'create_project',
-	'rename_project',
-	'archive_project',
-	'create_todo',
-	'create_todos',
-	'update_todo',
-	'generate_document',
-	'delete_artifact',
-	'regenerate_artifact'
+/**
+ * Tools that change something the user owns, as opposed to just reading it.
+ *
+ * Derived rather than listed. The hand-written list had drifted: every diagram
+ * tool was missing from it, so a diagram write rendered in the muted tone the
+ * row geometry reserves for reads, and `generate_document` was in it under a
+ * name the catalogue no longer has.
+ */
+const readOnlyTools = new Set<RenderedTool>([
+	'get_project',
+	'get_note',
+	'list_note_versions',
+	'download_artifact',
+	'export_document'
 ]);
 
-export const isWriteTool = (name: string): boolean => writeTools.has(name);
+export const isWriteTool = (name: string): boolean =>
+	isRendered(name) && !readOnlyTools.has(name) && !mechanismTools.has(name);
 
 /**
  * What the user loses by approving, for the calls where that is not obvious. Most writes are
  * plainly described by their own title, and a generic "this changes saved data" line under
  * every one of them trains the user to skip the line that matters.
  */
-const consequences: Readonly<Record<string, string>> = {
+const consequences: Partial<Record<RenderedTool, string>> = {
 	archive_note: 'This moves the note to the trash. You can restore it later.',
+	delete_note_forever: 'This deletes the note permanently. It cannot be restored.',
+	empty_note_trash: 'This deletes everything in the trash permanently.',
 	restore_note_version:
 		'This replaces the note’s current content. The version it replaces stays in the history.',
 	archive_project: 'Archiving hides the project and everything in it. You can restore it later.',
@@ -188,7 +279,8 @@ const consequences: Readonly<Record<string, string>> = {
 	regenerate_artifact: 'This replaces the current artifact.'
 };
 
-export const approvalConsequence = (name: string): string | undefined => consequences[name];
+export const approvalConsequence = (name: string): string | undefined =>
+	isRendered(name) ? consequences[name] : undefined;
 
 /**
  * What to show when a tool row is expanded. The disclosure used to repeat its own

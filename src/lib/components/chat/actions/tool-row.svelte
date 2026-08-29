@@ -17,7 +17,7 @@
 		toolDisclosure,
 		toolStatusParts
 	} from '$lib/components/agent';
-	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
+	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON } from './chat-row';
 	import DisclosureBody from './disclosure/disclosure-body.svelte';
 
 	let { tool, shell }: { tool: ChatToolActivity; shell?: ShellContext } = $props();
@@ -97,7 +97,10 @@
 			{@render openAction()}
 		</div>
 		<Collapsible.Content class={CHAT_ROW_DETAIL}>
-			<div class="py-1 {CHAT_ROW_INDENT}">
+			<!-- No indent of its own. Inside the turn's log this row is already indented under
+			     the door that opened it, and indenting again put a call's detail two steps in
+			     from a list that is only two levels deep. -->
+			<div class="py-1">
 				<DisclosureBody {disclosure} {tool} {shell} />
 			</div>
 		</Collapsible.Content>

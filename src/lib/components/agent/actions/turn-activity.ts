@@ -1,11 +1,11 @@
 import type { ShellContext } from '$lib/models/workspace';
-import {
-	toolOutput,
-	type ChatToolActivity,
-	type FailedToolActivity
-} from '$lib/stores/agent/chat-tools';
+import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
 import { toolStatusParts } from './tool-presentation';
+import { explainToolFailure } from './tool-result';
+import { mechanismTools, quietTools, type RenderedTool } from './rendered-tools';
+
+export { mechanismTools, quietTools };
 
 /**
  * What a turn did, in terms of the user's own things.
@@ -20,7 +20,7 @@ import { toolStatusParts } from './tool-presentation';
  * lives behind the turn's own details.
  */
 
-export type TouchedKind = 'note' | 'todo' | 'project' | 'skill';
+export type TouchedKind = 'note' | 'todo' | 'project' | 'skill' | 'diagram';
 
 /**
  * What became of the call a row stands for.
@@ -35,10 +35,12 @@ export type TouchedKind = 'note' | 'todo' | 'project' | 'skill';
  */
 export type StepOutcome = 'running' | 'done' | 'failed' | 'rejected';
 
-const stepOutcome = (status: ChatToolActivity['status']): StepOutcome => {
-	if (status === 'running') return 'running';
-	if (status === 'failed') return 'failed';
-	if (status === 'rejected') return 'rejected';
+const stepOutcome = (tool: ChatToolActivity): StepOutcome => {
+	if (tool.status === 'running') return 'running';
+	if (tool.status === 'rejected') return 'rejected';
+	// `toolFailure` and not `status === 'failed'`: a call can carry its failure in its
+	// result, which is how a no-op `edit_note` came to be summarised as `edited`.
+	if (toolFailure(tool) !== undefined) return 'failed';
 	return 'done';
 };
 
@@ -79,79 +81,37 @@ export interface TurnAction {
 /** One row of a turn's summary: a thing that was touched, or work that was done. */
 export type TurnRow = TouchedThing | TurnAction;
 
+/**
+ * One thing that went wrong, and everything it went wrong to.
+ *
+ * A cause and its subjects, rather than a list of failed calls, because that is
+ * what a reader is looking at: three calls abandoned by the same stopped run are
+ * one piece of news about three things, not three pieces of news. Returned as
+ * one shape so the block can state the cause once — it used to be printed per
+ * call, and then again inside each call's row in the log, so a turn that lost
+ * three changes said the same sentence six times.
+ *
+ * `subjects` are {@link TurnRow}s and not strings so each one opens, on exactly
+ * the same terms as a row that succeeded. A failure is the moment a link is
+ * worth most: the note is still there, and the reader is about to go and look.
+ */
+export interface FailureGroup {
+	/** The reason, in the reader's terms, stated once. */
+	readonly cause: string;
+	/** What it befell. Never empty. */
+	readonly subjects: readonly TurnRow[];
+	/** The raw message, for the log. Evidence, not the message. */
+	readonly raw: string;
+}
+
 export interface TurnActivity {
 	/** What the turn did, deduplicated and in the order it happened. */
 	readonly touched: readonly TurnRow[];
-	/**
-	 * Calls that failed and that nothing later made good. The whole activity is returned
-	 * rather than its message, so the failure can be stated as what happened to which thing
-	 * instead of as the sentence the run happened to produce.
-	 */
-	readonly failures: readonly FailedToolActivity[];
+	/** What failed and nothing later put right, grouped by cause. */
+	readonly failures: readonly FailureGroup[];
 	/** Every call the turn made, mechanism included — what the details door is for. */
 	readonly callCount: number;
 }
-
-/**
- * Calls that are the agent finding its footing rather than work on the workspace. A row
- * reading "Search tools" is not reassurance, and it is not something anyone can act on.
- */
-export const mechanismTools = new Set([
-	'search_tools',
-	'use_tool',
-	'get_workspace_context',
-	'load_skill',
-	'list_tool_preferences',
-	'set_tool_enabled',
-	'list_agent_models',
-	'get_agent_preferences',
-	'update_agent_preferences',
-	'list_trust_policies',
-	'update_trust_policy',
-	'list_api_tokens',
-	'revoke_api_token'
-]);
-
-/**
- * Reads and searches that tell the reader nothing they can act on.
- *
- * The rule dividing this from an action row is whether the call *changed*
- * anything. A search that found nine notes is the agent orienting itself, the
- * same as a tool search; the answer it produced is the thing worth reading.
- *
- * Stated as an explicit list because the default is now the other way round.
- * Rows used to appear only for the 22 names in `subjects`, so all 46 of the
- * catalogue's other tools were dropped in silence — including every diagram
- * tool, which is why a studio turn that drew a diagram reported nothing it had
- * done. Anything unlisted now gets a row, so a tool added tomorrow is visible
- * by default and hiding one is a decision somebody has to write down here.
- */
-export const quietTools = new Set([
-	'search',
-	'search_note',
-	'ls',
-	'grep',
-	'sed',
-	'search_icons',
-	'find_references',
-	'get_today_view',
-	'get_artifact',
-	'get_export_settings',
-	'diff_note_versions',
-	'read_canvas_diagram',
-	'read_project_diagram',
-	'list_projects',
-	'list_todos',
-	'list_skills',
-	'list_skill_versions',
-	'list_artifacts',
-	'list_attachments',
-	'list_templates',
-	'list_suggestions',
-	'list_trashed_notes',
-	'list_user_memory',
-	'list_project_memory'
-]);
 
 interface ToolSubject {
 	readonly kind: TouchedKind;
@@ -161,13 +121,23 @@ interface ToolSubject {
 }
 
 /**
+ * A tool that renders but names nothing the reader can open. Spelled out rather
+ * than left absent for the same reason `audit-allow` carries a reason: the map
+ * below is total over {@link RenderedTool}, so adding a tool forces the question
+ * "what does this act on?", and answering "nothing" is an entry a reviewer can
+ * see rather than a gap nobody notices.
+ */
+const NO_SUBJECT = 'no-subject';
+
+/**
  * The tools that act on something a person owns, and what they leave behind. Reads are here
  * too: knowing which note the agent read is how a user judges the answer it gave.
  *
- * A tool absent from this map contributes nothing to the summary — searches and list calls
- * have no single subject, and inventing one for them would be a row that opens nothing.
+ * Total over the tools that render. It used to hold 22 names and be consulted with a plain
+ * lookup, so the other 22 rendered tools fell through to a row with nothing behind it —
+ * every diagram tool among them, which is the one output the studio exists to produce.
  */
-const subjects: Readonly<Record<string, ToolSubject>> = {
+const subjects: Record<RenderedTool, ToolSubject | typeof NO_SUBJECT> = {
 	get_note: { kind: 'note', verb: 'read', idKey: 'noteId' },
 	save_note: { kind: 'note', verb: 'edited', idKey: 'noteId' },
 	edit_note: { kind: 'note', verb: 'edited', idKey: 'noteId' },
@@ -181,15 +151,49 @@ const subjects: Readonly<Record<string, ToolSubject>> = {
 	list_note_versions: { kind: 'note', verb: 'read history', idKey: 'noteId' },
 	delete_note_forever: { kind: 'note', verb: 'deleted', idKey: 'noteId' },
 	create_todo: { kind: 'todo', verb: 'created' },
+	// One row per todo would be the batch's whole point undone; the disclosure lists them.
+	create_todos: NO_SUBJECT,
 	update_todo: { kind: 'todo', verb: 'updated', idKey: 'todoId' },
 	create_project: { kind: 'project', verb: 'created' },
 	rename_project: { kind: 'project', verb: 'renamed', idKey: 'projectId' },
 	archive_project: { kind: 'project', verb: 'archived', idKey: 'projectId' },
 	get_project: { kind: 'project', verb: 'read', idKey: 'projectId' },
 	create_skill: { kind: 'skill', verb: 'created' },
+	create_skill_from_selection: { kind: 'skill', verb: 'created' },
 	save_skill: { kind: 'skill', verb: 'edited', idKey: 'noteId' },
 	edit_skill: { kind: 'skill', verb: 'edited', idKey: 'noteId' },
-	update_skill: { kind: 'skill', verb: 'updated', idKey: 'noteId' }
+	update_skill: { kind: 'skill', verb: 'updated', idKey: 'noteId' },
+	restore_skill_version: { kind: 'skill', verb: 'restored a version', idKey: 'noteId' },
+	set_skill_pinned: { kind: 'skill', verb: 'updated', idKey: 'noteId' },
+	// A diagram is a thing the user owns and can open, and it was none of those:
+	// every diagram tool was typed as a note, had no entry here, and so rendered
+	// as a row with nothing behind it — for the one output the studio exists to
+	// produce.
+	create_diagram: { kind: 'diagram', verb: 'created' },
+	edit_diagram: { kind: 'diagram', verb: 'edited', idKey: 'diagramId' },
+	revise_mermaid_diagram: { kind: 'diagram', verb: 'revised', idKey: 'diagramId' },
+	promote_diagram: { kind: 'diagram', verb: 'kept', idKey: 'diagramId' },
+	create_folder: { kind: 'note', verb: 'created' },
+	move_project_entry: { kind: 'note', verb: 'moved', idKey: 'noteId' },
+	empty_note_trash: NO_SUBJECT,
+	// The suggestion is the subject, and a suggestion has no surface of its own to
+	// open — it is decided in the panel it came from.
+	accept_suggestion: NO_SUBJECT,
+	reject_suggestion: NO_SUBJECT,
+	revert_suggestion: NO_SUBJECT,
+	extract_promises: NO_SUBJECT,
+	relate_selection: NO_SUBJECT,
+	propose_memory_change: NO_SUBJECT,
+	export_document: NO_SUBJECT,
+	update_export_settings: NO_SUBJECT,
+	download_artifact: NO_SUBJECT,
+	delete_artifact: NO_SUBJECT,
+	regenerate_artifact: NO_SUBJECT
+};
+
+const subjectOfTool = (name: string): ToolSubject | undefined => {
+	const entry = (subjects as Record<string, ToolSubject | typeof NO_SUBJECT>)[name];
+	return entry === undefined || entry === NO_SUBJECT ? undefined : entry;
 };
 
 /**
@@ -203,9 +207,12 @@ const verbRank = [
 	'restored a version',
 	'restored',
 	'renamed',
+	'moved',
 	'draft discarded',
 	'updated',
 	'published',
+	'kept',
+	'revised',
 	'edited',
 	'moved to trash',
 	'deleted',
@@ -231,7 +238,15 @@ const identify = (tool: ChatToolActivity, subject: ToolSubject): string | undefi
 	if (fromArguments) return fromArguments;
 	const output = toolOutput(tool);
 	if (!isRecord(output)) return undefined;
-	return asString(output.noteId) ?? asString(output.todoId) ?? asString(output.id);
+	return (
+		asString(output.noteId) ??
+		asString(output.todoId) ??
+		asString(output.diagramId) ??
+		// Deliberately not `projectId`: it is present on results whose subject is a note or a
+		// diagram, and taking it there would hand the row an id of the wrong kind — which
+		// opens the wrong thing rather than failing to open.
+		asString(output.id)
+	);
 };
 
 const nameOf = (
@@ -261,7 +276,8 @@ const placeholder: Readonly<Record<TouchedKind, string>> = {
 	note: 'A note',
 	todo: 'A todo',
 	project: 'A project',
-	skill: 'A skill'
+	skill: 'A skill',
+	diagram: 'A diagram'
 };
 
 /**
@@ -278,7 +294,7 @@ export function turnSteps(
 		// A call parked on approval is already on screen in full, as the change the reader is
 		// being asked to decide on. Listing it again underneath says the same thing twice.
 		if (tool.status === 'approval_required') continue;
-		const subject = subjects[tool.name];
+		const subject = subjectOfTool(tool.name);
 		// Not a note, todo, project or skill — but still work, and it says so in its own
 		// words rather than not appearing. `toolStatusParts` is total over the catalogue,
 		// falling back to a readable form of the tool's name, so there is always a phrase.
@@ -286,7 +302,7 @@ export function turnSteps(
 			steps.push({
 				kind: 'action',
 				label: toolStatusParts(tool, shell).label,
-				outcome: stepOutcome(tool.status)
+				outcome: stepOutcome(tool)
 			});
 			continue;
 		}
@@ -298,7 +314,7 @@ export function turnSteps(
 			title: name ?? placeholder[subject.kind],
 			named: name !== undefined,
 			verb: subject.verb,
-			outcome: stepOutcome(tool.status)
+			outcome: stepOutcome(tool)
 		});
 	}
 	return steps;
@@ -356,7 +372,12 @@ export function turnActivity(
 
 	const touched = order.map((key) => byIdentity.get(key) as TouchedThing);
 	const succeeded = turnTools.filter(
-		(tool) => tool.status === 'succeeded' && !mechanismTools.has(tool.name)
+		(tool) =>
+			tool.status === 'succeeded' &&
+			// A call that came back carrying a failure did not succeed, whatever the run
+			// journalled. Counting it here made it "recover" the very failure it is.
+			toolFailure(tool) === undefined &&
+			!mechanismTools.has(tool.name)
 	);
 	const recovered = new Set(turnSteps(succeeded, shell).map((step) => identityOf(step)));
 	// A call whose payload was malformed never names its subject, so identity cannot match it
@@ -366,11 +387,16 @@ export function turnActivity(
 
 	// A failure earns a sentence only when nothing later put it right. The wrapper rejection
 	// that precedes a successful save is the agent correcting itself mid-turn.
-	const failures = tools
-		.filter((tool) => tool.status === 'failed')
+	//
+	// Judged over `turnTools`, not `tools`. Whether something failed is a question about the
+	// turn, and the caller hands this one group of it at a time: three groups each holding one
+	// abandoned call each reported their own failure, so the reader got the same red sentence
+	// three times down the transcript with nothing distinguishing them.
+	const unresolved = turnTools
+		.filter((tool) => toolFailure(tool) !== undefined)
 		.filter((tool) => {
 			if (mechanismTools.has(tool.name)) return false;
-			const subject = subjects[tool.name];
+			const subject = subjectOfTool(tool.name);
 			if (!subject) return true;
 			const id = identify(tool, subject);
 			if (!id) return !recoveredNames.has(tool.name);
@@ -383,12 +409,26 @@ export function turnActivity(
 				outcome: 'failed'
 			});
 			return !recovered.has(key);
-		})
-		// One sentence per distinct failure: a call retried verbatim twice failed once as far
-		// as the reader is concerned.
-		.filter(
-			(tool, index, all) => all.findIndex((other) => other.failure === tool.failure) === index
-		);
+		});
+
+	// One block per cause, carrying every thing that cause befell. Grouped on the reader's
+	// sentence rather than the raw message so two phrasings of "the note moved on" are one
+	// piece of news, which is how the reader experiences them.
+	const byCause = new Map<string, { raw: string; subjects: TurnRow[] }>();
+	for (const tool of unresolved) {
+		const raw = toolFailure(tool) as string;
+		const cause = explainToolFailure(raw) ?? raw;
+		const group = byCause.get(cause) ?? { raw, subjects: [] };
+		const [row] = turnSteps([tool], shell);
+		// A subject the group already names is the same call retried verbatim: one row.
+		if (row && !group.subjects.some((existing) => identityOf(existing) === identityOf(row)))
+			group.subjects.push(row);
+		byCause.set(cause, group);
+	}
+
+	const failures = [...byCause.entries()]
+		.filter(([, group]) => group.subjects.length > 0)
+		.map(([cause, group]) => ({ cause, raw: group.raw, subjects: group.subjects }));
 
 	return { touched, failures, callCount: tools.length };
 }
