@@ -1,6 +1,7 @@
 import type { AgentInputItem, Session } from '@openai/agents';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
+import { FAILURE_PREFIX } from '$lib/models/agent/tool-failure';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 
 export interface ReplayVirtualizer {
@@ -92,7 +93,7 @@ const outputText = (
  * key is always first. Matching the prefix rather than parsing keeps this total:
  * there is no malformed-JSON branch to invent an answer for.
  */
-const isFailureEnvelope = (text: string): boolean => text.trimStart().startsWith('{"failure":');
+const isFailureEnvelope = (text: string): boolean => text.trimStart().startsWith(FAILURE_PREFIX);
 
 /**
  * Diagram calls the model has to be able to re-read, because they failed.

@@ -1,3 +1,5 @@
+import { readToolFailure } from '$lib/models/agent/tool-failure';
+
 export type ChatToolStatus = 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
 
 /** What every tool row carries, whatever became of the call. */
@@ -116,14 +118,12 @@ export const toolOutput = (tool: ChatToolActivity): unknown =>
  * The server contract does not move. This reads the failure where it actually
  * is, so a single question — "did this call fail?" — has a single answer.
  */
-export const toolFailure = (tool: ChatToolActivity): string | undefined => {
-	if (tool.status === 'failed') return tool.failure;
-	if (tool.status !== 'succeeded') return undefined;
-	const output = tool.output;
-	if (typeof output !== 'object' || output === null || Array.isArray(output)) return undefined;
-	const failure = (output as Record<string, unknown>).failure;
-	return typeof failure === 'string' && failure.trim().length > 0 ? failure : undefined;
-};
+export const toolFailure = (tool: ChatToolActivity): string | undefined =>
+	tool.status === 'failed'
+		? tool.failure
+		: tool.status === 'succeeded'
+			? readToolFailure(tool.output)
+			: undefined;
 
 /** Whether the call failed, by either route. */
 export const toolFailed = (tool: ChatToolActivity): boolean => toolFailure(tool) !== undefined;

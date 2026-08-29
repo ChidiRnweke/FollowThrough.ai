@@ -44,6 +44,7 @@ import {
 } from '$lib/server/services/notes/markdown';
 import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
+import { toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	projectMemory,
 	projectNoteRevision,
@@ -907,11 +908,12 @@ export class AgentTools {
 			// `recovery` because a bare message left the model guessing — it re-sent
 			// the same rejected document twice rather than inspecting what it sent.
 			errorFunction: (_context, error) =>
-				JSON.stringify({
-					failure: error instanceof Error ? error.message : String(error),
-					recovery:
-						'Read the failure and fix the arguments before retrying. Retrying the same arguments will fail the same way.'
-				}),
+				JSON.stringify(
+					toolFailure(error instanceof Error ? error.message : String(error), {
+						recovery:
+							'Read the failure and fix the arguments before retrying. Retrying the same arguments will fail the same way.'
+					})
+				),
 			execute: async (input, _runContext, details) => {
 				const parsed = definition.parameters.parse(input);
 				return this.toolExecutor.execute(
@@ -1162,11 +1164,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				// into a bare message, which would strip the occurrence counts and nearest
 				// matches the model needs to correct itself on the next turn.
 				if (!patched.ok)
-					return {
-						failure: 'No edits were applied.',
-						problems: patched.failures.map(describeNotePatchFailure),
-						failures: patched.failures
-					};
+					return toolFailure('No edits were applied.', {
+						problems: patched.failures.map(describeNotePatchFailure)
+					});
 				const content = noteContentFromMarkdown(patched.markdown);
 				const saved = await factory.notes().save(actor, {
 					note: { ...current.note, ...content }
@@ -1449,7 +1449,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			async (input) => {
 				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
 				if (view.skill.note.kind !== 'skill')
-					return { failure: 'save_skill only edits skill notes; this note is not a skill.' };
+					return toolFailure('save_skill only edits skill notes; this note is not a skill.');
 				const content = noteContentFromMarkdown(input.markdown);
 				const saved = await factory.notes().save(actor, {
 					note: { ...view.skill.note, ...content }
@@ -1469,17 +1469,15 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			async (input) => {
 				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
 				if (view.skill.note.kind !== 'skill')
-					return { failure: 'edit_skill only edits skill notes; this note is not a skill.' };
+					return toolFailure('edit_skill only edits skill notes; this note is not a skill.');
 				const before = noteMarkdownFromContent(view.skill.note.document);
 				const patched = applyNotePatch(before, input.edits);
 				// A failure is returned rather than thrown so the occurrence counts and
 				// nearest matches survive into the model's next attempt.
 				if (!patched.ok)
-					return {
-						failure: 'No edits were applied.',
-						problems: patched.failures.map(describeNotePatchFailure),
-						failures: patched.failures
-					};
+					return toolFailure('No edits were applied.', {
+						problems: patched.failures.map(describeNotePatchFailure)
+					});
 				const content = noteContentFromMarkdown(patched.markdown);
 				const saved = await factory.notes().save(actor, {
 					note: { ...view.skill.note, ...content }
