@@ -10,6 +10,7 @@ import {
 } from '@openai/agents';
 import OpenAI from 'openai';
 import type { ActorContext } from '$lib/models/identity';
+import { readToolFailure } from '$lib/models/agent/tool-failure';
 import {
 	DEFAULT_AGENT_MAX_TURNS,
 	openRouterWebSearchTool,
@@ -129,9 +130,7 @@ const objectArguments = (value: unknown): Readonly<Record<string, unknown>> => {
 };
 
 const callDetails = (item: ToolStreamEvent['item']) => {
-	const serialized = item?.toJSON() as
-		| { rawItem?: Record<string, unknown>; toolName?: string; type?: string; output?: unknown }
-		| undefined;
+	const serialized = item?.toJSON() as SerializedToolItem | undefined;
 	const raw = item?.rawItem ?? serialized?.rawItem ?? {};
 	const name = String(item?.toolName ?? serialized?.toolName ?? raw.name ?? 'tool');
 	const args = objectArguments(item?.arguments ?? raw.arguments);
@@ -142,18 +141,6 @@ const callDetails = (item: ToolStreamEvent['item']) => {
 		arguments: innerName ? objectArguments(args.payload) : args,
 		output: item?.output ?? serialized?.output ?? raw.output
 	};
-};
-
-const failureFromOutput = (output: unknown): string | undefined => {
-	if (typeof output === 'object' && output !== null && 'failure' in output)
-		return typeof output.failure === 'string' ? output.failure : undefined;
-	if (typeof output !== 'string') return undefined;
-	const parsed = JSON.parse(output) as unknown;
-	return typeof parsed === 'object' && parsed !== null && 'failure' in parsed
-		? typeof parsed.failure === 'string'
-			? parsed.failure
-			: undefined
-		: undefined;
 };
 
 /**
@@ -275,7 +262,7 @@ export class AgentToolEventMapper {
 		const callId = details.callId || fallbackCallId || '';
 		const known = this.calls.get(callId);
 		this.calls.delete(callId);
-		const failure = failureFromOutput(details.output);
+		const failure = readToolFailure(details.output);
 		return {
 			type: 'tool_completed',
 			callId,
