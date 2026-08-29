@@ -182,6 +182,19 @@ Final gate evidence:
   matching todo, and a presented editable canvas. Its ambiguous prompt and acceptance effects are
   unchanged. `20260829-target-diagram-clockfix` passed 1/1. This green is a fixture-contract
   correction, not model improvement.
+- `20260829-full-final-24cdcad-b`: 207/211 from a clean detached worktree at the recorded commit.
+  The relative-Friday case passed in-suite, as did both target-resolution cases from the prior
+  run. Four unchanged contracts were red: a catalog-discovered archive flow used an invalid
+  contextual project ID; the English-only memory case answered wholly in Dutch; a two-item todo
+  request used repeated single writes instead of the catalog's preferred batch operation; and a
+  structurally valid editable diagram lost a 2/5 semantic-faithfulness vote. No prompt or oracle
+  was relaxed. Generic production guidance now makes contextual ID reuse, response-language
+  precedence, multi-todo batching, and explicit directed/negative diagram relations operational.
+  The four unchanged isolated runs passed 1/1 (`20260829-target-contextual-project-id`,
+  `20260829-target-memory-language-precedence`, `20260829-target-batch-action-items`, and
+  `20260829-target-directed-diagram`). Focused instruction tests passed 75/75 and architecture
+  audits passed at zero violations. These are one-sample behavior recoveries; the prior clean-run
+  misses remain variance evidence rather than a stability claim.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.

@@ -141,6 +141,30 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('batches several new todos into one write', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'use one create_todos call rather than repeated create_todo calls'
+		);
+	});
+
+	it('resolves a named current project from application context', () => {
+		expect(buildAgentInstructions({})).toContain(
+			"currentProject whose name matches the project the user named already supplies that project's exact id"
+		);
+	});
+
+	it('applies standing language preference before incidental message language', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'a relevant standing language preference, then the language the user happened to write in'
+		);
+	});
+
+	it('preserves stated directions and negative relations in diagrams', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'preserve every stated relationship direction as an explicit directed edge'
+		);
+	});
+
 	it('requires wide informational requests to cover source facts', () => {
 		expect(buildAgentInstructions({})).toContain(
 			'material facts from relevant note bodies and pending work'
