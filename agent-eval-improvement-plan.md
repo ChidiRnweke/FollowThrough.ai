@@ -171,6 +171,17 @@ Final gate evidence:
   ten-second cancellation backstop and result persistence. A provider stall remains a red case; it
   can no longer race later fixtures or ledger writes. Focused Vitest passed 173/173 and architecture
   audits passed at zero violations; deterministic cache verification remains 63/63.
+- `20260829-full-final-91e5138`: 208/211. All 71 tool-retrieval cases and every retrieval, memory,
+  skill, safety, diagram, intent, and completion case passed. Two target-resolution reds
+  (`correct-note-read-scoped` and `multi-turn-switch-then-edit-first`) passed unchanged in isolated
+  reruns, so they remain hard cases and are classified as one-sample model variance. The compound
+  diagram/reminder case failed twice despite a successful `create_todo`; added diagnostics proved
+  that Luna persisted the correct next Friday for the authoritative runtime clock (2026-09-04),
+  while the oracle still required 2026-08-28 from stale `observedAt` metadata. The fixture now
+  derives Friday from the same UTC runtime clock and still requires one exact date, a persisted
+  matching todo, and a presented editable canvas. Its ambiguous prompt and acceptance effects are
+  unchanged. `20260829-target-diagram-clockfix` passed 1/1. This green is a fixture-contract
+  correction, not model improvement.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.

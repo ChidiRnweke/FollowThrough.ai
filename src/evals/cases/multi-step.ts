@@ -9,6 +9,16 @@ import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/to
 import { ARCHETYPES, type EvalCase } from './types';
 import { expectSuggestionPending } from '../assertions/effects';
 
+/** Mirrors the agent's UTC clock when no client timezone is attached. */
+const upcomingFridayUtc = (now = new Date()): string => {
+	const friday = 5;
+	const daysUntilFriday = (friday - now.getUTCDay() + 7) % 7;
+	const date = new Date(
+		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilFriday)
+	);
+	return date.toISOString().slice(0, 10);
+};
+
 /**
  * Multi-step cases prove the agent chains tools correctly for composite tasks.
  * Assertions are on tool call presence and sequence — not content quality.
@@ -327,10 +337,9 @@ export const multiStepCases: readonly EvalCase[] = [
 			prompt:
 				'Turn this into a picture I can review, and leave me a reminder for Friday to check it.'
 		},
-		expected: { canvasKind: 'present', dueDate: '2026-08-28' },
+		expected: { canvasKind: 'present', dueDate: upcomingFridayUtc() },
 		metadata: {
-			observedAt: '2026-08-24',
-			note: 'Compound production-style request: create the visual and persist the follow-up, then stop.'
+			note: 'Compound production-style request: create the visual and persist the follow-up on the Friday named relative to the authoritative runtime clock, then stop.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, architectureWorkspace);
@@ -355,11 +364,18 @@ export const multiStepCases: readonly EvalCase[] = [
 					view.todo.dueDate === this.expected.dueDate &&
 					/(diagram|picture|review|architecture)/i.test(view.todo.title)
 			);
+			const createCall = findCall(result, 'create_todo');
+			const persistedTodos = todos.map((view) => ({
+				title: view.todo.title,
+				dueDate: view.todo.dueDate
+			}));
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
+				createArguments: createCall?.arguments,
 				canvasKind: canvas.kind,
-				reminder: reminder?.todo.title
+				reminder: reminder?.todo.title,
+				persistedTodos
 			});
 			const complete = canvas.kind === this.expected.canvasKind && Boolean(reminder);
 			px.logAnnotation({
@@ -375,7 +391,7 @@ export const multiStepCases: readonly EvalCase[] = [
 					reminderPersisted: Boolean(reminder)
 				},
 				result.failure ??
-					`canvas=${canvas.kind}; reminder=${reminder?.todo.title ?? 'missing'}; tools=${result.calledToolNames.join(', ')}; failures=${
+					`canvas=${canvas.kind}; reminder=${reminder?.todo.title ?? 'missing'}; create=${JSON.stringify(createCall?.arguments)}; todos=${JSON.stringify(persistedTodos)}; tools=${result.calledToolNames.join(', ')}; failures=${
 						result.toolCalls
 							.filter((call) => call.failure)
 							.map((call) => `${call.name}: ${call.failure}`)
