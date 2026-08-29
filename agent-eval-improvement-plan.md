@@ -195,6 +195,18 @@ Final gate evidence:
   `20260829-target-directed-diagram`). Focused instruction tests passed 75/75 and architecture
   audits passed at zero violations. These are one-sample behavior recoveries; the prior clean-run
   misses remain variance evidence rather than a stability claim.
+- `20260829-full-master-845058a`: 209/211, run directly from the clean primary `master` checkout.
+  Every prior remediation passed in-suite: tool search, English memory, batch action-item creation,
+  diagram faithfulness, the relative-Friday compound effect, and both confusable target-resolution
+  cases. An unnamed triggered skill called `load_skill` with a nonexistent ID and then produced an
+  unstamped note; the unchanged isolated rerun passed 1/1, so this remains one-sample model
+  variance. The no-selection negative correctly called `get_note` and avoided `extract_promises`,
+  but reproducibly serialized every optional `list_todos` filter as `""`, which the runtime rejected
+  for enum/date fields. The tool boundary now normalizes blank optional todo filters to omission
+  while preserving strict validation for nonblank UUIDs, enums, and dates. Its unchanged targeted
+  run passed 1/1. Focused tool tests passed 101/101 and architecture audits passed at zero
+  violations. Added payload diagnostics expose exact arguments and typed failures without changing
+  either case's prompt or pass condition.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.

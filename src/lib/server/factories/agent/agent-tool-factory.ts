@@ -1282,11 +1282,13 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('list_todos'),
 			'read',
 			temporal({
-				projectId: projectId.optional(),
-				noteId: noteId.optional(),
-				status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional(),
-				responsibility: z.enum(['mine', 'waiting_on']).optional(),
-				dueBefore: localDate.optional()
+				projectId: optionalModelField(projectId),
+				noteId: optionalModelField(noteId),
+				status: optionalModelField(
+					z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled'])
+				),
+				responsibility: optionalModelField(z.enum(['mine', 'waiting_on'])),
+				dueBefore: optionalModelField(localDate)
 			}),
 			async (input) => ({
 				todos: (await factory.todos().list(actor, input)).todos.map((view) =>

@@ -77,6 +77,11 @@ export const selectionCases: readonly EvalCase[] = [
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
+				calls: result.toolCalls.map((call) => ({
+					name: call.name,
+					arguments: call.arguments,
+					failure: call.failure
+				})),
 				response: result.finalResponse.slice(0, 300)
 			});
 
@@ -295,10 +300,16 @@ export const selectionCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			expect({ status: result.status, tools: tools.passed }).toEqual({
-				status: 'completed',
-				tools: true
-			});
+			expect(
+				{ status: result.status, tools: tools.passed },
+				`${tools.explanation}; calls=${JSON.stringify(
+					result.toolCalls.map((call) => ({
+						name: call.name,
+						arguments: call.arguments,
+						failure: call.failure
+					}))
+				)}`
+			).toEqual({ status: 'completed', tools: true });
 		}
 	}
 ];

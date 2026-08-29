@@ -936,6 +936,33 @@ describe('Agent tool coverage invariants', () => {
 		expect(received).toEqual({ query: 'deployment procedures' });
 	});
 
+	it('treats blank optional todo filters as omitted', async () => {
+		let received: unknown;
+		const projectId = crypto.randomUUID();
+		const noteId = crypto.randomUUID();
+		const factory = {
+			todos: () => ({
+				list: async (_actor: unknown, input: unknown) => {
+					received = input;
+					return { todos: [] };
+				}
+			})
+		} as unknown as ControllerFactory;
+		await directToolFor('auto_accept', 'list_todos', { factory }).invoke(
+			{} as never,
+			JSON.stringify({
+				projectId,
+				noteId,
+				status: '',
+				responsibility: '',
+				dueBefore: '',
+				createdAfter: '',
+				createdBefore: ''
+			})
+		);
+		expect(received).toEqual({ projectId, noteId });
+	});
+
 	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
 		const projectId = crypto.randomUUID();
 		const calls: { projectId: string; title: string }[] = [];

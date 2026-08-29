@@ -455,6 +455,9 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
+				loadSkillCalls: result.toolCalls
+					.filter((call) => call.name === 'load_skill')
+					.map((call) => ({ arguments: call.arguments, failure: call.failure })),
 				response: result.finalResponse.slice(0, 400),
 				createdNote: createdNote?.title
 			});
@@ -481,7 +484,11 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 
 			expect(
 				{ status: result.status, loaded: tools.passed, followed: follows },
-				`${tools.explanation}; persisted note must contain ${String(this.expected.stamp)}`
+				`${tools.explanation}; loads=${JSON.stringify(
+					result.toolCalls
+						.filter((call) => call.name === 'load_skill')
+						.map((call) => ({ arguments: call.arguments, failure: call.failure }))
+				)}; persisted note must contain ${String(this.expected.stamp)}`
 			).toEqual({ status: 'completed', loaded: true, followed: true });
 		}
 	}
