@@ -905,6 +905,15 @@ describe('Agent tool coverage invariants', () => {
 		});
 	});
 
+	it('advertises create-note parent scope as an existing folder only', () => {
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((candidate) => candidate.name === 'create_note');
+		expect(definition?.parameters.shape.parentId.description).toContain(
+			'otherwise omit this field'
+		);
+	});
+
 	it('treats blank optional search scope fields as omitted', async () => {
 		let received: unknown;
 		const factory = {

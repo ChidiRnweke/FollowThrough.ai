@@ -56,6 +56,19 @@ export interface RunCaseInput {
 }
 
 /**
+ * Leaves enough room inside Vitest's 420-second boundary for the controller's
+ * ten-second cancellation backstop and result persistence. The 390-second
+ * default is calibrated from the recorded 445-second provider stall that
+ * otherwise continued into the next case.
+ */
+export const evalCaseDeadlineMs = (value = process.env.EVAL_CASE_TIMEOUT_MS): number => {
+	const parsed = Number(value ?? 390_000);
+	if (!Number.isFinite(parsed) || parsed <= 0)
+		throw new Error(`EVAL_CASE_TIMEOUT_MS must be a positive number, received ${String(value)}`);
+	return parsed;
+};
+
+/**
  * Drives one agent turn along the production path: submit through the agent
  * controller, wait for a terminal status, then read the outcome back out of the
  * persisted event log. Nothing here inspects the agent loop directly — the
@@ -82,7 +95,22 @@ export async function runCase(
 		...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {})
 	});
 
-	const status = await waitForTerminalStatus(lab, actor, receipt.runId);
+	const terminalStatus = waitForTerminalStatus(lab, actor, receipt.runId);
+	let deadline: ReturnType<typeof setTimeout> | undefined;
+	const cancelledStatus = new Promise<AgentRunStatus>((resolve, reject) => {
+		deadline = setTimeout(() => {
+			void agent
+				.cancel(actor, receipt.runId)
+				.then(() => terminalStatus)
+				.then(resolve, reject);
+		}, evalCaseDeadlineMs());
+	});
+	let status: AgentRunStatus;
+	try {
+		status = await Promise.race([terminalStatus, cancelledStatus]);
+	} finally {
+		if (deadline) clearTimeout(deadline);
+	}
 	const snapshot = await agent.getRun(actor, receipt.runId);
 	const events = await agent.listRunEvents(actor, receipt.runId, '');
 

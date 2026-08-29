@@ -1107,7 +1107,11 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			z.object({
 				title: z.string().min(1),
 				projectId: projectId.optional(),
-				parentId: noteId.optional()
+				parentId: noteId
+					.optional()
+					.describe(
+						'Set only when the user asked for a specific existing folder. Copy that folder id from workspace context; otherwise omit this field. Never use a note id, project id, or invented id.'
+					)
 			}),
 			async (input) => {
 				const chosenProjectId = await requireProject(

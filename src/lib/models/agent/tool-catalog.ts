@@ -159,7 +159,7 @@ export const TOOL_DESCRIPTIONS: readonly ToolCatalogEntry[] = [
 		retrievalText:
 			'change, tidy, refresh, polish, or improve part of an existing note while preserving every existing fact and all unrelated content',
 		description:
-			'Mutating tool. Use this for an underspecified tidy, refresh, polish, or improvement: preserve every existing fact and make only small anchored changes. Before the first edit to a note in any turn, you MUST call get_note, then sed or grep its body.file.path and copy every oldText verbatim from that authoritative Markdown. Do not reconstruct anchors from memory, plain text, or earlier revisions. Each edit replaces an exact, unique snippet, and every edit must apply or none do. If an anchor is not found, re-read the file; never retry the same oldText or fall back to save_note.'
+			'Mutating tool. Use this for an underspecified tidy, refresh, polish, or improvement: preserve every existing fact and make only small anchored changes. Before the first edit to a note in any turn, you MUST call get_note, then sed or grep its body.file.path and copy every oldText verbatim from that authoritative Markdown. Do not reconstruct anchors from memory, plain text, or earlier revisions. Batch multiple verified replacements for the same note into one call. Never send an edit whose newText is identical to oldText. Each edit replaces an exact, unique snippet, and every edit must apply or none do. If an anchor is not found, re-read the file; never retry the same oldText or fall back to save_note.'
 	},
 	{
 		name: 'rename_note',

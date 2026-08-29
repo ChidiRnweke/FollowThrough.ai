@@ -135,6 +135,18 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('batches several verified edits without sending no-op replacements', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'Never request a replacement whose newText is byte-identical to oldText'
+		);
+	});
+
+	it('requires wide informational requests to cover source facts', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'material facts from relevant note bodies and pending work'
+		);
+	});
+
 	it('formats the server clock in the client IANA timezone', () => {
 		const instructions = buildAgentInstructions(
 			{ appContext: { client: { timeZone: 'Europe/Brussels', localDate: 'stale' } } },
