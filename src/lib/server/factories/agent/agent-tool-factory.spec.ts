@@ -505,6 +505,27 @@ describe('Agent tool coverage invariants', () => {
 		expect(Object.keys(getNote?.parameters.shape ?? {}).sort()).toEqual(['noteId']);
 	});
 
+	it('limits one atomic note edit batch to five replacements', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		const input = {
+			noteId: crypto.randomUUID(),
+			edits: Array.from({ length: 6 }, (_, index) => ({
+				oldText: `old ${index}`,
+				newText: `new ${index}`
+			}))
+		};
+		expect(editNote?.parameters.safeParse(input).success).toBe(false);
+	});
+
+	it('advertises sequential batches for extensive note edits', () => {
+		const editNote = registry('auto_accept')
+			.definitions()
+			.find((definition) => definition.name === 'edit_note');
+		expect(editNote?.description).toContain('no more than five complete replacements');
+	});
+
 	it('returns the note body as a virtual Markdown file descriptor', () => {
 		const note = noteBuilder({
 			id: crypto.randomUUID() as never,

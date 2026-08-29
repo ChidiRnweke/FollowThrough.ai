@@ -781,7 +781,7 @@ export function buildAgentInstructions(
 		`A standing response-language preference governs even when the user writes in another language; only an explicit current request for a response language overrides it.\n\n`;
 	const notePreservation =
 		'An underspecified request to tidy, refresh, or improve a note is not permission for a whole-body rewrite: preserve every existing fact and make only the smallest grounded edits.\n\n' +
-		'When one note needs several independent replacements, verify every anchor first and send them together in one edit_note call. Never request a replacement whose newText is byte-identical to oldText.\n\n' +
+		'When one note needs several independent replacements, verify every anchor first and send up to five complete replacements together in one edit_note call. For more extensive changes, continue in sequential batches only after the prior batch succeeds. Every edit requires both oldText and newText strings. Never request a replacement whose newText is byte-identical to oldText.\n\n' +
 		'When one request yields several new todos, use one create_todos call rather than repeated create_todo calls.\n\n' +
 		'A successful mutation in this conversation is durable evidence: if the user repeats the same request, do not perform the same write again. When completion is uncertain, read current state before acting. For todo creation, treat only the same requested item in the same project as already done; similar work may legitimately be separate.\n\n' +
 		'Independent reads must start together: do not wait for one independent read before starting another.\n\n' +

@@ -207,6 +207,20 @@ Final gate evidence:
   run passed 1/1. Focused tool tests passed 101/101 and architecture audits passed at zero
   violations. Added payload diagnostics expose exact arguments and typed failures without changing
   either case's prompt or pass condition.
+- `20260829-full-master-5d0b117`: 209/211 in 1,637.49 seconds, run directly from primary `master`.
+  The earlier skill and blank-filter failures passed in-suite, along with every retrieval,
+  language-precedence, batching, diagram, relative-date, selection, and multi-turn remediation.
+  The confusable Backend note read returned the correct Backend-only answer but skipped the required
+  `get_note`; the unchanged isolated case passed 1/1, so this remains provider variance rather than
+  a relaxed oracle. The embedded durable-preference task proposed the correct reviewable memory and
+  completed its twelve-section edit, but issued a malformed or redundant `edit_note` first. Two
+  independent diagnostic reruns reproduced a missing `newText` at the sixth substantive replacement.
+  The shared note/skill edit contract now limits one atomic patch to five complete replacements and
+  directs extensive work into sequential successful batches. This is a measured production schema
+  fix: the case prompt, required memory proposal, completed-run requirement, and rejection of any tool
+  failure are unchanged. Focused Vitest passed 179/179; architecture audits passed at zero violations;
+  the unchanged target passed 1/1 and the complete memory section passed 11/11. Tool-call arguments
+  and failures are now retained in the two affected Phoenix outputs for future variance diagnosis.
 
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.

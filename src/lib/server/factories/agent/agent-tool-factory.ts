@@ -579,7 +579,11 @@ const noteEdit = z.object({
 /** Shared by edit_note and edit_skill, so their preflight gates validate the same shape. */
 const noteEdits = z.object({
 	noteId: noteId,
-	edits: z.array(noteEdit).min(1).max(20)
+	// Two Luna runs independently dropped `newText` from the sixth substantive
+	// replacement in one generated call. Keep each atomic patch small enough for
+	// every replacement to remain structurally complete; callers can continue in
+	// a later call after the first batch succeeds.
+	edits: z.array(noteEdit).min(1).max(5)
 });
 const localDate = z.iso.date().transform((value) => value as LocalDate);
 export interface AgentToolContext {
@@ -1284,9 +1288,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			temporal({
 				projectId: optionalModelField(projectId),
 				noteId: optionalModelField(noteId),
-				status: optionalModelField(
-					z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled'])
-				),
+				status: optionalModelField(z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled'])),
 				responsibility: optionalModelField(z.enum(['mine', 'waiting_on'])),
 				dueBefore: optionalModelField(localDate)
 			}),

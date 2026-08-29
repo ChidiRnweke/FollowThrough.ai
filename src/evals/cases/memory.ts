@@ -321,6 +321,11 @@ export const memoryCases: readonly EvalCase[] = [
 				model: result.model,
 				response: result.finalResponse,
 				toolCalls: result.calledToolNames,
+				calls: result.toolCalls.map((call) => ({
+					name: call.name,
+					arguments: call.arguments,
+					failure: call.failure
+				})),
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 

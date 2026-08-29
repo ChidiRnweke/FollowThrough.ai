@@ -44,6 +44,11 @@ export const correctnessCases: readonly EvalCase[] = [
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
+				calls: result.toolCalls.map((toolCall) => ({
+					name: toolCall.name,
+					arguments: toolCall.arguments,
+					failure: toolCall.failure
+				})),
 				expectedNoteId,
 				actualNoteId: call?.arguments.noteId,
 				response: result.finalResponse.slice(0, 300)

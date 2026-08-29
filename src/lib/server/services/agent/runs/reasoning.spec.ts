@@ -141,6 +141,12 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
+	it('splits extensive edits into complete sequential batches', () => {
+		expect(buildAgentInstructions({})).toContain(
+			'up to five complete replacements together in one edit_note call'
+		);
+	});
+
 	it('batches several new todos into one write', () => {
 		expect(buildAgentInstructions({})).toContain(
 			'use one create_todos call rather than repeated create_todo calls'
