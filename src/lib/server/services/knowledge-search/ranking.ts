@@ -7,6 +7,7 @@ import {
 	SemanticConventions
 } from '@arizeai/openinference-semantic-conventions';
 import type { Attributes } from '@opentelemetry/api';
+import { z } from 'zod';
 interface OperationObserver {
 	run<T>(
 		name: string,
@@ -50,11 +51,15 @@ export interface SearchRankingOptions extends LanguageModelClientOptions {
 	readonly observer?: OperationObserver;
 }
 
-interface RerankResult {
-	readonly index: number;
-	readonly relevance_score?: number;
-	readonly relevanceScore?: number;
-}
+const rerankResponseSchema = z.object({
+	results: z.array(
+		z.object({
+			index: z.number().int().nonnegative(),
+			relevance_score: z.number().optional(),
+			relevanceScore: z.number().optional()
+		})
+	)
+});
 
 /** Titles are retrieval evidence, not display-only metadata. */
 export const rerankDocumentText = (match: SearchMatch): string => {
@@ -174,8 +179,8 @@ export class SearchRanking implements ISearchRanking {
 						throw new ExternalServiceError('Reranking failed', {
 							cause: `OpenRouter rerank returned ${response.status}`
 						});
-					const body = (await response.json()) as { results?: readonly RerankResult[] };
-					return (body.results ?? [])
+					const body = rerankResponseSchema.parse(await response.json());
+					return body.results
 						.map((result) => {
 							const match = matches[result.index];
 							if (!match) return undefined;

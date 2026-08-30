@@ -1,22 +1,20 @@
 import { openRouterWebSearchTool, type WebResearchTool } from '$lib/models/agent';
+import { z } from 'zod';
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+const webResearchRequestSchema = z.looseObject({
+	tools: z.array(z.looseObject({ type: z.string() })).optional()
+});
 
 const requestUrl = (input: string | URL | Request): URL =>
 	new URL(input instanceof Request ? input.url : input.toString());
 
 const appendWebSearchTool = (body: string, tool: WebResearchTool): string => {
-	const request = JSON.parse(body) as { tools?: unknown };
-	const tools = Array.isArray(request.tools) ? request.tools : [];
-	if (
-		!tools.some(
-			(candidate) =>
-				typeof candidate === 'object' &&
-				candidate !== null &&
-				(candidate as { type?: unknown }).type === tool.type
-		)
-	)
-		tools.push(tool);
+	const request = webResearchRequestSchema.parse(JSON.parse(body));
+	const tools = request.tools ?? [];
+	if (!tools.some((candidate) => candidate.type === tool.type))
+		tools.push({ type: tool.type, parameters: { ...tool.parameters } });
 	return JSON.stringify({ ...request, tools });
 };
 

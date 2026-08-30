@@ -1,5 +1,6 @@
 import { ExternalServiceError } from '$lib/errors';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+import { z } from 'zod';
 
 interface OperationObserver {
 	run<T>(
@@ -79,6 +80,23 @@ interface OcrResponse {
 	readonly message?: string;
 	readonly detail?: unknown;
 }
+
+const ocrResponseSchema: z.ZodType<OcrResponse> = z.object({
+	pages: z
+		.array(
+			z.object({
+				index: z.number().optional(),
+				markdown: z.string().optional(),
+				images: z
+					.array(z.object({ id: z.string().optional(), image_base64: z.string().optional() }))
+					.optional()
+			})
+		)
+		.optional(),
+	usage_info: z.object({ pages_processed: z.number().optional() }).optional(),
+	message: z.string().optional(),
+	detail: z.json().optional()
+});
 
 export interface MistralOcrOptions {
 	readonly baseURL?: string;
@@ -188,7 +206,7 @@ export class MistralOcr implements ITextRecognition {
 						include_image_base64: true
 					})
 				});
-				const payload = (await response.json()) as OcrResponse;
+				const payload = ocrResponseSchema.parse(await response.json());
 				if (!response.ok)
 					throw new ExternalServiceError('Document OCR failed', {
 						cause: failureMessage(payload, response.status)

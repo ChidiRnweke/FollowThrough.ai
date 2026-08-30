@@ -1,4 +1,8 @@
+import { z } from 'zod';
+
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+const reasoningRequestSchema = z.looseObject({ reasoning: z.json().optional() });
 
 const requestUrl = (input: string | URL | Request): URL =>
 	new URL(input instanceof Request ? input.url : input.toString());
@@ -16,7 +20,7 @@ const requestUrl = (input: string | URL | Request): URL =>
 const REASONING = { enabled: true } as const;
 
 const withReasoningRequested = (body: string): string => {
-	const request = JSON.parse(body) as { reasoning?: unknown };
+	const request = reasoningRequestSchema.parse(JSON.parse(body));
 	// A caller that already asked for reasoning has said what it wants — an effort
 	// level, or off — and this must not overwrite it with a blanket "on".
 	if (request.reasoning !== undefined) return body;

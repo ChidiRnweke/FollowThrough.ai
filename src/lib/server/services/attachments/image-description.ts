@@ -1,4 +1,10 @@
+import { z } from 'zod';
+
 const DEFAULT_LANGUAGE_MODEL_BASE_URL = 'https://openrouter.ai/api/v1';
+
+const imageDescriptionResponseSchema = z.object({
+	choices: z.array(z.object({ message: z.object({ content: z.string() }) }))
+});
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
@@ -56,7 +62,7 @@ export class ImageDescription implements IImageDescription {
 			})
 		});
 		if (!response.ok) throw new Error(`Vision description failed (${response.status})`);
-		const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+		const payload = imageDescriptionResponseSchema.parse(await response.json());
 		const description = payload.choices?.[0]?.message?.content?.trim();
 		if (!description) throw new Error('Vision model returned no description');
 		return description;

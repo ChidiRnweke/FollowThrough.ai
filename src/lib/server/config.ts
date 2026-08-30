@@ -471,6 +471,10 @@ export const setSessionCookie = (
 export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
 	cookies.delete('session', { path: '/' });
 
+const pkceCookieSchema = z
+	.object({ codeVerifier: z.string().min(1), state: z.string().min(1) })
+	.strict();
+
 export const getPkceCookie = (
 	cookies: Pick<CookieJar, 'get'>,
 	state: string
@@ -478,7 +482,7 @@ export const getPkceCookie = (
 	const data = cookies.get(`oauth_${state}`);
 	if (!data) return null;
 	try {
-		return JSON.parse(data) as { codeVerifier: string; state: string };
+		return pkceCookieSchema.parse(JSON.parse(data));
 	} catch (error) {
 		throw new Error('The OAuth verification cookie is corrupt', { cause: error });
 	}
