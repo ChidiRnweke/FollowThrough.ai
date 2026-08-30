@@ -52,7 +52,7 @@ export const instrumentedController = <T extends object>(
 				const [actor, ...rest] = args;
 				const userId =
 					typeof actor === 'object' && actor !== null && 'userId' in actor
-						? (actor as { userId: unknown }).userId
+						? actor.userId
 						: undefined;
 				if (logLevelEnabled('info'))
 					logger.info(
