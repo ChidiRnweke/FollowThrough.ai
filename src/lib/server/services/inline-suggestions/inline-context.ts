@@ -8,6 +8,7 @@ import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
 import { searchDocumentIdSchema, type SearchMatch } from '$lib/models/knowledge-search';
 import type { ProjectId } from '$lib/models/projects';
+import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 import { getEncoding } from 'js-tiktoken';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 interface OperationObserver {
@@ -34,10 +35,7 @@ interface KnowledgeSearcher {
 }
 
 interface MemoryEntryLister {
-	list(
-		actor: ActorContext,
-		filter: Readonly<Record<string, unknown>>
-	): Promise<readonly MemoryEntry[]>;
+	list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
 }
 
 interface Reranker {

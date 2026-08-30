@@ -10,6 +10,7 @@ import type {
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { Lab } from './application';
 
 const TERMINAL: readonly AgentRunStatus[] = [
@@ -22,7 +23,7 @@ const TERMINAL: readonly AgentRunStatus[] = [
 export interface ToolCall {
 	readonly callId: string;
 	readonly name: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
+	readonly arguments: AgentPayloadObject;
 	readonly output?: unknown;
 	readonly failure?: string;
 	/** True when the run paused for approval on this call instead of executing it. */

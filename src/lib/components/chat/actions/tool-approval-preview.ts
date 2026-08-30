@@ -1,5 +1,6 @@
 import type { Note, NoteEdit, NoteId } from '$lib/models/notes';
 import type { AgentPreferences } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { FieldChange } from '$lib/components/agent';
 import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-patch-preview';
 import { argumentLabel } from './tool-approval-fields';
@@ -107,7 +108,7 @@ const settingsHref = (keys: readonly string[]): string =>
  * whole preference record would otherwise bury the one field it means to move.
  */
 const settingsChange = (
-	args: Readonly<Record<string, unknown>>,
+	args: AgentPayloadObject,
 	baseline: AgentPreferences | undefined
 ): SettingsChange => {
 	const proposed = Object.entries(args).filter(
@@ -155,10 +156,7 @@ export interface NoteChange {
 }
 
 /** The note a pending call will change, so the card knows what to load for comparison. */
-export const targetNoteId = (
-	name: string,
-	args: Readonly<Record<string, unknown>>
-): NoteId | undefined => {
+export const targetNoteId = (name: string, args: AgentPayloadObject): NoteId | undefined => {
 	if (!NOTE_BODY_TOOLS.has(name)) return undefined;
 	return typeof args.noteId === 'string' ? (args.noteId as NoteId) : undefined;
 };
@@ -167,7 +165,7 @@ export const isNoteBodyTool = (name: string): boolean => NOTE_BODY_TOOLS.has(nam
 
 const candidateBody = (
 	name: string,
-	args: Readonly<Record<string, unknown>>,
+	args: AgentPayloadObject,
 	baseline: Note
 ): { document: Note['document']; plainText: string } | { problems: readonly string[] } => {
 	if (name === 'save_note') {
@@ -193,7 +191,7 @@ const EMPTY_DOCUMENT: Note['document'] = { type: 'doc', content: [] };
  * user was asked to approve a body they could not see. Showing one side is the honest
  * answer: it cannot say what changes, but it can always say what will be written.
  */
-const uncomparableSave = (args: Readonly<Record<string, unknown>>): ApprovalPreview | undefined => {
+const uncomparableSave = (args: AgentPayloadObject): ApprovalPreview | undefined => {
 	const markdown = typeof args.markdown === 'string' ? args.markdown : undefined;
 	if (markdown === undefined) return undefined;
 	const preview = previewNoteMarkdown(markdown);
@@ -217,12 +215,12 @@ const uncomparableSave = (args: Readonly<Record<string, unknown>>): ApprovalPrev
 /** Tools whose payload is a whole draw.io document. */
 const DIAGRAM_TOOLS = new Set(['create_diagram', 'edit_diagram']);
 
-const diagramTitle = (args: Readonly<Record<string, unknown>>, fallback: string): string =>
+const diagramTitle = (args: AgentPayloadObject, fallback: string): string =>
 	typeof args.title === 'string' && args.title.trim() ? args.title : fallback;
 
 const diagramChange = (
 	name: string,
-	args: Readonly<Record<string, unknown>>,
+	args: AgentPayloadObject,
 	baseline: ApprovalBaseline
 ): DiagramChange => {
 	const source = typeof args.source === 'string' ? args.source : '';
@@ -238,7 +236,7 @@ const diagramChange = (
 
 export const approvalPreview = (
 	name: string,
-	args: Readonly<Record<string, unknown>>,
+	args: AgentPayloadObject,
 	baseline: ApprovalBaseline
 ): ApprovalPreview => {
 	if (name === PREFERENCES_TOOL)

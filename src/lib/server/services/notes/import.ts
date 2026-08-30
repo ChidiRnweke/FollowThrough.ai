@@ -189,7 +189,7 @@ const frontmatterBlock = (block: string): FrontmatterBlock => {
 		const parsed: unknown = parseYaml(block);
 		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
 			return { kind: 'corrupt' };
-		return { kind: 'keys', keys: Object.keys(parsed as Record<string, unknown>) };
+		return { kind: 'keys', keys: Object.keys(parsed) };
 	} catch {
 		return { kind: 'corrupt' };
 	}

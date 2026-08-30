@@ -1,26 +1,32 @@
 import { mount, unmount, type Component } from 'svelte';
 
+/**
+ * Node-view component props, open by design: this renderer mounts arbitrary
+ * Tiptap node-view components, so the bag takes Svelte's own generic props
+ * shape. Vendored editor code — the domain payload types model this app's
+ * wire data, not DOM-attributable props.
+ */
+// audit-allow: no-record-unknown — Svelte mounts arbitrary components as open prop records by design.
+export type RendererProps = Record<string, unknown>;
+
 export interface SvelteRendererOptions {
-	props?: Record<string, unknown>;
+	props?: RendererProps;
 }
 
 export class SvelteRenderer {
 	private container: Element;
 
-	private componentInstance: Record<string, unknown> | null = null;
+	private componentInstance: RendererProps | null = null;
 
-	private component: Component<Record<string, unknown>>;
+	private component: Component<RendererProps>;
 
-	private store = $state<Record<string, unknown>>({});
+	private store = $state<RendererProps>({});
 
 	destroyed = false;
 
 	el: Element | null = null;
 
-	constructor(
-		component: Component<Record<string, unknown>>,
-		{ props = {} }: SvelteRendererOptions = {}
-	) {
+	constructor(component: Component<RendererProps>, { props = {} }: SvelteRendererOptions = {}) {
 		this.component = component;
 		this.container = document.createElement('div');
 		Object.assign(this.store, props);
@@ -31,11 +37,11 @@ export class SvelteRenderer {
 		return this.el;
 	}
 
-	get props(): Record<string, unknown> {
+	get props(): RendererProps {
 		return this.store;
 	}
 
-	get ref(): Record<string, unknown> | null {
+	get ref(): RendererProps | null {
 		return this.componentInstance;
 	}
 
@@ -52,7 +58,7 @@ export class SvelteRenderer {
 		this.el = this.container.firstElementChild as Element | null;
 	}
 
-	updateProps(props: Record<string, unknown> = {}): void {
+	updateProps(props: RendererProps = {}): void {
 		if (this.destroyed) {
 			return;
 		}

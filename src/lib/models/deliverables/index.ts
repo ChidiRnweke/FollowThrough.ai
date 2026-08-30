@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -121,6 +123,27 @@ export const defaultExportSettings: ExportSettings = {
 	includeTitle: false,
 	diagramTheme: { base: 'light' }
 };
+
+/**
+ * Stored settings are a partial overlay on the defaults, so every field is
+ * optional here and the reader merges the result. Written to JSONB by the
+ * exporter's own repositories, where typed values are always a subset of this.
+ */
+export const exportSettingsOverlaySchema = z
+	.object({
+		fontFamily: z.enum(['helvetica', 'times', 'courier']),
+		fontSize: z.number(),
+		lineHeight: z.number(),
+		margin: z.number(),
+		includeTitle: z.boolean(),
+		diagramTheme: z
+			.object({
+				base: z.enum(['light', 'dark']),
+				colors: z.record(z.string(), z.string()).optional()
+			})
+			.optional()
+	})
+	.partial();
 
 /** Intended display size of a diagram, in SVG user units. */
 export interface DiagramSize {

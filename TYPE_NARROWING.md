@@ -267,7 +267,7 @@ produce.
 
 ### Phase 5 — Land remaining zero-baseline rules and close the audit
 
-- [ ] **TN-50: Land `no-record-unknown` at zero**
+- [x] **TN-50: Land `no-record-unknown` at zero**
 - [x] **TN-51: Land identifier-independent `no-weak-record-guard` at zero**
   - [x] Detect by signature — a type predicate whose target is `Record<string, unknown|any>` or a
         bare weak index signature — never by the identifier. The name-based scanner reported a

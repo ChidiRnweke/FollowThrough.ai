@@ -6,7 +6,14 @@ export type EditorStateSnapshot = {
 	editor: Editor;
 };
 
-const shallowEqual = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+/**
+ * Attr bags compared by this hook are open ProseMirror attributes; the values
+ * are only ever diffed, never indexed by name.
+ */
+// audit-allow: no-record-unknown — attrs are compared with Object.keys, never read by shape.
+type AttrBag = Record<string, unknown>;
+
+const shallowEqual = (a: AttrBag, b: AttrBag) => {
 	const aKeys = Object.keys(a);
 
 	if (aKeys.length !== Object.keys(b).length) {
@@ -22,7 +29,7 @@ const shallowEqual = (a: Record<string, unknown>, b: Record<string, unknown>) =>
 	return true;
 };
 
-export const useEditorState = <T extends Record<string, unknown>>({
+export const useEditorState = <T extends AttrBag>({
 	editor,
 	selector
 }: {

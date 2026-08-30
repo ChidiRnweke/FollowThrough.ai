@@ -33,6 +33,7 @@ import {
 	parseProviderToolCall,
 	unwrapDispatchedToolCall
 } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
@@ -244,7 +245,7 @@ interface AgentToolExecutor {
 		input: {
 			readonly callId: string;
 			readonly toolName: string;
-			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly arguments: AgentPayloadObject;
 			readonly classification: 'read' | 'proposal' | 'mutation';
 		},
 		action: () => Promise<unknown>

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 import { svgViewBoxSize } from '$lib/models/deliverables';
 
 /**
@@ -35,18 +35,15 @@ export function attachmentIdFromSrc(src: string): string | undefined {
 
 export function collectImageSources(doc: ProseMirrorDocument): string[] {
 	const sources: string[] = [];
-	const walk = (node: Record<string, unknown>): void => {
+	const walk = (node: ProseMirrorNode): void => {
 		if (node.type === 'image') {
-			const attrs = node.attrs;
-			const src =
-				typeof attrs === 'object' && attrs !== null && 'src' in attrs ? attrs.src : undefined;
+			const src = node.attrs?.src;
 			if (typeof src === 'string' && (isRemoteSource(src) || ATTACHMENT_SRC.test(src)))
 				sources.push(src);
 		}
-		if (!Array.isArray(node.content)) return;
-		for (const child of node.content) if (typeof child === 'object' && child !== null) walk(child);
+		if ('content' in node) for (const child of node.content ?? []) walk(child);
 	};
-	walk({ type: doc.type, content: doc.content });
+	for (const child of doc.content ?? []) walk(child);
 	return sources;
 }
 

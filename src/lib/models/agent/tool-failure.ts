@@ -27,13 +27,27 @@ export interface ToolFailure {
 export const FAILURE_PREFIX = '{"failure":';
 
 /**
+ * The detail a tool attaches to a failure: JSON, with keys open. Declared here
+ * rather than borrowed from `payload.ts` because a model file may not import a
+ * sibling — only the barrel may — and this shape is exactly the slice of
+ * `AgentPayloadObject` a failure detail is.
+ */
+export type FailureDetail =
+	| string
+	| number
+	| boolean
+	| null
+	| readonly FailureDetail[]
+	| { readonly [key: string]: FailureDetail };
+
+/**
  * Build a failed result. `detail` is whatever the tool can say about it — the
  * problems a patch hit, the recovery advice an adapter can give — spread after
  * `failure` so the key order the prefix depends on holds.
  */
 export const toolFailure = (
 	failure: string,
-	detail?: Readonly<Record<string, unknown>>
+	detail?: { readonly [key: string]: FailureDetail }
 ): ToolFailure => ({ failure, ...detail });
 
 /**

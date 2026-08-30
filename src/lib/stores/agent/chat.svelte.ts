@@ -8,6 +8,7 @@ import type {
 	Message,
 	RunAgentInput
 } from '$lib/models/agent';
+import { isAgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type {
@@ -195,11 +196,10 @@ const restoredImages = (value: unknown): ChatPart[] => {
 	return value
 		.filter(
 			(item): item is { id: string; dataUrl: string; name: string } =>
-				typeof item === 'object' &&
-				item !== null &&
-				typeof (item as Record<string, unknown>).id === 'string' &&
-				typeof (item as Record<string, unknown>).dataUrl === 'string' &&
-				typeof (item as Record<string, unknown>).name === 'string'
+				isAgentPayloadObject(item) &&
+				typeof item.id === 'string' &&
+				typeof item.dataUrl === 'string' &&
+				typeof item.name === 'string'
 		)
 		.map((item) => ({
 			kind: 'image' as const,

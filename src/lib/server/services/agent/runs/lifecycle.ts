@@ -2,9 +2,9 @@ import type { ActorContext } from '$lib/models/identity';
 import { AgentProviderFailure } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
-	AgentRunContext,
 	AgentEvent,
 	AgentRun,
+	AgentRunContext,
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
@@ -14,6 +14,7 @@ import type {
 	RunAgentInput,
 	ToolActivity
 } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { DateTime } from '$lib/models/workspace';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type {
@@ -35,7 +36,7 @@ interface AgentToolExecutor {
 		input: {
 			readonly callId: string;
 			readonly toolName: string;
-			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly arguments: AgentPayloadObject;
 			readonly classification: 'read' | 'proposal' | 'mutation';
 		},
 		action: () => Promise<unknown>

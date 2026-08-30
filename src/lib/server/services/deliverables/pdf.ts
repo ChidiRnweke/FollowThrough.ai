@@ -1,6 +1,7 @@
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import pdfmake from 'pdfmake';
+import type { PdfCellBlock, PdfContent, PdfDocumentDefinition, PdfTableBlock } from 'pdfmake';
 import type {
 	DiagramRenders,
 	ExportSettings,
@@ -205,7 +206,10 @@ interface ConversionContext {
 	readonly bodyFont: string;
 }
 
-function imageBlock(attrs: ProseMirrorMediaAttrs, context: ConversionContext): unknown {
+function imageBlock(
+	attrs: ProseMirrorMediaAttrs,
+	context: ConversionContext
+): PdfContent | PdfContent[] {
 	const src = attrs.src ?? undefined;
 	if (!src) return [];
 	const data = src.startsWith('data:') ? src : context.images.get(src);
@@ -240,8 +244,8 @@ const CODE_PANEL_LINE = '#e5e7eb';
  * pdfmake idiom for a filled box with inner padding; `preserveLeadingSpaces`
  * keeps the source indentation that plain text nodes would lose.
  */
-function codePanel(text: string): unknown {
-	const runs: unknown[] = [...withFontRuns({ text, color: '#1f2328' }, MONO_FONT)];
+function codePanel(text: string): PdfTableBlock {
+	const runs: PdfContent[] = [...withFontRuns({ text, color: '#1f2328' }, MONO_FONT)];
 	return {
 		table: {
 			widths: ['*'],
@@ -276,18 +280,18 @@ function codePanel(text: string): unknown {
 function tableBlock(
 	node: Extract<ProseMirrorNode, { type: 'table' }>,
 	context: ConversionContext
-): unknown {
+): PdfContent | PdfContent[] {
 	const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
 	// Slots covered by a rowspan from an earlier row, per row index.
 	const covered: Array<Set<number>> = rows.map(() => new Set<number>());
-	const body: unknown[][] = [];
+	const body: (readonly (PdfCellBlock | Record<string, never>)[])[] = [];
 	let columnCount = 0;
 
 	rows.forEach((row, rowIndex) => {
 		const cells = (row.content ?? []).filter(
 			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
 		);
-		const bodyRow: unknown[] = [];
+		const bodyRow: (PdfCellBlock | Record<string, never>)[] = [];
 		let column = 0;
 		for (const cell of cells) {
 			while (covered[rowIndex]!.has(column)) {
@@ -298,15 +302,12 @@ function tableBlock(
 			const rowSpan = Math.max(cell.attrs?.rowspan ?? 1, 1);
 			const cellContent = cell.content ?? [];
 			const converted = cellContent.map((c) => convertNode(c, context)).flat();
-			const entry: Record<string, unknown> = {
+			const entry: PdfCellBlock = {
 				...(converted.length > 0 ? { text: converted } : { text: '' }),
 				...(colSpan > 1 ? { colSpan } : {}),
-				...(rowSpan > 1 ? { rowSpan } : {})
+				...(rowSpan > 1 ? { rowSpan } : {}),
+				...(cell.type === 'tableHeader' ? { bold: true, fillColor: TABLE_HEADER_FILL } : {})
 			};
-			if (cell.type === 'tableHeader') {
-				entry.bold = true;
-				entry.fillColor = TABLE_HEADER_FILL;
-			}
 			bodyRow.push(entry);
 			for (let offset = 1; offset < colSpan; offset += 1) {
 				bodyRow.push({});
@@ -346,7 +347,7 @@ function tableBlock(
 		colwidths.length === columnCount
 			? colwidths.reduce((sum, w) => sum + w, 0)
 			: undefined;
-	const widths = totalWidth
+	const widths: (number | '*')[] = totalWidth
 		? colwidths.map((w) => ((w as number) / totalWidth) * context.contentWidth)
 		: Array.from({ length: columnCount }, () => '*');
 
@@ -378,7 +379,7 @@ function tableBlock(
  * raster-then-vector fallback: the two copies were identical down to the fit box,
  * and only one carried the note explaining it.
  */
-function diagramContent(key: string, context: ConversionContext): unknown {
+function diagramContent(key: string, context: ConversionContext): PdfContent | undefined {
 	// Leave the block's own margins out of the fit box: an unbreakable block
 	// reaching the exact page body height sits on a knife's edge.
 	const fit = [context.contentWidth, context.usableHeight - 16];
@@ -389,7 +390,7 @@ function diagramContent(key: string, context: ConversionContext): unknown {
 	return svg ? { svg, fit, margin } : undefined;
 }
 
-function convertNode(node: ProseMirrorNode, context: ConversionContext): unknown {
+function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfContent | PdfContent[] {
 	const type = node.type;
 	const content = nodeContent(node);
 
@@ -408,7 +409,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): unknown
 			};
 		}
 		case 'paragraph': {
-			const children: unknown[] = [];
+			const children: (string | PdfContent)[] = [];
 			for (const child of content) {
 				if (child.type === 'text') {
 					children.push(...withFontRuns(textRunFromNode(child), context.bodyFont));
@@ -440,7 +441,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): unknown
 			const blockContent = content.map((c) => convertNode(c, context)).flat();
 			return blockContent.map((item) => {
 				if (typeof item === 'object' && item !== null) {
-					return { ...(item as Record<string, unknown>), italics: true, margin: [20, 0, 20, 4] };
+					return { ...item, italics: true, margin: [20, 0, 20, 4] };
 				}
 				return { text: item, italics: true, margin: [20, 0, 20, 4] };
 			});
@@ -504,9 +505,9 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): unknown
 	}
 }
 
-function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): unknown[] {
+function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): PdfContent[] {
 	const content = doc.content ?? [];
-	const result: unknown[] = [];
+	const result: PdfContent[] = [];
 	for (const node of content) {
 		const converted = convertNode(node, context);
 		if (Array.isArray(converted)) {
@@ -553,7 +554,7 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 		bodyFont
 	};
 
-	const content: unknown[] = [];
+	const content: PdfContent[] = [];
 
 	// The export title is the file name; it only lands on the page when asked for.
 	if (settings.includeTitle) {
@@ -580,7 +581,7 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 		content.push({ text: '', margin: [0, 0, 0, 8] });
 	}
 
-	const docDefinition: Record<string, unknown> = {
+	const docDefinition: PdfDocumentDefinition = {
 		content,
 		defaultStyle: {
 			font: FONT_FAMILIES[settings.fontFamily],

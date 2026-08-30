@@ -13,7 +13,8 @@ const RULES = [
 	'no-instanceof-models',
 	'no-response-json-cast',
 	'no-zod-unknown',
-	'no-weak-record-guard'
+	'no-weak-record-guard',
+	'no-record-unknown'
 ] as const;
 export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
@@ -63,6 +64,30 @@ const weakRecordType = (node: ts.TypeNode): boolean => {
 		node.members.length > 0 &&
 		node.members.every((member) => ts.isIndexSignatureDeclaration(member) && weakValue(member.type))
 	);
+};
+/**
+ * `Record<string, unknown|any>`, `{ [k: string]: unknown|any }`, or either
+ * wrapped in `Readonly<…>` — the open-keyed struct substitute TN-50 bans.
+ *
+ * The category-rule and the guard-rule share `weakRecordType` because they
+ * attack the same shape in two positions: the guard declares a predicate
+ * narrowing to it, and this one names it as a field, parameter, or return. A
+ * `Readonly` wrapper is the same shape in a second coat — the majority of the
+ * baseline was `Readonly<Record<string, unknown>>` — so it must be unwrapped
+ * before checking, or renaming the wrapper would evade the rule the way a
+ * rename evades nothing else here.
+ */
+const weakRecordTypeRef = (node: ts.TypeNode): boolean => {
+	if (ts.isTypeReferenceNode(node)) {
+		if (
+			ts.isIdentifier(node.typeName) &&
+			node.typeName.text === 'Readonly' &&
+			node.typeArguments?.length === 1
+		)
+			return weakRecordTypeRef(node.typeArguments[0]);
+		return weakRecordType(node);
+	}
+	return weakRecordType(node);
 };
 
 /**
@@ -170,6 +195,9 @@ export const analyzeSource = (
 				return;
 			}
 		}
+		// A `Readonly<Record<string, unknown>>` matches both at the wrapper and at
+		// its type argument — one violation per rule and line is the report.
+		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
 	const visit = (node: ts.Node): void => {
@@ -180,6 +208,12 @@ export const analyzeSource = (
 			report('no-zod-unknown', node, 'uses a non-narrowing Zod unknown or any schema');
 		if (weakRecordGuard(node))
 			report('no-weak-record-guard', node, 'narrows to an open-keyed record instead of a type');
+		if (ts.isTypeNode(node) && weakRecordTypeRef(node))
+			report(
+				'no-record-unknown',
+				node,
+				'uses an open-keyed record of unknown as a struct substitute'
+			);
 		if (
 			fileName.startsWith('src/lib/models/') &&
 			ts.isBinaryExpression(node) &&

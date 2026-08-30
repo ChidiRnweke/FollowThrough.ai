@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type {
 	AgentEvent,
 	AgentRunContext,
@@ -114,7 +115,7 @@ type DiagramWorkflowObserver = <T>(
 		input: string;
 		sessionId: string;
 		userId?: string;
-		metadata?: Readonly<Record<string, unknown>>;
+		metadata?: AgentPayloadObject;
 		tags?: readonly string[];
 	},
 	operation: () => Promise<T>,
@@ -556,12 +557,11 @@ export class DiagramAuthoring {
 					input: input.prompt,
 					sessionId: conversation.id,
 					userId: actor.userId,
-					metadata: {
-						runId: run.id,
-						noteId: task.noteId,
-						operation: task.operation,
-						model
-					},
+					// Two arms rather than a conditional spread: an absent note must not
+					// be spelled as `noteId: undefined` in trace metadata.
+					metadata: task.noteId
+						? { runId: run.id, noteId: task.noteId, operation: task.operation, model }
+						: { runId: run.id, operation: task.operation, model },
 					tags: ['agent', 'diagram']
 				},
 				async () => {

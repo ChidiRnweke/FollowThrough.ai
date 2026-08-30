@@ -10,6 +10,7 @@
 		class: className,
 		...restProps
 	}: WithElementRef<HTMLAttributes<HTMLElement>> & {
+		// audit-allow: no-record-unknown — shadcn child slots pass the primitive's own props forward; they are open by design.
 		child?: Snippet<[{ props: Record<string, unknown> }]>;
 	} = $props();
 

@@ -290,7 +290,7 @@ export function toolDetailLines(tool: ChatToolActivity): string[] {
 	return Object.keys(tool.arguments).length > 0 ? ['No details to show.'] : ['No arguments.'];
 }
 
-export function scalarSummaries(arguments_: Readonly<Record<string, unknown>>): string[] {
+export function scalarSummaries(arguments_: AgentPayloadObject): string[] {
 	return Object.entries(arguments_)
 		.filter(
 			([key, value]) =>

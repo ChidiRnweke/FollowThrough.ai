@@ -187,12 +187,37 @@ const edgeStyle = (palette: DrawioPalette): Record<string, string> => ({
 });
 
 /**
+ * Every configuration key this host sends draw.io in its `configure` message.
+ * draw.io merges whatever subset it receives, so the send side accepts any
+ * `Partial` of this; the app's own `drawioConfig` produces the whole record.
+ */
+export interface DrawioHostConfig {
+	readonly passiveScroll: boolean;
+	readonly preserveViewState: boolean;
+	readonly suppressNewWindows: boolean;
+	readonly css: string;
+	readonly darkColor: string;
+	readonly defaultGridColor: string;
+	readonly defaultDarkGridColor: string;
+	readonly defaultPageBackgroundColor: string;
+	readonly defaultDarkPageBackgroundColor: string;
+	readonly defaultFonts: readonly string[];
+	readonly defaultVertexStyle: Readonly<Record<string, string>>;
+	readonly defaultEdgeStyle: Readonly<Record<string, string>>;
+	readonly presetColors: readonly string[];
+	readonly hideMenus: readonly string[];
+	readonly defaultLibraries: string;
+	readonly sidebarWidth: number;
+	readonly expandLibraries: boolean;
+}
+
+/**
  * The configuration draw.io is sent once, before it initialises.
  *
  * `passiveScroll`, `preserveViewState` and `suppressNewWindows` are behavioural
  * and predate the theming; the rest is appearance.
  */
-export const drawioConfig = (palette: DrawioPalette): Record<string, unknown> => ({
+export const drawioConfig = (palette: DrawioPalette): DrawioHostConfig => ({
 	passiveScroll: true,
 	preserveViewState: true,
 	suppressNewWindows: true,

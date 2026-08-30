@@ -5,6 +5,7 @@ import type { ControllerFactory } from '$lib/server/factories/controller-factory
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { DomainError } from '$lib/errors';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import {
 	McpTools,
@@ -116,7 +117,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 				inputSchema: definition.parameters.shape,
 				annotations: annotationsFor(definition)
 			},
-			(input: Record<string, unknown>) => attempt(() => definition.execute(input))
+			(input: AgentPayloadObject) => attempt(() => definition.execute(input))
 		);
 		registered.add(definition.name);
 	};

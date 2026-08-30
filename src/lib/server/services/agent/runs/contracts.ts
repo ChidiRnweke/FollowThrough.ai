@@ -15,6 +15,7 @@ import type {
 	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
@@ -102,7 +103,7 @@ export interface AgentToolExecutor {
 		input: {
 			readonly callId: string;
 			readonly toolName: string;
-			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly arguments: AgentPayloadObject;
 			readonly classification: 'read' | 'proposal' | 'mutation';
 		},
 		action: () => Promise<unknown>

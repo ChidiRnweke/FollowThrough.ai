@@ -19,6 +19,7 @@
 		busy?: boolean;
 		onconfirm: () => void | Promise<void>;
 		/** Rendered inside an AlertDialog.Trigger; receives the trigger props to spread. */
+		// audit-allow: no-record-unknown — the trigger slot forwards the headless primitive's props, open by design.
 		trigger: Snippet<[Record<string, unknown>]>;
 	} = $props();
 

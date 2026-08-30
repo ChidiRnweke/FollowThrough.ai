@@ -6,6 +6,7 @@ import strings from './strings.js';
 import { getCellsInColumn, isRowSelected, selectRow } from './utils.js';
 
 export interface TableCellOptions {
+	// audit-allow: no-record-unknown — Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
 	HTMLAttributes: Record<string, unknown>;
 }
 

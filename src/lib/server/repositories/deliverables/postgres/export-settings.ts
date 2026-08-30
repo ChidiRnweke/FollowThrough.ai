@@ -2,14 +2,14 @@ import { and, eq } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { ExportSettings } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import { defaultExportSettings } from '$lib/models/deliverables';
+import { defaultExportSettings, exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import type { ExportSettingsRepository } from '$lib/server/repositories/deliverables';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/deliverables';
 
-const toSettings = (stored: Record<string, unknown>): ExportSettings => ({
+const toSettings = (stored: unknown): ExportSettings => ({
 	...defaultExportSettings,
-	...(stored as Partial<ExportSettings>)
+	...exportSettingsOverlaySchema.parse(stored)
 });
 
 export class ExportSettingsRecords implements ExportSettingsRepository {

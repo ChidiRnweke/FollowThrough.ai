@@ -122,19 +122,19 @@ describe('source audit rules', () => {
 			violations(
 				'const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object"'
 			)
-		).toHaveLength(1);
+		).toHaveLength(2);
 	});
 	it('rejects the same guard under a different name', () => {
 		expect(
 			violations(
 				'const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === "object"'
 			)
-		).toHaveLength(1);
+		).toHaveLength(2);
 	});
 	it('rejects a guard narrowing to an inline index signature', () => {
 		expect(
 			violations('function isBag(value: unknown): value is { [key: string]: any } { return true }')
-		).toHaveLength(1);
+		).toHaveLength(2);
 	});
 	it('allows a guard that narrows to a concrete type', () => {
 		expect(
@@ -143,20 +143,57 @@ describe('source audit rules', () => {
 			)
 		).toHaveLength(0);
 	});
-	it('allows a record type that is not a guard', () => {
-		expect(violations('const bag: Record<string, unknown> = {}')).toHaveLength(0);
+	it('allows a guard narrowing without a weak record in scope', () => {
+		expect(violations('const bag: Record<string, string> = {}')).toHaveLength(0);
 	});
-	it('allows a reasoned weak-record-guard exception', () => {
+	it('leaves the target record reported when only the guard is excused', () => {
 		expect(
 			violations(
 				'// audit-allow: no-weak-record-guard — Tiptap options are typed as any by the library.\nconst isRecord = (value: unknown): value is Record<string, unknown> => true'
 			)
-		).toHaveLength(0);
+		).toHaveLength(1);
 	});
 	it('rejects a stale weak-record-guard allowance', () => {
 		expect(
 			violations(
 				'// audit-allow: no-weak-record-guard — Tiptap options are typed as any by the library.\nconst isNote = (value: unknown): value is Note => true'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects an open-keyed record of unknown', () => {
+		expect(violations('const bag: Record<string, unknown> = {}')).toHaveLength(1);
+	});
+	it('rejects the same record wrapped in Readonly', () => {
+		expect(violations('const bag: Readonly<Record<string, unknown>> = {}')).toHaveLength(1);
+	});
+	it('rejects a bare open index signature of unknown', () => {
+		expect(violations('const bag: { [key: string]: unknown } = {}')).toHaveLength(1);
+	});
+	it('rejects a Readonly-wrapped inline index signature', () => {
+		expect(violations('const bag: Readonly<{ [key: string]: any }> = {}')).toHaveLength(1);
+	});
+	it('rejects a weak record as a generic argument', () => {
+		expect(violations('const component: Component<Record<string, unknown>> = frame')).toHaveLength(
+			1
+		);
+	});
+	it('allows a concrete-value map', () => {
+		expect(violations('const headers: Record<string, string> = {}')).toHaveLength(0);
+	});
+	it('allows a named open-keyed payload type', () => {
+		expect(violations('const args: AgentPayloadObject = {}')).toHaveLength(0);
+	});
+	it('allows a hardened alias used in place of the raw record', () => {
+		expect(
+			violations(
+				'// audit-allow: no-record-unknown — Svelte mounts arbitrary components as open prop records by design.\ntype RendererProps = Record<string, unknown>;\nconst frame: RendererProps = {}'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale record-unknown allowance', () => {
+		expect(
+			violations(
+				'// audit-allow: no-record-unknown — Svelte mounts arbitrary components as open prop records by design.\nconst headers: Record<string, string> = {}'
 			)
 		).toHaveLength(1);
 	});

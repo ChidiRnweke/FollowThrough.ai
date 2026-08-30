@@ -110,3 +110,32 @@ describe('Conversation visibility invariants', () => {
 		expect(message.content).toEqual({ type: 'text', text: 'Hello' });
 	});
 });
+
+describe('journaling tool outcomes', () => {
+	it('journals a succeeded call without output as null rather than raising', async () => {
+		const journal = new ConversationArchive(new InMemoryConversationRepository());
+		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
+		await journal.recordToolActivity(testActor(), conversation.id, {
+			callId: 'call-1',
+			name: 'revoke_api_token',
+			input: {},
+			status: 'succeeded'
+		});
+		const [message] = await journal.listMessages(testActor(), conversation.id);
+		expect(message.content.output).toBeNull();
+	});
+
+	it('raises when a present output value is not JSON', async () => {
+		const journal = new ConversationArchive(new InMemoryConversationRepository());
+		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
+		await expect(
+			journal.recordToolActivity(testActor(), conversation.id, {
+				callId: 'call-1',
+				name: 'some_tool',
+				input: {},
+				status: 'succeeded',
+				output: { notJson: () => 'x' }
+			})
+		).rejects.toThrow(/Settled tool output is not JSON/);
+	});
+});

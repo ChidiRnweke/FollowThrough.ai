@@ -20,6 +20,8 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ProjectTemplateStyles } from '$lib/models/projects';
 import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
 import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
+import type { StoredSessionItem } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
@@ -104,8 +106,6 @@ export const agentRunStatus = pgEnum('agent_run_status', [
 export const agentRunDecision = pgEnum('agent_run_decision', ['approve', 'reject']);
 export const conversationKind = pgEnum('conversation_kind', ['chat', 'workflow']);
 export const userRole = pgEnum('user_role', ['USER', 'ADMIN', 'WAITING']);
-
-type JsonObject = Record<string, unknown>;
 
 const timestamps = {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -686,7 +686,8 @@ export const trustPolicies = pgTable(
 		pipeline: pipelineKind('pipeline').notNull(),
 		autoAcceptEnabled: boolean('auto_accept_enabled').notNull().default(false),
 		minimumConfidence: integer('minimum_confidence'),
-		conditions: jsonb('conditions').$type<JsonObject>().notNull().default({}),
+		// Retained column (TN-40): nothing reads or writes the conditions anymore.
+		conditions: jsonb('conditions').$type<unknown>().notNull().default({}),
 		...timestamps
 	},
 	(table) => [
@@ -849,8 +850,10 @@ export const agentRuns = pgTable(
 			.default([]),
 		failure: text('failure'),
 		providerErrorCode: text('provider_error_code'),
-		contextSnapshot: jsonb('context_snapshot').$type<JsonObject>().notNull().default({}),
-		inputSnapshot: jsonb('input_snapshot').$type<JsonObject>().notNull().default({}),
+		// JSONB SQL has no schema: both snapshots are parsed at the repository
+		// read path (`parseRunAgentInput`, `parseAgentRunContextSnapshot`).
+		contextSnapshot: jsonb('context_snapshot').$type<unknown>().notNull().default({}),
+		inputSnapshot: jsonb('input_snapshot').$type<unknown>().notNull().default({}),
 		retryOfRunId: uuid('retry_of_run_id').references((): AnyPgColumn => agentRuns.id, {
 			onDelete: 'set null'
 		}),
@@ -905,7 +908,7 @@ export const agentSessionItems = pgTable(
 			.notNull()
 			.references(() => conversations.id, { onDelete: 'cascade' }),
 		position: integer('position').notNull(),
-		item: jsonb('item').$type<JsonObject>().notNull(),
+		item: jsonb('item').$type<StoredSessionItem>().notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -954,7 +957,7 @@ export const messages = pgTable(
 			{ onDelete: 'set null' }
 		),
 		role: messageRole('role').notNull(),
-		content: jsonb('content').$type<JsonObject>().notNull(),
+		content: jsonb('content').$type<AgentPayloadObject>().notNull(),
 		model: text('model'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
@@ -1111,7 +1114,9 @@ export const exportSettings = pgTable(
 		projectId: uuid('project_id')
 			.notNull()
 			.references(() => projects.id, { onDelete: 'cascade' }),
-		settings: jsonb('settings').$type<JsonObject>().notNull().default({}),
+		// A partial overlay on the app defaults, parsed at the repository
+		// read path (`exportSettingsOverlaySchema`).
+		settings: jsonb('settings').$type<unknown>().notNull().default({}),
 		...timestamps
 	},
 	(table) => [primaryKey({ columns: [table.userId, table.projectId] })]

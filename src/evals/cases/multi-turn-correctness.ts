@@ -1,11 +1,24 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
-import { runCase } from '../lab/run-case';
+import { runCase, type ToolCall } from '../lab/run-case';
 import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
 import { expectMemoryAbsent, expectMemoryProposed } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
+import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+
+/**
+ * The note id a call targeted, at the top level or as `note.id` (which
+ * `edit_note` nests under a `note` argument).
+ */
+const targetedNoteId = (call: ToolCall | undefined): AgentPayload | undefined => {
+	const note = call?.arguments?.note;
+	return (
+		call?.arguments?.noteId ??
+		(note !== undefined && isAgentPayloadObject(note) ? note.id : undefined)
+	);
+};
 
 /**
  * Multi-turn correctness cases.
@@ -56,9 +69,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(turn2, 'edit_note') ?? findCall(turn2, 'save_note');
-			const targetedId =
-				(call?.arguments as Record<string, unknown>)?.noteId ??
-				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
+			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === expectedNoteId;
 			const after = await lab.controllers.notes().get(workspace.actor, {
 				noteId: expectedNoteId
@@ -154,9 +165,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(turn3, 'edit_note') ?? findCall(turn3, 'save_note');
-			const targetedId =
-				(call?.arguments as Record<string, unknown>)?.noteId ??
-				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
+			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === backendNoteId;
 			const gotWrong = targetedId === mobileNoteId;
 			const backendAfter = await lab.controllers.notes().get(workspace.actor, {

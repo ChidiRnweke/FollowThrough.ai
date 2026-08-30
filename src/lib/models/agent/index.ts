@@ -137,7 +137,7 @@ export interface Message {
 	readonly runId?: AgentRunId;
 	readonly eventCursor?: string;
 	readonly role: 'user' | 'assistant' | 'tool';
-	readonly content: Readonly<Record<string, unknown>>;
+	readonly content: AgentPayloadObject;
 	readonly model?: string;
 	readonly createdAt: DateTime;
 }
@@ -151,7 +151,7 @@ interface ToolActivityBase {
 	 */
 	readonly callId?: string;
 	readonly name: string;
-	readonly input: Readonly<Record<string, unknown>>;
+	readonly input: AgentPayloadObject;
 }
 
 /**
@@ -327,7 +327,7 @@ export interface ToolPreference {
 export interface PendingAgentDecision {
 	readonly callId: string;
 	readonly toolName: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
+	readonly arguments: AgentPayloadObject;
 }
 
 /** Context available before retrieval-backed grounding is assembled. */
@@ -780,7 +780,7 @@ export type AgentEvent =
 			readonly type: 'tool_started';
 			readonly callId: string;
 			readonly name: string;
-			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly arguments: AgentPayloadObject;
 	  }
 	| {
 			readonly type: 'tool_completed';
@@ -801,7 +801,7 @@ export type AgentEvent =
 			readonly runId: AgentRunId;
 			readonly callId: string;
 			readonly name: string;
-			readonly arguments: Readonly<Record<string, unknown>>;
+			readonly arguments: AgentPayloadObject;
 	  }
 	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
 	/**
@@ -830,6 +830,22 @@ export type AgentEvent =
 			readonly model?: string;
 	  }
 	| { readonly type: 'resources_stale'; readonly resources: readonly string[] };
+
+/**
+ * A run event as persisted and replayed. It carries the domain union directly:
+ * the record was once a second, private copy of `AgentEvent` in a sibling file
+ * that could not import this barrel — an outdated declaration that spread
+ * `Readonly<Record<string, unknown>>` arguments and an `any` suggestion across
+ * every replay, diverging from the type the repository wrote and the client
+ * parsed.
+ */
+export interface AgentRunEventRecord {
+	readonly cursor: string;
+	readonly runId: AgentRunId;
+	readonly attempt: number;
+	readonly event: AgentEvent;
+	readonly createdAt: Date;
+}
 
 /**
  * What the provider streamed, as this application acts on it.

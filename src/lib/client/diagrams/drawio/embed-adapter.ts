@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { uncompressDrawioXml } from './uncompress';
+import type { DrawioHostConfig } from './theme';
 
 export const DRAWIO_EMBED_ORIGIN = 'https://embed.diagrams.net';
 // `compressed=0` is load-bearing: without it the embed returns each `<diagram>`
@@ -19,6 +20,25 @@ export interface DrawioEmbedPort {
 	listen(listener: (event: DrawioMessageEvent) => void): () => void;
 	post(message: string, targetOrigin: string): void;
 }
+
+/** The messages this host sends draw.io over its JSON protocol. */
+type DrawioHostMessage =
+	| {
+			readonly action: 'export';
+			readonly format: 'svg';
+			readonly embedImages: false;
+			readonly embedFonts: false;
+	  }
+	| { readonly action: 'configure'; readonly config: Partial<DrawioHostConfig> }
+	| {
+			readonly action: 'load';
+			readonly xml: string;
+			readonly autosave: 1;
+			readonly modified: 'modified';
+			readonly saveAndExit: 0;
+			readonly noExitBtn: 1;
+			readonly dark: boolean;
+	  };
 
 export class BrowserDrawioEmbedPort implements DrawioEmbedPort {
 	constructor(
@@ -106,7 +126,7 @@ export class DrawioEmbedAdapter {
 	 * Behavioural defaults, kept here so an embed that asks for no theming still
 	 * scrolls and navigates the way the app needs.
 	 */
-	private config: Readonly<Record<string, unknown>> = {
+	private config: Partial<DrawioHostConfig> = {
 		passiveScroll: true,
 		preserveViewState: true,
 		suppressNewWindows: true
@@ -121,7 +141,7 @@ export class DrawioEmbedAdapter {
 		xml: string;
 		dark?: boolean;
 		/** Appearance and behaviour, sent once before the editor initialises. */
-		config?: Readonly<Record<string, unknown>>;
+		config?: Partial<DrawioHostConfig>;
 	}): void {
 		this.stop();
 		this.xml = input.xml;
@@ -282,7 +302,7 @@ export class DrawioEmbedAdapter {
 		});
 	}
 
-	private send(message: Readonly<Record<string, unknown>>): void {
+	private send(message: DrawioHostMessage): void {
 		if (!this.port.frameWindow()) return;
 		this.port.post(JSON.stringify(message), DRAWIO_EMBED_ORIGIN);
 	}

@@ -1,5 +1,6 @@
 import { config as loadDotenv } from 'dotenv';
 import type { AcceptanceCriterion, SuiteConfig } from '@arizeai/phoenix-client/vitest';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 
 loadDotenv({ quiet: true });
@@ -57,7 +58,7 @@ export const passRate = (annotationName: string, minPassRate = 1): AcceptanceCri
 export const suiteConfig = (options: {
 	readonly description: string;
 	readonly acceptanceCriteria?: AcceptanceCriterion[];
-	readonly metadata?: Record<string, unknown>;
+	readonly metadata?: AgentPayloadObject;
 }): SuiteConfig => ({
 	datasetName: DATASET_NAME,
 	description: options.description,

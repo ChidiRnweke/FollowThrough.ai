@@ -9,6 +9,7 @@ import {
 	temporalNotesWorkspace
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -56,7 +57,7 @@ export const statesLocalCalendarDate = (response: string, now: Date, timeZone: s
 	return candidates.some((candidate) => normalized.includes(candidate));
 };
 
-export const hasCreatedRange = (arguments_: Record<string, unknown> | undefined): boolean =>
+export const hasCreatedRange = (arguments_: AgentPayloadObject | undefined): boolean =>
 	typeof arguments_?.createdAfter === 'string' || typeof arguments_?.createdBefore === 'string';
 
 export const isReasonableLastMonthStart = (value: unknown, now: Date): boolean => {

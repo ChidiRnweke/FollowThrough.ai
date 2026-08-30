@@ -464,7 +464,7 @@ const getCurrentCellRect = (tr: Transaction) => {
 type CellInfo = { pos: number; start: number; node: Node | null | undefined };
 
 const getSpanMetrics = (n: Node | null | undefined) => {
-	const attrs = (n?.attrs ?? {}) as Record<string, unknown>;
+	const attrs = n?.attrs ?? {};
 	const rowspan = typeof attrs.rowspan === 'number' ? attrs.rowspan : 1;
 	const colspan = typeof attrs.colspan === 'number' ? attrs.colspan : 1;
 	return { rowspan, colspan };

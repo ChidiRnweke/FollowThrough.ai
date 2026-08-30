@@ -269,7 +269,7 @@
 									<Tip text="Delete">
 										{#snippet children({ props: tipProps })}
 											<Button
-												{...mergeProps(confirmProps as Record<string, unknown>, tipProps)}
+												{...mergeProps(confirmProps, tipProps)}
 												variant="ghost"
 												size="icon-sm"
 												aria-label="Delete"

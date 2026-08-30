@@ -42,10 +42,19 @@ export interface StoreAgentFileInput {
 
 export type AgentFileToolName = 'ls' | 'grep' | 'sed';
 
+/** The next tool's arguments, as JSON: strings, numbers, booleans, and their containers. */
+export type AgentFileToolArguments =
+	| string
+	| number
+	| boolean
+	| null
+	| readonly AgentFileToolArguments[]
+	| { readonly [key: string]: AgentFileToolArguments };
+
 export interface AgentFileNextAction {
 	readonly reason: string;
 	readonly tool: AgentFileToolName;
-	readonly arguments: Readonly<Record<string, unknown>>;
+	readonly arguments: AgentFileToolArguments;
 }
 
 export type AgentFileError =

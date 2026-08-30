@@ -8,6 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // The symbol slot holds Svelte attachments, whose element type varies per trigger.
 // `unknown` there would not satisfy `Attachment<HTMLButtonElement>` at the spread site.
+// audit-allow: no-record-unknown — headless-primitive prop bags are open by Svelte's own component typing; see the comment above.
 type AnyProps = {
 	[key: string]: unknown;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

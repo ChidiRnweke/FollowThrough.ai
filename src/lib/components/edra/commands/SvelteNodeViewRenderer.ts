@@ -11,7 +11,7 @@ import type { Decoration, DecorationSource } from '@tiptap/pm/view';
 
 import NodeViewFrame from '../NodeViewFrame.svelte';
 import type { Editor } from './CoreEditor.js';
-import { SvelteRenderer } from './SvelteRenderer.svelte.js';
+import { SvelteRenderer, type RendererProps } from './SvelteRenderer.svelte.js';
 
 export interface SvelteNodeViewRendererOptions extends NodeViewRendererOptions {
 	update:
@@ -74,7 +74,7 @@ class SvelteNodeView extends NodeView<Component, Editor, SvelteNodeViewRendererO
 		this.handleSelectionUpdate = this.handleSelectionUpdate.bind(this);
 		this.editor.on('selectionUpdate', this.handleSelectionUpdate);
 
-		this.renderer = new SvelteRenderer(NodeViewFrame as Component<Record<string, unknown>>, {
+		this.renderer = new SvelteRenderer(NodeViewFrame as Component<RendererProps>, {
 			props: {
 				component: this.component,
 				onDragStart,
@@ -128,7 +128,7 @@ class SvelteNodeView extends NodeView<Component, Editor, SvelteNodeViewRendererO
 		decorations: readonly Decoration[],
 		innerDecorations: DecorationSource
 	): boolean {
-		const rerenderComponent = (props?: Record<string, unknown>) => {
+		const rerenderComponent = (props?: RendererProps) => {
 			this.decorationClasses = this.getDecorationClasses();
 			this.renderer.updateProps({ decorationClasses: this.decorationClasses, ...props });
 		};

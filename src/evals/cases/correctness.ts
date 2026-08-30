@@ -1,10 +1,26 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
-import { runCase } from '../lab/run-case';
+import { runCase, type ToolCall } from '../lab/run-case';
 import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
+import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+
+/**
+ * The note or todo id a call targeted, spelled either at the top level or as
+ * `note.id` (which `edit_note` nests under a `note` argument).
+ */
+const targetId = (call: ToolCall | undefined): AgentPayload | undefined => {
+	const note = call?.arguments?.note;
+	return (
+		call?.arguments?.noteId ??
+		(note !== undefined && isAgentPayloadObject(note) ? note.id : undefined)
+	);
+};
+
+const targetField = (call: ToolCall | undefined, key: string): AgentPayload | undefined =>
+	call?.arguments?.[key];
 
 /**
  * Target correctness: does the agent pass the RIGHT object ID to tools?
@@ -90,9 +106,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'edit_note') ?? findCall(result, 'save_note');
-			const targetedId =
-				(call?.arguments as Record<string, unknown>)?.noteId ??
-				((call?.arguments as Record<string, unknown>)?.note as Record<string, unknown>)?.id;
+			const targetedId = targetId(call);
 			const gotCorrect = targetedId === expectedNoteId;
 			const gotWrong = targetedId === wrongNoteId;
 
@@ -142,7 +156,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'update_todo');
-			const targetedId = (call?.arguments as Record<string, unknown>)?.todoId;
+			const targetedId = targetField(call, 'todoId');
 			const gotCorrect = targetedId === expectedTodoId;
 			const gotWrong = targetedId === wrongTodoId;
 
@@ -191,7 +205,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'create_todo');
-			const targetedProjectId = (call?.arguments as Record<string, unknown>)?.projectId;
+			const targetedProjectId = targetField(call, 'projectId');
 			const gotCorrect = targetedProjectId === expectedProjectId;
 			const gotWrong = targetedProjectId === wrongProjectId;
 
@@ -239,7 +253,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'create_note');
-			const targetedProjectId = (call?.arguments as Record<string, unknown>)?.projectId;
+			const targetedProjectId = targetField(call, 'projectId');
 			const gotCorrect = targetedProjectId === expectedProjectId;
 
 			px.logOutput({
@@ -285,7 +299,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'rename_project');
-			const targetedProjectId = (call?.arguments as Record<string, unknown>)?.projectId;
+			const targetedProjectId = targetField(call, 'projectId');
 			const gotCorrect = targetedProjectId === expectedProjectId;
 			const gotWrong = targetedProjectId === wrongProjectId;
 
@@ -332,7 +346,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'update_todo');
-			const targetedId = (call?.arguments as Record<string, unknown>)?.todoId;
+			const targetedId = targetField(call, 'todoId');
 			const gotCorrect = targetedId === expectedTodoId;
 
 			px.logOutput({
@@ -377,7 +391,7 @@ export const correctnessCases: readonly EvalCase[] = [
 
 			// Agent should search, find the Backend note, then read it
 			const call = findCall(result, 'get_note');
-			const targetedId = (call?.arguments as Record<string, unknown>)?.noteId;
+			const targetedId = targetField(call, 'noteId');
 			const gotCorrect = targetedId === expectedNoteId;
 
 			px.logOutput({
@@ -426,7 +440,7 @@ export const correctnessCases: readonly EvalCase[] = [
 			const call = findCall(result, 'get_note');
 			const searchCall = findCall(result, 'search');
 			const searchNoteCall = findCall(result, 'search_note');
-			const targetedId = (call?.arguments as Record<string, unknown>)?.noteId;
+			const targetedId = targetField(call, 'noteId');
 			const targetedSearchNoteId = searchNoteCall?.arguments.noteId;
 			const searchResults = Array.isArray(searchCall?.output)
 				? searchCall.output.filter(

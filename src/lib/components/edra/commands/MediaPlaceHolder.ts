@@ -5,6 +5,7 @@ import { NodeSelection } from '@tiptap/pm/state';
 import { toast } from 'svelte-sonner';
 
 export interface MediaPlaceholderOptions {
+	// audit-allow: no-record-unknown — Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
 	HTMLAttributes: Record<string, unknown>;
 	onUpload?: (file: File) => Promise<string>;
 }

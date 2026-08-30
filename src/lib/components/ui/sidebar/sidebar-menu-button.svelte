@@ -58,6 +58,7 @@
 		size?: SidebarMenuButtonSize;
 		tooltipContent?: Snippet | string;
 		tooltipContentProps?: WithoutChildrenOrChild<ComponentProps<typeof Tooltip.Content>>;
+		// audit-allow: no-record-unknown — shadcn child slots pass the primitive's own props forward; they are open by design.
 		child?: Snippet<[{ props: Record<string, unknown> }]>;
 	} = $props();
 

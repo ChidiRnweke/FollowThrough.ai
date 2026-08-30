@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { AgentPreferences } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { approvalPreview, targetNoteId, type ApprovalPreview } from './tool-approval-preview';
 
 /** The body is a ProseMirror document now; reduce it back to text for an assertion. */
@@ -165,7 +166,7 @@ describe('reviewing a change to the settings the agent runs under', () => {
 		inlineSuggestionsEnabled: true
 	} as unknown as AgentPreferences;
 
-	const settings = (args: Record<string, unknown>) =>
+	const settings = (args: AgentPayloadObject) =>
 		approvalPreview('update_agent_preferences', args, { kind: 'preferences', preferences });
 
 	it('states the model being replaced alongside the one replacing it', () => {

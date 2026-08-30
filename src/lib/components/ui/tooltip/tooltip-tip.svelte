@@ -17,6 +17,7 @@
 		delayDuration?: number;
 		/** Renders the trigger without a tooltip — for conditionally-labelled controls. */
 		disabled?: boolean;
+		// audit-allow: no-record-unknown — shadcn child slots pass the primitive's own props forward; they are open by design.
 		children: Snippet<[{ props: Record<string, unknown> }]>;
 	};
 

@@ -6,6 +6,7 @@ import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
+import { isAgentPayloadObject, type AgentPayloadObject } from '$lib/models/agent/payload';
 
 /**
  * The agent-level half of tool coverage.
@@ -26,7 +27,7 @@ interface InvocationCase {
 	readonly prompt: string;
 	readonly tool: string;
 	/** Checks the dispatched arguments are usable, not word-for-word. */
-	readonly payload?: (args: Record<string, unknown>) => string | undefined;
+	readonly payload?: (args: AgentPayloadObject) => string | undefined;
 	/** Score as a direct required-tool check even though the tool is searchable. */
 	readonly direct?: boolean;
 	readonly firstClass?: boolean;
@@ -70,12 +71,7 @@ const CASES: readonly InvocationCase[] = [
 			const todos = args.todos;
 			if (!Array.isArray(todos) || todos.length < 3)
 				return `expected at least 3 todos: ${JSON.stringify(todos)}`;
-			return todos.every(
-				(todo) =>
-					typeof todo === 'object' &&
-					todo !== null &&
-					usableString((todo as Record<string, unknown>).title)
-			)
+			return todos.every((todo) => isAgentPayloadObject(todo) && usableString(todo.title))
 				? undefined
 				: 'some todos were missing a usable title';
 		}
@@ -167,12 +163,7 @@ const CASES: readonly InvocationCase[] = [
 		payload: (args) => {
 			const edits = args.edits;
 			if (!Array.isArray(edits) || edits.length < 1) return 'edits was missing or empty';
-			return edits.every(
-				(edit) =>
-					typeof edit === 'object' &&
-					edit !== null &&
-					usableString((edit as Record<string, unknown>).oldText)
-			)
+			return edits.every((edit) => isAgentPayloadObject(edit) && usableString(edit.oldText))
 				? undefined
 				: 'some edits were missing a usable oldText';
 		}
@@ -254,9 +245,7 @@ export const toolInvocationCases: readonly EvalCase[] = CASES.map((entry) => ({
 		}
 
 		if (entry.payload) {
-			const problem = call
-				? entry.payload(call.arguments as Record<string, unknown>)
-				: 'tool never ran';
+			const problem = call ? entry.payload(call.arguments) : 'tool never ran';
 			px.logAnnotation({
 				name: ARCHETYPES.toolPayload,
 				score: problem ? 0 : 1,

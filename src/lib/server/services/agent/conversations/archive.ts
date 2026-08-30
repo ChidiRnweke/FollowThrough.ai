@@ -9,6 +9,11 @@ import type {
 	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
+import {
+	readAgentPayload,
+	type AgentPayload,
+	type AgentPayloadObject
+} from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
@@ -16,6 +21,30 @@ import { NotFoundError } from '$lib/errors';
 import type { ConversationRepository } from '$lib/server/repositories/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
+
+/**
+ * The succeeded arm's output, as the wire type. Corrupt results never reach
+ * this arm: the run's event mapper settles them as `failed` before the row is
+ * built, so the value read here is the classification's own result.
+ */
+const jsonOutput = (value: unknown): AgentPayload => {
+	const read = readAgentPayload(value);
+	if (read.kind === 'corrupt') throw new Error(`Settled tool output is not JSON: ${read.message}`);
+	return read.value;
+};
+
+/**
+ * Journal-safe projection of user images. The input interface has no index
+ * signature, so the wire type would not take it; the values are plain JSON and
+ * the projection says so without a cast.
+ */
+const imagePayloads = (images: readonly ConversationImageInput[]): AgentPayloadObject[] =>
+	images.map((image) => ({
+		id: image.id,
+		mediaType: image.mediaType,
+		dataUrl: image.dataUrl,
+		name: image.name
+	}));
 
 export class ConversationArchive {
 	constructor(private readonly repository: ConversationRepository) {}
@@ -152,20 +181,15 @@ export class ConversationArchive {
 		runId?: AgentRunId,
 		images?: readonly ConversationImageInput[]
 	): Promise<void> {
-		await this.append(
-			actor,
-			conversationId,
-			'user',
-			{
-				type: 'text',
-				text: prompt,
-				...(images?.length ? { images: [...images] } : {})
-			},
-			undefined,
-			{
-				runId
-			}
-		);
+		// Two arms rather than a conditional spread: an absent key must not be
+		// spelled as `images: undefined`, which the wire type cannot carry.
+		const content: AgentPayloadObject =
+			images && images.length > 0
+				? { type: 'text', text: prompt, images: imagePayloads(images) }
+				: { type: 'text', text: prompt };
+		await this.append(actor, conversationId, 'user', content, undefined, {
+			runId
+		});
 	}
 
 	async recordAssistantText(
@@ -213,6 +237,10 @@ export class ConversationArchive {
 		);
 	}
 
+	/**
+	 * Journal a tool outcome as a `tool_activity` message row, settling `output`
+	 * and `failure` from the arm of the activity that can carry them.
+	 */
 	async recordToolActivity(
 		actor: ActorContext,
 		conversationId: ConversationId,
@@ -222,31 +250,37 @@ export class ConversationArchive {
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
-		await this.append(
-			actor,
-			conversationId,
-			'tool',
-			{
-				type: 'tool_activity',
-				callId: activity.callId,
-				name: activity.name,
-				input: activity.input,
-				// Read off the arm that can have it. `decision` is gone: no writer ever
-				// set it, so every row ever journalled carried its `null`.
-				output: activity.status === 'succeeded' ? (activity.output ?? null) : null,
-				failure: activity.status === 'failed' ? activity.failure : null,
-				status: activity.status
-			},
-			undefined,
-			provenance
-		);
+		// `callId` and the failed/succeeded payloads are spelled as explicit `null`
+		// because the wire type cannot carry `undefined`: absent is a different
+		// fact from `null` here only for callId, and the client already reads
+		// `String(callId ?? '')`, so the two spell the same thing on replay.
+		const content: AgentPayloadObject = {
+			type: 'tool_activity',
+			callId: activity.callId ?? null,
+			name: activity.name,
+			input: activity.input,
+			// Read off the arm that can have it. `decision` is gone: no writer ever
+			// set it, so every row ever journalled carried its `null`.
+			// A succeeded call with no output journals `null` rather than raising:
+			// a tool that returned nothing settles as `providerToolOutput`'s
+			// `none` kind and reaches here output-absent, which is a normal
+			// outcome. Only a *present* value that is not JSON is a defect, and
+			// `jsonOutput` raises for it.
+			output:
+				activity.status === 'succeeded' && activity.output !== undefined
+					? jsonOutput(activity.output)
+					: null,
+			failure: activity.status === 'failed' ? activity.failure : null,
+			status: activity.status
+		};
+		await this.append(actor, conversationId, 'tool', content, undefined, provenance);
 	}
 
 	private async append(
 		actor: ActorContext,
 		conversationId: ConversationId,
 		role: Message['role'],
-		content: Readonly<Record<string, unknown>>,
+		content: AgentPayloadObject,
 		model?: string,
 		provenance?: {
 			readonly runId?: AgentRunId;

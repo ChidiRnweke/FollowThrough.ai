@@ -1,4 +1,5 @@
 import type { Lab } from '../lab/application';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 
 /**
  * A case is declared as data so that every case in the app can be registered
@@ -23,10 +24,10 @@ export interface EvalCase {
 	/** Archetypes and tags this case belongs to. */
 	readonly splits: readonly string[];
 	/** Recorded as the dataset example's input. */
-	readonly input: Record<string, unknown>;
+	readonly input: AgentPayloadObject;
 	/** Recorded as the dataset example's reference output. */
-	readonly expected: Record<string, unknown>;
-	readonly metadata?: Record<string, unknown>;
+	readonly expected: AgentPayloadObject;
+	readonly metadata?: AgentPayloadObject;
 	/**
 	 * Executes the case: seeds its fixture, runs the agent, logs output and
 	 * capability annotations, and asserts the hard invariants.

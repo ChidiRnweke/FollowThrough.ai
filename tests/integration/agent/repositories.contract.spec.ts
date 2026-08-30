@@ -5,7 +5,8 @@ import type {
 	AgentRun,
 	AgentRunId,
 	Message,
-	MessageId
+	MessageId,
+	StoredSessionItem
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
@@ -352,7 +353,7 @@ describe('Postgres agent session repository invariants', () => {
 			conversationId,
 			position: 0,
 			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
-			item: 'not an item' as unknown as Record<string, unknown>
+			item: 'not an item' as unknown as StoredSessionItem
 		});
 		await expect(new AgentSessionRecords(context.db).list(owner, conversationId)).rejects.toThrow(
 			/must be a JSON object/

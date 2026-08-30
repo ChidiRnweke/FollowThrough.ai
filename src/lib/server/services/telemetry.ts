@@ -22,6 +22,7 @@ import {
 	OpenInferenceSpanKind,
 	SemanticConventions
 } from '@arizeai/openinference-semantic-conventions';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 
 const TRACER_NAME = 'followthrough';
 const WORKFLOW_CONTEXT_KEY = createContextKey('followthrough.workflow');
@@ -123,7 +124,7 @@ export interface WorkflowTraceContext {
 	readonly kind?: OpenInferenceSpanKind | null;
 	readonly sessionId?: string;
 	readonly userId?: string;
-	readonly metadata?: Readonly<Record<string, unknown>>;
+	readonly metadata?: AgentPayloadObject;
 	readonly tags?: readonly string[];
 	readonly attributes?: Attributes;
 	/** Do not emit an independent root when this operation is background work. */

@@ -23,6 +23,7 @@ import type { WorkspaceController } from '$lib/server/controllers/workspace/cont
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext, ApiTokenId } from '$lib/models/identity';
 import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/agent';
+import { readAgentPayloadObject, type AgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -606,7 +607,7 @@ export interface AgentToolDefinition {
 	readonly description: string;
 	readonly classification: 'read' | 'proposal' | 'mutation';
 	readonly parameters: z.ZodObject;
-	readonly execute: (input: Record<string, unknown>) => Promise<unknown>;
+	readonly execute: (input: AgentPayloadObject) => Promise<unknown>;
 	/**
 	 * Optional gate consulted by the approval boundary, never by the tool itself.
 	 *
@@ -628,10 +629,40 @@ export interface AgentToolDefinition {
 	 * - Keep it consistent with `execute`: same read, same serializer, same
 	 *   patch, so the gate and the outcome cannot disagree.
 	 */
-	readonly preflight?: (input: Record<string, unknown>) => Promise<boolean>;
+	readonly preflight?: (input: AgentPayloadObject) => Promise<boolean>;
 }
 
 type Definition = AgentToolDefinition;
+
+/**
+ * Parse the tool's own parameter schema and carry the result to the seam as the
+ * wire type, so no interface below the factory sees an open-keyed record. The
+ * provider hands every call's arguments down as already-JSON, and zod validates
+ * them; a value that passes the schema but still fails the JSON representation
+ * check is corruption this application produced itself, so it raises rather
+ * than inventing a value.
+ *
+ * Optional fields the schema preprocesses to `undefined` — the tools' spelling
+ * of "blank means omitted" — are dropped rather than carried, because the wire
+ * type cannot represent them and the tool bodies read absence as absence. The
+ * drop is top-level only, deliberately: every schema keeps its preprocessed
+ * optionals flat (`optionalModelField` on the tool's own shape), so a nested
+ * object never gains a `undefined` value the JSON check below would have to
+ * refuse. A schema that nests one changes that contract and must move the drop
+ * down with it.
+ */
+const parseArguments = (schema: z.ZodObject, input: unknown): AgentPayloadObject => {
+	const parsed: unknown = schema.parse(input);
+	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+		throw new Error('Tool arguments must parse to an object');
+	const withoutUndefined = Object.fromEntries(
+		Object.entries(parsed).filter(([, value]) => value !== undefined)
+	);
+	const read = readAgentPayloadObject(withoutUndefined);
+	if (read.kind === 'corrupt')
+		throw new Error(`Tool arguments could not be represented as JSON: ${read.message}`);
+	return read.value;
+};
 
 const defineTool = <T extends z.ZodObject>(
 	name: string,
@@ -705,6 +736,7 @@ const jsonObjectSchema = (schema: z.ZodObject) => {
 		converted.properties === null
 	)
 		throw new Error('Tool parameters must convert to a strict object schema');
+	// audit-allow: no-record-unknown — JSON Schema property nodes are an open dialect by specification and are passed verbatim to the SDK protocol.
 	const properties: Record<string, Record<string, unknown>> = {};
 	for (const [name, property] of Object.entries(converted.properties)) {
 		if (typeof property !== 'object' || property === null)
@@ -905,7 +937,7 @@ export class AgentTools {
 				? async (_context, input) =>
 						definition.classification === 'mutation' &&
 						this.mode === 'approval_required' &&
-						(await gate(definition.parameters.parse(input)))
+						(await gate(parseArguments(definition.parameters, input)))
 				: definition.classification === 'mutation' && this.mode === 'approval_required',
 			// `failure` first, and always: `ConversationBuffer` recognises the envelope
 			// by that prefix to decide which calls the model still needs to re-read.
@@ -919,15 +951,15 @@ export class AgentTools {
 					})
 				),
 			execute: async (input, _runContext, details) => {
-				const parsed = definition.parameters.parse(input);
+				const args = parseArguments(definition.parameters, input);
 				return this.toolExecutor.execute(
 					{
 						callId: String(details?.toolCall?.callId ?? ''),
 						toolName: definition.name,
-						arguments: parsed,
+						arguments: args,
 						classification: definition.classification
 					},
-					() => definition.execute(parsed)
+					() => definition.execute(args)
 				);
 			}
 		});

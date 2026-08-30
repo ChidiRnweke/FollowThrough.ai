@@ -3,7 +3,7 @@ import { MarkView } from '@tiptap/core';
 import type { Component } from 'svelte';
 
 import MarkViewFrame from '../MarkViewFrame.svelte';
-import { SvelteRenderer } from './SvelteRenderer.svelte.js';
+import { SvelteRenderer, type RendererProps } from './SvelteRenderer.svelte.js';
 
 export interface SvelteMarkViewRendererOptions extends MarkViewRendererOptions {
 	as?: string;
@@ -26,7 +26,7 @@ class SvelteMarkView extends MarkView<Component, SvelteMarkViewRendererOptions> 
 			updateAttributes: this.updateAttributes.bind(this)
 		} satisfies MarkViewProps;
 
-		this.renderer = new SvelteRenderer(MarkViewFrame as Component<Record<string, unknown>>, {
+		this.renderer = new SvelteRenderer(MarkViewFrame as Component<RendererProps>, {
 			props: {
 				component: this.component,
 				...componentProps
