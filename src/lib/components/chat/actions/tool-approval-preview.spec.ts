@@ -8,8 +8,8 @@ const candidateText = (preview: ApprovalPreview): string => {
 	if (preview.kind !== 'note' || !preview.change.body) return '';
 	return (preview.change.body.candidate.content ?? [])
 		.map((block) => {
-			const text = block.content as readonly { text?: string }[] | undefined;
-			return (text ?? []).map((node) => node.text ?? '').join('');
+			const children = 'content' in block ? (block.content ?? []) : [];
+			return children.map((node) => (node.type === 'text' ? node.text : '')).join('');
 		})
 		.join('\n\n');
 };

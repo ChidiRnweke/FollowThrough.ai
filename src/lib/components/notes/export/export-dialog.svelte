@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
+	import type { ProseMirrorDocument } from '$lib/models/notes';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -37,7 +38,7 @@
 		projectId: string;
 		defaultTitle?: string;
 		defaultNoteIds?: string[];
-		documents?: readonly { id: string; document: unknown }[];
+		documents?: readonly { id: string; document: ProseMirrorDocument }[];
 		/** The note's draw.io diagrams, whose exported SVG is what the document embeds. */
 		diagrams?: readonly { readonly id: string; readonly renderedSvg?: string }[];
 	} = $props();

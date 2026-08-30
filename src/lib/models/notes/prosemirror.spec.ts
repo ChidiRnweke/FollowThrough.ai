@@ -40,7 +40,7 @@ describe('ProseMirror document invariants', () => {
 						content: [{ type: 'strong', content: [{ type: 'text', text: 'Broken' }] }]
 					}
 				]
-			})?.message
-		).toBe('strong is inline formatting and cannot be used as a node');
+			})?.path
+		).toBe('$.content[0].content[0].type');
 	});
 });

@@ -7,7 +7,7 @@ import { selectionMedia } from './diagram-copy.js';
 import { noteMarkdownFromContent } from './note-markdown.js';
 import { withoutClipboardPadding } from './paste-slice.js';
 import { withoutBoundaryBlankLines } from './paste.js';
-import type { EdraDocument } from './document.js';
+import { parseEdraDocument } from './document.js';
 
 const BLOCK_SEPARATOR = '\n\n';
 
@@ -88,7 +88,7 @@ export const selectionMarkdown = (state: EditorState): string => {
 	if (state.selection.empty) return '';
 	const content = withoutClipboardPadding(state.selection.content()).content.toJSON();
 	if (!content) return '';
-	const document: EdraDocument = { type: 'doc', content };
+	const document = parseEdraDocument({ type: 'doc', content });
 	return noteMarkdownFromContent(document);
 };
 

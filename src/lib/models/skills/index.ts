@@ -14,7 +14,12 @@ type DateTime = Brand<string, 'DateTime'>;
 
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 interface TextSelection {

@@ -10,14 +10,15 @@
 	} from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
-	import type { AgentRunId } from '$lib/models/agent';
-	import type {
-		NoteId,
-		NoteLinkTarget,
-		OutlineHeading,
-		OutlineOffset,
-		ProseMirrorDocument,
-		TextSelection
+	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
+	import {
+		parseProseMirrorDocument,
+		type NoteId,
+		type NoteLinkTarget,
+		type OutlineHeading,
+		type OutlineOffset,
+		type ProseMirrorDocument,
+		type TextSelection
 	} from '$lib/models/notes';
 	import { activeHeadingAt, outlineFrom } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
@@ -271,9 +272,7 @@
 				signal
 			});
 			if (!response.ok) throw new Error(`Writing suggestion failed with status ${response.status}`);
-			const result = (await response.json()) as
-				| { readonly outcome: 'suggested'; readonly text: string }
-				| { readonly outcome: 'no_suggestion' };
+			const result = inlineSuggestionSchema.parse(await response.json());
 			return result.outcome === 'suggested' ? { text: result.text } : { text: '' };
 		} catch (error) {
 			if (signal.aborted) return { text: '' };
@@ -1019,7 +1018,7 @@
 	}
 
 	export function getDocument(): ProseMirrorDocument {
-		return editor?.state.doc.toJSON() as ProseMirrorDocument;
+		return parseProseMirrorDocument(editor?.state.doc.toJSON() ?? { type: 'doc', content: [] });
 	}
 
 	export function getEditor(): Editor | undefined {

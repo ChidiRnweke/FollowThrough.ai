@@ -20,6 +20,17 @@ export interface NoteMarkdownContent {
 	readonly plainText: string;
 }
 
+interface SerializableDocumentNode {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly SerializableDocumentNode[];
+}
+
+interface SerializableDocument {
+	readonly type: 'doc';
+	readonly content?: readonly SerializableDocumentNode[];
+}
+
 /** Convert a compact Markdown payload into the editor's persisted note content. */
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const parsed = markdown.parse(source);
@@ -39,5 +50,5 @@ export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => 
  * against — so it has to round-trip every node the editor can produce, not just the ones
  * Markdown has native syntax for.
  */
-export const noteMarkdownFromContent = (document: EdraDocument): string =>
-	markdown.serialize(editorContent(document));
+export const noteMarkdownFromContent = (document: SerializableDocument): string =>
+	markdown.serialize(editorContent(parseEdraDocument(document)));

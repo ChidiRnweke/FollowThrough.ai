@@ -6,19 +6,30 @@ import {
 	noteSearchSnippet,
 	replaceInNoteDocument,
 	searchNoteText,
-	type NoteSearchOptions
+	type NoteSearchOptions,
+	type ProseMirrorDocument,
+	type ProseMirrorNode,
+	type ProseMirrorParagraphNode,
+	type ProseMirrorTextNode
 } from './index';
 
 const literal: NoteSearchOptions = { regex: false, caseSensitive: false };
 
-const doc = (...blocks: Record<string, unknown>[]) => ({ type: 'doc' as const, content: blocks });
+const doc = (...blocks: ProseMirrorNode[]): ProseMirrorDocument => ({
+	type: 'doc',
+	content: blocks
+});
 
-const paragraph = (...texts: (string | Record<string, unknown>)[]) => ({
+const paragraph = (...texts: (string | ProseMirrorNode)[]): ProseMirrorParagraphNode => ({
 	type: 'paragraph',
 	content: texts.map((text) => (typeof text === 'string' ? { type: 'text', text } : text))
 });
 
-const bold = (text: string) => ({ type: 'text', text, marks: [{ type: 'bold' }] });
+const bold = (text: string): ProseMirrorTextNode => ({
+	type: 'text',
+	text,
+	marks: [{ type: 'bold' }]
+});
 
 describe('Searching note text', () => {
 	it('finds literal matches with exact offsets', () => {
@@ -153,12 +164,14 @@ describe('Replacing in a document', () => {
 			'baz',
 			literal
 		);
-		expect(result?.document.content?.[0].content).toEqual([{ type: 'text', text: 'baz' }]);
+		expect(result?.document.content?.[0]).toMatchObject({
+			content: [{ type: 'text', text: 'baz' }]
+		});
 	});
 
 	it('removes the matched slice from later nodes without touching their siblings', () => {
 		const result = replaceInNoteDocument(doc(paragraph('a', bold('Xb'))), 'aX', '', literal);
-		expect(result?.document.content?.[0].content).toEqual([bold('b')]);
+		expect(result?.document.content?.[0]).toMatchObject({ content: [bold('b')] });
 	});
 
 	it('expands regex capture groups per match', () => {
@@ -196,7 +209,9 @@ describe('Replacing in a document', () => {
 	it('does not mutate the original document', () => {
 		const original = doc(paragraph('hello world'));
 		replaceInNoteDocument(original, 'world', 'there', literal);
-		expect(original.content?.[0].content).toEqual([{ type: 'text', text: 'hello world' }]);
+		expect(original.content?.[0]).toMatchObject({
+			content: [{ type: 'text', text: 'hello world' }]
+		});
 	});
 });
 

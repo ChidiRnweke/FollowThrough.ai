@@ -3,6 +3,7 @@ import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
 import { svgViewBoxSize } from '$lib/models/deliverables';
 import { rasterizeSvg } from '$lib/client/images/rasterize';
 import { initializeMermaid, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
+import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 /**
  * Rendering the mermaid diagrams an export carries.
@@ -27,34 +28,36 @@ export const mergeDiagramRenders = (...parts: readonly DiagramRenders[]): Diagra
 	sizes: Object.assign({}, ...parts.map((part) => part.sizes))
 });
 
-function collectMermaidSources(node: unknown, sources: string[]): void {
-	if (typeof node !== 'object' || node === null) return;
-	const record = node as { type?: string; text?: string; content?: unknown[] };
-	if (record.type === 'mermaid') {
-		const text = (record.content ?? [])
-			.map((child) => (child as { text?: string }).text ?? '')
+const nodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
+	'content' in node ? (node.content ?? []) : [];
+
+function collectMermaidSources(node: ProseMirrorNode, sources: string[]): void {
+	if (node.type === 'mermaid') {
+		const text = nodeContent(node)
+			.map((child) => (child.type === 'text' ? child.text : ''))
 			.join('');
 		if (text.trim()) sources.push(text);
 		return;
 	}
-	for (const child of record.content ?? []) collectMermaidSources(child, sources);
+	for (const child of nodeContent(node)) collectMermaidSources(child, sources);
 }
 
-function collectDrawioIds(node: unknown, ids: string[]): void {
-	if (typeof node !== 'object' || node === null) return;
-	const record = node as { type?: string; attrs?: { diagramId?: string }; content?: unknown[] };
-	if (record.type === 'drawio') {
-		const id = record.attrs?.diagramId;
+function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
+	if (node.type === 'drawio') {
+		const id = node.attrs?.diagramId;
 		if (id && !ids.includes(id)) ids.push(id);
 		return;
 	}
-	for (const child of record.content ?? []) collectDrawioIds(child, ids);
+	for (const child of nodeContent(node)) collectDrawioIds(child, ids);
 }
 
 /** Every draw.io diagram referenced by a set of documents, in document order. */
-export function drawioReferencesIn(documents: readonly { document: unknown }[]): string[] {
+export function drawioReferencesIn(
+	documents: readonly { document: ProseMirrorDocument }[]
+): string[] {
 	const ids: string[] = [];
-	for (const entry of documents) collectDrawioIds(entry.document, ids);
+	for (const entry of documents)
+		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
 	return ids;
 }
 
@@ -92,9 +95,12 @@ export async function renderDrawioDiagrams(
 }
 
 /** Every mermaid source in a set of documents, in document order. */
-export function mermaidSourcesIn(documents: readonly { document: unknown }[]): string[] {
+export function mermaidSourcesIn(
+	documents: readonly { document: ProseMirrorDocument }[]
+): string[] {
 	const sources: string[] = [];
-	for (const entry of documents) collectMermaidSources(entry.document, sources);
+	for (const entry of documents)
+		for (const node of entry.document.content ?? []) collectMermaidSources(node, sources);
 	return sources;
 }
 

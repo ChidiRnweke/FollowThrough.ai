@@ -5,6 +5,7 @@ import {
 	type NoteEdit,
 	type NotePatchFailure
 } from '$lib/models/notes';
+import { parseProseMirrorDocument } from '$lib/models/notes';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
@@ -28,7 +29,8 @@ export const previewNoteEdits = (note: Note, edits: readonly NoteEdit[]): NotePa
 	try {
 		const patched = applyNotePatch(noteMarkdownFromContent(note.document), edits);
 		if (!patched.ok) return { ok: false, problems: patched.failures.map(describeNotePatchFailure) };
-		return { ok: true, ...noteContentFromMarkdown(patched.markdown) };
+		const content = noteContentFromMarkdown(patched.markdown);
+		return { ok: true, ...content, document: parseProseMirrorDocument(content.document) };
 	} catch (error) {
 		return {
 			ok: false,
@@ -40,7 +42,8 @@ export const previewNoteEdits = (note: Note, edits: readonly NoteEdit[]): NotePa
 /** The note body a whole-body save would produce, for the same before/after comparison. */
 export const previewNoteMarkdown = (markdown: string): NotePatchPreview => {
 	try {
-		return { ok: true, ...noteContentFromMarkdown(markdown) };
+		const content = noteContentFromMarkdown(markdown);
+		return { ok: true, ...content, document: parseProseMirrorDocument(content.document) };
 	} catch (error) {
 		return {
 			ok: false,

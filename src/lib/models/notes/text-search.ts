@@ -17,9 +17,32 @@
 type NoteId = string & { readonly __brand: 'NoteId' };
 type ProjectId = string & { readonly __brand: 'ProjectId' };
 
+/**
+ * The structural view search walks. A document the notes domain's strict schema
+ * accepted satisfies it; chisel keeps sibling files self-contained, so the view
+ * is declared here rather than imported from the barrel.
+ */
+interface DocumentNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly DocumentNodeView[];
+}
+
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly DocumentNodeView[];
+}
+
+/** The mutable twin {@link replaceInNoteDocument} edits through a structured clone. */
+interface MutableDocumentNode {
+	readonly type: string;
+	text?: string;
+	content?: MutableDocumentNode[];
+}
+
+interface MutableDocument {
+	readonly type: 'doc';
+	content?: MutableDocumentNode[];
 }
 
 export interface NoteSearchOptions {
@@ -170,14 +193,14 @@ const BLOCK_SEPARATOR = '\n\n';
 
 /** A text node's slice of the layout string, tied to the (mutable) node it came from. */
 interface TextSegment {
-	readonly node: Record<string, unknown>;
+	readonly node: DocumentNodeView;
 	readonly start: number;
 	readonly end: number;
 }
 
 /** A top-level block's span of the layout string, so fully-consumed blocks can be dropped. */
 interface BlockSpan {
-	readonly node: Record<string, unknown>;
+	readonly node: DocumentNodeView;
 	readonly textStart: number;
 	readonly textEnd: number;
 }
@@ -188,7 +211,7 @@ interface DocumentLayout {
 	readonly blocks: readonly BlockSpan[];
 }
 
-const isTextNode = (node: Record<string, unknown>): boolean => node.type === 'text';
+const isTextNode = (node: DocumentNodeView): boolean => node.type === 'text';
 
 /**
  * Walks a document into the plain-text layout the editor produces: text nodes contribute
@@ -208,9 +231,9 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 		length += value.length;
 	};
 
-	const walk = (node: Record<string, unknown>, depth: number): void => {
+	const walk = (node: DocumentNodeView, depth: number): void => {
 		if (isTextNode(node)) {
-			const text = typeof node.text === 'string' ? node.text : '';
+			const text = node.text ?? '';
 			segments.push({ node, start: length, end: length + text.length });
 			push(text);
 			return;
@@ -222,15 +245,11 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 		if (!firstBlock) push(BLOCK_SEPARATOR);
 		firstBlock = false;
 		const textStart = length;
-		const children = Array.isArray(node.content) ? (node.content as Record<string, unknown>[]) : [];
-		for (const child of children) walk(child, depth + 1);
+		for (const child of node.content ?? []) walk(child, depth + 1);
 		if (depth === 0) blocks.push({ node, textStart, textEnd: length });
 	};
 
-	const topLevel = Array.isArray(document.content)
-		? (document.content as Record<string, unknown>[])
-		: [];
-	for (const block of topLevel) walk(block, 0);
+	for (const block of document.content ?? []) walk(block, 0);
 
 	return { text: chunks.join(''), segments, blocks };
 };
@@ -239,25 +258,25 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 export const noteDocumentText = (document: ProseMirrorDocument): string =>
 	layoutDocument(document).text;
 
-export interface NoteDocumentReplaceResult {
-	readonly document: ProseMirrorDocument;
+export interface NoteDocumentReplaceResult<
+	Document extends ProseMirrorDocument = ProseMirrorDocument
+> {
+	readonly document: Document;
 	readonly plainText: string;
 	/** Matches actually replaced; zero-length matches are never counted. */
 	readonly replaced: number;
 }
 
-const EMPTY_PARAGRAPH: Record<string, unknown> = { type: 'paragraph' };
+const EMPTY_PARAGRAPH: MutableDocumentNode = { type: 'paragraph' };
 
 /** Drops text nodes the replacement emptied; every other node keeps its shape. */
-const pruneEmptyTextNodes = (node: Record<string, unknown>): void => {
-	if (!Array.isArray(node.content)) return;
-	const children = node.content as Record<string, unknown>[];
-	node.content = children.filter((child) => !isTextNode(child) || child.text !== '');
-	for (const child of node.content as Record<string, unknown>[]) pruneEmptyTextNodes(child);
+const pruneEmptyTextNodes = (node: MutableDocumentNode): void => {
+	if (!node.content) return;
+	node.content = node.content.filter((child) => !isTextNode(child) || child.text !== '');
+	for (const child of node.content) pruneEmptyTextNodes(child);
 };
 
-const hasContent = (node: Record<string, unknown>): boolean =>
-	Array.isArray(node.content) && (node.content as unknown[]).length > 0;
+const hasContent = (node: MutableDocumentNode): boolean => (node.content?.length ?? 0) > 0;
 
 /**
  * Replaces every match of `query` in a document, returning a new document and its fresh
@@ -270,19 +289,18 @@ const hasContent = (node: Record<string, unknown>): boolean =>
  * entire text was consumed by one match are removed, which is how a replace across a
  * paragraph boundary reads seamlessly instead of leaving an empty paragraph behind.
  */
-export const replaceInNoteDocument = (
-	document: ProseMirrorDocument,
+export const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
+	document: Document,
 	query: string,
 	replacement: string,
 	options: NoteSearchOptions
-): NoteDocumentReplaceResult | undefined => {
+): NoteDocumentReplaceResult<Document> | undefined => {
 	const pattern = buildNoteSearchPattern(query, options);
 	if (pattern === undefined) return undefined;
 
-	const clone = structuredClone(document) as {
-		type: 'doc';
-		content?: Record<string, unknown>[];
-	};
+	// The clone is what replacement edits, so it gets the mutable view; `Document`
+	// flows back out unchanged in shape, only text nodes lost or gained characters.
+	const clone = structuredClone(document) as MutableDocument;
 	const layout = layoutDocument(clone);
 	const matches = findMatches(layout.text, pattern, Number.POSITIVE_INFINITY);
 	if (matches.length === 0) return undefined;
@@ -292,10 +310,11 @@ export const replaceInNoteDocument = (
 		let first = true;
 		for (const segment of layout.segments) {
 			if (segment.end <= match.start || segment.start >= match.end) continue;
-			const nodeText = typeof segment.node.text === 'string' ? segment.node.text : '';
+			const target = segment.node as MutableDocumentNode;
+			const nodeText = target.text ?? '';
 			const cutStart = Math.max(match.start, segment.start) - segment.start;
 			const cutEnd = Math.min(match.end, segment.end) - segment.start;
-			segment.node.text = first
+			target.text = first
 				? nodeText.slice(0, cutStart) + expanded + nodeText.slice(cutEnd)
 				: nodeText.slice(0, cutStart) + nodeText.slice(cutEnd);
 			first = false;
@@ -316,7 +335,7 @@ export const replaceInNoteDocument = (
 	}
 
 	return {
-		document: clone,
+		document: clone as Document,
 		plainText: noteDocumentText(clone),
 		replaced: matches.length
 	};

@@ -20,7 +20,7 @@ import type {
 	SetNoteSectionNumberingInput,
 	SyncNoteInput
 } from '$lib/models/notes';
-import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
+import { MAX_NOTE_DOCUMENTS, proseMirrorDocumentSchema } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
 import type { UserId } from '$lib/models/identity';
@@ -52,10 +52,7 @@ const noteSchema = z.object({
 	kind: z.enum(['folder', 'note', 'skill']),
 	position: z.number().int(),
 	title: z.string(),
-	document: z.object({
-		type: z.literal('doc'),
-		content: z.array(z.record(z.string(), z.unknown())).readonly().optional()
-	}),
+	document: proseMirrorDocumentSchema,
 	plainText: z.string(),
 	currentRevision: z.number().int(),
 	publishedRevision: z.number().int().default(0),

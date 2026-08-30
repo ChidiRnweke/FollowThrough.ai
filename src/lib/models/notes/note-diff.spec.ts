@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { countNoteDiff, diffNoteDocuments, type DiffDocument, type NoteDiff } from './note-diff';
+import {
+	countNoteDiff,
+	diffNoteDocuments,
+	type DiffDocument,
+	type DiffNode,
+	type NoteDiff
+} from './note-diff';
 
 const para = (text: string) => ({
 	type: 'paragraph',
@@ -12,7 +18,7 @@ const heading = (text: string) => ({
 	content: [{ type: 'text', text }]
 });
 
-const doc = (...content: object[]): DiffDocument => ({ type: 'doc', content });
+const doc = (...content: DiffNode[]): DiffDocument => ({ type: 'doc', content });
 
 /** The classification of each side, as kinds only, so an assertion reads the property under test. */
 const kindsOf = (diff: NoteDiff) => ({

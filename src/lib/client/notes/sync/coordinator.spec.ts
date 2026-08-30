@@ -222,7 +222,7 @@ describe('Local note synchronization invariants', () => {
 		const pending = pendingRecord();
 		const remote = noteBuilder({
 			currentRevision: 2,
-			document: { type: 'doc', content: [{ type: 'paragraph', attrs: { preserved: true } }] }
+			document: { type: 'doc', content: [{ type: 'paragraph', attrs: { textAlign: 'center' } }] }
 		});
 		await repository.put({
 			...pending,

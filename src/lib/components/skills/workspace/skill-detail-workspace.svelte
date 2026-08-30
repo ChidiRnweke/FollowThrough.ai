@@ -23,9 +23,13 @@
 		saveSkillDescription
 	} from '$lib/remote/skills/skills.remote';
 	import type { SkillView } from '$lib/models/skills';
-	import type { NoteEtag } from '$lib/models/notes';
+	import { parseProseMirrorDocument, type Note, type NoteEtag } from '$lib/models/notes';
 
 	let { data }: { data: { view: SkillView; raw: string; etag: NoteEtag } } = $props();
+	const syncableNote = (): Note => ({
+		...data.view.skill.note,
+		document: parseProseMirrorDocument(data.view.skill.note.document)
+	});
 
 	const noteId = $derived(data.view.skill.note.id);
 
@@ -51,7 +55,7 @@
 	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Local copies so sync results and device-copy content survive between loads.
-	let note = $state(untrack(() => ({ ...data.view.skill.note })));
+	let note = $state(untrack(syncableNote));
 	let savedDescription = $state(untrack(() => data.view.skill.description));
 
 	// Any state where the device copy has not reached the server.
@@ -62,7 +66,7 @@
 	onMount(() => {
 		let cancelled = false;
 		const stopListening = noteSync.listenForReconnect();
-		void noteSync.initialize({ note: data.view.skill.note, etag: data.etag }).then((local) => {
+		void noteSync.initialize({ note: syncableNote(), etag: data.etag }).then((local) => {
 			if (cancelled) return;
 			// Server-authoritative fields come from the load; content fields come
 			// from the device copy, which may hold unsynced edits.
@@ -266,7 +270,7 @@
 			await invalidateAll();
 			// The import rewrote the note server-side, so rebase the sync store on
 			// the fresh version before the next save, then remount the editors.
-			const local = await noteSync.initialize({ note: data.view.skill.note, etag: data.etag });
+			const local = await noteSync.initialize({ note: syncableNote(), etag: data.etag });
 			note = { ...local };
 			savedDescription = data.view.skill.description;
 			dirty = false;

@@ -1,7 +1,17 @@
 type NoteId = string & { readonly __brand: 'NoteId' };
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Readonly<Record<string, unknown>>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorMarkView {
+	readonly type: string;
+	readonly attrs?: object;
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly attrs?: object;
+	readonly marks?: readonly ProseMirrorMarkView[];
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 /**
@@ -18,24 +28,25 @@ export interface NoteLinkTarget {
 	readonly title: string;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null;
-
 /** True only for an image node whose source is this attachment's content endpoint. */
 export const documentReferencesAttachment = (
-	document: ProseMirrorDocument | Record<string, unknown>,
+	document: ProseMirrorDocument,
 	attachmentId: string
 ): boolean => {
 	const expectedSource = `/api/attachments/${attachmentId}/content`;
 	let found = false;
-	const walk = (node: unknown): void => {
-		if (found || !isRecord(node)) return;
-		const attrs = node.attrs;
-		if (node.type === 'image' && isRecord(attrs) && attrs.src === expectedSource) {
+	const walk = (node: ProseMirrorDocument | ProseMirrorNodeView): void => {
+		if (found) return;
+		if (
+			node.type === 'image' &&
+			node.attrs &&
+			'src' in node.attrs &&
+			node.attrs.src === expectedSource
+		) {
 			found = true;
 			return;
 		}
-		if (Array.isArray(node.content)) for (const child of node.content) walk(child);
+		for (const child of node.content ?? []) walk(child);
 	};
 	walk(document);
 	return found;
@@ -46,23 +57,18 @@ export const documentReferencesAttachment = (
  *
  * Deduplicated: two links to the same note are one relationship, not two.
  */
-export const collectNoteLinkTargets = (
-	document: ProseMirrorDocument | Record<string, unknown>
-): readonly NoteId[] => {
+export const collectNoteLinkTargets = (document: ProseMirrorDocument): readonly NoteId[] => {
 	const found = new Set<NoteId>();
 
-	const walk = (node: unknown): void => {
-		if (!isRecord(node)) return;
-		const marks = node.marks;
-		if (Array.isArray(marks))
-			for (const mark of marks) {
-				if (!isRecord(mark) || mark.type !== 'noteLink') continue;
-				const attrs = mark.attrs;
-				const noteId = isRecord(attrs) ? attrs.noteId : undefined;
+	const walk = (node: ProseMirrorDocument | ProseMirrorNodeView): void => {
+		if ('marks' in node)
+			for (const mark of node.marks ?? []) {
+				if (mark.type !== 'noteLink') continue;
+				if (!mark.attrs || !('noteId' in mark.attrs)) continue;
+				const noteId = mark.attrs.noteId;
 				if (typeof noteId === 'string' && noteId) found.add(noteId as NoteId);
 			}
-		const content = node.content;
-		if (Array.isArray(content)) for (const child of content) walk(child);
+		for (const child of node.content ?? []) walk(child);
 	};
 
 	walk(document);

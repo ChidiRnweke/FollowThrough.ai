@@ -6,7 +6,12 @@ import type {
 	ExportSettings,
 	ExtractedTemplateStyles
 } from '$lib/models/deliverables';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type {
+	ProseMirrorDocument,
+	ProseMirrorMediaAttrs,
+	ProseMirrorNode,
+	ProseMirrorTextNode
+} from '$lib/models/notes';
 import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
@@ -156,12 +161,12 @@ export interface GeneratePdfInput extends DiagramRenders {
 	readonly imageResolver?: ImageSourceResolver;
 }
 
-function collectText(node: Record<string, unknown>): string {
-	if (node.type === 'text') return (node.text as string) ?? '';
-	if (node.content) {
-		return (node.content as Array<Record<string, unknown>>).map(collectText).join('');
-	}
-	return '';
+const nodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
+	'content' in node ? (node.content ?? []) : [];
+
+function collectText(node: ProseMirrorNode): string {
+	if (node.type === 'text') return node.text;
+	return nodeContent(node).map(collectText).join('');
 }
 
 interface InlineRun {
@@ -174,10 +179,9 @@ interface InlineRun {
 	font?: string;
 }
 
-function textRunFromNode(node: Record<string, unknown>): InlineRun {
-	const text = (node.text as string) ?? '';
-	const marks =
-		(node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
+function textRunFromNode(node: ProseMirrorTextNode): InlineRun {
+	const text = node.text;
+	const marks = node.marks ?? [];
 	const run: InlineRun = { text };
 	for (const mark of marks) {
 		if (mark.type === 'bold') run.bold = true;
@@ -201,8 +205,8 @@ interface ConversionContext {
 	readonly bodyFont: string;
 }
 
-function imageBlock(attrs: Record<string, unknown>, context: ConversionContext): unknown {
-	const src = attrs.src as string | undefined;
+function imageBlock(attrs: ProseMirrorMediaAttrs, context: ConversionContext): unknown {
+	const src = attrs.src ?? undefined;
 	if (!src) return [];
 	const data = src.startsWith('data:') ? src : context.images.get(src);
 	if (!data) {
@@ -269,15 +273,20 @@ function codePanel(text: string): unknown {
 }
 
 /** Convert a Tiptap table node into a pdfmake table element. */
-function tableBlock(node: Record<string, unknown>, context: ConversionContext): unknown {
-	const rows = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
+function tableBlock(
+	node: Extract<ProseMirrorNode, { type: 'table' }>,
+	context: ConversionContext
+): unknown {
+	const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
 	// Slots covered by a rowspan from an earlier row, per row index.
 	const covered: Array<Set<number>> = rows.map(() => new Set<number>());
 	const body: unknown[][] = [];
 	let columnCount = 0;
 
 	rows.forEach((row, rowIndex) => {
-		const cells = (row.content as Array<Record<string, unknown>> | undefined) ?? [];
+		const cells = (row.content ?? []).filter(
+			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+		);
 		const bodyRow: unknown[] = [];
 		let column = 0;
 		for (const cell of cells) {
@@ -285,10 +294,9 @@ function tableBlock(node: Record<string, unknown>, context: ConversionContext): 
 				bodyRow.push({});
 				column += 1;
 			}
-			const cellAttrs = (cell.attrs as Record<string, unknown> | undefined) ?? {};
-			const colSpan = Math.max((cellAttrs.colspan as number) ?? 1, 1);
-			const rowSpan = Math.max((cellAttrs.rowspan as number) ?? 1, 1);
-			const cellContent = (cell.content as Array<Record<string, unknown>> | undefined) ?? [];
+			const colSpan = Math.max(cell.attrs?.colspan ?? 1, 1);
+			const rowSpan = Math.max(cell.attrs?.rowspan ?? 1, 1);
+			const cellContent = cell.content ?? [];
 			const converted = cellContent.map((c) => convertNode(c, context)).flat();
 			const entry: Record<string, unknown> = {
 				...(converted.length > 0 ? { text: converted } : { text: '' }),
@@ -327,9 +335,11 @@ function tableBlock(node: Record<string, unknown>, context: ConversionContext): 
 
 	// Honour the editor's column widths when the first row records them; scale
 	// the pixel widths to fit the printable area. Otherwise distribute evenly.
-	const firstRowCells = (rows[0]?.content as Array<Record<string, unknown>> | undefined) ?? [];
+	const firstRowCells = (rows[0]?.content ?? []).filter(
+		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+	);
 	const colwidths = firstRowCells
-		.map((cell) => (cell.attrs as Record<string, unknown> | undefined)?.colwidth)
+		.map((cell) => cell.attrs?.colwidth)
 		.map((value) => (Array.isArray(value) ? Number(value[0]) : undefined));
 	const totalWidth =
 		colwidths.every((w): w is number => typeof w === 'number' && Number.isFinite(w) && w > 0) &&
@@ -379,14 +389,13 @@ function diagramContent(key: string, context: ConversionContext): unknown {
 	return svg ? { svg, fit, margin } : undefined;
 }
 
-function convertNode(node: Record<string, unknown>, context: ConversionContext): unknown {
-	const type = node.type as string;
-	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
-	const attrs = (node.attrs as Record<string, unknown> | undefined) ?? {};
+function convertNode(node: ProseMirrorNode, context: ConversionContext): unknown {
+	const type = node.type;
+	const content = nodeContent(node);
 
 	switch (type) {
 		case 'heading': {
-			const level = Math.min((attrs.level as number) ?? 1, 6);
+			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const sizes = [18, 16, 14, 13, 12, 11];
 			const spacing = headingSpacingPt(level);
 			return {
@@ -413,7 +422,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 		case 'orderedList': {
 			return {
 				[type === 'bulletList' ? 'ul' : 'ol']: content.map((item) => {
-					const itemContent = (item.content as Array<Record<string, unknown>> | undefined) ?? [];
+					const itemContent = nodeContent(item);
 					const converted = itemContent.map((c) => convertNode(c, context)).flat();
 					if (converted.length === 0) return { text: '' };
 					// An item holding block content (a nested list, diagram, image, code
@@ -448,7 +457,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 			// draw.io ships its own exported SVG, rasterized by the browser like a
 			// mermaid diagram. Without one there is no source worth printing — the XML
 			// is not something a reader can use — so the block says it is missing.
-			const reference = (node.attrs as { diagramId?: string } | undefined)?.diagramId;
+			const reference = node.attrs?.diagramId ?? undefined;
 			return (
 				(reference ? diagramContent(reference, context) : undefined) ?? {
 					text: '[diagram unavailable]',
@@ -475,7 +484,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 			};
 		}
 		case 'image': {
-			return imageBlock(attrs, context);
+			return imageBlock(node.attrs ?? {}, context);
 		}
 		case 'table': {
 			return tableBlock(node, context);
@@ -496,7 +505,7 @@ function convertNode(node: Record<string, unknown>, context: ConversionContext):
 }
 
 function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): unknown[] {
-	const content = (doc.content as Array<Record<string, unknown>> | undefined) ?? [];
+	const content = doc.content ?? [];
 	const result: unknown[] = [];
 	for (const node of content) {
 		const converted = convertNode(node, context);

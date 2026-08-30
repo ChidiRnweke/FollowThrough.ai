@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import type { ProseMirrorDocument } from '$lib/models/notes';
+	import { parseProseMirrorDocument, type ProseMirrorDocument } from '$lib/models/notes';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
@@ -50,8 +50,8 @@
 
 	export function getDocument(): ProseMirrorDocument {
 		const document = editor?.getJSON();
-		if (!document || document.type !== 'doc') return { type: 'doc', content: [] };
-		return { type: 'doc', ...(document.content ? { content: document.content } : {}) };
+		if (!document) return { type: 'doc', content: [] };
+		return parseProseMirrorDocument(document);
 	}
 
 	export function focus(): void {

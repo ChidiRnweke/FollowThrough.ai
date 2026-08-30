@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type {
+	ProseMirrorDocument,
+	ProseMirrorListItemNode,
+	ProseMirrorMark,
+	ProseMirrorTableCellNode,
+	ProseMirrorTableHeaderNode
+} from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
 import { generateDocx } from './docx';
@@ -64,7 +70,7 @@ const relationshipsXml = async (body: ProseMirrorDocument): Promise<string> => {
 	return new AdmZip(buffer).readAsText('word/_rels/document.xml.rels');
 };
 
-const linked = (marks: unknown[]): ProseMirrorDocument => ({
+const linked = (marks: ProseMirrorMark[]): ProseMirrorDocument => ({
 	type: 'doc',
 	content: [{ type: 'paragraph', content: [{ type: 'text', marks, text: 'the docs' }] }]
 });
@@ -159,11 +165,11 @@ const zipFor = async (overrides: Partial<Parameters<typeof generateDocx>[0]> = {
  * structure must survive a DOCX export just like they survive a PDF.
  */
 describe('Docx export parity with PDF', () => {
-	const cell = (text: string) => ({
+	const cell = (text: string): ProseMirrorTableCellNode => ({
 		type: 'tableCell',
 		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 	});
-	const header = (text: string) => ({
+	const header = (text: string): ProseMirrorTableHeaderNode => ({
 		type: 'tableHeader',
 		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 	});
@@ -678,7 +684,7 @@ describe('App-owned attachment images in an exported document', () => {
 });
 
 describe('Ordered-list numbering in an exported document', () => {
-	const listItem = (text: string) => ({
+	const listItem = (text: string): ProseMirrorListItemNode => ({
 		type: 'listItem',
 		content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 	});

@@ -1,5 +1,5 @@
 import { createEditor } from '$lib/components/edra/commands/editor';
-import type { EdraDocument } from './document.js';
+import { parseEdraDocument, type EdraDocument } from './document.js';
 
 export async function markdownToProseMirror(markdown: string): Promise<{
 	document: EdraDocument;
@@ -32,10 +32,7 @@ export async function markdownToProseMirror(markdown: string): Promise<{
 			reject(new Error('Editor returned a non-document root'));
 			return;
 		}
-		const edraDocument: EdraDocument = {
-			type: 'doc',
-			...(json.content ? { content: json.content } : {})
-		};
+		const edraDocument = parseEdraDocument(json);
 		const text = editor.getText({ blockSeparator: '\n\n' });
 		editor.destroy();
 		container.remove();

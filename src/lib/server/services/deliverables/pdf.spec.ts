@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type {
+	ProseMirrorDocument,
+	ProseMirrorTableCellNode,
+	ProseMirrorTableHeaderNode
+} from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
 
@@ -367,11 +371,11 @@ describe('Pdf generation invariants', () => {
 	});
 
 	it('renders tables as a grid, keeping cell text and spans (1/2)', async () => {
-		const cell = (text: string) => ({
+		const cell = (text: string): ProseMirrorTableCellNode => ({
 			type: 'tableCell',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 		});
-		const header = (text: string) => ({
+		const header = (text: string): ProseMirrorTableHeaderNode => ({
 			type: 'tableHeader',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 		});
@@ -402,11 +406,11 @@ describe('Pdf generation invariants', () => {
 	});
 
 	it('renders tables as a grid, keeping cell text and spans (2/2)', async () => {
-		const cell = (text: string) => ({
+		const cell = (text: string): ProseMirrorTableCellNode => ({
 			type: 'tableCell',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 		});
-		const header = (text: string) => ({
+		const header = (text: string): ProseMirrorTableHeaderNode => ({
 			type: 'tableHeader',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 		});

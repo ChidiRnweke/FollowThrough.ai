@@ -26,7 +26,7 @@ import type {
 	ExportSettings,
 	ExtractedTemplateStyles
 } from '$lib/models/deliverables';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { ProseMirrorDocument, ProseMirrorNode, ProseMirrorTextNode } from '$lib/models/notes';
 import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
@@ -144,15 +144,14 @@ function headingFont(
 type InlineRun = TextRun | ExternalHyperlink;
 
 function textRunFromNode(
-	node: Record<string, unknown>,
+	node: ProseMirrorTextNode,
 	styles: ExtractedTemplateStyles,
 	isCode: boolean = false,
 	forceItalics: boolean = false,
 	forceBold: boolean = false
 ): InlineRun {
-	const text = (node.text as string) ?? '';
-	const marks =
-		(node.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined) ?? [];
+	const text = node.text;
+	const marks = node.marks ?? [];
 	let bold = forceBold;
 	let italics = forceItalics;
 	let fontName = isCode ? 'Courier New' : (styles.fonts.body.name ?? 'Calibri');
@@ -182,16 +181,16 @@ function textRunFromNode(
 	return new TextRun({ text, bold, italics, font: fontName, size: fontSize });
 }
 
-function collectText(node: Record<string, unknown>): string {
-	if (node.type === 'text') return (node.text as string) ?? '';
-	if (node.content) {
-		return (node.content as Array<Record<string, unknown>>).map(collectText).join('');
-	}
-	return '';
+const nodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
+	'content' in node ? (node.content ?? []) : [];
+
+function collectText(node: ProseMirrorNode): string {
+	if (node.type === 'text') return node.text;
+	return nodeContent(node).map(collectText).join('');
 }
 
 /** Runs for one paragraph's inline content, honouring blockquote/table-header context. */
-function inlineRuns(content: readonly Record<string, unknown>[], ctx: DocxContext): InlineRun[] {
+function inlineRuns(content: readonly ProseMirrorNode[], ctx: DocxContext): InlineRun[] {
 	const children: InlineRun[] = [];
 	for (const child of content) {
 		if (child.type === 'text') {
@@ -296,21 +295,25 @@ const TABLE_LINE_COLOR = 'D1D5DB';
 const TABLE_HEADER_FILL = 'F3F4F6';
 
 /** Convert a Tiptap table node into a Word table, keeping spans and header rows. */
-function tableBlock(node: Record<string, unknown>, ctx: DocxContext): Table | null {
-	const rows = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
+function tableBlock(
+	node: Extract<ProseMirrorNode, { type: 'table' }>,
+	ctx: DocxContext
+): Table | null {
+	const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
 	const tableRows: TableRow[] = [];
 	let columnCount = 0;
 
 	rows.forEach((row, rowIndex) => {
-		const cells = (row.content as Array<Record<string, unknown>> | undefined) ?? [];
+		const cells = (row.content ?? []).filter(
+			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+		);
 		const isHeaderRow = cells.length > 0 && cells.every((cell) => cell.type === 'tableHeader');
 		const tableCells: TableCell[] = [];
 		let column = 0;
 		for (const cell of cells) {
-			const cellAttrs = (cell.attrs as Record<string, unknown> | undefined) ?? {};
-			const columnSpan = Math.max((cellAttrs.colspan as number) ?? 1, 1);
-			const rowSpan = Math.max((cellAttrs.rowspan as number) ?? 1, 1);
-			const cellContent = (cell.content as Array<Record<string, unknown>> | undefined) ?? [];
+			const columnSpan = Math.max(cell.attrs?.colspan ?? 1, 1);
+			const rowSpan = Math.max(cell.attrs?.rowspan ?? 1, 1);
+			const cellContent = cell.content ?? [];
 			// The docx library inserts the vertical-merge continuation cells a rowSpan
 			// implies into the following rows itself, so covered slots need no padding here.
 			const cellCtx: DocxContext = cell.type === 'tableHeader' ? { ...ctx, forceBold: true } : ctx;
@@ -342,9 +345,11 @@ function tableBlock(node: Record<string, unknown>, ctx: DocxContext): Table | nu
 	// pixel widths to the printable width in twips. Otherwise let Word distribute.
 	const contentWidthTwips =
 		PAGE_WIDTH_TWIPS - ctx.styles.pageMargins.left - ctx.styles.pageMargins.right;
-	const firstRowCells = (rows[0]?.content as Array<Record<string, unknown>> | undefined) ?? [];
+	const firstRowCells = (rows[0]?.content ?? []).filter(
+		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+	);
 	const colwidths = firstRowCells
-		.map((cell) => (cell.attrs as Record<string, unknown> | undefined)?.colwidth)
+		.map((cell) => cell.attrs?.colwidth)
 		.map((value) => (Array.isArray(value) ? Number(value[0]) : undefined));
 	const totalWidth =
 		colwidths.every((w): w is number => typeof w === 'number' && Number.isFinite(w) && w > 0) &&
@@ -421,8 +426,11 @@ function diagramImage(
  * A referenced draw.io diagram, embedded from the SVG its editor exported and the
  * browser rasterized. There is no textual fallback: the XML is not readable prose.
  */
-function drawioBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph[] {
-	const reference = (node.attrs as { diagramId?: string } | undefined)?.diagramId;
+function drawioBlock(
+	node: Extract<ProseMirrorNode, { type: 'drawio' }>,
+	ctx: DocxContext
+): Paragraph[] {
+	const reference = node.attrs?.diagramId ?? undefined;
 	const image = reference ? diagramImage(reference, ctx, { before: 120, after: 120 }) : undefined;
 	return image
 		? [image]
@@ -434,7 +442,10 @@ function drawioBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph
 }
 
 /** A mermaid diagram: the browser-rendered PNG when supplied, otherwise its source as code. */
-function mermaidBlock(node: Record<string, unknown>, ctx: DocxContext): Paragraph[] {
+function mermaidBlock(
+	node: Extract<ProseMirrorNode, { type: 'mermaid' }>,
+	ctx: DocxContext
+): Paragraph[] {
 	const source = collectText(node);
 	const image = diagramImage(mermaidSourceHash(source), ctx);
 	// Without a browser render the diagram source is still worth keeping.
@@ -442,18 +453,17 @@ function mermaidBlock(node: Record<string, unknown>, ctx: DocxContext): Paragrap
 }
 
 function convertNode(
-	node: Record<string, unknown>,
+	node: ProseMirrorNode,
 	ctx: DocxContext,
 	depth: number = 0
 ): (Paragraph | Table)[] {
-	const type = node.type as string;
-	const content = (node.content as Array<Record<string, unknown>> | undefined) ?? [];
-	const attrs = (node.attrs as Record<string, unknown> | undefined) ?? {};
+	const type = node.type;
+	const content = nodeContent(node);
 	const results: (Paragraph | Table)[] = [];
 
 	switch (type) {
 		case 'heading': {
-			const level = Math.min((attrs.level as number) ?? 1, 6);
+			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const text = collectText(node);
 			const h = headingFont(ctx.styles, level);
 			const spacing = headingSpacingPt(level);
@@ -496,13 +506,10 @@ function convertNode(
 			const listInstance = type === 'orderedList' ? ctx.orderedListInstances.next++ : undefined;
 			for (const item of content) {
 				if (item.type !== 'listItem') continue;
-				const itemContent = (item.content as Array<Record<string, unknown>>) ?? [];
+				const itemContent = nodeContent(item);
 				for (const child of itemContent) {
 					if (child.type === 'paragraph') {
-						const runs = inlineRuns(
-							(child.content as Array<Record<string, unknown>> | undefined) ?? [],
-							ctx
-						);
+						const runs = inlineRuns(nodeContent(child), ctx);
 						results.push(
 							new Paragraph({
 								...(type === 'bulletList'
@@ -557,7 +564,7 @@ function convertNode(
 			break;
 		}
 		case 'image': {
-			const src = attrs.src as string | undefined;
+			const src = node.attrs?.src ?? undefined;
 			if (!src) break;
 			const data = src.startsWith('data:') ? src : ctx.images.get(src);
 			if (!data) {
@@ -568,7 +575,7 @@ function convertNode(
 				);
 				break;
 			}
-			const run = bodyImageRun(data, attrs.width, ctx);
+			const run = bodyImageRun(data, node.attrs?.width, ctx);
 			if (run) results.push(new Paragraph({ children: [run] }));
 			break;
 		}
@@ -648,7 +655,7 @@ export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
 		}
 
 		const docContent = note.document.content ?? [];
-		for (const node of docContent as Array<Record<string, unknown>>) {
+		for (const node of docContent) {
 			allBlocks.push(...convertNode(node, ctx));
 		}
 

@@ -10,6 +10,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { BuiltInSkills } from './built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
+import { parseProseMirrorDocument } from '$lib/models/notes';
 
 const legacyInstructions = `Use FollowThrough as an action-oriented workbench.
 
@@ -34,7 +35,7 @@ const setupLegacyFollowThrough = async () => {
 	const state = setup();
 	await state.provisioner.ensure(testActor());
 	const current = state.skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
-	const note = {
+	const note: typeof current.note = {
 		...current.note,
 		document: {
 			type: 'doc' as const,
@@ -45,8 +46,9 @@ const setupLegacyFollowThrough = async () => {
 		publishedRevision: 0,
 		publishedAt: undefined
 	};
+	const storedNote = { ...note, document: parseProseMirrorDocument(note.document) };
 	state.notes.notes = state.notes.notes.map((candidate) =>
-		candidate.id === note.id ? note : candidate
+		candidate.id === storedNote.id ? storedNote : candidate
 	);
 	state.skills.skills = state.skills.skills.map((skill) =>
 		skill.note.id === note.id
@@ -227,7 +229,11 @@ describe('Built-in skill provisioning invariants', () => {
 		const { provisioner, notes, skills } = setup();
 		await provisioner.ensure(testActor());
 		const stale = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
-		const staleNote = { ...stale.note, plainText: RETIRED_BUILT_INS[1]!.instructions };
+		const staleNote = {
+			...stale.note,
+			document: parseProseMirrorDocument(stale.note.document),
+			plainText: RETIRED_BUILT_INS[1]!.instructions
+		};
 		notes.notes = notes.notes.map((note) => (note.id === staleNote.id ? staleNote : note));
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === staleNote.id
