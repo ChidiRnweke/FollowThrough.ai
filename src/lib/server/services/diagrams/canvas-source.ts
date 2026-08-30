@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId } from '$lib/models/agent';
+import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
+import { sessionOutputText } from '$lib/models/agent';
 import type { DiagramId } from '$lib/models/diagrams';
 
 /**
@@ -13,33 +14,24 @@ import type { DiagramId } from '$lib/models/diagrams';
  * sent.
  */
 export interface CanvasSourceItems {
-	/**
-	 * Mirrors `AgentSessionItem.item`, which is what the adapter has. The precise
-	 * type for a session row is the SDK's `AgentInputItem` union, and it cannot be
-	 * named here: this port is satisfied by `AgentSessionRepository`, whose row
-	 * type lives in `models/agent`, and a model may not import a framework.
-	 */
 	list(
 		actor: ActorContext,
 		conversationId: ConversationId,
 		limit?: number
-	): Promise<readonly { readonly item: Readonly<Record<string, unknown>> }[]>;
+	): Promise<readonly { readonly item: PersistedSessionItem }[]>;
 }
 
-const WRITING_TOOLS = ['create_diagram', 'edit_diagram'] as const;
+const WRITING_TOOLS: ReadonlySet<string> = new Set(['create_diagram', 'edit_diagram']);
 
 /**
- * A session row that is a diagram write's result, and nothing else.
+ * The id a diagram write reports back.
  *
- * Parsed rather than cast: the rows are stored JSON, so `item.output.text` is a
- * claim until something checks it.
+ * The item shape no longer needs a schema of its own — a row arrives as one of
+ * the session-item arms, so "is this a diagram write's result, and what text did
+ * it return" is two field reads the compiler checks. What still needs parsing is
+ * the tool's own JSON payload, which this union deliberately does not claim to
+ * know.
  */
-const diagramWriteResult = z.object({
-	type: z.literal('function_call_result'),
-	name: z.enum(WRITING_TOOLS),
-	output: z.object({ text: z.string() })
-});
-
 const writtenDiagramId = z.object({
 	diagramId: z
 		.string()
@@ -47,10 +39,11 @@ const writtenDiagramId = z.object({
 		.transform((value) => value as DiagramId)
 });
 
-const fromResult = (item: Readonly<Record<string, unknown>>): DiagramId | undefined => {
-	const parsed = diagramWriteResult.safeParse(item);
-	if (!parsed.success) return undefined;
-	const payload: unknown = JSON.parse(parsed.data.output.text);
+const fromResult = (item: PersistedSessionItem): DiagramId | undefined => {
+	if (item.type !== 'function_call_result' || !WRITING_TOOLS.has(item.name)) return undefined;
+	const text = sessionOutputText(item);
+	if (text === undefined) return undefined;
+	const payload: unknown = JSON.parse(text);
 	return writtenDiagramId.safeParse(payload).data?.diagramId;
 };
 

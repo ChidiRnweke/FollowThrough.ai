@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { rewindToUserItem, type SessionItem } from './rewind';
+import { rewindToUserItem } from './rewind';
+import {
+	assistantItem as assistant,
+	callItem,
+	userItem as user
+} from '$lib/testing/agent/session-items';
 
-const user = (text: string): SessionItem => ({ role: 'user', content: text });
-const assistant = (text: string): SessionItem => ({ role: 'assistant', content: text });
-const toolCall = (name: string): SessionItem => ({ type: 'function_call', name });
+const toolCall = (name: string) => callItem(name, `call-${name}`);
 
 describe('rewinding session memory to a user turn', () => {
 	it('drops the named user turn and everything after it', () => {

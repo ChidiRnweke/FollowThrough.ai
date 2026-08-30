@@ -9,6 +9,7 @@ import type {
 	AgentRunEventRecord,
 	AgentRunSnapshot,
 	AgentSessionItem,
+	PersistedSessionItem,
 	Conversation,
 	ConversationId,
 	DecideAgentRunBatchInput,
@@ -89,10 +90,7 @@ interface AgentSessionRepository {
 		conversationId: ConversationId,
 		limit?: number
 	): Promise<readonly AgentSessionItem[]>;
-	replace(
-		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
-	): Promise<void>;
+	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]): Promise<void>;
 }
 
 const now = (): DateTime => new Date().toISOString() as DateTime;

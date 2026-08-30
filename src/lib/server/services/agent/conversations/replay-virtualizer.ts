@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { getEncoding } from 'js-tiktoken';
-import type { ConversationId } from '$lib/models/agent';
+import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 
@@ -21,36 +21,45 @@ export class AgentReplayVirtualizer {
 	async virtualize(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		item: Readonly<Record<string, unknown>>
-	): Promise<Readonly<Record<string, unknown>>> {
-		const isTool = item.type === 'function_call' || item.type === 'function_call_result';
-		const isMessage = item.type === 'message' || item.role === 'user' || item.role === 'assistant';
-		if (!isTool && !isMessage) return item;
-		if (typeof item.name === 'string' && DIAGRAM_TOOLS.has(item.name)) return item;
-		const callId =
-			typeof item.callId === 'string'
-				? item.callId
-				: typeof item.call_id === 'string'
-					? item.call_id
-					: createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16);
-		if (item.type === 'function_call' && typeof item.arguments === 'string') {
-			const parsed = JSON.parse(item.arguments) as unknown;
-			const virtualized = await this.walk(
-				actor,
-				conversationId,
-				parsed,
-				safeSegment(callId),
-				'arguments'
-			);
-			return { ...item, arguments: JSON.stringify(virtualized) };
+		item: PersistedSessionItem
+	): Promise<PersistedSessionItem> {
+		// `reasoning` and `unrecognised` are left alone: the first is the model's own
+		// scratch text and the second is a shape this code did not understand.
+		switch (item.type) {
+			case 'function_call':
+				if (DIAGRAM_TOOLS.has(item.name)) return item;
+				return {
+					...item,
+					arguments: JSON.stringify(
+						await this.walk(
+							actor,
+							conversationId,
+							// The tool's own payload, which the session-item union does not
+							// claim to know. `unknown` is the honest type for it here.
+							JSON.parse(item.arguments) as unknown,
+							safeSegment(item.callId),
+							'arguments'
+						)
+					)
+				};
+			case 'function_call_result':
+				if (DIAGRAM_TOOLS.has(item.name)) return item;
+				return this.walk(actor, conversationId, item, safeSegment(item.callId), 'item');
+			case 'user_message':
+			case 'assistant_message':
+				return this.walk(
+					actor,
+					conversationId,
+					item,
+					// A message carries no call id. Hashing it is not a fallback for a
+					// missing fact — it is the only stable name a message has, and it is
+					// what the stored file path is keyed by.
+					safeSegment(createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16)),
+					'message'
+				);
+			default:
+				return item;
 		}
-		return this.walk(
-			actor,
-			conversationId,
-			item,
-			safeSegment(callId),
-			isMessage ? 'message' : 'item'
-		);
 	}
 
 	private async walk<T>(

@@ -7,6 +7,7 @@ import type {
 	AgentRunStatus,
 	AgentSessionItem,
 	ConversationId,
+	PersistedSessionItem,
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
@@ -15,7 +16,9 @@ import {
 	isTerminalAgentRunStatus,
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
-	parseWorkflowRunContext
+	parseSessionItem,
+	parseWorkflowRunContext,
+	toStoredSessionItem
 } from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
 import type {
@@ -459,7 +462,7 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 	id: row.id as AgentSessionItem['id'],
 	conversationId: row.conversationId as AgentSessionItem['conversationId'],
 	position: row.position,
-	item: row.item,
+	item: parseSessionItem(row.item),
 	createdAt: row.createdAt.toISOString() as AgentSessionItem['createdAt']
 });
 
@@ -506,7 +509,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 	async append(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
+		items: readonly PersistedSessionItem[]
 	): Promise<void> {
 		if (items.length === 0) return;
 		await this.assertOwned(actor, conversationId);
@@ -520,7 +523,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 				id: crypto.randomUUID(),
 				conversationId,
 				position: start + index,
-				item: { ...item }
+				item: toStoredSessionItem(item)
 			}))
 		);
 	}
@@ -554,7 +557,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 
 	async replace(
 		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
+		items: readonly PersistedSessionItem[]
 	): Promise<void> {
 		await this.database.transaction(async (transaction) => {
 			await transaction
@@ -566,7 +569,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 						id: crypto.randomUUID(),
 						conversationId,
 						position,
-						item: { ...item }
+						item: toStoredSessionItem(item)
 					}))
 				);
 		});

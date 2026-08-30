@@ -4,22 +4,22 @@
  * Editing or re-asking a question sends it as the input of a brand new run, so
  * the discarded turn has to leave session memory first — otherwise the agent
  * replays a transcript that still contains the question it is being asked again.
- * The turn is addressed by its one-based position among user items: only items
- * carrying `role: 'user'` count, because tool calls and tool outputs carry no
- * role at all.
+ * The turn is addressed by its one-based position among user items: only the
+ * `user_message` arm counts, because tool calls and tool outputs are not a turn
+ * anyone can be sent back to.
  */
-export type SessionItem = Readonly<Record<string, unknown>>;
+import type { PersistedSessionItem } from '$lib/models/agent';
 
-const isUserItem = (item: SessionItem): boolean => item.role === 'user';
+const isUserItem = (item: PersistedSessionItem): boolean => item.type === 'user_message';
 
 /**
  * The prefix of `items` that precedes the `ordinal`-th user item, or `undefined`
  * when there is no such item and nothing needs rewinding.
  */
 export function rewindToUserItem(
-	items: readonly SessionItem[],
+	items: readonly PersistedSessionItem[],
 	ordinal: number
-): readonly SessionItem[] | undefined {
+): readonly PersistedSessionItem[] | undefined {
 	if (ordinal < 1) return undefined;
 	const userIndices = items.reduce<number[]>((indices, item, index) => {
 		if (isUserItem(item)) indices.push(index);

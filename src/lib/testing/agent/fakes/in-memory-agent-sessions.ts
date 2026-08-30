@@ -1,9 +1,26 @@
+import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentSessionItem, AgentSessionItemId, ConversationId } from '$lib/models/agent';
+import type {
+	AgentSessionItem,
+	AgentSessionItemId,
+	ConversationId,
+	PersistedSessionItem
+} from '$lib/models/agent';
+import { parseSessionItem, sessionJsonObjectSchema, toStoredSessionItem } from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 const now = () => new Date().toISOString() as AgentSessionItem['createdAt'];
+
+const restoredItemsSchema = z.array(
+	z.object({
+		id: z.string().transform((value) => value as AgentSessionItemId),
+		conversationId: z.string().transform((value) => value as ConversationId),
+		position: z.number().int(),
+		item: sessionJsonObjectSchema,
+		createdAt: z.string().transform((value) => value as AgentSessionItem['createdAt'])
+	})
+);
 
 export class InMemoryAgentSessionRepository implements AgentSessionRepository, SnapshotParticipant {
 	items: AgentSessionItem[] = [];
@@ -22,7 +39,7 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 	async append(
 		_actor: ActorContext,
 		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
+		items: readonly PersistedSessionItem[]
 	): Promise<void> {
 		const start =
 			this.items
@@ -56,7 +73,7 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 
 	async replace(
 		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
+		items: readonly PersistedSessionItem[]
 	): Promise<void> {
 		this.items = this.items.filter((item) => item.conversationId !== conversationId);
 		items.forEach((item, position) =>
@@ -71,10 +88,20 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 	}
 
 	snapshot(): unknown {
-		return structuredClone(this.items);
+		return structuredClone(
+			this.items.map((row) => ({ ...row, item: toStoredSessionItem(row.item) }))
+		);
 	}
 
+	/**
+	 * Parsed rather than asserted, so the fake cannot hold a row the repository
+	 * would refuse to return: a fixture encoding an impossible state teaches the
+	 * bug to everyone who copies it.
+	 */
 	restore(snapshot: unknown): void {
-		this.items = snapshot as AgentSessionItem[];
+		this.items = restoredItemsSchema.parse(snapshot).map((row) => ({
+			...row,
+			item: parseSessionItem(row.item)
+		}));
 	}
 }

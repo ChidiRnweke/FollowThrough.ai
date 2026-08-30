@@ -9,6 +9,7 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	ConversationId,
+	PersistedSessionItem,
 	PreparedAgentRun,
 	RunAgentInput,
 	ToolActivity
@@ -363,7 +364,7 @@ export class AgentRunLifecycle {
 	private async complete(
 		run: AgentRun,
 		actor: ActorContext,
-		sessionItems: readonly Readonly<Record<string, unknown>>[],
+		sessionItems: readonly PersistedSessionItem[],
 		decisionCallIds: readonly string[] = []
 	): Promise<boolean> {
 		const settled = await this.deps.transactions.run(async () => {

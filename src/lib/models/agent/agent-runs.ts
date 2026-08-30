@@ -2,11 +2,6 @@ type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 type AgentRunId = string & { readonly __brand: 'AgentRunId' };
 type ConversationId = string & { readonly __brand: 'ConversationId' };
-interface PendingAgentDecision {
-	readonly callId: string;
-	readonly toolName: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
-}
 type NoteActionKind = 'promises' | 'relate' | 'reference' | 'diagram' | 'revise' | 'convert';
 type AgentEvent =
 	| {
@@ -106,20 +101,6 @@ export interface AgentRunEventRecord {
 	readonly event: AgentEvent;
 	readonly createdAt: Date;
 }
-
-export type AgentExecutionUpdate =
-	| { readonly type: 'event'; readonly event: AgentEvent }
-	| {
-			readonly type: 'approval_checkpoint';
-			readonly serializedState: string;
-			readonly traceparent?: string;
-			readonly pendingDecisions: readonly PendingAgentDecision[];
-			readonly sessionItems: readonly Readonly<Record<string, unknown>>[];
-	  }
-	| {
-			readonly type: 'completed';
-			readonly sessionItems: readonly Readonly<Record<string, unknown>>[];
-	  };
 
 export class AgentProviderFailure extends Error {
 	constructor(

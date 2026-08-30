@@ -30,7 +30,12 @@ import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 import { withReasoning } from '$lib/server/repositories/agent/reasoning-transport';
-import type { ContextNote, ContextSelection, ConversationId } from '$lib/models/agent';
+import type {
+	ContextNote,
+	ContextSelection,
+	ConversationId,
+	PersistedSessionItem
+} from '$lib/models/agent';
 
 /**
  * Turns one run may take before the SDK cuts it off. High enough that a
@@ -351,7 +356,7 @@ interface AgentToolExecutor {
 	): Promise<unknown>;
 }
 interface BufferedSession extends Session {
-	snapshot(): Promise<readonly Readonly<Record<string, unknown>>[]>;
+	snapshot(): Promise<readonly PersistedSessionItem[]>;
 }
 
 interface AgentTurnContext {

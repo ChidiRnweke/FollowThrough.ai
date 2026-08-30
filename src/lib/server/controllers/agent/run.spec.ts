@@ -6,6 +6,7 @@ import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { assistantItem, userItem } from '$lib/testing/agent/session-items';
 import {
 	appContextBuilder,
 	testActor,
@@ -275,8 +276,8 @@ describe('resubmitting an edited question', () => {
 			input: 'Summarise this'
 		});
 		await sessions.append(testActor(), receipt.conversationId, [
-			{ role: 'user', content: 'Summarise this' },
-			{ role: 'assistant', content: 'Here you go' }
+			userItem('Summarise this'),
+			assistantItem('Here you go')
 		]);
 		await controller.submit(testActor(), {
 			requestId: '20000000-0000-4000-8000-000000000004',

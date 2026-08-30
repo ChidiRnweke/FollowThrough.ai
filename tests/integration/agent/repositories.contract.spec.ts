@@ -11,8 +11,18 @@ import type { DateTime } from '$lib/models/workspace';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import {
 	AgentPreferenceRecords,
-	AgentRunRecords
+	AgentRunRecords,
+	AgentSessionRecords
 } from '$lib/server/repositories/agent/postgres/agent-settings';
+import * as schema from '$lib/server/db/schema/registry';
+import {
+	assistantItem,
+	callItem,
+	reasoningItem,
+	resultItem,
+	unrecognisedItem,
+	userItem
+} from '$lib/testing/agent/session-items';
 import {
 	AgentRunDecisionRecords,
 	AgentRunEventRecords
@@ -284,6 +294,69 @@ describe('Postgres durable agent run repository invariants', () => {
 				requestId: 'request-97-overlap'
 			})
 		).rejects.toThrow();
+	});
+});
+describe('Postgres agent session repository invariants', () => {
+	const seedConversation = async (suffix: string) => {
+		const owner = actor(suffix);
+		await new UserRecords(context.db).ensureLocal(owner);
+		const conversation = await new ConversationRecords(context.db).insert(owner, {
+			id: `20000000-0000-4000-8000-0000000000${suffix}` as ConversationId,
+			userId: owner.userId,
+			kind: 'chat',
+			createdAt: now,
+			updatedAt: now
+		});
+		return { owner, conversationId: conversation.id };
+	};
+
+	const transcript = [
+		userItem('Draw me a diagram'),
+		reasoningItem('picking a shape'),
+		callItem('create_diagram', 'call-1', JSON.stringify({ source: '<mxfile/>' })),
+		resultItem('create_diagram', 'call-1', JSON.stringify({ diagramId: 'diagram-1' })),
+		assistantItem('Here it is')
+	];
+
+	it('returns every arm it was given, through the jsonb column', async () => {
+		const { owner, conversationId } = await seedConversation('81');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, transcript);
+		expect((await repository.list(owner, conversationId)).map((row) => row.item)).toEqual(
+			transcript
+		);
+	});
+
+	// The column holds whatever the provider SDK wrote. A shape this code has not
+	// met must not make the conversation unreadable.
+	it('reads a row it does not recognise as the unrecognised arm', async () => {
+		const { owner, conversationId } = await seedConversation('82');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [unrecognisedItem('compaction')]);
+		const [row] = await repository.list(owner, conversationId);
+		expect(row?.item.type).toBe('unrecognised');
+	});
+
+	it('hands an unrecognised row back exactly as it was stored', async () => {
+		const { owner, conversationId } = await seedConversation('83');
+		const repository = new AgentSessionRecords(context.db);
+		const item = unrecognisedItem('compaction');
+		await repository.append(owner, conversationId, [item]);
+		expect((await repository.list(owner, conversationId))[0]?.item).toEqual(item);
+	});
+
+	it('refuses a column that does not hold a JSON object', async () => {
+		const { owner, conversationId } = await seedConversation('84');
+		await context.db.insert(schema.agentSessionItems).values({
+			id: crypto.randomUUID(),
+			conversationId,
+			position: 0,
+			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			item: 'not an item' as unknown as Record<string, unknown>
+		});
+		await expect(new AgentSessionRecords(context.db).list(owner, conversationId)).rejects.toThrow(
+			/must be a JSON object/
+		);
 	});
 });
 describe('Postgres trust-policy repository invariants', () => {

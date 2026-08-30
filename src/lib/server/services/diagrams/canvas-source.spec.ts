@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId } from '$lib/models/agent';
+import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
+import { callItem, resultItem } from '$lib/testing/agent/session-items';
 import { PresentedCanvasSource, type CanvasSourceItems } from './canvas-source';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const actor = { userId: 'user-1' as ActorContext['userId'] };
 const conversation = 'conversation-1' as ConversationId;
 
-const itemsOf = (...rows: { item: Record<string, unknown> }[]): CanvasSourceItems => ({
+const itemsOf = (...rows: { item: PersistedSessionItem }[]): CanvasSourceItems => ({
 	list: async () => rows
 });
 
 describe('The diagram on a conversation canvas', () => {
 	const result = (diagramId: string, name = 'create_diagram') => ({
-		item: {
-			name,
-			type: 'function_call_result',
-			output: { text: JSON.stringify({ diagramId }) }
-		}
+		item: resultItem(name, `call-${diagramId}`, JSON.stringify({ diagramId }))
 	});
 
 	it('is the diagram the conversation last wrote', async () => {
@@ -40,11 +37,7 @@ describe('The diagram on a conversation canvas', () => {
 	// The call carries what was proposed; only the result names what was stored.
 	it('ignores the call and reads the result', async () => {
 		const call = {
-			item: {
-				name: 'create_diagram',
-				type: 'function_call',
-				arguments: JSON.stringify({ diagramId: testDiagramId(9) })
-			}
+			item: callItem('create_diagram', 'call-9', JSON.stringify({ diagramId: testDiagramId(9) }))
 		};
 		const reader = new PresentedCanvasSource(itemsOf(call));
 		expect(await reader.latest(actor, conversation)).toBeUndefined();

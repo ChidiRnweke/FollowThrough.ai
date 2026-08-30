@@ -1,5 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentPreferences, AgentSessionItem, ConversationId } from '$lib/models/agent';
+import type {
+	AgentPreferences,
+	AgentSessionItem,
+	ConversationId,
+	PersistedSessionItem
+} from '$lib/models/agent';
 
 /** Per-user resolution floor. Absent means every setting falls back to the deployment's environment default, never a hard-coded literal. */
 export interface AgentPreferencesRepository {
@@ -17,12 +22,9 @@ export interface AgentSessionRepository {
 	append(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
+		items: readonly PersistedSessionItem[]
 	): Promise<void>;
 	pop(actor: ActorContext, conversationId: ConversationId): Promise<AgentSessionItem | undefined>;
 	clear(actor: ActorContext, conversationId: ConversationId): Promise<void>;
-	replace(
-		conversationId: ConversationId,
-		items: readonly Readonly<Record<string, unknown>>[]
-	): Promise<void>;
+	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]): Promise<void>;
 }

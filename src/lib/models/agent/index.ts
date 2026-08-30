@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PersistedSessionItem } from './session-item';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -438,7 +439,7 @@ export interface AgentSessionItem {
 	readonly id: AgentSessionItemId;
 	readonly conversationId: ConversationId;
 	readonly position: number;
-	readonly item: Readonly<Record<string, unknown>>;
+	readonly item: PersistedSessionItem;
 	readonly createdAt: DateTime;
 }
 
@@ -1307,4 +1308,27 @@ export const parseRunAgentInput = (
 		})
 		.parse(input);
 
+/**
+ * What one turn of a run reports back.
+ *
+ * It lives beside the session-item union rather than in `agent-runs.ts` because
+ * it carries one: that file is a self-contained persistence projection that may
+ * not import a sibling, and duplicating a six-arm union to satisfy the rule
+ * would be worse than moving the one type that needs it.
+ */
+export type AgentExecutionUpdate =
+	| { readonly type: 'event'; readonly event: AgentEvent }
+	| {
+			readonly type: 'approval_checkpoint';
+			readonly serializedState: string;
+			readonly traceparent?: string;
+			readonly pendingDecisions: readonly PendingAgentDecision[];
+			readonly sessionItems: readonly PersistedSessionItem[];
+	  }
+	| {
+			readonly type: 'completed';
+			readonly sessionItems: readonly PersistedSessionItem[];
+	  };
+
 export * from './agent-runs';
+export * from './session-item';

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { AgentReplayVirtualizer } from './replay-virtualizer';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import {
+	callItem,
+	reasoningItem,
+	stringResultItem,
+	unrecognisedItem,
+	userItemWithImage
+} from '$lib/testing/agent/session-items';
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('AgentReplayVirtualizer', () => {
@@ -9,12 +16,7 @@ describe('AgentReplayVirtualizer', () => {
 		const result = await new AgentReplayVirtualizer(files).virtualize(
 			testActor(),
 			testConversationId(),
-			{
-				type: 'function_call_result',
-				name: 'search',
-				callId: 'call-1',
-				output: 'large result '.repeat(5000)
-			}
+			stringResultItem('search', 'call-1', 'large result '.repeat(5000))
 		);
 
 		expect(result).toMatchObject({
@@ -28,37 +30,26 @@ describe('AgentReplayVirtualizer', () => {
 		const result = await new AgentReplayVirtualizer(new InMemoryAgentFiles()).virtualize(
 			testActor(),
 			testConversationId(),
-			{
-				type: 'function_call',
-				name: 'save_note',
-				callId: 'call-2',
-				arguments: JSON.stringify({ markdown: 'long note '.repeat(5000) })
-			}
+			callItem('save_note', 'call-2', JSON.stringify({ markdown: 'long note '.repeat(5000) }))
 		);
 
-		expect(() => JSON.parse(result.arguments as string)).not.toThrow();
+		expect(() => JSON.parse(result.type === 'function_call' ? result.arguments : '')).not.toThrow();
 	});
 
 	it('persists the exact bytes behind the pointer', async () => {
 		const files = new InMemoryAgentFiles();
 		const content = 'large result '.repeat(5000);
-		await new AgentReplayVirtualizer(files).virtualize(testActor(), testConversationId(), {
-			type: 'function_call_result',
-			name: 'search',
-			callId: 'call-3',
-			output: content
-		});
+		await new AgentReplayVirtualizer(files).virtualize(
+			testActor(),
+			testConversationId(),
+			stringResultItem('search', 'call-3', content)
+		);
 
 		expect((await files.list(testActor()))[0]?.content).toBe(content);
 	});
 
 	it('preserves diagram rows for the canvas recovery reader', async () => {
-		const item = {
-			type: 'function_call_result',
-			name: 'create_diagram',
-			callId: 'call-4',
-			output: 'diagram source '.repeat(5000)
-		};
+		const item = stringResultItem('create_diagram', 'call-4', 'diagram source '.repeat(5000));
 		const result = await new AgentReplayVirtualizer(new InMemoryAgentFiles()).virtualize(
 			testActor(),
 			testConversationId(),
@@ -72,9 +63,31 @@ describe('AgentReplayVirtualizer', () => {
 		const result = await new AgentReplayVirtualizer(new InMemoryAgentFiles()).virtualize(
 			testActor(),
 			testConversationId(),
-			{ role: 'user', content: [{ type: 'input_text', text: 'long message '.repeat(5000) }] }
+			userItemWithImage('long message '.repeat(5000), 'https://example.test/a.png')
 		);
 
 		expect(JSON.stringify(result)).toContain('/history/');
+	});
+
+	it('leaves the model reasoning alone', async () => {
+		const item = reasoningItem('thinking '.repeat(5000));
+		const result = await new AgentReplayVirtualizer(new InMemoryAgentFiles()).virtualize(
+			testActor(),
+			testConversationId(),
+			item
+		);
+
+		expect(result).toBe(item);
+	});
+
+	it('leaves an item it does not recognise exactly as stored', async () => {
+		const item = unrecognisedItem('compaction');
+		const result = await new AgentReplayVirtualizer(new InMemoryAgentFiles()).virtualize(
+			testActor(),
+			testConversationId(),
+			item
+		);
+
+		expect(result).toBe(item);
 	});
 });
