@@ -1,27 +1,35 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
+import { z } from 'zod';
 
 const pendingWrites = new Map<string, Promise<void>>();
 
 const isMissingFile = (error: unknown): error is NodeJS.ErrnoException =>
 	error instanceof Error && 'code' in error && error.code === 'ENOENT';
 
-export interface EvalResultRecordInput {
-	readonly runId: string;
-	readonly section: string;
-	readonly subjectModel: string;
-	readonly commit: string;
-	readonly profile: string;
-	readonly caseId: string;
-	readonly sample: number;
-	readonly durationMs: number;
-	readonly outcome: 'passed' | 'failed';
-	readonly failure?: string;
-	readonly completedAt: string;
-}
+const evalResultRecordBaseSchema = z.object({
+	runId: z.string(),
+	section: z.string(),
+	subjectModel: z.string(),
+	commit: z.string(),
+	profile: z.string(),
+	caseId: z.string(),
+	sample: z.number().int().positive(),
+	durationMs: z.number().int().nonnegative(),
+	completedAt: z.iso.datetime()
+});
 
-export const buildEvalResultRecord = (
-	input: EvalResultRecordInput
-): Readonly<EvalResultRecordInput> => ({ ...input });
+const evalResultRecordSchema = z.discriminatedUnion('outcome', [
+	evalResultRecordBaseSchema.extend({ outcome: z.literal('passed') }).strict(),
+	evalResultRecordBaseSchema.extend({ outcome: z.literal('failed'), failure: z.string() }).strict()
+]);
+
+const evalResultLogSchema = z.array(evalResultRecordSchema);
+
+export type EvalResultRecordInput = Readonly<z.infer<typeof evalResultRecordSchema>>;
+
+export const buildEvalResultRecord = (input: EvalResultRecordInput): EvalResultRecordInput => ({
+	...input
+});
 
 /**
  * What was on disk, as three separate answers.
@@ -48,7 +56,8 @@ const readLog = async (path: string): Promise<LogContents> => {
 		throw error;
 	}
 	try {
-		return { kind: 'entries', entries: JSON.parse(raw) as EvalResultRecordInput[] };
+		const parsed: unknown = JSON.parse(raw);
+		return { kind: 'entries', entries: evalResultLogSchema.parse(parsed) };
 	} catch (error) {
 		return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) };
 	}

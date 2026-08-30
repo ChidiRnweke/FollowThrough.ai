@@ -216,6 +216,8 @@ produce.
   - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
 - [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
+  - [x] Parse the eval result log as a strict passed/failed union and quarantine structurally
+        invalid JSON instead of trusting a cast.
 
 ### Phase 5 — Land remaining zero-baseline rules and close the audit
 

@@ -17,6 +17,16 @@ const result = buildEvalResultRecord({
 	completedAt: '2026-08-24T10:00:00.000Z'
 });
 
+const failedResult = buildEvalResultRecord({
+	...result,
+	caseId: 'tool-retrieval-todos-create-failed',
+	outcome: 'failed',
+	failure: 'The tool was not called'
+});
+
+const passedWithFailure = JSON.stringify([{ ...result, failure: 'Impossible passed state' }]);
+const failedWithoutFailure = JSON.stringify([{ ...result, outcome: 'failed' }]);
+
 describe('eval result log', () => {
 	it('retains all provenance fields', () => {
 		expect(result).toEqual({
@@ -39,6 +49,17 @@ describe('eval result log', () => {
 		try {
 			await appendEvalResult(path, result);
 			expect(JSON.parse(await readFile(path, 'utf8'))).toEqual([result]);
+		} finally {
+			await rm(directory, { recursive: true });
+		}
+	});
+
+	it('round-trips a failed record with its required failure', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
+		const path = join(directory, 'results.json');
+		try {
+			await appendEvalResult(path, failedResult);
+			expect(JSON.parse(await readFile(path, 'utf8'))).toEqual([failedResult]);
 		} finally {
 			await rm(directory, { recursive: true });
 		}
@@ -78,6 +99,31 @@ describe('eval result log', () => {
 			await writeFile(path, '[{"caseId": "truncated"}]}\n]', 'utf8');
 			await appendEvalResult(path, result);
 			expect((await readdir(directory)).some((name) => name.includes('.corrupt-'))).toBe(true);
+		} finally {
+			await rm(directory, { recursive: true });
+		}
+	});
+
+	it('replaces structurally invalid JSON with the new result', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
+		const path = join(directory, 'results.json');
+		try {
+			await writeFile(path, passedWithFailure, 'utf8');
+			await appendEvalResult(path, result);
+			expect(JSON.parse(await readFile(path, 'utf8'))).toEqual([result]);
+		} finally {
+			await rm(directory, { recursive: true });
+		}
+	});
+
+	it('quarantines structurally invalid JSON as evidence', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
+		const path = join(directory, 'results.json');
+		try {
+			await writeFile(path, failedWithoutFailure, 'utf8');
+			await appendEvalResult(path, result);
+			const quarantine = (await readdir(directory)).find((name) => name.includes('.corrupt-'))!;
+			expect(await readFile(join(directory, quarantine), 'utf8')).toBe(failedWithoutFailure);
 		} finally {
 			await rm(directory, { recursive: true });
 		}
