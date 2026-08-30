@@ -285,6 +285,50 @@ const suggestionPayloadSchemas = {
 	readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']>;
 };
 
+/**
+ * A stored suggestion, which may have a payload that no longer matches its kind.
+ *
+ * The domain `Suggestion` union stays closed: its arms are product states a
+ * suggestion can genuinely be in, and "the column did not parse" is not one of
+ * them. Adding a sixth `kind` for it would hand every consumer that switches on
+ * `kind` a case it cannot render, decide, or accept.
+ *
+ * So the failure lives at the read boundary instead, as its own type. The
+ * repository returns these; the service decides what to do with the unreadable
+ * ones. That keeps the decision with the caller that can actually make it, and
+ * keeps a single bad row from throwing out of a list read the way a note
+ * document once did.
+ */
+export type StoredSuggestion =
+	| { readonly status: 'readable'; readonly suggestion: Suggestion }
+	| {
+			readonly status: 'unreadable';
+			readonly id: SuggestionId;
+			readonly kind: SuggestionKind;
+			readonly reason: string;
+	  };
+
+/**
+ * Read a stored payload, reporting a mismatch rather than throwing.
+ *
+ * {@link parseSuggestionPayload} stays strict beside this and is what every
+ * write uses: a proposal with a bad payload is input its producer can fix.
+ */
+export const readSuggestionPayload = (
+	kind: SuggestionKind,
+	value: unknown
+):
+	| { readonly status: 'readable'; readonly payload: Suggestion['payload'] }
+	| { readonly status: 'unreadable'; readonly reason: string } => {
+	const parsed = suggestionPayloadSchemas[kind].safeParse(value);
+	return parsed.success
+		? { status: 'readable', payload: parsed.data }
+		: {
+				status: 'unreadable',
+				reason: parsed.error.issues[0]?.message ?? 'the stored payload did not parse'
+			};
+};
+
 export const parseSuggestionPayload = (
 	kind: SuggestionKind,
 	value: unknown

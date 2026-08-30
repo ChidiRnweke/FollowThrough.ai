@@ -302,6 +302,11 @@ export const isColumnGripSelected = ({
 	state: EditorState;
 	from: number;
 }) => {
+	// The bubble menu polls this from a plugin update that can land after the
+	// view is torn down — reading a destroyed view throws out of ProseMirror
+	// (`docView` is null by then), which surfaces as an unhandled error with no
+	// connection to the component that unmounted.
+	if (view.isDestroyed) return false;
 	const domAtPos = view.domAtPos(from).node as HTMLElement;
 	const nodeDOM = view.nodeDOM(from) as HTMLElement;
 	const node = nodeDOM || domAtPos;
@@ -333,6 +338,11 @@ export const isRowGripSelected = ({
 	state: EditorState;
 	from: number;
 }) => {
+	// The bubble menu polls this from a plugin update that can land after the
+	// view is torn down — reading a destroyed view throws out of ProseMirror
+	// (`docView` is null by then), which surfaces as an unhandled error with no
+	// connection to the component that unmounted.
+	if (view.isDestroyed) return false;
 	const domAtPos = view.domAtPos(from).node as HTMLElement;
 	const nodeDOM = view.nodeDOM(from) as HTMLElement;
 	const node = nodeDOM || domAtPos;

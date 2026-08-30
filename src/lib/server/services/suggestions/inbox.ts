@@ -68,12 +68,33 @@ export class SuggestionInbox {
 		return suggestion;
 	}
 
-	listByStatus(
+	/**
+	 * Readable suggestions only, with the rest reported rather than dropped
+	 * quietly.
+	 *
+	 * A suggestion whose payload no longer parses cannot be rendered, decided, or
+	 * accepted — the payload is the whole card. So the inbox omits it, and says
+	 * so where an operator will see it. That is the decision this layer is the
+	 * one able to make: the repository knows a row did not read, but only the
+	 * inbox knows the row was going to become a card.
+	 */
+	async listByStatus(
 		actor: ActorContext,
 		status: SuggestionStatus,
 		noteId?: Suggestion['noteId']
 	): Promise<readonly Suggestion[]> {
-		return this.suggestions.list(actor, { status, ...(noteId ? { noteId } : {}) });
+		const stored = await this.suggestions.list(actor, {
+			status,
+			...(noteId ? { noteId } : {})
+		});
+		const unreadable = stored.filter((row) => row.status === 'unreadable');
+		if (unreadable.length > 0)
+			console.warn(
+				`[suggestions] ${unreadable.length} stored suggestion(s) were left out of the inbox because their payload no longer matches their kind: ${unreadable
+					.map((row) => `${row.id} (${row.kind}): ${row.reason}`)
+					.join('; ')}`
+			);
+		return stored.flatMap((row) => (row.status === 'readable' ? [row.suggestion] : []));
 	}
 	async countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number> {
 		return (await this.listByStatus(actor, status)).length;

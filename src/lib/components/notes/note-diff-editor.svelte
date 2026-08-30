@@ -5,7 +5,7 @@
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import { createEditor } from '$lib/components/edra/commands/editor';
-	import { editorContent } from '$lib/components/edra/commands/document';
+	import { toEditorContent } from './editor-document';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -144,7 +144,7 @@
 
 	$effect(() => {
 		if (!editor) return;
-		editor.commands.setContent(editorContent(document));
+		editor.commands.setContent(toEditorContent(document));
 	});
 </script>
 

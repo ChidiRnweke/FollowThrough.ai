@@ -538,16 +538,40 @@ export interface CompareNoteRevisionsOutput {
  * (ADR 0037, ADR 0015). `mediaPlaceholder` is deliberately absent: it represents
  * an upload still in flight and never reaches a stored document.
  *
- * Attribute keys are optional while their value types are strict: the editor
- * serializes every default, but hand-built and Markdown-parsed documents may omit
- * them, and each attribute has a documented default in its extension. Unknown
- * keys and unknown node or mark types are what a parse rejects.
+ * **Node and mark types are closed; attributes are open.** An unmodelled node type
+ * changes what the document renders as and has to be caught. An unmodelled
+ * attribute does not: Tiptap extensions add global attributes to nodes they do
+ * not own — `addGlobalAttributes` is the documented mechanism — so the attribute
+ * set is open by construction and grows with every extension. Rejecting unknown
+ * attribute keys made the schema a list of every extension ever configured, which
+ * it silently stopped being the moment one was added.
+ *
+ * An earlier version of this comment claimed "attribute keys are optional while
+ * their value types are strict: the editor serializes every default". The first
+ * half is right and the second half inverted it. `Node.toJSON()` serializes a
+ * default by *writing it*, so a default of `null` reaches storage as
+ * `textAlign: null` — 659 of 663 stored values — which an `.optional()` enum
+ * rejects. Defaults are present-and-null, not absent.
+ *
+ * The types below name only the attributes this code reads; the schemas preserve
+ * every other key verbatim so a round trip is lossless. That asymmetry is
+ * deliberate. An index signature on the types would make `node.attrs.anything`
+ * type-check, which is the open-record indexing ADR 0037 exists to remove.
  *
  * This union lives in the notes domain barrel. Sibling model helpers such as
  * `text-search.ts` keep minimal structural views rather than importing the barrel.
  */
 
 export type ProseMirrorTextAlign = 'left' | 'center' | 'right' | 'justify';
+
+/** Whatever JSON an extension chose to store in an attribute. */
+export type ProseMirrorAttrValue =
+	| string
+	| number
+	| boolean
+	| null
+	| readonly ProseMirrorAttrValue[]
+	| { readonly [key: string]: ProseMirrorAttrValue };
 
 // ---------------------------------------------------------------------------
 // Marks
@@ -558,6 +582,7 @@ export interface ProseMirrorLinkAttrs {
 	readonly target?: string | null;
 	readonly rel?: string | null;
 	readonly class?: string | null;
+	readonly title?: string | null;
 }
 
 export interface ProseMirrorNoteLinkAttrs {
@@ -600,8 +625,8 @@ export interface ProseMirrorMediaAttrs {
 	readonly src?: string | null;
 	readonly alt?: string | null;
 	readonly title?: string | null;
-	readonly width?: string | null;
-	readonly height?: string | null;
+	readonly width?: string | number | null;
+	readonly height?: string | number | null;
 	readonly align?: string | null;
 }
 
@@ -636,7 +661,7 @@ export interface ProseMirrorTextNode {
 
 export interface ProseMirrorParagraphNode {
 	readonly type: 'paragraph';
-	readonly attrs?: { readonly textAlign?: ProseMirrorTextAlign };
+	readonly attrs?: { readonly textAlign?: ProseMirrorTextAlign | null };
 	readonly content?: readonly ProseMirrorNode[];
 }
 
@@ -644,9 +669,33 @@ export interface ProseMirrorHeadingNode {
 	readonly type: 'heading';
 	readonly attrs?: {
 		readonly level?: 1 | 2 | 3 | 4;
-		readonly textAlign?: ProseMirrorTextAlign;
+		readonly textAlign?: ProseMirrorTextAlign | null;
+		/** Written by `@tiptap/extension-table-of-contents`; the outline and its anchors read both. */
+		readonly id?: string | null;
+		readonly 'data-toc-id'?: string | null;
 	};
 	readonly content?: readonly ProseMirrorNode[];
+}
+
+/**
+ * A node this union does not recognise, kept whole.
+ *
+ * An arm rather than a thrown error, and an arm on the *node* rather than on the
+ * document, because those two choices are what bound the damage. `toNote` maps
+ * every row of a note list, so a throw from one document took out `/today`
+ * entirely; an arm on `Note.document` would instead force every consumer of a
+ * loaded note to branch on a case it cannot act on. At node granularity the
+ * failure stays where it happened: one block renders as unreadable, the rest of
+ * the note is fine, and the list never breaks.
+ *
+ * `raw` round-trips back to storage unchanged, so a document that degrades here
+ * loses nothing and repairs itself once the missing arm is added.
+ */
+export interface ProseMirrorUnknownNode {
+	readonly type: 'unknown';
+	readonly raw: ProseMirrorAttrValue;
+	/** Why it did not match, for the operator reading a log or the corpus test. */
+	readonly reason: string;
 }
 
 export interface ProseMirrorBlockquoteNode {
@@ -808,7 +857,8 @@ export type ProseMirrorNode =
 	| ProseMirrorTodoNode
 	| ProseMirrorCalloutNode
 	| ProseMirrorBlockMathNode
-	| ProseMirrorInlineMathNode;
+	| ProseMirrorInlineMathNode
+	| ProseMirrorUnknownNode;
 
 export interface ProseMirrorDocument {
 	readonly type: 'doc';
@@ -819,36 +869,64 @@ export interface ProseMirrorDocument {
 // Schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * `null` is not a tolerated oddity here, it is the common case: Tiptap's
+ * `TextAlign` extension defaults to `defaultAlignment: null` and this repo does
+ * not override it, so every paragraph and heading the editor writes carries it.
+ */
 const textAlignSchema = z.enum(['left', 'center', 'right', 'justify']);
 
-const linkAttrsSchema = z
-	.object({
-		href: z.string().nullish(),
-		target: z.string().nullish(),
-		rel: z.string().nullish(),
-		class: z.string().nullish()
-	})
-	.strict();
+const attrValueSchema: z.ZodType<ProseMirrorAttrValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(attrValueSchema),
+		z.record(z.string(), attrValueSchema)
+	])
+);
 
-const mediaAttrsSchema = z
-	.object({
-		src: z.string().nullish(),
-		alt: z.string().nullish(),
-		title: z.string().nullish(),
-		width: z.string().nullish(),
-		height: z.string().nullish(),
-		align: z.string().nullish()
-	})
-	.strict();
+/**
+ * Named attributes plus whatever else the extension wrote.
+ *
+ * `catchall` rather than `strict`: the named keys stay checked, and a key this
+ * schema has never heard of is preserved instead of failing the node. That is
+ * what makes adding a Tiptap extension a non-event rather than an outage.
+ */
+const attrs = <Shape extends z.ZodRawShape>(shape: Shape) =>
+	z.object(shape).catchall(attrValueSchema);
 
-const tableCellAttrsSchema = z
-	.object({
-		colspan: z.number().optional(),
-		rowspan: z.number().optional(),
-		colwidth: z.array(z.number()).nullish(),
-		style: z.string().nullish()
-	})
-	.strict();
+const linkAttrsSchema = attrs({
+	href: z.string().nullish(),
+	target: z.string().nullish(),
+	rel: z.string().nullish(),
+	class: z.string().nullish(),
+	title: z.string().nullish()
+});
+
+/**
+ * `width` and `height` are a string or a number, because both are stored. The
+ * resize handle writes a CSS string and the paste path writes the intrinsic
+ * pixel count, and nothing has ever normalised between them.
+ */
+const mediaDimensionSchema = z.union([z.string(), z.number()]);
+
+const mediaAttrsSchema = attrs({
+	src: z.string().nullish(),
+	alt: z.string().nullish(),
+	title: z.string().nullish(),
+	width: mediaDimensionSchema.nullish(),
+	height: mediaDimensionSchema.nullish(),
+	align: z.string().nullish()
+});
+
+const tableCellAttrsSchema = attrs({
+	colspan: z.number().optional(),
+	rowspan: z.number().optional(),
+	colwidth: z.array(z.number()).nullish(),
+	style: z.string().nullish()
+});
 
 export const proseMirrorMarkSchema: z.ZodType<ProseMirrorMark> = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('bold') }).strict(),
@@ -862,28 +940,25 @@ export const proseMirrorMarkSchema: z.ZodType<ProseMirrorMark> = z.discriminated
 	z
 		.object({
 			type: z.literal('noteLink'),
-			attrs: z.object({ noteId: z.string().nullish() }).strict().optional()
+			attrs: attrs({ noteId: z.string().nullish() }).optional()
 		})
 		.strict(),
 	z
 		.object({
 			type: z.literal('highlight'),
-			attrs: z.object({ color: z.string().nullish() }).strict().optional()
+			attrs: attrs({ color: z.string().nullish() }).optional()
 		})
 		.strict(),
 	z
 		.object({
 			type: z.literal('textStyle'),
-			attrs: z
-				.object({ color: z.string().nullish(), fontSize: z.string().nullish() })
-				.strict()
-				.optional()
+			attrs: attrs({ color: z.string().nullish(), fontSize: z.string().nullish() }).optional()
 		})
 		.strict(),
 	z
 		.object({
 			type: z.literal('ai-highlight'),
-			attrs: z.object({ color: z.string().nullish() }).strict().optional()
+			attrs: attrs({ color: z.string().nullish() }).optional()
 		})
 		.strict()
 ]);
@@ -892,26 +967,25 @@ const nodeContent = () => z.array(z.lazy(() => proseMirrorNodeSchema)).optional(
 
 const inlineMarks = () => z.array(z.lazy(() => proseMirrorMarkSchema)).optional();
 
-export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = z.lazy(() =>
+const knownNodeSchema = z.lazy(() =>
 	z.discriminatedUnion('type', [
 		z.object({ type: z.literal('text'), text: z.string(), marks: inlineMarks() }).strict(),
 		z
 			.object({
 				type: z.literal('paragraph'),
-				attrs: z.object({ textAlign: textAlignSchema.optional() }).strict().optional(),
+				attrs: attrs({ textAlign: textAlignSchema.nullish() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('heading'),
-				attrs: z
-					.object({
-						level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-						textAlign: textAlignSchema.optional()
-					})
-					.strict()
-					.optional(),
+				attrs: attrs({
+					level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+					textAlign: textAlignSchema.nullish(),
+					id: z.string().nullish(),
+					'data-toc-id': z.string().nullish()
+				}).optional(),
 				content: nodeContent()
 			})
 			.strict(),
@@ -920,10 +994,7 @@ export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = z.lazy(() =>
 		z
 			.object({
 				type: z.literal('orderedList'),
-				attrs: z
-					.object({ start: z.number().optional(), type: z.string().nullish() })
-					.strict()
-					.optional(),
+				attrs: attrs({ start: z.number().optional(), type: z.string().nullish() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
@@ -932,14 +1003,14 @@ export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = z.lazy(() =>
 		z
 			.object({
 				type: z.literal('taskItem'),
-				attrs: z.object({ checked: z.boolean().optional() }).strict().optional(),
+				attrs: attrs({ checked: z.boolean().optional() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('codeBlock'),
-				attrs: z.object({ language: z.string().nullish() }).strict().optional(),
+				attrs: attrs({ language: z.string().nullish() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
@@ -972,85 +1043,137 @@ export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = z.lazy(() =>
 		z
 			.object({
 				type: z.literal('audio'),
-				attrs: z
-					.object({
-						src: z.string().nullish(),
-						controls: z.boolean().nullish(),
-						autoplay: z.boolean().nullish(),
-						loop: z.boolean().nullish(),
-						muted: z.boolean().nullish(),
-						preload: z.string().nullish(),
-						controlslist: z.string().nullish(),
-						crossorigin: z.string().nullish(),
-						disableremoteplayback: z.boolean().nullish()
-					})
-					.strict()
-					.optional(),
+				attrs: attrs({
+					src: z.string().nullish(),
+					controls: z.boolean().nullish(),
+					autoplay: z.boolean().nullish(),
+					loop: z.boolean().nullish(),
+					muted: z.boolean().nullish(),
+					preload: z.string().nullish(),
+					controlslist: z.string().nullish(),
+					crossorigin: z.string().nullish(),
+					disableremoteplayback: z.boolean().nullish()
+				}).optional(),
 				marks: inlineMarks()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('iframe'),
-				attrs: z
-					.object({
-						src: z.string().optional(),
-						width: z.string().optional(),
-						height: z.number().optional()
-					})
-					.strict()
-					.optional()
+				attrs: attrs({
+					src: z.string().optional(),
+					width: z.string().optional(),
+					height: z.number().optional()
+				}).optional()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('mermaid'),
-				attrs: z
-					.object({
-						width: z.string().optional(),
-						pendingDrawioSuggestionId: z.string().nullish()
-					})
-					.strict()
-					.optional(),
+				attrs: attrs({
+					width: z.string().optional(),
+					pendingDrawioSuggestionId: z.string().nullish()
+				}).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('drawio'),
-				attrs: z.object({ diagramId: z.string().nullish() }).strict().optional(),
+				attrs: attrs({ diagramId: z.string().nullish() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('todoNode'),
-				attrs: z.object({ todoId: z.string().nullish() }).strict().optional(),
+				attrs: attrs({ todoId: z.string().nullish() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('callout'),
-				attrs: z.object({ emoji: z.string().optional() }).strict().optional(),
+				attrs: attrs({ emoji: z.string().optional() }).optional(),
 				content: nodeContent()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('blockMath'),
-				attrs: z.object({ latex: z.string().optional() }).strict().optional()
+				attrs: attrs({ latex: z.string().optional() }).optional()
 			})
 			.strict(),
 		z
 			.object({
 				type: z.literal('inlineMath'),
-				attrs: z.object({ latex: z.string().optional() }).strict().optional(),
+				attrs: attrs({ latex: z.string().optional() }).optional(),
 				marks: inlineMarks()
 			})
 			.strict()
 	])
 );
+
+/**
+ * Every node type the union above names, for telling "a type nobody modelled"
+ * apart from "a type we model, shaped in a way we did not expect". Both degrade
+ * to {@link ProseMirrorUnknownNode}; only the message differs, and the message
+ * is the whole value of the arm to whoever has to fix it.
+ */
+const KNOWN_NODE_TYPES: ReadonlySet<string> = new Set([
+	'text',
+	'paragraph',
+	'heading',
+	'blockquote',
+	'bulletList',
+	'orderedList',
+	'listItem',
+	'taskList',
+	'taskItem',
+	'codeBlock',
+	'table',
+	'tableRow',
+	'tableCell',
+	'tableHeader',
+	'horizontalRule',
+	'hardBreak',
+	'image',
+	'video',
+	'audio',
+	'iframe',
+	'mermaid',
+	'drawio',
+	'todoNode',
+	'callout',
+	'blockMath',
+	'inlineMath'
+]);
+
+/**
+ * The fallback arm, tried only after every real arm has failed.
+ *
+ * It accepts any object carrying a string `type`, which is the least a
+ * ProseMirror node can be, and keeps the whole thing — nested `content`
+ * included — so the block round-trips back to storage untouched. Because the
+ * union is tried innermost-first through `nodeContent`, a bad node degrades
+ * itself and leaves its ancestors intact.
+ */
+const unknownNodeSchema = z
+	.object({ type: z.string() })
+	.catchall(attrValueSchema)
+	.transform((raw) => ({
+		type: 'unknown' as const,
+		raw,
+		reason: KNOWN_NODE_TYPES.has(raw.type)
+			? `A '${raw.type}' node did not match its shape`
+			: `No arm matches a node of type '${raw.type}'`
+	}));
+
+/**
+ * The strict tree. Nested content is strict all the way down, and this is what
+ * every *write* boundary uses.
+ */
+export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = knownNodeSchema;
 
 export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	.object({
@@ -1059,9 +1182,95 @@ export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	})
 	.strict();
 
-/** Parse a document at a boundary. Throws a zod error naming the first bad path. */
+/**
+ * The read tree: strict, with a fallback at top level only.
+ *
+ * A block is the unit of degradation. Pushing the fallback all the way down
+ * would need a second copy of the whole union — one strict tree and one
+ * resilient tree — which is two schemas for one shape, the exact drift this
+ * module exists to prevent. A top-level fallback needs no second copy and still
+ * gives what the arm is for: a document with one unreadable block instead of a
+ * list read that throws.
+ */
+const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
+	.object({
+		type: z.literal('doc'),
+		content: z.array(z.union([proseMirrorNodeSchema, unknownNodeSchema])).optional()
+	})
+	.strict();
+
+/**
+ * Parse a document at a *write* boundary. Throws a zod error naming the first bad
+ * path.
+ *
+ * Strict at write, resilient at read (ADR 0037). A request body that does not
+ * parse is input the caller can fix, so rejecting it loudly is the whole point.
+ * Data already sitting in a column is not — see {@link readProseMirrorDocument}.
+ */
 export const parseProseMirrorDocument = (value: unknown): ProseMirrorDocument =>
 	proseMirrorDocumentSchema.parse(value);
+
+/**
+ * Read a document out of storage. Total: it never throws.
+ *
+ * Individual nodes already degrade to {@link ProseMirrorUnknownNode} on their
+ * own, so this only catches a column that is not a `doc` at all — genuine
+ * corruption. Even then it answers with a document, because the caller is a
+ * mapper inside a list: `toNote` runs over every row of `listActive`, and a
+ * throw from one row is what took `/today` down. A reported failure the renderer
+ * shows beats an exception the page cannot survive (ADR 0015).
+ */
+export const readProseMirrorDocument = (value: unknown): ProseMirrorDocument => {
+	const parsed = storedDocumentSchema.safeParse(value);
+	if (parsed.success) return parsed.data;
+	const raw = attrValueSchema.safeParse(value);
+	return {
+		type: 'doc',
+		content: [
+			{
+				type: 'unknown',
+				raw: raw.success ? raw.data : null,
+				reason: `Stored document is not readable: ${parsed.error.issues[0]?.message ?? 'unknown reason'}`
+			}
+		]
+	};
+};
+
+/**
+ * A document safe to hand to the editor.
+ *
+ * `ProseMirrorUnknownNode` is a storage concept: it exists so a list read cannot
+ * throw. Tiptap has no such node type, and handing it one produces exactly the
+ * failure the arm was added to prevent, one layer further out. So the seam into
+ * the editor converts it, and converts it into something *visible and
+ * preserved* — a code block holding the block's own JSON — rather than dropping
+ * it. If the note is then saved, the user still has their content on screen and
+ * in the document, as text they can see and copy, instead of a block that
+ * vanished silently.
+ *
+ * In practice this should never fire: the corpus conformance spec fails if any
+ * stored document contains an unknown node. It is here for the case that spec is
+ * written to catch, in the window before someone fixes it.
+ */
+export const editableProseMirrorDocument = (document: ProseMirrorDocument): ProseMirrorDocument => {
+	const convert = (node: ProseMirrorNode): ProseMirrorNode => {
+		if (node.type === 'unknown')
+			return {
+				type: 'codeBlock',
+				attrs: { language: 'json' },
+				content: [{ type: 'text', text: JSON.stringify(node.raw, null, '\t') }]
+			};
+		if (!('content' in node) || !node.content) return node;
+		return { ...node, content: node.content.map(convert) };
+	};
+	return { ...document, content: document.content?.map(convert) };
+};
+
+/** Every block that failed to parse, for the corpus spec and `check:boundaries`. */
+export const unknownProseMirrorNodes = (
+	document: ProseMirrorDocument
+): readonly ProseMirrorUnknownNode[] =>
+	(document.content ?? []).filter((node) => node.type === 'unknown');
 
 // ---------------------------------------------------------------------------
 // Validation (import boundary reports issues rather than throwing)

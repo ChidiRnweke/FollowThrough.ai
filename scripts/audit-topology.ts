@@ -152,6 +152,32 @@ for (const document of maintainedDocuments) {
 	}
 }
 
+/**
+ * Every parser a database mapper reads rows with must be exercised by the corpus
+ * spec.
+ *
+ * The strict ProseMirror union shipped green and took `/today` down on the first
+ * real page load, because every test that had validated it fed it either a
+ * hand-written literal or the output of other code in this repository. A schema
+ * and its fixtures, written from one mental model, agree with each other and
+ * with nothing else. The corpus is captured from a real database
+ * (`pnpm corpus:capture`), so it is the one input a schema's author did not
+ * write — and a read boundary that skips it is a boundary nobody has checked
+ * against its producer.
+ */
+const mapperSource = readFileSync(resolve(root, 'src/lib/server/db/mappers.ts'), 'utf8');
+const corpusSpecPath = 'tests/unit/corpus.spec.ts';
+const corpusSource = readFileSync(resolve(root, corpusSpecPath), 'utf8');
+const mapperParsers = new Set(
+	[...mapperSource.matchAll(/\b((?:parse|read)[A-Z][A-Za-z0-9]*)\s*\(/g)].map((match) => match[1]!)
+);
+for (const parser of [...mapperParsers].sort()) {
+	if (!corpusSource.includes(parser))
+		failures.push(
+			`${parser} reads stored rows in src/lib/server/db/mappers.ts but is not covered by ${corpusSpecPath}`
+		);
+}
+
 if (failures.length > 0) {
 	process.stderr.write(`${failures.join('\n')}\n`);
 	process.exitCode = 1;

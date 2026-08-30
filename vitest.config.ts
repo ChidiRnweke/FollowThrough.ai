@@ -60,7 +60,14 @@ export default defineConfig({
 					...common,
 					name: 'node-fast',
 					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}', 'scripts/**/*.spec.ts'],
+					include: [
+						'src/**/*.{test,spec}.{js,ts}',
+						'scripts/**/*.spec.ts',
+						// The corpus conformance specs. In the default gate deliberately:
+						// they are the only tests whose inputs came from a producer rather
+						// than from an author of the schema they check.
+						'tests/unit/*.spec.ts'
+					],
 					exclude: [
 						'src/**/*.svelte.{test,spec}.{js,ts}',
 						'src/**/*.isolated.spec.{js,ts}',
@@ -83,6 +90,19 @@ export default defineConfig({
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: [
+						// Feeds real editor JSON through `parseProseMirrorDocument` and asserts
+						// `attrs: { textAlign: null }`. It would have caught the strict-schema
+						// outage on the day it landed; it sat in `browser-full`, which the
+						// default gate does not run, so nobody saw it fail until users did.
+						// Mounts the real editor on a real stored document held in `$state` —
+						// the path a route takes, which nothing covered while opening a note
+						// was broken twice over.
+						'src/lib/components/notes/open-note.svelte.spec.ts',
+						// Feeds real editor JSON through `parseProseMirrorDocument` and asserts
+						// `attrs: { textAlign: null }`. It would have caught the strict-schema
+						// outage on the day it landed; it sat in `browser-full`, which the
+						// default gate does not run, so nobody saw it fail until users did.
+						'src/lib/components/notes/note-editor.svelte.spec.ts',
 						'src/lib/components/ui/ref-contracts.svelte.spec.ts',
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
 						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',

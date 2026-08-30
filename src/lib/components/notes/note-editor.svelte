@@ -29,7 +29,7 @@
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
-	import { editorContent } from '$lib/components/edra/commands/document.js';
+	import { toEditorContent } from './editor-document';
 	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
@@ -716,7 +716,7 @@
 		if (!editor) return;
 
 		// Initial content only; the page remounts per note via {#key}.
-		editor.commands.setContent(editorContent(untrack(() => document)));
+		editor.commands.setContent(toEditorContent(untrack(() => document)));
 		initialized = true;
 		editor.registerPlugin(
 			createSuggestionAnchorPlugin({
@@ -1035,7 +1035,7 @@
 	): void {
 		if (!editor) return;
 		initialized = false;
-		editor.commands.setContent(editorContent(nextDocument));
+		editor.commands.setContent(toEditorContent(nextDocument));
 		initialized = true;
 		if (previousDocument) shimmerChangedBlocks(previousDocument, nextDocument);
 	}

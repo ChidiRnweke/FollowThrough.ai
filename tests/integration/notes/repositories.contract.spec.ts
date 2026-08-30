@@ -5,6 +5,25 @@ import * as schema from '$lib/server/db/schema/registry';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { actor, context, now, seedNote } from '../database-harness';
+import corpusDocuments from '../../corpus/note-documents.json' with { type: 'json' };
+import { parseProseMirrorDocument } from '$lib/models/notes';
+
+/**
+ * A real document, not `{ type: 'doc', content: [] }`.
+ *
+ * Every fixture in this file used to be an empty doc, which has no nodes — so a
+ * suite that maps real rows through `toNote` against a real Postgres was
+ * structurally incapable of entering the node union, and watched the strict
+ * ProseMirror schema ship and break `/today` without a word. The richest
+ * document in the corpus exercises headings, tables, lists and marks on the way
+ * through the column and back.
+ */
+const richDocument = parseProseMirrorDocument(
+	corpusDocuments.reduce((largest, candidate) =>
+		JSON.stringify(candidate).length > JSON.stringify(largest).length ? candidate : largest
+	)
+);
+
 describe('Postgres note repository invariants', () => {
 	it('maps an inserted note back to the domain model', async () => {
 		const owner = actor('11');
@@ -19,7 +38,7 @@ describe('Postgres note repository invariants', () => {
 			kind: 'note',
 			position: 0,
 			title: 'Repository note',
-			document: { type: 'doc', content: [] },
+			document: richDocument,
 			plainText: 'content',
 			currentRevision: 1,
 			publishedRevision: 0,
@@ -43,7 +62,7 @@ describe('Postgres note repository invariants', () => {
 			kind: 'note',
 			position: 0,
 			title: 'Private note',
-			document: { type: 'doc', content: [] },
+			document: richDocument,
 			plainText: '',
 			currentRevision: 1,
 			publishedRevision: 0,
@@ -74,7 +93,7 @@ describe('Postgres note repository invariants', () => {
 			position: Number(suffix),
 			title: `Built-in ${suffix}`,
 			builtInKey: 'followthrough',
-			document: { type: 'doc', content: [] },
+			document: richDocument,
 			plainText: '',
 			currentRevision: 1,
 			publishedRevision: 0,
@@ -140,7 +159,7 @@ describe('Postgres note repository invariants', () => {
 				noteId: note.id,
 				revision,
 				title: `Snapshot ${revision}`,
-				document: { type: 'doc', content: [] },
+				document: richDocument,
 				plainText: '',
 				createdAt: now
 			});
@@ -170,7 +189,7 @@ describe('Postgres note repository invariants', () => {
 			noteId: note.id,
 			revision: 1,
 			title: 'Snapshot',
-			document: { type: 'doc', content: [] },
+			document: richDocument,
 			plainText: '',
 			createdAt: now
 		});
@@ -205,7 +224,7 @@ describe('Postgres note repository invariants', () => {
 			noteId: note.id,
 			revision: 1,
 			title: 'Snapshot',
-			document: { type: 'doc', content: [] },
+			document: richDocument,
 			plainText: '',
 			createdAt: now
 		});

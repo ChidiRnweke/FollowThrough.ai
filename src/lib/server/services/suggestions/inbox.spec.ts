@@ -131,4 +131,29 @@ describe('Suggestion management invariants', () => {
 		);
 		expect(active).toEqual([]);
 	});
+
+	// A payload that no longer matches its kind cannot be rendered, decided or
+	// accepted, and `list` maps many rows — so it is left out here rather than
+	// thrown from the mapper, which is what took the note list down.
+	it('leaves a suggestion whose payload no longer parses out of the inbox', async () => {
+		const { service, suggestions } = setup();
+		suggestions.suggestions = [suggestionBuilder()];
+		suggestions.unreadable = [
+			{
+				status: 'unreadable',
+				id: testSuggestionId(9),
+				kind: 'todo',
+				reason: 'Unrecognized key: "shape"'
+			}
+		];
+		expect(await service.listByStatus(testActor(), 'proposed')).toEqual([suggestionBuilder()]);
+	});
+
+	it('still returns the readable suggestions beside it', async () => {
+		const { service, suggestions } = setup();
+		suggestions.unreadable = [
+			{ status: 'unreadable', id: testSuggestionId(9), kind: 'todo', reason: 'bad payload' }
+		];
+		expect(await service.listByStatus(testActor(), 'proposed')).toEqual([]);
+	});
 });

@@ -53,20 +53,106 @@ produce.
 
 ### Phase 1 — Canonical ProseMirror documents
 
+> **TN-10 through TN-13 shipped a schema that had never met its producer, and it took `/today`
+> down.** The union rejected `textAlign: null` — the Tiptap `TextAlign` default, and 659 of 663
+> stored values — and the `id` / `data-toc-id` that `@tiptap/extension-table-of-contents` adds to
+> every heading. 13 of 33 stored notes failed; `toNote` maps every row of a note list, so the page
+> died whole. Saving was broken too, since `remote/notes` parses with the same schema.
+>
+> Every test that had validated it passed for structural reasons: `prosemirror.spec.ts` used
+> hand-written literals with no `attrs` at all, `markdown.spec.ts` used `noteContentFromMarkdown`,
+> which never instantiates a ProseMirror node and so never materializes an attribute default, and
+> the Postgres contract spec used `{ type: 'doc', content: [] }`, which cannot enter the node
+> union. The one spec that fed real editor JSON through the real parse — `note-editor.svelte.spec.ts`,
+> which asserts `attrs: { textAlign: null }` — lived in `browser-full`, which the default gate did
+> not run.
+>
+> Fixed in TN-14 below. The lesson generalises past ProseMirror: a schema and its fixtures written
+> from one mental model agree with each other and with nothing else.
+
 - [x] **TN-10: Define and parse the strict document union in `models/notes/index.ts`**
 - [x] **TN-11: Propagate total documents through models, DB/remote boundaries, and note services**
 - [x] **TN-12: Propagate total documents through editor/import/export, PDF, and DOCX paths**
 - [x] **TN-13: Cover supported nodes/marks, recursion, strict keys, and invalid reads/imports**
+- [x] **TN-14: Match the schema to its producer, and test boundaries against inputs their author
+      did not write**
+  - [x] Attributes are open, node and mark types stay closed. Tiptap adds global attributes to
+        nodes it does not own, so a closed attribute set is a list of every extension ever
+        configured. Known attributes are typed; the rest are preserved verbatim. The TS types name
+        only what the code reads — an index signature would make `node.attrs.anything`
+        type-check, which is the open-record indexing this effort removes.
+  - [x] `textAlign` is `.nullish()` (the file's own convention for every other loose attribute),
+        heading carries `id` / `data-toc-id`, and media `width` / `height` accept a number as well
+        as a string — the corpus found that one, stored by the paste path.
+  - [x] `ProseMirrorUnknownNode`: a fallback arm at _block_ granularity, and
+        `readProseMirrorDocument`, a total reader the DB mappers use. An arm on `Note.document`
+        would have handed every consumer a case it cannot act on; `pdf.ts` and `docx.ts` already
+        had `default:` arms, so the blast radius was zero. Write boundaries keep the strict tree —
+        `findProseMirrorDocumentIssue` still rejects an unmodelled block, and two existing specs
+        held the line on that.
+  - [x] `tests/corpus/` + `tests/unit/corpus.spec.ts`, captured by `pnpm corpus:capture` from a
+        real database, asserting **zero fallback arms** rather than "does not throw" — resilience
+        would otherwise absorb the next mistake in silence. `scripts/audit-topology.ts` requires
+        every `parse*`/`read*` in `db/mappers.ts` to appear there; it immediately caught
+        `parseSuggestionPayload`.
+  - [x] `editor-schema-conformance.spec.ts` runs the real extension list under jsdom in the
+        default gate and asserts the editor's own output satisfies the schema its save path uses.
+        Both mechanisms were verified to fail against the original defect before being trusted.
+  - [x] `note-editor.svelte.spec.ts` moved into `browser-focused`, so the spec that would have
+        caught this now runs in the default gate. The Postgres contract fixtures use a real corpus
+        document instead of an empty one.
+  - [x] After a migration or a schema change, `pnpm corpus:capture && pnpm test:unit` re-reads
+        every row of the connected database and parses it. Verify with `pnpm check`,
+        `pnpm test:architecture`, `pnpm test:unit`, `pnpm test:contracts`,
+        `pnpm test:browser:full`.
+  - [x] The Edra schema is no longer a duplicate of the domain one. Product code was borrowing
+        Edra's permissive protocol to convert its own domain document, so the two schemas for one
+        shape could disagree — and did, one rejecting `textAlign: null` while the other accepted
+        anything. `components/notes/editor-document.ts` now owns that conversion, where the domain
+        type is in scope, and re-validates nothing: the document already came through `toNote`.
+        Edra keeps its protocol for its own internal use, which the topology audit requires of a
+        vendored editor that may not import `$lib/models/`. `editableProseMirrorDocument` runs on
+        the way in, so a fallback block reaches the editor as a visible code block holding its own
+        JSON rather than crashing it or vanishing on the next save.
+  - [x] The suggestion list read is total, with the decision at the service. `StoredSuggestion` is
+        a read-boundary union — `readable` or `unreadable` — so the domain `Suggestion` union
+        stays closed over real product states; a sixth `kind` would have handed every consumer a
+        case it cannot render, decide, or accept. `SuggestionRecords.list` returns it,
+        `SuggestionInbox.listByStatus` drops the unreadable rows and warns with their ids, and
+        `findById` / `insert` / `transition` stay strict because they are single-row or
+        write-round-trips. This retires the last list-map read that could throw a page away.
 
 ### Phase 2 — Agent run and provider boundaries
 
 - [x] **TN-20: Separate base, prepared, workflow, and unprepared run contexts**
 - [x] **TN-21: Version workflow snapshots and map known legacy context shapes at repositories**
 - [x] **TN-22: Reject malformed provider tool arguments and preserve call-ID precedence**
-- [ ] **TN-23: Own and parse the persisted session-item union**
-  - [ ] Define the local discriminated union and schema in `models/agent/index.ts`.
-  - [ ] Parse repository reads and map to SDK `AgentInputItem` only in the provider adapter.
-  - [ ] Add round-trip, legacy, and malformed-row specs.
+- [x] **TN-23: Own and parse the persisted session-item union**
+  - [x] Define the local discriminated union and schema in `models/agent/session-item.ts`, exported
+        through the domain barrel. Not `index.ts` as originally written: `agent-runs.ts` also needs
+        the union for `AgentExecutionUpdate`, and a model file may not import a sibling — only the
+        barrel may. A sibling file the barrel re-exports gives the same public surface without
+        duplicating a six-arm union. `AgentExecutionUpdate` moved to `index.ts` for the same reason.
+  - [x] Parse repository reads and map to SDK `AgentInputItem` only in the provider adapter, which
+        is declared in place: `services/agent/conversations/buffer.ts` is the sole SDK-item import
+        in the repository. `ConversationSession` was deleted — nothing constructed it, and keeping
+        a second adapter meant either a shared module the layering forbids or a duplicated cast.
+  - [x] Add round-trip, legacy, and malformed-row specs, plus `agent_session_items` contract
+        coverage, which the integration suite had none of.
+  - The arms are measured, not guessed: all 177 stored rows in the dev database parse into a real
+    arm and round-trip deep-equal, with zero landing in `unrecognised`. Four item types occur
+    (`message`, `function_call`, `function_call_result`, `reasoning`); every result `output` is a
+    `{ type: 'text' }` part; `providerData` rides on assistant content parts and is preserved.
+  - `unrecognised` is an arm rather than a thrown error, by decision: the rows were written by a
+    provider SDK whose version this code does not pin, so a strictly closed union would turn any
+    upgrade that adds an item type into a data incident. It is an arm rather than a silent
+    passthrough so no reader can mistake it for something that parsed.
+  - Retired here: both `row.item as AgentInputItem` double casts, the `callId`/`call_id` fallback
+    in `replay-virtualizer.ts`, `rewind.ts`'s local `SessionItem` alias, `canvas-source.ts`'s
+    stand-in schema and the comment explaining why it could not name the SDK type, the recursive
+    `withoutInlineImages` walk with its `JSON.stringify(...).includes` guard, one
+    `no-json-parse-cast` violation in `buffer.ts`, and the fake's `snapshot as AgentSessionItem[]`.
+    Fifteen `Record<string, unknown>` occurrences in the strict layers go with them.
 - [ ] **TN-24: Normalize all provider stream events before reasoning logic**
   - [ ] Replace remaining raw probes with closed event schemas.
   - [ ] Cover `callId > call_id > id`, sole-active fallback, legacy `use_tool`, replay, and approval
@@ -214,7 +300,7 @@ Framework-forced casts (e.g. Tiptap `extension.options`) take `// audit-allow: n
 
 ```ts
 // silly
-return JSON.parse(data) as { codeVerifier: string; state: string };
+return JSON.parse(json) as Record<string, unknown>;
 ```
 
 `JSON.parse` returns `any`. Casting it to a concrete type is always a lie: nothing checked the
@@ -236,7 +322,10 @@ const item = value as unknown as AgentInputItem;
 
 **Remedy:** parse foreign data into a locally owned persisted union, then map that union to the
 SDK type inside the provider adapter. A third-party generic that cannot be expressed locally needs
-a precise `audit-allow`, not a second assertion.
+a precise `audit-allow`, not a second assertion. Exemplar: `PersistedSessionItem`
+(`src/lib/models/agent/session-item.ts`) — parsed at the repository mapper, mapped to
+`AgentInputItem` only in `services/agent/conversations/buffer.ts`, with an `unrecognised` arm so a
+newer SDK item stays readable and lossless instead of failing the conversation.
 
 ## 7. `z.unknown()` / `z.any()` in a schema — [audit] `no-zod-unknown`
 

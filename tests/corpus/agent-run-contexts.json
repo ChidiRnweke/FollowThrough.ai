@@ -1,0 +1,1784 @@
+[
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T22:40:26.263Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:39:01.841Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:44:23.439Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:41:08.929Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"noteTitle": "Solution design",
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"contextNotes": [],
+		"provenanceId": "62429017-bd4f-4d97-9407-3da0660d2f75",
+		"executionMode": "auto_accept",
+		"conversationId": "3a49a060-6752-462f-b71d-8ffe334715a0",
+		"effectiveModel": "deepseek/deepseek-v4-flash",
+		"diagramOperation": "convert"
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:23:20.849Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:41:08.929Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-24"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "full_page"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "9fbbd450-194b-4db7-b5f5-da6602767b8c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "81ba85b5-934a-4753-b468-ecbf84ae1b61",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T17:49:57.083Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"action": "convert",
+		"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79"
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T22:42:51.407Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-24"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "full_page"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "9fbbd450-194b-4db7-b5f5-da6602767b8c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "81ba85b5-934a-4753-b468-ecbf84ae1b61",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T19:03:03.851Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T22:45:10.706Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:44:23.439Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:27:18.127Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"action": "convert",
+		"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79"
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:41:08.929Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [
+					{
+						"id": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+						"title": "«redacted 15 chars»",
+						"projectId": "40a540a8-4823-4557-9acd-0a41db809816"
+					}
+				],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "92ff67c3-83ef-47dc-855a-7539b89194e1",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:29:49.905Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:23:53.605Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:27:18.127Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:23:53.605Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:27:18.127Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:44:23.439Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:37:15.785Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T22:45:58.059Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+		"skills": {
+			"items": [
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"noteTitle": "Solution design",
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-24"
+			},
+			"surface": {
+				"kind": "note_workbench",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [
+					{
+						"id": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+						"title": "«redacted 15 chars»",
+						"projectId": "40a540a8-4823-4557-9acd-0a41db809816"
+					}
+				],
+				"visiblePanes": [
+					{
+						"id": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+						"dirty": false,
+						"title": "«redacted 15 chars»",
+						"revision": 177,
+						"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+						"syncStatus": "synced"
+					}
+				],
+				"focusedNoteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79"
+			},
+			"capturedAt": "2026-08-24T06:23:29.039Z",
+			"activeResource": {
+				"id": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"kind": "note",
+				"title": "«redacted 15 chars»",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816"
+			},
+			"currentProject": {
+				"id": "40a540a8-4823-4557-9acd-0a41db809816",
+				"name": "Recovered project 40a540a8"
+			},
+			"projectTransition": "same_project",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": [
+			{
+				"title": "«redacted 15 chars»",
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"content": "Web Application Architecture Overview\n\nThis document explores the four fundamental layers of a modern web application: the Browser (client), the Frontend App (UI layer), the Backend (server logic), and the Database (persistent storage). Each topic is expanded into its own chapter below. \n\nArchitecture Diagram \n\nThe diagram below illustrates how the four components interact bidirectionally:\n\nflowchart LR\n  Browser[\"Browser\"] -->|HTTPS| Frontend[\"Frontend App\"]\n  Frontend -->|API Calls| Backend[\"Backend Server\"]\n  Backend -->|SQL Queries| Database[(\"Database\")]\n  Database -->|Results| Backend\n  Backend -->|JSON Responses| Frontend\n  Frontend -->|HTML/CSS/JS| Browser\n\n\n\nChapter 1: The Browser\n\nThe browser is the user's gateway to the application. It handles rendering HTML pages, executing JavaScript, and managing user interactions. Browsers like Chrome, Firefox, Safari, and Edge each implement web standards (HTML5, CSS3, ECMAScript) with varying degrees of support, making cross-browser testing essential.\n\nKey responsibilities of the browser include: \n\n\n\n\n\nParsing HTML and CSS to construct the DOM and CSSOM trees\n\n\n\nExecuting JavaScript via the V8 (Chrome) or SpiderMonkey (Firefox) engines\n\n\n\nManaging HTTP requests (fetch API, XMLHttpRequest) to communicate with servers\n\n\n\nStoring local data via cookies, localStorage, and IndexedDB\n\n\n\n\n\nEnforcing security policies like CORS, CSP, and Same-Origin Policy \n\nChapter 2: The Frontend App\n\nThe frontend application runs in the browser and provides the user interface (UI) and user experience (UX). Modern frontends are built with frameworks like React, Vue, Angular, or Svelte, which organize code into reusable components and manage state efficiently.\n\nCore frontend concepts include:\n\n\n\n\n\nComponent-based architecture — building UIs from isolated, reusable pieces\n\n\n\nState management using tools like Redux, Zustand, or Vuex\n\n\n\nClient-side routing (React Router, Vue Router) for single-page applications\n\n\n\n\n\nAPI integration — making requests to the backend and rendering responses\n\n\n\nResponsive design with CSS frameworks like Tailwind, Bootstrap, or Material UI\n\nflowchart TB\n  FA[\"Frontend App (Browser-based UI/UX)\"]\n  FW[\"Frameworks: React, Vue, Angular, Svelte\"]\n  CC[\"Core Frontend Concepts\"]\n\n  C1[\"Component-based Architecture - Reusable UI pieces\"]\n  C2[\"State Management - Redux, Zustand, Vuex\"]\n  C3[\"Client-side Routing - React Router, Vue Router\"]\n  C4[\"API Integration - Requests to Backend then Render\"]\n  C5[\"Responsive Design - Tailwind, Bootstrap, Material UI\"]\n\n  FA --> FW\n  FA --> CC\n  CC --> C1\n  CC --> C2\n  CC --> C3\n  CC --> C4\n  CC --> C5\n\nChapter 3: The Backend\n\nThe backend (or server-side) layer handles business logic, authentication, data processing, and API exposure. It can be built with runtimes like Node.js, or languages such as Python (Django, FastAPI), Java (Spring Boot), Go, Ruby on Rails, or PHP (Laravel).\n\nCore responsibilities of the backend:\n\n\n\n\n\nExposing RESTful or GraphQL APIs for the frontend to consume\n\n\n\nHandling authentication and authorization (JWT, OAuth, sessions)\n\n\n\nImplementing business logic, validation, and data transformation\n\n\n\nCommunicating with the database via ORMs (Prisma, Sequelize, TypeORM) or raw queries\n\n\n\nManaging server-side caching (Redis), background jobs (Bull, Celery), and file storage\n\nChapter 4: The Database\n\nThe database persists and serves the application's data. Choosing the right database depends on the data model, read/write patterns, and scaling requirements.\n\nMajor database categories:\n\n\n\n\n\nRelational (SQL): PostgreSQL, MySQL, SQLite — structured tables with ACID transactions and JOINs\n\n\n\nDocument (NoSQL): MongoDB, Couchbase — JSON-like documents, flexible schemas\n\n\n\nKey-Value: Redis, DynamoDB — ultra-fast lookups, ideal for caching and sessions\n\n\n\nGraph: Neo4j, ArangoDB — relationships-first data modeling\n\n\n\nTime-series: InfluxDB, TimescaleDB — optimized for logs, metrics, and IoT data\n\nDatabases communicate with the backend over a network connection, typically through a connection pool manager. SQL databases use structured query language; NoSQL databases use proprietary APIs or query languages (e.g., MongoDB's aggregation pipeline).\n\nSummary\n\nA modern web application follows a clean layered architecture: the Browser renders the Frontend Appwhich communicates via API to the Backend, which queries the Database. Each layer has distinct responsibilities and technology choices. Understanding how they interconnect is fundamental to full-stack development./\n\n\n\n\n\n\n\n\n\n",
+				"tokenCount": 958
+			}
+		]
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:37:15.785Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:42:16.280Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"noteTitle": "Solution design",
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"contextNotes": [],
+		"provenanceId": "244de266-ddf1-4725-8cd0-f2eb90b230e2",
+		"executionMode": "auto_accept",
+		"conversationId": "a5796634-8e04-4d69-8ffb-69fdda5c313b",
+		"effectiveModel": "deepseek/deepseek-v4-flash",
+		"diagramOperation": "convert"
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "e42bd868-6a42-4edd-a9f0-33aecd5e2fc4",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "14a51f1f-da5d-4b59-a39b-64264f83d28c",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "70bbb3b0-5262-4edd-879c-ab5912f69921",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5011b31d-798b-4bff-8c0b-bcba553f5075",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					},
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "5b384f2f-a091-4ae7-91ed-d40b408cc657",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:22:09.496Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:42:16.280Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	},
+	{
+		"skills": {
+			"items": [
+				{
+					"name": "Diagramming",
+					"noteId": "bae4d72c-d5e2-4970-b944-157082ec24eb",
+					"description": "Turn source material into clear diagrams, sketched in Mermaid and drawn in draw.io."
+				},
+				{
+					"name": "FollowThrough",
+					"noteId": "9e9df20e-89b5-49b5-9903-e4f5d42ee3a8",
+					"description": "Load before answering anything about how FollowThrough itself works — its features, terminology, routes, navigation, workflows, settings, and what the agent can do in it."
+				},
+				{
+					"name": "Settings",
+					"noteId": "188d1ff2-7f97-427b-af73-e8f45b12faa5",
+					"description": "Load before explaining or changing any FollowThrough setting: the chat, vision, inline and attachment models, execution mode, inline suggestions, web search engine and result caps, the per-run turn limit, tool selection, trust policies, MCP tokens, or document export defaults."
+				}
+			]
+		},
+		"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+		"appContext": {
+			"client": {
+				"layout": "wide",
+				"locale": "en-BE",
+				"timeZone": "Europe/Brussels",
+				"localDate": "2026-08-25"
+			},
+			"surface": {
+				"kind": "diagram_studio",
+				"presentation": "right_panel"
+			},
+			"version": 1,
+			"workbench": {
+				"openTabs": [],
+				"openChatTabs": [
+					{
+						"title": "«redacted 51 chars»",
+						"sessionKey": "8d9186ab-c34d-424c-8d60-8de4559df1b5",
+						"conversationId": "836ad646-13a1-4933-8086-0790ffa83c63"
+					}
+				],
+				"visiblePanes": []
+			},
+			"capturedAt": "2026-08-24T23:39:23.610Z",
+			"projectTransition": "screen_unscoped",
+			"conversationOrigin": {
+				"noteId": "39e7dc63-7d19-4d61-926c-83ad49f96c79",
+				"projectId": "40a540a8-4823-4557-9acd-0a41db809816",
+				"projectName": "Recovered project 40a540a8"
+			},
+			"recentInteractions": []
+		},
+		"contextNotes": []
+	}
+]

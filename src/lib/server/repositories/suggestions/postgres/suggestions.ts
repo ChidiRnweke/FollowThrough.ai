@@ -1,14 +1,19 @@
 import { and, asc, eq, isNull, lte } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import type { Suggestion, SuggestionId, SuggestionStatus } from '$lib/models/suggestions';
+import type {
+	StoredSuggestion,
+	Suggestion,
+	SuggestionId,
+	SuggestionStatus
+} from '$lib/models/suggestions';
 import type {
 	SuggestionRepository,
 	SuggestionTransition
 } from '$lib/server/repositories/suggestions/suggestions';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/suggestions';
-import { toSuggestion } from '$lib/server/db/mappers';
+import { toStoredSuggestion, toSuggestion } from '$lib/server/db/mappers';
 
 export class SuggestionRecords implements SuggestionRepository {
 	constructor(private readonly database: Database) {}
@@ -22,7 +27,7 @@ export class SuggestionRecords implements SuggestionRepository {
 	async list(
 		actor: ActorContext,
 		filter: { noteId?: Suggestion['noteId']; status?: SuggestionStatus }
-	): Promise<readonly Suggestion[]> {
+	): Promise<readonly StoredSuggestion[]> {
 		const conditions = [eq(schema.suggestions.userId, actor.userId)];
 		if (filter.noteId) conditions.push(eq(schema.suggestions.noteId, filter.noteId));
 		if (filter.status) conditions.push(eq(schema.suggestions.status, filter.status));
@@ -34,7 +39,7 @@ export class SuggestionRecords implements SuggestionRepository {
 				.leftJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
 				.where(and(...conditions, isNull(schema.projects.archivedAt)))
 				.orderBy(asc(schema.suggestions.createdAt))
-		).map((row) => toSuggestion(row.suggestion));
+		).map((row) => toStoredSuggestion(row.suggestion));
 	}
 	async insert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
 		const [row] = await this.database

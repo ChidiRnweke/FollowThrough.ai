@@ -4,7 +4,7 @@ import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
 import {
-	proseMirrorDocumentSchema,
+	readProseMirrorDocument,
 	type Note,
 	type NoteRelationship,
 	type NoteRevision
@@ -12,7 +12,12 @@ import {
 import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
-import { parseSuggestionPayload, type Suggestion } from '$lib/models/suggestions';
+import {
+	parseSuggestionPayload,
+	readSuggestionPayload,
+	type StoredSuggestion,
+	type Suggestion
+} from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
@@ -67,7 +72,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 		parentId: row.parentId ?? undefined,
 		builtInKey: row.builtInKey ?? undefined,
 		sectionNumbering: row.sectionNumbering ?? undefined,
-		document: proseMirrorDocumentSchema.parse(row.document),
+		document: readProseMirrorDocument(row.document),
 		publishedRevision: row.publishedRevision,
 		publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined,
 		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
@@ -78,7 +83,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 export const toRevision = (row: typeof schema.noteRevisions.$inferSelect): NoteRevision =>
 	domain<NoteRevision>({
 		...row,
-		document: proseMirrorDocumentSchema.parse(row.document),
+		document: readProseMirrorDocument(row.document),
 		provenanceId: row.provenanceId ?? undefined,
 		createdAt: instant(row.createdAt)
 	});
@@ -206,6 +211,28 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
 		createdAt: instant(row.createdAt),
 		updatedAt: instant(row.updatedAt)
 	});
+
+/**
+ * The read counterpart of {@link toSuggestion}, for the list path.
+ *
+ * `toSuggestion` stays strict and is what the write round-trips use — `insert`
+ * and `transition` return a row this process just wrote, so a parse failure
+ * there is a bug worth throwing on. `list` maps many rows, and a throw from one
+ * of them is what took `/today` down on the notes side.
+ */
+export const toStoredSuggestion = (
+	row: typeof schema.suggestions.$inferSelect
+): StoredSuggestion => {
+	const payload = readSuggestionPayload(row.kind, row.payload);
+	if (payload.status === 'unreadable')
+		return {
+			status: 'unreadable',
+			id: row.id as Suggestion['id'],
+			kind: row.kind,
+			reason: payload.reason
+		};
+	return { status: 'readable', suggestion: toSuggestion(row) };
+};
 
 export const toTrustPolicy = (row: typeof schema.trustPolicies.$inferSelect): TrustPolicy =>
 	domain<TrustPolicy>({
