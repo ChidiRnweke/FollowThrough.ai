@@ -7,6 +7,7 @@
 	import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
 	import { sidebarToggle } from '$lib/stores/shell/sidebar-toggle.svelte';
 	import { Tip } from '$lib/components/ui/tooltip';
+	import { Separator } from '$lib/components/ui/separator';
 	import { cn } from '$lib/utils';
 	import {
 		FtArrowRight as ArrowRight,
@@ -17,9 +18,11 @@
 		FtSearch as Search,
 		FtTheme as SunMoon,
 		FtTrash as Trash,
+		FtProfile as UserRound,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import Settings from '@lucide/svelte/icons/settings';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -28,7 +31,6 @@
 	import ProjectTree from '../../projects/project-tree.svelte';
 	import MemoryNotificationMenu from '../../memory/memory-notification-menu.svelte';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
-	import AccountMenu from './account-menu.svelte';
 
 	let {
 		shell,
@@ -45,10 +47,9 @@
 		squeezed?: boolean;
 	} = $props();
 
-	// The rail is sorted by what a thing *is*: destinations at the top, your projects
-	// filling the middle, and you at the bottom. Tools (find, trash) and account chrome
-	// (profile, settings) are neither, so they live in the footer — the icon bar and the
-	// account menu respectively — rather than as rows beside content.
+	// The rail is sorted by what a thing *is*: destinations at the top (profile among
+	// them), your projects filling the middle, and your tools at the bottom — find,
+	// settings, trash — under an identity row rather than as rows beside content.
 	function isActive(href: string): boolean {
 		return activePath.startsWith(href);
 	}
@@ -163,6 +164,16 @@
 							{/snippet}
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton isActive={isActive('/profile')} tooltipContent="Profile">
+							{#snippet child({ props })}
+								<a {...props} href="/profile">
+									<UserRound class="size-4" />
+									<span>Profile</span>
+								</a>
+							{/snippet}
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
 				</Sidebar.Menu>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
@@ -205,20 +216,44 @@
 		</Sidebar.Group>
 	</Sidebar.Content>
 	<Sidebar.Separator />
-	<Sidebar.Footer class="pb-3">
-		<div class="flex min-w-0 flex-col gap-1 group-data-[collapsible=icon]:items-center">
-			<AccountMenu displayName={shell.user.displayName} email={shell.user.email} />
-			<!-- Search and trash live here rather than in a labelled group of their own: a
-			     region for two links, pinned bottom with `mt-auto` against a `flex-1`
-			     Projects, floated free of everything around it. A magnifier and a bin are
-			     the two glyphs that need no caption, so the bar absorbs them and the tree
-			     gets the height back.
+	<Sidebar.Footer class="gap-0 p-0 pb-3">
+		<!-- The identity row is who you are, not a menu: it links to /profile (which
+		     also sits in the destinations above), and the email keeps a home in the
+		     tooltip. No chevron — there is no dropdown behind it. -->
+		<div
+			class="px-2 pt-2 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
+		>
+			<Tip text={shell.user.email} side="top">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						href="/profile"
+						class="tactile flex h-8 w-full min-w-0 items-center justify-start gap-2 rounded-md px-2 text-sm font-normal group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+						aria-label="Profile for {shell.user.displayName}"
+					>
+						<UserRound class="size-4 shrink-0 text-muted-foreground" />
+						<span class="truncate group-data-[collapsible=icon]:hidden"
+							>{shell.user.displayName}</span
+						>
+					</Button>
+				{/snippet}
+			</Tip>
+		</div>
+		<Sidebar.Separator class="mx-0 my-1" />
+		<!-- One airy strip, not a segmented control: ticks only mark the jump cluster
+		     (find, memories, chat); the app-chrome buttons stand alone, and trash sits
+		     apart, pinned right in destructive — it is the only command that destroys,
+		     so distance and colour keep it away from the toggles.
 
-			     `flex-wrap` because six `size-8` buttons need 192px and the rail's floor is
-			     `SIDEBAR_WIDTH_MIN_PX` (192) less the footer's own `p-2` — at the minimum
-			     width they wrap to a second line instead of overflowing. -->
+		     Buttons are size-7 rather than icon-sm: seven commands plus ticks need
+		     ~230px and the bar's floor is the rail's 192px minimum less padding — the
+		     strip wraps to a second line instead of overflowing. -->
+		<div
+			class="flex flex-wrap items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1"
+		>
 			<div
-				class="flex flex-wrap items-center justify-between group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1"
+				class="flex flex-wrap items-center gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1"
 			>
 				<Tip text="Find in notes" shortcut="⌘⇧F">
 					{#snippet children({ props })}
@@ -228,35 +263,23 @@
 							size="icon-sm"
 							aria-label="Find in notes"
 							aria-pressed={rightPanel.mode === 'search'}
-							class={rightPanel.mode === 'search' ? 'bg-accent text-brand' : ''}
+							class={cn('size-7', rightPanel.mode === 'search' && 'bg-accent text-brand')}
 							onclick={() => rightPanel.toggle('search')}
 						>
 							<Search class="size-4" />
 						</Button>
 					{/snippet}
 				</Tip>
-				<Tip text="Trash">
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="icon-sm"
-							aria-label="Trash"
-							href="/trash"
-							class={isActive('/trash') ? 'bg-accent text-brand' : ''}
-						>
-							<Trash class="size-4" />
-						</Button>
-					{/snippet}
-				</Tip>
-				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
+				<Separator orientation="vertical" class="h-3.5! group-data-[collapsible=icon]:hidden" />
+				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} class="size-7" />
+				<Separator orientation="vertical" class="h-3.5! group-data-[collapsible=icon]:hidden" />
 				<Tip text="Toggle chat panel">
 					{#snippet children({ props })}
 						<Button
 							{...props}
 							variant="ghost"
 							size="icon-sm"
-							class="hidden lg:inline-flex"
+							class="hidden size-7 lg:inline-flex"
 							aria-label="Toggle chat panel"
 							onclick={() => rightPanel.toggle('chat')}
 						>
@@ -270,7 +293,7 @@
 							{...props}
 							variant="ghost"
 							size="icon-sm"
-							class="lg:hidden"
+							class="size-7 lg:hidden"
 							aria-label="Open chat"
 							href="/chats/new"
 						>
@@ -285,6 +308,7 @@
 							variant="ghost"
 							size="icon-sm"
 							aria-label="Toggle theme"
+							class="size-7"
 							onclick={toggleMode}
 						>
 							<SunMoon class="size-4" />
@@ -298,13 +322,45 @@
 							variant="ghost"
 							size="icon-sm"
 							aria-label="Send feedback"
+							class="size-7"
 							onclick={() => (feedbackOpen = true)}
 						>
 							<MessageSquareWarning class="size-4" />
 						</Button>
 					{/snippet}
 				</Tip>
+				<Tip text="Settings">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Settings"
+							href="/settings"
+							class={cn('size-7', isActive('/settings') && 'bg-accent text-brand')}
+						>
+							<Settings class="size-4" />
+						</Button>
+					{/snippet}
+				</Tip>
 			</div>
+			<Tip text="Trash">
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						aria-label="Trash"
+						href="/trash"
+						class={cn(
+							'size-7 ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive group-data-[collapsible=icon]:ml-0',
+							isActive('/trash') && 'bg-destructive/15'
+						)}
+					>
+						<Trash class="size-4" />
+					</Button>
+				{/snippet}
+			</Tip>
 		</div>
 	</Sidebar.Footer>
 	<Sidebar.Rail />

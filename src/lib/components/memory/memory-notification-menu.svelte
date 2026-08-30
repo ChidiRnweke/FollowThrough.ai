@@ -5,13 +5,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { mergeProps } from '$lib/utils';
+	import { cn, mergeProps } from '$lib/utils';
 	import { FtNotifications as Bell } from '$lib/components/icons';
 
 	let {
-		notifications
+		notifications,
+		class: className
 	}: {
 		notifications: readonly PendingMemoryNotification[];
+		class?: string;
 	} = $props();
 
 	const total = $derived(notifications.reduce((sum, notification) => sum + notification.count, 0));
@@ -26,7 +28,7 @@
 						{...mergeProps(menuProps, tipProps)}
 						variant="ghost"
 						size="icon-sm"
-						class="relative"
+						class={cn('relative', className)}
 						aria-label={total === 0
 							? 'Memory notifications'
 							: `${total} pending memory suggestions`}
