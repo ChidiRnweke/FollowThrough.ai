@@ -50,7 +50,9 @@ export class IconifyIconSearch implements IconSearch {
 		const response = await this.fetchImpl(url, {
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 		}).catch((cause) => {
-			throw new ExternalServiceError('The icon library could not be reached.', { cause });
+			throw new ExternalServiceError('The icon library could not be reached.', {
+				cause: cause instanceof Error ? cause.message : String(cause)
+			});
 		});
 		if (!response.ok)
 			throw new ExternalServiceError(`The icon library answered ${response.status}.`);
@@ -65,7 +67,9 @@ export class IconifyIconSearch implements IconSearch {
 		try {
 			parsed = JSON.parse(body);
 		} catch (cause) {
-			throw new ExternalServiceError('The icon library returned something unreadable.', { cause });
+			throw new ExternalServiceError('The icon library returned something unreadable.', {
+				cause: cause instanceof Error ? cause.message : String(cause)
+			});
 		}
 		const names = (parsed as { icons?: unknown }).icons;
 		if (!Array.isArray(names)) return [];
