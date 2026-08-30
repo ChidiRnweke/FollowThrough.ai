@@ -33,6 +33,7 @@
 		"test:evals:smoke": "EVAL_PROFILE=smoke NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals src/evals/lab/lab.eval.ts src/evals/suites/agent.eval.ts --reporter=default",
 		"test:evals:gate": "EVAL_PROFILE=gate EVAL_GATE=1 EVAL_REPETITIONS=3 EVAL_RECORD=1 NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"test:evals:cache": "node --experimental-strip-types scripts/verify-eval-cache.ts",
+		"test:diagram-icons": "node --experimental-strip-types scripts/record-diagram-icons.ts",
 		"test:quality": "node --experimental-strip-types scripts/audit-tests.ts",
 		"test:topology": "node --experimental-strip-types scripts/audit-topology.ts",
 		"test:source": "node --experimental-strip-types scripts/audit-source.ts",

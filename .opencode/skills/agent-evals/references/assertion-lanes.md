@@ -61,6 +61,27 @@ A deterministic check pins the *mechanism*; a judge pins the *behaviour*.
 
 **When to downgrade**: if the deterministic check proves brittle (the model reaches the same behaviour through another legitimate route), keep it as the annotation and gate on the judge. The hard gate should always be the thing you actually mean to guarantee.
 
+## Lane 5 — Artifact inspection (no LLM)
+
+Parse the thing the agent *produced* and assert properties of it. Not what the agent did, and not what it said — what it made.
+
+**Use when** the deliverable is a structured artifact whose quality is objective: a diagram, a document, a spreadsheet, a schema. A judge asked "is this diagram professional?" is grading vibes; the graph either has an arrow anchored to a shape or it does not.
+
+**Two kinds of check, and they must stay separate.**
+
+- **Parameter-free rules** — true of every artifact of that kind, whatever its subject. Boxes do not overlap. Arrows attach to shapes rather than to coordinates. A child of a container is drawn inside it. Coordinates are on the grid. These can hard-fail because there is nothing to tune.
+- **Fixture-declared expectations** — true of *this* artifact because the source material says so. These components appear, these connections exist, this one does not, these boxes carry a brand mark, these sit inside that boundary. The fixture states them next to the prose the agent reads, so the two cannot drift.
+
+**Resist the thresholded middle.** "At most two edge crossings" looks deterministic and is a guess wearing a number — and a guessed threshold on a hard-failing rule is a flaky red suite. If a property needs a number to express, either find the measurement that justifies it or move the property into the fixture, where the artifact's own subject supplies the answer.
+
+**Run the parser through the production boundary first.** Inspect only what production would accept, so a rule can never report on an artifact no user could ever have.
+
+**Unit-test the rules themselves.** A rule that never fires passes everything silently. Each rule needs a minimal artifact that breaks exactly it, asserting the fired set is exactly that rule — `toContain` lets a broken rule hide behind a neighbour.
+
+**Know which draft you are grading.** An artifact eval runs a turn and inspects what came out, so it measures the *first* attempt. If the product gives the agent a way to see its own output and fix it — a render, a compile error, a screenshot — that loop is not being tested unless a case deliberately supplies the feedback and takes another turn. Check whether the first draft is what users actually get before treating the number as the product's quality: here it is, because the diagram render only rides back on the user's next message, so turn one is blind in production too.
+
+This repo's implementation: `src/evals/assertions/diagram/` — `graph.ts` (draw.io XML to absolute geometry), `rules.ts` (the parameter-free invariants), `expectations.ts` (the fixture-declared ones), each with a colocated spec running free in `node-fast`.
+
 ## Choosing
 
 | Question | Lane |
@@ -69,5 +90,8 @@ A deterministic check pins the *mechanism*; a judge pins the *behaviour*.
 | Did the agent use the specific capability? | 2 |
 | Did the agent behave correctly in semantics/precedence/scope? | 3 |
 | Both the mechanism and the outcome matter | 4 |
+| Is the artifact it produced any good? | 5 |
 
-Start at lane 1 and escalate only as far as the claim requires.
+Start at lane 1 and escalate only as far as the claim requires. Lane 5 is not an escalation of
+lane 3 but an alternative to it: when the claim is about an artifact rather than a behaviour,
+reach for it first and keep the judge for whatever genuinely needs reading.

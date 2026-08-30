@@ -222,6 +222,92 @@ Final gate evidence:
   the unchanged target passed 1/1 and the complete memory section passed 11/11. Tool-call arguments
   and failures are now retained in the two affected Phoenix outputs for future variance diagnosis.
 
+- `20260829-diagrams-artifact-inspection-baseline`: 1/12, `EVAL_SECTION=diagrams`. The section grew
+  from 2 cases to 12: ten architectures read from the Azure Architecture Center AI/ML listing and
+  rewritten as source notes, graded by a new deterministic artifact lane
+  (`src/evals/assertions/diagram/`) with no judge. Six of ten diagrams came back as grey rectangles
+  with no brand mark on any product box.
+- `20260829-diagrams-skill-discoverability-fix`: the cause was upstream of the model. The
+  Diagramming skill carried `allowImplicitInvocation: false` and was requested only on the
+  `diagram_studio` surface, so `buildCatalog` filtered it out of the advertised catalogue for every
+  request arriving from a note or from chat. The agent could not see the skill existed and could not
+  `load_skill` it; it had been drawing with no diagramming guidance at all, and no assertion said so.
+  `DIAGRAMMING_V3` is advertised everywhere, V2 retired. The cases now assert
+  `diagrammingSkill: 'loaded'` — three states, so "never installed" cannot hide behind "installed and
+  ignored".
+- `20260829-diagrams-brand-substitution`: `icons-present` accepted any icon, so `material-symbols:table`
+  passed as the Azure Table Storage mark and `mdi:application-outline` as a client. `icons-brand-match`
+  now requires the icon name to carry a brand token the fixture declares, compared without separators
+  or case so `logos:microsoft-power-bi` and `simple-icons:powerbi` both satisfy "power bi". Brand words
+  only, never category words. It caught `material-symbols:functions`, `mdi:firewall` and
+  `ic:outline-insights` on subsequent runs.
+- `20260829-diagrams-after-fixes`: 8/12 and 7/12 on consecutive runs, with the failing cases differing
+  between them — residual model variance rather than a fixed set. Twelve tuning cycles on the fastest
+  case reached 3/3 before the section run. Findings fell from roughly forty to seven; `group-membership`
+  and `edges-anchored` reached zero.
+  Six checks were retracted or corrected during this work because live evidence contradicted them,
+  each pinned by a regression case: `on-grid` (it fought deliberate vertical centring); `no-self-loop`
+  (the source says App Service authenticates with its own built-in authentication, which is a
+  self-loop); full containment read as overlap; a boundary drawn without owning its children not
+  recognised as a container; draw.io edge captions measured as shapes; and — the largest — routes
+  reconstructed centre to centre rather than clipped to the shapes' perimeters, which made every arrow
+  entering a boundary appear to cross the boundary's own contents. Two matcher defects went with them:
+  a coincidental word in one component's description could win the match for another component's name
+  (titles are now tried first), and a "pulls from" relationship was graded as strictly directional
+  when either arrow reads correctly (those pairs moved to a separate `connections` list).
+  `satisfiable.spec.ts` proves the oracle is reachable by hand-drawn diagrams, so a red case is a model
+  finding rather than an impossible expectation.
+  The section does not yet meet the 1.0 pass rate `acceptanceCriteriaFor` gates `diagram_quality` at.
+  Every remaining finding in the last two runs was a genuine defect — arrows crossing unrelated
+  shapes, a component parented to a group but drawn outside it, negative coordinates that crop on
+  export, and occasional generic-pictogram substitution — so the gap is model consistency, not oracle
+  error.
+- `20260829-diagrams-tiered-scoring`: findings now carry a severity. Everything in
+  `expectations.ts` blocks — components, required and forbidden edges, group membership, and both
+  icon checks — because those decide whether the diagram is of the system the source describes. The
+  structural rules in `rules.ts` are graded: each crossing, colliding pair, off-page shape or clipped
+  word costs a point, and a case passes with at most one. The budget is recorded with its derivation
+  beside the constant: diagrams a reviewer would send back carried several blemishes at once (three
+  colliding pairs and three off-page shapes in one case) while the ones that read cleanly carried at
+  most one. `Severity` is a discriminated union so `points` exists only on the arm that has them, and
+  points are charged per defect rather than per rule that fired.
+  Routing was corrected at the same time. `edgeStyle=orthogonalEdgeStyle` never draws a diagonal, so
+  an edge is judged against the straight line and both single-corner paths and counts as obstructed
+  only when every one is blocked; an edge with explicit waypoints is still judged on those alone.
+  `edge-clears-vertices` fell from four findings in the previous run to one.
+  The verification run was cut short: OpenRouter returned `402 … requires more credits` from case
+  eight onward, so only seven cases executed — four passed, three failed. Two of those three are
+  genuine (a stated Blob-Storage-to-Power-BI connection never drawn; three empty unlabelled
+  placeholder squares). The third, the Azure chat case, reported three separate blocking findings
+  that all traced to one oracle bug: the diagram's decorative heading "Azure OpenAI chat
+  architecture" won the match for the component "Azure OpenAI" ahead of the box named "Azure OpenAI
+  model", so the model box was reported as unbranded, unparented and unconnected at once. Component
+  matching now prefers the shortest matching title, pinned by a regression case. The section has not
+  been re-run since that fix and the projection is unverified.
+- `20260829-diagrams-skill-v3-icons-and-overlap`: 9/12 then 8/12 on consecutive runs. Two further
+  causes were found in the skill rather than the model. The inherited instruction "Search one word at
+  a time" sent the model to the category noun in a product's name — "monitor", "storage", "table" —
+  which returns generic pictograms, and restricting the search to brand collections is worse still:
+  it offers Google Cloud Storage for "storage" and Tableau for "table". Icon guidance is now an
+  ordered pair of steps, product brand then vendor word, with the note that reaching the second step
+  is the normal outcome; a first attempt that only said what *not* to search cut `search_icons` calls
+  from eight to two and left boxes bare. Separately, nothing in the skill had ever said that shapes
+  must not overlap, which was both remaining overlap failures. V3 now carries its own full body
+  rather than concatenating V2's, since retired bodies must not be edited. Overlaps and crossings
+  reached zero across twelve diagrams; the dominant remaining findings became missing and invented
+  edges, so a source-walk step was added ahead of the form checklist.
+- `20260829-diagrams-runtime-refactor-void`: the verification run for that last change is void. The
+  agent run context was being refactored concurrently — `context.ts` and `contracts.ts` at 21:34,
+  `models/agent/index.ts` at 21:37, `reasoning.ts` at 21:40, the last of them during the run — and
+  every case failed in 36 seconds on `Cannot read properties of undefined (reading 'items')` at
+  `reasoning.ts`, where `context.skills` no longer arrives. Re-measure once that work settles and
+  `pnpm check` is clean; the last trustworthy numbers are 9/12 and 8/12.
+- Scope boundary, recorded deliberately: this section measures the first draft only. The agent cannot
+  see what it drew, and production is blind on turn one too — the canvas render rides back on the
+  *next user message*. The repair loop that follows, where the agent looks at the picture and fixes a
+  broken icon or an overlapping label, is not covered by any case here and a regression in it would
+  be invisible. Reproducing it needs a browser to rasterise the XML, since nothing on the server can.
+
 - [ ] Run `pnpm check` and `pnpm lint`.
 - [ ] Run relevant unit tests and `pnpm test:architecture`.
 - [ ] Verify deterministic cache completeness.

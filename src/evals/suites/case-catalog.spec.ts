@@ -4,8 +4,8 @@ import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 
 describe('eval case selection', () => {
-	it('keeps the ambiguity-hardened inventory at 211 cases', () => {
-		expect(ALL_EVAL_CASES).toHaveLength(211);
+	it('keeps the ambiguity-hardened inventory at 221 cases', () => {
+		expect(ALL_EVAL_CASES).toHaveLength(221);
 	});
 
 	it('keeps every stable case id unique', () => {
