@@ -1,3 +1,9 @@
+import {
+	agentPayloadItems,
+	isAgentPayloadObject,
+	type AgentPayloadObject,
+	type AgentPayload
+} from '$lib/models/agent/payload';
 import type { ShellContext } from '$lib/models/workspace';
 
 /**
@@ -91,11 +97,8 @@ const placeOf = (project: string | undefined, parent: string | undefined): strin
 	return undefined;
 };
 
-const readable = (value: unknown): value is string | number | boolean =>
+const readable = (value: AgentPayload): value is string | number | boolean =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The subject and detail lines of one argument record, whether it is the call's
@@ -104,11 +107,12 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * an item has no such outlet, so its fields read as lines however long they are.
  */
 const subjectOf = (
-	record: Readonly<Record<string, unknown>>,
+	record: AgentPayloadObject,
 	options: { readonly cap?: number; readonly excludeProse?: boolean } = {}
 ): ApprovalItem => {
 	const headlineKey = typeof record.title === 'string' ? 'title' : 'name';
-	const headline = typeof record[headlineKey] === 'string' ? record[headlineKey] : undefined;
+	const named = record[headlineKey];
+	const headline = typeof named === 'string' ? named : undefined;
 
 	const entries = Object.entries(record).filter(([key, value]) => {
 		if (key === headlineKey && headline !== undefined) return false;
@@ -125,14 +129,15 @@ const subjectOf = (
 };
 
 export function approvalFields(
-	args: Readonly<Record<string, unknown>>,
+	args: AgentPayloadObject,
 	shell: ShellContext | undefined
 ): ApprovalFields {
 	const top = subjectOf(args, { cap: 4, excludeProse: true });
 
 	const items = Object.values(args)
-		.filter((value): value is readonly unknown[] => Array.isArray(value))
-		.flatMap((value) => value.filter(isPlainObject).map((element) => subjectOf(element)));
+		.map(agentPayloadItems)
+		.filter((value) => value !== undefined)
+		.flatMap((value) => value.filter(isAgentPayloadObject).map((element) => subjectOf(element)));
 
 	// A call that addresses a note by id alone (archive_note, say) would otherwise
 	// render with no subject at all; one that also carries a title (rename_note)

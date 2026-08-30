@@ -6,6 +6,12 @@ import {
 	noteTitle
 } from '../../chat/actions/tool-approval-fields';
 import { explainToolFailure } from './tool-result';
+import { toolResultFields, type ToolResultFields } from './tool-result-fields';
+import {
+	agentPayloadItems,
+	isAgentPayloadObject,
+	type AgentPayload
+} from '$lib/models/agent/payload';
 
 /**
  * What, if anything, sits behind a call's disclosure — and therefore whether it gets a
@@ -296,51 +302,48 @@ const recoverableAfter = new Set(['archive_note', 'archive_project', 'restore_no
 /** At most this many rows behind a disclosure; the rest are counted. Matches `tool-result.ts`. */
 const ITEM_CAP = 5;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const asString = (value: unknown): string | undefined =>
+const asString = (value: AgentPayload | undefined): string | undefined =>
 	typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 
-const idKeys = [
-	'noteId',
-	'todoId',
-	'diagramId',
-	'projectId',
-	'entryId',
-	'artifactId',
-	'suggestionId',
-	'id'
-];
+/**
+ * The id a payload offers, most specific first. `id` is last because a result
+ * that carries both a typed id and a bare one means the typed one.
+ */
+const identify = (fields: ToolResultFields): string | undefined =>
+	fields.noteId ??
+	fields.todoId ??
+	fields.diagramId ??
+	fields.projectId ??
+	fields.entryId ??
+	fields.artifactId ??
+	fields.suggestionId ??
+	fields.id;
 
-const identify = (source: Record<string, unknown>): string | undefined => {
-	for (const key of idKeys) {
-		const found = asString(source[key]);
-		if (found) return found;
-	}
-	return undefined;
-};
-
-const nameIn = (source: Record<string, unknown>): string | undefined =>
-	asString(source.title) ?? asString(source.name) ?? asString(source.content);
+const nameIn = (fields: ToolResultFields): string | undefined =>
+	fields.title ?? fields.name ?? fields.content;
 
 /** The array a collection result is actually in — top level, or one key down (`{ todos: [...] }`). */
-const collectionOf = (output: unknown): readonly unknown[] | undefined => {
-	if (Array.isArray(output)) return output;
-	if (!isRecord(output)) return undefined;
-	return Object.values(output).find(Array.isArray);
+const collectionOf = (output: AgentPayload | undefined): readonly AgentPayload[] | undefined => {
+	if (output === undefined) return undefined;
+	const top = agentPayloadItems(output);
+	if (top) return top;
+	if (!isAgentPayloadObject(output)) return undefined;
+	return Object.values(output)
+		.map(agentPayloadItems)
+		.find((nested) => nested !== undefined);
 };
 
-const entityFrom = (value: unknown, kind: EntityKind, shell?: ShellContext): EntityRef => {
-	if (!isRecord(value)) {
+const entityFrom = (value: AgentPayload, kind: EntityKind, shell?: ShellContext): EntityRef => {
+	if (!isAgentPayloadObject(value)) {
 		const title = asString(value);
 		return { kind, title: title ?? placeholder[kind], named: title !== undefined };
 	}
-	const id = identify(value);
+	const fields = toolResultFields(value);
+	const id = identify(fields);
 	// A note the shell already knows beats whatever the payload called it: the tree carries the
 	// title the user last saw, and a stale echo of an old one reads as the wrong note.
 	const resolved =
-		kind === 'note' || kind === 'skill' ? (noteTitle(shell, id) ?? nameIn(value)) : nameIn(value);
+		kind === 'note' || kind === 'skill' ? (noteTitle(shell, id) ?? nameIn(fields)) : nameIn(fields);
 	return {
 		kind,
 		...(id ? { id } : {}),
@@ -355,9 +358,12 @@ const entityFrom = (value: unknown, kind: EntityKind, shell?: ShellContext): Ent
  */
 const subjectOf = (tool: ChatToolActivity, kind: EntityKind, shell?: ShellContext): EntityRef => {
 	const returned = toolOutput(tool);
-	const output = isRecord(returned) ? returned : {};
-	const merged = { ...tool.arguments, ...output };
-	return entityFrom(merged, kind, shell);
+	// A result that is not an object contributes no fields to merge, and the
+	// arguments are then the whole of what is known about the subject. Stated as
+	// the absence it is, rather than as an empty record standing in for one — the
+	// two are the same merge, but only one of them is readable as a decision.
+	const named = returned !== undefined && isAgentPayloadObject(returned) ? returned : undefined;
+	return entityFrom(named ? { ...tool.arguments, ...named } : tool.arguments, kind, shell);
 };
 
 /**
@@ -367,11 +373,14 @@ const subjectOf = (tool: ChatToolActivity, kind: EntityKind, shell?: ShellContex
  */
 const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
 	const output = toolOutput(tool);
-	const previous = isRecord(output) && isRecord(output.previous) ? output.previous : undefined;
+	const previous =
+		output !== undefined && isAgentPayloadObject(output) && isAgentPayloadObject(output.previous)
+			? output.previous
+			: undefined;
+	// No `!== undefined` guard: a `AgentPayload` has no such member, which is one of
+	// the checks naming the wire type retires outright.
 	return Object.entries(tool.arguments)
-		.filter(
-			([key, value]) => !isIdentifierArgument(key, value) && value !== undefined && value !== null
-		)
+		.filter(([key, value]) => !isIdentifierArgument(key, value) && value !== null)
 		.map(([key, value]) => {
 			const from = previous ? asString(String(previous[key] ?? '')) : undefined;
 			return {
@@ -385,7 +394,8 @@ const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
 const shapeGuess = (tool: ChatToolActivity): Family => {
 	const output = toolOutput(tool);
 	if (collectionOf(output)) return 'collection';
-	if (isRecord(output) && Object.keys(output).length > 0) return 'record';
+	if (output !== undefined && isAgentPayloadObject(output) && Object.keys(output).length > 0)
+		return 'record';
 	return 'none';
 };
 
@@ -415,17 +425,16 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 		}
 
 		case 'note-diff': {
-			const returned = toolOutput(tool);
-			const output = isRecord(returned) ? returned : {};
-			const noteId = asString(output.noteId) ?? asString(tool.arguments.noteId);
+			const returned = toolResultFields(toolOutput(tool));
+			const noteId = returned.noteId ?? asString(tool.arguments.noteId);
 			// Without a note to diff there is nothing this family can render, so it falls back to
 			// stating what was sent rather than opening onto an apology.
 			if (!noteId) return { kind: 'record', changed: changesFrom(tool) };
-			const revision = output.currentRevision;
+			const { currentRevision } = returned;
 			return {
 				kind: 'note-diff',
 				noteId,
-				...(typeof revision === 'number' ? { revision } : {})
+				...(currentRevision === undefined ? {} : { revision: currentRevision })
 			};
 		}
 

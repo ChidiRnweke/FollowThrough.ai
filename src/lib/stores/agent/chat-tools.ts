@@ -1,12 +1,18 @@
+import {
+	readAgentPayload,
+	readAgentPayloadObject,
+	type AgentPayload,
+	type AgentPayloadObject
+} from '$lib/models/agent/payload';
 import { readToolFailure } from '$lib/models/agent/tool-failure';
 
 export type ChatToolStatus = 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
 
 /** What every tool row carries, whatever became of the call. */
-interface ChatToolActivityBase {
+export interface ChatToolActivityBase {
 	readonly callId: string;
 	readonly name: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
+	readonly arguments: AgentPayloadObject;
 	/** The run that produced it. Restored rows from before a run existed have none. */
 	readonly runId?: string;
 }
@@ -28,9 +34,53 @@ interface ChatToolActivityBase {
 export type ChatToolActivity =
 	| (ChatToolActivityBase & { readonly status: 'running' })
 	| (ChatToolActivityBase & { readonly status: 'approval_required' })
-	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: unknown })
+	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
 	| (ChatToolActivityBase & { readonly status: 'failed'; readonly failure: string })
 	| (ChatToolActivityBase & { readonly status: 'rejected' });
+
+/**
+ * The client's parse zone for tool payloads.
+ *
+ * Arguments and results reach the client two ways — off the run's event stream,
+ * and out of a journalled message row — and both are JSON both times. They were
+ * carried inward as `unknown` anyway, which is what made five presentation
+ * modules invent a `Record<string, unknown>` guard apiece. Reading them once
+ * here, where they arrive, is what lets `ChatToolActivity` name the shape.
+ *
+ * It runs per event rather than per render, so a large result is walked once.
+ */
+export const CORRUPT_OUTPUT = 'The tool returned a result this app could not read.';
+
+/**
+ * Arguments, or none recorded.
+ *
+ * `{}` is not an invented default here: it is already this module's word for
+ * "this event does not restate the arguments" — `tool_completed` sends exactly
+ * that, and `mergeToolActivity` keeps the earlier row's arguments when it sees
+ * it. A payload that is not a JSON object records no arguments in the same
+ * sense, and the surfaces are already total over the empty case.
+ */
+export const toolArguments = (value: unknown): AgentPayloadObject => {
+	const read = readAgentPayloadObject(value);
+	return read.kind === 'valid' ? read.value : {};
+};
+
+/**
+ * The settled arm for a call the run says succeeded.
+ *
+ * An unreadable result does not become a `succeeded` row with no output. That
+ * would report "the tool returned nothing", which is a different fact from "the
+ * tool returned something nobody here can read", and reporting the first when
+ * the second happened is the case ADR 0015 exists for — the reader cannot tell
+ * whether the work they asked for happened.
+ */
+export const settledTool = (base: ChatToolActivityBase, output: unknown): ChatToolActivity => {
+	if (output === undefined || output === null) return { ...base, status: 'succeeded' };
+	const read = readAgentPayload(output);
+	return read.kind === 'valid'
+		? { ...base, output: read.value, status: 'succeeded' }
+		: { ...base, failure: `${CORRUPT_OUTPUT} ${read.message}`, status: 'failed' };
+};
 
 const isActive = (tool: ChatToolActivity): boolean =>
 	tool.status === 'running' || tool.status === 'approval_required';
@@ -98,8 +148,13 @@ export type FailedToolActivity = Extract<ChatToolActivity, { readonly status: 'f
  * that used to reach for `tool.output` and get `undefined` from a call that had
  * not run yet, one that had failed, and one that succeeded returning nothing —
  * three different facts arriving as the same value.
+ *
+ * What comes back is JSON or nothing. The event reader parsed it on the way in,
+ * so a caller narrows it with an ordinary `typeof` test and indexes it without a
+ * guard — the four hand-rolled `isRecord` predicates that used to stand between
+ * this function and its readers had nothing left to do.
  */
-export const toolOutput = (tool: ChatToolActivity): unknown =>
+export const toolOutput = (tool: ChatToolActivity): AgentPayload | undefined =>
 	tool.status === 'succeeded' ? tool.output : undefined;
 
 /**

@@ -1,10 +1,21 @@
 import ts from 'typescript';
-export type SourceRule =
-	| 'shape-cast'
-	| 'silent-catch'
-	| 'no-instanceof-models'
-	| 'no-response-json-cast'
-	| 'no-zod-unknown';
+/**
+ * Every landed rule, in one place.
+ *
+ * The union and the stale-allowance sweep both need this list, and they used to
+ * hold a copy each — so adding a rule to one and not the other made every
+ * `audit-allow` for the new rule report as malformed, which is a failure that
+ * points at the wrong file.
+ */
+const RULES = [
+	'shape-cast',
+	'silent-catch',
+	'no-instanceof-models',
+	'no-response-json-cast',
+	'no-zod-unknown',
+	'no-weak-record-guard'
+] as const;
+export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
 	readonly rule: SourceRule;
 	readonly line: number;
@@ -34,6 +45,49 @@ const responseJsonCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAsser
 		ts.isCallExpression(expression) &&
 		ts.isPropertyAccessExpression(expression.expression) &&
 		expression.expression.name.text === 'json'
+	);
+};
+/** `Record<string, unknown>`, `Record<string, any>`, or `{ [k: string]: unknown }`. */
+const weakRecordType = (node: ts.TypeNode): boolean => {
+	const weakValue = (type: ts.TypeNode | undefined): boolean =>
+		type?.kind === ts.SyntaxKind.UnknownKeyword || type?.kind === ts.SyntaxKind.AnyKeyword;
+	if (ts.isTypeReferenceNode(node))
+		return (
+			ts.isIdentifier(node.typeName) &&
+			node.typeName.text === 'Record' &&
+			node.typeArguments?.length === 2 &&
+			weakValue(node.typeArguments[1])
+		);
+	if (!ts.isTypeLiteralNode(node)) return false;
+	return (
+		node.members.length > 0 &&
+		node.members.every((member) => ts.isIndexSignatureDeclaration(member) && weakValue(member.type))
+	);
+};
+
+/**
+ * A predicate that claims to narrow `unknown` into an open-keyed record.
+ *
+ * Detected by its signature and never by its name. The four copies in the chat
+ * surfaces were all called `isRecord`, but the fifth was `isPlainObject` and had
+ * the identical body — a name-based check reported a baseline of four and would
+ * have failed on the fifth the moment the rule landed.
+ *
+ * Narrowing to a concrete type is not this: a predicate answering `value is
+ * AgentPayloadObject` picks a member out of a union that already holds. What this
+ * catches is the shape that turns a compile-time guarantee into runtime hope,
+ * because everything after it still has to probe.
+ */
+const weakRecordGuard = (node: ts.Node): boolean => {
+	if (
+		!ts.isFunctionDeclaration(node) &&
+		!ts.isArrowFunction(node) &&
+		!ts.isFunctionExpression(node) &&
+		!ts.isMethodDeclaration(node)
+	)
+		return false;
+	return (
+		node.type !== undefined && ts.isTypePredicateNode(node.type) && weakRecordType(node.type.type!)
 	);
 };
 const explicitFailureResult = (node: ts.ReturnStatement): boolean => {
@@ -124,6 +178,8 @@ export const analyzeSource = (
 			report('no-response-json-cast', node, 'casts a response JSON result without parsing it');
 		if (weakZodCall(node))
 			report('no-zod-unknown', node, 'uses a non-narrowing Zod unknown or any schema');
+		if (weakRecordGuard(node))
+			report('no-weak-record-guard', node, 'narrows to an open-keyed record instead of a type');
 		if (
 			fileName.startsWith('src/lib/models/') &&
 			ts.isBinaryExpression(node) &&
@@ -148,16 +204,7 @@ export const analyzeSource = (
 		if (line.includes('audit-allow:')) {
 			const lineNumber = index + 1;
 			const match = allowance.exec(line);
-			if (
-				!match ||
-				![
-					'shape-cast',
-					'silent-catch',
-					'no-instanceof-models',
-					'no-response-json-cast',
-					'no-zod-unknown'
-				].includes(match[1] ?? '')
-			)
+			if (!match || !RULES.includes((match[1] ?? '') as SourceRule))
 				violations.push({
 					rule: 'silent-catch',
 					line: lineNumber + lineOffset,

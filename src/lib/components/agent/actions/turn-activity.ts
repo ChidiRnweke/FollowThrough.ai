@@ -4,6 +4,8 @@ import { noteTitle } from '../../chat/actions/tool-approval-fields';
 import { toolStatusParts } from './tool-presentation';
 import { explainToolFailure } from './tool-result';
 import { mechanismTools, quietTools, type RenderedTool } from './rendered-tools';
+import { toolResultFields } from './tool-result-fields';
+import type { AgentPayload } from '$lib/models/agent/payload';
 
 export { mechanismTools, quietTools };
 
@@ -222,11 +224,8 @@ const verbRank = [
 const strongerVerb = (left: string, right: string): string =>
 	verbRank.indexOf(right) > verbRank.indexOf(left) ? right : left;
 
-const asString = (value: unknown): string | undefined =>
+const asString = (value: AgentPayload | undefined): string | undefined =>
 	typeof value === 'string' && value.trim().length > 0 ? value : undefined;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A create names its result only on the way back: the id it can be opened by exists in the
@@ -236,16 +235,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const identify = (tool: ChatToolActivity, subject: ToolSubject): string | undefined => {
 	const fromArguments = subject.idKey ? asString(tool.arguments[subject.idKey]) : undefined;
 	if (fromArguments) return fromArguments;
-	const output = toolOutput(tool);
-	if (!isRecord(output)) return undefined;
+	const returned = toolResultFields(toolOutput(tool));
 	return (
-		asString(output.noteId) ??
-		asString(output.todoId) ??
-		asString(output.diagramId) ??
+		returned.noteId ??
+		returned.todoId ??
+		returned.diagramId ??
 		// Deliberately not `projectId`: it is present on results whose subject is a note or a
 		// diagram, and taking it there would hand the row an id of the wrong kind — which
 		// opens the wrong thing rather than failing to open.
-		asString(output.id)
+		returned.id
 	);
 };
 
@@ -263,11 +261,12 @@ const nameOf = (
 		const project = shell?.projects.find((candidate) => candidate.id === id);
 		if (project) return project.name;
 	}
-	const output = toolOutput(tool);
+	const returned = toolResultFields(toolOutput(tool));
 	return (
 		asString(tool.arguments.title) ??
 		asString(tool.arguments.name) ??
-		(isRecord(output) ? (asString(output.title) ?? asString(output.name)) : undefined)
+		returned.title ??
+		returned.name
 	);
 };
 

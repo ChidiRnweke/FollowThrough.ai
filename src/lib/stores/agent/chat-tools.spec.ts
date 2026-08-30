@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import {
 	matchToolActivity,
 	mergeToolActivity,
+	settledTool,
+	toolArguments,
 	toolFailure,
 	type ChatToolActivity
 } from './chat-tools';
@@ -13,7 +16,7 @@ const runningTool = (callId = 'call-1'): ChatToolActivity => ({
 	status: 'running'
 });
 
-const completed = (callId: string, output: unknown): ChatToolActivity => ({
+const completed = (callId: string, output: AgentPayload): ChatToolActivity => ({
 	callId,
 	name: 'find_references',
 	arguments: {},
@@ -114,5 +117,40 @@ describe('A failure a tool returned as a value is still a failure', () => {
 
 	it('ignores an empty failure key, which says nothing', () => {
 		expect(toolFailure({ ...noOpEdit, output: { failure: '  ' } })).toBeUndefined();
+	});
+});
+
+describe('Settling a call whose result came off the wire', () => {
+	const base = { callId: 'call-1', name: 'save_note', arguments: {} };
+
+	it('carries a readable result into the succeeded arm', () => {
+		expect(settledTool(base, { noteId: 'note-1' })).toEqual({
+			...base,
+			output: { noteId: 'note-1' },
+			status: 'succeeded'
+		});
+	});
+
+	it('succeeds with no output for a call that returned nothing', () => {
+		expect(settledTool(base, undefined)).toEqual({ ...base, status: 'succeeded' });
+	});
+
+	it('reports an unreadable result as a failure rather than as an empty success', () => {
+		expect(settledTool(base, { writtenAt: new Date() }).status).toBe('failed');
+	});
+
+	it('says which value it could not read', () => {
+		const settled = settledTool(base, { note: { revision: Number.NaN } });
+		expect(settled.status === 'failed' && settled.failure).toContain('root.note.revision');
+	});
+});
+
+describe('Reading the arguments a call was made with', () => {
+	it('keeps an object of arguments as they are', () => {
+		expect(toolArguments({ query: 'skills' })).toEqual({ query: 'skills' });
+	});
+
+	it('records no arguments when the payload is not an object', () => {
+		expect(toolArguments(['skills'])).toEqual({});
 	});
 });

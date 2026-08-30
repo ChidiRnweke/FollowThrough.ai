@@ -117,4 +117,47 @@ describe('source audit rules', () => {
 			)
 		).toHaveLength(1);
 	});
+	it('rejects a boolean guard that narrows to an open-keyed record', () => {
+		expect(
+			violations(
+				'const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object"'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects the same guard under a different name', () => {
+		expect(
+			violations(
+				'const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === "object"'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects a guard narrowing to an inline index signature', () => {
+		expect(
+			violations('function isBag(value: unknown): value is { [key: string]: any } { return true }')
+		).toHaveLength(1);
+	});
+	it('allows a guard that narrows to a concrete type', () => {
+		expect(
+			violations(
+				'const isAgentPayloadObject = (value: AgentPayload): value is AgentPayloadObject => true'
+			)
+		).toHaveLength(0);
+	});
+	it('allows a record type that is not a guard', () => {
+		expect(violations('const bag: Record<string, unknown> = {}')).toHaveLength(0);
+	});
+	it('allows a reasoned weak-record-guard exception', () => {
+		expect(
+			violations(
+				'// audit-allow: no-weak-record-guard — Tiptap options are typed as any by the library.\nconst isRecord = (value: unknown): value is Record<string, unknown> => true'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale weak-record-guard allowance', () => {
+		expect(
+			violations(
+				'// audit-allow: no-weak-record-guard — Tiptap options are typed as any by the library.\nconst isNote = (value: unknown): value is Note => true'
+			)
+		).toHaveLength(1);
+	});
 });

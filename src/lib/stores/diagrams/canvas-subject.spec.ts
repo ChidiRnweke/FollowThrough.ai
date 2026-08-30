@@ -1,8 +1,9 @@
+import type { AgentPayload } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { canvasDiagramId } from './canvas-subject';
 
-const call = (name: string, output: unknown, index = 0): ChatToolActivity => ({
+const call = (name: string, output: AgentPayload, index = 0): ChatToolActivity => ({
 	callId: `call-${name}-${index}`,
 	name,
 	arguments: {},

@@ -1,3 +1,4 @@
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 
 /**
@@ -14,7 +15,7 @@ export type ToolActivityOverrides = Partial<
 	Pick<ChatToolActivity, 'callId' | 'name' | 'arguments' | 'runId'>
 > &
 	(
-		| { readonly status?: 'succeeded'; readonly output?: unknown }
+		| { readonly status?: 'succeeded'; readonly output?: AgentPayload }
 		| { readonly status: 'running' }
 		| { readonly status: 'approval_required' }
 		| { readonly status: 'rejected' }

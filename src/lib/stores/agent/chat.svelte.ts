@@ -21,7 +21,10 @@ import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
 import {
 	matchToolActivity,
 	mergeToolActivity,
+	settledTool,
+	toolArguments,
 	type ChatToolActivity,
+	type ChatToolActivityBase,
 	type ChatToolStatus
 } from './chat-tools';
 import { suggestionToView } from '../suggestions/suggestion-view';
@@ -232,10 +235,10 @@ const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivit
 	const content = message.content;
 	const status = String(content.status ?? 'succeeded') as ChatToolStatus;
 	const abandoned = status === 'approval_required' && message.runId !== awaitingRunId;
-	const base = {
+	const base: ChatToolActivityBase = {
 		callId: String(content.callId ?? ''),
 		name: String(content.name ?? 'tool'),
-		arguments: (content.input ?? {}) as Readonly<Record<string, unknown>>,
+		arguments: toolArguments(content.input ?? {}),
 		...(message.runId ? { runId: message.runId } : {})
 	};
 	const failure = typeof content.failure === 'string' ? content.failure : undefined;
@@ -245,14 +248,7 @@ const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivit
 	// that somehow does not still has to say it failed rather than say nothing.
 	if (status === 'failed')
 		return { ...base, failure: failure ?? 'The tool call failed.', status: 'failed' };
-	if (status === 'succeeded')
-		return {
-			...base,
-			...(content.output !== null && content.output !== undefined
-				? { output: content.output }
-				: {}),
-			status: 'succeeded'
-		};
+	if (status === 'succeeded') return settledTool(base, content.output);
 	return { ...base, status };
 };
 
@@ -841,7 +837,7 @@ export class ChatStore {
 				applyToolActivity(reply.parts, {
 					callId: pending.callId,
 					name: pending.toolName,
-					arguments: pending.arguments,
+					arguments: toolArguments(pending.arguments),
 					runId: snapshot.run.id,
 					status: 'approval_required'
 				});
@@ -884,7 +880,7 @@ export class ChatStore {
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
 				name: event.name,
-				arguments: event.arguments,
+				arguments: toolArguments(event.arguments),
 				status: 'running'
 			});
 		} else if (event.type === 'tool_completed') {
@@ -898,13 +894,7 @@ export class ChatStore {
 							failure: event.failure,
 							status: 'failed'
 						}
-					: {
-							callId: event.callId,
-							name: event.name,
-							arguments: {},
-							...(event.output === undefined ? {} : { output: event.output }),
-							status: 'succeeded'
-						}
+					: settledTool({ callId: event.callId, name: event.name, arguments: {} }, event.output)
 			);
 		} else if (event.type === 'approval_required') {
 			this.runStatus = 'awaiting_approval';
@@ -912,7 +902,7 @@ export class ChatStore {
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
 				name: event.name,
-				arguments: event.arguments,
+				arguments: toolArguments(event.arguments),
 				runId: event.runId,
 				status: 'approval_required'
 			});

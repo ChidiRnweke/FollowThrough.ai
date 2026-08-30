@@ -1,11 +1,13 @@
 import type { ShellContext } from '$lib/models/workspace';
-import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import {
 	argumentLabel,
 	isIdentifierArgument,
 	noteTitle
 } from '../../chat/actions/tool-approval-fields';
 import { mechanismTools, type RenderedTool } from './rendered-tools';
+import { toolResultFields, type ToolResultFields } from './tool-result-fields';
 
 /** Tools that write the note body, and so speak about the note rather than themselves. */
 const noteBodyTools = new Set(['save_note', 'edit_note']);
@@ -158,22 +160,14 @@ const noteScopedTools = new Set([
 /** Tools whose `query` argument is what the row is about. */
 const querySubjectTools = new Set(['search', 'search_note', 'search_tools', 'find_references']);
 
-const stringArgument = (
-	arguments_: Readonly<Record<string, unknown>>,
-	key: string
-): string | undefined => {
+const stringArgument = (arguments_: AgentPayloadObject, key: string): string | undefined => {
 	const value = arguments_[key];
 	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const outputString = (tool: ChatToolActivity, key: string): string | undefined => {
-	if (tool.status !== 'succeeded' || !isRecord(tool.output)) return undefined;
-	const value = tool.output[key];
-	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
-};
+/** What the call answered with, by name — `undefined` for a call that has not settled. */
+const outputFields = (tool: ChatToolActivity): ToolResultFields =>
+	toolResultFields(toolOutput(tool));
 
 /**
  * A row's label says what happened; its subject says what it happened to, and the subject is
@@ -200,6 +194,7 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 	const resolvedNote = noteScopedTools.has(tool.name)
 		? noteTitle(shell, tool.arguments.noteId)
 		: undefined;
+	const returned = outputFields(tool);
 	const subject =
 		resolvedNote ??
 		(querySubjectTools.has(tool.name) ? stringArgument(tool.arguments, 'query') : undefined) ??
@@ -207,11 +202,9 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 		stringArgument(tool.arguments, 'name') ??
 		// A create names its subject only on the way back. Without this a note the agent
 		// just made was "Created note" with nothing after it.
-		outputString(tool, 'title') ??
-		outputString(tool, 'name');
-	const noteId = resolvedNote
-		? (tool.arguments.noteId as string)
-		: (outputString(tool, 'noteId') ?? undefined);
+		returned.title ??
+		returned.name;
+	const noteId = resolvedNote ? stringArgument(tool.arguments, 'noteId') : returned.noteId;
 	// A failure the tool returned as a value counts. See `toolFailure`.
 	const failure = toolFailure(tool);
 	const parts = (label: string): ToolStatusParts => ({

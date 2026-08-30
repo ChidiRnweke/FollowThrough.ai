@@ -1,3 +1,4 @@
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
@@ -72,7 +73,7 @@ describe('Approval fields read as labelled values', () => {
 });
 
 describe('Approval fields surface structured content as items', () => {
-	const createTodos = {
+	const createTodos: AgentPayloadObject = {
 		projectId: PROJECT_ID,
 		todos: [
 			{

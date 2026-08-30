@@ -1,3 +1,9 @@
+import {
+	agentPayloadItems,
+	isAgentPayloadObject,
+	type AgentPayloadObject,
+	type AgentPayload
+} from '$lib/models/agent/payload';
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 
 /**
@@ -43,16 +49,13 @@ const ITEM_CAP = 5;
 
 const EMPTY: ToolResultSummary = { lines: [], empty: true };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const readable = (value: unknown): value is string | number | boolean =>
+const readable = (value: AgentPayload): value is string | number | boolean =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 
 /** One line for one element of a returned collection: its name, or failing that, itself. */
-const itemLine = (item: unknown): string | undefined => {
+const itemLine = (item: AgentPayload): string | undefined => {
 	if (readable(item)) return String(item).slice(0, PROSE_LENGTH);
-	if (!isRecord(item)) return undefined;
+	if (!isAgentPayloadObject(item)) return undefined;
 	for (const key of ['title', 'name', 'content', 'text', 'query']) {
 		const value = item[key];
 		if (typeof value === 'string' && value.trim()) return value.slice(0, PROSE_LENGTH);
@@ -60,7 +63,7 @@ const itemLine = (item: unknown): string | undefined => {
 	return undefined;
 };
 
-const fromArray = (items: readonly unknown[]): ToolResultSummary => {
+const fromArray = (items: readonly AgentPayload[]): ToolResultSummary => {
 	if (items.length === 0) return { headline: 'Nothing found', lines: [], empty: false };
 	const lines = items
 		.slice(0, ITEM_CAP)
@@ -80,14 +83,14 @@ const fromArray = (items: readonly unknown[]): ToolResultSummary => {
  * `RecoverableUseToolFailure` builds server-side. It is the most important thing a row can
  * say, so it is read before the record's other fields.
  */
-const fromFailure = (record: Record<string, unknown>): ToolResultSummary | undefined => {
+const fromFailure = (record: AgentPayloadObject): ToolResultSummary | undefined => {
 	const failure = record.failure;
 	if (typeof failure !== 'string') return undefined;
 	const recovery = typeof record.recovery === 'string' ? [record.recovery] : [];
 	return { headline: failure, lines: recovery, empty: false };
 };
 
-const fromRecord = (record: Record<string, unknown>): ToolResultSummary => {
+const fromRecord = (record: AgentPayloadObject): ToolResultSummary => {
 	const failed = fromFailure(record);
 	if (failed) return failed;
 
@@ -104,7 +107,9 @@ const fromRecord = (record: Record<string, unknown>): ToolResultSummary => {
 
 	if (!prose && lines.length === 0) {
 		// A collection nested one level down (`{ notes: [...] }`) is the result, not a field.
-		const nested = Object.values(record).find(Array.isArray);
+		const nested = Object.values(record)
+			.map(agentPayloadItems)
+			.find((value) => value !== undefined);
 		return nested ? fromArray(nested) : EMPTY;
 	}
 	return {
@@ -119,8 +124,8 @@ const fromRecord = (record: Record<string, unknown>): ToolResultSummary => {
  * in front of someone who asked for a shorter note — the count is the whole of what they
  * could want from it, and only in the log.
  */
-const toolSearchSummary = (output: unknown): ToolResultSummary => {
-	const found = Array.isArray(output) ? output.length : 0;
+const toolSearchSummary = (output: AgentPayload | undefined): ToolResultSummary => {
+	const found = output === undefined ? 0 : (agentPayloadItems(output)?.length ?? 0);
 	return {
 		headline: found === 1 ? 'Found 1 tool it can use' : `Found ${found} tools it can use`,
 		lines: [],
@@ -154,7 +159,10 @@ export function explainToolFailure(failure: string): string {
 	return failure;
 }
 
-export function summariseToolResult(output: unknown, toolName?: string): ToolResultSummary {
+export function summariseToolResult(
+	output: AgentPayload | undefined,
+	toolName?: string
+): ToolResultSummary {
 	if (toolName === 'search_tools') return toolSearchSummary(output);
 	if (output === undefined || output === null) return EMPTY;
 	if (typeof output === 'string') {
@@ -166,7 +174,8 @@ export function summariseToolResult(output: unknown, toolName?: string): ToolRes
 	}
 	if (typeof output === 'number' || typeof output === 'boolean')
 		return { lines: [String(output)], empty: false };
-	if (Array.isArray(output)) return fromArray(output);
-	if (isRecord(output)) return fromRecord(output);
+	const items = agentPayloadItems(output);
+	if (items) return fromArray(items);
+	if (isAgentPayloadObject(output)) return fromRecord(output);
 	return EMPTY;
 }

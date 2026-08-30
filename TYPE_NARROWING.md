@@ -77,21 +77,48 @@ produce.
 - [ ] **TN-30: Build the authoritative `AgentToolContractMap` in the agent model barrel**
 - [ ] **TN-31: Derive generic server definitions, executor calls, events, and pending decisions**
 - [ ] **TN-32: Parse client event-stream JSON into correlated tool activities**
-- [ ] **TN-33: Replace client record probes with tool-specific typed projections**
+- [x] **TN-33: Replace client record probes with tool-specific typed projections**
+  - [x] Name the wire type: `AgentPayload` / `AgentPayloadObject` in `models/agent/payload.ts`,
+        read once at the client event and journal readers (`stores/agent/chat-tools.ts`).
+  - [x] `ChatToolActivity.output` and `.arguments` carry it instead of `unknown` and
+        `Record<string, unknown>`; an unreadable result settles as `failed`, not as an empty
+        `succeeded` (ADR 0015).
+  - [x] Named-field projection `toolResultFields` replaces index access at the three surfaces
+        that read a closed set of fields (`tool-presentation`, `turn-activity`, `tool-disclosure`).
+  - [x] All five weak record guards deleted. Verify with `pnpm test:architecture`.
+  - Not done here, and deliberately: the projection is by field name, not per tool. Which fields
+    a given tool returns is TN-30's contract map; a per-tool schema written before it exists
+    would be a guess maintained in the wrong file. `canvas-subject.ts` remains the exemplar for
+    the per-tool form.
 - [ ] **TN-34: Prove registry/catalog/constructed-definition key equality and all round trips**
 
 ### Phase 4 — Remaining closed domain and boundary shapes
 
 - [x] **TN-40: Remove `TrustPolicy.conditions` while retaining its database column**
 - [x] **TN-41: Close domain-error details through `DomainErrorDetailsByCode`**
-- [ ] **TN-42: Close provenance by producer kind, pipeline, and producer name**
+- [ ] **TN-42: Close provenance by producer kind, pipeline, and producer name — IN PROGRESS (root)**
+  - [x] Define the canonical producer union, exact metadata schemas, and parser in
+        `models/provenance/index.ts`.
+  - [x] Parse persisted rows in the DB mapper and make repository writes use the exact union.
+  - [ ] Propagate the closed shape through domain-local views and production constructors; add
+        producer and malformed-row coverage.
+  - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
 - [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
 
 ### Phase 5 — Land remaining zero-baseline rules and close the audit
 
 - [ ] **TN-50: Land `no-record-unknown` at zero**
-- [ ] **TN-51: Land identifier-independent `no-weak-record-guard` at zero**
+- [x] **TN-51: Land identifier-independent `no-weak-record-guard` at zero**
+  - [x] Detect by signature — a type predicate whose target is `Record<string, unknown|any>` or a
+        bare weak index signature — never by the identifier. The name-based scanner reported a
+        baseline of 4 in 4 files; the fifth was `isPlainObject` in
+        `components/chat/actions/tool-approval-fields.ts` and would have failed the rule on
+        landing.
+  - [x] Collapse the duplicated rule list in `scripts/audit-source-rules.ts` into one `RULES`
+        const, so the union and the stale-allowance sweep cannot drift.
+  - [x] Reject, differently-named reject, inline-index-signature reject, concrete-type valid,
+        allowance, and stale-allowance specs. Verify with `pnpm test:architecture`.
 - [ ] **TN-52: Land `no-json-parse-cast` and `no-cast-probe` at zero**
 - [ ] **TN-53: Land strict-layer `no-unknown-type` with reasoned parser/SDK allowances**
 - [ ] **TN-54: Run the all-scope residual sweep and regenerate final before/after counts**
@@ -128,7 +155,7 @@ Exemplar: `DomainSuggestion['payload']` (`src/lib/models/suggestions/index.ts`) 
 hangs off the `kind` discriminant. Genuine maps stay legal: `Record<string, string>` for HTTP
 headers (`models/attachments/index.ts`) is a real open-keyed map, not a struct.
 
-## 3. `isRecord`-style boolean guards — [audit] `no-is-record`
+## 3. `isRecord`-style boolean guards — [audit] `no-weak-record-guard`
 
 ```ts
 // silly
@@ -142,6 +169,14 @@ of it, and two already disagreed about arrays.
 
 **Remedy:** a zod schema at the reader. Exemplar: `readToolFailure`
 (`src/lib/models/agent/tool-failure.ts`) — `safeParse` at the point of use, typed result out.
+
+Where the value is foreign JSON that many surfaces read, name the wire first and project from it:
+`readAgentPayload` (`src/lib/models/agent/payload.ts`) turns `unknown` into a closed
+`AgentPayload` union that narrows under a plain `typeof`, and `toolResultFields`
+(`src/lib/components/agent/actions/tool-result-fields.ts`) reads the named fields off it. The rule
+is detected by signature, so renaming the guard does not evade it. A predicate that narrows
+_within_ a closed union to a concrete type — `isAgentPayloadObject` — is not this pattern and does
+not fire: the union already holds, and the compiler checks the branch.
 
 ## 4. The cast-probe: `x as { field?: unknown }` — [audit] `no-cast-probe`
 
