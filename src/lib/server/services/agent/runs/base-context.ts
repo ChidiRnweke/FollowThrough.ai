@@ -1,25 +1,30 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
-import type { ContextSelection, ConversationId, RunAgentInput } from '$lib/models/agent';
-export interface AgentContextBuilder {
+import type {
+	BaseAgentContextData,
+	ContextSelection,
+	ConversationId,
+	RunAgentInput
+} from '$lib/models/agent';
+export interface BaseAgentContextBuilder {
 	build(
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<Readonly<Record<string, unknown>>>;
+	): Promise<BaseAgentContextData>;
 }
 interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
 
-export class BaseAgentContext implements AgentContextBuilder {
+export class BaseAgentContext implements BaseAgentContextBuilder {
 	constructor(private readonly noteReader?: NoteReader) {}
 	async build(
 		actor: ActorContext,
 		input: RunAgentInput,
 		_run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<Readonly<Record<string, unknown>>> {
+	): Promise<BaseAgentContextData> {
 		void _run;
 		const note =
 			input.noteId && this.noteReader ? await this.noteReader.get(actor, input.noteId) : undefined;
@@ -34,10 +39,11 @@ export class BaseAgentContext implements AgentContextBuilder {
 		const selections: ContextSelection[] = pinned.map((selection) =>
 			note && selection.noteId === note.id ? { ...selection, title: note.title } : selection
 		);
+		const projectId = input.projectId ?? note?.projectId;
 		return {
-			projectId: input.projectId ?? note?.projectId,
-			noteId: input.noteId,
-			noteTitle: note?.title,
+			...(projectId ? { projectId } : {}),
+			...(input.noteId ? { noteId: input.noteId } : {}),
+			...(note ? { noteTitle: note.title } : {}),
 			...(selections.length ? { selections } : {})
 		};
 	}

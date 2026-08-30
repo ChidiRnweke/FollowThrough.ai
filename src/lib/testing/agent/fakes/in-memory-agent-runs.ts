@@ -12,7 +12,7 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { OutputSegment } from '$lib/server/repositories/agent';
 import { segmentOutput } from '$lib/server/repositories/agent';
-import { assertAgentRunTransition } from '$lib/models/agent';
+import { agentRunContextSchema, assertAgentRunTransition } from '$lib/models/agent';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -125,12 +125,15 @@ export class InMemoryAgentRunPersistence
 			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
 		);
 		if (!run) return undefined;
-		const { kind: _kind, inputSnapshot: _inputSnapshot, ...statePatch } = patch;
+		const { kind: _kind, inputSnapshot: _inputSnapshot, contextSnapshot, ...statePatch } = patch;
 		const updated: AgentRun =
 			run.kind === 'agent'
 				? {
 						...run,
 						...statePatch,
+						...(contextSnapshot === undefined
+							? {}
+							: { contextSnapshot: agentRunContextSchema.parse(contextSnapshot) }),
 						kind: 'agent',
 						status: to,
 						updatedAt: new Date().toISOString() as DateTime

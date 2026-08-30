@@ -4,10 +4,11 @@ import type {
 	AgentRun,
 	AgentRunId,
 	ConversationId,
-	PendingAgentDecision
+	PendingAgentDecision,
+	WorkflowRunContext
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
@@ -19,7 +20,7 @@ export interface AgentRunStore {
 			conversationId: ConversationId;
 			model: string;
 			executionMode: AgentExecutionMode;
-			contextSnapshot: Readonly<Record<string, unknown>>;
+			contextSnapshot: WorkflowRunContext;
 			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun>;
@@ -28,7 +29,7 @@ export interface AgentRunStore {
 	updateContext(
 		actor: ActorContext,
 		runId: AgentRunId,
-		contextSnapshot: Readonly<Record<string, unknown>>
+		contextSnapshot: WorkflowRunContext
 	): Promise<AgentRun>;
 	pause(
 		actor: ActorContext,
@@ -55,7 +56,7 @@ export class AgentRunLedger implements AgentRunStore {
 			conversationId: ConversationId;
 			model: string;
 			executionMode: AgentExecutionMode;
-			contextSnapshot: Readonly<Record<string, unknown>>;
+			contextSnapshot: WorkflowRunContext;
 			retryOfRunId?: AgentRunId;
 		}
 	): Promise<AgentRun> {
@@ -68,7 +69,7 @@ export class AgentRunLedger implements AgentRunStore {
 			status: 'running',
 			requestId: crypto.randomUUID(),
 			pendingDecisions: [],
-			definitionVersion: 1,
+			definitionVersion: 2,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
@@ -92,9 +93,11 @@ export class AgentRunLedger implements AgentRunStore {
 	async updateContext(
 		actor: ActorContext,
 		runId: AgentRunId,
-		contextSnapshot: Readonly<Record<string, unknown>>
+		contextSnapshot: WorkflowRunContext
 	): Promise<AgentRun> {
 		const run = await this.get(actor, runId);
+		if (run.kind !== 'workflow')
+			throw new ValidationError('Only workflow runs accept workflow context updates');
 		return this.repository.update(actor, { ...run, contextSnapshot, updatedAt: now() });
 	}
 

@@ -1,11 +1,18 @@
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
-import type { Conversation, ConversationId, ContextNote, RunAgentInput } from '$lib/models/agent';
+import type {
+	AgentRunContext,
+	BaseAgentContextData,
+	Conversation,
+	ConversationId,
+	ContextNote,
+	ResolvedAgentAppContextV1,
+	RunAgentInput
+} from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
-import type { ResolvedAppContextV1 } from '$lib/models/workspace';
 import type { SkillSummary } from '$lib/models/skills';
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 interface AgentContextBuilder {
@@ -13,7 +20,14 @@ interface AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<Readonly<Record<string, unknown>>>;
+	): Promise<AgentRunContext>;
+}
+interface BaseAgentContextBuilder {
+	build(
+		actor: ActorContext,
+		input: RunAgentInput,
+		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
+	): Promise<BaseAgentContextData>;
 }
 interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
@@ -30,7 +44,7 @@ interface ProjectReader {
 interface MemoryLister {
 	list(
 		actor: ActorContext,
-		filter: Readonly<Record<string, unknown>>
+		filter: { readonly projectId?: ProjectId; readonly includeDeleted?: boolean }
 	): Promise<readonly MemoryEntry[]>;
 }
 
@@ -79,7 +93,7 @@ interface AdvertisedSkill {
  */
 export class AgentContext implements AgentContextBuilder {
 	constructor(
-		private readonly base: AgentContextBuilder,
+		private readonly base: BaseAgentContextBuilder,
 		private readonly skillFinder: SkillFinder,
 		private readonly noteReader: NoteReader,
 		private readonly conversations?: ConversationReader,
@@ -92,11 +106,9 @@ export class AgentContext implements AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<Readonly<Record<string, unknown>>> {
+	): Promise<AgentRunContext> {
 		const base = await this.base.build(actor, input, run);
-		const projectId =
-			input.projectId ??
-			(typeof base.projectId === 'string' ? (base.projectId as ProjectId) : undefined);
+		const projectId = input.projectId ?? base.projectId;
 		const [availableSkills, contextNotes, allMemories] = await Promise.all([
 			this.skillFinder.listEnabled(actor, projectId),
 			this.loadContextNotes(actor, input.contextNoteIds ?? []),
@@ -171,7 +183,7 @@ export class AgentContext implements AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		conversationId: ConversationId
-	): Promise<{ appContext?: ResolvedAppContextV1 }> {
+	): Promise<{ appContext?: ResolvedAgentAppContextV1 }> {
 		if (!input.appContext) return {};
 		const conversation = await this.conversations?.get(actor, conversationId);
 		const originProjectId = conversation?.contextProjectId;
@@ -209,7 +221,7 @@ export class AgentContext implements AgentContextBuilder {
 	private async resolveRequestedScope(
 		actor: ActorContext,
 		input: RunAgentInput
-	): Promise<Pick<ResolvedAppContextV1, 'requestedScope'>> {
+	): Promise<Pick<ResolvedAgentAppContextV1, 'requestedScope'>> {
 		const requested = input.requestedScope;
 		if (!requested) return {};
 		const [project, note] = await Promise.all([

@@ -242,7 +242,6 @@ describe('Postgres durable agent run repository invariants', () => {
 			status: 'queued',
 			requestId: `request-${suffix}`,
 			pendingDecisions: [],
-			contextSnapshot: {},
 			inputSnapshot: { conversationId: conversation.id, prompt: 'Contract prompt' },
 			createdAt: now,
 			updatedAt: now
@@ -295,7 +294,6 @@ describe('Postgres trust-policy repository invariants', () => {
 			userId: owner.userId,
 			pipeline: 'agent',
 			autoAcceptEnabled: false,
-			conditions: {},
 			createdAt: now,
 			updatedAt: now
 		});

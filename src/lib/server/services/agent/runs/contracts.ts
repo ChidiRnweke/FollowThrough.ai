@@ -1,6 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentExecutionUpdate,
+	AgentRunContext,
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunId,
@@ -37,14 +38,14 @@ export interface AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId }
-	): Promise<Readonly<Record<string, unknown>>>;
+	): Promise<AgentRunContext>;
 }
 export interface AgentRunner {
 	execute(input: {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
-		readonly context: Readonly<Record<string, unknown>>;
+		readonly context: AgentRunContext;
 		/** Decisions to apply before resuming, one per parked tool call. */
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;

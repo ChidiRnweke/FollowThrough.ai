@@ -3,6 +3,7 @@ import { AgentProviderFailure } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentRun,
+	AgentRunContext,
 	AgentRunId,
 	ConversationId,
 	ToolActivity
@@ -18,6 +19,7 @@ import { AgentRunLifecycle } from './lifecycle';
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
 const testTime = '2026-01-01T00:00:00.000Z' as DateTime;
+const resolvedContext: AgentRunContext = { contextNotes: [], skills: { items: [] } };
 
 /**
  * Stands in for a provider stream the user stops: it hangs until the signal
@@ -51,7 +53,7 @@ const throwingRunner = (error: unknown) => ({
 const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecutionUpdate> }>(
 	runner: T,
 	options?: {
-		readonly contextBuilder?: { build(): Promise<Readonly<Record<string, unknown>>> };
+		readonly contextBuilder?: { build(): Promise<AgentRunContext> };
 		readonly pendingDecisions?: AgentRun['pendingDecisions'];
 	}
 ) => {
@@ -71,7 +73,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		requestId: '30000000-0000-4000-8000-0000000000r1',
 		pendingDecisions: options?.pendingDecisions ?? [],
 		provenanceId: testProvenanceId() as ProvenanceId,
-		contextSnapshot: { seeded: true },
+		contextSnapshot: resolvedContext,
 		inputSnapshot: { conversationId: testConversationId, prompt: 'Do the thing' },
 		definitionVersion: 2,
 		createdAt: testTime,
@@ -84,7 +86,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		decisions: runs,
 		sessions,
 		transactions: new InMemoryTransactionRunner([runs, sessions]),
-		contextBuilder: options?.contextBuilder ?? { build: async () => ({ seeded: true }) },
+		contextBuilder: options?.contextBuilder ?? { build: async () => resolvedContext },
 		provenance: {
 			record: async () => {
 				throw new Error('Unexpected provenance record');
@@ -195,7 +197,6 @@ describe('a cancellation that races the end of a run', () => {
 		const finishing = new Promise<void>((resolve) => (release = resolve));
 		return {
 			release: () => release(),
-			// eslint-disable-next-line require-yield
 			execute: async function* () {
 				await finishing;
 				yield final;
@@ -299,13 +300,17 @@ describe('a cancellation that races preparation', () => {
 				build: async () => {
 					entered();
 					await gate;
-					return { seeded: true };
+					return resolvedContext;
 				}
 			}
 		});
 		// An empty snapshot forces prepare to write one, which is the write the
 		// cancel races.
-		context.runs.runs[0] = { ...context.runs.runs[0]!, contextSnapshot: {} };
+		const current = context.runs.runs[0]!;
+		if (current.kind !== 'agent') throw new Error('Expected an agent run');
+		const { contextSnapshot: _contextSnapshot, ...unprepared } = current;
+		void _contextSnapshot;
+		context.runs.runs[0] = unprepared;
 		return { ...context, building, release: () => release() };
 	};
 

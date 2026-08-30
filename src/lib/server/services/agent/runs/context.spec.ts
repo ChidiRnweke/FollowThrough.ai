@@ -17,6 +17,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId } from '$lib/models/notes';
 import { BaseAgentContext } from './base-context';
 import { AgentContext } from './context';
+import type { AgentRunContext } from '$lib/models/agent';
 
 /** The slice of the note reader `AgentContext` depends on. */
 interface NoteReader {
@@ -36,8 +37,7 @@ const skill = (project = testProjectId()): Skill => ({
 	isEnabled: true
 });
 
-const catalog = (context: Readonly<Record<string, unknown>>) =>
-	context.skills as { items: { name: string; description: string }[]; truncated?: true };
+const catalog = (context: AgentRunContext) => context.skills;
 
 const setup = async (skillProject = testProjectId()) => {
 	const notes = new InMemoryNoteContent();
@@ -261,7 +261,7 @@ describe('Agent grounding invariants', () => {
 			},
 			{ provenanceId: testProvenanceId() }
 		);
-		return (context.contextNotes as { content?: string; tokenCount: number }[])[0];
+		return context.contextNotes[0];
 	};
 
 	it('omits the content of oversized context notes', async () => {

@@ -34,7 +34,12 @@ type Confidence = Brand<number, 'Confidence'>;
 
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 interface TextSelection {
@@ -99,7 +104,6 @@ export interface TrustPolicy {
 	readonly pipeline: PipelineKind;
 	readonly autoAcceptEnabled: boolean;
 	readonly minimumConfidence?: Confidence;
-	readonly conditions: Readonly<Record<string, unknown>>;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
@@ -313,6 +317,52 @@ export interface PendingAgentDecision {
 	readonly arguments: Readonly<Record<string, unknown>>;
 }
 
+/** Context available before retrieval-backed grounding is assembled. */
+export interface BaseAgentContextData {
+	readonly projectId?: ProjectId;
+	readonly noteId?: NoteId;
+	readonly noteTitle?: string;
+	readonly selections?: readonly ContextSelection[];
+}
+
+export interface AgentSkillCatalogItem {
+	readonly noteId: string;
+	readonly name: string;
+	readonly description: string;
+}
+
+export interface AgentSkillCatalog {
+	readonly items: readonly AgentSkillCatalogItem[];
+	readonly truncated?: true;
+}
+
+/** Fully assembled context consumed by an executable agent run. */
+export interface AgentRunContext extends BaseAgentContextData {
+	readonly appContext?: ResolvedAgentAppContextV1;
+	readonly userMemory?: readonly string[];
+	readonly contextNotes: readonly ContextNote[];
+	readonly skills: AgentSkillCatalog;
+}
+
+export type WorkflowRunContext =
+	| { readonly kind: 'note_action'; readonly action: NoteActionKind; readonly noteId: NoteId }
+	| {
+			readonly kind: 'diagram';
+			readonly state: 'unprepared';
+			readonly operation: 'generate' | 'revise' | 'convert';
+			readonly noteId?: NoteId;
+	  }
+	| {
+			readonly kind: 'diagram';
+			readonly state: 'prepared';
+			readonly context: AgentRunContext;
+			readonly conversationId: ConversationId;
+			readonly effectiveModel: string;
+			readonly executionMode: 'auto_accept';
+			readonly provenanceId: ProvenanceId;
+			readonly diagramOperation: 'generate' | 'revise' | 'convert';
+	  };
+
 /**
  * A durable run. `serializedState` is what lets an `awaiting_approval` run survive a
  * process restart, and `inputSnapshot` freezes the preferences a retry replays under,
@@ -342,21 +392,30 @@ interface AgentRunBase {
 	readonly pendingDecisions: readonly PendingAgentDecision[];
 	readonly failure?: string;
 	readonly providerErrorCode?: string;
-	readonly contextSnapshot?: Readonly<Record<string, unknown>>;
 	readonly retryOfRunId?: AgentRunId;
 	readonly definitionVersion?: number;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
 
-export interface ResolvedAgentRun extends AgentRunBase {
+export interface UnpreparedAgentRun extends AgentRunBase {
 	readonly kind: 'agent';
 	readonly inputSnapshot: RunAgentInput;
+	readonly contextSnapshot?: never;
 }
+
+export interface PreparedAgentRun extends AgentRunBase {
+	readonly kind: 'agent';
+	readonly inputSnapshot: RunAgentInput;
+	readonly contextSnapshot: AgentRunContext;
+}
+
+export type ResolvedAgentRun = UnpreparedAgentRun | PreparedAgentRun;
 
 export interface WorkflowAgentRun extends AgentRunBase {
 	readonly kind: 'workflow';
 	readonly inputSnapshot?: never;
+	readonly contextSnapshot: WorkflowRunContext;
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
@@ -628,6 +687,34 @@ export type InlineSuggestion =
 	| { readonly outcome: 'no_suggestion'; readonly reason: 'ineligible' | 'empty_model' }
 	| { readonly outcome: 'busy' | 'rate_limited'; readonly retryAfterMs: number };
 
+export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
+	z
+		.object({
+			outcome: z.literal('suggested'),
+			text: z.string(),
+			grounding: z
+				.object({
+					currentNote: z.literal(true),
+					userMemoryCount: z.number().int().nonnegative(),
+					projectPassageCount: z.number().int().nonnegative()
+				})
+				.strict()
+		})
+		.strict(),
+	z
+		.object({
+			outcome: z.literal('no_suggestion'),
+			reason: z.enum(['ineligible', 'empty_model'])
+		})
+		.strict(),
+	z
+		.object({
+			outcome: z.enum(['busy', 'rate_limited']),
+			retryAfterMs: z.number().int().nonnegative()
+		})
+		.strict()
+]) satisfies z.ZodType<InlineSuggestion>;
+
 export interface SubmitAgentRunInput {
 	readonly requestId: string;
 	readonly conversationId?: ConversationId;
@@ -823,7 +910,7 @@ interface SemanticInteraction {
 	readonly occurredAt: string;
 }
 
-interface AppContextSnapshotV1 {
+export interface AppContextSnapshotV1 {
 	readonly version: 1;
 	readonly capturedAt: string;
 	readonly client: {
@@ -857,6 +944,25 @@ interface AppContextSnapshotV1 {
 	};
 	readonly selection?: TextSelection;
 	readonly recentInteractions: readonly SemanticInteraction[];
+}
+
+export type ProjectTransition =
+	'same_project' | 'different_project' | 'origin_unscoped' | 'screen_unscoped';
+
+export interface ResolvedAgentAppContextV1 extends AppContextSnapshotV1 {
+	readonly conversationOrigin: {
+		readonly projectId?: ProjectId;
+		readonly projectName?: string;
+		readonly noteId?: NoteId;
+	};
+	readonly projectTransition: ProjectTransition;
+	readonly requestedScope?: {
+		readonly projectId?: ProjectId;
+		readonly projectName?: string;
+		readonly noteId?: NoteId;
+		readonly noteTitle?: string;
+		readonly note: string;
+	};
 }
 
 const brandedUuid = <T extends string>() => z.uuid().transform((value) => value as T);
@@ -995,6 +1101,123 @@ const appContextSnapshotSchema = z
 		)
 	})
 	.strict();
+
+const resolvedAgentAppContextSchema: z.ZodType<ResolvedAgentAppContextV1> = appContextSnapshotSchema
+	.extend({
+		conversationOrigin: z
+			.object({
+				projectId: projectIdSchema.optional(),
+				projectName: z.string().optional(),
+				noteId: noteIdSchema.optional()
+			})
+			.strict(),
+		projectTransition: z.enum([
+			'same_project',
+			'different_project',
+			'origin_unscoped',
+			'screen_unscoped'
+		]),
+		requestedScope: z
+			.object({
+				projectId: projectIdSchema.optional(),
+				projectName: z.string().optional(),
+				noteId: noteIdSchema.optional(),
+				noteTitle: z.string().optional(),
+				note: z.string()
+			})
+			.strict()
+			.optional()
+	})
+	.strict();
+
+const contextSelectionSchema = textSelectionSchema
+	.extend({ title: z.string().optional() })
+	.strict();
+const contextNoteSchema = z
+	.object({
+		noteId: noteIdSchema,
+		title: z.string(),
+		content: z.string().optional(),
+		tokenCount: z.number().int().nonnegative()
+	})
+	.strict();
+const agentSkillCatalogItemSchema = z
+	.object({ noteId: z.string(), name: z.string(), description: z.string() })
+	.strict();
+
+export const agentRunContextSchema: z.ZodType<AgentRunContext> = z
+	.object({
+		projectId: projectIdSchema.optional(),
+		noteId: noteIdSchema.optional(),
+		noteTitle: z.string().optional(),
+		selections: z.array(contextSelectionSchema).optional(),
+		appContext: resolvedAgentAppContextSchema.optional(),
+		userMemory: z.array(z.string()).optional(),
+		contextNotes: z.array(contextNoteSchema),
+		skills: z
+			.object({
+				items: z.array(agentSkillCatalogItemSchema),
+				truncated: z.literal(true).optional()
+			})
+			.strict()
+	})
+	.strict();
+
+const noteActionRunContextSchema = z
+	.object({
+		kind: z.literal('note_action'),
+		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+		noteId: noteIdSchema
+	})
+	.strict();
+const unpreparedDiagramRunContextSchema = z
+	.object({
+		kind: z.literal('diagram'),
+		state: z.literal('unprepared'),
+		operation: z.enum(['generate', 'revise', 'convert']),
+		noteId: noteIdSchema.optional()
+	})
+	.strict();
+const preparedDiagramRunContextSchema = z
+	.object({
+		kind: z.literal('diagram'),
+		state: z.literal('prepared'),
+		context: agentRunContextSchema,
+		conversationId: conversationIdSchema,
+		effectiveModel: z.string(),
+		executionMode: z.literal('auto_accept'),
+		provenanceId: brandedUuid<ProvenanceId>(),
+		diagramOperation: z.enum(['generate', 'revise', 'convert'])
+	})
+	.strict();
+
+export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
+	noteActionRunContextSchema,
+	unpreparedDiagramRunContextSchema,
+	preparedDiagramRunContextSchema
+]);
+
+const emptyContextSchema = z.object({}).strict();
+const legacyNoteActionRunContextSchema = noteActionRunContextSchema.omit({ kind: true });
+const legacyDiagramRunContextSchema = unpreparedDiagramRunContextSchema.omit({
+	kind: true,
+	state: true
+});
+
+export const parseAgentRunContextSnapshot = (value: unknown): AgentRunContext | undefined => {
+	if (emptyContextSchema.safeParse(value).success) return undefined;
+	return agentRunContextSchema.parse(value);
+};
+
+export const parseWorkflowRunContext = (value: unknown): WorkflowRunContext => {
+	const current = workflowRunContextSchema.safeParse(value);
+	if (current.success) return current.data;
+	const noteAction = legacyNoteActionRunContextSchema.safeParse(value);
+	if (noteAction.success) return { kind: 'note_action', ...noteAction.data };
+	const diagram = legacyDiagramRunContextSchema.safeParse(value);
+	if (diagram.success) return { kind: 'diagram', state: 'unprepared', ...diagram.data };
+	return workflowRunContextSchema.parse(value);
+};
 
 const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().max(12_000) });
 const submittedImagesSchema = z.array(conversationImageSchema).max(4).optional();

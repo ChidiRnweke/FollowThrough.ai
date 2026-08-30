@@ -13,7 +13,9 @@ import type {
 import {
 	assertAgentRunTransition,
 	isTerminalAgentRunStatus,
-	parseRunAgentInput
+	parseAgentRunContextSnapshot,
+	parseRunAgentInput,
+	parseWorkflowRunContext
 } from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
 import type {
@@ -63,22 +65,26 @@ const toRunBase = (row: typeof schema.agentRuns.$inferSelect) => ({
 	pendingDecisions: row.pendingDecisions,
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
-	contextSnapshot: row.contextSnapshot,
 	...(row.retryOfRunId ? { retryOfRunId: row.retryOfRunId as AgentRun['retryOfRunId'] } : {}),
 	definitionVersion: row.definitionVersion,
 	createdAt: row.createdAt.toISOString() as AgentRun['createdAt'],
 	updatedAt: row.updatedAt.toISOString() as AgentRun['updatedAt']
 });
 
-const toResolvedRun = (row: typeof schema.agentRuns.$inferSelect): ResolvedAgentRun => ({
-	...toRunBase(row),
-	kind: 'agent',
-	inputSnapshot: parseRunAgentInput(row.inputSnapshot, row.conversationId as ConversationId)
-});
+const toResolvedRun = (row: typeof schema.agentRuns.$inferSelect): ResolvedAgentRun => {
+	const contextSnapshot = parseAgentRunContextSnapshot(row.contextSnapshot);
+	return {
+		...toRunBase(row),
+		kind: 'agent',
+		inputSnapshot: parseRunAgentInput(row.inputSnapshot, row.conversationId as ConversationId),
+		...(contextSnapshot ? { contextSnapshot } : {})
+	};
+};
 
 const toWorkflowRun = (row: typeof schema.agentRuns.$inferSelect): WorkflowAgentRun => ({
 	...toRunBase(row),
-	kind: 'workflow'
+	kind: 'workflow',
+	contextSnapshot: parseWorkflowRunContext(row.contextSnapshot)
 });
 
 export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun =>

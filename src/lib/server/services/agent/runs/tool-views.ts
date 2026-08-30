@@ -111,7 +111,9 @@ export interface NoteWriteProjection {
 	readonly currentRevision: number;
 }
 
-export const projectNoteWrite = (note: Note): NoteWriteProjection => ({
+export const projectNoteWrite = (
+	note: Pick<Note, 'id' | 'title' | 'currentRevision'>
+): NoteWriteProjection => ({
 	noteId: note.id,
 	title: note.title,
 	currentRevision: note.currentRevision

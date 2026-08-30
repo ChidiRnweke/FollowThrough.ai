@@ -99,9 +99,9 @@ export class WorkflowRunner implements WorkflowRunStarter {
 			requestId: crypto.randomUUID(),
 			pendingDecisions: [],
 			// `noteId` is what a client that lost its session storage searches by.
-			contextSnapshot: { action: task.action, noteId: task.noteId },
+			contextSnapshot: { kind: 'note_action', action: task.action, noteId: task.noteId },
 			startedAt: timestamp,
-			definitionVersion: 1,
+			definitionVersion: 2,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		};
@@ -180,7 +180,8 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		} catch (settlementError) {
 			throw new AggregateError(
 				[error, settlementError],
-				`Workflow run ${runId} failed and its failure could not be persisted`
+				`Workflow run ${runId} failed and its failure could not be persisted`,
+				{ cause: settlementError }
 			);
 		}
 	}

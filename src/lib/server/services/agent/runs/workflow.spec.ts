@@ -111,7 +111,7 @@ describe('WorkflowRunner', () => {
 		}).toEqual({
 			executionMode: 'auto_accept',
 			conversationId: created[0]?.id,
-			contextSnapshot: { action: 'diagram', noteId: testNoteId() }
+			contextSnapshot: { kind: 'note_action', action: 'diagram', noteId: testNoteId() }
 		});
 	});
 
