@@ -63,4 +63,58 @@ describe('source audit rules', () => {
 	it('rejects stale allowances', () => {
 		expect(violations('// audit-allow: silent-catch — terminal reporter\nwork()')).toHaveLength(1);
 	});
+	it('rejects instanceof in models', () => {
+		expect(analyzeSource('src/lib/models/example.ts', 'value instanceof Error')).toHaveLength(1);
+	});
+	it('allows instanceof outside models', () => {
+		expect(analyzeSource('src/lib/client/example.ts', 'value instanceof Error')).toHaveLength(0);
+	});
+	it('reports source lines with an extraction offset', () => {
+		expect(analyzeSource('example.svelte', 'const value = ({ id }) as never', 12)[0]?.line).toBe(
+			13
+		);
+	});
+	it('rejects a concrete cast on response JSON', () => {
+		expect(violations('const body = (await response.json()) as { ok: boolean }')).toHaveLength(1);
+	});
+	it('allows an honest unknown response JSON intermediate', () => {
+		expect(violations('const body = (await response.json()) as unknown')).toHaveLength(0);
+	});
+	it('allows a reasoned response JSON framework exception', () => {
+		expect(
+			violations(
+				'// audit-allow: no-response-json-cast — Framework supplies runtime validation.\nconst body = (await response.json()) as Payload'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a Zod unknown schema', () => {
+		expect(violations("import { z } from 'zod';\nconst payload = z.unknown()")).toHaveLength(1);
+	});
+	it('rejects an aliased Zod any schema', () => {
+		expect(
+			violations("import { z as schema } from 'zod';\nconst payload = schema.any()")
+		).toHaveLength(1);
+	});
+	it('rejects a namespace-imported Zod unknown schema', () => {
+		expect(
+			violations("import * as schema from 'zod';\nconst payload = schema.unknown()")
+		).toHaveLength(1);
+	});
+	it('allows a concrete Zod JSON schema', () => {
+		expect(violations("import { z } from 'zod';\nconst payload = z.json()")).toHaveLength(0);
+	});
+	it('allows a reasoned Zod SDK exception', () => {
+		expect(
+			violations(
+				"import { z } from 'zod';\n// audit-allow: no-zod-unknown — SDK callback owns runtime validation.\nconst payload = z.unknown()"
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale Zod allowance', () => {
+		expect(
+			violations(
+				"import { z } from 'zod';\n// audit-allow: no-zod-unknown — SDK callback owns runtime validation.\nconst payload = z.string()"
+			)
+		).toHaveLength(1);
+	});
 });

@@ -21,6 +21,7 @@ import type { ProjectTemplateStyles } from '$lib/models/projects';
 import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
 import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
 import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 /**
@@ -1150,7 +1151,7 @@ export const feedbackReports = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		body: text('body').notNull(),
 		url: text('url').notNull(),
-		appContext: jsonb('app_context').$type<JsonObject>().notNull(),
+		appContext: jsonb('app_context').$type<AppContextSnapshotV1>().notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('feedback_reports_user_created_idx').on(table.userId, table.createdAt)]

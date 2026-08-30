@@ -1,9 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 /** A user-submitted feedback report: free text, the URL it was filed from, and an app-context snapshot to reproduce the issue. */
 export interface FeedbackReport {
 	readonly body: string;
 	readonly url: string;
-	readonly appContext: Readonly<Record<string, unknown>>;
+	readonly appContext: AppContextSnapshotV1;
 }
 interface FeedbackWriter {
 	create(actor: ActorContext, report: FeedbackReport): Promise<void>;

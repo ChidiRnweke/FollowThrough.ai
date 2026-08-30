@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 
-const payloadObject = z.record(z.string(), z.unknown());
+const payloadObject = z.record(z.string(), z.json());
 
 /**
  * `payload` is the documented shape, but some models never populate a nested
@@ -59,10 +59,8 @@ export const resolveUseToolPayload = (
 	if (flat === undefined) return { ok: false };
 	if (typeof flat !== 'string') return { ok: true, payload: flat };
 	try {
-		const parsed: unknown = JSON.parse(flat);
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-			return { ok: false };
-		return { ok: true, payload: parsed as Record<string, unknown> };
+		const parsed = payloadObject.safeParse(JSON.parse(flat));
+		return parsed.success ? { ok: true, payload: parsed.data } : { ok: false };
 	} catch {
 		return { ok: false };
 	}

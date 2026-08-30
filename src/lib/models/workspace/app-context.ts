@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 type NoteId = Brand<string, 'NoteId'>;
 type ProjectId = Brand<string, 'ProjectId'>;
@@ -42,7 +44,7 @@ export interface NoteContext {
 
 export interface PaneContext extends NoteContext {
 	readonly revision: number;
-	readonly syncStatus: string;
+	readonly syncStatus: 'loading' | 'synced' | 'saving' | 'pending' | 'conflict' | 'error';
 	readonly dirty: boolean;
 	readonly dirtyExcerpt?: string;
 }
@@ -93,6 +95,89 @@ export interface AppContextSnapshotV1 {
 	};
 	readonly recentInteractions: readonly SemanticInteraction[];
 }
+
+const noteIdSchema = z.uuid().transform((value) => value as NoteId);
+const projectIdSchema = z.uuid().transform((value) => value as ProjectId);
+
+const noteContextSchema = z
+	.object({ id: noteIdSchema, title: z.string(), projectId: projectIdSchema })
+	.strict();
+
+const paneContextSchema = noteContextSchema
+	.extend({
+		revision: z.number().int().nonnegative(),
+		syncStatus: z.enum(['loading', 'synced', 'saving', 'pending', 'conflict', 'error']),
+		dirty: z.boolean(),
+		dirtyExcerpt: z.string().optional()
+	})
+	.strict();
+
+const semanticInteractionSchema = z
+	.object({
+		kind: z.enum(['focus', 'select', 'open', 'edit']),
+		resourceKind: z.enum(['note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
+		resourceId: z.string(),
+		occurredAt: z.iso.datetime()
+	})
+	.strict();
+
+/** Strict runtime boundary for browser-captured application context. */
+export const appContextSnapshotV1Schema: z.ZodType<AppContextSnapshotV1> = z
+	.object({
+		version: z.literal(1),
+		capturedAt: z.iso.datetime(),
+		client: z
+			.object({
+				locale: z.string().min(1),
+				timeZone: z.string().min(1),
+				localDate: z.iso.date(),
+				layout: z.enum(['compact', 'wide'])
+			})
+			.strict(),
+		surface: z
+			.object({
+				kind: z.enum(APP_SURFACE_KINDS),
+				presentation: z.enum(['right_panel', 'full_page']),
+				filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
+			})
+			.strict(),
+		currentProject: z.object({ id: projectIdSchema, name: z.string() }).strict().optional(),
+		activeResource: z
+			.object({
+				kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
+				id: z.string(),
+				title: z.string(),
+				projectId: projectIdSchema.optional()
+			})
+			.strict()
+			.optional(),
+		workbench: z
+			.object({
+				openTabs: z.array(noteContextSchema),
+				visiblePanes: z.array(paneContextSchema),
+				focusedNoteId: noteIdSchema.optional(),
+				otherVisibleNoteId: noteIdSchema.optional(),
+				openChatTabs: z
+					.array(
+						z
+							.object({
+								sessionKey: z.string(),
+								conversationId: z.string().min(1).optional(),
+								title: z.string()
+							})
+							.strict()
+					)
+					.optional()
+			})
+			.strict()
+			.optional(),
+		recentInteractions: z.array(semanticInteractionSchema)
+	})
+	.strict();
+
+/** Parse an external app-context snapshot before it crosses into application logic. */
+export const parseAppContextSnapshotV1 = (value: unknown): AppContextSnapshotV1 =>
+	appContextSnapshotV1Schema.parse(value);
 
 export type ProjectTransition =
 	'same_project' | 'different_project' | 'origin_unscoped' | 'screen_unscoped';

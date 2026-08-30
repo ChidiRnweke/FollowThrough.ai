@@ -6,7 +6,10 @@ import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
 const KEY = 'followthrough.notes.active-actions';
 
 /** Whatever the completion handler needs that the result itself does not carry. */
-export type NoteActionContext = Readonly<Record<string, unknown>>;
+export interface NoteActionContext {
+	readonly source?: string;
+	readonly insertAt?: number;
+}
 
 interface StoredRun {
 	readonly runId: AgentRunId;
@@ -22,8 +25,8 @@ const storedRunSchema = z.object({
 	action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
 	noteId: z.string().min(1),
 	cursor: z.string(),
-	context: z.record(z.string(), z.unknown())
-});
+	context: z.object({ source: z.string().optional(), insertAt: z.number().int().optional() }).strict()
+}).strict();
 
 const parseStoredRuns = (value: string): readonly StoredRun[] =>
 	storedRunSchema

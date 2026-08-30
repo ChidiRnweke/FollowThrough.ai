@@ -2,12 +2,13 @@ import { z } from 'zod';
 import { command } from '$app/server';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import { appContextSnapshotV1Schema } from '$lib/models/workspace';
 
 export const submitFeedback = command(
 	z.object({
 		body: z.string().min(1).max(10_000),
 		url: z.string().max(2000),
-		appContext: z.record(z.string(), z.unknown())
+		appContext: appContextSnapshotV1Schema
 	}),
 	async (input) => {
 		const actor = requestActor();
