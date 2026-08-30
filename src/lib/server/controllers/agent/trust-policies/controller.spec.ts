@@ -9,7 +9,6 @@ const policy = (overrides: Partial<TrustPolicy> = {}): TrustPolicy => ({
 	userId: testActor().userId,
 	pipeline: 'extract_promises',
 	autoAcceptEnabled: false,
-	conditions: {},
 	createdAt: testNow,
 	updatedAt: testNow,
 	...overrides
@@ -27,8 +26,7 @@ class FakeTrustPolicyStore implements TrustPolicyStore {
 			userId: actor.userId,
 			pipeline: input.pipeline,
 			autoAcceptEnabled: input.autoAcceptEnabled,
-			minimumConfidence: input.minimumConfidence,
-			conditions: {}
+			minimumConfidence: input.minimumConfidence
 		});
 		this.policies = [
 			...this.policies.filter(

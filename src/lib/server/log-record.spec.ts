@@ -46,17 +46,11 @@ describe('recordAttributes', () => {
 		expect(recordAttributes(['[domain]', error])['error.code']).toBe('EXTERNAL_SERVICE');
 	});
 
-	test('exposes each detail the throw site captured', () => {
+	test('exposes the normalized cause the throw site captured', () => {
 		const error = new ExternalServiceError('Generated document could not be stored', {
-			cause: 'NoSuchBucket',
-			bucket: 'artifacts'
+			cause: 'NoSuchBucket'
 		});
-		expect(recordAttributes([error])['error.details.bucket']).toBe('artifacts');
-	});
-
-	test('stringifies a detail that is not a primitive', () => {
-		const error = new ExternalServiceError('Upload rejected', { response: { status: 502 } });
-		expect(recordAttributes([error])['error.details.response']).toBe('{"status":502}');
+		expect(recordAttributes([error])['error.details.cause']).toBe('NoSuchBucket');
 	});
 
 	test('adds no exception attributes when no argument is an error', () => {

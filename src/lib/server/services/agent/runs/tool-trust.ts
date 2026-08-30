@@ -36,7 +36,6 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 					userId: actor.userId,
 					pipeline,
 					autoAcceptEnabled: false,
-					conditions: {},
 					createdAt: now(),
 					updatedAt: now()
 				}
@@ -52,7 +51,6 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 			...(input.minimumConfidence !== undefined
 				? { minimumConfidence: input.minimumConfidence }
 				: {}),
-			conditions: existing?.conditions ?? {},
 			createdAt: existing?.createdAt ?? timestamp,
 			updatedAt: timestamp
 		});

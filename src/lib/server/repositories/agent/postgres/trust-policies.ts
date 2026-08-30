@@ -36,7 +36,6 @@ export class TrustPolicyRecords implements TrustPolicyRepository {
 				pipeline: policy.pipeline,
 				autoAcceptEnabled: policy.autoAcceptEnabled,
 				minimumConfidence: policy.minimumConfidence,
-				conditions: policy.conditions as Record<string, unknown>,
 				createdAt: new Date(policy.createdAt),
 				updatedAt: new Date(policy.updatedAt)
 			})
@@ -45,7 +44,6 @@ export class TrustPolicyRecords implements TrustPolicyRepository {
 				set: {
 					autoAcceptEnabled: policy.autoAcceptEnabled,
 					minimumConfidence: policy.minimumConfidence,
-					conditions: policy.conditions as Record<string, unknown>,
 					updatedAt: new Date(policy.updatedAt)
 				}
 			})

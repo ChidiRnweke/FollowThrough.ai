@@ -25,7 +25,6 @@ describe('Trust policy invariants', () => {
 				userId: testActor().userId,
 				pipeline: 'reference',
 				autoAcceptEnabled: true,
-				conditions: {},
 				createdAt: testNow,
 				updatedAt: testNow
 			}
@@ -43,7 +42,6 @@ describe('Trust policy invariants', () => {
 				pipeline: 'relate',
 				autoAcceptEnabled: true,
 				minimumConfidence: 80 as never,
-				conditions: {},
 				createdAt: testNow,
 				updatedAt: testNow
 			}
