@@ -153,7 +153,7 @@ produce.
     `withoutInlineImages` walk with its `JSON.stringify(...).includes` guard, one
     `no-json-parse-cast` violation in `buffer.ts`, and the fake's `snapshot as AgentSessionItem[]`.
     Fifteen `Record<string, unknown>` occurrences in the strict layers go with them.
-- [ ] **TN-24: Normalize all provider stream events before reasoning logic**
+- [ ] **TN-24: Normalize all provider stream events before reasoning logic** — IN PROGRESS (claude)
   - [ ] Replace remaining raw probes with closed event schemas.
   - [ ] Cover `callId > call_id > id`, sole-active fallback, legacy `use_tool`, replay, and approval
         recovery.
@@ -161,6 +161,15 @@ produce.
 ### Phase 3 — Exhaustive agent tool contracts
 
 - [ ] **TN-30: Build the authoritative `AgentToolContractMap` in the agent model barrel**
+  - [ ] Key totality: the map is a mapped type over each controller's methods, so a new method
+        without a contract entry is a type error (the `AgentToolCoverage` precedent).
+  - [ ] Value correspondence: each entry's argument and output schemas are derived from — or
+        type-level-asserted against — the controller method's own signature, so a change to the
+        producer is a compile error at the registry. Key totality without value correspondence is
+        a checklist, not enforcement: a hand-written entry that matched yesterday's return type
+        still compiles after the producer changes, which re-creates the TN-14 failure mode — a
+        schema agreeing with itself, not with its producer.
+  - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
 - [ ] **TN-31: Derive generic server definitions, executor calls, events, and pending decisions**
 - [ ] **TN-32: Parse client event-stream JSON into correlated tool activities**
 - [x] **TN-33: Replace client record probes with tool-specific typed projections**
