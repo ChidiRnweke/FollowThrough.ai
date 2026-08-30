@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import type { PersistedSessionItem } from './session-item';
+import { AgentProviderFailure } from './agent-runs';
+import {
+	readAgentPayload,
+	readAgentPayloadObject,
+	type AgentPayload,
+	type AgentPayloadObject
+} from './payload';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -137,7 +144,12 @@ export interface Message {
 
 /** What every tool call carries, whatever became of it. */
 interface ToolActivityBase {
-	readonly callId: string;
+	/**
+	 * Absent on an outcome the provider reported without an identifier that the
+	 * run could not correlate either. The client settles such a row by name and
+	 * recency, which it can only do if the absence survives the journal.
+	 */
+	readonly callId?: string;
 	readonly name: string;
 	readonly input: Readonly<Record<string, unknown>>;
 }
@@ -772,7 +784,14 @@ export type AgentEvent =
 	  }
 	| {
 			readonly type: 'tool_completed';
-			readonly callId: string;
+			/**
+			 * Absent when the provider reported an outcome without an identifier and
+			 * the run could not correlate it either — several calls were in flight,
+			 * or none was. The client settles such a row by name and recency
+			 * (`matchToolActivity`), which it can only do if the server says the id is
+			 * missing rather than spelling it `''`.
+			 */
+			readonly callId?: string;
 			readonly name: string;
 			readonly output?: unknown;
 			readonly failure?: string;
@@ -811,6 +830,272 @@ export type AgentEvent =
 			readonly model?: string;
 	  }
 	| { readonly type: 'resources_stale'; readonly resources: readonly string[] };
+
+/**
+ * What the provider streamed, as this application acts on it.
+ *
+ * The runner's events used to be read through a structural stand-in: a
+ * `type: string` discriminant, an item whose only method was `toJSON(): unknown`,
+ * nine `unknown` fields behind a schema of nine `z.json()` calls, and a
+ * cast-probe onto `Record<string, unknown>` to reach reasoning text. None of it
+ * checked anything.
+ *
+ * The call id was the expensive part. It was resolved as
+ * `String(item?.callId ?? raw.callId ?? raw.call_id ?? raw.id ?? '')`, so a
+ * provider that omitted the id and a provider that sent a number both reached
+ * the approval matcher as a string — one as `''`, the other as `'[object
+ * Object]'` — and the resume at an approval checkpoint decides which parked call
+ * a user's decision applies to by comparing exactly that value. Two calls
+ * missing an id compared equal.
+ *
+ * This union is the decision about what a stream event is. It is parsed once, at
+ * the top of the run loop, and every mapper below it receives a total value.
+ * `ignored` is an arm rather than `undefined` for the reason
+ * {@link UnrecognisedSessionItem} is one: the SDK version is not pinned, and a
+ * reader must not be able to mistake "there is nothing to do here" for "this
+ * parsed".
+ */
+export type ProviderStreamEvent =
+	| { readonly type: 'tool_called'; readonly call: ProviderToolCall }
+	| { readonly type: 'tool_output'; readonly call: ProviderToolCall }
+	/** One completed reasoning item, which providers that stream no deltas send instead. */
+	| { readonly type: 'reasoning_item'; readonly text: string }
+	| { readonly type: 'reasoning_delta'; readonly text: string }
+	| { readonly type: 'text_delta'; readonly text: string }
+	| { readonly type: 'ignored' };
+
+/**
+ * A tool's return value: absent, readable, or unreadable.
+ *
+ * Three arms rather than an optional payload because they are three different
+ * facts, and "the tool returned nothing" reported when "the tool returned
+ * something nobody here can read" happened is the case ADR 0015 exists for. The
+ * mapper is the caller that knows what to do with each, so the disjunction stops
+ * here rather than being resolved into a default.
+ */
+export type ProviderToolOutput =
+	| { readonly kind: 'none' }
+	| { readonly kind: 'value'; readonly value: AgentPayload }
+	| { readonly kind: 'corrupt'; readonly message: string };
+
+/** One tool call as the provider described it, with the three id spellings resolved. */
+export interface ProviderToolCall {
+	/**
+	 * Absent when the provider reported the call without one, which happens on
+	 * outputs. Never `''`: the caller decides what to do about a call it cannot
+	 * name, and it cannot decide that if absence is spelled as a value.
+	 */
+	readonly callId: string | undefined;
+	readonly name: string;
+	readonly arguments: AgentPayloadObject;
+	readonly output: ProviderToolOutput;
+}
+
+/**
+ * The value a tool returned, taken out of the item without validation so
+ * {@link readAgentPayload} can classify it.
+ *
+ * A `z.record`-shaped JSON schema accepts a `Date` — which has no enumerable
+ * keys — and parses it to `{}`. That is the silent wrong answer `payload.ts` is
+ * hand-written to avoid, and it would land on the one input a type cannot warn
+ * about, so the value has to reach that reader untouched.
+ */
+const providerOutputValue = z.custom<unknown>(() => true);
+
+const providerTextPartSchema = z.object({ text: z.string() });
+
+/**
+ * `callId`, then `call_id`, then `id`. Each is a string or it is not there:
+ * a number or an object in that position is an id this code cannot use, and
+ * coercing it produced `'[object Object]'`, which matches nothing and says so
+ * nowhere.
+ */
+const providerCallIdentity = {
+	callId: z.string().optional(),
+	call_id: z.string().optional(),
+	id: z.string().optional()
+};
+
+const providerRawItemSchema = z.object({
+	name: z.string().optional(),
+	arguments: z.string().optional(),
+	output: providerOutputValue.optional(),
+	rawContent: z.array(providerTextPartSchema).optional(),
+	content: z.array(providerTextPartSchema).optional(),
+	summary: z.array(providerTextPartSchema).optional(),
+	...providerCallIdentity
+});
+
+/**
+ * The stream item, read off its declared fields.
+ *
+ * `z.object` strips what it does not name rather than rejecting it: providers
+ * and the SDK both add fields, and the closed thing here is the arm set, not the
+ * field set. `rawItem` is a declared property on every `RunItem` subclass and
+ * `toJSON()` returns that same `rawItem`, so the serialised path the old reader
+ * kept beside it was reading one field twice — and reading it meant calling a
+ * method on a value nothing had parsed.
+ */
+const providerItemSchema = z.object({
+	rawItem: providerRawItemSchema.optional(),
+	toolName: z.string().optional(),
+	callId: z.string().optional(),
+	arguments: z.string().optional(),
+	output: providerOutputValue.optional()
+});
+
+type ProviderItem = z.infer<typeof providerItemSchema>;
+
+const runItemStreamEventSchema = z.object({
+	type: z.literal('run_item_stream_event'),
+	name: z.string(),
+	item: providerItemSchema
+});
+
+/** The OpenRouter chunk that carries token-level reasoning beside the visible text. */
+const providerReasoningChunkSchema = z.object({
+	choices: z
+		.array(z.object({ delta: z.object({ reasoning: z.string().nullish() }).optional() }))
+		.optional()
+});
+
+const rawModelStreamEventSchema = z.object({
+	type: z.literal('raw_model_stream_event'),
+	data: z.union([
+		z.object({ type: z.literal('output_text_delta'), delta: z.string() }),
+		z.object({ type: z.literal('model'), event: providerReasoningChunkSchema })
+	])
+});
+
+const providerToolOutput = (value: unknown): ProviderToolOutput => {
+	if (value === undefined || value === null) return { kind: 'none' };
+	const read = readAgentPayload(value);
+	return read.kind === 'valid'
+		? { kind: 'value', value: read.value }
+		: { kind: 'corrupt', message: read.message };
+};
+
+/**
+ * Tool arguments, whether the provider sent them as JSON text or as an object.
+ *
+ * Both failures are fatal to the turn and always have been: a call whose
+ * arguments nobody can read is a call that must not be presented as though it
+ * ran.
+ */
+const providerArguments = (value: unknown): AgentPayloadObject => {
+	if (value === undefined) return {};
+	let candidate: unknown = value;
+	if (typeof value === 'string') {
+		try {
+			candidate = JSON.parse(value);
+		} catch (error) {
+			throw new AgentProviderFailure(
+				'The provider returned malformed JSON tool arguments',
+				'MALFORMED_TOOL_ARGUMENTS',
+				false,
+				{ cause: error }
+			);
+		}
+	}
+	const read = readAgentPayloadObject(candidate);
+	if (read.kind === 'corrupt')
+		throw new AgentProviderFailure(
+			'The provider returned tool arguments that were not an object',
+			'MALFORMED_TOOL_ARGUMENTS',
+			false,
+			{ cause: new Error(read.message) }
+		);
+	return read.value;
+};
+
+const dispatchedCall = (
+	name: string,
+	args: AgentPayloadObject
+): { readonly name: string; readonly arguments: AgentPayloadObject } | undefined => {
+	if (name !== 'use_tool') return undefined;
+	const inner = args.name;
+	if (typeof inner !== 'string') return undefined;
+	const payload = args.payload;
+	return {
+		name: inner,
+		arguments: payload === undefined ? {} : providerArguments(payload)
+	};
+};
+
+/**
+ * The tool a legacy `use_tool` envelope dispatches to, or nothing when the call
+ * is already a direct one.
+ *
+ * Conversations that predate the direct-dispatch surface still hold these
+ * envelopes, and a tool discovered inside one has to stay callable in later
+ * turns or the model reads its own transcript, repeats a call that worked a
+ * message ago, and gets `Tool not found`.
+ */
+export const unwrapDispatchedToolCall = (
+	name: string,
+	args: string | undefined
+): { readonly name: string; readonly arguments: AgentPayloadObject } | undefined =>
+	dispatchedCall(name, providerArguments(args));
+
+const providerReasoningText = (item: ProviderItem): string => {
+	const raw = item.rawItem;
+	const parts = raw?.rawContent ?? raw?.content ?? raw?.summary;
+	if (!parts) return '';
+	return parts
+		.map((part) => part.text)
+		.filter((text) => text.length > 0)
+		.join('\n');
+};
+
+const providerCall = (item: ProviderItem): ProviderToolCall => {
+	const raw = item.rawItem;
+	const name = item.toolName ?? raw?.name ?? 'tool';
+	const args = providerArguments(item.arguments ?? raw?.arguments);
+	const dispatched = dispatchedCall(name, args);
+	return {
+		callId: item.callId ?? raw?.callId ?? raw?.call_id ?? raw?.id,
+		name: dispatched?.name ?? name,
+		arguments: dispatched?.arguments ?? args,
+		output: providerToolOutput(item.output ?? raw?.output)
+	};
+};
+
+/**
+ * One stream event as an arm of {@link ProviderStreamEvent}.
+ *
+ * Raises only for arguments nobody can read; anything this union does not model
+ * settles as `ignored`, so a newer SDK event type cannot fail a turn.
+ */
+export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent => {
+	const runItem = runItemStreamEventSchema.safeParse(event);
+	if (runItem.success) {
+		const { name, item } = runItem.data;
+		if (name === 'tool_called') return { type: 'tool_called', call: providerCall(item) };
+		if (name === 'tool_output') return { type: 'tool_output', call: providerCall(item) };
+		if (name !== 'reasoning_item_created') return { type: 'ignored' };
+		const text = providerReasoningText(item);
+		return text ? { type: 'reasoning_item', text } : { type: 'ignored' };
+	}
+	const raw = rawModelStreamEventSchema.safeParse(event);
+	if (!raw.success) return { type: 'ignored' };
+	const { data } = raw.data;
+	if (data.type === 'output_text_delta') return { type: 'text_delta', text: data.delta };
+	const reasoning = data.event.choices?.[0]?.delta?.reasoning;
+	return reasoning ? { type: 'reasoning_delta', text: reasoning } : { type: 'ignored' };
+};
+
+/**
+ * A tool call held outside the stream — a `RunState` interruption parked on an
+ * approval, which is not a stream event and never reaches the loop above.
+ *
+ * Absent when the value is not a tool item at all. The caller decides what that
+ * means: for an approval it means a parked call nothing can be matched against,
+ * which is a failure rather than a call to skip.
+ */
+export const parseProviderToolCall = (item: unknown): ProviderToolCall | undefined => {
+	const parsed = providerItemSchema.safeParse(item);
+	return parsed.success ? providerCall(parsed.data) : undefined;
+};
 
 export interface DecideAgentRunInput {
 	readonly runId: AgentRunId;

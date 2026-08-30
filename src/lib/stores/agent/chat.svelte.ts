@@ -719,12 +719,17 @@ export class ChatStore {
 	): Promise<void> {
 		if (this.deciding) return;
 		const runId = tools.find((tool) => tool.runId)?.runId;
-		if (!runId || tools.length === 0) return;
+		// A call the run could not name is a call the server cannot match a decision
+		// to, so it is not sent. Parked approvals always carry one.
+		const callIds = tools
+			.map((tool) => tool.callId)
+			.filter((callId): callId is string => callId !== undefined);
+		if (!runId || callIds.length === 0) return;
 		this.deciding = true;
 		try {
 			const snapshot = await this.transport.decideMany({
 				runId: runId as AgentRunId,
-				callIds: tools.map((tool) => tool.callId),
+				callIds,
 				decision
 			});
 			// Replaced, not edited: an approved call is `running` and a refused one is

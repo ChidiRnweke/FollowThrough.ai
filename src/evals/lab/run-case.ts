@@ -192,15 +192,20 @@ function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly 
 			continue;
 		}
 		if (event.type === 'tool_completed') {
-			const started = calls.get(event.callId);
-			calls.set(event.callId, {
-				callId: event.callId,
+			// A completion the run could not name settles no call here. Correlating it
+			// by guesswork would attribute an outcome to a call that may not be its
+			// own, and an eval reads these records as evidence.
+			const { callId } = event;
+			if (callId === undefined) continue;
+			const started = calls.get(callId);
+			calls.set(callId, {
+				callId,
 				name: started?.name ?? event.name,
 				arguments: started?.arguments ?? {},
 				...(event.output === undefined ? {} : { output: event.output }),
 				...(event.failure ? { failure: event.failure } : {})
 			});
-			if (!started) order.push(event.callId);
+			if (!started) order.push(callId);
 			continue;
 		}
 		if (event.type === 'approval_required') {

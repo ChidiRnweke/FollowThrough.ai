@@ -399,7 +399,7 @@ function executionIntervals(result: AgentRunResult): Map<string, { start: Date; 
 	for (const record of result.events) {
 		const { event, createdAt } = record;
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		if (event.type === 'tool_completed') {
+		if (event.type === 'tool_completed' && event.callId !== undefined) {
 			const start = started.get(event.callId);
 			if (start) intervals.set(event.name, { start, end: createdAt });
 		}
@@ -564,7 +564,7 @@ function parallelSameTool(
 	for (const record of result.events) {
 		const { event, createdAt } = record;
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		if (event.type === 'tool_completed') {
+		if (event.type === 'tool_completed' && event.callId !== undefined) {
 			const start = started.get(event.callId);
 			if (start) intervals.push({ name: event.name, start, end: createdAt });
 		}

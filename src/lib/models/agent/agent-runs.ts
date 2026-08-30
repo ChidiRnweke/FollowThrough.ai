@@ -21,7 +21,9 @@ type AgentEvent =
 	  }
 	| {
 			readonly type: 'tool_completed';
-			readonly callId: string;
+			// Absent when the provider reported an outcome without an identifier and
+			// the run could not correlate it; see the note on the domain union.
+			readonly callId?: string;
 			readonly name: string;
 			readonly output?: unknown;
 			readonly failure?: string;

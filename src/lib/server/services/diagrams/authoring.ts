@@ -15,10 +15,12 @@ import type {
 	AgentRunId,
 	Conversation,
 	ConversationId,
+	ProviderStreamEvent,
 	RunAgentInput,
 	ToolActivity,
 	WorkflowRunContext
 } from '$lib/models/agent';
+import { parseProviderStreamEvent } from '$lib/models/agent';
 import type {
 	ConvertInlineMermaidInput,
 	Diagram,
@@ -103,7 +105,7 @@ type DiagramModelResolver = (
 ) => string;
 
 interface ToolEventMapper {
-	map(event: unknown): AgentEvent | undefined;
+	map(event: ProviderStreamEvent): AgentEvent | undefined;
 }
 
 type DiagramWorkflowObserver = <T>(
@@ -584,10 +586,11 @@ export class DiagramAuthoring {
 						...(task.signal ? { signal: task.signal } : {})
 					});
 					const mapper = this.dependencies.createToolEventMapper();
-					for await (const event of stream) {
+					for await (const streamed of stream) {
 						// The provider settles the stream on abort, but a tool call already
 						// in flight can still deliver events; stop recording them.
 						task.signal?.throwIfAborted();
+						const event = parseProviderStreamEvent(streamed);
 						const toolEvent = mapper.map(event);
 						if (toolEvent?.type === 'tool_started')
 							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
@@ -616,8 +619,7 @@ export class DiagramAuthoring {
 											status: 'succeeded'
 										}
 							);
-						if (event.type === 'raw_model_stream_event' && event.data.type === 'output_text_delta')
-							assistantText += event.data.delta;
+						if (event.type === 'text_delta') assistantText += event.text;
 					}
 					await stream.completed;
 					if (!draft)

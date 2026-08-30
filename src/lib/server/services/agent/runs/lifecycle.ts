@@ -132,10 +132,14 @@ export class AgentRunLifecycle {
 				}
 				if (update.type === 'event') {
 					await this.persistEvent(run, actor, update.event);
-					if (update.event.type === 'tool_completed' && !update.event.failure) {
-						const resource = successfulMutations.get(update.event.callId);
+					const settled =
+						update.event.type === 'tool_completed' && !update.event.failure
+							? update.event.callId
+							: undefined;
+					if (settled !== undefined) {
+						const resource = successfulMutations.get(settled);
 						if (resource) {
-							successfulMutations.delete(update.event.callId);
+							successfulMutations.delete(settled);
 							await this.persistEvent(run, actor, {
 								type: 'resources_stale',
 								resources: [resource]

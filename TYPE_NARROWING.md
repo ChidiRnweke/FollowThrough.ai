@@ -153,10 +153,52 @@ produce.
     `withoutInlineImages` walk with its `JSON.stringify(...).includes` guard, one
     `no-json-parse-cast` violation in `buffer.ts`, and the fake's `snapshot as AgentSessionItem[]`.
     Fifteen `Record<string, unknown>` occurrences in the strict layers go with them.
-- [ ] **TN-24: Normalize all provider stream events before reasoning logic** — IN PROGRESS (claude)
-  - [ ] Replace remaining raw probes with closed event schemas.
-  - [ ] Cover `callId > call_id > id`, sole-active fallback, legacy `use_tool`, replay, and approval
-        recovery.
+- [x] **TN-24: Normalize all provider stream events before reasoning logic**
+  - [x] `ProviderStreamEvent` in `models/agent/index.ts`, parsed once by `parseProviderStreamEvent`
+        at the top of the run loop. In the barrel rather than a sibling file because the right type
+        for a call's arguments and output is `AgentPayload` from `./payload`, and only the barrel
+        may import a sibling — a sibling would have needed a third hand-copy of the JSON type after
+        `session-item.ts`'s `SessionJson`. `ignored` is an arm rather than `undefined`, for the
+        reason `UnrecognisedSessionItem` is one.
+  - [x] Retired from `reasoning.ts`: `RawToolItem` (nine `unknown` fields behind nine `z.json()`
+        calls), `SerializedToolItem`, `ToolStreamEvent` (a `type: string` discriminant and
+        `toJSON(): unknown`), `ReasoningStreamEvent`, `callDetails`, `objectArguments`,
+        `reasoningDeltaFromChunk`, and `reasoningTextFromItem` — a cast-probe onto
+        `Record<string, unknown>`, then `as unknown`, then an inline `'text' in part` guard. The
+        `toJSON()` path went with them: `rawItem` is a declared property of every `RunItem`
+        subclass and `toJSON()` returns that same `rawItem`, so the serialised fallback was reading
+        one field twice, and reading it meant calling a method on a value nothing had parsed.
+  - [x] `callId > call_id > id`, each a string or absent. `String(… ?? '')` is gone, and with it
+        the two values it invented: `''` for an id the provider never sent, and `'[object Object]'`
+        for one it sent as an object. The approval resume compares exactly this value to decide
+        which parked call a user's decision applies to, so two id-less calls used to compare equal.
+        `parkedCall` now raises `UNIDENTIFIED_TOOL_CALL` rather than matching anything.
+  - [x] The sole-active fallback is a branch on `callId === undefined`, not on `''` being falsy.
+        With none or several calls in flight the mapper emits `tool_completed` carrying no
+        `callId`, so `callId` is now optional on that arm and on `ToolActivity` /
+        `ChatToolActivity`. This is not a new state: `matchToolActivity` was already written for
+        it and settles the row by name and recency, which is better than anything the server can
+        do. The server's job was only to stop spelling the absence as a value.
+  - [x] `unwrapDispatchedToolCall` owns the legacy `use_tool` envelope, at the parse, so no
+        consumer sees one. `services/agent/runs/tool-recovery.ts` and its spec are deleted: nothing
+        but the spec imported them, `reasoning.ts` declares its own `RecoverableToolSuggestion`
+        with `invokeVia: 'direct' | 'search_first'`, and the dead module still spoke the retired
+        `use_tool` vocabulary — two recovery vocabularies for one concept, one unreachable. Its
+        `input_schema?: unknown`, `example?: unknown` and two `as JsonSchemaShape` cast-probes go
+        with it.
+  - [x] A tool result is `ProviderToolOutput` — `none`, `value`, or `corrupt` — rather than an
+        optional payload. An unreadable result settles the row as `failed`, never as a `succeeded`
+        row carrying nothing (ADR 0015). `readAgentPayload` classifies it rather than a zod schema,
+        because `z.record` accepts a `Date` and parses it to `{}`.
+  - [x] `services/diagrams/authoring.ts` was the second consumer and its port read
+        `map(event: unknown)` — the loosest signature in the repository, loose only because
+        `ToolStreamEvent` was never exported. It takes `ProviderStreamEvent` now.
+  - [x] `provider-stream-event.spec.ts` feeds the parser the shape the SDK actually emits, with
+        the facts on `item.rawItem`. The old mapper specs passed literals whose only member was a
+        `toJSON()` — a fixture that agreed with the reader written beside it and with no real
+        event, which is the TN-14 lesson in a second place. Verified with `pnpm check`,
+        `pnpm test:architecture`, `pnpm test:unit`, `pnpm test:contracts`, `pnpm lint`, and a live
+        `pnpm test:evals:smoke` run against a real provider.
 
 ### Phase 3 — Exhaustive agent tool contracts
 
@@ -211,9 +253,11 @@ produce.
   - [x] Define the canonical producer union, exact metadata schemas, and parser in
         `models/provenance/index.ts`.
   - [x] Parse persisted rows in the DB mapper and make repository writes use the exact union.
-  - [ ] Propagate the closed shape through domain-local views and production constructors; add
+  - [x] Propagate the closed shape through domain-local views and production constructors; add
         producer and malformed-row coverage.
-  - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
+  - [x] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`. The work had
+        landed in `a153e9d` and `edccff5` but no run was recorded against it; these two boxes were
+        ticked from TN-24's gate, which covers the same tree.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
   - [x] Remove the redundant actor cast-probe from controller boundary instrumentation.
   - [x] Type DOCX image widths from the parsed ProseMirror media attributes.

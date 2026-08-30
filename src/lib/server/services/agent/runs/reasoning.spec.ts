@@ -11,8 +11,13 @@ import {
 	type StreamEvent
 } from '@openai/agents';
 import { z } from 'zod';
-import { AgentProviderFailure } from '$lib/models/agent';
-import type { AgentRunContext, ContextSelection, PreparedAgentRun } from '$lib/models/agent';
+import { AgentProviderFailure, parseProviderStreamEvent } from '$lib/models/agent';
+import type {
+	AgentRunContext,
+	ContextSelection,
+	PreparedAgentRun,
+	ProviderStreamEvent
+} from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -553,137 +558,149 @@ describe('Unknown agent tool recovery', () => {
 	});
 });
 
+/**
+ * A stream event in the shape the SDK actually emits: the facts live on
+ * `item.rawItem`, which is a declared property of every `RunItem` subclass.
+ * The literals these specs used to pass carried a `toJSON()` and nothing else,
+ * which no real event has — a fixture agreeing only with the reader written
+ * beside it.
+ */
+const streamedItem = (
+	name: 'tool_called' | 'tool_output',
+	rawItem: Readonly<Record<string, unknown>>
+): ProviderStreamEvent =>
+	parseProviderStreamEvent({ type: 'run_item_stream_event', name, item: { rawItem } });
+
+const toolCalled = (rawItem: Readonly<Record<string, unknown>>): ProviderStreamEvent =>
+	streamedItem('tool_called', { type: 'function_call', ...rawItem });
+
+const toolOutput = (rawItem: Readonly<Record<string, unknown>>): ProviderStreamEvent =>
+	streamedItem('tool_output', { type: 'function_call_result', ...rawItem });
+
+const reasoningItem = (text: string): ProviderStreamEvent =>
+	parseProviderStreamEvent({
+		type: 'run_item_stream_event',
+		name: 'reasoning_item_created',
+		item: { rawItem: { type: 'reasoning', rawContent: [{ type: 'reasoning_text', text }] } }
+	});
+
 describe('Agent tool event invariants', () => {
-	it('rejects malformed JSON tool arguments as a provider failure', () => {
-		const mapMalformedCall = () =>
-			new AgentToolEventMapper().map({
-				type: 'run_item_stream_event',
-				name: 'tool_called',
-				item: {
-					toJSON: () => ({ rawItem: { callId: 'call-bad', name: 'save_note', arguments: '{' } })
-				}
-			});
-		expect(mapMalformedCall).toThrowError(AgentProviderFailure);
-	});
-
-	it('rejects non-object tool arguments as a provider failure', () => {
-		const mapArrayArguments = () =>
-			new AgentToolEventMapper().map({
-				type: 'run_item_stream_event',
-				name: 'tool_called',
-				item: {
-					toJSON: () => ({ rawItem: { callId: 'call-bad', name: 'save_note', arguments: '[]' } })
-				}
-			});
-		expect(mapArrayArguments).toThrowError(AgentProviderFailure);
-	});
-
 	it('maps an SDK tool call to a domain start event', () => {
-		const event = new AgentToolEventMapper().map({
-			type: 'run_item_stream_event',
-			name: 'tool_called',
-			item: { toJSON: () => ({ rawItem: { callId: 'call-1', name: 'relate_selection' } }) }
-		});
+		const event = new AgentToolEventMapper().map(
+			toolCalled({ callId: 'call-1', name: 'relate_selection' })
+		);
 		expect(event).toEqual({
 			type: 'tool_started',
 			callId: 'call-1',
 			name: 'relate_selection',
-			arguments: {},
-			output: undefined
+			arguments: {}
 		});
+	});
+
+	it('refuses to key a call the provider opened without an identifier', () => {
+		const mapAnonymousCall = () =>
+			new AgentToolEventMapper().map(toolCalled({ name: 'save_note' }));
+		expect(mapAnonymousCall).toThrowError(AgentProviderFailure);
 	});
 
 	it('preserves the tool name when mapping its SDK output event', () => {
 		const mapper = new AgentToolEventMapper();
-		mapper.map({
-			type: 'run_item_stream_event',
-			name: 'tool_called',
-			item: { toJSON: () => ({ rawItem: { callId: 'call-1', name: 'find_references' } }) }
-		});
-		const event = mapper.map({
-			type: 'run_item_stream_event',
-			name: 'tool_output',
-			item: { toJSON: () => ({ rawItem: { callId: 'call-1' } }) }
-		});
-		expect(event).toEqual({
-			type: 'tool_completed',
-			callId: 'call-1',
-			name: 'find_references'
-		});
+		mapper.map(toolCalled({ callId: 'call-1', name: 'find_references' }));
+		const event = mapper.map(toolOutput({ callId: 'call-1' }));
+		expect(event).toEqual({ type: 'tool_completed', callId: 'call-1', name: 'find_references' });
 	});
 
 	it('maps a controller failure returned by the tool boundary', () => {
-		const event = new AgentToolEventMapper().map({
-			type: 'run_item_stream_event',
-			name: 'tool_output',
-			item: {
-				toJSON: () => ({
-					rawItem: { callId: 'call-2', name: 'create_note', output: '{"failure":"Denied"}' }
-				})
-			}
-		});
+		const event = new AgentToolEventMapper().map(
+			toolOutput({ callId: 'call-2', name: 'create_note', output: '{"failure":"Denied"}' })
+		);
 		expect(event).toMatchObject({ type: 'tool_completed', callId: 'call-2', failure: 'Denied' });
 	});
 
-	it('presents a dispatched long-tail call as its inner action', () => {
+	it('settles an unreadable tool result as a failure rather than an empty success', () => {
 		const event = new AgentToolEventMapper().map({
-			type: 'run_item_stream_event',
-			name: 'tool_called',
-			item: {
-				toJSON: () => ({
-					rawItem: {
-						callId: 'call-3',
-						name: 'use_tool',
-						arguments: JSON.stringify({
-							name: 'create_note',
-							payload: { title: 'Decision log' }
-						})
-					}
-				})
+			type: 'tool_output',
+			call: {
+				callId: 'call-9',
+				name: 'read_note',
+				arguments: {},
+				output: { kind: 'corrupt', message: 'root.when is a Date' }
 			}
 		});
+		expect(event).toMatchObject({
+			type: 'tool_completed',
+			failure: expect.stringContaining('Date')
+		});
+	});
+
+	it('presents a dispatched long-tail call as its inner action', () => {
+		const event = new AgentToolEventMapper().map(
+			toolCalled({
+				callId: 'call-3',
+				name: 'use_tool',
+				arguments: JSON.stringify({ name: 'create_note', payload: { title: 'Decision log' } })
+			})
+		);
 		expect(event).toEqual({
 			type: 'tool_started',
 			callId: 'call-3',
 			name: 'create_note',
-			arguments: { title: 'Decision log' },
-			output: undefined
+			arguments: { title: 'Decision log' }
 		});
 	});
 
 	it('preserves the inner action name on dispatched tool output', () => {
 		const mapper = new AgentToolEventMapper();
-		mapper.map({
-			type: 'run_item_stream_event',
-			name: 'tool_called',
-			item: {
-				toJSON: () => ({
-					rawItem: {
-						callId: 'call-4',
-						name: 'use_tool',
-						arguments: JSON.stringify({ name: 'save_note', payload: { note: {} } })
-					}
-				})
-			}
-		});
-		const event = mapper.map({
-			type: 'run_item_stream_event',
-			name: 'tool_output',
-			item: { toJSON: () => ({ rawItem: { callId: 'call-4', name: 'use_tool' } }) }
-		});
+		mapper.map(
+			toolCalled({
+				callId: 'call-4',
+				name: 'use_tool',
+				arguments: JSON.stringify({ name: 'save_note', payload: { note: {} } })
+			})
+		);
+		const event = mapper.map(toolOutput({ callId: 'call-4', name: 'use_tool' }));
 		expect(event).toEqual({ type: 'tool_completed', callId: 'call-4', name: 'save_note' });
+	});
+
+	it('settles an outcome without an id onto the one call in flight', () => {
+		const mapper = new AgentToolEventMapper();
+		mapper.map(toolCalled({ callId: 'call-5', name: 'search_notes' }));
+		const event = mapper.map(toolOutput({ name: 'search_notes' }));
+		expect(event).toEqual({ type: 'tool_completed', callId: 'call-5', name: 'search_notes' });
+	});
+
+	it('reports no call id when an outcome without one meets several calls in flight', () => {
+		const mapper = new AgentToolEventMapper();
+		mapper.map(toolCalled({ callId: 'call-6', name: 'search_notes' }));
+		mapper.map(toolCalled({ callId: 'call-7', name: 'read_note' }));
+		const event = mapper.map(toolOutput({ name: 'read_note' }));
+		expect(event).toEqual({ type: 'tool_completed', name: 'read_note' });
+	});
+
+	it('reports no call id when an outcome without one meets no call in flight', () => {
+		const event = new AgentToolEventMapper().map(toolOutput({ name: 'read_note' }));
+		expect(event).toEqual({ type: 'tool_completed', name: 'read_note' });
+	});
+
+	it('does not settle a second call onto the first when the outcome names its own', () => {
+		const mapper = new AgentToolEventMapper();
+		mapper.map(toolCalled({ callId: 'call-8', name: 'search_notes' }));
+		const event = mapper.map(toolOutput({ callId: 'call-unknown', name: 'read_note' }));
+		expect(event).toEqual({ type: 'tool_completed', callId: 'call-unknown', name: 'read_note' });
 	});
 });
 
 describe('Agent reasoning event invariants', () => {
 	it('maps reasoning on a raw provider chunk to a delta event', () => {
-		const event = new AgentReasoningEventMapper().map({
-			type: 'raw_model_stream_event',
-			data: {
-				type: 'model',
-				event: { choices: [{ delta: { reasoning: 'Let me check the workspace first.' } }] }
-			}
-		});
+		const event = new AgentReasoningEventMapper().map(
+			parseProviderStreamEvent({
+				type: 'raw_model_stream_event',
+				data: {
+					type: 'model',
+					event: { choices: [{ delta: { reasoning: 'Let me check the workspace first.' } }] }
+				}
+			})
+		);
 		expect(event).toEqual({
 			type: 'reasoning_delta',
 			text: 'Let me check the workspace first.'
@@ -691,86 +708,51 @@ describe('Agent reasoning event invariants', () => {
 	});
 
 	it('ignores raw chunks without reasoning', () => {
-		const event = new AgentReasoningEventMapper().map({
-			type: 'raw_model_stream_event',
-			data: { type: 'model', event: { choices: [{ delta: { content: 'visible text' } }] } }
-		});
+		const event = new AgentReasoningEventMapper().map(
+			parseProviderStreamEvent({
+				type: 'raw_model_stream_event',
+				data: { type: 'model', event: { choices: [{ delta: { content: 'visible text' } }] } }
+			})
+		);
 		expect(event).toBeUndefined();
 	});
 
 	it('dedupes the completed reasoning item after streamed deltas', () => {
 		const mapper = new AgentReasoningEventMapper();
-		mapper.map({
-			type: 'raw_model_stream_event',
-			data: { type: 'model', event: { choices: [{ delta: { reasoning: 'Thinking…' } }] } }
-		});
-		const event = mapper.map({
-			type: 'run_item_stream_event',
-			name: 'reasoning_item_created',
-			item: {
-				toJSON: () => ({
-					rawItem: {
-						type: 'reasoning',
-						rawContent: [{ type: 'reasoning_text', text: 'Thinking…' }]
-					}
-				})
-			}
-		});
+		mapper.map({ type: 'reasoning_delta', text: 'Thinking…' });
+		const event = mapper.map(reasoningItem('Thinking…'));
 		expect(event).toBeUndefined();
 	});
 
 	it('emits the completed reasoning item when no deltas were streamed', () => {
-		const event = new AgentReasoningEventMapper().map({
-			type: 'run_item_stream_event',
-			name: 'reasoning_item_created',
-			item: {
-				toJSON: () => ({
-					rawItem: {
-						type: 'reasoning',
-						rawContent: [{ type: 'reasoning_text', text: 'The user wants a note.' }]
-					}
-				})
-			}
-		});
+		const event = new AgentReasoningEventMapper().map(reasoningItem('The user wants a note.'));
 		expect(event).toEqual({ type: 'reasoning_delta', text: 'The user wants a note.' });
 	});
 
 	it('emits nothing for a reasoning item without text', () => {
-		const event = new AgentReasoningEventMapper().map({
-			type: 'run_item_stream_event',
-			name: 'reasoning_item_created',
-			item: { toJSON: () => ({ rawItem: { type: 'reasoning', content: [] } }) }
-		});
+		const event = new AgentReasoningEventMapper().map(
+			parseProviderStreamEvent({
+				type: 'run_item_stream_event',
+				name: 'reasoning_item_created',
+				item: { rawItem: { type: 'reasoning', content: [] } }
+			})
+		);
 		expect(event).toBeUndefined();
 	});
 
 	it('resumes emitting items after a deduped generation', () => {
 		const mapper = new AgentReasoningEventMapper();
-		mapper.map({
-			type: 'raw_model_stream_event',
-			data: { type: 'model', event: { choices: [{ delta: { reasoning: 'Step one.' } }] } }
-		});
-		mapper.map({
-			type: 'run_item_stream_event',
-			name: 'reasoning_item_created',
-			item: {
-				toJSON: () => ({
-					rawItem: {
-						type: 'reasoning',
-						rawContent: [{ type: 'reasoning_text', text: 'Step one.' }]
-					}
-				})
-			}
-		});
-		const event = mapper.map({
-			type: 'run_item_stream_event',
-			name: 'reasoning_item_created',
-			item: {
-				toJSON: () => ({
+		mapper.map({ type: 'reasoning_delta', text: 'Step one.' });
+		mapper.map(reasoningItem('Step one.'));
+		const event = mapper.map(
+			parseProviderStreamEvent({
+				type: 'run_item_stream_event',
+				name: 'reasoning_item_created',
+				item: {
 					rawItem: { type: 'reasoning', summary: [{ type: 'summary_text', text: 'Step two.' }] }
-				})
-			}
-		});
+				}
+			})
+		);
 		expect(event).toEqual({ type: 'reasoning_delta', text: 'Step two.' });
 	});
 });

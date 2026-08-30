@@ -10,7 +10,8 @@ export type ChatToolStatus = 'running' | 'approval_required' | 'succeeded' | 'fa
 
 /** What every tool row carries, whatever became of the call. */
 export interface ChatToolActivityBase {
-	readonly callId: string;
+	/** Absent when the provider reported the outcome without one; see `matchToolActivity`. */
+	readonly callId?: string;
 	readonly name: string;
 	readonly arguments: AgentPayloadObject;
 	/** The run that produced it. Restored rows from before a run existed have none. */
