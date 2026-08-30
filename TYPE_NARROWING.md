@@ -216,6 +216,7 @@ produce.
   - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
   - [x] Remove the redundant actor cast-probe from controller boundary instrumentation.
+  - [x] Type DOCX image widths from the parsed ProseMirror media attributes.
 - [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
   - [x] Parse the eval result log as a strict passed/failed union and quarantine structurally
         invalid JSON instead of trusting a cast.

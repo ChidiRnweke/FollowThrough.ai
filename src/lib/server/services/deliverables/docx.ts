@@ -26,7 +26,12 @@ import type {
 	ExportSettings,
 	ExtractedTemplateStyles
 } from '$lib/models/deliverables';
-import type { ProseMirrorDocument, ProseMirrorNode, ProseMirrorTextNode } from '$lib/models/notes';
+import type {
+	ProseMirrorDocument,
+	ProseMirrorMediaAttrs,
+	ProseMirrorNode,
+	ProseMirrorTextNode
+} from '$lib/models/notes';
 import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
@@ -250,7 +255,11 @@ function rasterDimensions(buffer: Buffer): { width: number; height: number } | u
  * (percent of the printable width, or pixels), otherwise the natural size, always
  * capped to the printable width with the aspect ratio preserved.
  */
-function bodyImageRun(dataUrl: string, widthAttr: unknown, ctx: DocxContext): ImageRun | null {
+function bodyImageRun(
+	dataUrl: string,
+	widthAttr: ProseMirrorMediaAttrs['width'],
+	ctx: DocxContext
+): ImageRun | null {
 	const parsed = parseDataUrl(dataUrl);
 	if (!parsed) return null;
 	const type = RUN_IMAGE_TYPES[parsed.mediaType];
