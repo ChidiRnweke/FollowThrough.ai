@@ -3,7 +3,6 @@
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, type TabId } from '$lib/stores/workbench/tab-ref';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { Button } from '$lib/components/ui/button';

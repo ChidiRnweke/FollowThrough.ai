@@ -1,29 +1,24 @@
 import type { NoteRef } from '$lib/models/notes';
 import type { PipelineKind } from '$lib/models/agent';
-import type { Provenance } from '$lib/models/provenance';
 import type { Suggestion, SuggestionView } from '$lib/models/suggestions';
 
-const producerNames: Record<PipelineKind, string> = {
-	extract_promises: 'Extract Promises',
-	relate: 'Relate',
-	reference: 'Reference',
-	agent: 'Agent',
-	memory: 'Memory'
-};
-
+/**
+ * A suggestion the user just watched a pipeline produce, as the tray shows it.
+ *
+ * It states the pipeline and the time, which is what the caption reads and all
+ * this side knows. It used to assemble a whole `Provenance` here — inventing a
+ * producer name per pipeline, an empty metadata bag, and omitting the source
+ * anchor, run id and model that the real record carries. The stored row was
+ * never consulted and never matched.
+ */
 export function suggestionToView(
 	suggestion: Suggestion,
 	pipeline: PipelineKind,
 	note?: NoteRef
 ): SuggestionView {
-	const provenance: Provenance = {
-		id: suggestion.provenanceId,
-		userId: suggestion.userId,
-		producerKind: pipeline === 'agent' || pipeline === 'memory' ? 'agent' : 'pipeline',
-		producerName: producerNames[pipeline],
-		pipeline,
-		metadata: {},
-		createdAt: suggestion.createdAt
+	return {
+		suggestion,
+		origin: { pipeline, createdAt: suggestion.createdAt },
+		...(note !== undefined ? { note } : {})
 	};
-	return { suggestion, provenance, ...(note !== undefined ? { note } : {}) };
 }

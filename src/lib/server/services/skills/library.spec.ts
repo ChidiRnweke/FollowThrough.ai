@@ -25,7 +25,8 @@ const setup = () => {
 			id: testProvenanceId(),
 			userId: testActor().userId,
 			producerKind: 'agent',
-			producerName: 'Agent',
+			producerName: 'Agent memory',
+			pipeline: 'memory',
 			metadata: {},
 			createdAt: testNow
 		}

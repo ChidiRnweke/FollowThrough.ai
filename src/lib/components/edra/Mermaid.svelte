@@ -16,7 +16,6 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Shapes from '@lucide/svelte/icons/shapes';
 	import X from '@lucide/svelte/icons/x';
 	import Minus from '@lucide/svelte/icons/minus';

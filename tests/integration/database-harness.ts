@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, inject } from 'vitest';
+import type { AgentRunId } from '$lib/models/agent';
 import type { Artifact, ArtifactId } from '$lib/models/deliverables';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -47,9 +48,11 @@ export const seedProvenance = async (owner: ReturnType<typeof actor>, suffix: st
 	const provenance: Provenance = {
 		id: `60000000-0000-4000-8000-${suffix.padStart(12, '0')}` as ProvenanceId,
 		userId: owner.userId,
-		producerKind: 'pipeline',
-		producerName: 'Contract',
+		producerKind: 'agent',
+		producerName: 'FollowThrough Workbench Agent',
 		pipeline: 'agent',
+		runId: `70000000-0000-4000-8000-${suffix.padStart(12, '0')}` as AgentRunId,
+		model: 'contract-harness',
 		metadata: {},
 		createdAt: now
 	};

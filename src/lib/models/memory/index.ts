@@ -1,3 +1,4 @@
+import type { SuggestionView } from '$lib/models/suggestions';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -12,8 +13,6 @@ type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
-type AgentRunId = Brand<string, 'AgentRunId'>;
-
 export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
@@ -23,13 +22,6 @@ type LocalDate = Brand<string, 'LocalDate'>;
 type Url = Brand<string, 'Url'>;
 
 type Confidence = Brand<number, 'Confidence'>;
-
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
-}
-
-type NoteKind = 'folder' | 'note' | 'skill';
 
 type TodoResponsibility = 'mine' | 'waiting_on';
 
@@ -43,57 +35,7 @@ type DiagramKind = 'mermaid' | 'drawio';
 
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 
-type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type ProducerKind = 'user' | 'pipeline' | 'agent';
-
 type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
-
-interface Note {
-	readonly id: NoteId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly parentId?: NoteId;
-	readonly kind: NoteKind;
-	readonly position: number;
-	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Provenance {
-	readonly id: ProvenanceId;
-	readonly userId: UserId;
-	readonly producerKind: ProducerKind;
-	readonly producerName: string;
-	readonly pipeline?: PipelineKind;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly runId?: AgentRunId;
-	readonly model?: string;
-	readonly metadata: Readonly<Record<string, unknown>>;
-	readonly createdAt: DateTime;
-}
 
 type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
@@ -243,15 +185,6 @@ export interface ProposeMemoryChangeInput {
 export interface ProposeMemoryChangeOutput {
 	readonly suggestion: Suggestion;
 	readonly appliedEntry?: MemoryEntry;
-}
-
-type NoteRef = Pick<Note, 'id' | 'title'>;
-
-interface SuggestionView {
-	readonly suggestion: Suggestion;
-	readonly note?: NoteRef;
-	readonly anchor?: SourceAnchor;
-	readonly provenance: Provenance;
 }
 
 export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'> {

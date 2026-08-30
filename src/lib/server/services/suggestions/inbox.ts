@@ -16,6 +16,7 @@ import type {
 	ProvenanceRepository,
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
+import { provenanceOrigin } from '$lib/models/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
 export interface Clock {
 	now(): DateTime;
@@ -96,7 +97,7 @@ export class SuggestionInbox {
 					suggestion,
 					...(note ? { note: { id: note.id, title: note.title } } : {}),
 					...(anchor ? { anchor } : {}),
-					provenance
+					origin: provenanceOrigin(provenance)
 				};
 			})
 		);

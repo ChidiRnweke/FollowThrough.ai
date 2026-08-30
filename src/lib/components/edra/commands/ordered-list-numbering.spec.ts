@@ -46,15 +46,6 @@ const paragraph = (text: string) => ({
 const itemTexts = (block: JSONBlock | undefined): string[] =>
 	(block?.content ?? []).map((item) => item.content?.[0]?.content?.[0]?.text ?? '');
 
-/** Every top-level ordered list's node range, in document order. */
-const orderedListRanges = (editor: Editor): { from: number; to: number }[] => {
-	const ranges: { from: number; to: number }[] = [];
-	editor.state.doc.forEach((node, offset) => {
-		if (node.type.name === 'orderedList') ranges.push({ from: offset, to: offset + node.nodeSize });
-	});
-	return ranges;
-};
-
 /** Every top-level paragraph's node range, in document order. */
 const paragraphRanges = (editor: Editor): { from: number; to: number }[] => {
 	const ranges: { from: number; to: number }[] = [];

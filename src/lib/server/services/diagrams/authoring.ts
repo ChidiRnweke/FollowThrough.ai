@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
+	AgentRunContext,
 	AgentModel,
 	AgentPreferences,
 	AgentRun,
@@ -15,7 +16,8 @@ import type {
 	Conversation,
 	ConversationId,
 	RunAgentInput,
-	ToolActivity
+	ToolActivity,
+	WorkflowRunContext
 } from '$lib/models/agent';
 import type {
 	ConvertInlineMermaidInput,
@@ -28,7 +30,7 @@ import type {
 } from '$lib/models/diagrams';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId, TextSelection } from '$lib/models/notes';
-import type { Provenance, ProvenanceId } from '$lib/models/provenance';
+import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 
@@ -45,7 +47,7 @@ interface AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<Readonly<Record<string, unknown>>>;
+	): Promise<AgentRunContext>;
 }
 
 interface ConversationJournal {
@@ -78,13 +80,13 @@ interface AgentRunStore {
 			conversationId: ConversationId;
 			model: string;
 			executionMode: 'auto_accept';
-			contextSnapshot: Readonly<Record<string, unknown>>;
+			contextSnapshot: WorkflowRunContext;
 		}
 	): Promise<AgentRun>;
 	updateContext(
 		actor: ActorContext,
 		runId: AgentRunId,
-		context: Readonly<Record<string, unknown>>
+		context: WorkflowRunContext
 	): Promise<AgentRun>;
 	complete(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
 	fail(actor: ActorContext, runId: AgentRunId, failure: string): Promise<AgentRun>;
@@ -264,10 +266,7 @@ export interface DiagramAgentDependencies {
 	readonly models: { list(): Promise<readonly AgentModel[]> };
 	readonly runs: AgentRunStore;
 	readonly provenance: {
-		record(
-			actor: ActorContext,
-			input: Omit<Provenance, 'id' | 'userId' | 'createdAt'>
-		): Promise<Provenance>;
+		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
 	readonly builtInSkills: { load(actor: ActorContext, key: string): Promise<Skill> };
 	readonly defaultModel: string;
@@ -471,7 +470,12 @@ export class DiagramAuthoring {
 			conversationId: conversation.id,
 			model,
 			executionMode: 'auto_accept',
-			contextSnapshot: { operation: task.operation, noteId: task.noteId }
+			contextSnapshot: {
+				kind: 'diagram',
+				state: 'unprepared',
+				operation: task.operation,
+				noteId: task.noteId
+			}
 		});
 		const provenance = await this.dependencies.provenance.record(actor, {
 			producerKind: 'agent',
@@ -489,10 +493,12 @@ export class DiagramAuthoring {
 			prompt: this.prompt(task)
 		};
 		await this.dependencies.conversations.recordUserPrompt(actor, conversation.id, input.prompt);
-		const context = {
-			...(await this.dependencies.contextBuilder.build(actor, input, {
+		const context: WorkflowRunContext = {
+			kind: 'diagram',
+			state: 'prepared',
+			context: await this.dependencies.contextBuilder.build(actor, input, {
 				provenanceId: provenance.id
-			})),
+			}),
 			conversationId: conversation.id,
 			effectiveModel: model,
 			executionMode: 'auto_accept',

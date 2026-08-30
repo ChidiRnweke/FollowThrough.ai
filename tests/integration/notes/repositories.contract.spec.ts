@@ -246,7 +246,7 @@ describe('Postgres note repository invariants', () => {
 		expect(hits.map((entry) => entry.id)).toEqual([other.note.id]);
 	});
 	it('hides a searchable note when its project is archived', async () => {
-		const { owner, project, note } = await seedNote('199');
+		const { owner, project } = await seedNote('199');
 		await new ProjectRecords(context.db).archive(owner, project.id);
 		expect(await new NoteRecords(context.db).listSearchable(owner)).toEqual([]);
 	});

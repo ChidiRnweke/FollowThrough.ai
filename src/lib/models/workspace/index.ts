@@ -1,3 +1,4 @@
+import type { Provenance } from '$lib/models/provenance';
 export type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 /** Capability-neutral contract for work that must commit or roll back as one unit. */
@@ -16,8 +17,6 @@ type TodoId = Brand<string, 'TodoId'>;
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
-
-type AgentRunId = Brand<string, 'AgentRunId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 
@@ -39,7 +38,12 @@ export interface Page<T> {
 
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 type NoteKind = 'folder' | 'note' | 'skill';
@@ -51,10 +55,6 @@ type TodoResponsibility = 'mine' | 'waiting_on';
 type TodoPriority = 'low' | 'medium' | 'high';
 
 type PromiseStrength = 'explicit' | 'implied' | 'tentative';
-
-type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type ProducerKind = 'user' | 'pipeline' | 'agent';
 
 interface User {
 	readonly id: UserId;
@@ -125,19 +125,6 @@ interface SourceAnchor {
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Provenance {
-	readonly id: ProvenanceId;
-	readonly userId: UserId;
-	readonly producerKind: ProducerKind;
-	readonly producerName: string;
-	readonly pipeline?: PipelineKind;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly runId?: AgentRunId;
-	readonly model?: string;
-	readonly metadata: Readonly<Record<string, unknown>>;
 	readonly createdAt: DateTime;
 }
 

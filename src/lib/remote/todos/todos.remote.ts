@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type { TodoId, TodoListFilter, UpdateTodoInput } from '$lib/models/todos';
+import type { TodoId } from '$lib/models/todos';
 import type { ProjectId } from '$lib/models/projects';
 import type { NoteId } from '$lib/models/notes';
 import type { LocalDate } from '$lib/models/workspace';

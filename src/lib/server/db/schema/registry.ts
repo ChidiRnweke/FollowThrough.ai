@@ -21,6 +21,7 @@ import type { ProjectTemplateStyles } from '$lib/models/projects';
 import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
 import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
 import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
@@ -280,7 +281,7 @@ export const provenance = pgTable(
 		}),
 		runId: text('run_id'),
 		model: text('model'),
-		metadata: jsonb('metadata').$type<JsonObject>().notNull().default({}),
+		metadata: jsonb('metadata').$type<Provenance['metadata']>().notNull().default({}),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('provenance_user_created_idx').on(table.userId, table.createdAt)]

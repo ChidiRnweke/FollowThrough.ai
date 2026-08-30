@@ -9,8 +9,6 @@ import type {
 	GetDiagramRevisionInput,
 	GetDiagramRevisionOutput,
 	GetProjectDiagramInput,
-	KeepStudioDiagramInput,
-	KeepStudioDiagramOutput,
 	ListProjectDiagramsInput,
 	ListProjectDiagramsOutput,
 	ListTrashedDiagramsInput,

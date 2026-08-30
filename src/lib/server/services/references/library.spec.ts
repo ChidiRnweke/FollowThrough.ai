@@ -142,6 +142,8 @@ describe('Reference management invariants', () => {
 				userId: testActor().userId,
 				producerKind: 'pipeline',
 				producerName: 'Reference',
+				pipeline: 'reference',
+				sourceAnchorId: testAnchorId(),
 				metadata: {},
 				createdAt: testNow
 			}
@@ -167,6 +169,8 @@ describe('Reference management invariants', () => {
 				userId: testActor().userId,
 				producerKind: 'pipeline',
 				producerName: 'Reference',
+				pipeline: 'reference',
+				sourceAnchorId: testAnchorId(),
 				metadata: {},
 				createdAt: testNow
 			}

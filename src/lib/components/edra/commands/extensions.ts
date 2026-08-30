@@ -81,8 +81,7 @@ function parseIsolatedMarkdown(
 	return isolatedMarkedInstance.parse(source, options);
 }
 
-let isolatedMarkdownParser: typeof marked;
-isolatedMarkdownParser = Object.assign(parseIsolatedMarkdown, marked, {
+const isolatedMarkdownParser: typeof marked = Object.assign(parseIsolatedMarkdown, marked, {
 	options: (options: MarkedOptions) => {
 		isolatedMarkedInstance.options(options);
 		return isolatedMarkdownParser;

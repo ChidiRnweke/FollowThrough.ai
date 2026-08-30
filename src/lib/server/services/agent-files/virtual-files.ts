@@ -22,7 +22,6 @@ import type {
 	AgentFile,
 	AgentFileError,
 	AgentFileId,
-	AgentFileMetadata,
 	AgentFileNextAction,
 	AgentGrepResult,
 	AgentLsResult,

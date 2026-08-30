@@ -119,7 +119,7 @@
 			</blockquote>
 		{/if}
 		<p class="provenance-caption">
-			{provenanceCaption(view.provenance, view.note?.title)}
+			{provenanceCaption(view.origin, view.note?.title)}
 		</p>
 	</Card.Content>
 	{#if suggestion.status === 'proposed' && (onaccept || onreject || onreview)}

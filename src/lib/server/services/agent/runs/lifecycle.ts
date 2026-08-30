@@ -2,18 +2,19 @@ import type { ActorContext } from '$lib/models/identity';
 import { AgentProviderFailure } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
+	AgentRunContext,
 	AgentEvent,
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
 	ConversationId,
-	ResolvedAgentRun,
+	PreparedAgentRun,
 	RunAgentInput,
 	ToolActivity
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
-import type { Provenance, ProvenanceId } from '$lib/models/provenance';
+import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
@@ -26,7 +27,7 @@ interface AgentContextBuilder {
 		actor: ActorContext,
 		input: RunAgentInput,
 		run: { provenanceId: ProvenanceId }
-	): Promise<Readonly<Record<string, unknown>>>;
+	): Promise<AgentRunContext>;
 }
 interface AgentToolExecutor {
 	execute(
@@ -44,17 +45,14 @@ interface AgentRunner {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
-		readonly context: Readonly<Record<string, unknown>>;
+		readonly context: AgentRunContext;
 		readonly decision?: AgentRunDecisionRecord;
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate>;
 }
 interface ProvenanceRecorder {
-	record(
-		actor: ActorContext,
-		input: Omit<Provenance, 'id' | 'userId' | 'createdAt'>
-	): Promise<Provenance>;
+	record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 }
 interface ConversationJournal {
 	recordToolActivity(
@@ -120,7 +118,7 @@ export class AgentRunLifecycle {
 				actor,
 				run,
 				request,
-				context: run.contextSnapshot ?? {},
+				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,
 				toolExecutor
@@ -269,12 +267,13 @@ export class AgentRunLifecycle {
 		} catch (settlementError) {
 			throw new AggregateError(
 				[error, settlementError],
-				`Agent run ${runId} failed and its failure could not be persisted`
+				`Agent run ${runId} failed and its failure could not be persisted`,
+				{ cause: settlementError }
 			);
 		}
 	}
 
-	private async prepare(runId: AgentRunId): Promise<ResolvedAgentRun | undefined> {
+	private async prepare(runId: AgentRunId): Promise<PreparedAgentRun | undefined> {
 		const transitioned = await this.deps.runs.transitionAgent(runId, 'queued', 'running', {
 			startedAt: new Date().toISOString() as DateTime
 		});
@@ -295,7 +294,7 @@ export class AgentRunLifecycle {
 			await this.deps.runs.update(actor, run);
 		}
 
-		if (!run.contextSnapshot || Object.keys(run.contextSnapshot).length === 0) {
+		if (!run.contextSnapshot) {
 			const context = await this.deps.contextBuilder.build(actor, run.inputSnapshot, {
 				provenanceId: run.provenanceId!
 			});
@@ -310,7 +309,7 @@ export class AgentRunLifecycle {
 		});
 		this.deps.eventBus.notify(run.id);
 
-		return run;
+		return run as PreparedAgentRun;
 	}
 
 	/**

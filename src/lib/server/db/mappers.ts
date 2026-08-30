@@ -9,7 +9,7 @@ import {
 	type NoteRelationship,
 	type NoteRevision
 } from '$lib/models/notes';
-import type { Provenance, SourceAnchor } from '$lib/models/provenance';
+import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
 import { parseSuggestionPayload, type Suggestion } from '$lib/models/suggestions';
@@ -98,12 +98,15 @@ export const toAnchor = (row: typeof schema.sourceAnchors.$inferSelect): SourceA
 	});
 
 export const toProvenance = (row: typeof schema.provenance.$inferSelect): Provenance =>
-	domain<Provenance>({
-		...row,
-		pipeline: row.pipeline ?? undefined,
-		sourceAnchorId: row.sourceAnchorId ?? undefined,
-		runId: row.runId ? (row.runId as Provenance['runId']) : undefined,
-		model: row.model ?? undefined,
+	parseProvenance({
+		id: row.id,
+		userId: row.userId,
+		producerKind: row.producerKind,
+		producerName: row.producerName,
+		...(row.pipeline ? { pipeline: row.pipeline } : {}),
+		...(row.sourceAnchorId ? { sourceAnchorId: row.sourceAnchorId } : {}),
+		...(row.runId ? { runId: row.runId } : {}),
+		...(row.model ? { model: row.model } : {}),
 		metadata: row.metadata,
 		createdAt: instant(row.createdAt)
 	});
@@ -206,7 +209,9 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
 
 export const toTrustPolicy = (row: typeof schema.trustPolicies.$inferSelect): TrustPolicy =>
 	domain<TrustPolicy>({
-		...row,
+		userId: row.userId,
+		pipeline: row.pipeline,
+		autoAcceptEnabled: row.autoAcceptEnabled,
 		minimumConfidence:
 			row.minimumConfidence === null
 				? undefined

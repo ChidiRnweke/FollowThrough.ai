@@ -21,8 +21,6 @@ import {
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
-import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 
 const setup = () => {
 	const diagrams = new InMemoryDiagramRepository();

@@ -48,15 +48,7 @@ export class InMemorySuggestionReader implements SuggestionLister, SuggestionVie
 	): Promise<readonly SuggestionView[]> {
 		return suggestions.map((suggestion) => ({
 			suggestion,
-			provenance: {
-				id: suggestion.provenanceId,
-				userId: actor.userId,
-				producerKind: 'agent',
-				producerName: 'Agent memory',
-				pipeline: 'memory',
-				metadata: {},
-				createdAt: suggestion.createdAt
-			}
+			origin: { pipeline: 'memory' as const, createdAt: suggestion.createdAt }
 		}));
 	}
 }

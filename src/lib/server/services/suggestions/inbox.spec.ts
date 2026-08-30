@@ -14,7 +14,8 @@ import {
 	testActor,
 	testNow,
 	testProvenanceId,
-	testSuggestionId
+	testSuggestionId,
+	testAnchorId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
@@ -29,7 +30,9 @@ const setup = () => {
 			id: testProvenanceId(),
 			userId: testActor().userId,
 			producerKind: 'pipeline',
-			producerName: 'Test',
+			producerName: 'Relate',
+			pipeline: 'relate',
+			sourceAnchorId: testAnchorId(),
 			metadata: {},
 			createdAt: testNow
 		}

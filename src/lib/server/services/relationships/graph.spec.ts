@@ -11,7 +11,8 @@ import {
 	testNoteId,
 	testNow,
 	testProjectId,
-	testProvenanceId
+	testProvenanceId,
+	testAnchorId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
@@ -85,6 +86,8 @@ describe('Relationship management invariants', () => {
 				userId: testActor().userId,
 				producerKind: 'pipeline',
 				producerName: 'Relate',
+				pipeline: 'relate',
+				sourceAnchorId: testAnchorId(),
 				metadata: {},
 				createdAt: testNow
 			}

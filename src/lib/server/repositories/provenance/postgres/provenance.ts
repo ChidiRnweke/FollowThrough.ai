@@ -23,11 +23,11 @@ export class ProvenanceRecords implements ProvenanceRepository {
 				userId: actor.userId,
 				producerKind: provenance.producerKind,
 				producerName: provenance.producerName,
-				pipeline: provenance.pipeline,
+				pipeline: 'pipeline' in provenance ? provenance.pipeline : undefined,
 				sourceAnchorId: provenance.sourceAnchorId,
-				runId: provenance.runId,
-				model: provenance.model,
-				metadata: provenance.metadata as Record<string, unknown>,
+				runId: 'runId' in provenance ? provenance.runId : undefined,
+				model: 'model' in provenance ? provenance.model : undefined,
+				metadata: provenance.metadata,
 				createdAt: new Date(provenance.createdAt)
 			})
 			.returning();

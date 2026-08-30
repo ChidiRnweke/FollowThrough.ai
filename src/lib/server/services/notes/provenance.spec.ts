@@ -19,7 +19,8 @@ describe('Provenance management invariants', () => {
 		const { service } = setup();
 		const recorded = await service.record(testActor(), {
 			producerKind: 'agent',
-			producerName: 'Agent',
+			producerName: 'Agent memory',
+			pipeline: 'memory',
 			metadata: {}
 		});
 		expect(recorded.userId).toBe(testActor().userId);
@@ -33,6 +34,7 @@ describe('Provenance management invariants', () => {
 			service.record(testActor(2), {
 				producerKind: 'pipeline',
 				producerName: 'Relate',
+				pipeline: 'relate',
 				sourceAnchorId: testAnchorId(),
 				metadata: {}
 			})

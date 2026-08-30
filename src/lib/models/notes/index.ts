@@ -1,5 +1,7 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
+import type { SuggestionView } from '$lib/models/suggestions';
+import type { Provenance } from '$lib/models/provenance';
 import { z } from 'zod';
 import type { NoteRevisionDiff } from './revision-diff';
 import type { SectionNumberingView } from './section-numbering';
@@ -24,35 +26,15 @@ type ReferenceId = Brand<string, 'ReferenceId'>;
 
 type DiagramId = Brand<string, 'DiagramId'>;
 
-type SuggestionId = Brand<string, 'SuggestionId'>;
-
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
-
-type AgentRunId = Brand<string, 'AgentRunId'>;
-
-type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
 type LocalDate = Brand<string, 'LocalDate'>;
 
 type Url = Brand<string, 'Url'>;
-
-type Confidence = Brand<number, 'Confidence'>;
-
-export interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
-}
-
-export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
-	.object({
-		type: z.literal('doc'),
-		content: z.array(z.record(z.string(), z.unknown())).optional()
-	})
-	.strict();
 
 export interface TextSelection {
 	readonly noteId: NoteId;
@@ -74,15 +56,7 @@ type PromiseStrength = 'explicit' | 'implied' | 'tentative';
 
 type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
 
-type DiagramKind = 'mermaid' | 'drawio';
-
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-
-type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type ProducerKind = 'user' | 'pipeline' | 'agent';
-
-type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
 /** A ProseMirror document plus a revision counter, the only concurrency token the sync protocol needs. */
 export interface Note {
@@ -149,19 +123,6 @@ interface SourceAnchor {
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Provenance {
-	readonly id: ProvenanceId;
-	readonly userId: UserId;
-	readonly producerKind: ProducerKind;
-	readonly producerName: string;
-	readonly pipeline?: PipelineKind;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly runId?: AgentRunId;
-	readonly model?: string;
-	readonly metadata: Readonly<Record<string, unknown>>;
 	readonly createdAt: DateTime;
 }
 
@@ -247,90 +208,6 @@ interface DrawioDiagram extends DiagramBase {
 }
 
 type Diagram = MermaidDiagram | DrawioDiagram;
-
-type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
-
-interface SuggestionBase<Kind extends SuggestionKind, Payload> {
-	readonly id: SuggestionId;
-	readonly userId: UserId;
-	readonly noteId?: NoteId;
-	readonly kind: Kind;
-	readonly status: SuggestionStatus;
-	readonly payload: Payload;
-	readonly confidence?: Confidence;
-	readonly provenanceId: ProvenanceId;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly decidedAt?: DateTime;
-	readonly expiresAt?: DateTime;
-	readonly appliedArtifactId?: string;
-	readonly isAutoAccepted: boolean;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
-
-type BacklinkSuggestion = SuggestionBase<'backlink', CreateRelationshipInput>;
-
-type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
-
-type DiagramSuggestion = SuggestionBase<
-	'diagram',
-	{
-		readonly noteId: NoteId;
-		readonly kind: DiagramKind;
-		readonly title?: string;
-		readonly source: string;
-	}
->;
-
-type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
-
-type Suggestion =
-	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
-
-type MemoryChangeOperation = 'add' | 'update' | 'remove';
-
-interface MemoryChangePayload {
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
-}
-
-interface CreateTodoInput {
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly description?: string;
-	readonly responsibility: TodoResponsibility;
-	readonly waitingOn?: string;
-	readonly dueDate?: LocalDate;
-	readonly dueDateVerbatim?: string;
-	readonly promiseStrength?: PromiseStrength;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
-interface CreateRelationshipInput {
-	readonly sourceNoteId: NoteId;
-	readonly targetNoteId: NoteId;
-	readonly kind: RelationshipKind;
-	readonly justification?: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
-interface CreateReferenceInput {
-	readonly noteId: NoteId;
-	readonly url: Url;
-	readonly title: string;
-	readonly tier: ReferenceTier;
-	readonly relevanceNote: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
 
 /** A note paired with the ETag a save must present to land without conflict. */
 export interface VersionedNote {
@@ -450,13 +327,6 @@ interface TodoView {
 	readonly originNote?: NoteRef;
 	readonly anchor?: SourceAnchor;
 	readonly provenance?: Provenance;
-}
-
-interface SuggestionView {
-	readonly suggestion: Suggestion;
-	readonly note?: NoteRef;
-	readonly anchor?: SourceAnchor;
-	readonly provenance: Provenance;
 }
 
 interface BacklinkView {
@@ -658,7 +528,571 @@ export interface CompareNoteRevisionsOutput {
 	readonly againstRevision: number;
 }
 
-export * from './prosemirror';
+/**
+ * The note document tree as a strict discriminated union over the editor's real
+ * node and mark set.
+ *
+ * The source of truth for the set is the headless schema list in
+ * `src/lib/components/edra/commands/markdown-extensions.ts` — a node or mark the
+ * editor can serialize has a member here, and anything else fails to parse
+ * (ADR 0037, ADR 0015). `mediaPlaceholder` is deliberately absent: it represents
+ * an upload still in flight and never reaches a stored document.
+ *
+ * Attribute keys are optional while their value types are strict: the editor
+ * serializes every default, but hand-built and Markdown-parsed documents may omit
+ * them, and each attribute has a documented default in its extension. Unknown
+ * keys and unknown node or mark types are what a parse rejects.
+ *
+ * This union lives in the notes domain barrel. Sibling model helpers such as
+ * `text-search.ts` keep minimal structural views rather than importing the barrel.
+ */
+
+export type ProseMirrorTextAlign = 'left' | 'center' | 'right' | 'justify';
+
+// ---------------------------------------------------------------------------
+// Marks
+// ---------------------------------------------------------------------------
+
+export interface ProseMirrorLinkAttrs {
+	readonly href?: string | null;
+	readonly target?: string | null;
+	readonly rel?: string | null;
+	readonly class?: string | null;
+}
+
+export interface ProseMirrorNoteLinkAttrs {
+	readonly noteId?: string | null;
+}
+
+export interface ProseMirrorHighlightAttrs {
+	readonly color?: string | null;
+}
+
+/** The `textStyle` mark carries what the Color and FontSize extensions hang on it. */
+export interface ProseMirrorTextStyleAttrs {
+	readonly color?: string | null;
+	readonly fontSize?: string | null;
+}
+
+export interface ProseMirrorAiHighlightAttrs {
+	readonly color?: string | null;
+}
+
+export type ProseMirrorMark =
+	| { readonly type: 'bold' }
+	| { readonly type: 'italic' }
+	| { readonly type: 'strike' }
+	| { readonly type: 'code' }
+	| { readonly type: 'underline' }
+	| { readonly type: 'subscript' }
+	| { readonly type: 'superscript' }
+	| { readonly type: 'link'; readonly attrs?: ProseMirrorLinkAttrs }
+	| { readonly type: 'noteLink'; readonly attrs?: ProseMirrorNoteLinkAttrs }
+	| { readonly type: 'highlight'; readonly attrs?: ProseMirrorHighlightAttrs }
+	| { readonly type: 'textStyle'; readonly attrs?: ProseMirrorTextStyleAttrs }
+	| { readonly type: 'ai-highlight'; readonly attrs?: ProseMirrorAiHighlightAttrs };
+
+// ---------------------------------------------------------------------------
+// Node attributes
+// ---------------------------------------------------------------------------
+
+export interface ProseMirrorMediaAttrs {
+	readonly src?: string | null;
+	readonly alt?: string | null;
+	readonly title?: string | null;
+	readonly width?: string | null;
+	readonly height?: string | null;
+	readonly align?: string | null;
+}
+
+export interface ProseMirrorAudioAttrs {
+	readonly src?: string | null;
+	readonly controls?: boolean | null;
+	readonly autoplay?: boolean | null;
+	readonly loop?: boolean | null;
+	readonly muted?: boolean | null;
+	readonly preload?: string | null;
+	readonly controlslist?: string | null;
+	readonly crossorigin?: string | null;
+	readonly disableremoteplayback?: boolean | null;
+}
+
+export interface ProseMirrorTableCellAttrs {
+	readonly colspan?: number;
+	readonly rowspan?: number;
+	readonly colwidth?: readonly number[] | null;
+	readonly style?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Nodes
+// ---------------------------------------------------------------------------
+
+export interface ProseMirrorTextNode {
+	readonly type: 'text';
+	readonly text: string;
+	readonly marks?: readonly ProseMirrorMark[];
+}
+
+export interface ProseMirrorParagraphNode {
+	readonly type: 'paragraph';
+	readonly attrs?: { readonly textAlign?: ProseMirrorTextAlign };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorHeadingNode {
+	readonly type: 'heading';
+	readonly attrs?: {
+		readonly level?: 1 | 2 | 3 | 4;
+		readonly textAlign?: ProseMirrorTextAlign;
+	};
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorBlockquoteNode {
+	readonly type: 'blockquote';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorBulletListNode {
+	readonly type: 'bulletList';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorOrderedListNode {
+	readonly type: 'orderedList';
+	readonly attrs?: { readonly start?: number; readonly type?: string | null };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorListItemNode {
+	readonly type: 'listItem';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTaskListNode {
+	readonly type: 'taskList';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTaskItemNode {
+	readonly type: 'taskItem';
+	readonly attrs?: { readonly checked?: boolean };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorCodeBlockNode {
+	readonly type: 'codeBlock';
+	readonly attrs?: { readonly language?: string | null };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTableNode {
+	readonly type: 'table';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTableRowNode {
+	readonly type: 'tableRow';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTableCellNode {
+	readonly type: 'tableCell';
+	readonly attrs?: ProseMirrorTableCellAttrs;
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTableHeaderNode {
+	readonly type: 'tableHeader';
+	readonly attrs?: ProseMirrorTableCellAttrs;
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorHorizontalRuleNode {
+	readonly type: 'horizontalRule';
+}
+
+export interface ProseMirrorHardBreakNode {
+	readonly type: 'hardBreak';
+	readonly marks?: readonly ProseMirrorMark[];
+}
+
+export interface ProseMirrorImageNode {
+	readonly type: 'image';
+	readonly attrs?: ProseMirrorMediaAttrs;
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorVideoNode {
+	readonly type: 'video';
+	readonly attrs?: ProseMirrorMediaAttrs;
+}
+
+export interface ProseMirrorAudioNode {
+	readonly type: 'audio';
+	readonly attrs?: ProseMirrorAudioAttrs;
+	readonly marks?: readonly ProseMirrorMark[];
+}
+
+export interface ProseMirrorIframeNode {
+	readonly type: 'iframe';
+	readonly attrs?: {
+		readonly src?: string;
+		readonly width?: string;
+		readonly height?: number;
+	};
+}
+
+export interface ProseMirrorMermaidNode {
+	readonly type: 'mermaid';
+	readonly attrs?: {
+		readonly width?: string;
+		readonly pendingDrawioSuggestionId?: string | null;
+	};
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorDrawioNode {
+	readonly type: 'drawio';
+	readonly attrs?: { readonly diagramId?: string | null };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorTodoNode {
+	readonly type: 'todoNode';
+	readonly attrs?: { readonly todoId?: string | null };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorCalloutNode {
+	readonly type: 'callout';
+	readonly attrs?: { readonly emoji?: string };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+export interface ProseMirrorBlockMathNode {
+	readonly type: 'blockMath';
+	readonly attrs?: { readonly latex?: string };
+}
+
+export interface ProseMirrorInlineMathNode {
+	readonly type: 'inlineMath';
+	readonly attrs?: { readonly latex?: string };
+	readonly marks?: readonly ProseMirrorMark[];
+}
+
+export type ProseMirrorNode =
+	| ProseMirrorTextNode
+	| ProseMirrorParagraphNode
+	| ProseMirrorHeadingNode
+	| ProseMirrorBlockquoteNode
+	| ProseMirrorBulletListNode
+	| ProseMirrorOrderedListNode
+	| ProseMirrorListItemNode
+	| ProseMirrorTaskListNode
+	| ProseMirrorTaskItemNode
+	| ProseMirrorCodeBlockNode
+	| ProseMirrorTableNode
+	| ProseMirrorTableRowNode
+	| ProseMirrorTableCellNode
+	| ProseMirrorTableHeaderNode
+	| ProseMirrorHorizontalRuleNode
+	| ProseMirrorHardBreakNode
+	| ProseMirrorImageNode
+	| ProseMirrorVideoNode
+	| ProseMirrorAudioNode
+	| ProseMirrorIframeNode
+	| ProseMirrorMermaidNode
+	| ProseMirrorDrawioNode
+	| ProseMirrorTodoNode
+	| ProseMirrorCalloutNode
+	| ProseMirrorBlockMathNode
+	| ProseMirrorInlineMathNode;
+
+export interface ProseMirrorDocument {
+	readonly type: 'doc';
+	readonly content?: readonly ProseMirrorNode[];
+}
+
+// ---------------------------------------------------------------------------
+// Schemas
+// ---------------------------------------------------------------------------
+
+const textAlignSchema = z.enum(['left', 'center', 'right', 'justify']);
+
+const linkAttrsSchema = z
+	.object({
+		href: z.string().nullish(),
+		target: z.string().nullish(),
+		rel: z.string().nullish(),
+		class: z.string().nullish()
+	})
+	.strict();
+
+const mediaAttrsSchema = z
+	.object({
+		src: z.string().nullish(),
+		alt: z.string().nullish(),
+		title: z.string().nullish(),
+		width: z.string().nullish(),
+		height: z.string().nullish(),
+		align: z.string().nullish()
+	})
+	.strict();
+
+const tableCellAttrsSchema = z
+	.object({
+		colspan: z.number().optional(),
+		rowspan: z.number().optional(),
+		colwidth: z.array(z.number()).nullish(),
+		style: z.string().nullish()
+	})
+	.strict();
+
+export const proseMirrorMarkSchema: z.ZodType<ProseMirrorMark> = z.discriminatedUnion('type', [
+	z.object({ type: z.literal('bold') }).strict(),
+	z.object({ type: z.literal('italic') }).strict(),
+	z.object({ type: z.literal('strike') }).strict(),
+	z.object({ type: z.literal('code') }).strict(),
+	z.object({ type: z.literal('underline') }).strict(),
+	z.object({ type: z.literal('subscript') }).strict(),
+	z.object({ type: z.literal('superscript') }).strict(),
+	z.object({ type: z.literal('link'), attrs: linkAttrsSchema.optional() }).strict(),
+	z
+		.object({
+			type: z.literal('noteLink'),
+			attrs: z.object({ noteId: z.string().nullish() }).strict().optional()
+		})
+		.strict(),
+	z
+		.object({
+			type: z.literal('highlight'),
+			attrs: z.object({ color: z.string().nullish() }).strict().optional()
+		})
+		.strict(),
+	z
+		.object({
+			type: z.literal('textStyle'),
+			attrs: z
+				.object({ color: z.string().nullish(), fontSize: z.string().nullish() })
+				.strict()
+				.optional()
+		})
+		.strict(),
+	z
+		.object({
+			type: z.literal('ai-highlight'),
+			attrs: z.object({ color: z.string().nullish() }).strict().optional()
+		})
+		.strict()
+]);
+
+const nodeContent = () => z.array(z.lazy(() => proseMirrorNodeSchema)).optional();
+
+const inlineMarks = () => z.array(z.lazy(() => proseMirrorMarkSchema)).optional();
+
+export const proseMirrorNodeSchema: z.ZodType<ProseMirrorNode> = z.lazy(() =>
+	z.discriminatedUnion('type', [
+		z.object({ type: z.literal('text'), text: z.string(), marks: inlineMarks() }).strict(),
+		z
+			.object({
+				type: z.literal('paragraph'),
+				attrs: z.object({ textAlign: textAlignSchema.optional() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('heading'),
+				attrs: z
+					.object({
+						level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+						textAlign: textAlignSchema.optional()
+					})
+					.strict()
+					.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z.object({ type: z.literal('blockquote'), content: nodeContent() }).strict(),
+		z.object({ type: z.literal('bulletList'), content: nodeContent() }).strict(),
+		z
+			.object({
+				type: z.literal('orderedList'),
+				attrs: z
+					.object({ start: z.number().optional(), type: z.string().nullish() })
+					.strict()
+					.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z.object({ type: z.literal('listItem'), content: nodeContent() }).strict(),
+		z.object({ type: z.literal('taskList'), content: nodeContent() }).strict(),
+		z
+			.object({
+				type: z.literal('taskItem'),
+				attrs: z.object({ checked: z.boolean().optional() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('codeBlock'),
+				attrs: z.object({ language: z.string().nullish() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z.object({ type: z.literal('table'), content: nodeContent() }).strict(),
+		z.object({ type: z.literal('tableRow'), content: nodeContent() }).strict(),
+		z
+			.object({
+				type: z.literal('tableCell'),
+				attrs: tableCellAttrsSchema.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('tableHeader'),
+				attrs: tableCellAttrsSchema.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z.object({ type: z.literal('horizontalRule') }).strict(),
+		z.object({ type: z.literal('hardBreak'), marks: inlineMarks() }).strict(),
+		z
+			.object({
+				type: z.literal('image'),
+				attrs: mediaAttrsSchema.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z.object({ type: z.literal('video'), attrs: mediaAttrsSchema.optional() }).strict(),
+		z
+			.object({
+				type: z.literal('audio'),
+				attrs: z
+					.object({
+						src: z.string().nullish(),
+						controls: z.boolean().nullish(),
+						autoplay: z.boolean().nullish(),
+						loop: z.boolean().nullish(),
+						muted: z.boolean().nullish(),
+						preload: z.string().nullish(),
+						controlslist: z.string().nullish(),
+						crossorigin: z.string().nullish(),
+						disableremoteplayback: z.boolean().nullish()
+					})
+					.strict()
+					.optional(),
+				marks: inlineMarks()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('iframe'),
+				attrs: z
+					.object({
+						src: z.string().optional(),
+						width: z.string().optional(),
+						height: z.number().optional()
+					})
+					.strict()
+					.optional()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('mermaid'),
+				attrs: z
+					.object({
+						width: z.string().optional(),
+						pendingDrawioSuggestionId: z.string().nullish()
+					})
+					.strict()
+					.optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('drawio'),
+				attrs: z.object({ diagramId: z.string().nullish() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('todoNode'),
+				attrs: z.object({ todoId: z.string().nullish() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('callout'),
+				attrs: z.object({ emoji: z.string().optional() }).strict().optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('blockMath'),
+				attrs: z.object({ latex: z.string().optional() }).strict().optional()
+			})
+			.strict(),
+		z
+			.object({
+				type: z.literal('inlineMath'),
+				attrs: z.object({ latex: z.string().optional() }).strict().optional(),
+				marks: inlineMarks()
+			})
+			.strict()
+	])
+);
+
+export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
+	.object({
+		type: z.literal('doc'),
+		content: z.array(proseMirrorNodeSchema).optional()
+	})
+	.strict();
+
+/** Parse a document at a boundary. Throws a zod error naming the first bad path. */
+export const parseProseMirrorDocument = (value: unknown): ProseMirrorDocument =>
+	proseMirrorDocumentSchema.parse(value);
+
+// ---------------------------------------------------------------------------
+// Validation (import boundary reports issues rather than throwing)
+// ---------------------------------------------------------------------------
+
+export interface ProseMirrorValidationIssue {
+	readonly path: string;
+	readonly message: string;
+}
+
+const issuePath = (path: readonly PropertyKey[]): string =>
+	path.reduce<string>(
+		(acc, segment) =>
+			typeof segment === 'number' ? `${acc}[${segment}]` : `${acc}.${String(segment)}`,
+		'$'
+	);
+
+/**
+ * The first thing wrong with a document, or `undefined` when it parses clean.
+ * The importer reports this instead of throwing so one bad note fails without
+ * rejecting the files that imported fine (ADR 0014, ADR 0015).
+ */
+export const findProseMirrorDocumentIssue = (
+	document: unknown
+): ProseMirrorValidationIssue | undefined => {
+	const result = proseMirrorDocumentSchema.safeParse(document);
+	if (result.success) return undefined;
+	const issue = result.error.issues[0];
+	if (!issue) return { path: '$', message: 'document is invalid' };
+	return { path: issuePath(issue.path), message: issue.message };
+};
 
 export * from './note-patch';
 

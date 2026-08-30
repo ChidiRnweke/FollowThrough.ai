@@ -17,7 +17,7 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, ProseMirrorDocument } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { Provenance } from '$lib/models/provenance';
+import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
 import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import {
@@ -45,10 +45,7 @@ interface AttachmentDownloader {
 	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
 }
 interface ProvenanceRecorder {
-	record(
-		actor: ActorContext,
-		input: Omit<Provenance, 'id' | 'userId' | 'createdAt'>
-	): Promise<Provenance>;
+	record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 }
 interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
@@ -298,7 +295,7 @@ export class ArtifactLibrary {
 			sourceNoteIds: input.noteIds,
 			templateId: input.templateId,
 			provenanceId: provenance.id,
-			...(provenance.runId ? { runId: provenance.runId } : {}),
+			...('runId' in provenance ? { runId: provenance.runId } : {}),
 			createdAt: now()
 		};
 

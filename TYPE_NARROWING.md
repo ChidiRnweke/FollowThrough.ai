@@ -96,7 +96,23 @@ produce.
 
 - [x] **TN-40: Remove `TrustPolicy.conditions` while retaining its database column**
 - [x] **TN-41: Close domain-error details through `DomainErrorDetailsByCode`**
-- [ ] **TN-42: Close provenance by producer kind, pipeline, and producer name — IN PROGRESS (root)**
+- [x] **TN-42: Close provenance by producer kind, pipeline, and producer name**
+  - [x] Ten producer arms in `models/provenance`, each carrying only the fields its producer has,
+        with a `strict` schema per arm. `MCP client` was unmodelled and is now an arm.
+  - [x] `ProvenanceRequest` distributes: the six hand-written `Omit<Provenance, …>` signatures
+        collapsed the union to its shared keys, which is why every caller setting `pipeline`,
+        `runId` or `model` was a type error.
+  - [x] `asProvenance` completes a request through the model's own parser, so the four sites that
+        spread a union member into a literal no longer widen it out of every arm.
+  - [x] Delete the seven duplicate open-shaped declarations: `Provenance` in
+        `models/{workspace,notes,memory,todos,suggestions}` and `SuggestionView` in
+        `models/{memory,notes}`, plus the suggestion type tree `models/notes` had copied to
+        declare it.
+  - [x] `ProvenanceOrigin` replaces `SuggestionView.provenance`. The client has no run id, model
+        or source anchor, so it was inventing a record per pipeline — producer names that no
+        producer uses, reaching the caption.
+  - [x] Fixtures that encoded impossible records now build real ones. Verify with
+        `pnpm test:architecture`, `pnpm test:unit`, `pnpm check`.
   - [x] Define the canonical producer union, exact metadata schemas, and parser in
         `models/provenance/index.ts`.
   - [x] Parse persisted rows in the DB mapper and make repository writes use the exact union.

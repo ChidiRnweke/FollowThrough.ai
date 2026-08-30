@@ -14,8 +14,6 @@ import { palette } from '$lib/stores/shell/palette.svelte';
 import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 import { sidebarToggle } from '$lib/stores/shell/sidebar-toggle.svelte';
 import { tick } from 'svelte';
-import { workbench } from '$lib/stores/workbench/workbench.svelte';
-import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 
 export interface AppCommand {
 	readonly id: string;

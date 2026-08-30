@@ -20,13 +20,17 @@ interface StoredRun {
 	readonly context: NoteActionContext;
 }
 
-const storedRunSchema = z.object({
-	runId: z.string().min(1),
-	action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
-	noteId: z.string().min(1),
-	cursor: z.string(),
-	context: z.object({ source: z.string().optional(), insertAt: z.number().int().optional() }).strict()
-}).strict();
+const storedRunSchema = z
+	.object({
+		runId: z.string().min(1),
+		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+		noteId: z.string().min(1),
+		cursor: z.string(),
+		context: z
+			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
+			.strict()
+	})
+	.strict();
 
 const parseStoredRuns = (value: string): readonly StoredRun[] =>
 	storedRunSchema
@@ -130,9 +134,13 @@ class SessionRunStorage implements RunStorage {
  */
 export class NoteActionRunsStore {
 	private entries = $state<NoteActionRun[]>([]);
+	/* eslint-disable svelte/prefer-svelte-reactivity -- plumbing, not state: no
+	   surface reads these, so reactivity would track what nothing consumes. What
+	   this store publishes is `entries` above. */
 	private readonly streams = new Map<AgentRunId, EventStream>();
 	private readonly handlers = new Map<NoteActionKind, NoteActionHandler>();
 	private readonly waiters = new Map<AgentRunId, (outcome: NoteActionOutcome) => void>();
+	/* eslint-enable svelte/prefer-svelte-reactivity */
 
 	constructor(
 		/** One store per note: a split pane must never show its sibling's work. */
@@ -285,6 +293,7 @@ export class NoteActionRunsStore {
 	}
 }
 
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- a registry of stores, not rendered state; each store publishes its own.
 const stores = new Map<NoteId, NoteActionRunsStore>();
 
 /** One store per note id, so a split pane's two editors never share run state. */

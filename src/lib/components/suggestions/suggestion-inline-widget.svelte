@@ -65,7 +65,7 @@
 					<p class="text-sm">{suggestionKindLabels[suggestion.kind]}</p>
 				{/if}
 				<p class="provenance-caption">
-					{provenanceCaption(view.provenance, view.note?.title)}
+					{provenanceCaption(view.origin, view.note?.title)}
 				</p>
 			</div>
 			<div class="flex shrink-0 items-center gap-1">

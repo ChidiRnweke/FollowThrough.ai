@@ -2,9 +2,7 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import ProjectTreeView from './project-tree-view.svelte';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
-	import type { Project, ProjectId } from '$lib/models/projects';
-
-	const projectId = '10000000-0000-4000-8000-000000000001' as ProjectId;
+	import type { Project } from '$lib/models/projects';
 
 	let {
 		projects,

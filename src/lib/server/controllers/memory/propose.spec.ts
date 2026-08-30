@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
-import type { Provenance } from '$lib/models/provenance';
+import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
@@ -29,16 +29,12 @@ class RecordingProvenanceRecorder implements ProvenanceRecorder {
 	records: Provenance[] = [];
 	constructor(private readonly repository: InMemoryProvenanceRepository) {}
 
-	async record(
-		actor: ActorContext,
-		input: Omit<Provenance, 'id' | 'userId' | 'createdAt'>
-	): Promise<Provenance> {
-		const provenance: Provenance = {
+	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
+		const provenance = asProvenance(input, {
 			id: testProvenanceId(this.records.length + 1),
 			userId: actor.userId,
-			...input,
 			createdAt: testNow
-		};
+		});
 		this.records.push(provenance);
 		return this.repository.insert(actor, provenance);
 	}
@@ -92,7 +88,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('records agent provenance on the memory pipeline', async () => {
 		const { provenance, controller } = setup();
 		await controller.propose(testActor(), addInput());
-		expect(provenance.records[0]?.pipeline).toBe('memory');
+		expect(provenance.records[0]).toMatchObject({ pipeline: 'memory' });
 	});
 
 	it('leaves the entry uncreated without an authorizing trust policy', async () => {

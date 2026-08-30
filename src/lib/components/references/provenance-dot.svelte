@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Provenance, SourceAnchor } from '$lib/models/provenance';
+	import { provenanceOrigin, type Provenance, type SourceAnchor } from '$lib/models/provenance';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { provenanceCaption } from '../shared/labels';
 
@@ -24,7 +24,7 @@
 		<span class="size-2 rounded-full bg-primary"></span>
 	</HoverCard.Trigger>
 	<HoverCard.Content class="w-72 space-y-1">
-		<p class="provenance-caption">{provenanceCaption(provenance, sourceTitle)}</p>
+		<p class="provenance-caption">{provenanceCaption(provenanceOrigin(provenance), sourceTitle)}</p>
 		{#if anchor}
 			<blockquote class="border-l-2 border-border pl-2 text-sm text-muted-foreground">
 				{anchor.quote}

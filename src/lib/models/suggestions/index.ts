@@ -1,3 +1,4 @@
+import type { ProvenanceOrigin } from '$lib/models/provenance';
 import { z } from 'zod';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -24,8 +25,6 @@ type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
-type AgentRunId = Brand<string, 'AgentRunId'>;
-
 type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
@@ -38,7 +37,12 @@ type Confidence = Brand<number, 'Confidence'>;
 
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 type NoteKind = 'folder' | 'note' | 'skill';
@@ -58,10 +62,6 @@ type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'menti
 type DiagramKind = 'mermaid' | 'drawio';
 
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-
-type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type ProducerKind = 'user' | 'pipeline' | 'agent';
 
 export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
@@ -95,19 +95,6 @@ interface SourceAnchor {
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Provenance {
-	readonly id: ProvenanceId;
-	readonly userId: UserId;
-	readonly producerKind: ProducerKind;
-	readonly producerName: string;
-	readonly pipeline?: PipelineKind;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly runId?: AgentRunId;
-	readonly model?: string;
-	readonly metadata: Readonly<Record<string, unknown>>;
 	readonly createdAt: DateTime;
 }
 
@@ -458,7 +445,7 @@ export interface SuggestionView {
 	readonly suggestion: Suggestion;
 	readonly note?: NoteRef;
 	readonly anchor?: SourceAnchor;
-	readonly provenance: Provenance;
+	readonly origin: ProvenanceOrigin;
 }
 
 export interface ListSuggestionsInput {

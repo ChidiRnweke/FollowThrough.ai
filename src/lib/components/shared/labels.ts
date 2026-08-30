@@ -1,7 +1,7 @@
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { MemoryEntryType } from '$lib/models/memory';
 import type { PipelineKind } from '$lib/models/agent';
-import type { Provenance } from '$lib/models/provenance';
+import type { ProvenanceOrigin } from '$lib/models/provenance';
 import type { ReferenceTier } from '$lib/models/references';
 import type { RelationshipKind } from '$lib/models/relationships';
 import type { SuggestionKind } from '$lib/models/suggestions';
@@ -242,11 +242,11 @@ export function formatRelativeTime(dateTime: DateTime, now: number = Date.now())
 	return formatDateTime(dateTime);
 }
 
-export function provenanceCaption(provenance: Provenance, sourceTitle?: string): string {
-	const producer = provenance.pipeline
-		? pipelineLabels[provenance.pipeline]
-		: provenance.producerName;
-	const parts = [producer, sourceTitle, formatDateTime(provenance.createdAt)];
+export function provenanceCaption(origin: ProvenanceOrigin, sourceTitle?: string): string {
+	// A pipeline is named by its label; anything else answers with its producer.
+	// Read off the arm rather than off a field that may not be there.
+	const producer = 'pipeline' in origin ? pipelineLabels[origin.pipeline] : origin.producerName;
+	const parts = [producer, sourceTitle, formatDateTime(origin.createdAt)];
 	return parts.filter((part): part is string => part !== undefined).join(' · ');
 }
 

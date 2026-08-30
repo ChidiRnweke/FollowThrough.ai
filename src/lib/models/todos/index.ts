@@ -1,3 +1,4 @@
+import type { Provenance } from '$lib/models/provenance';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -14,8 +15,6 @@ type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
-type AgentRunId = Brand<string, 'AgentRunId'>;
-
 type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
@@ -28,7 +27,12 @@ type Confidence = Brand<number, 'Confidence'>;
 
 interface ProseMirrorDocument {
 	readonly type: 'doc';
-	readonly content?: readonly Record<string, unknown>[];
+	readonly content?: readonly ProseMirrorNodeView[];
+}
+interface ProseMirrorNodeView {
+	readonly type: string;
+	readonly text?: string;
+	readonly content?: readonly ProseMirrorNodeView[];
 }
 
 interface TextSelection {
@@ -54,10 +58,6 @@ type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'menti
 type DiagramKind = 'mermaid' | 'drawio';
 
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-
-type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type ProducerKind = 'user' | 'pipeline' | 'agent';
 
 type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
@@ -91,19 +91,6 @@ interface SourceAnchor {
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Provenance {
-	readonly id: ProvenanceId;
-	readonly userId: UserId;
-	readonly producerKind: ProducerKind;
-	readonly producerName: string;
-	readonly pipeline?: PipelineKind;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly runId?: AgentRunId;
-	readonly model?: string;
-	readonly metadata: Readonly<Record<string, unknown>>;
 	readonly createdAt: DateTime;
 }
 

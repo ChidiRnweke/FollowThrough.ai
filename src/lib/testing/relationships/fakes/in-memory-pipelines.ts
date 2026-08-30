@@ -2,7 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { PipelineKind } from '$lib/models/agent';
 import type { LinkCandidate } from '$lib/models/relationships';
 import type { PromiseCandidate } from '$lib/models/todos';
-import type { Provenance } from '$lib/models/provenance';
+import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ReferenceCandidate } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
@@ -118,16 +118,14 @@ export class InMemoryWebReferenceClient implements WebReferenceClient {
 export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotParticipant {
 	records: Provenance[] = [];
 
-	async record(
-		actor: ActorContext,
-		input: Omit<Provenance, 'id' | 'userId' | 'createdAt'>
-	): Promise<Provenance> {
-		const provenance: Provenance = {
+	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
+		// Built through the model's own parser, exactly as production is, so the
+		// fake cannot hold a record production could never produce.
+		const provenance = asProvenance(input, {
 			id: testProvenanceId(this.records.length + 1),
 			userId: actor.userId,
-			...input,
 			createdAt: testNow
-		};
+		});
 		this.records.push(provenance);
 		return provenance;
 	}
