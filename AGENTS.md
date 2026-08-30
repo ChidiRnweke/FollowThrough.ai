@@ -119,6 +119,23 @@ diff where a human can audit it. An allowance is not a migration mechanism.
   where the recovery genuinely reports itself somewhere the type cannot show — say the returned
   placeholder that lands in a rendered document — and the reason must name where.
 
+## Type narrowing (ADR 0037)
+
+Parse external data into narrow types at the boundary; inward of the boundary, resolved types are
+total. The pattern catalog with remedies lives in @TYPE_NARROWING.md; the decision and its limits
+are in
+`docs/src/content/docs/decisions/0037-parse-external-data-at-the-boundary-and-keep-resolved-types-total.md`.
+
+- Parsing happens only in the parse zones: `remote/`, the DB mappers and repository read paths,
+  the provider event mappers, and the client event/storage readers. Schemas live in `models/`
+  next to the type they produce. Services and controllers never parse — they receive narrow
+  values from both directions.
+- `unknown` type positions, `Record<string, unknown>`, `isRecord`-style guards, cast-probes
+  (`x as { a?: unknown }`), `JSON.parse` casts, and `z.unknown()` schemas are banned in the
+  strict layers (`models/`, `services/`, `controllers/`) and on their way to zero everywhere
+  else. `scripts/audit-source-rules.ts` gains one zero-baseline rule per pattern as its fix
+  batch lands; do not add new occurrences — there is no grandfathering.
+
 ## Defaults, limits, and blast radius
 
 Judgement rules, not audited. They exist because each has already cost this codebase a defect.
