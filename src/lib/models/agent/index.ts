@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { PersistedSessionItem } from './session-item';
 import { AgentProviderFailure } from './agent-runs';
+import type { ToolName } from './tool-catalog';
 import {
 	readAgentPayload,
 	readAgentPayloadObject,
@@ -75,6 +76,29 @@ export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent'
 type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
 export type ToolClassification = 'read' | 'proposal' | 'mutation';
+
+/**
+ * How one controller method participates in the agent tool surface.
+ *
+ * The generic map is model-owned, but its controller type argument is supplied
+ * at the server registry seam. That keeps controller imports out of models
+ * while making every controller method an explicit decision. A method may own
+ * several wire contracts because aliases such as `search` / `search_note` and
+ * `save_note` / `edit_note` deliberately adapt one capability in different
+ * ways.
+ */
+export type AgentToolContractBinding =
+	| {
+			readonly kind: ToolClassification;
+			readonly tools: readonly ToolName[];
+	  }
+	| { readonly kind: 'excluded'; readonly reason: string };
+
+export type AgentToolContractMap<Controllers> = {
+	readonly [Controller in keyof Controllers]: {
+		readonly [Method in keyof Controllers[Controller]]: AgentToolContractBinding;
+	};
+};
 
 interface Project {
 	readonly id: ProjectId;

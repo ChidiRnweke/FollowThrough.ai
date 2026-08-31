@@ -3,6 +3,9 @@ import type { FunctionTool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
+import type { SkillsController } from '$lib/server/controllers/skills/controller';
+import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
+import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { noteEtag } from '$lib/models/notes';
@@ -25,6 +28,7 @@ import {
 	type ToolAccessPolicy
 } from './agent-tool-factory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 
 const executeDirectly: AgentToolExecutor = {
 	execute: (_input, action) => action()
@@ -197,17 +201,18 @@ describe('Agent tool coverage invariants', () => {
 		const classifications = Object.values(agentToolCoverage).flatMap(
 			(controller) => Object.values(controller) as AgentToolClassification[]
 		);
-		const coveredActions = classifications.filter(
-			(classification) => classification.kind !== 'excluded'
-		).length;
-		// Six controller actions are deliberately exposed more than once:
-		// memory.list as list_project_memory and list_user_memory, notes.save as
-		// save_note and edit_note, the skill body write as save_skill and
-		// edit_skill, todos.create as create_todo (single) and create_todos
-		// (batch), and retrieval.search as search (knowledge base) and
-		// search_note (single note).
-		const scopedAliases = 6;
-		expect(registry('approval_required').tools()).toHaveLength(coveredActions + scopedAliases);
+		const contracts = classifications.flatMap((classification) =>
+			classification.kind === 'excluded' ? [] : classification.tools
+		);
+		expect(registry('approval_required').tools()).toHaveLength(contracts.length);
+	});
+
+	it('binds every catalog tool to one controller method', () => {
+		const bound = Object.values(agentToolCoverage)
+			.flatMap((controller) => Object.values(controller) as AgentToolClassification[])
+			.flatMap((classification) => (classification.kind === 'excluded' ? [] : classification.tools))
+			.toSorted();
+		expect(bound).toEqual(TOOL_DESCRIPTIONS.map((entry) => entry.name).toSorted());
 	});
 
 	// The studio is a chat with a canvas beside it, not a place. Gating this on a
@@ -1569,6 +1574,63 @@ describe('Agent tool coverage invariants', () => {
 			projectId: 'Required for project scope; omit entirely for user scope.',
 			memoryEntryId: 'Required for update or remove; omit entirely for add.'
 		});
+	});
+});
+
+describe('Explicit mutation receipts', () => {
+	it('reports the pinned skill state after saving it', async () => {
+		const skills = capabilityDependencies<SkillsController>({ setPinned: async () => undefined });
+		const factory = capabilityDependencies<ControllerFactory>({ skills: () => skills });
+		const tool = registry('auto_accept', { factory })
+			.definitions()
+			.find((definition) => definition.name === 'set_skill_pinned');
+		const input = {
+			noteId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55',
+			projectId: '8e0b1a27-9c2d-4f18-8a5e-1d55b3c7f902',
+			pinned: true
+		};
+		expect(await tool?.execute(input)).toEqual(input);
+	});
+
+	it('reports the revoked token id', async () => {
+		const apiTokens = capabilityDependencies<ApiTokensController>({
+			revoke: async () => undefined
+		});
+		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
+		const tool = registry('auto_accept', { factory })
+			.definitions()
+			.find((definition) => definition.name === 'revoke_api_token');
+		expect(await tool?.execute({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' })).toEqual({
+			tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013',
+			revoked: true
+		});
+	});
+
+	it('reports the deleted artifact id', async () => {
+		const deliverables = capabilityDependencies<DeliverablesController>({
+			deleteArtifact: async () => undefined
+		});
+		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
+		const tool = registry('auto_accept', { factory })
+			.definitions()
+			.find((definition) => definition.name === 'delete_artifact');
+		expect(await tool?.execute({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' })).toEqual({
+			artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124',
+			deleted: true
+		});
+	});
+
+	it('fails visibly when an artifact does not exist', async () => {
+		const deliverables = capabilityDependencies<DeliverablesController>({
+			getArtifact: async () => undefined
+		});
+		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
+		const tool = registry('auto_accept', { factory })
+			.definitions()
+			.find((definition) => definition.name === 'get_artifact');
+		await expect(
+			tool?.execute({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' })
+		).rejects.toThrow('Artifact not found');
 	});
 });
 

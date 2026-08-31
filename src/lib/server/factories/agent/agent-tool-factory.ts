@@ -22,15 +22,25 @@ import type { TodosController } from '$lib/server/controllers/todos/controller';
 import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext, ApiTokenId } from '$lib/models/identity';
-import type { AgentExecutionMode, AgentRun, RunAgentInput } from '$lib/models/agent';
-import { readAgentPayloadObject, type AgentPayloadObject } from '$lib/models/agent/payload';
+import type {
+	AgentExecutionMode,
+	AgentRun,
+	AgentToolContractMap,
+	RunAgentInput
+} from '$lib/models/agent';
+import {
+	readAgentPayload,
+	readAgentPayloadObject,
+	type AgentPayload,
+	type AgentPayloadObject
+} from '$lib/models/agent/payload';
 import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import { ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -57,12 +67,24 @@ import {
 	projectSuggestion,
 	projectTodo,
 	projectTodoWrite,
-	projectUser
+	projectUser,
+	type MemoryProjection,
+	type NoteRevisionProjection,
+	type NoteViewProjection,
+	type NoteWriteProjection,
+	type ProjectProjection,
+	type SkillViewProjection,
+	type SuggestionProjection,
+	type TodoProjection,
+	type TodoWriteProjection,
+	type UserProjection
 } from '../../services/agent/runs/tool-views';
+import type { ToolFailure } from '$lib/models/agent/tool-failure';
 import {
 	FIRST_CLASS_TOOL_NAMES,
 	TOOL_CATALOG,
-	toolDescription
+	toolDescription,
+	type ToolName
 } from '$lib/models/agent/tool-catalog';
 import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
 
@@ -95,32 +117,35 @@ export interface ToolAccessPolicy {
 }
 
 export type AgentToolClassification =
-	| { readonly kind: 'read' | 'proposal' | 'mutation' }
+	| {
+			readonly kind: 'read' | 'proposal' | 'mutation';
+			readonly tools: readonly ToolName[];
+	  }
 	| { readonly kind: 'excluded'; readonly reason: string };
 
-type Coverage<T> = { readonly [Method in keyof T]: AgentToolClassification };
-
-export interface AgentToolCoverage {
-	readonly agentFiles: Coverage<AgentFilesController>;
-	readonly workspace: Coverage<WorkspaceController>;
-	readonly projects: Coverage<ProjectsController>;
-	readonly notes: Coverage<NotesController>;
-	readonly todos: Coverage<TodosController>;
-	readonly relationships: Coverage<RelationshipsController>;
-	readonly references: Coverage<ReferencesController>;
-	readonly diagrams: Coverage<DiagramsController>;
-	readonly diagramStudio: Coverage<DiagramStudioController>;
-	readonly suggestions: Coverage<SuggestionsController>;
-	readonly skills: Coverage<SkillsController>;
-	readonly trustPolicies: Coverage<TrustPoliciesController>;
-	readonly toolPreferences: Coverage<ToolPreferencesController>;
-	readonly agentSettings: Coverage<AgentSettingsController>;
-	readonly apiTokens: Coverage<ApiTokensController>;
-	readonly attachments: Coverage<AttachmentsController>;
-	readonly deliverables: Coverage<DeliverablesController>;
-	readonly memory: Coverage<MemoryController>;
-	readonly retrieval: Coverage<RetrievalController>;
+interface CoveredAgentControllers {
+	readonly agentFiles: AgentFilesController;
+	readonly workspace: WorkspaceController;
+	readonly projects: ProjectsController;
+	readonly notes: NotesController;
+	readonly todos: TodosController;
+	readonly relationships: RelationshipsController;
+	readonly references: ReferencesController;
+	readonly diagrams: DiagramsController;
+	readonly diagramStudio: DiagramStudioController;
+	readonly suggestions: SuggestionsController;
+	readonly skills: SkillsController;
+	readonly trustPolicies: TrustPoliciesController;
+	readonly toolPreferences: ToolPreferencesController;
+	readonly agentSettings: AgentSettingsController;
+	readonly apiTokens: ApiTokensController;
+	readonly attachments: AttachmentsController;
+	readonly deliverables: DeliverablesController;
+	readonly memory: MemoryController;
+	readonly retrieval: RetrievalController;
 }
+
+export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
 
 /**
  * Why most of the studio's surface is not an agent tool: these are the user
@@ -131,35 +156,38 @@ const STUDIO_GESTURE =
 
 export const agentToolCoverage = {
 	agentFiles: {
-		ls: { kind: 'read' },
-		grep: { kind: 'read' },
-		sed: { kind: 'read' }
+		ls: { kind: 'read', tools: ['ls'] },
+		grep: { kind: 'read', tools: ['grep'] },
+		sed: { kind: 'read', tools: ['sed'] }
 	},
-	workspace: { getShellContext: { kind: 'read' }, getTodayView: { kind: 'read' } },
+	workspace: {
+		getShellContext: { kind: 'read', tools: ['get_workspace_context'] },
+		getTodayView: { kind: 'read', tools: ['get_today_view'] }
+	},
 	projects: {
-		list: { kind: 'read' },
-		get: { kind: 'read' },
-		create: { kind: 'mutation' },
-		rename: { kind: 'mutation' },
-		archive: { kind: 'mutation' },
-		createFolder: { kind: 'mutation' },
-		move: { kind: 'mutation' },
+		list: { kind: 'read', tools: ['list_projects'] },
+		get: { kind: 'read', tools: ['get_project'] },
+		create: { kind: 'mutation', tools: ['create_project'] },
+		rename: { kind: 'mutation', tools: ['rename_project'] },
+		archive: { kind: 'mutation', tools: ['archive_project'] },
+		createFolder: { kind: 'mutation', tools: ['create_folder'] },
+		move: { kind: 'mutation', tools: ['move_project_entry'] },
 		setSectionNumberingDefault: {
 			kind: 'excluded',
 			reason: 'A viewing default for the editor; it changes nothing the agent can read.'
 		}
 	},
 	notes: {
-		get: { kind: 'read' },
+		get: { kind: 'read', tools: ['get_note'] },
 		listDocuments: {
 			kind: 'excluded',
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
 		},
-		create: { kind: 'mutation' },
-		save: { kind: 'mutation' },
+		create: { kind: 'mutation', tools: ['create_note'] },
+		save: { kind: 'mutation', tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill'] },
 		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
-		publish: { kind: 'mutation' },
-		discardDraft: { kind: 'mutation' },
+		publish: { kind: 'mutation', tools: ['publish_note'] },
+		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
 		listSyncInventory: {
 			kind: 'excluded',
 			reason: 'Sync inventory is reserved for browser reconciliation.'
@@ -172,13 +200,13 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Bulk replace is a UI surface; the agent edits a note with edit_note.'
 		},
-		rename: { kind: 'mutation' },
-		archive: { kind: 'mutation' },
-		restore: { kind: 'mutation' },
-		listTrash: { kind: 'read' },
-		deleteForever: { kind: 'mutation' },
-		emptyTrash: { kind: 'mutation' },
-		listRevisions: { kind: 'read' },
+		rename: { kind: 'mutation', tools: ['rename_note'] },
+		archive: { kind: 'mutation', tools: ['archive_note'] },
+		restore: { kind: 'mutation', tools: ['restore_note'] },
+		listTrash: { kind: 'read', tools: ['list_trashed_notes'] },
+		deleteForever: { kind: 'mutation', tools: ['delete_note_forever'] },
+		emptyTrash: { kind: 'mutation', tools: ['empty_note_trash'] },
+		listRevisions: { kind: 'read', tools: ['list_note_versions'] },
 		getRevision: {
 			kind: 'excluded',
 			reason: 'Diff rendering detail; the agent reads note content with get_note.'
@@ -187,15 +215,15 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Published version bodies are mounted under the note versions directory for sed.'
 		},
-		compareRevisions: { kind: 'read' },
-		restoreRevision: { kind: 'mutation' },
+		compareRevisions: { kind: 'read', tools: ['diff_note_versions'] },
+		restoreRevision: { kind: 'mutation', tools: ['restore_note_version'] },
 		setSectionNumbering: {
 			kind: 'excluded',
 			reason: 'Section numbering is a visual editor preference; note content is unchanged.'
 		}
 	},
 	todos: {
-		list: { kind: 'read' },
+		list: { kind: 'read', tools: ['list_todos'] },
 		get: {
 			kind: 'excluded',
 			reason: 'Reading one todo adds nothing over list, which already returns the same fields.'
@@ -212,13 +240,13 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Board export is a user download; the agent reads todos through list.'
 		},
-		create: { kind: 'mutation' },
-		update: { kind: 'mutation' },
+		create: { kind: 'mutation', tools: ['create_todo', 'create_todos'] },
+		update: { kind: 'mutation', tools: ['update_todo'] },
 		remove: {
 			kind: 'excluded',
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
-		extractPromises: { kind: 'proposal' },
+		extractPromises: { kind: 'proposal', tools: ['extract_promises'] },
 		startExtractPromises: {
 			kind: 'excluded',
 			reason:
@@ -226,7 +254,7 @@ export const agentToolCoverage = {
 		}
 	},
 	relationships: {
-		suggestFromSelection: { kind: 'proposal' },
+		suggestFromSelection: { kind: 'proposal', tools: ['relate_selection'] },
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:
@@ -234,7 +262,7 @@ export const agentToolCoverage = {
 		}
 	},
 	references: {
-		suggestFromSelection: { kind: 'proposal' },
+		suggestFromSelection: { kind: 'proposal', tools: ['find_references'] },
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:
@@ -247,7 +275,7 @@ export const agentToolCoverage = {
 			reason:
 				'Mermaid generation is the inline note editor flow; the agent presents a canvas diagram with create_diagram.'
 		},
-		reviseMermaid: { kind: 'mutation' },
+		reviseMermaid: { kind: 'mutation', tools: ['revise_mermaid_diagram'] },
 		reviseInlineMermaid: {
 			kind: 'excluded',
 			reason: 'Inline diagram revision is scoped to the editor workflow.'
@@ -261,7 +289,7 @@ export const agentToolCoverage = {
 			reason: 'The note-scoped draw.io editor loads its own diagram.'
 		},
 		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
-		promote: { kind: 'proposal' },
+		promote: { kind: 'proposal', tools: ['promote_diagram'] },
 		startGenerateMermaid: {
 			kind: 'excluded',
 			reason:
@@ -282,14 +310,14 @@ export const agentToolCoverage = {
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
-		createDiagram: { kind: 'mutation' },
+		createDiagram: { kind: 'mutation', tools: ['create_diagram'] },
 		// A revision writes a working revision onto the diagram it names, so it asks
 		// first. `read` would mean no prompt, which is how the agent came to change a
 		// saved diagram with neither permission asked nor anything shown.
-		editDiagram: { kind: 'mutation' },
-		readCanvasDiagram: { kind: 'read' },
-		readProjectDiagram: { kind: 'read' },
-		searchDiagramIcons: { kind: 'read' },
+		editDiagram: { kind: 'mutation', tools: ['edit_diagram'] },
+		readCanvasDiagram: { kind: 'read', tools: ['read_canvas_diagram'] },
+		readProjectDiagram: { kind: 'read', tools: ['read_project_diagram'] },
+		searchDiagramIcons: { kind: 'read', tools: ['search_icons'] },
 		// Everything below is a user gesture. Keeping, renaming and deleting are the
 		// user saying what the project holds; the studio and the gallery own those
 		// gates, and the agent's part is to put a version on the canvas.
@@ -334,41 +362,41 @@ export const agentToolCoverage = {
 		}
 	},
 	suggestions: {
-		list: { kind: 'read' },
+		list: { kind: 'read', tools: ['list_suggestions'] },
 		listPendingMemory: {
 			kind: 'excluded',
 			reason: 'Pending memory review is scoped to the notification and memory UI.'
 		},
-		acceptReviewed: { kind: 'mutation' },
+		acceptReviewed: { kind: 'mutation', tools: ['accept_suggestion'] },
 		accept: {
 			kind: 'excluded',
 			reason:
 				'Acceptance goes through acceptReviewed, which refuses a draw.io diagram that has no review to draw its preview.'
 		},
-		reject: { kind: 'mutation' },
-		revert: { kind: 'mutation' }
+		reject: { kind: 'mutation', tools: ['reject_suggestion'] },
+		revert: { kind: 'mutation', tools: ['revert_suggestion'] }
 	},
 	skills: {
-		list: { kind: 'read' },
+		list: { kind: 'read', tools: ['list_skills'] },
 		get: {
 			kind: 'excluded',
 			reason:
 				'Skill reads go through load_skill; the controller method still serves the UI and the skill write tools.'
 		},
-		loadForAgent: { kind: 'read' },
-		create: { kind: 'mutation' },
-		createFromSelection: { kind: 'mutation' },
-		listVersions: { kind: 'read' },
-		restoreVersion: { kind: 'mutation' },
-		update: { kind: 'mutation' },
+		loadForAgent: { kind: 'read', tools: ['load_skill'] },
+		create: { kind: 'mutation', tools: ['create_skill'] },
+		createFromSelection: { kind: 'mutation', tools: ['create_skill_from_selection'] },
+		listVersions: { kind: 'read', tools: ['list_skill_versions'] },
+		restoreVersion: { kind: 'mutation', tools: ['restore_skill_version'] },
+		update: { kind: 'mutation', tools: ['update_skill'] },
 		serialize: { kind: 'excluded', reason: 'The full skill is available through load_skill.' },
-		setPinned: { kind: 'mutation' }
+		setPinned: { kind: 'mutation', tools: ['set_skill_pinned'] }
 	},
 	attachments: {
 		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
 		complete: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
 		completeForTodo: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
-		list: { kind: 'read' },
+		list: { kind: 'read', tools: ['list_attachments'] },
 		listForProject: {
 			kind: 'excluded',
 			reason: 'Project attachments enter agent context through semantic retrieval.'
@@ -397,12 +425,12 @@ export const agentToolCoverage = {
 			reason: 'The agent cannot upload local user files.'
 		},
 		completeTemplateUpload: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
-		listTemplates: { kind: 'read' },
+		listTemplates: { kind: 'read', tools: ['list_templates'] },
 		deleteTemplate: {
 			kind: 'excluded',
 			reason: 'Template management is a deliberate user action.'
 		},
-		generateDocument: { kind: 'mutation' },
+		generateDocument: { kind: 'mutation', tools: ['export_document'] },
 		generateBundle: {
 			kind: 'excluded',
 			reason:
@@ -412,18 +440,21 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Preview is an interactive UI flow; the agent generates documents directly.'
 		},
-		getExportSettings: { kind: 'read' },
-		updateExportSettings: { kind: 'mutation' },
-		listArtifacts: { kind: 'read' },
-		getArtifact: { kind: 'read' },
-		downloadArtifact: { kind: 'read' },
-		deleteArtifact: { kind: 'mutation' },
-		regenerateArtifact: { kind: 'mutation' }
+		getExportSettings: { kind: 'read', tools: ['get_export_settings'] },
+		updateExportSettings: { kind: 'mutation', tools: ['update_export_settings'] },
+		listArtifacts: { kind: 'read', tools: ['list_artifacts'] },
+		getArtifact: { kind: 'read', tools: ['get_artifact'] },
+		downloadArtifact: { kind: 'read', tools: ['download_artifact'] },
+		deleteArtifact: { kind: 'mutation', tools: ['delete_artifact'] },
+		regenerateArtifact: { kind: 'mutation', tools: ['regenerate_artifact'] }
 	},
-	trustPolicies: { list: { kind: 'read' }, update: { kind: 'mutation' } },
+	trustPolicies: {
+		list: { kind: 'read', tools: ['list_trust_policies'] },
+		update: { kind: 'mutation', tools: ['update_trust_policy'] }
+	},
 	toolPreferences: {
-		list: { kind: 'read' },
-		setEnabled: { kind: 'mutation' },
+		list: { kind: 'read', tools: ['list_tool_preferences'] },
+		setEnabled: { kind: 'mutation', tools: ['set_tool_enabled'] },
 		clearOverride: {
 			kind: 'excluded',
 			reason:
@@ -431,8 +462,8 @@ export const agentToolCoverage = {
 		}
 	},
 	memory: {
-		list: { kind: 'read' },
-		propose: { kind: 'proposal' },
+		list: { kind: 'read', tools: ['list_project_memory', 'list_user_memory'] },
+		propose: { kind: 'proposal', tools: ['propose_memory_change'] },
 		create: {
 			kind: 'excluded',
 			reason: 'Memory changes must flow through propose_memory_change review.'
@@ -447,13 +478,16 @@ export const agentToolCoverage = {
 		}
 	},
 	agentSettings: {
-		getPreferences: { kind: 'read' },
-		updatePreferences: { kind: 'mutation' },
-		listModels: { kind: 'read' }
+		getPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
+		updatePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
+		listModels: { kind: 'read', tools: ['list_agent_models'] }
 	},
-	apiTokens: { list: { kind: 'read' }, revoke: { kind: 'mutation' } },
+	apiTokens: {
+		list: { kind: 'read', tools: ['list_api_tokens'] },
+		revoke: { kind: 'mutation', tools: ['revoke_api_token'] }
+	},
 	retrieval: {
-		search: { kind: 'read' }
+		search: { kind: 'read', tools: ['search', 'search_note'] }
 	}
 } as const satisfies AgentToolCoverage;
 
@@ -491,9 +525,9 @@ const withinCreatedRange = <T extends { readonly createdAt: string }>(
 	(!range.createdAfter || value.createdAt >= range.createdAfter) &&
 	(!range.createdBefore || value.createdAt <= range.createdBefore);
 const filterCreated = (
-	value: unknown,
+	value: AgentPayload,
 	range: { createdAfter?: string; createdBefore?: string }
-): unknown => {
+): AgentPayload => {
 	if (Array.isArray(value))
 		return value
 			.filter(
@@ -510,7 +544,9 @@ const filterCreated = (
 	);
 };
 
-const createdRange = (value: unknown): { createdAfter?: string; createdBefore?: string } => {
+const createdRange = (
+	value: AgentPayloadObject
+): { createdAfter?: string; createdBefore?: string } => {
 	if (typeof value !== 'object' || value === null) return {};
 	const createdAfter = 'createdAfter' in value ? value.createdAfter : undefined;
 	const createdBefore = 'createdBefore' in value ? value.createdBefore : undefined;
@@ -607,7 +643,7 @@ export interface AgentToolDefinition {
 	readonly description: string;
 	readonly classification: 'read' | 'proposal' | 'mutation';
 	readonly parameters: z.ZodObject;
-	readonly execute: (input: AgentPayloadObject) => Promise<unknown>;
+	readonly execute: (input: AgentPayloadObject) => Promise<AgentPayload>;
 	/**
 	 * Optional gate consulted by the approval boundary, never by the tool itself.
 	 *
@@ -664,12 +700,135 @@ const parseArguments = (schema: z.ZodObject, input: unknown): AgentPayloadObject
 	return read.value;
 };
 
-const defineTool = <T extends z.ZodObject>(
-	name: string,
+type ControllerResult<Method> = Method extends (...args: never[]) => Promise<infer Output>
+	? Output
+	: never;
+
+interface AgentToolOutputMap {
+	readonly ls: ControllerResult<AgentFilesController['ls']>;
+	readonly grep: ControllerResult<AgentFilesController['grep']>;
+	readonly sed: ControllerResult<AgentFilesController['sed']>;
+	readonly search: ControllerResult<RetrievalController['search']>;
+	readonly search_note: ControllerResult<RetrievalController['search']>;
+	readonly get_workspace_context: {
+		readonly user: UserProjection;
+		readonly projects: readonly ProjectProjection[];
+		readonly noteTree: readonly import('$lib/server/services/agent/runs/tool-views').NoteSummaryProjection[];
+		readonly skills: ControllerResult<WorkspaceController['getShellContext']>['skills'];
+		readonly pendingSuggestionCount: number;
+	};
+	readonly get_today_view: ControllerResult<WorkspaceController['getTodayView']>;
+	readonly list_projects: { readonly projects: readonly ProjectProjection[] };
+	readonly get_project: ControllerResult<ProjectsController['get']>;
+	readonly create_project: ProjectProjection;
+	readonly rename_project: ProjectProjection;
+	readonly archive_project: ProjectProjection;
+	readonly create_folder: NoteWriteProjection;
+	readonly move_project_entry: ControllerResult<ProjectsController['move']>;
+	readonly get_note: NoteViewProjection;
+	readonly create_note: NoteWriteProjection;
+	readonly save_note: NoteWriteProjection;
+	readonly edit_note:
+		| ToolFailure
+		| (NoteWriteProjection & {
+				readonly appliedEdits: number;
+				readonly matchedTexts: readonly string[];
+		  });
+	readonly rename_note: NoteWriteProjection;
+	readonly archive_note: NoteWriteProjection;
+	readonly restore_note: NoteWriteProjection;
+	readonly list_trashed_notes: ControllerResult<NotesController['listTrash']>;
+	readonly delete_note_forever: ControllerResult<NotesController['deleteForever']>;
+	readonly empty_note_trash: ControllerResult<NotesController['emptyTrash']>;
+	readonly list_note_versions: ControllerResult<NotesController['listRevisions']>;
+	readonly diff_note_versions: ControllerResult<NotesController['compareRevisions']>;
+	readonly restore_note_version: NoteWriteProjection & { readonly etag: NoteEtag };
+	readonly publish_note: NoteWriteProjection & { readonly etag: NoteEtag };
+	readonly discard_note_draft: ControllerResult<NotesController['discardDraft']>;
+	readonly list_todos: { readonly todos: readonly TodoProjection[] };
+	readonly create_todo: TodoWriteProjection;
+	readonly create_todos: { readonly todos: readonly TodoWriteProjection[] };
+	readonly update_todo: TodoWriteProjection;
+	readonly revise_mermaid_diagram: ControllerResult<DiagramsController['reviseMermaid']>;
+	readonly search_icons: ControllerResult<DiagramStudioController['searchDiagramIcons']>;
+	readonly read_project_diagram: {
+		readonly id: DiagramId;
+		readonly kind: 'mermaid' | 'drawio';
+		readonly title?: string;
+		readonly labels: string;
+		readonly path: string;
+	};
+	readonly promote_diagram: ControllerResult<DiagramsController['promote']>;
+	readonly list_suggestions: { readonly suggestions: readonly SuggestionProjection[] };
+	readonly accept_suggestion: ControllerResult<SuggestionsController['acceptReviewed']>;
+	readonly reject_suggestion: ControllerResult<SuggestionsController['reject']>;
+	readonly revert_suggestion: ControllerResult<SuggestionsController['revert']>;
+	readonly list_skills: ControllerResult<SkillsController['list']>;
+	readonly save_skill:
+		| ToolFailure
+		| { readonly noteId: NoteId; readonly name: string; readonly currentRevision: number };
+	readonly edit_skill:
+		| ToolFailure
+		| {
+				readonly noteId: NoteId;
+				readonly name: string;
+				readonly currentRevision: number;
+				readonly appliedEdits: number;
+				readonly matchedTexts: readonly string[];
+		  };
+	readonly create_skill: ControllerResult<SkillsController['create']>;
+	readonly list_skill_versions: { readonly revisions: readonly NoteRevisionProjection[] };
+	readonly restore_skill_version: ControllerResult<SkillsController['restoreVersion']>;
+	readonly update_skill: ControllerResult<SkillsController['update']>;
+	readonly set_skill_pinned: {
+		readonly noteId: NoteId;
+		readonly projectId: ProjectId;
+		readonly pinned: boolean;
+	};
+	readonly list_api_tokens: ControllerResult<ApiTokensController['list']>;
+	readonly revoke_api_token: { readonly tokenId: ApiTokenId; readonly revoked: true };
+	readonly list_attachments: ControllerResult<AttachmentsController['list']>;
+	readonly list_project_memory: { readonly entries: readonly MemoryProjection[] };
+	readonly list_user_memory: { readonly entries: readonly MemoryProjection[] };
+	readonly propose_memory_change: ControllerResult<MemoryController['propose']>;
+	readonly list_trust_policies: ControllerResult<TrustPoliciesController['list']>;
+	readonly update_trust_policy: ControllerResult<TrustPoliciesController['update']>;
+	readonly list_tool_preferences: ControllerResult<ToolPreferencesController['list']>;
+	readonly set_tool_enabled: ControllerResult<ToolPreferencesController['setEnabled']>;
+	readonly get_agent_preferences: ControllerResult<AgentSettingsController['getPreferences']>;
+	readonly update_agent_preferences: ControllerResult<
+		AgentSettingsController['updatePreferences']
+	> & {
+		readonly previous: ControllerResult<AgentSettingsController['getPreferences']>;
+	};
+	readonly list_agent_models: ControllerResult<AgentSettingsController['listModels']>;
+	readonly export_document: ControllerResult<DeliverablesController['generateDocument']>;
+	readonly list_artifacts: ControllerResult<DeliverablesController['listArtifacts']>;
+	readonly list_templates: ControllerResult<DeliverablesController['listTemplates']>;
+	readonly get_export_settings: ControllerResult<DeliverablesController['getExportSettings']>;
+	readonly update_export_settings: ControllerResult<DeliverablesController['updateExportSettings']>;
+	readonly get_artifact: NonNullable<ControllerResult<DeliverablesController['getArtifact']>>;
+	readonly download_artifact: ControllerResult<DeliverablesController['downloadArtifact']>;
+	readonly delete_artifact: { readonly artifactId: ArtifactId; readonly deleted: true };
+	readonly regenerate_artifact: ControllerResult<DeliverablesController['regenerateArtifact']>;
+	readonly extract_promises: ControllerResult<TodosController['extractPromises']>;
+	readonly relate_selection: ControllerResult<RelationshipsController['suggestFromSelection']>;
+	readonly find_references: ControllerResult<ReferencesController['suggestFromSelection']>;
+	readonly create_skill_from_selection: ControllerResult<SkillsController['createFromSelection']>;
+	readonly load_skill: SkillViewProjection;
+	readonly create_diagram: ControllerResult<DiagramStudioController['createDiagram']>;
+	readonly edit_diagram: ControllerResult<DiagramStudioController['editDiagram']>;
+	readonly read_canvas_diagram: ControllerResult<DiagramStudioController['readCanvasDiagram']>;
+}
+
+export type AgentToolOutput<Name extends ToolName> = AgentToolOutputMap[Name];
+
+const defineTool = <Name extends ToolName, T extends z.ZodObject>(
+	name: Name,
 	description: string,
 	classification: Definition['classification'],
 	parameters: T,
-	execute: (input: z.infer<T>) => Promise<unknown>,
+	execute: (input: z.infer<T>) => Promise<AgentToolOutput<Name>>,
 	preflight?: (input: z.infer<T>) => Promise<boolean>
 ): Definition => {
 	const strictParameters = parameters.strict();
@@ -683,7 +842,10 @@ const defineTool = <T extends z.ZodObject>(
 			strictParameters.parse(input);
 			const parsed = parameters.parse(input);
 			const result = await execute(parsed);
-			return filterCreated(result, createdRange(parsed));
+			const read = readAgentPayload(result);
+			if (read.kind === 'corrupt')
+				throw new Error(`Tool output could not be represented as JSON: ${read.message}`);
+			return filterCreated(read.value, createdRange(parseArguments(parameters, input)));
 		}
 	};
 };
@@ -1591,7 +1753,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('set_skill_pinned'),
 			'mutation',
 			z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
-			(input) => factory.skills().setPinned(actor, input)
+			async (input) => {
+				await factory.skills().setPinned(actor, input);
+				return input;
+			}
 		)
 	];
 	const account = (): Definition[] => [
@@ -1603,7 +1768,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('revoke_api_token'),
 			'mutation',
 			z.object({ tokenId: apiTokenId }),
-			(input) => factory.apiTokens().revoke(actor, input.tokenId)
+			async (input) => {
+				await factory.apiTokens().revoke(actor, input.tokenId);
+				return { tokenId: input.tokenId, revoked: true as const };
+			}
 		),
 		define(
 			'list_attachments',
@@ -1817,7 +1985,11 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('get_artifact'),
 			'read',
 			z.object({ artifactId: artifactId }),
-			(input) => factory.deliverables().getArtifact(actor, input.artifactId)
+			async (input) => {
+				const artifact = await factory.deliverables().getArtifact(actor, input.artifactId);
+				if (!artifact) throw new NotFoundError('Artifact not found');
+				return artifact;
+			}
 		),
 		define(
 			'download_artifact',
@@ -1831,7 +2003,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			toolDescription('delete_artifact'),
 			'mutation',
 			z.object({ artifactId: artifactId }),
-			(input) => factory.deliverables().deleteArtifact(actor, input.artifactId)
+			async (input) => {
+				await factory.deliverables().deleteArtifact(actor, input.artifactId);
+				return { artifactId: input.artifactId, deleted: true as const };
+			}
 		),
 		define(
 			'regenerate_artifact',

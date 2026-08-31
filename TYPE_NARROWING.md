@@ -202,16 +202,23 @@ produce.
 
 ### Phase 3 — Exhaustive agent tool contracts
 
-- [ ] **TN-30: Build the authoritative `AgentToolContractMap` in the agent model barrel**
-  - [ ] Key totality: the map is a mapped type over each controller's methods, so a new method
+- [x] **TN-30: Build the authoritative `AgentToolContractMap` in the agent model barrel**
+  - [x] Key totality: the map is a mapped type over each controller's methods, so a new method
         without a contract entry is a type error (the `AgentToolCoverage` precedent).
-  - [ ] Value correspondence: each entry's argument and output schemas are derived from — or
+  - [x] Value correspondence: each entry's argument and output schemas are derived from — or
         type-level-asserted against — the controller method's own signature, so a change to the
         producer is a compile error at the registry. Key totality without value correspondence is
         a checklist, not enforcement: a hand-written entry that matched yesterday's return type
         still compiles after the producer changes, which re-creates the TN-14 failure mode — a
         schema agreeing with itself, not with its producer.
-  - [ ] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`.
+  - [x] The model-owned generic keeps server controller types at the registry seam. Every active
+        method names its `ToolName` contracts, argument schemas type the adapter input, and the
+        exhaustive output map derives passthrough values from controller return types while naming
+        projected wire values explicitly. Every result is read into `AgentPayload` before leaving
+        the adapter.
+  - [x] Void mutations return explicit receipts, and a missing artifact is a `NotFoundError`
+        rather than an undefined successful result. Verify with `pnpm test:architecture`, focused
+        factory/MCP specs, `pnpm test:unit`, and `pnpm check`.
 - [ ] **TN-31: Derive generic server definitions, executor calls, events, and pending decisions**
 - [ ] **TN-32: Parse client event-stream JSON into correlated tool activities**
 - [x] **TN-33: Replace client record probes with tool-specific typed projections**
