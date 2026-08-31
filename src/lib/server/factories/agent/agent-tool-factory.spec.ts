@@ -3,6 +3,7 @@ import type { FunctionTool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
+import type { ProjectsController } from '$lib/server/controllers/projects/controller';
 import type { SkillsController } from '$lib/server/controllers/skills/controller';
 import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
@@ -24,9 +25,9 @@ import {
 	agentToolCoverage,
 	agentToolRegistry,
 	LOCKED_TOOL_NAMES,
-	type AgentToolClassification,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
+import type { AgentToolContractBinding } from '$lib/models/agent';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 
@@ -199,7 +200,7 @@ describe('Agent tool coverage invariants', () => {
 
 	it('registers one stable tool for every non-excluded controller action', () => {
 		const classifications = Object.values(agentToolCoverage).flatMap(
-			(controller) => Object.values(controller) as AgentToolClassification[]
+			(controller) => Object.values(controller) as AgentToolContractBinding[]
 		);
 		const contracts = classifications.flatMap((classification) =>
 			classification.kind === 'excluded' ? [] : classification.tools
@@ -209,10 +210,38 @@ describe('Agent tool coverage invariants', () => {
 
 	it('binds every catalog tool to one controller method', () => {
 		const bound = Object.values(agentToolCoverage)
-			.flatMap((controller) => Object.values(controller) as AgentToolClassification[])
+			.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
 			.flatMap((classification) => (classification.kind === 'excluded' ? [] : classification.tools))
 			.toSorted();
 		expect(bound).toEqual(TOOL_DESCRIPTIONS.map((entry) => entry.name).toSorted());
+	});
+
+	// Tool recovery reads this list to tell the model whether a name it got wrong
+	// can be called right now or needs a `search_tools` round-trip first. The
+	// answer used to be derived from the built SDK values by testing whether
+	// `isEnabled` was a function — but `tool()` assigns every tool one, so the
+	// test was always false and the list held only the promoted tools. Every
+	// first-class tool was reported as needing discovery, including the note
+	// writes the prompt tells the model to call directly.
+	it('offers the same tools the SDK gate would allow', async () => {
+		const tools = registry('auto_accept');
+		const gated = await enabledToolNames(tools.agentTools());
+		// `search_tools` is built rather than defined, so it has no catalog name.
+		// Compared as sets: recovery reads these into one, and only membership
+		// decides whether a name is offered.
+		expect(tools.offeredToolNames().toSorted()).toEqual(
+			gated.filter((name) => name !== 'search_tools').toSorted()
+		);
+	});
+
+	it('offers a promoted long-tail tool alongside the first-class set', () => {
+		expect(registry('auto_accept').offeredToolNames(['archive_project'])).toContain(
+			'archive_project'
+		);
+	});
+
+	it('does not offer a long-tail tool no turn has promoted', () => {
+		expect(registry('auto_accept').offeredToolNames()).not.toContain('archive_project');
 	});
 
 	// The studio is a chat with a canvas beside it, not a place. Gating this on a
@@ -1574,6 +1603,67 @@ describe('Agent tool coverage invariants', () => {
 			projectId: 'Required for project scope; omit entirely for user scope.',
 			memoryEntryId: 'Required for update or remove; omit entirely for add.'
 		});
+	});
+});
+
+/**
+ * The id the run correlates a settled call by. It used to reach the executor as
+ * `String(details?.toolCall?.callId ?? '')`, so a call the provider sent no id
+ * for arrived as a value rather than as an absence — and `AgentRunLifecycle`
+ * keys its successful mutations by exactly this string, where a second id-less
+ * mutation overwrote the first.
+ */
+describe('The provider call id', () => {
+	const recordedCallIds = (): {
+		executor: AgentToolExecutor;
+		seen: { readonly callId?: string }[];
+	} => {
+		const seen: { readonly callId?: string }[] = [];
+		return {
+			seen,
+			executor: {
+				execute: async (input, action) => {
+					seen.push(input);
+					return action();
+				}
+			}
+		};
+	};
+
+	const invokeListProjects = async (
+		executor: AgentToolExecutor,
+		details?: Parameters<FunctionTool['invoke']>[2]
+	): Promise<void> => {
+		const factory = capabilityDependencies<ControllerFactory>({
+			projects: () =>
+				capabilityDependencies<ProjectsController>({ list: async () => ({ projects: [] }) })
+		});
+		const selected = createAgentTools(
+			factory,
+			testActor(),
+			'auto_accept',
+			{
+				provenanceId: testProvenanceId(),
+				input: { conversationId: testConversationId(), prompt: 'Help' },
+				model: 'openai/gpt-5.6'
+			},
+			executor
+		)
+			.agentTools(['list_projects'])
+			.find((candidate) => candidate.name === 'list_projects') as FunctionTool;
+		await selected.invoke({} as never, JSON.stringify({}), details);
+	};
+
+	it('is absent from the executor call when the provider sent none', async () => {
+		const { executor, seen } = recordedCallIds();
+		await invokeListProjects(executor);
+		expect(seen.map((input) => 'callId' in input)).toEqual([false]);
+	});
+
+	it('is passed through unchanged when the provider sent one', async () => {
+		const { executor, seen } = recordedCallIds();
+		await invokeListProjects(executor, { toolCall: { callId: 'call-7' } } as never);
+		expect(seen.map((input) => input.callId)).toEqual(['call-7']);
 	});
 });
 

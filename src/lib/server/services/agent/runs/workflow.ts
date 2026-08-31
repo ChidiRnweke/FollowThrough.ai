@@ -8,6 +8,7 @@ import type {
 	ConversationId,
 	NoteActionKind
 } from '$lib/models/agent';
+import { readAgentPayload } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunEventRepository, AgentRunRepository } from '$lib/server/repositories/agent';
@@ -41,6 +42,18 @@ export interface WorkflowRunnerDependencies {
 	readonly defaultModel: string;
 }
 
+/**
+ * `Result` stays unconstrained, and the reading happens in {@link
+ * WorkflowRunner.execute} instead.
+ *
+ * Constraining it to `AgentPayload` is what this looks like it wants, because
+ * the result is appended to the event log and replayed to a client that
+ * reconnects. But the tasks return domain outputs — `FindReferencesOutput`,
+ * `GenerateMermaidDiagramOutput` — which are JSON-shaped and still not
+ * assignable to an index signature. Satisfying the constraint would mean
+ * putting one on each of those domain types, which is the open-keyed indexing
+ * this effort removes, in the layer furthest from the wire.
+ */
 export interface WorkflowRunTask<Result> {
 	readonly action: NoteActionKind;
 	readonly noteId: NoteId;
@@ -137,7 +150,20 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		try {
 			await this.append(runId, { type: 'run_started', runId, attempt: 1 });
 			const result = await task.run(controller.signal);
-			await this.append(runId, { type: 'workflow_result', action: task.action, result });
+			// The one place a domain result becomes wire JSON. A result that cannot
+			// be represented raises here, so the run settles as failed with that
+			// reason rather than persisting a value the replay would hand back as
+			// something other than what ran.
+			const carried = readAgentPayload(result);
+			if (carried.kind === 'corrupt')
+				throw new Error(
+					`The ${task.action} result could not be represented as JSON: ${carried.message}`
+				);
+			await this.append(runId, {
+				type: 'workflow_result',
+				action: task.action,
+				result: carried.value
+			});
 			await this.dependencies.runs.transition(runId, 'running', 'completed', {
 				finishedAt: now()
 			});

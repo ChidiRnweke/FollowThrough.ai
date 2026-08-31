@@ -832,7 +832,11 @@ describe('Agent turn span lifecycle', () => {
 	};
 
 	const reasoning = new AgentReasoning(
-		async () => ({ agentTools: () => [approvalTool], catalog: () => [] }),
+		async () => ({
+			agentTools: () => [approvalTool],
+			offeredToolNames: () => [],
+			catalog: () => []
+		}),
 		sessions,
 		'test-key',
 		'https://openrouter.test/api/v1',
@@ -887,6 +891,7 @@ describe('Agent turn span lifecycle', () => {
 					promotions.push([...alreadyPromoted]);
 					return [approvalTool];
 				},
+				offeredToolNames: () => [],
 				catalog: () => [{ name: 'save_note' }]
 			}),
 			sessions,

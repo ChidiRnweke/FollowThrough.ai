@@ -201,7 +201,7 @@ interface ToolActivityBase {
 export type ToolActivity =
 	| (ToolActivityBase & { readonly status: 'running' })
 	| (ToolActivityBase & { readonly status: 'approval_required' })
-	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: unknown })
+	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
 	| (ToolActivityBase & { readonly status: 'failed'; readonly failure: string });
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
@@ -817,7 +817,12 @@ export type AgentEvent =
 			 */
 			readonly callId?: string;
 			readonly name: string;
-			readonly output?: unknown;
+			/**
+			 * The tool's own result, already read into the wire type by the factory
+			 * before the call left it. It was `unknown`, so the journal, the replay
+			 * and every client surface narrowed the same JSON again for itself.
+			 */
+			readonly output?: AgentPayload;
 			readonly failure?: string;
 	  }
 	| {
@@ -837,7 +842,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'workflow_result';
 			readonly action: NoteActionKind;
-			readonly result: unknown;
+			readonly result: AgentPayload;
 	  }
 	| {
 			readonly type: 'failed';

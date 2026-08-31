@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import type { ActorContext, UserId } from '$lib/models/identity';
-import { FIRST_CLASS_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
+import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
 import { rankToolsForGoal } from '../lab/tool-catalog';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -31,7 +31,13 @@ const catalogActor = (): ActorContext => ({ userId: randomUUID() as UserId });
 interface RetrievalGoal {
 	readonly id: string;
 	readonly goal: string;
-	readonly expected: string;
+	/**
+	 * A catalog name, so a goal expecting a tool this application does not have
+	 * fails to compile. It used to be `string`, and such a case would have run
+	 * against the retriever and reported a retrieval miss for a tool that was
+	 * never there to retrieve.
+	 */
+	readonly expected: ToolName;
 }
 
 export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [

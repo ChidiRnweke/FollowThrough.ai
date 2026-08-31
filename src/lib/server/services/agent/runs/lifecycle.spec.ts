@@ -8,6 +8,8 @@ import type {
 	ConversationId,
 	ToolActivity
 } from '$lib/models/agent';
+import type { ToolName } from '$lib/models/agent/tool-catalog';
+import type { AgentToolExecutor } from './contracts';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
@@ -411,6 +413,58 @@ describe('settling a run whose execution threw', () => {
 	it('clears the pending decision once it has been settled in the journal', async () => {
 		const { runs } = await crashHoldingApproval();
 		expect(currentRun(runs).pendingDecisions).toEqual([]);
+	});
+});
+
+/**
+ * A turn that mutates twice through the executor, with the call ids the test
+ * supplies, and settles the calls the provider identified.
+ *
+ * The id-less case is the one that mattered: every call used to reach the
+ * executor as `String(details?.toolCall?.callId ?? '')`, so two mutations
+ * without an id shared the key `''`. The second overwrote the first, and only
+ * one of the two resources was ever reported stale.
+ */
+const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) => ({
+	execute: async function* (input: {
+		readonly toolExecutor: AgentToolExecutor;
+	}): AsyncIterable<AgentExecutionUpdate> {
+		for (const call of calls)
+			await input.toolExecutor.execute(
+				{ ...call, arguments: {}, classification: 'mutation' },
+				async () => ({ ok: true })
+			);
+		for (const call of calls)
+			if (call.callId !== undefined)
+				yield {
+					type: 'event',
+					event: { type: 'tool_completed', callId: call.callId, name: call.toolName }
+				};
+		yield { type: 'completed', sessionItems: [] };
+	} as never
+});
+
+const staleResources = async (
+	calls: readonly { toolName: ToolName; callId?: string }[]
+): Promise<string[]> => {
+	const context = setup(mutatingRunner(calls) as never);
+	await context.lifecycle.execute(testRunId, new AbortController().signal);
+	return context.runs.events.flatMap((record) =>
+		record.event.type === 'resources_stale' ? [...record.event.resources] : []
+	);
+};
+
+describe('telling the client what a mutation left stale', () => {
+	it('reports each mutation the provider gave no call id for', async () => {
+		expect(
+			await staleResources([{ toolName: 'save_note' }, { toolName: 'archive_project' }])
+		).toEqual(['save_note', 'archive_project']);
+	});
+
+	it('reports an identified mutation once its call settles', async () => {
+		expect(await staleResources([{ toolName: 'save_note', callId: 'call-1' }])).toEqual([
+			'save_note'
+		]);
 	});
 });
 

@@ -125,17 +125,23 @@ describe('journaling tool outcomes', () => {
 		expect(message.content.output).toBeNull();
 	});
 
-	it('raises when a present output value is not JSON', async () => {
+	// The spec that stood here fed a succeeded activity an output holding a
+	// function, and asserted the journal raised. `ToolActivity.succeeded.output`
+	// is `AgentPayload` now, so that fixture describes a row no producer can
+	// build, and the journal's re-read of an already-read value went with it.
+	// The reading is covered where it happens: `payload.spec.ts` for the reader,
+	// and the tool factory's own output check for the tool results that use it.
+	it('journals a succeeded call output as the value it was given', async () => {
 		const journal = new ConversationArchive(new InMemoryConversationRepository());
 		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
-		await expect(
-			journal.recordToolActivity(testActor(), conversation.id, {
-				callId: 'call-1',
-				name: 'some_tool',
-				input: {},
-				status: 'succeeded',
-				output: { notJson: () => 'x' }
-			})
-		).rejects.toThrow(/Settled tool output is not JSON/);
+		await journal.recordToolActivity(testActor(), conversation.id, {
+			callId: 'call-1',
+			name: 'some_tool',
+			input: {},
+			status: 'succeeded',
+			output: { noteId: 'note-1' }
+		});
+		const [message] = await journal.listMessages(testActor(), conversation.id);
+		expect(message.content.output).toEqual({ noteId: 'note-1' });
 	});
 });

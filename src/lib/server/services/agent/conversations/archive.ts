@@ -9,11 +9,7 @@ import type {
 	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
-import {
-	readAgentPayload,
-	type AgentPayload,
-	type AgentPayloadObject
-} from '$lib/models/agent/payload';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
@@ -21,17 +17,6 @@ import { NotFoundError } from '$lib/errors';
 import type { ConversationRepository } from '$lib/server/repositories/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
-
-/**
- * The succeeded arm's output, as the wire type. Corrupt results never reach
- * this arm: the run's event mapper settles them as `failed` before the row is
- * built, so the value read here is the classification's own result.
- */
-const jsonOutput = (value: unknown): AgentPayload => {
-	const read = readAgentPayload(value);
-	if (read.kind === 'corrupt') throw new Error(`Settled tool output is not JSON: ${read.message}`);
-	return read.value;
-};
 
 /**
  * Journal-safe projection of user images. The input interface has no index
@@ -264,12 +249,10 @@ export class ConversationArchive {
 			// A succeeded call with no output journals `null` rather than raising:
 			// a tool that returned nothing settles as `providerToolOutput`'s
 			// `none` kind and reaches here output-absent, which is a normal
-			// outcome. Only a *present* value that is not JSON is a defect, and
-			// `jsonOutput` raises for it.
+			// outcome. The value itself needs no reading here — `ToolActivity`
+			// carries the wire type, read once where the tool result was produced.
 			output:
-				activity.status === 'succeeded' && activity.output !== undefined
-					? jsonOutput(activity.output)
-					: null,
+				activity.status === 'succeeded' && activity.output !== undefined ? activity.output : null,
 			failure: activity.status === 'failed' ? activity.failure : null,
 			status: activity.status
 		};

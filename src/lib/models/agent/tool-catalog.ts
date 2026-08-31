@@ -20,7 +20,7 @@
  * to survive a discovery round-trip first. Two extra schemas per generation is a
  * cheaper price than losing the user's edit.
  */
-export const FIRST_CLASS_TOOL_NAMES = [
+export const FIRST_CLASS_TOOL_NAMES: readonly ToolName[] = [
 	'ls',
 	'grep',
 	'sed',
@@ -525,10 +525,19 @@ export const TOOL_DESCRIPTIONS = [
 /** Every tool name the catalog defines. */
 export type ToolName = (typeof TOOL_DESCRIPTIONS)[number]['name'];
 
-/** The on-demand catalog surfaced through search_tools: everything but first-class tools. */
-export const TOOL_CATALOG: readonly ToolCatalogEntry[] = TOOL_DESCRIPTIONS.filter(
-	(entry) => !FIRST_CLASS_TOOL_NAMES.includes(entry.name)
-);
+/**
+ * The on-demand catalog surfaced through search_tools: everything but
+ * first-class tools.
+ *
+ * The `name: ToolName` intersection is what keeps the literal names the const
+ * assertion above earned. A plain `readonly ToolCatalogEntry[]` annotation
+ * widened every entry's name back to `string`, so a caller could not test one
+ * against the catalog without widening its own type to match.
+ * {@link ToolCatalogEntry} itself cannot declare `name: ToolName`, because
+ * {@link ToolName} is derived from the descriptions that satisfy it.
+ */
+export const TOOL_CATALOG: readonly (ToolCatalogEntry & { readonly name: ToolName })[] =
+	TOOL_DESCRIPTIONS.filter((entry) => !FIRST_CLASS_TOOL_NAMES.includes(entry.name));
 
 /** Looks up a tool description; throws if the catalog and definitions drift apart. */
 export const toolDescription = (name: string): string => {

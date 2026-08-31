@@ -26,9 +26,12 @@ import type {
 	AgentExecutionMode,
 	AgentRun,
 	AgentToolContractMap,
-	RunAgentInput
+	RunAgentInput,
+	ToolClassification
 } from '$lib/models/agent';
 import {
+	agentPayloadItems,
+	isAgentPayloadObject,
 	readAgentPayload,
 	readAgentPayloadObject,
 	type AgentPayload,
@@ -100,7 +103,7 @@ export { FIRST_CLASS_TOOL_NAMES };
  * `agentTools()` and in the MCP surface rather than being definitions, so no
  * preference can reach them.
  */
-export const LOCKED_TOOL_NAMES = [
+export const LOCKED_TOOL_NAMES: readonly ToolName[] = [
 	'get_workspace_context',
 	'load_skill',
 	'list_tool_preferences',
@@ -115,13 +118,6 @@ export const LOCKED_TOOL_NAMES = [
 export interface ToolAccessPolicy {
 	isEnabled(toolName: string): boolean;
 }
-
-export type AgentToolClassification =
-	| {
-			readonly kind: 'read' | 'proposal' | 'mutation';
-			readonly tools: readonly ToolName[];
-	  }
-	| { readonly kind: 'excluded'; readonly reason: string };
 
 interface CoveredAgentControllers {
 	readonly agentFiles: AgentFilesController;
@@ -495,6 +491,19 @@ const none = z.object({});
 const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
 const optionalModelField = <T extends z.ZodType>(schema: T) =>
 	z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+/**
+ * The two bounds, read back out of the parsed object for the cross-field check.
+ *
+ * `temporal` is generic over the caller's shape, so zod infers the refinement's
+ * argument as a union that includes `Record<string, never>` and no longer knows
+ * the two keys this function itself just added. That is why the check used to
+ * open with `value as { createdAfter?: string; createdBefore?: string }`, which
+ * asserted a shape rather than reading one. A schema costs the same and is true.
+ */
+const createdBoundsSchema = z.object({
+	createdAfter: z.string().optional(),
+	createdBefore: z.string().optional()
+});
 const temporal = <T extends z.ZodRawShape>(shape: T) =>
 	z
 		.object({
@@ -507,38 +516,40 @@ const temporal = <T extends z.ZodRawShape>(shape: T) =>
 			)
 		})
 		.superRefine((value, context) => {
-			const range = value as { createdAfter?: string; createdBefore?: string };
-			if (
-				range.createdAfter &&
-				range.createdBefore &&
-				Date.parse(range.createdAfter) > Date.parse(range.createdBefore)
-			)
+			const { createdAfter, createdBefore } = createdBoundsSchema.parse(value);
+			if (createdAfter && createdBefore && Date.parse(createdAfter) > Date.parse(createdBefore))
 				context.addIssue({
 					code: 'custom',
 					message: 'createdAfter must be before or equal to createdBefore'
 				});
 		});
-const withinCreatedRange = <T extends { readonly createdAt: string }>(
-	value: T,
+const withinCreatedRange = (
+	createdAt: string,
 	range: { readonly createdAfter?: string; readonly createdBefore?: string }
 ): boolean =>
-	(!range.createdAfter || value.createdAt >= range.createdAfter) &&
-	(!range.createdBefore || value.createdAt <= range.createdBefore);
+	(!range.createdAfter || createdAt >= range.createdAfter) &&
+	(!range.createdBefore || createdAt <= range.createdBefore);
+/**
+ * A row is kept unless it carries a `createdAt` outside the range. The two
+ * tests used to be inline object casts — `item as { createdAt?: unknown }`, then
+ * `item as { createdAt: string }` — on a value whose type already said it was
+ * JSON. Indexing an {@link AgentPayloadObject} answers with another
+ * `AgentPayload`, so a plain `typeof` finishes the narrowing.
+ */
 const filterCreated = (
 	value: AgentPayload,
 	range: { createdAfter?: string; createdBefore?: string }
 ): AgentPayload => {
-	if (Array.isArray(value))
-		return value
-			.filter(
-				(item) =>
-					typeof item !== 'object' ||
-					item === null ||
-					typeof (item as { createdAt?: unknown }).createdAt !== 'string' ||
-					withinCreatedRange(item as { createdAt: string }, range)
-			)
+	const items = agentPayloadItems(value);
+	if (items)
+		return items
+			.filter((item) => {
+				if (!isAgentPayloadObject(item)) return true;
+				const createdAt = item.createdAt;
+				return typeof createdAt !== 'string' || withinCreatedRange(createdAt, range);
+			})
 			.map((item) => filterCreated(item, range));
-	if (typeof value !== 'object' || value === null) return value;
+	if (!isAgentPayloadObject(value)) return value;
 	return Object.fromEntries(
 		Object.entries(value).map(([key, item]) => [key, filterCreated(item, range)])
 	);
@@ -547,7 +558,6 @@ const filterCreated = (
 const createdRange = (
 	value: AgentPayloadObject
 ): { createdAfter?: string; createdBefore?: string } => {
-	if (typeof value !== 'object' || value === null) return {};
 	const createdAfter = 'createdAfter' in value ? value.createdAfter : undefined;
 	const createdBefore = 'createdBefore' in value ? value.createdBefore : undefined;
 	return {
@@ -639,9 +649,9 @@ export interface McpToolContext {
  * server (`$lib/server/mcp`) wraps the same values for external hosts.
  */
 export interface AgentToolDefinition {
-	readonly name: string;
+	readonly name: ToolName;
 	readonly description: string;
-	readonly classification: 'read' | 'proposal' | 'mutation';
+	readonly classification: ToolClassification;
 	readonly parameters: z.ZodObject;
 	readonly execute: (input: AgentPayloadObject) => Promise<AgentPayload>;
 	/**
@@ -822,6 +832,20 @@ interface AgentToolOutputMap {
 }
 
 export type AgentToolOutput<Name extends ToolName> = AgentToolOutputMap[Name];
+
+/**
+ * Key totality against the catalog, in both directions.
+ *
+ * The map is an interface, so nothing held it total over {@link ToolName}: a
+ * tool added to the catalog without an output entry stayed compilable until the
+ * first `AgentToolOutput<'that_tool'>` needed it, and an entry left behind by a
+ * deleted tool never failed at all. `agentToolCoverage` is checked structurally
+ * because it is a mapped type; this map could not be one, because its entries
+ * name concrete controller results rather than a uniform value.
+ */
+type Total<T extends never> = T;
+type _OutputMapCoversCatalog = Total<Exclude<ToolName, keyof AgentToolOutputMap>>;
+type _OutputMapNamesNothingElse = Total<Exclude<keyof AgentToolOutputMap, ToolName>>;
 
 const defineTool = <Name extends ToolName, T extends z.ZodObject>(
 	name: Name,
@@ -1011,7 +1035,13 @@ export class AgentTools {
 	 */
 	agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
 		const definitions = this.definitions();
-		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
+		// Keyed by `string`, not `ToolName`: the retriever ranks against stored
+		// embeddings and answers with whatever names that store holds, so a lookup
+		// is how a foreign name becomes a definition. The definition it finds
+		// carries the narrow name; a miss is a miss.
+		const byName = new Map<string, Definition>(
+			definitions.map((definition) => [definition.name, definition])
+		);
 		const firstClass = new Set(FIRST_CLASS_TOOL_NAMES);
 		const selected = FIRST_CLASS_TOOL_NAMES.map((name) => byName.get(name)).filter(
 			(definition): definition is Definition => definition !== undefined
@@ -1070,6 +1100,30 @@ export class AgentTools {
 		return [...direct, ...discoverable, searchTools];
 	}
 
+	/**
+	 * The catalog tools the model can call on the next generation: the first-class
+	 * set, plus whatever `search_tools` has already promoted in this conversation.
+	 * It takes the same `alreadyPromoted` list as {@link agentTools} and answers
+	 * about the same surface.
+	 *
+	 * Answered here because this is where the gate is decided. The caller used to
+	 * read it back off the built SDK values by testing
+	 * `typeof tool.isEnabled !== 'function'`, but `tool()` gives every tool an
+	 * `isEnabled` function, so the test was always false and the answer was only
+	 * ever the promoted tools — never the first-class ones. Tool recovery was
+	 * therefore telling the model to discover `save_note`, which it already held.
+	 *
+	 * `search_tools` is offered too and is deliberately absent: it is built here
+	 * rather than defined, so it has no catalog name to report.
+	 */
+	offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
+		const promoted = new Set(alreadyPromoted);
+		const firstClass = new Set<string>(FIRST_CLASS_TOOL_NAMES);
+		return this.definitions()
+			.filter((definition) => firstClass.has(definition.name) || promoted.has(definition.name))
+			.map((definition) => definition.name);
+	}
+
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
 		return TOOL_CATALOG.filter(
@@ -1114,9 +1168,14 @@ export class AgentTools {
 				),
 			execute: async (input, _runContext, details) => {
 				const args = parseArguments(definition.parameters, input);
+				// The id is passed through or omitted, never coerced. It was
+				// `String(details?.toolCall?.callId ?? '')`, so a call the provider
+				// sent no id for arrived as `''` — a value the lifecycle then used as
+				// a map key, where a second id-less call overwrote the first.
+				const callId = details?.toolCall?.callId;
 				return this.toolExecutor.execute(
 					{
-						callId: String(details?.toolCall?.callId ?? ''),
+						...(callId === undefined ? {} : { callId }),
 						toolName: definition.name,
 						arguments: args,
 						classification: definition.classification

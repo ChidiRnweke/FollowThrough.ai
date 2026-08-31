@@ -199,7 +199,12 @@ export interface SuggestionProjection {
 	readonly kind: string;
 	readonly status: string;
 	readonly confidence?: number;
-	readonly payload: unknown;
+	/**
+	 * The domain payload, which is already a union discriminated by `kind`. It
+	 * was `unknown`, so the one field of a suggestion that says what the
+	 * suggestion is arrived at the model's tool result with nothing said about it.
+	 */
+	readonly payload: Suggestion['payload'];
 	readonly createdAt: string;
 }
 

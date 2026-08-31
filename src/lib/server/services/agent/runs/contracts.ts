@@ -13,9 +13,11 @@ import type {
 	Message,
 	RunAgentInput,
 	StagedAgentRunInput,
-	ToolActivity
+	ToolActivity,
+	ToolClassification
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { ToolName } from '$lib/models/agent/tool-catalog';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
@@ -98,16 +100,34 @@ export interface InlineSuggestionThrottle {
 	release(userId: string): void;
 }
 
+/**
+ * The seam every tool call crosses between the SDK adapter and the run.
+ *
+ * The action and its result are {@link AgentPayload}, not `unknown`. The factory
+ * has already read each result into that type one frame below, so `unknown` here
+ * claimed an uncertainty that was already resolved, and every observer of a tool
+ * call had to guess the shape back.
+ *
+ * `callId` is optional because the provider does not always send one. It used to
+ * arrive as `String(details?.toolCall?.callId ?? '')`, which spelled the absence
+ * as a value. `AgentRunLifecycle` keys its successful mutations by this id, so
+ * two calls without one collided and the second settled under the first one's
+ * resource.
+ *
+ * `AgentRunLifecycle` and `AgentReasoning` declare their own copies of this
+ * port. They meet where the lifecycle hands its executor to the runner, so a
+ * copy that drifts fails `pnpm check` there.
+ */
 export interface AgentToolExecutor {
 	execute(
 		input: {
-			readonly callId: string;
-			readonly toolName: string;
+			readonly callId?: string;
+			readonly toolName: ToolName;
 			readonly arguments: AgentPayloadObject;
-			readonly classification: 'read' | 'proposal' | 'mutation';
+			readonly classification: ToolClassification;
 		},
-		action: () => Promise<unknown>
-	): Promise<unknown>;
+		action: () => Promise<AgentPayload>
+	): Promise<AgentPayload>;
 }
 export interface ConversationRecorder {
 	getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation>;

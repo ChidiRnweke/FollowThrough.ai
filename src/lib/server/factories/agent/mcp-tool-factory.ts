@@ -5,7 +5,11 @@ import type { ControllerFactory } from '$lib/server/factories/controller-factory
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { DomainError } from '$lib/errors';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import {
+	readAgentPayload,
+	type AgentPayload,
+	type AgentPayloadObject
+} from '$lib/models/agent/payload';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import {
 	McpTools,
@@ -24,12 +28,17 @@ export interface McpToolSurfaceOptions {
 	readonly toolAccess: ToolAccessPolicy;
 }
 
-/** MCP carries results as content blocks; every tool here returns JSON text. */
-const ok = (result: unknown) => {
-	if (result === undefined)
-		throw new Error('Tool returned undefined instead of an explicit result');
-	return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-};
+/**
+ * MCP carries results as content blocks; every tool here returns JSON text.
+ *
+ * The parameter is {@link AgentPayload} rather than `unknown`, so the runtime
+ * `undefined` check this used to carry is gone with it: a definition's `execute`
+ * has already read its result into that type and raises on anything that cannot
+ * be represented as JSON, which is the check the guard was standing in for.
+ */
+const ok = (result: AgentPayload) => ({
+	content: [{ type: 'text' as const, text: JSON.stringify(result) }]
+});
 
 interface McpToolFailure {
 	readonly kind: 'error';
@@ -47,7 +56,7 @@ const failed = (failure: McpToolFailure) => ({
  * error would fail the whole JSON-RPC call; `isError` lets the host's model
  * see what went wrong and try something else.
  */
-const attempt = async (run: () => Promise<unknown>) => {
+const attempt = async (run: () => Promise<AgentPayload>) => {
 	try {
 		return ok(await run());
 		// audit-allow: silent-catch — the MCP adapter converts every thrown domain failure into its explicit failed tool result.
@@ -96,7 +105,12 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 	const permitted = registry.definitions(
 		options.scope === 'read' ? { classifications: ['read'] } : {}
 	);
-	const byName = new Map(permitted.map((definition) => [definition.name, definition]));
+	// Keyed by `string` for the same reason as in `AgentTools.agentTools`: the
+	// retriever answers with names from the embedding store, and the lookup is
+	// what turns one of those into a definition.
+	const byName = new Map<string, AgentToolDefinition>(
+		permitted.map((definition) => [definition.name, definition])
+	);
 	const server = new McpServer(
 		{ name: 'followthrough', version: '1.0.0' },
 		{
@@ -155,7 +169,10 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 				.map((name) => byName.get(name))
 				.filter((definition): definition is AgentToolDefinition => definition !== undefined);
 			for (const definition of matches) register(definition);
-			return ok(
+			// Read rather than asserted: `z.toJSONSchema` answers with zod's own
+			// payload type, which is the one value on this surface that is not
+			// already known to be JSON.
+			const results = readAgentPayload(
 				matches.map((definition) => ({
 					name: definition.name,
 					description: definition.description,
@@ -164,6 +181,13 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 					callable_directly: true
 				}))
 			);
+			if (results.kind === 'corrupt')
+				return failed({
+					kind: 'error',
+					code: 'INTERNAL_ERROR',
+					message: `A tool schema could not be represented as JSON: ${results.message}`
+				});
+			return ok(results.value);
 		}
 	);
 

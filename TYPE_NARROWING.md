@@ -219,8 +219,66 @@ produce.
   - [x] Void mutations return explicit receipts, and a missing artifact is a `NotFoundError`
         rather than an undefined successful result. Verify with `pnpm test:architecture`, focused
         factory/MCP specs, `pnpm test:unit`, and `pnpm check`.
-- [ ] **TN-31: Derive generic server definitions, executor calls, events, and pending decisions**
+- [x] **TN-31: Derive generic server definitions, executor calls, events, and pending decisions**
+  - [x] The definition names itself: `AgentToolDefinition.name` is `ToolName` and its
+        classification is the model's `ToolClassification`, so the factory's duplicate
+        `AgentToolClassification` is gone. `FIRST_CLASS_TOOL_NAMES`, `LOCKED_TOOL_NAMES` and
+        `TOOL_CATALOG` carry catalog names too — a typo in any of those three lists was a tool
+        that silently never surfaced, and one runtime spec was all that stood behind it.
+        `AgentToolOutputMap` is now held total over `ToolName` in both directions; it is an
+        interface, so a tool added without an output entry compiled until the first use of
+        `AgentToolOutput<'that_tool'>`, and an entry left by a deleted tool never failed at all.
+  - [x] `AgentToolExecutor` takes `action: () => Promise<AgentPayload>` and answers with one, in
+        all three of its declarations. The factory reads every result into that type one frame
+        below, so `Promise<unknown>` — the catalog's own section-1 example — was claiming an
+        uncertainty that had already been resolved. `toolName` is a `ToolName`.
+  - [x] `callId` is optional at that seam and is passed through or omitted, never coerced. It was
+        `String(details?.toolCall?.callId ?? '')`, and `AgentRunLifecycle` keys its successful
+        mutations by exactly that string: two mutations the provider sent no id for shared the key
+        `''`, so the second overwrote the first and one of the two resources was never reported
+        stale. An id-less mutation now emits its `resources_stale` at once, because nothing will
+        settle a call that has no id to settle by.
+  - [x] `AgentTools.offeredToolNames` answers what the model can call, where the gate is decided.
+        `reasoning.ts` derived it from the built SDK values with
+        `typeof (tool as { isEnabled?: unknown }).isEnabled !== 'function'`, but `tool()` assigns
+        every tool an `isEnabled` function, so the test was always false and the answer was only
+        ever the promoted tools. Tool recovery was therefore telling the model to discover
+        `save_note` and `edit_note`, which the prompt tells it to call directly. Both specs were
+        run against the original code and fail there.
+  - [x] The MCP adapter's `ok`/`attempt` pair takes `AgentPayload`, and its runtime `undefined`
+        guard went with the `unknown`. Its `search_tools` result is read rather than asserted:
+        `z.toJSONSchema` answers with zod's own payload type, the one value on that surface not
+        already known to be JSON.
+  - [x] `AgentEvent.tool_completed.output`, `ToolActivity.succeeded.output` and
+        `workflow_result.result` carry `AgentPayload`. The persisted JSON shape does not change.
+        `ConversationArchive` no longer re-reads an already-read value, and the spec that fed it a
+        function-valued output went with that: the fixture described a row no producer can build.
+  - [x] `WorkflowRunTask<Result>` stays unconstrained, deliberately. `Result extends AgentPayload`
+        is what it looks like it wants, but the tasks return domain outputs — `FindReferencesOutput`,
+        `GenerateMermaidDiagramOutput` — that are JSON-shaped and still not assignable to an index
+        signature, so satisfying it meant putting one on each of those domain types. The read moved
+        to `WorkflowRunner.execute` instead, where a domain result becomes wire JSON, and a result
+        that cannot be represented settles the run as failed.
+  - [x] Three `no-cast-probe` violations retired: the two `createdAt` probes in `filterCreated`,
+        which indexed a value whose type already said it was JSON, and the range cast in
+        `temporal`'s refinement, where the generic shape leaves zod inferring a union that no
+        longer knows the two keys the function itself added. A schema reads them back instead.
+        `SuggestionProjection.payload` is the domain union rather than `unknown`.
+  - [x] Verified with `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`,
+        `pnpm test:contracts`, `pnpm lint`. `pnpm test:evals:smoke` was not run: it bills a real
+        provider, and the offered-tool fix is covered against the SDK's own gate in
+        `agent-tool-factory.spec.ts`.
+  - Not done here: splitting `tool_completed` into succeeded and failed arms, which it wants —
+    `output?` and `failure?` sit side by side. `AgentEvent` is persisted as
+    `jsonb('event').$type<AgentEvent>()` and asserted on read, so changing the arm shape needs a
+    read boundary with legacy mapping. It belongs with TN-32 and TN-43, which own that read path.
+    `PendingAgentDecision.toolName` stays `string` for the same reason: it comes from stored rows
+    and from provider interruptions, so closing it over the catalog without a parse would be a lie.
+    TN-34 owns that key equality.
 - [ ] **TN-32: Parse client event-stream JSON into correlated tool activities**
+  - Carries from TN-31: `AgentEvent` rows are read back with a cast, and `tool_completed` still
+    pairs an optional `output` with an optional `failure`. The arm split needs this block's read
+    boundary and its legacy mapping to land first.
 - [x] **TN-33: Replace client record probes with tool-specific typed projections**
   - [x] Name the wire type: `AgentPayload` / `AgentPayloadObject` in `models/agent/payload.ts`,
         read once at the client event and journal readers (`stores/agent/chat-tools.ts`).
@@ -235,6 +293,11 @@ produce.
     would be a guess maintained in the wrong file. `canvas-subject.ts` remains the exemplar for
     the per-tool form.
 - [ ] **TN-34: Prove registry/catalog/constructed-definition key equality and all round trips**
+  - Carries from TN-31: `AgentToolDefinition.name`, `FIRST_CLASS_TOOL_NAMES`, `LOCKED_TOOL_NAMES`
+    and `TOOL_CATALOG` are keyed by `ToolName` now, so the three runtime equality specs in
+    `agent-tool-factory.spec.ts` have a structural counterpart to be replaced by.
+    `PendingAgentDecision.toolName` is the one name still `string`, and it needs the parse this
+    block owns before it can close.
 
 ### Phase 4 — Remaining closed domain and boundary shapes
 
@@ -268,6 +331,9 @@ produce.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
   - [x] Remove the redundant actor cast-probe from controller boundary instrumentation.
   - [x] Type DOCX image widths from the parsed ProseMirror media attributes.
+  - Carries from TN-31: the `tool_completed` arm split. The event's `output?`/`failure?` pair is
+    the optional-fields-encoding-a-state pattern, and the fix needs the persisted-event read
+    boundary rather than a type change alone.
 - [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
   - [x] Parse the eval result log as a strict passed/failed union and quarantine structurally
         invalid JSON instead of trusting a cast.

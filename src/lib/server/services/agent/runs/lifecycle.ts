@@ -12,9 +12,11 @@ import type {
 	PersistedSessionItem,
 	PreparedAgentRun,
 	RunAgentInput,
-	ToolActivity
+	ToolActivity,
+	ToolClassification
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { ToolName } from '$lib/models/agent/tool-catalog';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { DateTime } from '$lib/models/workspace';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type {
@@ -31,16 +33,17 @@ interface AgentContextBuilder {
 		run: { provenanceId: ProvenanceId }
 	): Promise<AgentRunContext>;
 }
+/** Declared locally, matching the port in `./contracts`. */
 interface AgentToolExecutor {
 	execute(
 		input: {
-			readonly callId: string;
-			readonly toolName: string;
+			readonly callId?: string;
+			readonly toolName: ToolName;
 			readonly arguments: AgentPayloadObject;
-			readonly classification: 'read' | 'proposal' | 'mutation';
+			readonly classification: ToolClassification;
 		},
-		action: () => Promise<unknown>
-	): Promise<unknown>;
+		action: () => Promise<AgentPayload>
+	): Promise<AgentPayload>;
 }
 interface AgentRunner {
 	execute(input: {
@@ -107,12 +110,25 @@ export class AgentRunLifecycle {
 			const actor: ActorContext = { userId: run.userId };
 			const request = run.inputSnapshot;
 			const decisions = await this.deps.decisions.loadUnconsumed(run.id);
+			// Keyed by the provider's call id, so the stale-resource event can wait
+			// for the matching `tool_completed` and reach the client in the order it
+			// expects. The id used to arrive as `''` when the provider sent none, so
+			// two such mutations shared one key and the second overwrote the first.
 			const successfulMutations = new Map<string, string>();
 			const toolExecutor: AgentToolExecutor = {
 				execute: async (input, action) => {
 					const output = await action();
-					if (input.classification === 'mutation')
-						successfulMutations.set(input.callId, input.toolName);
+					if (input.classification !== 'mutation') return output;
+					// Nothing will settle a call the provider gave no id for, so there
+					// is nothing to wait for. The mutation already succeeded and its
+					// resource is stale either way, so say so now rather than key it
+					// under an id no `tool_completed` can carry.
+					if (input.callId === undefined)
+						await this.persistEvent(run, actor, {
+							type: 'resources_stale',
+							resources: [input.toolName]
+						});
+					else successfulMutations.set(input.callId, input.toolName);
 					return output;
 				}
 			};

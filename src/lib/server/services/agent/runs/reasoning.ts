@@ -24,8 +24,10 @@ import {
 	type ProviderToolCall,
 	type ProviderToolOutput,
 	type RunAgentInput,
+	type ToolClassification,
 	type WebResearchOptions
 } from '$lib/models/agent';
+import type { ToolName } from '$lib/models/agent/tool-catalog';
 import {
 	allImages,
 	AgentProviderFailure,
@@ -33,7 +35,7 @@ import {
 	parseProviderToolCall,
 	unwrapDispatchedToolCall
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
@@ -240,16 +242,17 @@ export class AgentReasoningEventMapper {
 	}
 }
 
+/** Declared locally, matching the port in `./contracts`. */
 interface AgentToolExecutor {
 	execute(
 		input: {
-			readonly callId: string;
-			readonly toolName: string;
+			readonly callId?: string;
+			readonly toolName: ToolName;
 			readonly arguments: AgentPayloadObject;
-			readonly classification: 'read' | 'proposal' | 'mutation';
+			readonly classification: ToolClassification;
 		},
-		action: () => Promise<unknown>
-	): Promise<unknown>;
+		action: () => Promise<AgentPayload>
+	): Promise<AgentPayload>;
 }
 interface BufferedSession extends Session {
 	snapshot(): Promise<readonly PersistedSessionItem[]>;
@@ -273,24 +276,6 @@ type AgentTurnObserver = <T>(
 
 const directTurnObserver: AgentTurnObserver = async function* (_context, operation) {
 	yield* operation();
-};
-
-/**
- * The tools the model can actually call on the next generation: everything
- * registered without a gate, plus the long-tail tools promotion has opened.
- * A gated tool carries an `isEnabled` function; an ungated one does not.
- */
-const enabledToolNames = (
-	tools: readonly Tool<unknown>[],
-	promoted: readonly string[]
-): string[] => {
-	const open = new Set(promoted);
-	return tools
-		.filter(
-			(tool) =>
-				typeof (tool as { isEnabled?: unknown }).isEnabled !== 'function' || open.has(tool.name)
-		)
-		.map((tool) => tool.name);
 };
 
 /**
@@ -371,6 +356,7 @@ export class AgentReasoning {
 			readonly executor: AgentToolExecutor;
 		}) => Promise<{
 			agentTools(alreadyPromoted?: readonly string[]): Tool<unknown>[];
+			offeredToolNames(alreadyPromoted?: readonly string[]): ToolName[];
 			catalog(): readonly { readonly name: string }[];
 		}>,
 		private readonly sessions: AgentSessionRepository,
@@ -461,7 +447,7 @@ export class AgentReasoning {
 			// is registered but gated, so passing every registered name here would
 			// report an undiscovered tool as already callable.
 			const toolRecovery = createToolRecoveryConfig(
-				enabledToolNames(tools, promoted),
+				registry.offeredToolNames(promoted),
 				catalogNames
 			);
 			const runner = new Runner({
