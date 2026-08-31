@@ -20,4 +20,9 @@ export type ToolActivityOverrides = Partial<
 		| { readonly status: 'approval_required' }
 		| { readonly status: 'rejected' }
 		| { readonly status: 'failed'; readonly failure: string }
+		| {
+				readonly status: 'reported_failure';
+				readonly failure: string;
+				readonly output: AgentPayload;
+		  }
 	);

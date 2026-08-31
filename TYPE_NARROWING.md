@@ -271,14 +271,64 @@ produce.
   - Not done here: splitting `tool_completed` into succeeded and failed arms, which it wants —
     `output?` and `failure?` sit side by side. `AgentEvent` is persisted as
     `jsonb('event').$type<AgentEvent>()` and asserted on read, so changing the arm shape needs a
-    read boundary with legacy mapping. It belongs with TN-32 and TN-43, which own that read path.
+    read boundary first. It belongs with TN-32 and TN-43, which own that read path. (Landed in
+    TN-32, as three arms rather than two.)
     `PendingAgentDecision.toolName` stays `string` for the same reason: it comes from stored rows
     and from provider interruptions, so closing it over the catalog without a parse would be a lie.
     TN-34 owns that key equality.
-- [ ] **TN-32: Parse client event-stream JSON into correlated tool activities**
-  - Carries from TN-31: `AgentEvent` rows are read back with a cast, and `tool_completed` still
-    pairs an optional `output` with an optional `failure`. The arm split needs this block's read
-    boundary and its legacy mapping to land first.
+- [x] **TN-32: Parse persisted and streamed run events, and split the tool outcome arms**
+  - [x] `readAgentEvent` and `agentEventSchema` in `models/agent/index.ts`, with `StoredAgentEvent`
+        as a read-boundary union rather than a sixth arm on `AgentEvent`. `AgentEvent` is the write
+        type too, and an `unrecognised` arm on it is a state a producer could say; `StoredSuggestion`
+        set the precedent. The three readers of one stored shape are retired with it:
+        `row.event` handed out under `jsonb('event').$type<AgentEvent>()`, the SSE frame's
+        `JSON.parse(event.data) as Omit<AgentRunEventRecord, 'createdAt'> & { createdAt: string }`,
+        and `restoredTool`'s `String(content.callId ?? '')` /
+        `String(content.status ?? 'succeeded') as ChatToolStatus`.
+  - [x] `tool_completed` is three arms: `tool_succeeded` (`output?`), `tool_reported_failure`
+        (`failure` **and** `output`, both required) and `tool_failed` (`failure`). Measured, not
+        guessed: of 147 stored rows, 117 carried `callId, name, output` and 30 carried a `failure`
+        beside the serialized `{"failure":…}` the tool returned — the ADR-0035 case — and both
+        consumers branched on `failure` first and dropped that output. One row in five lost its
+        detail on every replay. `ToolActivity` and `ChatToolActivity` carry the arm too, so the
+        fact survives the journal, and `toolFailure`'s second route
+        (`readToolFailure(tool.output)` on a `succeeded` row) is gone with it: the classification
+        happens in `AgentToolEventMapper.outcome`, where the value is produced.
+  - [x] No compatibility mapping. A reader branch for the retired shape is a second definition of
+        the union that nothing keeps correct, so the rows moved instead:
+        `drizzle/0049_split_tool_outcome_events.sql` rewrites 30 rows into `tool_reported_failure`
+        and 117 into `tool_succeeded`, following `0047_rename_diagram_tools`, which faced the same
+        problem — a name the code stopped using and the rows still carried.
+  - [x] `toolActivityFromEvent` is model-owned because two services need it and a service may not
+        import another. `AgentRunLifecycle` and `DiagramAuthoring` held a copy each and had already
+        diverged — the diagram one wrote `output: undefined` onto a `succeeded` row, which the wire
+        type cannot carry.
+  - [x] `segmentOutput` takes `StoredAgentEvent`, and an unreadable row closes the open segment
+        rather than being skipped: it is something that happened between two runs of output, and
+        merging across it would give the second run the first one's cursor. The controller drops
+        unreadable rows from the replay and warns with their cursors, the way `SuggestionInbox`
+        does; the repository's `append` still raises, because an event it cannot read back is a
+        writer bug and should be loud at the write.
+  - [x] The dead `suggestion` arm is deleted. Nothing has ever emitted one — no producer in the
+        repository, no stored row — and it was the only reason `models/agent` carried its own copy
+        of the suggestion type tree: `SuggestionBase`, five payload types, `CreateTodoInput`,
+        `CreateRelationshipInput`, `CreateReferenceInput`, `MemoryChangePayload` and eleven aliases
+        that existed to support them. Writing a schema for an event no producer emits would have
+        been a hand-copy of another domain's parser maintained against nothing.
+  - [x] `tests/corpus/agent-run-events.json` (2554 rows) and `agent-tool-messages.json` (129) are
+        captured by `pnpm corpus:capture`, and `tests/unit/corpus.spec.ts` asserts **zero**
+        unreadable rows in either. Both were verified to fail before the backfill ran, which is the
+        only reason to trust them. `agent-event.spec.ts` covers the three arms, the frame reader and
+        the refusals; the contract spec round-trips `tool_reported_failure` through jsonb.
+  - Not done here: `messages.content` is still `jsonb('content').$type<AgentPayloadObject>()` with
+    no parse at the mapper. The client journal reader parses defensively, so a corrupt row degrades
+    to one visible unreadable transcript row, but the DB-side read belongs with TN-44's remaining
+    JSONB boundaries. `scripts/audit-topology.ts` also still scans only `src/lib/server/db/mappers.ts`
+    for `parse*`/`read*` corpus coverage, and this parser lives in the agent repository, so nothing
+    forced the corpus entry — widening that scan belongs with TN-54's sweep.
+  - Verified with `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`, `pnpm test:contracts`,
+    `pnpm lint`. `pnpm test:evals:smoke` was not run: it bills a real provider, and the mapper's
+    three arms are covered against the SDK's own shapes in `reasoning.spec.ts`.
 - [x] **TN-33: Replace client record probes with tool-specific typed projections**
   - [x] Name the wire type: `AgentPayload` / `AgentPayloadObject` in `models/agent/payload.ts`,
         read once at the client event and journal readers (`stores/agent/chat-tools.ts`).
@@ -331,9 +381,8 @@ produce.
 - [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
   - [x] Remove the redundant actor cast-probe from controller boundary instrumentation.
   - [x] Type DOCX image widths from the parsed ProseMirror media attributes.
-  - Carries from TN-31: the `tool_completed` arm split. The event's `output?`/`failure?` pair is
-    the optional-fields-encoding-a-state pattern, and the fix needs the persisted-event read
-    boundary rather than a type change alone.
+  - [x] The `tool_completed` arm split landed in TN-32, which owns the persisted-event read
+        boundary the change needed.
 - [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
   - [x] Parse the eval result log as a strict passed/failed union and quarantine structurally
         invalid JSON instead of trusting a cast.

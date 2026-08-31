@@ -276,6 +276,47 @@ describe('Postgres durable agent run repository invariants', () => {
 			[...replay.map((event) => event.cursor)].sort((left, right) => Number(left) - Number(right))
 		);
 	});
+	/**
+	 * The three outcome arms go through jsonb and come back parsed rather than
+	 * asserted, so a shape the column's `$type<AgentEvent>()` merely claims cannot
+	 * survive the round trip unnoticed. `tool_reported_failure` is the arm worth
+	 * the trip: its failure and its output are both required, and the pair used to
+	 * be two optionals that every reader dropped one half of.
+	 */
+	it('replays a reported failure with both the message and the value it came from', async () => {
+		const run = await seedQueuedRun('95');
+		const events = new AgentRunEventRecords(context.db);
+		await events.append(run.id, 1, {
+			type: 'tool_reported_failure',
+			callId: 'call-95',
+			name: 'edit_note',
+			failure: 'No edits were applied.',
+			output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
+		});
+		const [replayed] = await events.replay(actor('95'), run.id, '0');
+		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
+			type: 'tool_reported_failure',
+			callId: 'call-95',
+			name: 'edit_note',
+			failure: 'No edits were applied.',
+			output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
+		});
+	});
+	it('replays a success that returned nothing without inventing a result', async () => {
+		const run = await seedQueuedRun('96');
+		const events = new AgentRunEventRecords(context.db);
+		await events.append(run.id, 1, {
+			type: 'tool_succeeded',
+			callId: 'call-96',
+			name: 'save_note'
+		});
+		const [replayed] = await events.replay(actor('96'), run.id, '0');
+		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
+			type: 'tool_succeeded',
+			callId: 'call-96',
+			name: 'save_note'
+		});
+	});
 	it('returns the same durable decision for an identical retry', async () => {
 		const run = await seedQueuedRun('94');
 		const owner = actor('94');

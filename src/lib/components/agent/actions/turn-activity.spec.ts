@@ -289,15 +289,17 @@ describe('A turn states each cause once, and names everything it befell', () => 
 /**
  * `edit_note` returns `{ failure, problems }` as a value rather than throwing, on
  * purpose: a throw is stringified to a bare message and strips the counts the model
- * needs to correct itself (ADR 0035). The run journals it `succeeded` all the same, so
- * nothing downstream saw it — the row read "Edited note" in ordinary colour and the
- * summary claimed the verb `edited`. ADR 0015: a user must be able to tell.
+ * needs to correct itself (ADR 0035). The run used to journal it `succeeded` all the
+ * same, so nothing downstream saw it — the row read "Edited note" in ordinary colour
+ * and the summary claimed the verb `edited`. ADR 0015: a user must be able to tell.
+ * The run classifies it now, and the row arrives on the arm that says so.
  */
 describe('A failure a tool returned as a value is still a failure', () => {
 	const noOpEdit = call({
 		name: 'edit_note',
 		arguments: { noteId: NOTE_ID },
-		status: 'succeeded',
+		status: 'reported_failure',
+		failure: 'No edits were applied.',
 		output: { failure: 'No edits were applied.', problems: ['Edit 1: oldText was not found.'] }
 	});
 

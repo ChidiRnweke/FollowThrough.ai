@@ -6,7 +6,9 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunStatus,
-	ConversationId
+	ConversationId,
+	StoredAgentEvent,
+	StoredAgentRunEventRecord
 } from '$lib/models/agent';
 import type { ResolvedAgentRun } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -55,7 +57,7 @@ export interface AgentRunEventRepository {
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
-	): Promise<readonly AgentRunEventRecord[]>;
+	): Promise<readonly StoredAgentRunEventRecord[]>;
 	latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string>;
 	reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]>;
 }
@@ -80,7 +82,7 @@ export interface OutputSegment {
  * repository so a fake and Postgres cannot disagree about what a turn looked like.
  */
 export const segmentOutput = (
-	records: readonly { readonly cursor: string; readonly event: AgentEvent }[]
+	records: readonly { readonly cursor: string; readonly event: StoredAgentEvent }[]
 ): readonly OutputSegment[] => {
 	const segments: { kind: 'text' | 'reasoning'; text: string; cursor: string }[] = [];
 	// `open` is what makes this faithful rather than merely grouped: anything else in the
@@ -89,14 +91,22 @@ export const segmentOutput = (
 	// ahead of the work it describes.
 	let open: (typeof segments)[number] | undefined;
 	for (const { cursor, event } of records) {
-		if (event.type !== 'text_delta' && event.type !== 'reasoning_delta') {
+		// An unreadable row closes the open segment rather than being skipped. It is
+		// something that happened between two runs of output, and merging across it
+		// would give the second run the first one's cursor.
+		if (event.kind === 'unreadable') {
 			open = undefined;
 			continue;
 		}
-		const kind = event.type === 'text_delta' ? 'text' : 'reasoning';
-		if (open?.kind === kind) open.text += event.text;
+		const { event: readable } = event;
+		if (readable.type !== 'text_delta' && readable.type !== 'reasoning_delta') {
+			open = undefined;
+			continue;
+		}
+		const kind = readable.type === 'text_delta' ? 'text' : 'reasoning';
+		if (open?.kind === kind) open.text += readable.text;
 		else {
-			open = { kind, text: event.text, cursor };
+			open = { kind, text: readable.text, cursor };
 			segments.push(open);
 		}
 	}

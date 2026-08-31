@@ -216,7 +216,7 @@ class DeferredHydrationTransport extends FakeAgentRunTransport {
 const streamedEvents: AgentEvent[] = [
 	{ type: 'text_delta', text: 'Let me check. ' },
 	{ type: 'tool_started', callId: 'call-1', name: 'find_references', arguments: { query: 'x' } },
-	{ type: 'tool_completed', callId: 'call-1', name: 'find_references', output: { count: 2 } },
+	{ type: 'tool_succeeded', callId: 'call-1', name: 'find_references', output: { count: 2 } },
 	{ type: 'text_delta', text: 'Found two.' }
 ];
 
@@ -287,7 +287,7 @@ describe('chat event projection', () => {
 			{ type: 'reasoning_delta', text: 'Let me search. ' },
 			{ type: 'reasoning_delta', text: 'Broadly first.' },
 			{ type: 'tool_started', callId: 'call-1', name: 'search', arguments: { query: '*' } },
-			{ type: 'tool_completed', callId: 'call-1', name: 'search', output: { count: 1 } },
+			{ type: 'tool_succeeded', callId: 'call-1', name: 'search', output: { count: 1 } },
 			{ type: 'text_delta', text: 'Found one.' }
 		]);
 		expect({
@@ -300,6 +300,52 @@ describe('chat event projection', () => {
 				text: 'Let me search. Broadly first.'
 			}
 		});
+	});
+
+	/**
+	 * A call that reports its own failure used to reach the transcript as a
+	 * `succeeded` row, and only a second question asked at each surface —
+	 * `readToolFailure(tool.output)` — kept a no-op `edit_note` from rendering as
+	 * "Edited note" in ordinary colour (ADR 0015). The run classifies it now, so
+	 * the row arrives in the arm that says so, with the detail still attached.
+	 */
+	it('settles a reported failure into its own arm, keeping the detail', async () => {
+		const { reply } = await sendWith([
+			{ type: 'tool_started', callId: 'call-9', name: 'edit_note', arguments: { noteId: 'n1' } },
+			{
+				type: 'tool_reported_failure',
+				callId: 'call-9',
+				name: 'edit_note',
+				failure: 'No edits were applied.',
+				output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
+			}
+		]);
+		expect(entryTools(reply)).toEqual([
+			{
+				callId: 'call-9',
+				name: 'edit_note',
+				arguments: { noteId: 'n1' },
+				failure: 'No edits were applied.',
+				output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] },
+				status: 'reported_failure'
+			}
+		]);
+	});
+
+	it('settles a failed call onto the row its call opened', async () => {
+		const { reply } = await sendWith([
+			{ type: 'tool_started', callId: 'call-3', name: 'save_note', arguments: { title: 'A' } },
+			{ type: 'tool_failed', callId: 'call-3', name: 'save_note', failure: 'Denied' }
+		]);
+		expect(entryTools(reply)).toEqual([
+			{
+				callId: 'call-3',
+				name: 'save_note',
+				arguments: { title: 'A' },
+				failure: 'Denied',
+				status: 'failed'
+			}
+		]);
 	});
 
 	it('answers every parked call in one decision', async () => {

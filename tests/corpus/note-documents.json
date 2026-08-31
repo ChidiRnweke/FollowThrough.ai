@@ -243,30 +243,6 @@
 				"type": "paragraph",
 				"attrs": {
 					"textAlign": null
-				},
-				"content": [
-					{
-						"text": "«redacted 7 chars»",
-						"type": "text",
-						"marks": [
-							{
-								"type": "link",
-								"attrs": {
-									"rel": "noopener noreferrer nofollow",
-									"href": "https://redacted.invalid/asset",
-									"class": null,
-									"title": null,
-									"target": "_blank"
-								}
-							}
-						]
-					}
-				]
-			},
-			{
-				"type": "paragraph",
-				"attrs": {
-					"textAlign": null
 				}
 			},
 			{
@@ -1143,30 +1119,6 @@
 					"width": "55.47169811320755%",
 					"height": 267
 				}
-			},
-			{
-				"type": "paragraph",
-				"attrs": {
-					"textAlign": null
-				},
-				"content": [
-					{
-						"text": "«redacted 15 chars»",
-						"type": "text",
-						"marks": [
-							{
-								"type": "link",
-								"attrs": {
-									"rel": "noopener noreferrer nofollow",
-									"href": "https://redacted.invalid/asset",
-									"class": null,
-									"title": null,
-									"target": "_blank"
-								}
-							}
-						]
-					}
-				]
 			},
 			{
 				"type": "paragraph",

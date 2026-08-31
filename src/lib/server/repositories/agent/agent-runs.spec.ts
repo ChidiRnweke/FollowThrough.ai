@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent, AgentRunId } from '$lib/models/agent';
+import type { AgentEvent, AgentRunId, StoredAgentEvent } from '$lib/models/agent';
 import { segmentOutput } from './agent-runs';
 
 const runId = '00000000-0000-4000-8000-000000000001' as AgentRunId;
 
 let cursor = 0;
-const at = (event: AgentEvent) => ({ cursor: String(++cursor), event });
+const stored = (event: AgentEvent): StoredAgentEvent => ({ kind: 'readable', event });
+const at = (event: AgentEvent) => ({ cursor: String(++cursor), event: stored(event) });
 
 const text = (value: string): AgentEvent => ({ type: 'text_delta', text: value });
 const thinking = (value: string): AgentEvent => ({ type: 'reasoning_delta', text: value });
@@ -36,14 +37,24 @@ describe('A turn is folded into the runs of output it was', () => {
 
 	it('remembers where a segment began, which is what puts the turn back in order', () => {
 		const segments = segmentOutput([
-			{ cursor: '1', event: text('a') },
-			{ cursor: '2', event: toolStarted() },
-			{ cursor: '3', event: text('b') }
+			{ cursor: '1', event: stored(text('a')) },
+			{ cursor: '2', event: stored(toolStarted()) },
+			{ cursor: '3', event: stored(text('b')) }
 		]);
 		expect(segments.at(-1)?.cursor).toBe('3');
 	});
 
 	it('ignores events that are neither', () => {
 		expect(segmentOutput([at({ type: 'run_started', runId, attempt: 1 })])).toEqual([]);
+	});
+
+	it('closes the open segment on a row it could not read, rather than merging across it', () => {
+		expect(
+			segmentOutput([
+				{ cursor: '1', event: stored(text('a')) },
+				{ cursor: '2', event: { kind: 'unreadable', reason: 'unrecognised type' } },
+				{ cursor: '3', event: stored(text('b')) }
+			]).map((segment) => segment.text)
+		).toEqual(['a', 'b']);
 	});
 });

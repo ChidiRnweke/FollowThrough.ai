@@ -197,25 +197,37 @@ export class AgentToolEventMapper {
 		const callId = call.callId ?? soleActive;
 		const known = callId === undefined ? undefined : this.calls.get(callId);
 		if (callId !== undefined) this.calls.delete(callId);
-		return {
-			type: 'tool_completed',
-			...(callId === undefined ? {} : { callId }),
-			name: known?.name ?? call.name,
-			...this.outcome(call.output)
-		};
+		return this.outcome(
+			{ ...(callId === undefined ? {} : { callId }), name: known?.name ?? call.name },
+			call.output
+		);
 	}
 
 	/**
-	 * What the row settles as. An unreadable result is a failure rather than a
-	 * success carrying no output: the two are different facts, and reporting the
-	 * first when the second happened is the case ADR 0015 exists for.
+	 * Which outcome arm the row settles as.
+	 *
+	 * Three arms because there are three facts, and the mapper is where all three
+	 * are still distinguishable. An unreadable result is a failure rather than a
+	 * success carrying no output — reporting the first when the second happened is
+	 * the case ADR 0015 exists for — and a result that reports its own failure
+	 * keeps the value it reported it in, which the model needs on the next attempt
+	 * (ADR 0035) and which the old single arm dropped.
 	 */
-	private outcome(output: ProviderToolOutput) {
-		if (output.kind === 'none') return {};
+	private outcome(
+		identity: { readonly callId?: string; readonly name: string },
+		output: ProviderToolOutput
+	): AgentEvent {
+		if (output.kind === 'none') return { type: 'tool_succeeded', ...identity };
 		if (output.kind === 'corrupt')
-			return { failure: `The tool result could not be read. ${output.message}` };
+			return {
+				type: 'tool_failed',
+				...identity,
+				failure: `The tool result could not be read. ${output.message}`
+			};
 		const failure = readToolFailure(output.value);
-		return { output: output.value, ...(failure ? { failure } : {}) };
+		return failure === undefined
+			? { type: 'tool_succeeded', ...identity, output: output.value }
+			: { type: 'tool_reported_failure', ...identity, failure, output: output.value };
 	}
 }
 

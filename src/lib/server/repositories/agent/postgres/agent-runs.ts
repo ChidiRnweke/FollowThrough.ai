@@ -4,8 +4,10 @@ import type {
 	AgentEvent,
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
-	AgentRunId
+	AgentRunId,
+	StoredAgentRunEventRecord
 } from '$lib/models/agent';
+import { readAgentEvent } from '$lib/models/agent';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -16,13 +18,41 @@ import { segmentOutput } from '$lib/server/repositories/agent';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
 
-const toEvent = (row: typeof schema.agentRunEvents.$inferSelect): AgentRunEventRecord => ({
-	cursor: row.cursor.toString(),
-	runId: row.runId as AgentRunId,
-	attempt: row.attempt,
-	event: row.event,
-	createdAt: row.createdAt
-});
+/**
+ * The stored row, read.
+ *
+ * `jsonb('event').$type<AgentEvent>()` is a declaration, not a check: it is the
+ * writer's promise about rows the writer has not seen, and every row in the
+ * table predates at least one change to the union. The parse is what makes the
+ * type true, and the unreadable arm is what keeps one bad row from being the
+ * whole replay.
+ */
+const toStoredEvent = (
+	row: typeof schema.agentRunEvents.$inferSelect
+): StoredAgentRunEventRecord => {
+	const identity = {
+		cursor: row.cursor.toString(),
+		runId: row.runId as AgentRunId,
+		attempt: row.attempt,
+		createdAt: row.createdAt
+	};
+	const read = readAgentEvent(row.event);
+	return read.kind === 'readable'
+		? { ...identity, kind: 'readable', event: read.event }
+		: { ...identity, kind: 'unreadable', reason: read.reason };
+};
+
+/**
+ * The row a write just produced. A round-trip through the parse rather than the
+ * value that went in, so an event this repository cannot read back is loud at
+ * the append rather than silent until the replay.
+ */
+const toEvent = (row: typeof schema.agentRunEvents.$inferSelect): AgentRunEventRecord => {
+	const stored = toStoredEvent(row);
+	if (stored.kind === 'unreadable')
+		throw new Error(`Appended agent run event did not read back: ${stored.reason}`);
+	return stored;
+};
 
 const toDecision = (row: typeof schema.agentRunDecisions.$inferSelect): AgentRunDecisionRecord => ({
 	runId: row.runId as AgentRunId,
@@ -52,7 +82,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
-	): Promise<readonly AgentRunEventRecord[]> {
+	): Promise<readonly StoredAgentRunEventRecord[]> {
 		const rows = await this.database
 			.select({ event: schema.agentRunEvents })
 			.from(schema.agentRunEvents)
@@ -65,7 +95,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 				)
 			)
 			.orderBy(asc(schema.agentRunEvents.cursor));
-		return rows.map(({ event }) => toEvent(event));
+		return rows.map(({ event }) => toStoredEvent(event));
 	}
 
 	async latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string> {
@@ -88,7 +118,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return segmentOutput(
 			rows.map(({ cursor, event }) => ({
 				cursor: String(cursor),
-				event
+				event: readAgentEvent(event)
 			}))
 		);
 	}

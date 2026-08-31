@@ -22,13 +22,10 @@ import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
 import {
 	matchToolActivity,
 	mergeToolActivity,
-	settledTool,
+	readJournalledTool,
 	toolArguments,
-	type ChatToolActivity,
-	type ChatToolActivityBase,
-	type ChatToolStatus
+	type ChatToolActivity
 } from './chat-tools';
-import { suggestionToView } from '../suggestions/suggestion-view';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
 import type { SelectionChip } from './selection-chip';
@@ -232,24 +229,24 @@ const ABANDONED_APPROVAL = 'The run ended before you answered.';
  * so this needs no new state and no rewrite of the rows already stored that way.
  */
 const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivity => {
-	const content = message.content;
-	const status = String(content.status ?? 'succeeded') as ChatToolStatus;
-	const abandoned = status === 'approval_required' && message.runId !== awaitingRunId;
-	const base: ChatToolActivityBase = {
-		callId: String(content.callId ?? ''),
-		name: String(content.name ?? 'tool'),
-		arguments: toolArguments(content.input ?? {}),
+	const read = readJournalledTool(message.content, {
 		...(message.runId ? { runId: message.runId } : {})
-	};
-	const failure = typeof content.failure === 'string' ? content.failure : undefined;
-	if (abandoned) return { ...base, failure: failure ?? ABANDONED_APPROVAL, status: 'failed' };
-	// Journal content is untyped JSON, so a `failed` row with no message is not
-	// something the type system can rule out here. Every writer supplies one; a row
-	// that somehow does not still has to say it failed rather than say nothing.
-	if (status === 'failed')
-		return { ...base, failure: failure ?? 'The tool call failed.', status: 'failed' };
-	if (status === 'succeeded') return settledTool(base, content.output);
-	return { ...base, status };
+	});
+	// A row this reader cannot reconstruct is shown as a failed call that says so,
+	// rather than being dropped from the turn. The work was attempted; hiding the
+	// row would report a turn that did less than it did.
+	if (read.kind === 'unreadable')
+		return {
+			name: 'tool',
+			arguments: {},
+			...(message.runId ? { runId: message.runId } : {}),
+			failure: `This tool call could not be read back from the transcript. ${read.reason}`,
+			status: 'failed'
+		};
+	const { tool } = read;
+	return tool.status === 'approval_required' && message.runId !== awaitingRunId
+		? { ...tool, failure: ABANDONED_APPROVAL, status: 'failed' }
+		: tool;
 };
 
 /** Where a message sat in its run's event stream. Messages without one keep their order. */
@@ -888,19 +885,31 @@ export class ChatStore {
 				arguments: toolArguments(event.arguments),
 				status: 'running'
 			});
-		} else if (event.type === 'tool_completed') {
-			applyToolActivity(
-				reply.parts,
-				event.failure
-					? {
-							callId: event.callId,
-							name: event.name,
-							arguments: {},
-							failure: event.failure,
-							status: 'failed'
-						}
-					: settledTool({ callId: event.callId, name: event.name, arguments: {} }, event.output)
-			);
+		} else if (event.type === 'tool_succeeded') {
+			applyToolActivity(reply.parts, {
+				callId: event.callId,
+				name: event.name,
+				arguments: {},
+				...(event.output === undefined ? {} : { output: event.output }),
+				status: 'succeeded'
+			});
+		} else if (event.type === 'tool_reported_failure') {
+			applyToolActivity(reply.parts, {
+				callId: event.callId,
+				name: event.name,
+				arguments: {},
+				failure: event.failure,
+				output: event.output,
+				status: 'reported_failure'
+			});
+		} else if (event.type === 'tool_failed') {
+			applyToolActivity(reply.parts, {
+				callId: event.callId,
+				name: event.name,
+				arguments: {},
+				failure: event.failure,
+				status: 'failed'
+			});
 		} else if (event.type === 'approval_required') {
 			this.runStatus = 'awaiting_approval';
 			reply.status = 'awaiting_approval';
@@ -911,9 +920,7 @@ export class ChatStore {
 				runId: event.runId,
 				status: 'approval_required'
 			});
-		} else if (event.type === 'suggestion')
-			reply.suggestions.push(suggestionToView(event.suggestion, 'agent'));
-		else if (event.type === 'failed') {
+		} else if (event.type === 'failed') {
 			reply.status = event.retryable ? 'queued' : 'failed';
 			reply.runId = event.runId ?? reply.runId;
 			reply.error = event.message;

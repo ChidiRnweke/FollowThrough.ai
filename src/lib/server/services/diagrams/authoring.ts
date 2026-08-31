@@ -21,7 +21,7 @@ import type {
 	ToolActivity,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import { parseProviderStreamEvent } from '$lib/models/agent';
+import { parseProviderStreamEvent, toolActivityFromEvent } from '$lib/models/agent';
 import type {
 	ConvertInlineMermaidInput,
 	Diagram,
@@ -592,32 +592,12 @@ export class DiagramAuthoring {
 						task.signal?.throwIfAborted();
 						const event = parseProviderStreamEvent(streamed);
 						const toolEvent = mapper.map(event);
-						if (toolEvent?.type === 'tool_started')
-							await this.dependencies.conversations.recordToolActivity(actor, conversation.id, {
-								callId: toolEvent.callId,
-								name: toolEvent.name,
-								input: toolEvent.arguments,
-								status: 'running'
-							});
-						if (toolEvent?.type === 'tool_completed')
+						const activity = toolEvent && toolActivityFromEvent(toolEvent);
+						if (activity)
 							await this.dependencies.conversations.recordToolActivity(
 								actor,
 								conversation.id,
-								toolEvent.failure
-									? {
-											callId: toolEvent.callId,
-											name: toolEvent.name,
-											input: {},
-											failure: toolEvent.failure,
-											status: 'failed'
-										}
-									: {
-											callId: toolEvent.callId,
-											name: toolEvent.name,
-											input: {},
-											output: toolEvent.output,
-											status: 'succeeded'
-										}
+								activity
 							);
 						if (event.type === 'text_delta') assistantText += event.text;
 					}

@@ -607,14 +607,25 @@ describe('Agent tool event invariants', () => {
 		const mapper = new AgentToolEventMapper();
 		mapper.map(toolCalled({ callId: 'call-1', name: 'find_references' }));
 		const event = mapper.map(toolOutput({ callId: 'call-1' }));
-		expect(event).toEqual({ type: 'tool_completed', callId: 'call-1', name: 'find_references' });
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-1', name: 'find_references' });
 	});
 
-	it('maps a controller failure returned by the tool boundary', () => {
+	/**
+	 * The value the tool returned rides along on this arm. It used to sit beside the
+	 * failure as a second optional, and both readers branched on the failure first and
+	 * dropped it — on 30 of the 147 rows the run had stored.
+	 */
+	it('maps a failure the tool returned as a value, keeping the value', () => {
 		const event = new AgentToolEventMapper().map(
 			toolOutput({ callId: 'call-2', name: 'create_note', output: '{"failure":"Denied"}' })
 		);
-		expect(event).toMatchObject({ type: 'tool_completed', callId: 'call-2', failure: 'Denied' });
+		expect(event).toEqual({
+			type: 'tool_reported_failure',
+			callId: 'call-2',
+			name: 'create_note',
+			failure: 'Denied',
+			output: '{"failure":"Denied"}'
+		});
 	});
 
 	it('settles an unreadable tool result as a failure rather than an empty success', () => {
@@ -628,7 +639,7 @@ describe('Agent tool event invariants', () => {
 			}
 		});
 		expect(event).toMatchObject({
-			type: 'tool_completed',
+			type: 'tool_failed',
 			failure: expect.stringContaining('Date')
 		});
 	});
@@ -659,14 +670,14 @@ describe('Agent tool event invariants', () => {
 			})
 		);
 		const event = mapper.map(toolOutput({ callId: 'call-4', name: 'use_tool' }));
-		expect(event).toEqual({ type: 'tool_completed', callId: 'call-4', name: 'save_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-4', name: 'save_note' });
 	});
 
 	it('settles an outcome without an id onto the one call in flight', () => {
 		const mapper = new AgentToolEventMapper();
 		mapper.map(toolCalled({ callId: 'call-5', name: 'search_notes' }));
 		const event = mapper.map(toolOutput({ name: 'search_notes' }));
-		expect(event).toEqual({ type: 'tool_completed', callId: 'call-5', name: 'search_notes' });
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-5', name: 'search_notes' });
 	});
 
 	it('reports no call id when an outcome without one meets several calls in flight', () => {
@@ -674,19 +685,19 @@ describe('Agent tool event invariants', () => {
 		mapper.map(toolCalled({ callId: 'call-6', name: 'search_notes' }));
 		mapper.map(toolCalled({ callId: 'call-7', name: 'read_note' }));
 		const event = mapper.map(toolOutput({ name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_completed', name: 'read_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', name: 'read_note' });
 	});
 
 	it('reports no call id when an outcome without one meets no call in flight', () => {
 		const event = new AgentToolEventMapper().map(toolOutput({ name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_completed', name: 'read_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', name: 'read_note' });
 	});
 
 	it('does not settle a second call onto the first when the outcome names its own', () => {
 		const mapper = new AgentToolEventMapper();
 		mapper.map(toolCalled({ callId: 'call-8', name: 'search_notes' }));
 		const event = mapper.map(toolOutput({ callId: 'call-unknown', name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_completed', callId: 'call-unknown', name: 'read_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-unknown', name: 'read_note' });
 	});
 });
 

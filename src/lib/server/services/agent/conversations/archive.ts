@@ -9,7 +9,7 @@ import type {
 	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
@@ -30,6 +30,19 @@ const imagePayloads = (images: readonly ConversationImageInput[]): AgentPayloadO
 		dataUrl: image.dataUrl,
 		name: image.name
 	}));
+
+/**
+ * The value a settled call produced, off the arm that can carry one.
+ *
+ * `reported_failure` keeps its output: the failure string was read out of that
+ * value, and the value is where the detail the model needs on its next attempt
+ * lives (ADR 0035). Journalling it as a bare failure is what used to throw the
+ * detail away.
+ */
+const toolActivityOutput = (activity: ToolActivity): AgentPayload => {
+	if (activity.status === 'reported_failure') return activity.output;
+	return activity.status === 'succeeded' && activity.output !== undefined ? activity.output : null;
+};
 
 export class ConversationArchive {
 	constructor(private readonly repository: ConversationRepository) {}
@@ -251,9 +264,11 @@ export class ConversationArchive {
 			// `none` kind and reaches here output-absent, which is a normal
 			// outcome. The value itself needs no reading here — `ToolActivity`
 			// carries the wire type, read once where the tool result was produced.
-			output:
-				activity.status === 'succeeded' && activity.output !== undefined ? activity.output : null,
-			failure: activity.status === 'failed' ? activity.failure : null,
+			output: toolActivityOutput(activity),
+			failure:
+				activity.status === 'failed' || activity.status === 'reported_failure'
+					? activity.failure
+					: null,
 			status: activity.status
 		};
 		await this.append(actor, conversationId, 'tool', content, undefined, provenance);

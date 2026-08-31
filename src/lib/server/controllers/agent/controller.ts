@@ -18,6 +18,7 @@ import type {
 	RunAgentInput,
 	ResolvedAgentRun,
 	StagedAgentRunInput,
+	StoredAgentRunEventRecord,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -68,7 +69,7 @@ interface AgentRunEventRepository {
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
-	): Promise<readonly AgentRunEventRecord[]>;
+	): Promise<readonly StoredAgentRunEventRecord[]>;
 	latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string>;
 }
 
@@ -373,12 +374,26 @@ export class Agent implements AgentController {
 		return this.snapshot(actor, run);
 	}
 
-	listRunEvents(
+	/**
+	 * A row the event union can no longer read is left out of the replay and named
+	 * in a warning. Dropping it here rather than at the repository keeps the
+	 * disjunction at the caller that can act on it: the stream advances its cursor
+	 * past the row either way, and a client cannot render an event nobody parsed.
+	 */
+	async listRunEvents(
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
 	): Promise<readonly AgentRunEventRecord[]> {
-		return this.dependencies.events.replay(actor, runId, after);
+		const stored = await this.dependencies.events.replay(actor, runId, after);
+		const unreadable = stored.filter((record) => record.kind === 'unreadable');
+		if (unreadable.length > 0)
+			console.warn(
+				`[agent] ${unreadable.length} stored run event(s) were left out of the replay of ${runId} because they no longer match the event union: ${unreadable
+					.map((record) => `${record.cursor}: ${record.reason}`)
+					.join('; ')}`
+			);
+		return stored.flatMap((record) => (record.kind === 'readable' ? [record] : []));
 	}
 
 	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot> {

@@ -10,6 +10,7 @@ import {
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import { toolOutcomeEvent } from '$lib/models/agent';
 import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -400,9 +401,10 @@ function executionIntervals(result: AgentRunResult): Map<string, { start: Date; 
 	for (const record of result.events) {
 		const { event, createdAt } = record;
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		if (event.type === 'tool_completed' && event.callId !== undefined) {
-			const start = started.get(event.callId);
-			if (start) intervals.set(event.name, { start, end: createdAt });
+		const outcome = toolOutcomeEvent(event);
+		if (outcome?.callId !== undefined) {
+			const start = started.get(outcome.callId);
+			if (start) intervals.set(outcome.name, { start, end: createdAt });
 		}
 	}
 	return intervals;
@@ -565,9 +567,10 @@ function parallelSameTool(
 	for (const record of result.events) {
 		const { event, createdAt } = record;
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		if (event.type === 'tool_completed' && event.callId !== undefined) {
-			const start = started.get(event.callId);
-			if (start) intervals.push({ name: event.name, start, end: createdAt });
+		const outcome = toolOutcomeEvent(event);
+		if (outcome?.callId !== undefined) {
+			const start = started.get(outcome.callId);
+			if (start) intervals.push({ name: outcome.name, start, end: createdAt });
 		}
 	}
 	const ofTool = intervals.filter((interval) => interval.name === toolName);

@@ -1,6 +1,6 @@
 import {
+	readAgentRunEventRecord,
 	submitAgentRunInputSchema,
-	type AgentRunEventRecord,
 	type AgentRunId,
 	type ConversationId
 } from '$lib/models/agent';
@@ -45,10 +45,14 @@ export class RemoteAgentRunTransport implements AgentRunTransport {
 		);
 		source.onopen = input.onOpen;
 		source.addEventListener('agent', (event) => {
-			const parsed = JSON.parse(event.data) as Omit<AgentRunEventRecord, 'createdAt'> & {
-				createdAt: string;
-			};
-			input.onEvent({ ...parsed, createdAt: new Date(parsed.createdAt) });
+			// The server serialized a record it had already parsed, but what arrives
+			// here is text off a socket and nothing between the two is checked. A
+			// frame this client cannot read is dropped rather than delivered as a
+			// record the store would then have to guess at.
+			const frame: unknown = JSON.parse(event.data);
+			const record = readAgentRunEventRecord(frame);
+			if (record.kind === 'readable') input.onEvent(record);
+			else console.warn(`[agent] dropped an unreadable event frame: ${record.reason}`);
 		});
 		source.onerror = input.onError;
 		return { close: () => source.close() };

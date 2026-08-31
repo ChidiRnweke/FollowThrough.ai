@@ -1,12 +1,23 @@
+/**
+ * The client's parse zone for tool payloads.
+ *
+ * Arguments and results reach the client two ways — off the run's event stream,
+ * and out of a journalled message row — and both are JSON both times. They were
+ * carried inward as `unknown` anyway, which is what made five presentation
+ * modules invent a `Record<string, unknown>` guard apiece. Reading them once
+ * here, where they arrive, is what lets `ChatToolActivity` name the shape.
+ *
+ * It runs per event rather than per render, so a large result is walked once.
+ */
+import { z } from 'zod';
 import {
-	readAgentPayload,
 	readAgentPayloadObject,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
 
-export type ChatToolStatus = 'running' | 'approval_required' | 'succeeded' | 'failed' | 'rejected';
+export type ChatToolStatus =
+	'running' | 'approval_required' | 'succeeded' | 'reported_failure' | 'failed' | 'rejected';
 
 /** What every tool row carries, whatever became of the call. */
 export interface ChatToolActivityBase {
@@ -36,27 +47,20 @@ export type ChatToolActivity =
 	| (ChatToolActivityBase & { readonly status: 'running' })
 	| (ChatToolActivityBase & { readonly status: 'approval_required' })
 	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
+	/** The tool returned, and what it returned says it failed (ADR 0035). */
+	| (ChatToolActivityBase & {
+			readonly status: 'reported_failure';
+			readonly failure: string;
+			readonly output: AgentPayload;
+	  })
 	| (ChatToolActivityBase & { readonly status: 'failed'; readonly failure: string })
 	| (ChatToolActivityBase & { readonly status: 'rejected' });
-
-/**
- * The client's parse zone for tool payloads.
- *
- * Arguments and results reach the client two ways — off the run's event stream,
- * and out of a journalled message row — and both are JSON both times. They were
- * carried inward as `unknown` anyway, which is what made five presentation
- * modules invent a `Record<string, unknown>` guard apiece. Reading them once
- * here, where they arrive, is what lets `ChatToolActivity` name the shape.
- *
- * It runs per event rather than per render, so a large result is walked once.
- */
-export const CORRUPT_OUTPUT = 'The tool returned a result this app could not read.';
 
 /**
  * Arguments, or none recorded.
  *
  * `{}` is not an invented default here: it is already this module's word for
- * "this event does not restate the arguments" — `tool_completed` sends exactly
+ * "this event does not restate the arguments" — an outcome event sends exactly
  * that, and `mergeToolActivity` keeps the earlier row's arguments when it sees
  * it. A payload that is not a JSON object records no arguments in the same
  * sense, and the surfaces are already total over the empty case.
@@ -67,20 +71,63 @@ export const toolArguments = (value: unknown): AgentPayloadObject => {
 };
 
 /**
- * The settled arm for a call the run says succeeded.
+ * One journalled `tool_activity` row as a transcript row, or the reason it could
+ * not be read.
  *
- * An unreadable result does not become a `succeeded` row with no output. That
- * would report "the tool returned nothing", which is a different fact from "the
- * tool returned something nobody here can read", and reporting the first when
- * the second happened is the case ADR 0015 exists for — the reader cannot tell
- * whether the work they asked for happened.
+ * The journal is JSON with no schema behind it, and this used to be read with
+ * `String(content.callId ?? '')`, `String(content.status ?? 'succeeded') as
+ * ChatToolStatus`, and a bare `typeof` for the failure — three different guesses
+ * about one stored shape, one of which could mint a status no arm of this union
+ * has. An id the row does not carry stays absent, because that absence is what
+ * `matchToolActivity` settles a row by.
  */
-export const settledTool = (base: ChatToolActivityBase, output: unknown): ChatToolActivity => {
-	if (output === undefined || output === null) return { ...base, status: 'succeeded' };
-	const read = readAgentPayload(output);
-	return read.kind === 'valid'
-		? { ...base, output: read.value, status: 'succeeded' }
-		: { ...base, failure: `${CORRUPT_OUTPUT} ${read.message}`, status: 'failed' };
+export type JournalledTool =
+	| { readonly kind: 'readable'; readonly tool: ChatToolActivity }
+	| { readonly kind: 'unreadable'; readonly reason: string };
+
+const journalledToolSchema = z.object({
+	callId: z.string().nullish(),
+	name: z.string(),
+	input: z.custom<AgentPayload>(() => true).optional(),
+	output: z.custom<AgentPayload>(() => true).optional(),
+	failure: z.string().nullish(),
+	status: z.enum(['running', 'approval_required', 'succeeded', 'reported_failure', 'failed'])
+});
+
+export const readJournalledTool = (
+	content: unknown,
+	provenance: { readonly runId?: string }
+): JournalledTool => {
+	const parsed = journalledToolSchema.safeParse(content);
+	if (!parsed.success) return { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
+	const row = parsed.data;
+	const base: ChatToolActivityBase = {
+		...(row.callId ? { callId: row.callId } : {}),
+		name: row.name,
+		arguments: toolArguments(row.input ?? {}),
+		...(provenance.runId ? { runId: provenance.runId } : {})
+	};
+	// `null` is how the archive spells an absent optional, because the wire type
+	// cannot carry `undefined`. Both spellings mean the field is not there.
+	const output = row.output ?? undefined;
+	const failure = row.failure ?? undefined;
+	if (row.status === 'running' || row.status === 'approval_required')
+		return { kind: 'readable', tool: { ...base, status: row.status } };
+	if (row.status === 'succeeded')
+		return {
+			kind: 'readable',
+			tool: { ...base, ...(output === undefined ? {} : { output }), status: 'succeeded' }
+		};
+	// A settled row that says it failed and does not say how, or that reported a
+	// failure without the value it read it out of, is a row this reader cannot
+	// reconstruct — the writer always supplies both.
+	if (failure === undefined)
+		return { kind: 'unreadable', reason: `a ${row.status} row carries no failure` };
+	if (row.status === 'failed')
+		return { kind: 'readable', tool: { ...base, failure, status: 'failed' } };
+	return output === undefined
+		? { kind: 'unreadable', reason: 'a reported_failure row carries no output' }
+		: { kind: 'readable', tool: { ...base, failure, output, status: 'reported_failure' } };
 };
 
 const isActive = (tool: ChatToolActivity): boolean =>
@@ -155,31 +202,29 @@ export type FailedToolActivity = Extract<ChatToolActivity, { readonly status: 'f
  * guard — the four hand-rolled `isRecord` predicates that used to stand between
  * this function and its readers had nothing left to do.
  */
-export const toolOutput = (tool: ChatToolActivity): AgentPayload | undefined =>
-	tool.status === 'succeeded' ? tool.output : undefined;
+export const toolOutput = (tool: ChatToolActivity): AgentPayload | undefined => {
+	if (tool.status === 'succeeded') return tool.output;
+	// A reported failure carries the value the failure was read out of, and the
+	// disclosure surfaces render it: the occurrence counts and nearest matches an
+	// `edit_note` failure attaches are the whole reason it returns a value.
+	return tool.status === 'reported_failure' ? tool.output : undefined;
+};
 
 /**
  * What went wrong, when something did.
  *
- * Two ways a call can have failed, and reading only the first is how a failure
- * came to look like a success. `edit_note` returns `{ failure, problems }` as a
- * *value* rather than throwing, deliberately and for a good reason — a throw is
- * stringified to a bare message and strips the occurrence counts and nearest
- * matches the model needs to correct itself on the next turn (ADR 0035). But
- * the run still journals that call as `succeeded`, so nothing downstream saw
- * it: a no-op edit rendered "Edited note · <title>" in ordinary colour and the
- * turn's touched list claimed the verb `edited`. ADR 0015 forbids exactly that
- * — the user could not tell whether the requested work happened.
- *
- * The server contract does not move. This reads the failure where it actually
- * is, so a single question — "did this call fail?" — has a single answer.
+ * One field read now, off whichever arm carries it. It used to be two questions
+ * asked here — `tool.failure` when the row said `failed`, and
+ * `readToolFailure(tool.output)` when it said `succeeded` — because
+ * `edit_note` returns `{ failure, problems }` as a *value* rather than throwing
+ * (ADR 0035) and the run journalled that call as a success, so nothing
+ * downstream saw it: a no-op edit rendered "Edited note · <title>" in ordinary
+ * colour and the turn's touched list claimed the verb `edited`. The classifier
+ * moved to the run, where the value is produced, and a call that reports its own
+ * failure now arrives already in the arm that says so.
  */
 export const toolFailure = (tool: ChatToolActivity): string | undefined =>
-	tool.status === 'failed'
-		? tool.failure
-		: tool.status === 'succeeded'
-			? readToolFailure(tool.output)
-			: undefined;
+	tool.status === 'failed' || tool.status === 'reported_failure' ? tool.failure : undefined;
 
-/** Whether the call failed, by either route. */
+/** Whether the call failed. */
 export const toolFailed = (tool: ChatToolActivity): boolean => toolFailure(tool) !== undefined;

@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import { AgentProviderFailure } from '$lib/models/agent';
+import { AgentProviderFailure, toolActivityFromEvent } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentEvent,
@@ -111,7 +111,7 @@ export class AgentRunLifecycle {
 			const request = run.inputSnapshot;
 			const decisions = await this.deps.decisions.loadUnconsumed(run.id);
 			// Keyed by the provider's call id, so the stale-resource event can wait
-			// for the matching `tool_completed` and reach the client in the order it
+			// for the matching outcome event and reach the client in the order it
 			// expects. The id used to arrive as `''` when the provider sent none, so
 			// two such mutations shared one key and the second overwrote the first.
 			const successfulMutations = new Map<string, string>();
@@ -122,7 +122,7 @@ export class AgentRunLifecycle {
 					// Nothing will settle a call the provider gave no id for, so there
 					// is nothing to wait for. The mutation already succeeded and its
 					// resource is stale either way, so say so now rather than key it
-					// under an id no `tool_completed` can carry.
+					// under an id no outcome event can carry.
 					if (input.callId === undefined)
 						await this.persistEvent(run, actor, {
 							type: 'resources_stale',
@@ -149,10 +149,7 @@ export class AgentRunLifecycle {
 				}
 				if (update.type === 'event') {
 					await this.persistEvent(run, actor, update.event);
-					const settled =
-						update.event.type === 'tool_completed' && !update.event.failure
-							? update.event.callId
-							: undefined;
+					const settled = update.event.type === 'tool_succeeded' ? update.event.callId : undefined;
 					if (settled !== undefined) {
 						const resource = successfulMutations.get(settled);
 						if (resource) {
@@ -370,7 +367,7 @@ export class AgentRunLifecycle {
 	): Promise<AgentRunEventRecord> {
 		const record = await this.deps.transactions.run(async () => {
 			const record = await this.deps.events.append(run.id, 1, event);
-			const activity = this.toolActivity(event);
+			const activity = toolActivityFromEvent(event);
 			if (activity)
 				await this.deps.conversations.recordToolActivity(actor, run.conversationId, activity, {
 					runId: run.id,
@@ -423,42 +420,5 @@ export class AgentRunLifecycle {
 		});
 		if (settled) this.deps.eventBus.notify(run.id);
 		return settled !== undefined;
-	}
-
-	private toolActivity(event: AgentEvent): ToolActivity | undefined {
-		if (event.type === 'tool_started')
-			return {
-				callId: event.callId,
-				name: event.name,
-				input: event.arguments,
-				status: 'running'
-			};
-		// Branch on the outcome rather than spreading both payloads and labelling the
-		// result: a `succeeded` row has no failure to carry and a `failed` row has no
-		// output, and each arm now says only what it has.
-		if (event.type === 'tool_completed')
-			return event.failure
-				? {
-						callId: event.callId,
-						name: event.name,
-						input: {},
-						failure: event.failure,
-						status: 'failed'
-					}
-				: {
-						callId: event.callId,
-						name: event.name,
-						input: {},
-						...(event.output === undefined ? {} : { output: event.output }),
-						status: 'succeeded'
-					};
-		if (event.type === 'approval_required')
-			return {
-				callId: event.callId,
-				name: event.name,
-				input: event.arguments,
-				status: 'approval_required'
-			};
-		return undefined;
 	}
 }

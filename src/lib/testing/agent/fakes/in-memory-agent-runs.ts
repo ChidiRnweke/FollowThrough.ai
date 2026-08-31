@@ -7,7 +7,8 @@ import type {
 	AgentRunId,
 	AgentRunStatus,
 	ConversationId,
-	ResolvedAgentRun
+	ResolvedAgentRun,
+	StoredAgentRunEventRecord
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { OutputSegment } from '$lib/server/repositories/agent';
@@ -240,10 +241,13 @@ export class InMemoryAgentRunPersistence
 		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
-	): Promise<readonly AgentRunEventRecord[]> {
-		return this.events.filter(
-			(event) => event.runId === runId && BigInt(event.cursor) > BigInt(after)
-		);
+	): Promise<readonly StoredAgentRunEventRecord[]> {
+		// The fake stores what a writer wrote, so every row is readable by
+		// construction. A fake must not be able to represent a state production
+		// cannot produce, and an unreadable row is one only a real database can hold.
+		return this.events
+			.filter((event) => event.runId === runId && BigInt(event.cursor) > BigInt(after))
+			.map((record) => ({ ...record, kind: 'readable' as const }));
 	}
 
 	async latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string> {
@@ -253,7 +257,12 @@ export class InMemoryAgentRunPersistence
 
 	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
 		return segmentOutput(
-			this.events.filter((record) => record.runId === runId && record.attempt === attempt)
+			this.events
+				.filter((record) => record.runId === runId && record.attempt === attempt)
+				.map((record) => ({
+					cursor: record.cursor,
+					event: { kind: 'readable', event: record.event }
+				}))
 		);
 	}
 

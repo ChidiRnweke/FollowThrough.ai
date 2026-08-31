@@ -104,6 +104,16 @@ write(
 		)
 	)
 );
+write(
+	'agent-run-events',
+	(await sql`select event from agent_run_events order by cursor`).map((row) => row.event)
+);
+write(
+	'agent-tool-messages',
+	(await sql`select content from messages where role = 'tool' order by created_at, id`).map(
+		(row) => row.content
+	)
+);
 write('suggestion-payloads', await sql`select kind, payload from suggestions order by id`);
 write(
 	'agent-run-contexts',

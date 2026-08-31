@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import noteDocuments from '../corpus/note-documents.json' with { type: 'json' };
 import noteRevisionDocuments from '../corpus/note-revision-documents.json' with { type: 'json' };
 import sessionItems from '../corpus/agent-session-items.json' with { type: 'json' };
+import runEvents from '../corpus/agent-run-events.json' with { type: 'json' };
+import toolMessages from '../corpus/agent-tool-messages.json' with { type: 'json' };
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
 import { readProseMirrorDocument, unknownProseMirrorNodes } from '$lib/models/notes';
-import { parseSessionItem } from '$lib/models/agent';
+import { parseSessionItem, readAgentEvent } from '$lib/models/agent';
+import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { parseProvenance } from '$lib/models/provenance';
 import { parseSuggestionPayload, readSuggestionPayload } from '$lib/models/suggestions';
 
@@ -64,6 +67,32 @@ describe('the stored agent session items', () => {
 			.map((item) => parseSessionItem(item))
 			.filter((item) => item.type === 'unrecognised');
 		expect(reasons(unrecognised)).toEqual([]);
+	});
+});
+
+describe('the stored agent run events', () => {
+	it('all read back into a modelled arm, so none is dropped from a replay', () => {
+		const unreadable = runEvents.flatMap((event) => {
+			const read = readAgentEvent(event);
+			return read.kind === 'unreadable' ? [read.reason] : [];
+		});
+		expect([...new Set(unreadable)].sort()).toEqual([]);
+	});
+});
+
+/**
+ * The transcript is what a reopened conversation shows, and it is rebuilt from
+ * these rows alone. A row this reader cannot reconstruct renders as a call that
+ * says it could not be read — visible rather than silent, but still a turn that
+ * shows less than it did.
+ */
+describe('the stored tool journal rows', () => {
+	it('all restore into a transcript row', () => {
+		const unreadable = toolMessages.flatMap((content) => {
+			const read = readJournalledTool(content, {});
+			return read.kind === 'unreadable' ? [read.reason] : [];
+		});
+		expect([...new Set(unreadable)].sort()).toEqual([]);
 	});
 });
 

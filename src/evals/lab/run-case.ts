@@ -7,6 +7,7 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
+import { toolOutcomeEvent } from '$lib/models/agent';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
@@ -192,19 +193,20 @@ function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly 
 			});
 			continue;
 		}
-		if (event.type === 'tool_completed') {
+		const outcome = toolOutcomeEvent(event);
+		if (outcome) {
 			// A completion the run could not name settles no call here. Correlating it
 			// by guesswork would attribute an outcome to a call that may not be its
 			// own, and an eval reads these records as evidence.
-			const { callId } = event;
+			const { callId } = outcome;
 			if (callId === undefined) continue;
 			const started = calls.get(callId);
 			calls.set(callId, {
 				callId,
-				name: started?.name ?? event.name,
+				name: started?.name ?? outcome.name,
 				arguments: started?.arguments ?? {},
-				...(event.output === undefined ? {} : { output: event.output }),
-				...(event.failure ? { failure: event.failure } : {})
+				...(outcome.type === 'tool_failed' ? {} : { output: outcome.output }),
+				...(outcome.type === 'tool_succeeded' ? {} : { failure: outcome.failure })
 			});
 			if (!started) order.push(callId);
 			continue;

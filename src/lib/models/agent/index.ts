@@ -17,10 +17,6 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 type NoteId = Brand<string, 'NoteId'>;
 
-type SuggestionId = Brand<string, 'SuggestionId'>;
-
-type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
-
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
 export type ConversationId = Brand<string, 'ConversationId'>;
@@ -31,13 +27,7 @@ export type AgentRunId = Brand<string, 'AgentRunId'>;
 
 export type AgentSessionItemId = Brand<string, 'AgentSessionItemId'>;
 
-type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
-
 type DateTime = Brand<string, 'DateTime'>;
-
-type LocalDate = Brand<string, 'LocalDate'>;
-
-type Url = Brand<string, 'Url'>;
 
 type Confidence = Brand<number, 'Confidence'>;
 
@@ -61,19 +51,7 @@ interface TextSelection {
 
 type NoteKind = 'folder' | 'note' | 'skill';
 
-type TodoResponsibility = 'mine' | 'waiting_on';
-
-type PromiseStrength = 'explicit' | 'implied' | 'tentative';
-
-type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
-
-type DiagramKind = 'mermaid' | 'drawio';
-
-type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-
 export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
-
-type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
 
 export type ToolClassification = 'read' | 'proposal' | 'mutation';
 
@@ -193,6 +171,12 @@ interface ToolActivityBase {
  * optional on `succeeded`, because a tool may legitimately return nothing —
  * and that is a different fact from having failed.
  *
+ * `reported_failure` is the third outcome and not a variety of the other two: a
+ * tool that returns its failure as a value (ADR 0035) has both a failure and the
+ * detail it came from, and journalling it as `failed` threw that detail away on
+ * one row in five. Both fields are required there for the same reason `failure`
+ * is required on `failed` — neither is producible without the other.
+ *
  * There is no `rejected` arm and no `decision` field. Nothing on this side of
  * the wire ever produced either; a rejection is a client-side state that lives
  * on `ChatToolActivity`, and `decision` was set by no writer at all while
@@ -202,6 +186,11 @@ export type ToolActivity =
 	| (ToolActivityBase & { readonly status: 'running' })
 	| (ToolActivityBase & { readonly status: 'approval_required' })
 	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
+	| (ToolActivityBase & {
+			readonly status: 'reported_failure';
+			readonly failure: string;
+			readonly output: AgentPayload;
+	  })
 	| (ToolActivityBase & { readonly status: 'failed'; readonly failure: string });
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
@@ -490,90 +479,6 @@ export interface AgentModel {
 	readonly capabilities: readonly string[];
 }
 
-type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
-
-interface SuggestionBase<Kind extends SuggestionKind, Payload> {
-	readonly id: SuggestionId;
-	readonly userId: UserId;
-	readonly noteId?: NoteId;
-	readonly kind: Kind;
-	readonly status: SuggestionStatus;
-	readonly payload: Payload;
-	readonly confidence?: Confidence;
-	readonly provenanceId: ProvenanceId;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly decidedAt?: DateTime;
-	readonly expiresAt?: DateTime;
-	readonly appliedArtifactId?: string;
-	readonly isAutoAccepted: boolean;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
-
-type BacklinkSuggestion = SuggestionBase<'backlink', CreateRelationshipInput>;
-
-type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
-
-type DiagramSuggestion = SuggestionBase<
-	'diagram',
-	{
-		readonly noteId: NoteId;
-		readonly kind: DiagramKind;
-		readonly title?: string;
-		readonly source: string;
-	}
->;
-
-type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
-
-type Suggestion =
-	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
-
-type MemoryChangeOperation = 'add' | 'update' | 'remove';
-
-interface MemoryChangePayload {
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
-}
-
-interface CreateTodoInput {
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly description?: string;
-	readonly responsibility: TodoResponsibility;
-	readonly waitingOn?: string;
-	readonly dueDate?: LocalDate;
-	readonly dueDateVerbatim?: string;
-	readonly promiseStrength?: PromiseStrength;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
-interface CreateRelationshipInput {
-	readonly sourceNoteId: NoteId;
-	readonly targetNoteId: NoteId;
-	readonly kind: RelationshipKind;
-	readonly justification?: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
-interface CreateReferenceInput {
-	readonly noteId: NoteId;
-	readonly url: Url;
-	readonly title: string;
-	readonly tier: ReferenceTier;
-	readonly relevanceNote: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-}
-
 /**
  * One explicitly attached context note as assembled for a run. At or under the
  * token limit the full content rides inside the user message; a larger note
@@ -806,24 +711,53 @@ export type AgentEvent =
 			readonly name: string;
 			readonly arguments: AgentPayloadObject;
 	  }
+	/**
+	 * The three tool outcomes. `callId` is optional on all of them and absent when
+	 * the provider reported the outcome without an identifier and the run could
+	 * not correlate one either — several calls were in flight, or none was. The
+	 * client settles such a row by name and recency (`matchToolActivity`), which
+	 * it can only do if the server says the id is missing rather than spelling
+	 * it `''`.
+	 *
+	 * The call ran and returned. `output` is absent only when the tool returned
+	 * nothing at all — `ProviderToolOutput`'s `none` kind — which is a normal
+	 * outcome for a mutation whose receipt is the mutation.
+	 *
+	 * The value is already read into the wire type by the factory before the call
+	 * left it. It was `unknown`, so the journal, the replay and every client
+	 * surface narrowed the same JSON again for itself.
+	 */
 	| {
-			readonly type: 'tool_completed';
-			/**
-			 * Absent when the provider reported an outcome without an identifier and
-			 * the run could not correlate it either — several calls were in flight,
-			 * or none was. The client settles such a row by name and recency
-			 * (`matchToolActivity`), which it can only do if the server says the id is
-			 * missing rather than spelling it `''`.
-			 */
+			readonly type: 'tool_succeeded';
 			readonly callId?: string;
 			readonly name: string;
-			/**
-			 * The tool's own result, already read into the wire type by the factory
-			 * before the call left it. It was `unknown`, so the journal, the replay
-			 * and every client surface narrowed the same JSON again for itself.
-			 */
 			readonly output?: AgentPayload;
-			readonly failure?: string;
+	  }
+	/**
+	 * The call ran, returned, and the value it returned says it failed.
+	 *
+	 * `edit_note` is why this exists: a thrown error is stringified to a bare
+	 * message and strips the occurrence counts and nearest matches the model needs
+	 * to correct itself, so the failure comes back as a value instead (ADR 0035).
+	 * Both fields are required because the failure is *read out of* the output —
+	 * neither can be present without the other, and the pair used to be two
+	 * optionals on one arm, which made `{ failure }` with no detail sayable and
+	 * made both consumers drop the detail on the floor. 30 of the 147 stored
+	 * `tool_completed` rows are this case.
+	 */
+	| {
+			readonly type: 'tool_reported_failure';
+			readonly callId?: string;
+			readonly name: string;
+			readonly failure: string;
+			readonly output: AgentPayload;
+	  }
+	/** The call did not produce a usable result: it threw, or its result was unreadable. */
+	| {
+			readonly type: 'tool_failed';
+			readonly callId?: string;
+			readonly name: string;
+			readonly failure: string;
 	  }
 	| {
 			readonly type: 'approval_required';
@@ -832,7 +766,6 @@ export type AgentEvent =
 			readonly name: string;
 			readonly arguments: AgentPayloadObject;
 	  }
-	| { readonly type: 'suggestion'; readonly suggestion: Suggestion }
 	/**
 	 * The whole outcome of a note action, carried in the event log so a client
 	 * that reconnects after a refresh finishes the action from the replay alone.
@@ -868,13 +801,249 @@ export type AgentEvent =
  * every replay, diverging from the type the repository wrote and the client
  * parsed.
  */
-export interface AgentRunEventRecord {
+interface AgentRunEventIdentity {
 	readonly cursor: string;
 	readonly runId: AgentRunId;
 	readonly attempt: number;
-	readonly event: AgentEvent;
 	readonly createdAt: Date;
 }
+
+export interface AgentRunEventRecord extends AgentRunEventIdentity {
+	readonly event: AgentEvent;
+}
+
+/**
+ * A replayed row before anyone has decided what to do about an unreadable one.
+ *
+ * The identity survives either way, because the cursor is what a warning has to
+ * name and what a client has to advance past.
+ */
+export type StoredAgentRunEventRecord =
+	| ({ readonly kind: 'readable' } & AgentRunEventRecord)
+	| (AgentRunEventIdentity & { readonly kind: 'unreadable'; readonly reason: string });
+
+/**
+ * The same, off the wire, where a frame that does not parse has no identity to
+ * report either — the cursor was part of what failed to read.
+ */
+export type ReadAgentRunEventRecord =
+	| ({ readonly kind: 'readable' } & AgentRunEventRecord)
+	| { readonly kind: 'unreadable'; readonly reason: string };
+
+/**
+ * A stored event row, read.
+ *
+ * A read-boundary union rather than a sixth `unrecognised` arm on `AgentEvent`,
+ * for the reason `StoredSuggestion` is one: `AgentEvent` is the *write* type as
+ * well, and an arm nothing can produce is a state a producer could nonetheless
+ * say. The disjunction stops at the caller that can act on it — the controller
+ * drops the unreadable rows and warns with their cursors — so no consumer of a
+ * replayed event sees a case it cannot render.
+ */
+export type StoredAgentEvent =
+	| { readonly kind: 'readable'; readonly event: AgentEvent }
+	| { readonly kind: 'unreadable'; readonly reason: string };
+
+/**
+ * The JSON a tool call carried, read with {@link readAgentPayload} rather than a
+ * zod schema. `z.record` accepts a `Date` — which has no enumerable keys — and
+ * parses it clean to `{}`, which is the silent wrong answer this whole exercise
+ * removes, so the value reaches the hand-written reader untouched.
+ */
+const eventPayloadSchema = z
+	.custom<unknown>(() => true)
+	.transform((value, context) => {
+		const read = readAgentPayload(value);
+		if (read.kind === 'corrupt') {
+			context.addIssue({ code: 'custom', message: read.message });
+			return z.NEVER;
+		}
+		return read.value;
+	});
+
+const eventPayloadObjectSchema = z
+	.custom<unknown>(() => true)
+	.transform((value, context) => {
+		const read = readAgentPayloadObject(value);
+		if (read.kind === 'corrupt') {
+			context.addIssue({ code: 'custom', message: read.message });
+			return z.NEVER;
+		}
+		return read.value;
+	});
+
+const runIdSchema = z.string().transform((value) => value as AgentRunId);
+
+const toolOutcomeSchemas = [
+	z.object({
+		type: z.literal('tool_succeeded'),
+		callId: z.string().optional(),
+		name: z.string(),
+		output: eventPayloadSchema.optional()
+	}),
+	z.object({
+		type: z.literal('tool_reported_failure'),
+		callId: z.string().optional(),
+		name: z.string(),
+		failure: z.string(),
+		output: eventPayloadSchema
+	}),
+	z.object({
+		type: z.literal('tool_failed'),
+		callId: z.string().optional(),
+		name: z.string(),
+		failure: z.string()
+	})
+] as const;
+
+const agentEventSchema = z.discriminatedUnion('type', [
+	z.object({
+		type: z.literal('run_queued'),
+		runId: runIdSchema,
+		attempt: z.number().int(),
+		reason: z.enum(['submitted', 'retry', 'resumed'])
+	}),
+	z.object({ type: z.literal('run_started'), runId: runIdSchema, attempt: z.number().int() }),
+	z.object({ type: z.literal('text_delta'), text: z.string() }),
+	z.object({ type: z.literal('reasoning_delta'), text: z.string() }),
+	z.object({
+		type: z.literal('tool_started'),
+		callId: z.string(),
+		name: z.string(),
+		arguments: eventPayloadObjectSchema
+	}),
+	...toolOutcomeSchemas,
+	z.object({
+		type: z.literal('approval_required'),
+		runId: runIdSchema,
+		callId: z.string(),
+		name: z.string(),
+		arguments: eventPayloadObjectSchema
+	}),
+	z.object({
+		type: z.literal('workflow_result'),
+		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+		result: eventPayloadSchema
+	}),
+	z.object({
+		type: z.literal('failed'),
+		runId: runIdSchema.optional(),
+		code: z.string(),
+		message: z.string(),
+		retryable: z.boolean()
+	}),
+	z.object({ type: z.literal('cancelled'), runId: runIdSchema, message: z.string() }),
+	z.object({
+		type: z.literal('completed'),
+		conversationId: z.string().transform((value) => value as ConversationId),
+		runId: runIdSchema.optional(),
+		model: z.string().optional()
+	}),
+	z.object({ type: z.literal('resources_stale'), resources: z.array(z.string()) })
+]) satisfies z.ZodType<AgentEvent>;
+
+/** The three events that settle a call, for readers that treat them alike. */
+export type ToolOutcomeEvent = Extract<
+	AgentEvent,
+	{ readonly type: 'tool_succeeded' | 'tool_reported_failure' | 'tool_failed' }
+>;
+
+/**
+ * The outcome an event settles, or nothing when it settles none.
+ *
+ * "Did this call finish?" is one question with one answer, and asking it as a
+ * three-way `type` test at every reader is how the old single arm's
+ * `!event.failure` test came to mean three different things in three files.
+ */
+export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
+	event.type === 'tool_succeeded' ||
+	event.type === 'tool_reported_failure' ||
+	event.type === 'tool_failed'
+		? event
+		: undefined;
+
+/**
+ * The journal row an event calls for, or nothing when the event is not about a
+ * tool call.
+ *
+ * Model-owned because two services need it and a service may not import
+ * another: `AgentRunLifecycle` journals every run's calls, and
+ * `DiagramAuthoring` journals its own. They held a copy each, and the copies
+ * had already diverged — the diagram one wrote `output: undefined` onto a
+ * `succeeded` row, which the wire type cannot carry.
+ */
+export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
+	if (event.type === 'tool_started')
+		return { callId: event.callId, name: event.name, input: event.arguments, status: 'running' };
+	if (event.type === 'approval_required')
+		return {
+			callId: event.callId,
+			name: event.name,
+			input: event.arguments,
+			status: 'approval_required'
+		};
+	const outcome = toolOutcomeEvent(event);
+	if (!outcome) return undefined;
+	// The arguments are not restated on an outcome, and the row that opened the
+	// call is the one that holds them; both journals key rows by `callId`.
+	const settled = {
+		...(outcome.callId === undefined ? {} : { callId: outcome.callId }),
+		name: outcome.name,
+		input: {}
+	};
+	if (outcome.type === 'tool_succeeded')
+		return {
+			...settled,
+			...(outcome.output === undefined ? {} : { output: outcome.output }),
+			status: 'succeeded'
+		};
+	return outcome.type === 'tool_failed'
+		? { ...settled, failure: outcome.failure, status: 'failed' }
+		: { ...settled, failure: outcome.failure, output: outcome.output, status: 'reported_failure' };
+};
+
+/**
+ * One stored row as an event, or the reason it could not be read.
+ *
+ * A row that does not parse degrades to one skipped event rather than throwing:
+ * `toNote` mapped every row of a note list and a single unmodelled attribute
+ * took `/today` down whole (TN-14). A replay is the same shape of read.
+ *
+ * There is no mapping for the retired `tool_completed` shape. The rows written
+ * under it read as `unreadable` and are dropped from replay with a warning
+ * naming their cursors: replay only drives a run still in flight, and a reopened
+ * conversation reads the journal instead.
+ */
+export const readAgentEvent = (value: unknown): StoredAgentEvent => {
+	const parsed = agentEventSchema.safeParse(value);
+	return parsed.success
+		? { kind: 'readable', event: parsed.data }
+		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
+};
+
+const agentRunEventFrameSchema = z.object({
+	cursor: z.string(),
+	runId: runIdSchema,
+	attempt: z.number().int(),
+	event: agentEventSchema,
+	createdAt: z.iso.datetime().transform((value) => new Date(value))
+});
+
+/**
+ * One frame off the run's event stream.
+ *
+ * The server serialized a record it had parsed, but the client receives text
+ * from a socket and the two ends are versioned separately: a tab left open
+ * across a deploy is served by the new stream and reads it with the old union,
+ * or the reverse. The `createdAt` conversion is the visible half of that — JSON
+ * has no date — and the rest of the record was riding on the same assertion.
+ */
+export const readAgentRunEventRecord = (value: unknown): ReadAgentRunEventRecord => {
+	const parsed = agentRunEventFrameSchema.safeParse(value);
+	return parsed.success
+		? { kind: 'readable', ...parsed.data }
+		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
+};
 
 /**
  * What the provider streamed, as this application acts on it.

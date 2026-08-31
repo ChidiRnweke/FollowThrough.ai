@@ -438,7 +438,7 @@ const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[
 			if (call.callId !== undefined)
 				yield {
 					type: 'event',
-					event: { type: 'tool_completed', callId: call.callId, name: call.toolName }
+					event: { type: 'tool_succeeded', callId: call.callId, name: call.toolName }
 				};
 		yield { type: 'completed', sessionItems: [] };
 	} as never
@@ -481,7 +481,7 @@ const talkativeRunner = () => ({
 			type: 'event',
 			event: { type: 'tool_started', callId: 'c1', name: 'get_note', arguments: {} }
 		};
-		yield { type: 'event', event: { type: 'tool_completed', callId: 'c1', name: 'get_note' } };
+		yield { type: 'event', event: { type: 'tool_succeeded', callId: 'c1', name: 'get_note' } };
 		yield { type: 'event', event: { type: 'text_delta', text: 'Done.' } };
 		yield { type: 'completed', sessionItems: [] };
 	} as never
