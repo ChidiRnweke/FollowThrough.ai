@@ -18,7 +18,10 @@ import type {
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryTodos
 	implements
@@ -125,11 +128,10 @@ export class InMemoryTodos
 		return todos.map((todo) => ({ todo }));
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.todos);
-	}
-
-	restore(snapshot: unknown): void {
-		this.todos = snapshot as Todo[];
+	snapshot(): RestoreSnapshot {
+		const todos = structuredClone(this.todos);
+		return () => {
+			this.todos = todos;
+		};
 	}
 }

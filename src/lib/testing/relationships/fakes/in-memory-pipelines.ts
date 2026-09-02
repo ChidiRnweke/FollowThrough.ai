@@ -25,7 +25,10 @@ import type {
 } from '$lib/server/services/references/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryPromiseExtractor implements PromiseExtractor {
 	candidates: PromiseCandidate[] = [];
@@ -130,12 +133,11 @@ export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotP
 		return provenance;
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.records);
-	}
-
-	restore(snapshot: unknown): void {
-		this.records = snapshot as Provenance[];
+	snapshot(): RestoreSnapshot {
+		const records = structuredClone(this.records);
+		return () => {
+			this.records = records;
+		};
 	}
 }
 

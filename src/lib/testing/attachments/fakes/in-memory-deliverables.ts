@@ -12,7 +12,10 @@ import type {
 	IAttachmentStorage,
 	StoredObjectInfo
 } from '$lib/server/services/attachments/storage';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotParticipant {
 	artifacts: Artifact[] = [];
@@ -54,12 +57,11 @@ export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotP
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.artifacts);
-	}
-
-	restore(snapshot: unknown): void {
-		this.artifacts = snapshot as Artifact[];
+	snapshot(): RestoreSnapshot {
+		const artifacts = structuredClone(this.artifacts);
+		return () => {
+			this.artifacts = artifacts;
+		};
 	}
 }
 
@@ -99,12 +101,11 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.templates);
-	}
-
-	restore(snapshot: unknown): void {
-		this.templates = snapshot as ProjectTemplate[];
+	snapshot(): RestoreSnapshot {
+		const templates = structuredClone(this.templates);
+		return () => {
+			this.templates = templates;
+		};
 	}
 }
 
@@ -157,11 +158,10 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 		this.objects.delete(objectKey);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.objects);
-	}
-
-	restore(snapshot: unknown): void {
-		this.objects = snapshot as typeof this.objects;
+	snapshot(): RestoreSnapshot {
+		const objects = structuredClone(this.objects);
+		return () => {
+			this.objects = objects;
+		};
 	}
 }

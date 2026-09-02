@@ -9,7 +9,10 @@ import type {
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { NotFoundError } from '$lib/errors';
 import { testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -59,13 +62,13 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	/** Set to make `linkToTodo` fail the way a foreign attachment would. */
 	linkFails = false;
 
-	snapshot(): unknown {
-		return { finalized: [...this.finalized], todoLinks: [...this.todoLinks] };
-	}
-	restore(snapshot: unknown): void {
-		const state = snapshot as { finalized: AttachmentView[]; todoLinks: TodoAttachmentLink[] };
-		this.finalized = [...state.finalized];
-		this.todoLinks = [...state.todoLinks];
+	snapshot(): RestoreSnapshot {
+		const finalized = [...this.finalized];
+		const todoLinks = [...this.todoLinks];
+		return () => {
+			this.finalized = [...finalized];
+			this.todoLinks = [...todoLinks];
+		};
 	}
 
 	initiate(): Promise<{

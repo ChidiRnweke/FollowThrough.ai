@@ -20,7 +20,10 @@ import type {
 	AgentRunEventRepository,
 	AgentRunRepository
 } from '$lib/server/repositories/agent';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryAgentRunPersistence
 	implements
@@ -303,21 +306,14 @@ export class InMemoryAgentRunPersistence
 		return true;
 	}
 
-	snapshot(): unknown {
-		return structuredClone({
-			runs: this.runs,
-			events: this.events,
-			decisions: this.decisions,
-			cursor: this.cursor
-		});
-	}
-
-	restore(snapshot: unknown): void {
-		const state = snapshot as ReturnType<InMemoryAgentRunPersistence['state']>;
-		this.runs = state.runs;
-		this.events = state.events;
-		this.decisions = state.decisions;
-		this.cursor = state.cursor;
+	snapshot(): RestoreSnapshot {
+		const state = structuredClone(this.state());
+		return () => {
+			this.runs = state.runs;
+			this.events = state.events;
+			this.decisions = state.decisions;
+			this.cursor = state.cursor;
+		};
 	}
 
 	private state() {

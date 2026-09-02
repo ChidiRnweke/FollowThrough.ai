@@ -1,7 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { MemoryEntry, MemoryEntryId } from '$lib/models/memory';
 import type { MemoryEntryListFilter, MemoryEntryRepository } from '$lib/server/repositories/memory';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryMemoryEntryRepository implements MemoryEntryRepository, SnapshotParticipant {
 	entries: MemoryEntry[] = [];
@@ -30,11 +33,10 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository, Sna
 		return entry;
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.entries);
-	}
-
-	restore(snapshot: unknown): void {
-		this.entries = snapshot as MemoryEntry[];
+	snapshot(): RestoreSnapshot {
+		const entries = structuredClone(this.entries);
+		return () => {
+			this.entries = entries;
+		};
 	}
 }

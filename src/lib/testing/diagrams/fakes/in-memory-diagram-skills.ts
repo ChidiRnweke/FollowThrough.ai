@@ -24,7 +24,10 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export const mermaidBuilder = (overrides: Partial<MermaidDiagram> = {}): MermaidDiagram => ({
 	id: '60000000-0000-4000-8000-000000000001' as DiagramId,
@@ -197,11 +200,10 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.skills);
-	}
-
-	restore(snapshot: unknown): void {
-		this.skills = snapshot as Skill[];
+	snapshot(): RestoreSnapshot {
+		const skills = structuredClone(this.skills);
+		return () => {
+			this.skills = skills;
+		};
 	}
 }

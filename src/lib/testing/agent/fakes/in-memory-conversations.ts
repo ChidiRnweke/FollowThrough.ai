@@ -5,7 +5,10 @@ import type {
 	ConversationListOptions,
 	ConversationRepository
 } from '$lib/server/repositories/agent';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryConversationRepository implements ConversationRepository, SnapshotParticipant {
 	conversations: Conversation[] = [];
@@ -84,16 +87,11 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone({ conversations: this.conversations, messages: this.messages });
-	}
-
-	restore(snapshot: unknown): void {
-		const state = snapshot as {
-			conversations: Conversation[];
-			messages: Message[];
+	snapshot(): RestoreSnapshot {
+		const state = structuredClone({ conversations: this.conversations, messages: this.messages });
+		return () => {
+			this.conversations = state.conversations;
+			this.messages = state.messages;
 		};
-		this.conversations = state.conversations;
-		this.messages = state.messages;
 	}
 }

@@ -31,7 +31,10 @@ import type {
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 interface ContentSnapshot {
@@ -237,21 +240,19 @@ export class InMemoryNoteContent
 		this.indexedNoteIds = [...this.indexedNoteIds.filter((noteId) => noteId !== note.id), note.id];
 	}
 
-	snapshot(): unknown {
-		return structuredClone({
+	snapshot(): RestoreSnapshot {
+		const state = structuredClone({
 			notes: this.notes,
 			recordedRevisions: this.recordedRevisions,
 			anchors: this.anchors,
 			indexedNoteIds: this.indexedNoteIds
 		} satisfies ContentSnapshot);
-	}
-
-	restore(snapshot: unknown): void {
-		const state = snapshot as ContentSnapshot;
-		this.notes = state.notes;
-		this.recordedRevisions = state.recordedRevisions;
-		this.anchors = state.anchors;
-		this.indexedNoteIds = state.indexedNoteIds;
+		return () => {
+			this.notes = state.notes;
+			this.recordedRevisions = state.recordedRevisions;
+			this.anchors = state.anchors;
+			this.indexedNoteIds = state.indexedNoteIds;
+		};
 	}
 
 	private isUnchanged(current: Note, candidate: Note): boolean {

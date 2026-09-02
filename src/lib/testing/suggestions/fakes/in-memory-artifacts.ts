@@ -4,7 +4,10 @@ import type { Todo } from '$lib/models/todos';
 import { ExternalServiceError } from '$lib/errors';
 import type { SuggestionArtifactApplier } from '$lib/server/controllers/suggestions/controller';
 import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, SnapshotParticipant {
 	artifacts: Todo[] = [];
@@ -35,11 +38,10 @@ export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, S
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.artifacts);
-	}
-
-	restore(snapshot: unknown): void {
-		this.artifacts = snapshot as Todo[];
+	snapshot(): RestoreSnapshot {
+		const artifacts = structuredClone(this.artifacts);
+		return () => {
+			this.artifacts = artifacts;
+		};
 	}
 }

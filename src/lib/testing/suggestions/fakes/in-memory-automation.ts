@@ -21,7 +21,10 @@ import type {
 	SuggestionReverter,
 	SuggestionViewAssembler
 } from '$lib/server/services/suggestions/contracts';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { materializeSuggestion } from '$lib/models/suggestions';
 
@@ -112,12 +115,11 @@ export class InMemorySuggestions
 		return this.replace(actor, { ...suggestion, status: 'reverted' });
 	}
 
-	snapshot(): unknown {
-		return structuredClone(this.suggestions);
-	}
-
-	restore(snapshot: unknown): void {
-		this.suggestions = snapshot as Suggestion[];
+	snapshot(): RestoreSnapshot {
+		const suggestions = structuredClone(this.suggestions);
+		return () => {
+			this.suggestions = suggestions;
+		};
 	}
 
 	private assertPending(suggestion: Suggestion): void {

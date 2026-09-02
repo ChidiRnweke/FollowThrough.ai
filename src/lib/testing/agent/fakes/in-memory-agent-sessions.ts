@@ -8,7 +8,10 @@ import type {
 } from '$lib/models/agent';
 import { parseSessionItem, sessionJsonObjectSchema, toStoredSessionItem } from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import type { SnapshotParticipant } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 const now = () => new Date().toISOString() as AgentSessionItem['createdAt'];
 
@@ -87,21 +90,21 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 		);
 	}
 
-	snapshot(): unknown {
-		return structuredClone(
+	/**
+	 * The captured rows go out through the stored form and are parsed back, so
+	 * the fake cannot restore a row the repository would refuse to return: a
+	 * fixture encoding an impossible state teaches the bug to everyone who
+	 * copies it. The round trip is the point — the type alone would let a row
+	 * the persisted schema rejects survive a rollback.
+	 */
+	snapshot(): RestoreSnapshot {
+		const stored = structuredClone(
 			this.items.map((row) => ({ ...row, item: toStoredSessionItem(row.item) }))
 		);
-	}
-
-	/**
-	 * Parsed rather than asserted, so the fake cannot hold a row the repository
-	 * would refuse to return: a fixture encoding an impossible state teaches the
-	 * bug to everyone who copies it.
-	 */
-	restore(snapshot: unknown): void {
-		this.items = restoredItemsSchema.parse(snapshot).map((row) => ({
-			...row,
-			item: parseSessionItem(row.item)
-		}));
+		return () => {
+			this.items = restoredItemsSchema
+				.parse(stored)
+				.map((row) => ({ ...row, item: parseSessionItem(row.item) }));
+		};
 	}
 }
