@@ -454,14 +454,93 @@ produce.
   - [x] Verify with `pnpm test:architecture`, focused unit specs, and `pnpm check`. The work had
         landed in `a153e9d` and `edccff5` but no run was recorded against it; these two boxes were
         ticked from TN-24's gate, which covers the same tree.
-- [ ] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
+- [x] **TN-43: Narrow remaining message, activity, instrumentation, PDFMake, DOCX, and JSONB shapes**
   - [x] Remove the redundant actor cast-probe from controller boundary instrumentation.
   - [x] Type DOCX image widths from the parsed ProseMirror media attributes.
   - [x] The `tool_completed` arm split landed in TN-32, which owns the persisted-event read
         boundary the change needed.
-- [ ] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
+  - [x] `messages.content` is read, not handed out. `StoredMessage` in `models/agent/index.ts` is a
+        read-boundary union like `StoredSuggestion` and `StoredAgentEvent`, and it hangs off
+        `content` alone — `Omit<Message, 'content'> & (readable | unreadable)`. `content` is the
+        only column that can fail to read, so `id`, `role`, `runId` and `eventCursor` stay present
+        on both arms and ordering, run grouping and truncation are total over a stored message
+        without narrowing first. `listMessages` maps every row of a conversation, which is the
+        TN-14 shape; `appendMessage` stays strict, because a row this process just wrote and
+        cannot read back is a writer bug and belongs at the write.
+  - [x] The unreadable row stays visible. `partsOfTurn` already had the `ChatPart.unreadable` arm
+        TN-34 added, so it renders where the gap is rather than being dropped — a turn that
+        silently loses a row reports doing less than it did. The disjunction went up, not down:
+        `getSession` passes the union to the client that renders it, and `resolveQuery` in
+        knowledge-search leaves an unreadable row out of the transcript it condenses rather than
+        standing in a placeholder the condenser would embed as something someone said.
+  - [x] `artifacts.sourceNoteIds` was `(row.sourceNoteIds as NoteId[]) ?? []` — an unchecked brand
+        on an unchecked array, and a default on a `notNull()` column that could not tell "cites no
+        notes" from "the read failed". `artifactSourceNoteIdsSchema` replaces both halves.
+        `skills.metadata` is parsed too; it was reaching the domain through the mapper's blanket
+        `domain<T>` cast.
+  - [x] `columnShares` in `models/deliverables` replaces the `(w as number)` in both renderers.
+        "Every column has a width" and "there is a total to divide by" were two values for one
+        fact, held apart in `pdf.ts` and `docx.ts` alike, and each then re-asserted what its own
+        `every` guard had proved inside a `map` the narrowing does not reach. One value, one copy —
+        the arithmetic ran twice and a fix to one would not have reached the other.
+  - [x] The fontkit `as FontHandle` was a locally declared interface holding the one method it
+        wanted, asserted onto `Font | FontCollection` — an `instanceof`-shaped move on a union that
+        carries its own discriminant. `openFace` narrows and raises on the collection arm, which
+        can only mean a bundled font file was replaced. `PdfSpannedCell` names the empty-object
+        placeholder pdfmake requires in a spanned grid position, at its three sites.
+  - [x] `tests/corpus/agent-message-contents.json` (201 rows, every role) and its zero-unreadable
+        assertion, verified to fail against a planted bad row before being trusted. The topology
+        audit scans only `db/mappers.ts` for `parse*`/`read*`, so nothing forced this entry —
+        widening that scan is still TN-54's. Two `repositories.contract.spec.ts` round trips cover
+        the unreadable arm against real Postgres, following the session-item precedent.
+  - Left for TN-54, deliberately: `db/mappers.ts:25`'s blanket `domain<T>(value: unknown): T =>
+value as T`. It is the root enabler of every unparsed jsonb hand-out, but retiring it is a
+    whole-mapper rewrite and does not belong in a block about specific columns.
+  - Not work yet: `feedbackReports.appContext` (`registry.ts:1160`) is written and never read, so
+    its `$type<AppContextSnapshotV1>()` is an unbacked promise rather than an unparsed read. It
+    becomes real the day a read is added.
+  - Verified with `pnpm check`, `pnpm test:architecture`, `pnpm test:unit` (3027), `pnpm
+test:contracts` (113), `pnpm corpus:capture`, and `eslint`/`prettier` on the touched files.
+- [x] **TN-44: Parse remaining JSON/config/storage/replay/recovery/eval boundaries**
   - [x] Parse the eval result log as a strict passed/failed union and quarantine structurally
         invalid JSON instead of trusting a cast.
+  - [x] The note-action SSE frame reads through `readAgentRunEventRecord` instead of a cast onto
+        `Omit<AgentRunEventRecord, 'createdAt'> & { createdAt: string }`. It was a second,
+        unparsed copy of a read whose parser and exemplar were one directory away
+        (`client/agent/runs/remote-transport.ts`); the two ends are versioned separately, which is
+        why that reader exists. The `(event as MessageEvent<string>)` cast went too — the
+        `addEventListener` overload already types it.
+  - [x] The icon-library search response is one `z.object({ icons: z.array(z.string()) })` at the
+        boundary, replacing a cast-probe, an `Array.isArray` and a hand-written `icon is
+    DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than answering
+        `[]`, which is the failure-looks-like-success default; a separate spec pins the real empty
+        match so the two stay distinguishable.
+  - [x] The Infisical secret list is a schema over both spellings (bare array, `{ secrets }`
+        envelope), with no zod detail in the thrown message so nothing from a secret record can
+        reach a log. Behaviour change worth knowing: an entry whose `secretValue` is not a string
+        used to be dropped silently and surface later as an unset environment variable. It now
+        fails the fetch.
+  - [x] The eval aux cache parses with `readAgentPayloadObject` and quarantines an unreadable file
+        to `<path>.corrupt-<ts>`, following `result-log.ts`. Not an empty-cache fallback: an empty
+        cache silently re-bills a real provider, so the message names that consequence.
+  - [x] The migration journal was typed by annotation over `JSON.parse`'s `any`, which checks
+        nothing. It has a schema now, and its spec parses the **real** `drizzle/meta/_journal.json`
+        rather than a literal written beside the reader — the TN-14 rule applied to a config file.
+  - Left as they are, and this is the finding TN-52 needs: `replay-virtualizer.ts:39` and
+    `tool-failure.ts:68` are `JSON.parse(x) as unknown`, the form section 5 calls honest.
+    **`no-json-parse-cast` must exempt `as unknown` explicitly**, or landing it breaks the two
+    sites the catalog holds up as correct.
+  - Also for TN-52: the two `JSON.parse(JSON.stringify(x))` deep clones
+    (`client/notes/sync/indexeddb-note-sync-repository.ts:21`,
+    `components/notes/editor-document.ts:39`) are not boundary reads — they strip a Svelte `$state`
+    proxy from a value this process just produced, and `structuredClone` is the call that throws on
+    that proxy. `$state.snapshot` is a rune and both are plain `.ts` files, so neither can use it;
+    renaming them to `.svelte.ts` would drag a framework-free client repository into the compiler
+    for a defensive copy. They need reasoned allowances, written when the rule exists — an
+    allowance naming a rule not in `RULES` reports as malformed today.
+  - Verified with `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`, and `eslint`/`prettier`
+    on the touched files. `pnpm test:evals` and `test:evals:smoke` were not run: they bill a real
+    provider, and both new readers are covered by their own specs.
 
 ### Phase 5 — Land remaining zero-baseline rules and close the audit
 
