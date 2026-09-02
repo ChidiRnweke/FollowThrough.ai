@@ -237,18 +237,28 @@ export interface InfisicalLikeClient {
 const sleep = (seconds: number) =>
 	new Promise<void>((resolve) => setTimeout(resolve, seconds * 1000));
 
+/**
+ * What `listSecrets` answers with, as this adapter reads it.
+ *
+ * Two shapes, because the SDK has returned both: a bare array and an envelope
+ * with the array under `secrets`. Only the two fields this code reads are
+ * named, and the object is open, so the rest of a secret record passes through
+ * untouched. An entry missing either field used to be dropped by a hand-written
+ * predicate — a missing key then reached the application as an absent
+ * environment variable rather than as a failed secret fetch, which is the same
+ * silence a wrong project id produces.
+ */
+const infisicalSecretSchema = z.object({ secretKey: z.string(), secretValue: z.string() });
+const infisicalSecretListSchema = z.union([
+	z.array(infisicalSecretSchema),
+	z.object({ secrets: z.array(infisicalSecretSchema) }).transform((body) => body.secrets)
+]);
+
 function snapshotFromResponse(response: unknown): Record<string, string> {
-	const secrets = Array.isArray(response)
-		? response
-		: (response as { secrets?: unknown } | null)?.secrets;
-	if (!Array.isArray(secrets))
-		throw new Error('Infisical returned an invalid secret-list response');
+	const parsed = infisicalSecretListSchema.safeParse(response);
+	if (!parsed.success) throw new Error('Infisical returned an invalid secret-list response');
 	return Object.fromEntries(
-		secrets
-			.filter(
-				(secret): secret is { secretKey: string; secretValue: string } =>
-					typeof secret?.secretKey === 'string' && typeof secret?.secretValue === 'string'
-			)
+		parsed.data
 			.filter((secret) => !isPlatformKey(secret.secretKey))
 			.map((secret) => [secret.secretKey, secret.secretValue])
 	);

@@ -1,10 +1,69 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
+import {
+	readAgentPayloadObject,
+	readAgentPayload,
+	type AgentPayload
+} from '$lib/models/agent/payload';
 
 const isMissingFile = (error: unknown): error is NodeJS.ErrnoException =>
 	error instanceof Error && 'code' in error && error.code === 'ENOENT';
+
+/**
+ * What was on disk, as three separate answers — the shape `result-log.ts` uses,
+ * for the same reason: an unreadable file and an absent one are different facts
+ * and the caller has to be able to tell them apart.
+ *
+ * The cast this replaced said the file held `Record<string, AgentPayload>`
+ * because it had been written by this class, which is true right up to the run
+ * where it is not — a truncated write, a hand edit, a half-flushed process. The
+ * cached entries are handed to callers as their own `T`, so a file holding a
+ * string, an array, or a JSON fragment used to reach an eval as a value that
+ * type-checked and was not one.
+ */
+type CacheContents =
+	| { readonly kind: 'entries'; readonly entries: Record<string, AgentPayload> }
+	| { readonly kind: 'absent' }
+	| { readonly kind: 'corrupt'; readonly reason: string };
+
+const readCacheFile = async (path: string): Promise<CacheContents> => {
+	let raw: string;
+	try {
+		raw = await readFile(path, 'utf8');
+	} catch (error) {
+		if (isMissingFile(error)) return { kind: 'absent' };
+		throw error;
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch (error) {
+		return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) };
+	}
+	const read = readAgentPayloadObject(parsed);
+	return read.kind === 'corrupt'
+		? { kind: 'corrupt', reason: read.message }
+		: { kind: 'entries', entries: { ...read.value } };
+};
+
+/**
+ * Moved rather than overwritten, and reported.
+ *
+ * Starting a fresh cache in silence would be the expensive kind of quiet: every
+ * entry the file held is a provider call this run will now make and pay for, and
+ * an eval that started billing again would look exactly like one that did not.
+ * The file itself is kept because whatever produced it is a bug worth the
+ * evidence.
+ */
+const quarantine = async (path: string, reason: string): Promise<void> => {
+	const moved = `${path}.corrupt-${Date.now()}`;
+	await rename(path, moved);
+	process.stderr.write(
+		`[evals] aux cache was unreadable (${reason}); moved to ${moved} and started a new one. ` +
+			'Every entry it held will be fetched from the provider again.\n'
+	);
+};
 
 /**
  * What an aux response becomes before it is cached: nothing may enter the file
@@ -92,12 +151,9 @@ export class DiskCache {
 	async flush(): Promise<void> {
 		if (!this.dirty || !this.entries) return;
 		await mkdir(dirname(this.path), { recursive: true });
-		let onDisk: Record<string, AgentPayload> = {};
-		try {
-			onDisk = JSON.parse(await readFile(this.path, 'utf8')) as Record<string, AgentPayload>;
-		} catch (error) {
-			if (!isMissingFile(error)) throw error;
-		}
+		const contents = await readCacheFile(this.path);
+		if (contents.kind === 'corrupt') await quarantine(this.path, contents.reason);
+		const onDisk = contents.kind === 'entries' ? contents.entries : {};
 		await writeFile(this.path, JSON.stringify({ ...onDisk, ...this.entries }, null, 0), 'utf8');
 		this.dirty = false;
 	}
@@ -108,12 +164,9 @@ export class DiskCache {
 
 	private async load(): Promise<Record<string, AgentPayload>> {
 		if (this.entries) return this.entries;
-		try {
-			this.entries = JSON.parse(await readFile(this.path, 'utf8')) as Record<string, AgentPayload>;
-		} catch (error) {
-			if (!isMissingFile(error)) throw error;
-			this.entries = {};
-		}
+		const contents = await readCacheFile(this.path);
+		if (contents.kind === 'corrupt') await quarantine(this.path, contents.reason);
+		this.entries = contents.kind === 'entries' ? contents.entries : {};
 		return this.entries;
 	}
 }

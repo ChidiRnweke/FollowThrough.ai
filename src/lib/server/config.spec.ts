@@ -50,6 +50,30 @@ class FakeSecretsClient implements InfisicalLikeClient {
 	}
 }
 
+/** Answers with exactly the body it was handed, so the read boundary sees real wire shapes. */
+class ShapedSecretsClient implements InfisicalLikeClient {
+	constructor(private readonly body: unknown) {}
+
+	auth() {
+		return { universalAuth: { login: async () => undefined } };
+	}
+
+	secrets() {
+		return { listSecrets: async () => this.body };
+	}
+}
+
+const shapedBackend = (client: ShapedSecretsClient) =>
+	new InfisicalSecretsBackend(
+		client,
+		'project',
+		'prod',
+		1800,
+		async () => undefined,
+		() => 0,
+		async () => undefined
+	);
+
 const infisicalBackend = (
 	client: FakeSecretsClient,
 	{ ttl = 1800, now = () => 0 }: { ttl?: number; now?: () => number } = {}
@@ -148,6 +172,32 @@ describe('secrets backends', () => {
 		});
 		expect(await infisicalBackend(client).readOptional('OTEL_EXPORTER_OTLP_ENDPOINT')).toBe(
 			undefined
+		);
+	});
+
+	test('a secret list answered as a bare array is read', async () => {
+		const client = new ShapedSecretsClient([
+			{ secretKey: 'DATABASE_URL', secretValue: 'pg://app' }
+		]);
+		expect(await shapedBackend(client).readSecret('DATABASE_URL')).toBe('pg://app');
+	});
+
+	// The predicate this replaced dropped such an entry, so a secret whose value
+	// came back null reached the application as an unset variable — the same
+	// silence a wrong project id produces, and indistinguishable from it.
+	test('a secret whose value is not a string fails the fetch rather than vanishing', async () => {
+		const client = new ShapedSecretsClient({
+			secrets: [{ secretKey: 'DATABASE_URL', secretValue: null }]
+		});
+		await expect(shapedBackend(client).readSecret('DATABASE_URL')).rejects.toThrow(
+			SecretsBackendError
+		);
+	});
+
+	test('a response that is neither an array nor an envelope fails the fetch', async () => {
+		const client = new ShapedSecretsClient({ error: 'forbidden' });
+		await expect(shapedBackend(client).readSecret('DATABASE_URL')).rejects.toThrow(
+			'invalid secret-list response'
 		);
 	});
 });

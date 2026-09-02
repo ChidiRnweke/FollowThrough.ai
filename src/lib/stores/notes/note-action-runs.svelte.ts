@@ -1,4 +1,9 @@
-import type { AgentRunEventRecord, AgentRunId, NoteActionKind } from '$lib/models/agent';
+import {
+	readAgentRunEventRecord,
+	type AgentRunEventRecord,
+	type AgentRunId,
+	type NoteActionKind
+} from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import { z } from 'zod';
 import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
@@ -86,11 +91,14 @@ class BrowserTransport implements NoteActionRunTransport {
 			`/api/agent/runs/${runId}/events?after=${encodeURIComponent(after)}`
 		);
 		source.addEventListener('agent', (event) => {
-			const parsed = JSON.parse((event as MessageEvent<string>).data) as Omit<
-				AgentRunEventRecord,
-				'createdAt'
-			> & { createdAt: string };
-			onEvent({ ...parsed, createdAt: new Date(parsed.createdAt) });
+			// The server serialized a record it had already parsed, but what arrives
+			// here is text off a socket and nothing between the two is checked. A
+			// frame this client cannot read is dropped rather than delivered as a
+			// record the store would then have to guess at.
+			const frame: unknown = JSON.parse(event.data);
+			const record = readAgentRunEventRecord(frame);
+			if (record.kind === 'readable') onEvent(record);
+			else console.warn(`[agent] dropped an unreadable event frame: ${record.reason}`);
 		});
 		source.onerror = onError;
 		return { close: () => source.close() };

@@ -65,8 +65,25 @@ describe('Finding a logo for a diagram', () => {
 		await expect(search.search('aws')).rejects.toThrow('unreadable');
 	});
 
-	it('treats a response without an icon list as no matches', async () => {
+	// Not `[]`: no icon list means the library did not answer the question, and
+	// "found nothing" is a real answer this search gives when it found nothing.
+	it('reports a response carrying no icon list', async () => {
 		const { search } = respondWith(JSON.stringify({ total: 0 }));
+		await expect(search.search('aws')).rejects.toThrow('unexpected search result');
+	});
+
+	it('reports an icon list holding something that is not a name', async () => {
+		const { search } = respondWith(JSON.stringify({ icons: ['logos:aws-s3', 7] }));
+		await expect(search.search('aws')).rejects.toThrow('unexpected search result');
+	});
+
+	it('accepts a response carrying fields it does not read', async () => {
+		const { search } = respondWith(JSON.stringify({ icons: ['logos:aws-s3'], total: 1 }));
+		expect((await search.search('aws'))[0]?.name).toBe('logos:aws-s3');
+	});
+
+	it('reports an empty match as an empty list', async () => {
+		const { search } = respondWith(icons());
 		expect(await search.search('aws')).toEqual([]);
 	});
 

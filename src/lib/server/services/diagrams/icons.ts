@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
 
 /**
@@ -28,6 +29,18 @@ export interface DiagramIcon {
 export interface IconSearch {
 	search(query: string, limit?: number): Promise<readonly DiagramIcon[]>;
 }
+
+/**
+ * Iconify's search response, as this adapter reads it.
+ *
+ * Only `icons` is named because it is the only field this code acts on; the
+ * endpoint also returns `total`, `limit`, `start` and `collections`, and a
+ * closed object would break on the next field Iconify adds. A response without
+ * a readable `icons` array is a failure, not an empty result: returning `[]`
+ * would tell the agent the library holds no mark for the term it asked about,
+ * which is the answer it gets when the search really did find nothing.
+ */
+const iconSearchResponseSchema = z.object({ icons: z.array(z.string()) });
 
 /** `logos:aws-s3` → `https://api.iconify.design/logos/aws-s3.svg`. */
 const iconUrl = (name: string): string | undefined => {
@@ -71,11 +84,14 @@ export class IconifyIconSearch implements IconSearch {
 				cause: cause instanceof Error ? cause.message : String(cause)
 			});
 		}
-		const names = (parsed as { icons?: unknown }).icons;
-		if (!Array.isArray(names)) return [];
-		return names
-			.filter((name): name is string => typeof name === 'string')
-			.map((name) => ({ name, url: iconUrl(name) }))
-			.filter((icon): icon is DiagramIcon => icon.url !== undefined);
+		const result = iconSearchResponseSchema.safeParse(parsed);
+		if (!result.success)
+			throw new ExternalServiceError('The icon library returned an unexpected search result.', {
+				cause: z.prettifyError(result.error)
+			});
+		return result.data.icons.flatMap((name) => {
+			const url = iconUrl(name);
+			return url === undefined ? [] : [{ name, url }];
+		});
 	}
 }
