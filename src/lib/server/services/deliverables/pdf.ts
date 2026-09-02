@@ -1,7 +1,15 @@
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
+import type { Font } from 'fontkit';
+import { ExternalServiceError } from '$lib/errors';
 import pdfmake from 'pdfmake';
-import type { PdfCellBlock, PdfContent, PdfDocumentDefinition, PdfTableBlock } from 'pdfmake';
+import type {
+	PdfCellBlock,
+	PdfContent,
+	PdfDocumentDefinition,
+	PdfSpannedCell,
+	PdfTableBlock
+} from 'pdfmake';
 import type {
 	DiagramRenders,
 	ExportSettings,
@@ -13,7 +21,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares, defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
 	fetchImages,
@@ -88,17 +96,30 @@ const FALLBACK_FONTS = ['NotoEmoji', 'NotoSansSymbols2', 'NotoSansMath'];
 // Joiners and variation selectors need no glyph of their own.
 const JOINER_CODEPOINTS = new Set([0x200d, 0xfe0e, 0xfe0f]);
 
-interface FontHandle {
-	hasGlyphForCodePoint(codepoint: number): boolean;
-}
+const fontCoverage = new Map<string, Font>();
 
-const fontCoverage = new Map<string, FontHandle>();
+/**
+ * The opened face, or a failure naming the file.
+ *
+ * `openSync` answers `Font | FontCollection`, and this used to assert its way
+ * past that with a locally declared `FontHandle` holding the one method it
+ * wanted — an `instanceof`-shaped move on a union that carries its own `type`
+ * discriminant. The shipped fonts are all single-face TTFs, so the collection
+ * arm should never appear; if it ever does, a font file has been replaced and
+ * that is worth saying rather than reading a method off the wrong shape.
+ */
+function openFace(family: string): Font {
+	const path = resolve(FONTS_DIR, FONT_FILES[family]!.normal!);
+	const opened = openFontSync(path);
+	if ('fonts' in opened)
+		throw new ExternalServiceError(`The bundled font ${family} is a collection, not a face.`);
+	return opened;
+}
 
 function covers(family: string, codepoint: number): boolean {
 	const cached = fontCoverage.get(family);
 	if (cached) return cached.hasGlyphForCodePoint(codepoint);
-	// All shipped fonts are single-face TTFs, never collections.
-	const handle = openFontSync(resolve(FONTS_DIR, FONT_FILES[family]!.normal!)) as FontHandle;
+	const handle = openFace(family);
 	fontCoverage.set(family, handle);
 	return handle.hasGlyphForCodePoint(codepoint);
 }
@@ -284,14 +305,14 @@ function tableBlock(
 	const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
 	// Slots covered by a rowspan from an earlier row, per row index.
 	const covered: Array<Set<number>> = rows.map(() => new Set<number>());
-	const body: (readonly (PdfCellBlock | Record<string, never>)[])[] = [];
+	const body: (readonly (PdfCellBlock | PdfSpannedCell)[])[] = [];
 	let columnCount = 0;
 
 	rows.forEach((row, rowIndex) => {
 		const cells = (row.content ?? []).filter(
 			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
 		);
-		const bodyRow: (PdfCellBlock | Record<string, never>)[] = [];
+		const bodyRow: (PdfCellBlock | PdfSpannedCell)[] = [];
 		let column = 0;
 		for (const cell of cells) {
 			while (covered[rowIndex]!.has(column)) {
@@ -339,16 +360,12 @@ function tableBlock(
 	const firstRowCells = (rows[0]?.content ?? []).filter(
 		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
 	);
-	const colwidths = firstRowCells
-		.map((cell) => cell.attrs?.colwidth)
-		.map((value) => (Array.isArray(value) ? Number(value[0]) : undefined));
-	const totalWidth =
-		colwidths.every((w): w is number => typeof w === 'number' && Number.isFinite(w) && w > 0) &&
-		colwidths.length === columnCount
-			? colwidths.reduce((sum, w) => sum + w, 0)
-			: undefined;
-	const widths: (number | '*')[] = totalWidth
-		? colwidths.map((w) => ((w as number) / totalWidth) * context.contentWidth)
+	const shares = columnShares(
+		firstRowCells.map((cell) => cell.attrs?.colwidth),
+		columnCount
+	);
+	const widths: (number | '*')[] = shares
+		? shares.map((share) => share * context.contentWidth)
 		: Array.from({ length: columnCount }, () => '*');
 
 	const hasHeaderRow =

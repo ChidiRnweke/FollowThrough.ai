@@ -4,12 +4,14 @@ import noteRevisionDocuments from '../corpus/note-revision-documents.json' with 
 import sessionItems from '../corpus/agent-session-items.json' with { type: 'json' };
 import runEvents from '../corpus/agent-run-events.json' with { type: 'json' };
 import toolMessages from '../corpus/agent-tool-messages.json' with { type: 'json' };
+import messageContents from '../corpus/agent-message-contents.json' with { type: 'json' };
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
 import { readProseMirrorDocument, unknownProseMirrorNodes } from '$lib/models/notes';
 import { z } from 'zod';
 import { parseSessionItem, readAgentEvent } from '$lib/models/agent';
 import { readAgentToolName } from '$lib/models/agent/tool-catalog';
+import { readAgentPayloadObject } from '$lib/models/agent/payload';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { parseProvenance } from '$lib/models/provenance';
 import { parseSuggestionPayload, readSuggestionPayload } from '$lib/models/suggestions';
@@ -77,6 +79,26 @@ describe('the stored agent run events', () => {
 		const unreadable = runEvents.flatMap((event) => {
 			const read = readAgentEvent(event);
 			return read.kind === 'unreadable' ? [read.reason] : [];
+		});
+		expect([...new Set(unreadable)].sort()).toEqual([]);
+	});
+});
+
+/**
+ * Every row of `messages.content`, not only the tool ones.
+ *
+ * The column was handed out under `jsonb('content').$type<AgentPayloadObject>()`
+ * with nothing checking it, and `listMessages` maps every row of a conversation:
+ * one row the column could hold but the type could not describe was one dead
+ * transcript. `StoredMessage.unreadable` keeps that from taking the page down,
+ * and this asserts the arm stays empty against real rows so the resilience does
+ * not become a hiding place.
+ */
+describe('the stored message contents', () => {
+	it('all read as a payload object', () => {
+		const unreadable = messageContents.flatMap((content) => {
+			const read = readAgentPayloadObject(content);
+			return read.kind === 'corrupt' ? [read.message] : [];
 		});
 		expect([...new Set(unreadable)].sort()).toEqual([]);
 	});

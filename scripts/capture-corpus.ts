@@ -114,6 +114,14 @@ write(
 		(row) => row.content
 	)
 );
+// Every role, not only `tool`. `agent-tool-messages` above feeds the journal's
+// tool reader; this one feeds the `messages.content` read boundary, which maps
+// every row of a conversation and so has to survive a user prompt and an
+// assistant answer as well as a tool result.
+write(
+	'agent-message-contents',
+	(await sql`select content from messages order by created_at, id`).map((row) => row.content)
+);
 write('suggestion-payloads', await sql`select kind, payload from suggestions order by id`);
 write(
 	'agent-run-contexts',

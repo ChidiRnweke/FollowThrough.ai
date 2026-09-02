@@ -10,7 +10,7 @@ import type {
 	ConversationImageInput,
 	InlineCompletionContext,
 	InlineSuggestionRequest,
-	Message,
+	StoredMessage,
 	RunAgentInput,
 	StagedAgentRunInput,
 	ToolActivity,
@@ -149,7 +149,10 @@ export interface ConversationJournal extends ConversationRecorder {
 		}
 	): Promise<Conversation>;
 	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
-	listMessages(actor: ActorContext, conversationId: ConversationId): Promise<readonly Message[]>;
+	listMessages(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<readonly StoredMessage[]>;
 	/** Drop the `ordinal`-th user turn (1-based, user messages only) and all later turns. */
 	truncateFromUserMessage(
 		actor: ActorContext,

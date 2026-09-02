@@ -72,11 +72,22 @@ declare module 'pdfmake' {
 		readonly fillColor?: string;
 	}
 
+	/**
+	 * The cell a spanned region leaves behind.
+	 *
+	 * pdfmake requires a placeholder in every grid position covered by a
+	 * `colSpan`/`rowSpan`, and it must be an object with no keys. Named rather
+	 * than spelled `Record<string, never>` at three sites, which reads as an
+	 * open-keyed map that happens to be empty instead of the one literal value
+	 * the library accepts.
+	 */
+	export type PdfSpannedCell = Record<string, never>;
+
 	export interface PdfTableBlock {
 		readonly table: {
 			readonly headerRows?: number;
 			readonly widths: readonly (number | '*')[];
-			readonly body: readonly (readonly (PdfCellBlock | Record<string, never>)[])[];
+			readonly body: readonly (readonly (PdfCellBlock | PdfSpannedCell)[])[];
 		};
 		readonly layout?: {
 			readonly fillColor?: string;

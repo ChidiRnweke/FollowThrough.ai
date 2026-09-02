@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Conversation, ConversationId, Message } from '$lib/models/agent';
+import type { Conversation, ConversationId, Message, StoredMessage } from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
 import type {
 	ConversationListOptions,
@@ -71,9 +71,17 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		return message;
 	}
 
-	async listMessages(actor: ActorContext, id: ConversationId): Promise<readonly Message[]> {
+	/**
+	 * Every held message reads, because the fake holds `Message` and only the
+	 * database can produce content that does not parse. A fake that could answer
+	 * `unreadable` would be inventing a state its own writes cannot reach; the
+	 * repository contract spec covers that arm against real Postgres.
+	 */
+	async listMessages(actor: ActorContext, id: ConversationId): Promise<readonly StoredMessage[]> {
 		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
-		return this.messages.filter((message) => message.conversationId === id);
+		return this.messages
+			.filter((message) => message.conversationId === id)
+			.map((message) => ({ ...message, kind: 'readable' as const }));
 	}
 
 	async deleteMessages(

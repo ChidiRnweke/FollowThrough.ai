@@ -149,6 +149,29 @@ export interface Message {
 	readonly createdAt: DateTime;
 }
 
+/**
+ * One journalled message as it comes back off the database.
+ *
+ * `messages.content` is a `jsonb` column that was handed out under
+ * `$type<AgentPayloadObject>()` with nothing checking it, and `listMessages`
+ * maps every row of a conversation — the shape that took `/today` down in
+ * TN-14. So the read is a union and the write type stays {@link Message}.
+ *
+ * The union hangs off `content` alone, because `content` is the only column
+ * that can fail to read. `id`, `role`, `runId` and `eventCursor` are ordinary
+ * columns and are present on both arms, so ordering, run grouping and
+ * truncation are total over a stored message without narrowing first.
+ *
+ * An unreadable row stays in the transcript rather than being dropped: the
+ * work was attempted, and a turn that silently loses a row reports doing less
+ * than it did. `ChatPart` already has the `unreadable` arm that renders it.
+ */
+export type StoredMessage = Omit<Message, 'content'> &
+	(
+		| { readonly kind: 'readable'; readonly content: AgentPayloadObject }
+		| { readonly kind: 'unreadable'; readonly reason: string }
+	);
+
 /** What every tool call carries, whatever became of it. */
 interface ToolActivityBase {
 	/**

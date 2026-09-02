@@ -5,7 +5,21 @@ import {
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import type { StoredMessage } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { ConversationArchive } from './archive';
+
+/**
+ * The content of a journalled message, narrowed once.
+ *
+ * `listMessages` answers with a read boundary now, and the fake can only hold
+ * messages it was given, so every row here reads. Narrowing in a helper keeps
+ * each `it` to the one assertion it is about.
+ */
+const contentOf = (message: StoredMessage | undefined): AgentPayloadObject => {
+	if (message?.kind !== 'readable') throw new Error('expected a readable message');
+	return message.content;
+};
 
 describe('Conversation visibility invariants', () => {
 	it('does not list workflow conversations as chat sessions', async () => {
@@ -68,7 +82,7 @@ describe('Conversation visibility invariants', () => {
 		await journal.recordUserPrompt(testActor(), conversation.id, 'Second');
 		await journal.truncateFromUserMessage(testActor(), conversation.id, 2);
 		const remaining = await journal.listMessages(testActor(), conversation.id);
-		expect(remaining.at(-1)?.content.text).toBe('First answer');
+		expect(contentOf(remaining.at(-1)).text).toBe('First answer');
 	});
 
 	it('leaves the transcript alone when the ordinal is past the last question', async () => {
@@ -99,7 +113,7 @@ describe('Conversation visibility invariants', () => {
 		];
 		await journal.recordUserPrompt(testActor(), conversation.id, 'Look at this', undefined, images);
 		const [message] = await journal.listMessages(testActor(), conversation.id);
-		expect(message.content.images).toEqual(images);
+		expect(contentOf(message).images).toEqual(images);
 	});
 
 	it('leaves a text-only turn without an images key', async () => {
@@ -107,7 +121,7 @@ describe('Conversation visibility invariants', () => {
 		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
 		await journal.recordUserPrompt(testActor(), conversation.id, 'Hello');
 		const [message] = await journal.listMessages(testActor(), conversation.id);
-		expect(message.content).toEqual({ type: 'text', text: 'Hello' });
+		expect(contentOf(message)).toEqual({ type: 'text', text: 'Hello' });
 	});
 });
 
@@ -122,7 +136,7 @@ describe('journaling tool outcomes', () => {
 			status: 'succeeded'
 		});
 		const [message] = await journal.listMessages(testActor(), conversation.id);
-		expect(message.content.output).toBeNull();
+		expect(contentOf(message).output).toBeNull();
 	});
 
 	// The spec that stood here fed a succeeded activity an output holding a
@@ -142,6 +156,6 @@ describe('journaling tool outcomes', () => {
 			output: { noteId: 'note-1' }
 		});
 		const [message] = await journal.listMessages(testActor(), conversation.id);
-		expect(message.content.output).toEqual({ noteId: 'note-1' });
+		expect(contentOf(message).output).toEqual({ noteId: 'note-1' });
 	});
 });

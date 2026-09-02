@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId, Message } from '$lib/models/agent';
+import type { ConversationId, StoredMessage } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { Condenser, KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
@@ -44,7 +44,8 @@ export interface RetrievalDependencies {
 
 const DEFAULT_SEARCH_LIMIT = 8;
 
-const messageText = (message: Message): string => {
+const messageText = (message: StoredMessage): string | undefined => {
+	if (message.kind === 'unreadable') return undefined;
 	const content = message.content;
 	if (typeof content.text === 'string') return content.text;
 	if (typeof content.content === 'string') return content.content;
@@ -88,7 +89,11 @@ export class Retrieval implements RetrievalController {
 		if (!input.conversationId) return input.query;
 		const history = await this.dependencies.conversations.listMessages(actor, input.conversationId);
 		if (history.length <= 1) return input.query;
-		const transcript = [...history.map(messageText), `user: ${input.query}`].join('\n');
+		// An unreadable row contributes no text to condense. It is left out rather
+		// than stood in for: a placeholder would put words in the transcript that
+		// nobody in the conversation said, and the condenser would embed them.
+		const spoken = history.map(messageText).filter((text) => text !== undefined);
+		const transcript = [...spoken, `user: ${input.query}`].join('\n');
 		return this.dependencies.condenser.condense(transcript);
 	}
 }

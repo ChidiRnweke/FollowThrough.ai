@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, ilike, inArray } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { Conversation, Message } from '$lib/models/agent';
-import { NotFoundError } from '$lib/errors';
+import type { Conversation, Message, StoredMessage } from '$lib/models/agent';
+import { readAgentPayloadObject } from '$lib/models/agent/payload';
+import { ExternalServiceError, NotFoundError } from '$lib/errors';
 import type {
 	ConversationListOptions,
 	ConversationRepository
@@ -27,16 +28,49 @@ const toConversation = (row: typeof schema.conversations.$inferSelect): Conversa
 	updatedAt: row.updatedAt.toISOString() as Conversation['updatedAt']
 });
 
-const toMessage = (row: typeof schema.messages.$inferSelect): Message => ({
+/**
+ * The columns every row has, whether or not its content reads.
+ *
+ * Kept apart from the content so the two arms cannot drift: a field added to
+ * `Message` is a compile error here until it is mapped once, rather than twice.
+ */
+const messageColumns = (row: typeof schema.messages.$inferSelect): Omit<Message, 'content'> => ({
 	id: row.id as Message['id'],
 	conversationId: row.conversationId as Message['conversationId'],
 	...(row.runId ? { runId: row.runId as Message['runId'] } : {}),
 	...(row.eventCursor ? { eventCursor: row.eventCursor.toString() } : {}),
 	role: row.role,
-	content: row.content,
 	...(row.model ? { model: row.model } : {}),
 	createdAt: row.createdAt.toISOString() as Message['createdAt']
 });
+
+/**
+ * `content` is read, not handed out.
+ *
+ * The column is `jsonb('content').$type<AgentPayloadObject>()`, which is a
+ * promise the database cannot keep, and `listMessages` maps every row of a
+ * conversation — one unreadable row used to be one dead transcript.
+ */
+const toStoredMessage = (row: typeof schema.messages.$inferSelect): StoredMessage => {
+	const content = readAgentPayloadObject(row.content);
+	return content.kind === 'valid'
+		? { ...messageColumns(row), kind: 'readable', content: content.value }
+		: { ...messageColumns(row), kind: 'unreadable', reason: content.message };
+};
+
+/**
+ * The same read, strict, for the insert's own round trip.
+ *
+ * A row this process just wrote and cannot read back is a writer bug, and it
+ * should be loud at the write rather than degrade a transcript later — the rule
+ * `readAgentEvent` and `append` already follow.
+ */
+const toMessage = (row: typeof schema.messages.$inferSelect): Message => {
+	const content = readAgentPayloadObject(row.content);
+	if (content.kind !== 'valid')
+		throw new ExternalServiceError(`Stored message content could not be read: ${content.message}`);
+	return { ...messageColumns(row), content: content.value };
+};
 
 export class ConversationRecords implements ConversationRepository {
 	constructor(private readonly database: Database) {}
@@ -147,7 +181,10 @@ export class ConversationRecords implements ConversationRepository {
 		return toMessage(row!);
 	}
 
-	async listMessages(actor: ActorContext, id: Conversation['id']): Promise<readonly Message[]> {
+	async listMessages(
+		actor: ActorContext,
+		id: Conversation['id']
+	): Promise<readonly StoredMessage[]> {
 		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
 		return (
 			await this.database
@@ -155,7 +192,7 @@ export class ConversationRecords implements ConversationRepository {
 				.from(schema.messages)
 				.where(eq(schema.messages.conversationId, id))
 				.orderBy(asc(schema.messages.createdAt))
-		).map(toMessage);
+		).map(toStoredMessage);
 	}
 
 	async deleteMessages(

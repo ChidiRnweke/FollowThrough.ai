@@ -12,6 +12,7 @@ import {
 import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
+import { skillMetadataSchema } from '$lib/models/skills';
 import {
 	parseSuggestionPayload,
 	readSuggestionPayload,
@@ -258,7 +259,7 @@ export const toSkill = (
 	triggerHints: skill.triggerHints,
 	license: skill.license ?? undefined,
 	compatibility: skill.compatibility ?? undefined,
-	metadata: skill.metadata,
+	metadata: skillMetadataSchema.parse(skill.metadata),
 	allowImplicitInvocation: skill.allowImplicitInvocation,
 	isEnabled: skill.isEnabled
 });

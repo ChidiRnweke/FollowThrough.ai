@@ -6,7 +6,8 @@ import type {
 	AgentRunStatus,
 	ConversationId,
 	Message,
-	RunAgentInput
+	RunAgentInput,
+	StoredMessage
 } from '$lib/models/agent';
 import { isAgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
@@ -264,16 +265,23 @@ const restoredTool = (
 };
 
 /** Where a message sat in its run's event stream. Messages without one keep their order. */
-const cursorOf = (message: Message): number =>
+const cursorOf = (message: StoredMessage): number =>
 	message.eventCursor === undefined ? Number.MAX_SAFE_INTEGER : Number(message.eventCursor);
 
-const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): ChatPart[] => {
+const partsOfTurn = (messages: readonly StoredMessage[], awaitingRunId?: string): ChatPart[] => {
 	const parts: ChatPart[] = [];
 	// Sorted by cursor, because a turn's messages are not written in the order they happened:
 	// tool activity is journalled as each call settles, while the agent's own output is
 	// written when the run completes. Read back by insertion order, every turn looked like
 	// all of the work followed by all of the words.
 	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
+		// A row whose stored content the server could not read. It keeps its place
+		// in the turn — `eventCursor` is an ordinary column and survives — so the
+		// reader sees where the gap is rather than a turn quietly missing a step.
+		if (message.kind === 'unreadable') {
+			parts.push({ kind: 'unreadable', reason: message.reason });
+			continue;
+		}
 		if (message.role === 'tool') {
 			const restored = restoredTool(message, awaitingRunId);
 			if ('unreadable' in restored) parts.push({ kind: 'unreadable', reason: restored.unreadable });
@@ -299,13 +307,16 @@ const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): Chat
  * `awaitingRunId` is the run, if any, that is genuinely parked on an approval; see
  * `restoredTool` for why every other parked call is restored as abandoned.
  */
-const restoreEntries = (messages: readonly Message[], awaitingRunId?: string): ChatEntry[] => {
+const restoreEntries = (
+	messages: readonly StoredMessage[],
+	awaitingRunId?: string
+): ChatEntry[] => {
 	const entries: ChatEntry[] = [];
-	let turn: { runId?: string; messages: Message[] } | undefined;
+	let turn: { runId?: string; messages: StoredMessage[] } | undefined;
 
 	const flush = (): void => {
 		if (!turn?.messages.length) return;
-		const first = turn.messages[0] as Message;
+		const first = turn.messages[0] as StoredMessage;
 		entries.push({
 			id: first.id,
 			role: 'assistant',
@@ -320,14 +331,22 @@ const restoreEntries = (messages: readonly Message[], awaitingRunId?: string): C
 	for (const message of messages) {
 		if (message.role === 'user') {
 			flush();
-			const text = typeof message.content.text === 'string' ? message.content.text : '';
+			// The user's own turn, whether or not its content read: an unreadable
+			// prompt is still a turn the reader took, and dropping it would leave
+			// the agent's reply answering nothing.
+			const parts: ChatPart[] =
+				message.kind === 'unreadable'
+					? [{ kind: 'unreadable', reason: message.reason }]
+					: [
+							...(typeof message.content.text === 'string' && message.content.text
+								? [{ kind: 'text' as const, text: message.content.text }]
+								: []),
+							...restoredImages(message.content.images)
+						];
 			entries.push({
 				id: message.id,
 				role: 'user',
-				parts: [
-					...(text ? [{ kind: 'text' as const, text }] : []),
-					...restoredImages(message.content.images)
-				],
+				parts,
 				suggestions: [],
 				status: 'completed',
 				...(message.runId ? { runId: message.runId } : {})

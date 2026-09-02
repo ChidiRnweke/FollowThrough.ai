@@ -7,8 +7,8 @@ import type {
 	ListArtifactsParams,
 	TemplateId
 } from '$lib/models/deliverables';
-import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import { artifactSourceNoteIdsSchema } from '$lib/models/deliverables';
 import type { ArtifactRepository } from '$lib/server/repositories/deliverables';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/deliverables';
@@ -24,7 +24,7 @@ const toArtifact = (row: typeof schema.artifacts.$inferSelect): Artifact => ({
 	format: row.format as Artifact['format'],
 	objectKey: row.objectKey,
 	byteSize: row.byteSize,
-	sourceNoteIds: (row.sourceNoteIds as NoteId[]) ?? [],
+	sourceNoteIds: [...artifactSourceNoteIdsSchema.parse(row.sourceNoteIds)],
 	templateId: row.templateId ? (row.templateId as TemplateId) : undefined,
 	provenanceId: row.provenanceId ? (row.provenanceId as Artifact['provenanceId']) : undefined,
 	runId: row.runId ? (row.runId as Artifact['runId']) : undefined,

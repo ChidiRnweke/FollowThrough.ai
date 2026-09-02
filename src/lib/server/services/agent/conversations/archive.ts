@@ -6,6 +6,7 @@ import type {
 	ConversationImageInput,
 	Message,
 	MessageId,
+	StoredMessage,
 	StagedAgentRunInput,
 	ToolActivity
 } from '$lib/models/agent';
@@ -146,7 +147,10 @@ export class ConversationArchive {
 		return conversation;
 	}
 
-	listMessages(actor: ActorContext, conversationId: ConversationId): Promise<readonly Message[]> {
+	listMessages(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<readonly StoredMessage[]> {
 		return this.repository.listMessages(actor, conversationId);
 	}
 

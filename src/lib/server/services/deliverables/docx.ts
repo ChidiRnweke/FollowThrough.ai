@@ -32,7 +32,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares, defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
 import {
 	collectImageSources,
 	fetchImages,
@@ -357,23 +357,17 @@ function tableBlock(
 	const firstRowCells = (rows[0]?.content ?? []).filter(
 		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
 	);
-	const colwidths = firstRowCells
-		.map((cell) => cell.attrs?.colwidth)
-		.map((value) => (Array.isArray(value) ? Number(value[0]) : undefined));
-	const totalWidth =
-		colwidths.every((w): w is number => typeof w === 'number' && Number.isFinite(w) && w > 0) &&
-		colwidths.length === columnCount
-			? colwidths.reduce((sum, w) => sum + w, 0)
-			: undefined;
+	const shares = columnShares(
+		firstRowCells.map((cell) => cell.attrs?.colwidth),
+		columnCount
+	);
 
 	const border = { style: BorderStyle.SINGLE, size: 4, color: TABLE_LINE_COLOR };
 	return new Table({
 		width: { size: 100, type: WidthType.PERCENTAGE },
-		...(totalWidth
+		...(shares
 			? {
-					columnWidths: colwidths.map((w) =>
-						Math.round(((w as number) / totalWidth) * contentWidthTwips)
-					)
+					columnWidths: shares.map((share) => Math.round(share * contentWidthTwips))
 				}
 			: {}),
 		borders: {

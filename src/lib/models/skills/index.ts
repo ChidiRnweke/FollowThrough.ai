@@ -1,3 +1,4 @@
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -65,6 +66,16 @@ export interface Skill {
 	readonly allowImplicitInvocation?: boolean;
 	readonly isEnabled: boolean;
 }
+
+/**
+ * The stored `skills.metadata` column, read rather than handed out.
+ *
+ * A genuine open-keyed map of strings — the frontmatter keys a skill author
+ * chose — so `Record<string, string>` is the honest type and this schema only
+ * has to prove the values really are strings. It was reaching the domain
+ * through the mapper's blanket `domain<T>` cast with nothing checking it.
+ */
+export const skillMetadataSchema = z.record(z.string(), z.string());
 
 /** The portable SKILL.md form: YAML frontmatter plus an instruction body, used for import/export. */
 export interface SkillManifest {

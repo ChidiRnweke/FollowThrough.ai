@@ -8,6 +8,7 @@ import type {
 	MessageId,
 	StoredSessionItem
 } from '$lib/models/agent';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { DateTime } from '$lib/models/workspace';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import {
@@ -57,8 +58,61 @@ describe('Postgres conversation repository invariants', () => {
 			await repository.appendMessage(owner, message);
 		}
 		const messages = await repository.listMessages(owner, conversation.id);
-		expect(messages.map((message) => message.content.text)).toEqual(['first', 'second']);
+		expect(
+			messages.map((message) => (message.kind === 'readable' ? message.content.text : undefined))
+		).toEqual(['first', 'second']);
 	});
+	// `messages.content` was handed out under `$type<AgentPayloadObject>()` with
+	// nothing checking it, and `listMessages` maps every row: one row the column
+	// could hold but the type could not describe used to be a dead transcript.
+	it('reads a message whose stored content is not an object as unreadable', async () => {
+		const owner = actor('85');
+		await new UserRecords(context.db).ensureLocal(owner);
+		const repository = new ConversationRecords(context.db);
+		const conversation: Conversation = {
+			id: '20000000-0000-4000-8000-000000000085' as ConversationId,
+			userId: owner.userId,
+			kind: 'chat',
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, conversation);
+		await context.db.insert(schema.messages).values({
+			id: '30000000-0000-4000-8000-000000000085',
+			conversationId: conversation.id,
+			role: 'user',
+			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			content: 'not a payload' as unknown as AgentPayloadObject,
+			createdAt: new Date(now)
+		});
+		const [message] = await repository.listMessages(owner, conversation.id);
+		expect(message?.kind).toBe('unreadable');
+	});
+
+	it('keeps the columns of an unreadable message so it holds its place', async () => {
+		const owner = actor('86');
+		await new UserRecords(context.db).ensureLocal(owner);
+		const repository = new ConversationRecords(context.db);
+		const conversation: Conversation = {
+			id: '20000000-0000-4000-8000-000000000086' as ConversationId,
+			userId: owner.userId,
+			kind: 'chat',
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, conversation);
+		await context.db.insert(schema.messages).values({
+			id: '30000000-0000-4000-8000-000000000086',
+			conversationId: conversation.id,
+			role: 'assistant',
+			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			content: 42 as unknown as AgentPayloadObject,
+			createdAt: new Date(now)
+		});
+		const [message] = await repository.listMessages(owner, conversation.id);
+		expect(message?.role).toBe('assistant');
+	});
+
 	it('does not reveal a conversation to another actor', async () => {
 		const owner = actor('8');
 		await new UserRecords(context.db).ensureLocal(owner);
@@ -126,7 +180,9 @@ describe('Postgres conversation repository invariants', () => {
 			'31000000-0000-4000-8000-000000000003' as MessageId
 		]);
 		const messages = await repository.listMessages(owner, conversation.id);
-		expect(messages.map((message) => message.content.text)).toEqual(['keep']);
+		expect(
+			messages.map((message) => (message.kind === 'readable' ? message.content.text : undefined))
+		).toEqual(['keep']);
 	});
 	it('persists conversation model and execution-mode overrides', async () => {
 		const owner = actor('71');

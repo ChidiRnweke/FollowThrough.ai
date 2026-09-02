@@ -14,7 +14,7 @@ import type {
 	ConversationId,
 	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
-	Message,
+	StoredMessage,
 	RunAgentInput,
 	ResolvedAgentRun,
 	StagedAgentRunInput,
@@ -213,7 +213,7 @@ export interface AgentController {
 		conversationId: ConversationId
 	): Promise<{
 		conversation: Conversation;
-		messages: readonly Message[];
+		messages: readonly StoredMessage[];
 		latestRun?: AgentRunSnapshot;
 	}>;
 }

@@ -53,6 +53,19 @@ export interface Artifact {
 }
 
 /**
+ * The stored `source_note_ids` column, read rather than asserted.
+ *
+ * The column is `jsonb('source_note_ids').$type<string[]>().notNull()`, and the
+ * mapper used to spell it `(row.sourceNoteIds as NoteId[]) ?? []` — an
+ * unchecked brand on an unchecked array, with a default on a `notNull()`
+ * column that could not tell "this artifact cites no notes" from "the read
+ * failed". Both halves are the bug; the parse replaces both.
+ */
+export const artifactSourceNoteIdsSchema = z
+	.array(z.uuid().transform((value) => value as NoteId))
+	.readonly();
+
+/**
  * An `Artifact` plus display context. `stale` is what tells a reader the source
  * note changed after this artifact was generated, without them having to diff it.
  */
@@ -186,6 +199,36 @@ export function headingSpacingPt(level: number): { before: number; after: number
 			return undefined;
 	}
 }
+
+/**
+ * Each column's share of the table width, or nothing when the document does not
+ * declare a usable width for every column.
+ *
+ * One value rather than two, because "every column has a width" and "there is a
+ * total to divide by" are the same fact. Both renderers used to hold them apart
+ * — a `colwidths` array of `number | undefined` beside a `totalWidth` that was
+ * `undefined` in exactly the same cases — and both then re-asserted the fact
+ * their own guard had already proved, with `(w as number) / totalWidth` inside
+ * a `map` the `every` narrowing does not reach.
+ *
+ * Shares rather than widths, because a PDF divides the content width in points
+ * and a DOCX divides it in twips. Sharing the arithmetic is also the point:
+ * this ran twice, and a fix to one copy would not have reached the other.
+ */
+export const columnShares = (
+	colwidths: readonly (readonly number[] | null | undefined)[],
+	columnCount: number
+): readonly number[] | undefined => {
+	if (colwidths.length !== columnCount) return undefined;
+	const widths: number[] = [];
+	for (const declared of colwidths) {
+		const width = declared?.[0];
+		if (width === undefined || !Number.isFinite(width) || width <= 0) return undefined;
+		widths.push(width);
+	}
+	const total = widths.reduce((sum, width) => sum + width, 0);
+	return widths.map((width) => width / total);
+};
 
 /**
  * Browser-rendered diagrams travelling with an export request, keyed by SHA-256 of the

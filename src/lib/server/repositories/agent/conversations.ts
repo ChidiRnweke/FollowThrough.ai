@@ -1,5 +1,11 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Conversation, ConversationId, Message, MessageId } from '$lib/models/agent';
+import type {
+	Conversation,
+	ConversationId,
+	Message,
+	MessageId,
+	StoredMessage
+} from '$lib/models/agent';
 export interface ConversationListOptions {
 	readonly kind?: Conversation['kind'];
 	readonly limit?: number;
@@ -14,7 +20,7 @@ export interface ConversationRepository {
 	update(actor: ActorContext, conversation: Conversation): Promise<Conversation>;
 	delete(actor: ActorContext, id: ConversationId): Promise<void>;
 	appendMessage(actor: ActorContext, message: Message): Promise<Message>;
-	listMessages(actor: ActorContext, id: ConversationId): Promise<readonly Message[]>;
+	listMessages(actor: ActorContext, id: ConversationId): Promise<readonly StoredMessage[]>;
 	/**
 	 * Drop the named messages. Used when a question is edited or asked again: the
 	 * discarded turn has to leave the transcript, or hydration puts it back on the
