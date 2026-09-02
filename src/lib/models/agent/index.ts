@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import type { PersistedSessionItem } from './session-item';
 import { AgentProviderFailure } from './agent-runs';
-import type { ToolName } from './tool-catalog';
+import {
+	AGENT_TOOL_NAME_VALUES,
+	TOOL_NAME_VALUES,
+	type AgentToolName,
+	type ToolName
+} from './tool-catalog';
 import {
 	readAgentPayload,
 	readAgentPayloadObject,
@@ -152,7 +157,7 @@ interface ToolActivityBase {
 	 * recency, which it can only do if the absence survives the journal.
 	 */
 	readonly callId?: string;
-	readonly name: string;
+	readonly name: AgentToolName;
 	readonly input: AgentPayloadObject;
 }
 
@@ -336,10 +341,18 @@ export interface ToolPreference {
 	readonly source: 'default' | 'user' | 'project';
 }
 
-/** A tool call parked at an approval checkpoint, waiting for `decide`/`decideMany`. */
+/**
+ * A tool call parked at an approval checkpoint, waiting for `decide`/`decideMany`.
+ *
+ * `toolName` is a {@link ToolName}, not a string: a park on a name no tool
+ * answers can never be approved, so the value is read where it is produced —
+ * `parkedCall` for a provider interruption, {@link readPendingDecisions} for a
+ * stored row. `search_tools` is deliberately not admitted here; it is a read
+ * and never parks.
+ */
 export interface PendingAgentDecision {
 	readonly callId: string;
-	readonly toolName: string;
+	readonly toolName: ToolName;
 	readonly arguments: AgentPayloadObject;
 }
 
@@ -708,7 +721,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_started';
 			readonly callId: string;
-			readonly name: string;
+			readonly name: AgentToolName;
 			readonly arguments: AgentPayloadObject;
 	  }
 	/**
@@ -730,7 +743,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_succeeded';
 			readonly callId?: string;
-			readonly name: string;
+			readonly name: AgentToolName;
 			readonly output?: AgentPayload;
 	  }
 	/**
@@ -748,7 +761,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_reported_failure';
 			readonly callId?: string;
-			readonly name: string;
+			readonly name: AgentToolName;
 			readonly failure: string;
 			readonly output: AgentPayload;
 	  }
@@ -756,14 +769,14 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_failed';
 			readonly callId?: string;
-			readonly name: string;
+			readonly name: AgentToolName;
 			readonly failure: string;
 	  }
 	| {
 			readonly type: 'approval_required';
 			readonly runId: AgentRunId;
 			readonly callId: string;
-			readonly name: string;
+			readonly name: AgentToolName;
 			readonly arguments: AgentPayloadObject;
 	  }
 	/**
@@ -874,24 +887,79 @@ const eventPayloadObjectSchema = z
 
 const runIdSchema = z.string().transform((value) => value as AgentRunId);
 
+/** A catalog tool name. `search_tools` is not one; see {@link agentToolNameSchema}. */
+const toolNameSchema = z.enum(TOOL_NAME_VALUES);
+
+/**
+ * Every name the agent surface can produce, catalog or not.
+ *
+ * Stored events and journalled tool rows are parsed with this rather than
+ * `z.string()`: across the 2554 run events and 129 tool messages in
+ * `tests/corpus/`, the only name outside the catalog is `search_tools`, which
+ * `AgentTools.agentTools()` assembles rather than defines.
+ */
+export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
+
+const pendingAgentDecisionSchema = z
+	.object({
+		callId: z.string().min(1),
+		toolName: toolNameSchema,
+		arguments: eventPayloadObjectSchema
+	})
+	.strict() satisfies z.ZodType<PendingAgentDecision>;
+
+/** The call id of a decision that did not parse, for the warning that reports it. */
+const readCallId = (row: unknown): string | undefined =>
+	z.object({ callId: z.string() }).safeParse(row).data?.callId;
+
+/**
+ * Reads the `agent_runs.pending_decisions` column.
+ *
+ * A decision that does not read is dropped rather than raised on: the run row
+ * still has to be readable so the user can cancel the run, and a resume that
+ * lands on none of its interruptions already fails loudly with "The pending
+ * approval could not be resumed". The dropped call ids come back so the caller
+ * can warn with them, which is what `SuggestionInbox.listByStatus` does with
+ * unreadable suggestion rows.
+ *
+ * The column holds in-flight state only — cleared on resume and by
+ * `abandonPendingCalls`, and empty in every stored row when this boundary was
+ * written — so there is no legacy shape to map here, and nothing for the
+ * corpus to capture.
+ */
+export const readPendingDecisions = (
+	value: unknown
+): { readonly decisions: readonly PendingAgentDecision[]; readonly dropped: readonly string[] } => {
+	if (!Array.isArray(value)) return { decisions: [], dropped: [] };
+	const rows: readonly unknown[] = value;
+	const decisions: PendingAgentDecision[] = [];
+	const dropped: string[] = [];
+	for (const row of rows) {
+		const parsed = pendingAgentDecisionSchema.safeParse(row);
+		if (parsed.success) decisions.push(parsed.data);
+		else dropped.push(readCallId(row) ?? 'unidentified');
+	}
+	return { decisions, dropped };
+};
+
 const toolOutcomeSchemas = [
 	z.object({
 		type: z.literal('tool_succeeded'),
 		callId: z.string().optional(),
-		name: z.string(),
+		name: agentToolNameSchema,
 		output: eventPayloadSchema.optional()
 	}),
 	z.object({
 		type: z.literal('tool_reported_failure'),
 		callId: z.string().optional(),
-		name: z.string(),
+		name: agentToolNameSchema,
 		failure: z.string(),
 		output: eventPayloadSchema
 	}),
 	z.object({
 		type: z.literal('tool_failed'),
 		callId: z.string().optional(),
-		name: z.string(),
+		name: agentToolNameSchema,
 		failure: z.string()
 	})
 ] as const;
@@ -909,7 +977,7 @@ const agentEventSchema = z.discriminatedUnion('type', [
 	z.object({
 		type: z.literal('tool_started'),
 		callId: z.string(),
-		name: z.string(),
+		name: agentToolNameSchema,
 		arguments: eventPayloadObjectSchema
 	}),
 	...toolOutcomeSchemas,
@@ -917,7 +985,7 @@ const agentEventSchema = z.discriminatedUnion('type', [
 		type: z.literal('approval_required'),
 		runId: runIdSchema,
 		callId: z.string(),
-		name: z.string(),
+		name: agentToolNameSchema,
 		arguments: eventPayloadObjectSchema
 	}),
 	z.object({

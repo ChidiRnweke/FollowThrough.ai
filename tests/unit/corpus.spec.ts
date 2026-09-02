@@ -7,7 +7,9 @@ import toolMessages from '../corpus/agent-tool-messages.json' with { type: 'json
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
 import { readProseMirrorDocument, unknownProseMirrorNodes } from '$lib/models/notes';
+import { z } from 'zod';
 import { parseSessionItem, readAgentEvent } from '$lib/models/agent';
+import { readAgentToolName } from '$lib/models/agent/tool-catalog';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { parseProvenance } from '$lib/models/provenance';
 import { parseSuggestionPayload, readSuggestionPayload } from '$lib/models/suggestions';
@@ -93,6 +95,37 @@ describe('the stored tool journal rows', () => {
 			return read.kind === 'unreadable' ? [read.reason] : [];
 		});
 		expect([...new Set(unreadable)].sort()).toEqual([]);
+	});
+});
+
+/**
+ * The names in both journals, checked against the agent surface itself.
+ *
+ * `AgentToolName` is the catalog plus `search_tools`, and that one exception is
+ * the whole reason this assertion exists: `search_tools` is assembled inside
+ * `AgentTools.agentTools()` rather than defined, so it is bound to no controller
+ * method and has no `TOOL_DESCRIPTIONS` entry, and every persisted tool name
+ * used to be a bare `string` to make room for it. 38 event rows and 10 tool
+ * messages carry it; nothing else is outside the catalog.
+ *
+ * The run-event check is not the same one as above. `readAgentEvent` reports an
+ * unreadable row for any reason, so an added arm or a loosened field would keep
+ * it green while a name quietly drifted. This reads the name itself.
+ */
+const journalledToolNames = (rows: readonly unknown[]): readonly string[] =>
+	rows.flatMap((row) => {
+		const named = z.object({ name: z.string() }).safeParse(row);
+		return named.success ? [named.data.name] : [];
+	});
+
+describe('the tool names in both stored journals', () => {
+	it('are all names the agent surface has', () => {
+		const names = [...journalledToolNames(runEvents), ...journalledToolNames(toolMessages)];
+		expect([...new Set(names.filter((name) => readAgentToolName(name) === undefined))]).toEqual([]);
+	});
+
+	it('include the one name that is not in the catalog, so the check is not vacuous', () => {
+		expect(journalledToolNames(runEvents)).toContain('search_tools');
 	});
 });
 

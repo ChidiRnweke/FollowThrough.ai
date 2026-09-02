@@ -14,6 +14,7 @@ import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retrie
 import {
 	McpTools,
 	FIRST_CLASS_TOOL_NAMES,
+	FIRST_CLASS_TOOL_SET,
 	type AgentToolDefinition,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
@@ -144,9 +145,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer 
 
 	// First-class tools are already registered above and carry no stored embedding,
 	// so they cannot be ranked here. App-only definitions never enter McpTools.
-	const discoverable = permitted.filter(
-		(definition) => !FIRST_CLASS_TOOL_NAMES.includes(definition.name)
-	);
+	const discoverable = permitted.filter((definition) => !FIRST_CLASS_TOOL_SET.has(definition.name));
 
 	server.registerTool(
 		'search_tools',

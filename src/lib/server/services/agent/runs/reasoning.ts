@@ -27,7 +27,12 @@ import {
 	type ToolClassification,
 	type WebResearchOptions
 } from '$lib/models/agent';
-import type { ToolName } from '$lib/models/agent/tool-catalog';
+import {
+	readAgentToolName,
+	readToolName,
+	type AgentToolName,
+	type ToolName
+} from '$lib/models/agent/tool-catalog';
 import {
 	allImages,
 	AgentProviderFailure,
@@ -171,6 +176,31 @@ const unidentifiedCall = (name: string) =>
 		false
 	);
 
+/**
+ * The provider names a tool; this is where that name becomes one of ours.
+ *
+ * It raises rather than settling the row as `tool_failed`, and rather than
+ * carrying the raw string onward. The SDK resolves every call against the tools
+ * this run handed it and answers an unknown name with its own `Tool not found`
+ * before any event is emitted, so a name arriving here that the agent surface
+ * does not have means the registry and the tools given to the SDK have
+ * diverged — a bug in this process, not a thing the model did. Across the 2554
+ * stored run events in `tests/corpus/`, it has never happened.
+ *
+ * `tool_started` has no failure arm to settle into either: the call did start,
+ * and inventing an outcome for it would be the quiet wrong answer.
+ */
+const namedTool = (name: string): AgentToolName => {
+	const read = readAgentToolName(name);
+	if (read === undefined)
+		throw new AgentProviderFailure(
+			`The provider called "${name}", which is not a tool this agent offers`,
+			'UNKNOWN_TOOL_CALL',
+			false
+		);
+	return read;
+};
+
 export class AgentToolEventMapper {
 	private readonly calls = new Map<string, ProviderToolCall>();
 
@@ -184,7 +214,7 @@ export class AgentToolEventMapper {
 			return {
 				type: 'tool_started',
 				callId: call.callId,
-				name: call.name,
+				name: namedTool(call.name),
 				arguments: call.arguments
 			};
 		}
@@ -198,7 +228,7 @@ export class AgentToolEventMapper {
 		const known = callId === undefined ? undefined : this.calls.get(callId);
 		if (callId !== undefined) this.calls.delete(callId);
 		return this.outcome(
-			{ ...(callId === undefined ? {} : { callId }), name: known?.name ?? call.name },
+			{ ...(callId === undefined ? {} : { callId }), name: namedTool(known?.name ?? call.name) },
 			call.output
 		);
 	}
@@ -214,7 +244,7 @@ export class AgentToolEventMapper {
 	 * (ADR 0035) and which the old single arm dropped.
 	 */
 	private outcome(
-		identity: { readonly callId?: string; readonly name: string },
+		identity: { readonly callId?: string; readonly name: AgentToolName },
 		output: ProviderToolOutput
 	): AgentEvent {
 		if (output.kind === 'none') return { type: 'tool_succeeded', ...identity };
@@ -341,8 +371,15 @@ const promotedInConversation = async (
  * shows them. An interruption that does not parse, or that carries no id,
  * cannot be answered at all — it used to compare equal to any other id-less
  * call, because both coerced to `''`.
+ *
+ * The name joins the id as a refusal for the same reason. A park on a name no
+ * controller method answers cannot be approved either: approving it would
+ * resume the run into a call nothing can execute. `readToolName` rather than
+ * `readAgentToolName` because `search_tools` is a read and never parks.
  */
-const parkedCall = (item: unknown): ProviderToolCall & { readonly callId: string } => {
+const parkedCall = (
+	item: unknown
+): ProviderToolCall & { readonly callId: string; readonly name: ToolName } => {
 	const call = parseProviderToolCall(item);
 	if (!call)
 		throw new AgentProviderFailure(
@@ -352,9 +389,23 @@ const parkedCall = (item: unknown): ProviderToolCall & { readonly callId: string
 		);
 	const { callId } = call;
 	if (callId === undefined) throw unidentifiedCall(call.name);
-	return { ...call, callId };
+	const name = readToolName(call.name);
+	if (name === undefined)
+		throw new AgentProviderFailure(
+			`The provider parked a run on "${call.name}", which is not a tool this agent offers`,
+			'UNKNOWN_PARKED_CALL',
+			false
+		);
+	return { ...call, callId, name };
 };
 
+/**
+ * The parked names to re-offer on a resume. `pendingDecisions.toolName` is a
+ * `ToolName` now, so the filter narrows for one thing only: a tool the user has
+ * deselected in Settings since the park is genuinely gone, and that resume
+ * should fail through the interruption check rather than be handed a capability
+ * the user withdrew.
+ */
 const parkedTools = (run: AgentRun, catalog: ReadonlySet<string>): string[] =>
 	run.pendingDecisions.map((decision) => decision.toolName).filter((name) => catalog.has(name));
 

@@ -136,7 +136,7 @@ describe('journaling tool outcomes', () => {
 		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
 		await journal.recordToolActivity(testActor(), conversation.id, {
 			callId: 'call-1',
-			name: 'some_tool',
+			name: 'get_note',
 			input: {},
 			status: 'succeeded',
 			output: { noteId: 'note-1' }

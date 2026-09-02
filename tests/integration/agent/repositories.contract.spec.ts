@@ -302,6 +302,36 @@ describe('Postgres durable agent run repository invariants', () => {
 			output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
 		});
 	});
+	/**
+	 * `agent_runs.pending_decisions` is `jsonb().$type<readonly
+	 * PendingAgentDecision[]>()` and had no contract coverage at all, so nothing
+	 * proved that a parked call survives the column it is stored in. It is the
+	 * only place a run's approval state lives between the park and the resume:
+	 * lose it and the user's Approve has nothing to match against.
+	 */
+	it('round-trips a parked tool call through the pending_decisions column', async () => {
+		const run = await seedQueuedRun('103');
+		const runs = new AgentRunRecords(context.db);
+		const parked = {
+			callId: 'call-103',
+			toolName: 'archive_note' as const,
+			arguments: { noteId: 'note-103' }
+		};
+		await runs.update(actor('103'), { ...run, pendingDecisions: [parked] });
+		const reread = await runs.findById(actor('103'), run.id);
+		expect(reread?.pendingDecisions).toEqual([parked]);
+	});
+
+	/**
+	 * The column is in-flight state and empty at rest, so this is the read that
+	 * actually happens on nearly every run.
+	 */
+	it('reads an unparked run back with no pending decisions', async () => {
+		const run = await seedQueuedRun('104');
+		const runs = new AgentRunRecords(context.db);
+		expect((await runs.findById(actor('104'), run.id))?.pendingDecisions).toEqual([]);
+	});
+
 	it('replays a success that returned nothing without inventing a result', async () => {
 		const run = await seedQueuedRun('96');
 		const events = new AgentRunEventRecords(context.db);

@@ -18,6 +18,7 @@ import {
 	parseRunAgentInput,
 	parseSessionItem,
 	parseWorkflowRunContext,
+	readPendingDecisions,
 	toStoredSessionItem
 } from '$lib/models/agent';
 import { NotFoundError } from '$lib/errors';
@@ -49,6 +50,24 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
 	updatedAt: row.updatedAt.toISOString() as AgentPreferences['updatedAt']
 });
 
+/**
+ * The `pending_decisions` read boundary.
+ *
+ * The column is `jsonb().$type<readonly PendingAgentDecision[]>()`, which is a
+ * claim rather than a check — the last one on this row. A decision that does
+ * not read is dropped and warned rather than raised on, so the run stays
+ * readable and cancellable; the resume it can no longer answer already fails
+ * loudly through the interruption check in `reasoning.ts`.
+ */
+const toPendingDecisions = (row: typeof schema.agentRuns.$inferSelect) => {
+	const { decisions, dropped } = readPendingDecisions(row.pendingDecisions);
+	if (dropped.length > 0)
+		console.warn(
+			`[agent-runs] ${dropped.length} pending decision(s) on run ${row.id} could not be read and were dropped: ${dropped.join(', ')}`
+		);
+	return decisions;
+};
+
 const toRunBase = (row: typeof schema.agentRuns.$inferSelect) => ({
 	id: row.id as AgentRun['id'],
 	userId: row.userId as AgentRun['userId'],
@@ -65,7 +84,7 @@ const toRunBase = (row: typeof schema.agentRuns.$inferSelect) => ({
 	...(row.provenanceId ? { provenanceId: row.provenanceId as AgentRun['provenanceId'] } : {}),
 	...(row.serializedState ? { serializedState: row.serializedState } : {}),
 	...(row.traceparent ? { traceparent: row.traceparent } : {}),
-	pendingDecisions: row.pendingDecisions,
+	pendingDecisions: toPendingDecisions(row),
 	...(row.failure ? { failure: row.failure } : {}),
 	...(row.providerErrorCode ? { providerErrorCode: row.providerErrorCode } : {}),
 	...(row.retryOfRunId ? { retryOfRunId: row.retryOfRunId as AgentRun['retryOfRunId'] } : {}),
@@ -95,12 +114,7 @@ export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun =>
 
 type PendingDecisionRows = NonNullable<(typeof schema.agentRuns.$inferInsert)['pendingDecisions']>;
 
-const toPendingDecisionRows = (run: AgentRun): PendingDecisionRows =>
-	run.pendingDecisions.map((decision) => ({
-		callId: decision.callId,
-		toolName: decision.toolName,
-		arguments: decision.arguments
-	})) as PendingDecisionRows;
+const toPendingDecisionRows = (run: AgentRun): PendingDecisionRows => run.pendingDecisions;
 
 export class AgentPreferenceRecords implements AgentPreferencesRepository {
 	constructor(private readonly database: Database) {}
@@ -417,13 +431,7 @@ export class AgentRunRecords implements AgentRunRepository {
 					: {}),
 				...(patch.traceparent !== undefined ? { traceparent: patch.traceparent ?? null } : {}),
 				...(patch.pendingDecisions !== undefined
-					? {
-							pendingDecisions: patch.pendingDecisions.map((d) => ({
-								callId: d.callId,
-								toolName: d.toolName,
-								arguments: d.arguments
-							})) as PendingDecisionRows
-						}
+					? { pendingDecisions: patch.pendingDecisions }
 					: {}),
 				...(patch.failure !== undefined ? { failure: patch.failure ?? null } : {}),
 				...(patch.providerErrorCode !== undefined

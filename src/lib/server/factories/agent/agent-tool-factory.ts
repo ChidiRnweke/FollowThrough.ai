@@ -85,13 +85,14 @@ import {
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
 import {
 	FIRST_CLASS_TOOL_NAMES,
+	FIRST_CLASS_TOOL_SET,
 	TOOL_CATALOG,
 	toolDescription,
 	type ToolName
 } from '$lib/models/agent/tool-catalog';
 import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
 
-export { FIRST_CLASS_TOOL_NAMES };
+export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
 
 /**
  * Tools the user cannot deselect. Without `get_workspace_context` and
@@ -103,12 +104,15 @@ export { FIRST_CLASS_TOOL_NAMES };
  * `agentTools()` and in the MCP surface rather than being definitions, so no
  * preference can reach them.
  */
-export const LOCKED_TOOL_NAMES: readonly ToolName[] = [
+export const LOCKED_TOOL_NAMES = [
 	'get_workspace_context',
 	'load_skill',
 	'list_tool_preferences',
 	'set_tool_enabled'
-];
+] as const satisfies readonly ToolName[];
+
+/** Membership for callers holding a {@link ToolName}; see {@link FIRST_CLASS_TOOL_SET}. */
+export const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
 
 /**
  * The user's resolved tool selection, already collapsed from the stored user
@@ -486,6 +490,42 @@ export const agentToolCoverage = {
 		search: { kind: 'read', tools: ['search', 'search_note'] }
 	}
 } as const satisfies AgentToolCoverage;
+
+/**
+ * Every tool name some controller method claims a contract for.
+ *
+ * `agentToolCoverage` is `as const satisfies`, so each `tools` entry keeps its
+ * literals and this union is real rather than a restatement of `ToolName`.
+ */
+type BoundToolName = {
+	[Controller in keyof typeof agentToolCoverage]: {
+		[
+			Method in keyof (typeof agentToolCoverage)[Controller]
+		]: (typeof agentToolCoverage)[Controller][Method] extends {
+			readonly tools: readonly (infer Name)[];
+		}
+			? Name
+			: never;
+	}[keyof (typeof agentToolCoverage)[Controller]];
+}[keyof typeof agentToolCoverage];
+
+/**
+ * Registry and catalog name each other exactly, proved by the compiler.
+ *
+ * This replaced two runtime specs. A catalog name nobody bound was a tool the
+ * factory could describe and never build; a bound name the catalog did not
+ * carry was a tool with no description, which `toolDescription` only discovered
+ * when someone constructed it. Both are now `pnpm check` failures at the
+ * declaration rather than assertions in a suite that has to be run first.
+ *
+ * What stays runtime, and why: a union cannot see a name bound by two different
+ * controller methods, and the *constructed* definition set is a function of run
+ * context — `agentOnlyDefinitions` builds the selection-bound tools only when a
+ * selection is present, and `McpTools` composes a different pair — so no type
+ * can hold it total. `agent-tool-factory.spec.ts` covers both.
+ */
+type _CoverageCoversCatalog = Total<Exclude<ToolName, BoundToolName>>;
+type _CoverageNamesNothingElse = Total<Exclude<BoundToolName, ToolName>>;
 
 const none = z.object({});
 const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
@@ -1017,7 +1057,7 @@ export class AgentTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_NAMES.includes(definition.name) || this.toolAccess.isEnabled(definition.name))
+				(LOCKED_TOOL_SET.has(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 
@@ -1042,7 +1082,6 @@ export class AgentTools {
 		const byName = new Map<string, Definition>(
 			definitions.map((definition) => [definition.name, definition])
 		);
-		const firstClass = new Set(FIRST_CLASS_TOOL_NAMES);
 		const selected = FIRST_CLASS_TOOL_NAMES.map((name) => byName.get(name)).filter(
 			(definition): definition is Definition => definition !== undefined
 		);
@@ -1060,7 +1099,7 @@ export class AgentTools {
 		// several model families answered with an empty object forever.
 		const promoted = new Set<string>(alreadyPromoted);
 		const discoverable = definitions
-			.filter((definition) => !firstClass.has(definition.name))
+			.filter((definition) => !FIRST_CLASS_TOOL_SET.has(definition.name))
 			.map((definition) =>
 				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
 			);
@@ -1118,16 +1157,17 @@ export class AgentTools {
 	 */
 	offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
 		const promoted = new Set(alreadyPromoted);
-		const firstClass = new Set<string>(FIRST_CLASS_TOOL_NAMES);
 		return this.definitions()
-			.filter((definition) => firstClass.has(definition.name) || promoted.has(definition.name))
+			.filter(
+				(definition) => FIRST_CLASS_TOOL_SET.has(definition.name) || promoted.has(definition.name)
+			)
 			.map((definition) => definition.name);
 	}
 
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
 		return TOOL_CATALOG.filter(
-			(entry) => LOCKED_TOOL_NAMES.includes(entry.name) || this.toolAccess.isEnabled(entry.name)
+			(entry) => LOCKED_TOOL_SET.has(entry.name) || this.toolAccess.isEnabled(entry.name)
 		);
 	}
 
@@ -2251,7 +2291,7 @@ export class McpTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_NAMES.includes(definition.name) || this.toolAccess.isEnabled(definition.name))
+				(LOCKED_TOOL_SET.has(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 }

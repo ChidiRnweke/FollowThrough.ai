@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import type { ActorContext, UserId } from '$lib/models/identity';
-import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
+import { FIRST_CLASS_TOOL_SET, type ToolName } from '$lib/models/agent/tool-catalog';
 import { rankToolsForGoal } from '../lab/tool-catalog';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -382,7 +382,7 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 const TOP_K = 5;
 
 export const toolRetrievalCases: readonly EvalCase[] = TOOL_RETRIEVAL_GOALS.filter(
-	(entry) => !FIRST_CLASS_TOOL_NAMES.includes(entry.expected)
+	(entry) => !FIRST_CLASS_TOOL_SET.has(entry.expected)
 ).map((entry) => ({
 	id: `tool-retrieval-${entry.id}`,
 	name: `catalog surfaces ${entry.expected} for: ${entry.goal}`,

@@ -29,7 +29,6 @@ import {
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 
 const executeDirectly: AgentToolExecutor = {
 	execute: (_input, action) => action()
@@ -188,32 +187,36 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 	});
 });
 
+/**
+ * Registry↔catalog key equality is proved by the compiler now: see
+ * `_CoverageCoversCatalog` and `_CoverageNamesNothingElse` beside
+ * `agentToolCoverage`. Two runtime specs were deleted with them — the
+ * classification kinds (`AgentToolContractBinding` is a closed union, so every
+ * kind is already total) and the catalog-name equality itself.
+ *
+ * These two remain because no type can see either fact. A union collapses a
+ * name bound twice, and the *constructed* definition set is a function of run
+ * context: `agentOnlyDefinitions` builds the selection-bound tools only when a
+ * selection is present, and `McpTools` composes a different pair.
+ */
+const boundToolNames = (): string[] =>
+	Object.values(agentToolCoverage)
+		.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
+		.flatMap((binding) => (binding.kind === 'excluded' ? [] : binding.tools));
+
 describe('Agent tool coverage invariants', () => {
-	it('classifies every covered controller method', () => {
-		const classifications = Object.values(agentToolCoverage).flatMap((controller) =>
-			Object.values(controller).map((classification) => classification.kind)
-		);
-		expect(
-			classifications.every((kind) => ['read', 'proposal', 'mutation', 'excluded'].includes(kind))
-		).toBe(true);
+	it('binds each catalog tool to exactly one controller method', () => {
+		const bound = boundToolNames();
+		expect(bound.toSorted()).toEqual([...new Set(bound)].toSorted());
 	});
 
 	it('registers one stable tool for every non-excluded controller action', () => {
-		const classifications = Object.values(agentToolCoverage).flatMap(
-			(controller) => Object.values(controller) as AgentToolContractBinding[]
-		);
-		const contracts = classifications.flatMap((classification) =>
-			classification.kind === 'excluded' ? [] : classification.tools
-		);
-		expect(registry('approval_required').tools()).toHaveLength(contracts.length);
-	});
-
-	it('binds every catalog tool to one controller method', () => {
-		const bound = Object.values(agentToolCoverage)
-			.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
-			.flatMap((classification) => (classification.kind === 'excluded' ? [] : classification.tools))
-			.toSorted();
-		expect(bound).toEqual(TOOL_DESCRIPTIONS.map((entry) => entry.name).toSorted());
+		expect(
+			registry('approval_required')
+				.tools()
+				.map((tool) => tool.name)
+				.toSorted()
+		).toEqual(boundToolNames().toSorted());
 	});
 
 	// Tool recovery reads this list to tell the model whether a name it got wrong

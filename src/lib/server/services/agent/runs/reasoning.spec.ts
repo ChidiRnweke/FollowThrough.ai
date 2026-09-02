@@ -603,6 +603,33 @@ describe('Agent tool event invariants', () => {
 		expect(mapAnonymousCall).toThrowError(AgentProviderFailure);
 	});
 
+	/**
+	 * The SDK resolves every call against the tools this run handed it and answers
+	 * an unknown name with its own `Tool not found` before any event is emitted, so
+	 * a name arriving here that the agent surface does not have means the registry
+	 * and the tools given to the SDK have diverged. That is a bug in this process,
+	 * not something the model did, and `tool_started` has no failure arm to settle
+	 * it into: the call did start, and inventing an outcome for it would be the
+	 * quiet wrong answer.
+	 */
+	it('refuses a call to a name the agent surface does not have', () => {
+		const mapUnknownCall = () =>
+			new AgentToolEventMapper().map(toolCalled({ callId: 'call-1', name: 'save_notes' }));
+		expect(mapUnknownCall).toThrowError(AgentProviderFailure);
+	});
+
+	it('accepts search_tools, which is built rather than defined and has no catalog entry', () => {
+		const event = new AgentToolEventMapper().map(
+			toolCalled({ callId: 'call-1', name: 'search_tools' })
+		);
+		expect(event).toEqual({
+			type: 'tool_started',
+			callId: 'call-1',
+			name: 'search_tools',
+			arguments: {}
+		});
+	});
+
 	it('preserves the tool name when mapping its SDK output event', () => {
 		const mapper = new AgentToolEventMapper();
 		mapper.map(toolCalled({ callId: 'call-1', name: 'find_references' }));
@@ -633,7 +660,7 @@ describe('Agent tool event invariants', () => {
 			type: 'tool_output',
 			call: {
 				callId: 'call-9',
-				name: 'read_note',
+				name: 'get_note',
 				arguments: {},
 				output: { kind: 'corrupt', message: 'root.when is a Date' }
 			}
@@ -675,29 +702,29 @@ describe('Agent tool event invariants', () => {
 
 	it('settles an outcome without an id onto the one call in flight', () => {
 		const mapper = new AgentToolEventMapper();
-		mapper.map(toolCalled({ callId: 'call-5', name: 'search_notes' }));
-		const event = mapper.map(toolOutput({ name: 'search_notes' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-5', name: 'search_notes' });
+		mapper.map(toolCalled({ callId: 'call-5', name: 'search' }));
+		const event = mapper.map(toolOutput({ name: 'search' }));
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-5', name: 'search' });
 	});
 
 	it('reports no call id when an outcome without one meets several calls in flight', () => {
 		const mapper = new AgentToolEventMapper();
-		mapper.map(toolCalled({ callId: 'call-6', name: 'search_notes' }));
-		mapper.map(toolCalled({ callId: 'call-7', name: 'read_note' }));
-		const event = mapper.map(toolOutput({ name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', name: 'read_note' });
+		mapper.map(toolCalled({ callId: 'call-6', name: 'search' }));
+		mapper.map(toolCalled({ callId: 'call-7', name: 'get_note' }));
+		const event = mapper.map(toolOutput({ name: 'get_note' }));
+		expect(event).toEqual({ type: 'tool_succeeded', name: 'get_note' });
 	});
 
 	it('reports no call id when an outcome without one meets no call in flight', () => {
-		const event = new AgentToolEventMapper().map(toolOutput({ name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', name: 'read_note' });
+		const event = new AgentToolEventMapper().map(toolOutput({ name: 'get_note' }));
+		expect(event).toEqual({ type: 'tool_succeeded', name: 'get_note' });
 	});
 
 	it('does not settle a second call onto the first when the outcome names its own', () => {
 		const mapper = new AgentToolEventMapper();
-		mapper.map(toolCalled({ callId: 'call-8', name: 'search_notes' }));
-		const event = mapper.map(toolOutput({ callId: 'call-unknown', name: 'read_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-unknown', name: 'read_note' });
+		mapper.map(toolCalled({ callId: 'call-8', name: 'search' }));
+		const event = mapper.map(toolOutput({ callId: 'call-unknown', name: 'get_note' }));
+		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-unknown', name: 'get_note' });
 	});
 });
 

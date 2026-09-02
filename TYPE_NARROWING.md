@@ -342,12 +342,70 @@ produce.
     a given tool returns is TN-30's contract map; a per-tool schema written before it exists
     would be a guess maintained in the wrong file. `canvas-subject.ts` remains the exemplar for
     the per-tool form.
-- [ ] **TN-34: Prove registry/catalog/constructed-definition key equality and all round trips**
-  - Carries from TN-31: `AgentToolDefinition.name`, `FIRST_CLASS_TOOL_NAMES`, `LOCKED_TOOL_NAMES`
-    and `TOOL_CATALOG` are keyed by `ToolName` now, so the three runtime equality specs in
-    `agent-tool-factory.spec.ts` have a structural counterpart to be replaced by.
-    `PendingAgentDecision.toolName` is the one name still `string`, and it needs the parse this
-    block owns before it can close.
+- [x] **TN-34: Prove registry/catalog/constructed-definition key equality and all round trips**
+  - [x] `AgentToolName = ToolName | 'search_tools'` in `models/agent/tool-catalog.ts`, with
+        `readAgentToolName` and the narrower `readToolName`. `search_tools` is the one name that is
+        not a `ToolName`: `AgentTools.agentTools()` assembles it rather than defining it, so it is
+        bound to no controller method and has no `TOOL_DESCRIPTIONS` entry. That single exception
+        is why `PendingAgentDecision.toolName`, `ToolActivityBase.name` and every `AgentEvent` tool
+        arm were a bare `string`. Measured: across the 2554 stored run events and 129 stored tool
+        messages in `tests/corpus/`, it is the _only_ name outside the catalog — 38 rows and 10.
+  - [x] Registry↔catalog key equality is the compiler's now. `BoundToolName` is derived from
+        `agentToolCoverage` (which is `as const satisfies`, so its `tools` entries keep literals),
+        and `_CoverageCoversCatalog` / `_CoverageNamesNothingElse` hold it total in both directions
+        through the `Total<T extends never>` helper `AgentToolOutputMap` already used. Verified by
+        unbinding `get_today_view` and watching `pnpm check` fail at the declaration.
+  - [x] Two runtime specs deleted with them: the classification-kind check (`AgentToolContractBinding`
+        is a closed union, so the kinds were already total) and the catalog-name equality itself.
+  - Not made structural, and it cannot be: the **constructed** definition set is a function of run
+    context — `agentOnlyDefinitions` builds the selection-bound tools only when a selection is
+    present, `McpTools` composes a different pair, and both then filter by `LOCKED_TOOL_SET` and
+    the user's `ToolAccessPolicy`. No type can hold that total over `ToolName`. Its spec stays, and
+    is sharpened from a length comparison to name-set equality against the bound contracts. A union
+    also cannot see a name bound by two controller methods, so that is one spec too. Deleting
+    either would leave nothing checking that the factory builds a tool for every contract it
+    declares.
+  - [x] `PendingAgentDecision.toolName` is a `ToolName`, read at both producers. `parkedCall` joins
+        its existing unreadable/id-less refusals with `UNKNOWN_PARKED_CALL`: approving a park on a
+        name nothing answers would resume the run into a call nothing can execute. `readPendingDecisions`
+        owns the `agent_runs.pending_decisions` read, which was the last `jsonb().$type<>()`
+        hand-out on the run row; an unreadable decision is dropped and warned so the run stays
+        readable and cancellable, and the resume it can no longer answer already fails loudly
+        through the interruption check. Both `as PendingDecisionRows` write casts go with it.
+  - [x] `ToolActivityBase.name` and all five `AgentEvent` tool arms carry `AgentToolName`, parsed by
+        `agentToolNameSchema`. `ProviderStreamEvent`'s arms stay `string` — the provider is a foreign
+        producer and its name is genuinely unparsed there — and `AgentToolEventMapper` is the parse.
+        It raises `UNKNOWN_TOOL_CALL` rather than settling the row: the SDK resolves every call
+        against the tools this run handed it, and answers an unknown name with its own
+        `Tool not found` before any event is emitted. So a name arriving here means the registry
+        and the SDK's tools have diverged — a bug in this process, not something the model did.
+        `tool_started` has no failure arm to settle into either.
+  - Not closed: `ChatToolActivity.name` stays `string`. What is _persisted_ is closed at both ends,
+    and `corpus.spec.ts` reads every stored name through `readAgentToolName` to prove it. This
+    client type has a producer the persisted ones do not — `restoredTool` renders a journal row it
+    could not read as a visible failed call, and that row has no tool name. Closing the field would
+    leave that producer a seventh arm on a union six consumers branch on with fall-through defaults,
+    or an invented name shown to a user.
+  - Also not closed: `TOOL_CATALOG` keeps `ToolName` rather than the new `LongTailToolName`. `filter`
+    cannot prove the partition, so narrowing it needs a hand-written type predicate — an unchecked
+    claim, which is the thing this effort removes. `tool-catalog.spec.ts` holds the partition.
+  - [x] Round trips: `repositories.contract.spec.ts` now round-trips a parked call through the
+        `agent_runs.pending_decisions` jsonb column, which had no contract coverage at all, and reads
+        an unparked run back with none. `corpus.spec.ts` reads every tool name in both stored
+        journals through `readAgentToolName` and asserts zero exceptions, plus a second spec that the
+        corpus really does contain `search_tools` so the check is not vacuous. Both were verified to
+        fail before `search_tools` was admitted to the union.
+  - No corpus fixture for `pending_decisions`, deliberately: the column is in-flight state, cleared
+    on resume and by `abandonPendingCalls`, and was empty in **every** stored row when this was
+    written. A captured fixture would be an empty array asserting nothing.
+  - Five spec fixtures named tools that do not exist — `some_tool`, `search_notes`, `read_note` —
+    and now fail to compile or parse. A fixture encoding a state production cannot produce teaches
+    the bug to everyone who copies it; they name real tools.
+  - Verified with `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`, `pnpm test:contracts`,
+    and `prettier`/`eslint` on the touched files (`pnpm lint` fails on 39 pre-existing files on
+    `master` too). The live approval park was not exercised: it bills a real provider, for the same
+    reason `pnpm test:evals:smoke` was not run in TN-31 and TN-32. The read boundary it would
+    exercise is covered against real Postgres by the contract round trip above.
 
 ### Phase 4 — Remaining closed domain and boundary shapes
 
