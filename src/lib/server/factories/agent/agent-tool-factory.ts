@@ -37,7 +37,7 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
+import type { NoteEtag, NoteId, NoteRevisionId, TextSelection } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
@@ -1051,9 +1051,15 @@ export class AgentTools {
 		const allowed = options.classifications
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
+		const selection = this.context.input.selection;
 		return [
-			...sharedToolDefinitions(this.controllers, this.actor),
-			...agentOnlyDefinitions(this.controllers, this.actor, this.context)
+			...Object.values(sharedToolDefinitions(this.controllers, this.actor)),
+			...Object.values(appToolDefinitions(this.controllers, this.actor, this.context)),
+			...(selection
+				? Object.values(
+						selectionToolDefinitions(this.controllers, this.actor, selection, this.context.model)
+					)
+				: [])
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
@@ -1228,17 +1234,27 @@ export class AgentTools {
 	}
 }
 
-const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext): Definition[] => {
+/**
+ * Every tool both surfaces build, keyed by name.
+ *
+ * Keyed rather than listed so the key set is a type. `BuiltToolName` unions the
+ * keys of this and the three gated groups below, and two assertions hold that
+ * union equal to `ToolName` — so a catalog tool nobody builds, and a builder for
+ * a tool the catalog does not have, are both `pnpm check` failures. The set used
+ * to be an array, which has no key type at all, and the only thing standing
+ * behind it was one runtime spec exercising one configuration.
+ */
+const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) => {
 	const define = defineTool;
-	const retrieval = (): Definition[] => [
-		define(
+	const retrieval = () => ({
+		ls: define(
 			'ls',
 			toolDescription('ls'),
 			'read',
 			z.object({ path: z.string().min(1).optional() }),
 			(input) => factory.agentFiles().ls(actor, input.path)
 		),
-		define(
+		grep: define(
 			'grep',
 			toolDescription('grep'),
 			'read',
@@ -1256,7 +1272,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					ignoreCase: input.ignoreCase ?? false
 				})
 		),
-		define(
+		sed: define(
 			'sed',
 			toolDescription('sed'),
 			'read',
@@ -1276,7 +1292,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.agentFiles().sed(actor, input.path, input.range)
 		),
-		define(
+		search: define(
 			'search',
 			toolDescription('search'),
 			'read',
@@ -1294,7 +1310,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
 				})
 		),
-		define(
+		search_note: define(
 			'search_note',
 			toolDescription('search_note'),
 			'read',
@@ -1307,7 +1323,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
 				})
 		),
-		define(
+		get_workspace_context: define(
 			'get_workspace_context',
 			toolDescription('get_workspace_context'),
 			'read',
@@ -1324,47 +1340,53 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				};
 			}
 		),
-		define(
+		get_today_view: define(
 			'get_today_view',
 			toolDescription('get_today_view'),
 			'read',
 			z.object({ today: localDate }),
 			(input) => factory.workspace().getTodayView(actor, input)
 		)
-	];
-	const projects = (): Definition[] => [
-		define('list_projects', toolDescription('list_projects'), 'read', temporal({}), async () => ({
-			projects: (await factory.projects().list(actor)).projects.map(projectProject)
-		})),
-		define(
+	});
+	const projects = () => ({
+		list_projects: define(
+			'list_projects',
+			toolDescription('list_projects'),
+			'read',
+			temporal({}),
+			async () => ({
+				projects: (await factory.projects().list(actor)).projects.map(projectProject)
+			})
+		),
+		get_project: define(
 			'get_project',
 			toolDescription('get_project'),
 			'read',
 			z.object({ projectId: projectId }),
 			(input) => factory.projects().get(actor, input)
 		),
-		define(
+		create_project: define(
 			'create_project',
 			toolDescription('create_project'),
 			'mutation',
 			z.object({ name: z.string().min(1), description: z.string().optional() }),
 			async (input) => projectProject((await factory.projects().create(actor, input)).project)
 		),
-		define(
+		rename_project: define(
 			'rename_project',
 			toolDescription('rename_project'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1) }),
 			async (input) => projectProject((await factory.projects().rename(actor, input)).project)
 		),
-		define(
+		archive_project: define(
 			'archive_project',
 			toolDescription('archive_project'),
 			'mutation',
 			z.object({ projectId: projectId }),
 			async (input) => projectProject((await factory.projects().archive(actor, input)).project)
 		),
-		define(
+		create_folder: define(
 			'create_folder',
 			toolDescription('create_folder'),
 			'mutation',
@@ -1374,7 +1396,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			async (input) =>
 				projectNoteWrite((await factory.projects().createFolder(actor, input)).folder)
 		),
-		define(
+		move_project_entry: define(
 			'move_project_entry',
 			toolDescription('move_project_entry'),
 			'mutation',
@@ -1386,9 +1408,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.projects().move(actor, input)
 		)
-	];
-	const notes = (): Definition[] => [
-		define(
+	});
+	const notes = () => ({
+		get_note: define(
 			'get_note',
 			toolDescription('get_note'),
 			'read',
@@ -1400,7 +1422,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return projectNoteView(view, agentFileOf(path, 'text/markdown', markdown).metadata);
 			}
 		),
-		define(
+		create_note: define(
 			'create_note',
 			toolDescription('create_note'),
 			'mutation',
@@ -1431,7 +1453,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return projectNoteWrite(created.note);
 			}
 		),
-		define(
+		save_note: define(
 			'save_note',
 			toolDescription('save_note'),
 			'mutation',
@@ -1448,7 +1470,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return projectNoteWrite(saved.note);
 			}
 		),
-		define(
+		edit_note: define(
 			'edit_note',
 			toolDescription('edit_note'),
 			'mutation',
@@ -1483,56 +1505,56 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return applyNotePatch(noteMarkdownFromContent(current.note.document), parsed.data.edits).ok;
 			}
 		),
-		define(
+		rename_note: define(
 			'rename_note',
 			toolDescription('rename_note'),
 			'mutation',
 			z.object({ noteId: noteId, title: z.string().min(1) }),
 			async (input) => projectNoteWrite((await factory.notes().rename(actor, input)).note)
 		),
-		define(
+		archive_note: define(
 			'archive_note',
 			toolDescription('archive_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			async (input) => projectNoteWrite((await factory.notes().archive(actor, input)).note)
 		),
-		define(
+		restore_note: define(
 			'restore_note',
 			toolDescription('restore_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			async (input) => projectNoteWrite((await factory.notes().restore(actor, input)).note)
 		),
-		define(
+		list_trashed_notes: define(
 			'list_trashed_notes',
 			toolDescription('list_trashed_notes'),
 			'read',
 			z.object({ projectId: projectId.optional() }),
 			(input) => factory.notes().listTrash(actor, input)
 		),
-		define(
+		delete_note_forever: define(
 			'delete_note_forever',
 			toolDescription('delete_note_forever'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().deleteForever(actor, input)
 		),
-		define(
+		empty_note_trash: define(
 			'empty_note_trash',
 			toolDescription('empty_note_trash'),
 			'mutation',
 			z.object({ projectId: projectId.optional() }),
 			(input) => factory.notes().emptyTrash(actor, input)
 		),
-		define(
+		list_note_versions: define(
 			'list_note_versions',
 			toolDescription('list_note_versions'),
 			'read',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().listRevisions(actor, input)
 		),
-		define(
+		diff_note_versions: define(
 			'diff_note_versions',
 			toolDescription('diff_note_versions'),
 			'read',
@@ -1543,7 +1565,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.notes().compareRevisions(actor, input)
 		),
-		define(
+		restore_note_version: define(
 			'restore_note_version',
 			toolDescription('restore_note_version'),
 			'mutation',
@@ -1555,7 +1577,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { ...projectNoteWrite(restored.note), etag: restored.etag };
 			}
 		),
-		define(
+		publish_note: define(
 			'publish_note',
 			toolDescription('publish_note'),
 			'mutation',
@@ -1565,16 +1587,16 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { ...projectNoteWrite(published.note), etag: published.etag };
 			}
 		),
-		define(
+		discard_note_draft: define(
 			'discard_note_draft',
 			toolDescription('discard_note_draft'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().discardDraft(actor, input)
 		)
-	];
-	const todos = (): Definition[] => [
-		define(
+	});
+	const todos = () => ({
+		list_todos: define(
 			'list_todos',
 			toolDescription('list_todos'),
 			'read',
@@ -1591,7 +1613,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				)
 			})
 		),
-		define(
+		create_todo: define(
 			'create_todo',
 			toolDescription('create_todo'),
 			'mutation',
@@ -1605,7 +1627,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			async (input) => projectTodoWrite((await factory.todos().create(actor, input)).todo)
 		),
-		define(
+		create_todos: define(
 			'create_todos',
 			toolDescription('create_todos'),
 			'mutation',
@@ -1638,7 +1660,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { todos: created };
 			}
 		),
-		define(
+		update_todo: define(
 			'update_todo',
 			toolDescription('update_todo'),
 			'mutation',
@@ -1655,23 +1677,23 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			// The controller also returns the whole `TodoView`, which the model never reads.
 			async (input) => projectTodoWrite((await factory.todos().update(actor, input)).todo)
 		)
-	];
-	const diagrams = (): Definition[] => [
-		define(
+	});
+	const diagrams = () => ({
+		revise_mermaid_diagram: define(
 			'revise_mermaid_diagram',
 			toolDescription('revise_mermaid_diagram'),
 			'mutation',
 			z.object({ diagramId: diagramId, instruction: z.string().min(1) }),
 			(input) => factory.diagrams().reviseMermaid(actor, input)
 		),
-		define(
+		search_icons: define(
 			'search_icons',
 			toolDescription('search_icons'),
 			'read',
 			z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
 			(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
 		),
-		define(
+		read_project_diagram: define(
 			'read_project_diagram',
 			toolDescription('read_project_diagram'),
 			'read',
@@ -1687,16 +1709,16 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				};
 			}
 		),
-		define(
+		promote_diagram: define(
 			'promote_diagram',
 			toolDescription('promote_diagram'),
 			'proposal',
 			z.object({ diagramId: diagramId }),
 			(input) => factory.diagrams().promote(actor, input)
 		)
-	];
-	const suggestions = (): Definition[] => [
-		define(
+	});
+	const suggestions = () => ({
+		list_suggestions: define(
 			'list_suggestions',
 			toolDescription('list_suggestions'),
 			'read',
@@ -1707,7 +1729,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				)
 			})
 		),
-		define(
+		accept_suggestion: define(
 			'accept_suggestion',
 			toolDescription('accept_suggestion'),
 			'mutation',
@@ -1719,26 +1741,26 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			// other kind of suggestion the two are the same call.
 			(input) => factory.suggestions().acceptReviewed(actor, input)
 		),
-		define(
+		reject_suggestion: define(
 			'reject_suggestion',
 			toolDescription('reject_suggestion'),
 			'mutation',
 			z.object({ suggestionId: suggestionId }),
 			(input) => factory.suggestions().reject(actor, input)
 		),
-		define(
+		revert_suggestion: define(
 			'revert_suggestion',
 			toolDescription('revert_suggestion'),
 			'mutation',
 			z.object({ suggestionId: suggestionId }),
 			(input) => factory.suggestions().revert(actor, input)
 		)
-	];
-	const skills = (): Definition[] => [
-		define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
+	});
+	const skills = () => ({
+		list_skills: define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
 			factory.skills().list(actor)
 		),
-		define(
+		save_skill: define(
 			'save_skill',
 			toolDescription('save_skill'),
 			'mutation',
@@ -1758,7 +1780,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				};
 			}
 		),
-		define(
+		edit_skill: define(
 			'edit_skill',
 			toolDescription('edit_skill'),
 			'mutation',
@@ -1796,7 +1818,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					.ok;
 			}
 		),
-		define(
+		create_skill: define(
 			'create_skill',
 			toolDescription('create_skill'),
 			'mutation',
@@ -1817,7 +1839,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return factory.skills().create(actor, { ...input, projectId: chosenProjectId });
 			}
 		),
-		define(
+		list_skill_versions: define(
 			'list_skill_versions',
 			toolDescription('list_skill_versions'),
 			'read',
@@ -1827,14 +1849,14 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { revisions: revisions.map(projectNoteRevision) };
 			}
 		),
-		define(
+		restore_skill_version: define(
 			'restore_skill_version',
 			toolDescription('restore_skill_version'),
 			'mutation',
 			z.object({ noteId: noteId, revision: z.number().int().positive() }),
 			(input) => factory.skills().restoreVersion(actor, input)
 		),
-		define(
+		update_skill: define(
 			'update_skill',
 			toolDescription('update_skill'),
 			'mutation',
@@ -1847,7 +1869,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.skills().update(actor, input)
 		),
-		define(
+		set_skill_pinned: define(
 			'set_skill_pinned',
 			toolDescription('set_skill_pinned'),
 			'mutation',
@@ -1857,12 +1879,16 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return input;
 			}
 		)
-	];
-	const account = (): Definition[] => [
-		define('list_api_tokens', toolDescription('list_api_tokens'), 'read', temporal({}), () =>
-			factory.apiTokens().list(actor)
+	});
+	const account = () => ({
+		list_api_tokens: define(
+			'list_api_tokens',
+			toolDescription('list_api_tokens'),
+			'read',
+			temporal({}),
+			() => factory.apiTokens().list(actor)
 		),
-		define(
+		revoke_api_token: define(
 			'revoke_api_token',
 			toolDescription('revoke_api_token'),
 			'mutation',
@@ -1872,16 +1898,16 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { tokenId: input.tokenId, revoked: true as const };
 			}
 		),
-		define(
+		list_attachments: define(
 			'list_attachments',
 			toolDescription('list_attachments'),
 			'read',
 			temporal({ noteId: noteId }),
 			(input) => factory.attachments().list(actor, input.noteId as NoteId)
 		)
-	];
-	const memoryAndPreferences = (): Definition[] => [
-		define(
+	});
+	const memoryAndPreferences = () => ({
+		list_project_memory: define(
 			'list_project_memory',
 			toolDescription('list_project_memory'),
 			'read',
@@ -1895,7 +1921,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				).entries.map(projectMemory)
 			})
 		),
-		define(
+		list_user_memory: define(
 			'list_user_memory',
 			toolDescription('list_user_memory'),
 			'read',
@@ -1907,7 +1933,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { entries };
 			}
 		),
-		define(
+		propose_memory_change: define(
 			'propose_memory_change',
 			toolDescription('propose_memory_change'),
 			'proposal',
@@ -1931,14 +1957,14 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.memory().propose(actor, input)
 		),
-		define(
+		list_trust_policies: define(
 			'list_trust_policies',
 			toolDescription('list_trust_policies'),
 			'read',
 			temporal({}),
 			() => factory.trustPolicies().list(actor)
 		),
-		define(
+		update_trust_policy: define(
 			'update_trust_policy',
 			toolDescription('update_trust_policy'),
 			'mutation',
@@ -1951,7 +1977,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 			}),
 			(input) => factory.trustPolicies().update(actor, input)
 		),
-		define(
+		list_tool_preferences: define(
 			'list_tool_preferences',
 			toolDescription('list_tool_preferences'),
 			'read',
@@ -1961,7 +1987,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					.toolPreferences()
 					.list(actor, input.projectId ? { projectId: input.projectId as ProjectId } : {})
 		),
-		define(
+		set_tool_enabled: define(
 			'set_tool_enabled',
 			toolDescription('set_tool_enabled'),
 			'mutation',
@@ -1977,10 +2003,14 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
 				})
 		),
-		define('get_agent_preferences', toolDescription('get_agent_preferences'), 'read', none, () =>
-			factory.agentSettings().getPreferences(actor)
+		get_agent_preferences: define(
+			'get_agent_preferences',
+			toolDescription('get_agent_preferences'),
+			'read',
+			none,
+			() => factory.agentSettings().getPreferences(actor)
 		),
-		define(
+		update_agent_preferences: define(
 			'update_agent_preferences',
 			toolDescription('update_agent_preferences'),
 			'mutation',
@@ -2012,12 +2042,16 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { ...updated, previous };
 			}
 		),
-		define('list_agent_models', toolDescription('list_agent_models'), 'read', none, () =>
-			factory.agentSettings().listModels(actor)
+		list_agent_models: define(
+			'list_agent_models',
+			toolDescription('list_agent_models'),
+			'read',
+			none,
+			() => factory.agentSettings().listModels(actor)
 		)
-	];
-	const deliverables = (): Definition[] => [
-		define(
+	});
+	const deliverables = () => ({
+		export_document: define(
 			'export_document',
 			toolDescription('export_document'),
 			'mutation',
@@ -2037,28 +2071,28 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
 				})
 		),
-		define(
+		list_artifacts: define(
 			'list_artifacts',
 			toolDescription('list_artifacts'),
 			'read',
 			temporal({ projectId: projectId }),
 			(input) => factory.deliverables().listArtifacts(actor, input.projectId)
 		),
-		define(
+		list_templates: define(
 			'list_templates',
 			toolDescription('list_templates'),
 			'read',
 			temporal({ projectId: projectId }),
 			(input) => factory.deliverables().listTemplates(actor, input.projectId)
 		),
-		define(
+		get_export_settings: define(
 			'get_export_settings',
 			toolDescription('get_export_settings'),
 			'read',
 			z.object({ projectId: projectId }),
 			(input) => factory.deliverables().getExportSettings(actor, input.projectId)
 		),
-		define(
+		update_export_settings: define(
 			'update_export_settings',
 			toolDescription('update_export_settings'),
 			'mutation',
@@ -2079,7 +2113,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 					includeTitle: input.includeTitle
 				})
 		),
-		define(
+		get_artifact: define(
 			'get_artifact',
 			toolDescription('get_artifact'),
 			'read',
@@ -2090,14 +2124,14 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return artifact;
 			}
 		),
-		define(
+		download_artifact: define(
 			'download_artifact',
 			toolDescription('download_artifact'),
 			'read',
 			z.object({ artifactId: artifactId }),
 			(input) => factory.deliverables().downloadArtifact(actor, input.artifactId)
 		),
-		define(
+		delete_artifact: define(
 			'delete_artifact',
 			toolDescription('delete_artifact'),
 			'mutation',
@@ -2107,15 +2141,15 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 				return { artifactId: input.artifactId, deleted: true as const };
 			}
 		),
-		define(
+		regenerate_artifact: define(
 			'regenerate_artifact',
 			toolDescription('regenerate_artifact'),
 			'mutation',
 			z.object({ artifactId: artifactId }),
 			(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId)
 		)
-	];
-	return [
+	});
+	return {
 		...retrieval(),
 		...projects(),
 		...notes(),
@@ -2126,67 +2160,84 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext):
 		...account(),
 		...memoryAndPreferences(),
 		...deliverables()
-	];
+	};
 };
 
-const agentOnlyDefinitions = (
+/**
+ * The tools that act *on* a selection, so a turn without one cannot build them.
+ *
+ * The selection is a parameter rather than something read off the context here,
+ * which is what lets this group be total over its four names: the caller decides
+ * whether there is a selection, and this decides nothing. The conditionality used
+ * to live inside the group as `selection ? [...] : []`, which made the group's
+ * membership — not just its availability — depend on the turn, and that is why no
+ * type could hold the constructed set total.
+ */
+const selectionToolDefinitions = (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	selection: TextSelection,
+	model: string
+) => ({
+	extract_promises: defineTool(
+		'extract_promises',
+		toolDescription('extract_promises'),
+		'proposal',
+		z.object({
+			responsibility: z
+				.enum(['mine', 'waiting_on'])
+				.optional()
+				.describe(
+					'Use mine for commitments made by the user (I/my), waiting_on for commitments made by someone else, or omit only when the user asked for every actor.'
+				)
+		}),
+		(fields) =>
+			factory.todos().extractPromises(actor, {
+				selection,
+				...(fields.responsibility ? { responsibility: fields.responsibility } : {})
+			})
+	),
+	relate_selection: defineTool(
+		'relate_selection',
+		toolDescription('relate_selection'),
+		'proposal',
+		z.object({}),
+		() => factory.relationships().suggestFromSelection(actor, { selection })
+	),
+	find_references: defineTool(
+		'find_references',
+		toolDescription('find_references'),
+		'proposal',
+		z.object({}),
+		() => factory.references().suggestFromSelection(actor, { selection }, { model })
+	),
+	create_skill_from_selection: defineTool(
+		'create_skill_from_selection',
+		toolDescription('create_skill_from_selection'),
+		'mutation',
+		z.object({
+			name: z.string().min(1),
+			description: z.string(),
+			triggerHints: z.array(z.string())
+		}),
+		(fields) => factory.skills().createFromSelection(actor, { ...fields, selection })
+	)
+});
+
+/**
+ * The tools only the in-app agent builds: `load_skill`, which threads the
+ * conversation's own note as context, and the three studio tools whose whole
+ * effect lands in a surface an external host does not have (`surface: 'app'` in
+ * the catalog).
+ */
+const appToolDefinitions = (
 	factory: ControllerFactory,
 	actor: ActorContext,
 	context: AgentToolContext
-): Definition[] => {
+) => {
 	const input = context.input;
-	const model = context.model;
-	const selection = input.selection;
-	const selectionDefinitions: Definition[] = selection
-		? [
-				defineTool(
-					'extract_promises',
-					toolDescription('extract_promises'),
-					'proposal',
-					z.object({
-						responsibility: z
-							.enum(['mine', 'waiting_on'])
-							.optional()
-							.describe(
-								'Use mine for commitments made by the user (I/my), waiting_on for commitments made by someone else, or omit only when the user asked for every actor.'
-							)
-					}),
-					(fields) =>
-						factory.todos().extractPromises(actor, {
-							selection,
-							...(fields.responsibility ? { responsibility: fields.responsibility } : {})
-						})
-				),
-				defineTool(
-					'relate_selection',
-					toolDescription('relate_selection'),
-					'proposal',
-					z.object({}),
-					() => factory.relationships().suggestFromSelection(actor, { selection })
-				),
-				defineTool(
-					'find_references',
-					toolDescription('find_references'),
-					'proposal',
-					z.object({}),
-					() => factory.references().suggestFromSelection(actor, { selection }, { model })
-				),
-				defineTool(
-					'create_skill_from_selection',
-					toolDescription('create_skill_from_selection'),
-					'mutation',
-					z.object({
-						name: z.string().min(1),
-						description: z.string(),
-						triggerHints: z.array(z.string())
-					}),
-					(fields) => factory.skills().createFromSelection(actor, { ...fields, selection })
-				)
-			]
-		: [];
-	return [
-		...selectionDefinitions,
-		defineTool(
+	return {
+		load_skill: defineTool(
 			'load_skill',
 			toolDescription('load_skill'),
 			'read',
@@ -2200,7 +2251,7 @@ const agentOnlyDefinitions = (
 				return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
 			}
 		),
-		defineTool(
+		create_diagram: defineTool(
 			'create_diagram',
 			toolDescription('create_diagram'),
 			'mutation',
@@ -2227,7 +2278,7 @@ const agentOnlyDefinitions = (
 				});
 			}
 		),
-		defineTool(
+		edit_diagram: defineTool(
 			'edit_diagram',
 			toolDescription('edit_diagram'),
 			'mutation',
@@ -2238,7 +2289,7 @@ const agentOnlyDefinitions = (
 			}),
 			(fields) => factory.diagramStudio().editDiagram(actor, fields)
 		),
-		defineTool(
+		read_canvas_diagram: defineTool(
 			'read_canvas_diagram',
 			toolDescription('read_canvas_diagram'),
 			'read',
@@ -2248,15 +2299,21 @@ const agentOnlyDefinitions = (
 					conversationId: input.conversationId
 				})
 		)
-	];
+	};
 };
 
+/**
+ * `load_skill` is the one tool with a different body per surface: the in-app
+ * agent threads the conversation's own note as `contextNoteId`, and an external
+ * MCP host has no conversation to thread. It is therefore built here as well as
+ * in {@link appToolDefinitions}, and is the only name the two groups share.
+ */
 const mcpOnlyDefinitions = (
 	factory: ControllerFactory,
 	actor: ActorContext,
 	context: McpToolContext
-): Definition[] => [
-	defineTool(
+) => ({
+	load_skill: defineTool(
 		'load_skill',
 		toolDescription('load_skill'),
 		'read',
@@ -2269,7 +2326,26 @@ const mcpOnlyDefinitions = (
 			return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
 		}
 	)
-];
+});
+
+/**
+ * Every tool name some group actually builds.
+ *
+ * This is the proof TN-34 could not make: the constructed set is now keyed, so
+ * its membership is a type, and the two assertions below hold it equal to the
+ * catalog in both directions. Availability is still a runtime question — a turn
+ * without a selection builds no selection tools, an MCP host gets no app-surface
+ * tools, and a deselected tool is filtered — but *which tools exist to be gated*
+ * is now decided at compile time.
+ */
+type BuiltToolName =
+	| keyof ReturnType<typeof sharedToolDefinitions>
+	| keyof ReturnType<typeof selectionToolDefinitions>
+	| keyof ReturnType<typeof appToolDefinitions>
+	| keyof ReturnType<typeof mcpOnlyDefinitions>;
+
+type _BuildersCoverCatalog = Total<Exclude<ToolName, BuiltToolName>>;
+type _BuildersNameNothingElse = Total<Exclude<BuiltToolName, ToolName>>;
 
 export class McpTools {
 	constructor(
@@ -2286,8 +2362,8 @@ export class McpTools {
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
 		return [
-			...sharedToolDefinitions(this.controllers, this.actor),
-			...mcpOnlyDefinitions(this.controllers, this.actor, this.context)
+			...Object.values(sharedToolDefinitions(this.controllers, this.actor)),
+			...Object.values(mcpOnlyDefinitions(this.controllers, this.actor, this.context))
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&

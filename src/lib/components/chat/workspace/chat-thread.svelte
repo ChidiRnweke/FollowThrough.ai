@@ -308,6 +308,15 @@
 													text={part.text}
 													streaming={entry.status === 'streaming'}
 												/>{/if}
+										{:else if part.kind === 'unreadable'}
+											<!-- A journalled row the transcript reader could not reconstruct. Shown
+										     rather than dropped, because the work was attempted and hiding the row
+										     reports a turn that did less than it did. Muted rather than an alert:
+										     nothing failed for the user, the record of it is what is damaged. -->
+											<div class="flex items-start gap-2 text-xs">
+												<Warning class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+												<span class="text-muted-foreground">{part.reason}</span>
+											</div>
 										{/if}
 									{/if}
 								{/each}

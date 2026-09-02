@@ -15,6 +15,8 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
+import { agentToolNameSchema } from '$lib/models/agent';
+import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 
 export type ChatToolStatus =
 	'running' | 'approval_required' | 'succeeded' | 'reported_failure' | 'failed' | 'rejected';
@@ -23,21 +25,7 @@ export type ChatToolStatus =
 export interface ChatToolActivityBase {
 	/** Absent when the provider reported the outcome without one; see `matchToolActivity`. */
 	readonly callId?: string;
-	/**
-	 * `string`, where `ToolActivity.name` and `AgentEvent`'s tool arms are
-	 * `AgentToolName`.
-	 *
-	 * Not an oversight, and not a gap the corpus leaves open: `corpus.spec.ts`
-	 * reads every stored tool-message name through `readAgentToolName` and holds
-	 * it at zero exceptions, so what is *persisted* is closed at both ends. This
-	 * type has a producer the persisted ones do not — `restoredTool` renders a
-	 * journal row it could not read as a visible failed call, and that row has no
-	 * tool name to give. Closing the field would make that producer's only honest
-	 * options a seventh arm on a union six consumers branch on with fall-through
-	 * defaults, or an invented name shown to a user. Both are worse than a `string`
-	 * on a presentation type.
-	 */
-	readonly name: string;
+	readonly name: AgentToolName;
 	readonly arguments: AgentPayloadObject;
 	/** The run that produced it. Restored rows from before a run existed have none. */
 	readonly runId?: string;
@@ -101,7 +89,10 @@ export type JournalledTool =
 
 const journalledToolSchema = z.object({
 	callId: z.string().nullish(),
-	name: z.string(),
+	// A journalled row naming a tool the agent surface no longer has becomes an
+	// `unreadable` transcript part rather than a row nothing can label.
+	// `tests/unit/corpus.spec.ts` holds that at zero against the stored messages.
+	name: agentToolNameSchema,
 	input: z.custom<AgentPayload>(() => true).optional(),
 	output: z.custom<AgentPayload>(() => true).optional(),
 	failure: z.string().nullish(),

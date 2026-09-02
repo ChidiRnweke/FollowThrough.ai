@@ -5,7 +5,7 @@ import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 // `TOOL_DESCRIPTIONS`, not `TOOL_CATALOG`: the latter drops the first-class tools, which
 // are exactly the ones the agent reaches for most and so the ones that most need a row.
-import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
+import { TOOL_DESCRIPTIONS, type AgentToolName } from '$lib/models/agent/tool-catalog';
 import {
 	mechanismTools,
 	quietTools,
@@ -207,7 +207,7 @@ describe('A running turn shows its steps as they arrive', () => {
  * as `AgentToolCoverage` keeping the server total over its controller methods.
  */
 describe('Every tool the agent can call reports itself', () => {
-	const rowFor = (name: string) => turnSteps([call({ name })], shell)[0];
+	const rowFor = (name: AgentToolName) => turnSteps([call({ name })], shell)[0];
 	// Both lists hide a call on purpose; the test is that hiding is always on purpose.
 	const quietNames = new Set([...quietTools, ...mechanismTools]);
 

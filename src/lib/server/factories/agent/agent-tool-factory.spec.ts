@@ -22,12 +22,14 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentTools,
+	McpTools,
 	agentToolCoverage,
 	agentToolRegistry,
 	LOCKED_TOOL_NAMES,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
+import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
 const executeDirectly: AgentToolExecutor = {
@@ -188,16 +190,19 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 });
 
 /**
- * Registry↔catalog key equality is proved by the compiler now: see
- * `_CoverageCoversCatalog` and `_CoverageNamesNothingElse` beside
- * `agentToolCoverage`. Two runtime specs were deleted with them — the
- * classification kinds (`AgentToolContractBinding` is a closed union, so every
- * kind is already total) and the catalog-name equality itself.
+ * Three runtime specs were deleted here, each replaced by a compiler check.
  *
- * These two remain because no type can see either fact. A union collapses a
- * name bound twice, and the *constructed* definition set is a function of run
- * context: `agentOnlyDefinitions` builds the selection-bound tools only when a
- * selection is present, and `McpTools` composes a different pair.
+ * `_CoverageCoversCatalog` / `_CoverageNamesNothingElse` beside
+ * `agentToolCoverage` hold registry and catalog equal, which retired the
+ * catalog-name equality spec; `AgentToolContractBinding` is a closed union, which
+ * retired the classification-kind spec; and `_BuildersCoverCatalog` /
+ * `_BuildersNameNothingElse` beside `BuiltToolName` hold the *constructed* set
+ * equal to the catalog, which retired the one that compared them at runtime.
+ *
+ * What is left is what no type can see. A union collapses a name bound twice.
+ * And membership is not availability: the compiler knows every tool exists to be
+ * built, but which ones a given turn or surface actually offers is decided at
+ * run time, and a gate that withheld the wrong tool would type-check perfectly.
  */
 const boundToolNames = (): string[] =>
 	Object.values(agentToolCoverage)
@@ -210,13 +215,68 @@ describe('Agent tool coverage invariants', () => {
 		expect(bound.toSorted()).toEqual([...new Set(bound)].toSorted());
 	});
 
-	it('registers one stable tool for every non-excluded controller action', () => {
+	/**
+	 * These four are the only selection-gated definitions, and they are gated
+	 * because each one acts *on* the selection: without one there is nothing for
+	 * them to read. A construction bug that dropped an unrelated tool when no
+	 * selection was present would look identical to the gate doing its job.
+	 */
+	const SELECTION_BOUND = [
+		'create_skill_from_selection',
+		'extract_promises',
+		'find_references',
+		'relate_selection'
+	];
+
+	it('withholds exactly the selection-bound tools when a turn has no selection', () => {
+		const withoutSelection = createAgentTools(
+			{} as ControllerFactory,
+			testActor(),
+			'approval_required',
+			{
+				provenanceId: testProvenanceId(),
+				input: { conversationId: testConversationId(), prompt: 'Help' },
+				model: 'openai/gpt-5.6'
+			}
+		);
 		expect(
-			registry('approval_required')
+			withoutSelection
 				.tools()
 				.map((tool) => tool.name)
 				.toSorted()
-		).toEqual(boundToolNames().toSorted());
+		).toEqual(
+			boundToolNames()
+				.filter((name) => !SELECTION_BOUND.includes(name))
+				.toSorted()
+		);
+	});
+
+	/**
+	 * The MCP surface composes a different pair of definition sets, and nothing
+	 * compared its constructed list to anything at all. It is the same contracts
+	 * minus the app-surface tools, which are excluded because their whole effect
+	 * lands in a window an external host cannot see.
+	 */
+	it('builds every contract on the MCP surface except the app-surface tools', () => {
+		const mcp = new McpTools(
+			{} as ControllerFactory,
+			testActor(),
+			{ provenanceId: testProvenanceId() },
+			allTools
+		);
+		const appSurface: readonly string[] = TOOL_DESCRIPTIONS.filter(
+			(entry) => 'surface' in entry
+		).map((entry) => entry.name);
+		expect(
+			mcp
+				.definitions()
+				.map((definition) => definition.name)
+				.toSorted()
+		).toEqual(
+			boundToolNames()
+				.filter((name) => !SELECTION_BOUND.includes(name) && !appSurface.includes(name))
+				.toSorted()
+		);
 	});
 
 	// Tool recovery reads this list to tell the model whether a name it got wrong

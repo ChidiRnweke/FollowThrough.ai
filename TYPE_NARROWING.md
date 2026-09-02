@@ -357,14 +357,26 @@ produce.
         unbinding `get_today_view` and watching `pnpm check` fail at the declaration.
   - [x] Two runtime specs deleted with them: the classification-kind check (`AgentToolContractBinding`
         is a closed union, so the kinds were already total) and the catalog-name equality itself.
-  - Not made structural, and it cannot be: the **constructed** definition set is a function of run
-    context — `agentOnlyDefinitions` builds the selection-bound tools only when a selection is
-    present, `McpTools` composes a different pair, and both then filter by `LOCKED_TOOL_SET` and
-    the user's `ToolAccessPolicy`. No type can hold that total over `ToolName`. Its spec stays, and
-    is sharpened from a length comparison to name-set equality against the bound contracts. A union
-    also cannot see a name bound by two controller methods, so that is one spec too. Deleting
-    either would leave nothing checking that the factory builds a tool for every contract it
-    declares.
+  - [x] The **constructed** definition set is structural too, which first looked impossible: the
+        groups returned `Definition[]`, and `agentOnlyDefinitions` built the selection-bound tools
+        only when a selection was present, so membership itself depended on the turn and no type
+        could hold it total. The fix was to stop conflating membership with availability. The
+        groups return objects keyed by tool name, and the conditionality moved out of the group and
+        into its caller: `selectionToolDefinitions` takes the selection as a parameter and is total
+        over its four names, `appToolDefinitions` holds the three `surface: 'app'` studio tools plus
+        the agent's `load_skill`, and `mcpOnlyDefinitions` holds the MCP `load_skill` — the one name
+        with a different body per surface, because only the in-app agent has a conversation note to
+        thread. `BuiltToolName` unions the four groups' key types, and `_BuildersCoverCatalog` /
+        `_BuildersNameNothingElse` hold it equal to `ToolName`. Verified in both directions by
+        renaming one key: a catalog tool nobody builds and a builder for a name the catalog lacks
+        are each a `pnpm check` failure. The runtime spec that compared the two sets is deleted.
+  - What no type can see, and what the remaining specs cover: a union collapses a name bound twice,
+    so the duplicate-binding spec stays. And membership is not availability — the compiler knows
+    every tool exists to be built, but a gate that withheld the wrong one type-checks perfectly, so
+    two specs now pin the gates. One asserts a turn without a selection withholds _exactly_ the four
+    selection-bound tools. The other asserts the MCP surface builds every contract except the
+    app-surface three; nothing had ever compared `McpTools.definitions()` to anything, and that spec
+    was verified to catch a `load_skill` drift that all 113 other specs passed straight through.
   - [x] `PendingAgentDecision.toolName` is a `ToolName`, read at both producers. `parkedCall` joins
         its existing unreadable/id-less refusals with `UNKNOWN_PARKED_CALL`: approving a park on a
         name nothing answers would resume the run into a call nothing can execute. `readPendingDecisions`
@@ -380,12 +392,18 @@ produce.
         `Tool not found` before any event is emitted. So a name arriving here means the registry
         and the SDK's tools have diverged — a bug in this process, not something the model did.
         `tool_started` has no failure arm to settle into either.
-  - Not closed: `ChatToolActivity.name` stays `string`. What is _persisted_ is closed at both ends,
-    and `corpus.spec.ts` reads every stored name through `readAgentToolName` to prove it. This
-    client type has a producer the persisted ones do not — `restoredTool` renders a journal row it
-    could not read as a visible failed call, and that row has no tool name. Closing the field would
-    leave that producer a seventh arm on a union six consumers branch on with fall-through defaults,
-    or an invented name shown to a user.
+  - [x] `ChatToolActivity.name` is an `AgentToolName` too, and the fix was to move the arm rather
+        than to widen the field. The blocker was `restoredTool`: a journal row the reader cannot
+        reconstruct was rendered as a `failed` tool call named `tool` — a machine name shown to a
+        user for a tool nobody called — and that invented name was the one thing keeping the field a
+        `string`. A seventh `ChatToolActivity` status was the wrong home for it, on a union six
+        consumers branch through with fall-through defaults. The right home was `ChatPart`, which is
+        already `text | image | reasoning | tool`: an unreadable row is not a tool call, it is a
+        fifth kind of part. Every existing consumer filters positively (`part.kind === 'tool'`,
+        `isToolPart`), so the new arm passes through them untouched and only `chat-thread.svelte`
+        gained a branch — muted rather than an alert, because nothing failed for the user, the
+        record of it is what is damaged. The row is still visible, for the reason the fake tool row
+        was: the work was attempted, and dropping it reports a turn that did less than it did.
   - Also not closed: `TOOL_CATALOG` keeps `ToolName` rather than the new `LongTailToolName`. `filter`
     cannot prove the partition, so narrowing it needs a hand-written type predicate — an unchecked
     claim, which is the thing this effort removes. `tool-catalog.spec.ts` holds the partition.

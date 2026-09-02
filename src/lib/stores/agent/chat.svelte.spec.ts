@@ -629,6 +629,49 @@ describe('a reopened turn reads as it happened', () => {
 	});
 
 	/**
+	 * A journalled row the reader cannot reconstruct is its own part, not a tool
+	 * call. It used to be restored as a `failed` call named `tool` — a machine name
+	 * shown to a user for a tool nobody called — and that invented name was the one
+	 * thing keeping `ChatToolActivity.name` a `string` while every persisted tool
+	 * name closed over the catalog.
+	 */
+	const withUnreadableRow = async () => {
+		const session = {
+			conversation: { id: conversationId },
+			messages: [
+				stored('user', { type: 'text', text: 'shorten this note' }),
+				stored('tool', { callId: 'c1', name: 'not_a_tool', input: {}, status: 'succeeded' }, '1')
+			]
+		} as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+		const store = new ChatStore(
+			'test-session',
+			new HydratingTransport(session),
+			new MemoryStorage()
+		);
+		store.conversationId = conversationId;
+		await store.hydrate();
+		return store;
+	};
+
+	it('restores a row it cannot read as its own part, not as a tool call', async () => {
+		const store = await withUnreadableRow();
+		expect(store.entries.at(1)?.parts.map((part) => part.kind)).toEqual(['unreadable']);
+	});
+
+	it('says why the row could not be read, rather than dropping it from the turn', async () => {
+		const store = await withUnreadableRow();
+		const [part] = store.entries.at(1)?.parts ?? [];
+		expect(part?.kind === 'unreadable' && part.reason).toContain(
+			'could not be read back from the transcript'
+		);
+	});
+
+	it('leaves no tool row behind for a call it could not read', async () => {
+		const store = await withUnreadableRow();
+		expect(entryTools(store.entries.at(1)!)).toEqual([]);
+	});
+
+	/**
 	 * A run that died holding an approval leaves the question journalled as still pending,
 	 * because nothing later ever settled that call. Replayed as-is it put a live
 	 * Approve/Reject card back on screen for a run that could not answer it — and answering

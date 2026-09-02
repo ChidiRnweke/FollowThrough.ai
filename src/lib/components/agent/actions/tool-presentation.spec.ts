@@ -1,3 +1,4 @@
+import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { describe, expect, it } from 'vitest';
 import type { ShellContext } from '$lib/models/workspace';
 import {
@@ -13,7 +14,7 @@ import {
 // none of them. `failed` gets its own builder because its arm needs a message —
 // which is the point, a failure has to say what went wrong.
 const tool = <Status extends 'succeeded' | 'rejected' | 'running'>(
-	name: string,
+	name: AgentToolName,
 	status: Status
 ) => ({
 	callId: 'call-1',
@@ -22,7 +23,7 @@ const tool = <Status extends 'succeeded' | 'rejected' | 'running'>(
 	status
 });
 
-const failedTool = (name: string, failure: string) => ({
+const failedTool = (name: AgentToolName, failure: string) => ({
 	callId: 'call-1',
 	name,
 	arguments: {},

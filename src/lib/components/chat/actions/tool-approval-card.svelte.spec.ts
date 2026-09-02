@@ -1,3 +1,4 @@
+import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
@@ -15,7 +16,7 @@ const shell = {
 	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
 } as unknown as ShellContext;
 
-const pendingCall = (name: string, args: AgentPayloadObject): ChatToolActivity => ({
+const pendingCall = (name: AgentToolName, args: AgentPayloadObject): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
 	name,
 	arguments: args,

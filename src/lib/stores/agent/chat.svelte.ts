@@ -151,7 +151,21 @@ export type ChatPart =
 	| { kind: 'text'; text: string }
 	| { kind: 'image'; id: string; dataUrl: string; name: string }
 	| { kind: 'reasoning'; text: string }
-	| { kind: 'tool'; tool: ChatToolActivity };
+	| { kind: 'tool'; tool: ChatToolActivity }
+	/**
+	 * A journalled row the transcript reader could not reconstruct.
+	 *
+	 * It is a part rather than a seventh `ChatToolActivity` status because it is
+	 * not a tool call: nothing is known about it except that a row was there and
+	 * could not be read. Modelling it as a tool call is what forced the invented
+	 * `name: 'tool'` — a machine name, shown to a user, for a tool nobody called —
+	 * and it is what kept `ChatToolActivity.name` a `string` while every persisted
+	 * tool name closed over the catalog.
+	 *
+	 * Still a visible part, for the reason the fake tool row was: the work was
+	 * attempted, and dropping the row reports a turn that did less than it did.
+	 */
+	| { kind: 'unreadable'; reason: string };
 
 export interface ChatEntry {
 	readonly id: string;
@@ -227,21 +241,21 @@ const ABANDONED_APPROVAL = 'The run ended before you answered.';
  *
  * `failed` is already a status the thread renders — `toolDisclosure` leads with the failure —
  * so this needs no new state and no rewrite of the rows already stored that way.
+ *
+ * A row the reader cannot reconstruct is not one of these. It answers with the
+ * `unreadable` part instead, because nothing is known about it except that it was
+ * there: it has no name, no arguments, and no outcome to report.
  */
-const restoredTool = (message: Message, awaitingRunId?: string): ChatToolActivity => {
+const restoredTool = (
+	message: Message,
+	awaitingRunId?: string
+): ChatToolActivity | { readonly unreadable: string } => {
 	const read = readJournalledTool(message.content, {
 		...(message.runId ? { runId: message.runId } : {})
 	});
-	// A row this reader cannot reconstruct is shown as a failed call that says so,
-	// rather than being dropped from the turn. The work was attempted; hiding the
-	// row would report a turn that did less than it did.
 	if (read.kind === 'unreadable')
 		return {
-			name: 'tool',
-			arguments: {},
-			...(message.runId ? { runId: message.runId } : {}),
-			failure: `This tool call could not be read back from the transcript. ${read.reason}`,
-			status: 'failed'
+			unreadable: `This tool call could not be read back from the transcript. ${read.reason}`
 		};
 	const { tool } = read;
 	return tool.status === 'approval_required' && message.runId !== awaitingRunId
@@ -261,7 +275,9 @@ const partsOfTurn = (messages: readonly Message[], awaitingRunId?: string): Chat
 	// all of the work followed by all of the words.
 	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
 		if (message.role === 'tool') {
-			applyToolActivity(parts, restoredTool(message, awaitingRunId));
+			const restored = restoredTool(message, awaitingRunId);
+			if ('unreadable' in restored) parts.push({ kind: 'unreadable', reason: restored.unreadable });
+			else applyToolActivity(parts, restored);
 			continue;
 		}
 		const text = typeof message.content.text === 'string' ? message.content.text : '';
