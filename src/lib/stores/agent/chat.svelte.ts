@@ -9,6 +9,7 @@ import type {
 	RunAgentInput,
 	StoredMessage
 } from '$lib/models/agent';
+import { isHttpError } from '@sveltejs/kit';
 import { isAgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { SuggestionView } from '$lib/models/suggestions';
@@ -81,15 +82,16 @@ const activeStatuses: readonly AgentRunStatus[] = [
  * what the server said instead of blaming the connection.
  */
 function rejectionMessage(error: unknown): string | undefined {
-	if (typeof error !== 'object' || error === null) return undefined;
-	const { status, body, message } = error as {
-		status?: unknown;
-		body?: { message?: unknown };
-		message?: unknown;
-	};
-	if (typeof status !== 'number' || status < 400 || status >= 500) return undefined;
-	const text = typeof body?.message === 'string' ? body.message : message;
-	return typeof text === 'string' && text.length > 0 ? text : 'That request was rejected.';
+	if (!isHttpError(error)) return undefined;
+	const { status } = error;
+	if (status < 400 || status >= 500) return undefined;
+	// `App.Error` declares `message` required, so the body needs no probing once
+	// the guard holds. The old hand-written shape also read a bare top-level
+	// `message`, for a rejection that carries a status without being an
+	// `HttpError` — nothing on this path produces one: a server `error()` arrives
+	// as an `HttpError`, and a client-side schema failure is a `ZodError` with no
+	// status, which returned `undefined` here before too.
+	return error.body.message.length > 0 ? error.body.message : 'That request was rejected.';
 }
 
 interface PersistedConversationChoices {

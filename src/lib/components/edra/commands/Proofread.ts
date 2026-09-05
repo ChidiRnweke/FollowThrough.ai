@@ -332,6 +332,7 @@ export const Proofread = Extension.create<ProofreadOptions, ProofreadStorage>({
 								selected: {
 									from: hit.from,
 									to: hit.to,
+									// audit-allow: no-cast-probe — ProseMirror types Decoration.spec as any, so the issue this plugin attached to its own decoration cannot be read back through the library type.
 									issue: (hit.spec as { issue: ProofreadIssueReport }).issue
 								}
 							} satisfies ProofreadMeta)

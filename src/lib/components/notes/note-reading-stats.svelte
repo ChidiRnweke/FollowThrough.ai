@@ -21,6 +21,7 @@
 	const stats = useEditorState({
 		editor,
 		selector: ({ editor }) => ({
+			// audit-allow: no-cast-probe — Tiptap types Editor.storage as any, so the CharacterCount extension's own storage shape is not expressible through the framework type.
 			words: (editor.storage.characterCount as { words: () => number } | undefined)?.words() ?? 0
 		})
 	});

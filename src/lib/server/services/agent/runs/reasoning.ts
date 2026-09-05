@@ -722,23 +722,23 @@ export class AgentReasoning {
 		});
 	}
 
+	// `in` narrows rather than asserts, and it is the right tool at these two
+	// readers rather than a schema: a service does not parse (ADR 0037), and the
+	// provider error reaches here through the agents SDK's run loop, which may
+	// rewrap it — so `instanceof OpenAI.APIError` would quietly change which
+	// failures count as retryable.
 	private providerErrorCode(error: unknown): string | undefined {
 		if (typeof error !== 'object' || error === null) return undefined;
-		const value = error as { code?: unknown; status?: unknown };
-		if (typeof value.code === 'string') return value.code;
-		if (typeof value.status === 'number') return String(value.status);
+		if ('code' in error && typeof error.code === 'string') return error.code;
+		if ('status' in error && typeof error.status === 'number') return String(error.status);
 		return undefined;
 	}
 
 	private isRetryable(error: unknown): boolean {
 		if (typeof error !== 'object' || error === null) return false;
-		const status = (error as { status?: unknown }).status;
-		return (
-			status === 408 ||
-			status === 409 ||
-			status === 429 ||
-			(typeof status === 'number' && status >= 500)
-		);
+		if (!('status' in error) || typeof error.status !== 'number') return false;
+		const { status } = error;
+		return status === 408 || status === 409 || status === 429 || status >= 500;
 	}
 }
 

@@ -175,8 +175,10 @@ function waitForTerminalStatus(
 const reconstructText = (events: readonly AgentRunEventRecord[]): string =>
 	events
 		.map((record) => record.event)
-		.filter((event) => event.type === 'text_delta')
-		.map((event) => (event as { text: string }).text)
+		// Folded into the map rather than filtered first: `filter` answers a
+		// boolean, so the narrowing it proves is thrown away and the `text` read
+		// then had to assert it back. The union discriminates here.
+		.map((event) => (event.type === 'text_delta' ? event.text : ''))
 		.join('');
 
 function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly ToolCall[] {

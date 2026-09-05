@@ -35,5 +35,7 @@ import { editableProseMirrorDocument, type ProseMirrorDocument } from '$lib/mode
  * JSON by definition, so a JSON round trip is a total deep copy here, and it
  * reads through a proxy the way `JSON.stringify` reads through anything.
  */
-export const toEditorContent = (document: ProseMirrorDocument): JSONContent =>
-	JSON.parse(JSON.stringify(editableProseMirrorDocument(document)));
+export const toEditorContent = (document: ProseMirrorDocument): JSONContent => {
+	// audit-allow: no-json-parse-cast — structuredClone throws DataCloneError on the Svelte $state proxy the document usually is, and $state.snapshot is a rune this plain .ts module cannot call, so the JSON round trip is the deep copy described above and not a boundary read.
+	return JSON.parse(JSON.stringify(editableProseMirrorDocument(document)));
+};

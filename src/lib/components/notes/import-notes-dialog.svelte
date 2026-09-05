@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { z } from 'zod';
 	import type { ImportMarkdownArchiveOutput, ProjectId } from '$lib/models/projects';
+	import { importMarkdownArchiveOutputSchema } from '$lib/models/projects';
 	import type { NoteId } from '$lib/models/notes';
 	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
@@ -28,6 +30,9 @@
 	let error = $state('');
 	let report = $state<ImportMarkdownArchiveOutput | undefined>(undefined);
 
+	/** What `/api/imports` answers with when it rejects the archive. */
+	const failureSchema = z.object({ message: z.string() });
+
 	async function run(): Promise<void> {
 		if (!archive) return;
 		busy = true;
@@ -38,12 +43,20 @@
 			body.set('projectId', projectId);
 			if (parentId) body.set('parentId', parentId);
 			const response = await fetch('/api/imports', { method: 'POST', body });
-			const payload = await response.json();
+			const payload: unknown = await response.json();
 			if (!response.ok) {
-				error = (payload as { message?: string }).message ?? 'The import failed.';
+				error = failureSchema.safeParse(payload).data?.message ?? 'The import failed.';
 				return;
 			}
-			report = payload as ImportMarkdownArchiveOutput;
+			const parsed = importMarkdownArchiveOutputSchema.safeParse(payload);
+			if (!parsed.success) {
+				// Deliberately not an empty report: the import ran, and saying so
+				// while admitting the report is unreadable is the honest pair. An
+				// empty report would claim it imported nothing.
+				error = 'The import finished, but its report could not be read. Reload to see what landed.';
+				return;
+			}
+			report = parsed.data;
 			await invalidateAll();
 			// audit-allow: silent-catch — submission failure is rendered and the selected files remain available for retry.
 		} catch {

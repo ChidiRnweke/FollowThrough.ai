@@ -198,6 +198,23 @@ export interface ImportMarkdownArchiveOutput {
 	readonly unmappedFrontmatterKeys: readonly string[];
 }
 
+/**
+ * The report, read rather than asserted.
+ *
+ * The import dialog reaches the importer through a multipart route rather than a
+ * remote function, so nothing between the two ends checks this shape. The report
+ * is the whole feature — a partial import that renders as a clean one is exactly
+ * what {@link ImportMarkdownArchiveOutput} exists to prevent — so the boundary
+ * that carries it has to be one that can fail out loud.
+ */
+export const importMarkdownArchiveOutputSchema = z.object({
+	importedNoteIds: z.array(z.uuid().transform((value) => value as NoteId)),
+	createdFolderIds: z.array(z.uuid().transform((value) => value as NoteId)),
+	skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
+	failed: z.array(z.object({ path: z.string(), message: z.string() })),
+	unmappedFrontmatterKeys: z.array(z.string())
+});
+
 export interface CreateFolderInput {
 	readonly projectId: ProjectId;
 	readonly name: string;

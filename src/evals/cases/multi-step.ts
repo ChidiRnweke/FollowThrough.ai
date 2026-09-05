@@ -6,6 +6,7 @@ import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
+import { isAgentPayloadObject, readAgentPayload } from '$lib/models/agent/payload';
 import { ARCHETYPES, type EvalCase } from './types';
 import { expectSuggestionPending } from '../assertions/effects';
 
@@ -60,16 +61,21 @@ export const multiStepCases: readonly EvalCase[] = [
 			const search = findCall(result, 'search');
 			const scopedSearch = findCall(result, 'search_note');
 			const authoritativeSearch = scopedSearch ?? search;
-			const searchResults = Array.isArray(authoritativeSearch?.output)
-				? authoritativeSearch.output
-				: [];
+			// Read the output as the wire type its siblings already use rather than
+			// probing it three times. A corrupt output is not a miss: it is a tool
+			// this eval could not read, so it is named in the explanation below
+			// instead of scoring as evidence the model failed.
+			const searchOutput = readAgentPayload(authoritativeSearch?.output);
+			const searchResults =
+				searchOutput.kind === 'valid' && Array.isArray(searchOutput.value)
+					? searchOutput.value
+					: [];
 			const groundedSearch = searchResults.some(
 				(value) =>
-					typeof value === 'object' &&
-					value !== null &&
-					(value as { noteId?: unknown }).noteId === expectedNoteId &&
-					typeof (value as { content?: unknown }).content === 'string' &&
-					/balanced double-entry posting/i.test((value as { content: string }).content) &&
+					isAgentPayloadObject(value) &&
+					value.noteId === expectedNoteId &&
+					typeof value.content === 'string' &&
+					/balanced double-entry posting/i.test(value.content) &&
 					(scopedSearch === undefined || scopedSearch.arguments.noteId === expectedNoteId)
 			);
 			const groundedFileRead =
@@ -80,7 +86,7 @@ export const multiStepCases: readonly EvalCase[] = [
 				name: ARCHETYPES.multiStep,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `context=${contextIndex}; search=${searchIndex}; searchNote=${names.indexOf('search_note')}; groundedSearch=${groundedSearch}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
+				explanation: `context=${contextIndex}; search=${searchIndex}; searchNote=${names.indexOf('search_note')}; groundedSearch=${groundedSearch}; searchOutput=${searchOutput.kind === 'valid' ? 'read' : searchOutput.message}; note=${noteIndex}; grep=${grepIndex}; sed=${sedIndex}; grounded=${grounded}`
 			});
 
 			expect({ status: result.status, resolvedReadAndGrounded: passed }).toEqual({

@@ -14,7 +14,9 @@ const RULES = [
 	'no-response-json-cast',
 	'no-zod-unknown',
 	'no-weak-record-guard',
-	'no-record-unknown'
+	'no-record-unknown',
+	'no-json-parse-cast',
+	'no-cast-probe'
 ] as const;
 export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
@@ -46,6 +48,86 @@ const responseJsonCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAsser
 		ts.isCallExpression(expression) &&
 		ts.isPropertyAccessExpression(expression.expression) &&
 		expression.expression.name.text === 'json'
+	);
+};
+const isCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAssertion =>
+	ts.isAsExpression(node) || ts.isTypeAssertionExpression(node);
+const jsonParseCall = (node: ts.Node): boolean =>
+	ts.isCallExpression(node) &&
+	ts.isPropertyAccessExpression(node.expression) &&
+	ts.isIdentifier(node.expression.expression) &&
+	node.expression.expression.text === 'JSON' &&
+	node.expression.name.text === 'parse';
+const honestUnknown = (type: ts.TypeNode | undefined): boolean =>
+	type?.kind === ts.SyntaxKind.UnknownKeyword;
+const enclosingReturnType = (node: ts.Node): ts.TypeNode | undefined => {
+	let current: ts.Node | undefined = node.parent;
+	while (current) {
+		if (ts.isFunctionLike(current)) return current.type;
+		current = current.parent;
+	}
+	return undefined;
+};
+/** The type an expression is handed to, in each position where a human wrote one down. */
+const declaredTarget = (node: ts.Node): ts.TypeNode | undefined => {
+	let current: ts.Node = node;
+	while (current.parent && ts.isParenthesizedExpression(current.parent)) current = current.parent;
+	const parent: ts.Node | undefined = current.parent;
+	if (!parent) return undefined;
+	if (isCast(parent) && parent.expression === current) return parent.type;
+	if (
+		(ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent)) &&
+		parent.initializer === current
+	)
+		return parent.type;
+	if (ts.isArrowFunction(parent) && parent.body === current) return parent.type;
+	if (ts.isReturnStatement(parent)) return enclosingReturnType(parent);
+	return undefined;
+};
+/**
+ * A `JSON.parse` result given a type nothing checked.
+ *
+ * `JSON.parse` returns `any`, so every way of naming its result is an assertion.
+ * The rule catches all three ways this codebase has written one: the cast, the
+ * annotated declaration, and the annotated return position. The annotated forms
+ * are not a stretch — `evals/lab/pglite-database.ts` carries a comment calling
+ * its old `const journal: MigrationJournal = JSON.parse(…)` "an assertion
+ * wearing a costume", and it checked exactly as much as the cast does.
+ *
+ * `as unknown`, `: unknown`, and a bare result handed straight to a schema are
+ * the honest forms and stay legal. That exemption is load-bearing:
+ * `models/agent/tool-failure.ts` and `services/agent/conversations/replay-virtualizer.ts`
+ * are the two sites TYPE_NARROWING.md §5 holds up as correct.
+ *
+ * Reported at the `JSON.parse` call, never at whatever named its result. That is
+ * not cosmetic: an `audit-allow` has to sit on the line above the one reported,
+ * and reporting the enclosing function would put the violation on its signature
+ * line, where no comment can precede the parse. The call is the one node present
+ * in all three positions.
+ */
+const jsonParseCast = (node: ts.Node): boolean => {
+	if (!jsonParseCall(node)) return false;
+	const target = declaredTarget(node);
+	return target !== undefined && !honestUnknown(target);
+};
+/**
+ * A cast onto an inline object type — the mirror of `shape-cast`, which owns
+ * the object-literal side.
+ *
+ * The union arm is not defensive. `note-reading-stats.svelte` casts to
+ * `{ words: () => number } | undefined`, and without it `| undefined` would be
+ * the one-character way to spell a probe the rule cannot see.
+ *
+ * A mapped type (`as { [P in K]?: V }`) and an array of type literals
+ * (`[] as { pos: number }[]`) are different shapes and do not fire: neither
+ * asserts an unverified shape onto a foreign value. The first is a generic
+ * helper naming its own result, the second seeds an empty accumulator.
+ */
+const castProbe = (node: ts.Node): boolean => {
+	if (!isCast(node) || ts.isObjectLiteralExpression(unwrap(node.expression))) return false;
+	if (ts.isTypeLiteralNode(node.type)) return true;
+	return (
+		ts.isUnionTypeNode(node.type) && node.type.types.some((type) => ts.isTypeLiteralNode(type))
 	);
 };
 /** `Record<string, unknown>`, `Record<string, any>`, or `{ [k: string]: unknown }`. */
@@ -204,6 +286,10 @@ export const analyzeSource = (
 		if (shapeCast(node)) report('shape-cast', node, 'asserts a type onto an object literal');
 		if (responseJsonCast(node))
 			report('no-response-json-cast', node, 'casts a response JSON result without parsing it');
+		if (jsonParseCast(node))
+			report('no-json-parse-cast', node, 'names a JSON.parse result without parsing it');
+		if (castProbe(node))
+			report('no-cast-probe', node, 'asserts an inline object shape onto a value');
 		if (weakZodCall(node))
 			report('no-zod-unknown', node, 'uses a non-narrowing Zod unknown or any schema');
 		if (weakRecordGuard(node))

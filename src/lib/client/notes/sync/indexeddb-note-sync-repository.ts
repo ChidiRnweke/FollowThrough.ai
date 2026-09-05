@@ -18,8 +18,10 @@ const recordKey = (userId: UserId, noteId: NoteId): string => `${userId}:${noteI
  * for good, so normalise defensively.  A JSON round-trip is faithful for this
  * record: it holds only ProseMirror documents, ISO strings, numbers and booleans.
  */
-const clonable = (record: NoteSyncRecord): NoteSyncRecord =>
-	JSON.parse(JSON.stringify(record)) as NoteSyncRecord;
+const clonable = (record: NoteSyncRecord): NoteSyncRecord => {
+	// audit-allow: no-json-parse-cast — structuredClone throws DataCloneError on the Svelte $state proxy this strips, and $state.snapshot is a rune this framework-free .ts repository cannot call, so a JSON round trip is the only deep copy available here. It is a copy of a value this process just produced, not a boundary read.
+	return JSON.parse(JSON.stringify(record)) as NoteSyncRecord;
+};
 
 const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
 	new Promise((resolve, reject) => {

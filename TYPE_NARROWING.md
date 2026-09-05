@@ -512,7 +512,7 @@ test:contracts` (113), `pnpm corpus:capture`, and `eslint`/`prettier` on the tou
         `addEventListener` overload already types it.
   - [x] The icon-library search response is one `z.object({ icons: z.array(z.string()) })` at the
         boundary, replacing a cast-probe, an `Array.isArray` and a hand-written `icon is
-    DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than answering
+DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than answering
         `[]`, which is the failure-looks-like-success default; a separate spec pins the real empty
         match so the two stay distinguishable.
   - [x] The Infisical secret list is a schema over both spellings (bare array, `{ secrets }`
@@ -555,7 +555,69 @@ test:contracts` (113), `pnpm corpus:capture`, and `eslint`/`prettier` on the tou
         const, so the union and the stale-allowance sweep cannot drift.
   - [x] Reject, differently-named reject, inline-index-signature reject, concrete-type valid,
         allowance, and stale-allowance specs. Verify with `pnpm test:architecture`.
-- [ ] **TN-52: Land `no-json-parse-cast` and `no-cast-probe` at zero**
+- [x] **TN-52: Land `no-json-parse-cast` and `no-cast-probe` at zero**
+  - [x] `no-json-parse-cast` catches all three ways a `JSON.parse` result gets named, not just the
+        cast. `JSON.parse` returns `any`, and `any` adopts whatever annotation is in the position it
+        lands in, so `const doc: JSONContent = JSON.parse(text)` checks exactly as much as
+        `JSON.parse(text) as JSONContent` — nothing. A cast-only rule would have reported one
+        spelling of a lie and blessed the other, and `evals/lab/pglite-database.ts` already carried a
+        comment calling the annotated form "an assertion wearing a costume". `as unknown`,
+        `: unknown`, and a result handed straight to a schema stay legal; that exemption is what
+        keeps `tool-failure.ts:68` and `replay-virtualizer.ts:39` — the two sites §5 holds up as
+        correct — from being broken by their own catalog entry.
+  - [x] It reports at the `JSON.parse` call, not at whatever named the result. Found by landing it:
+        reporting the enclosing function put the violation on the signature line, where no
+        `audit-allow` can precede the parse, so `editor-document.ts` reported a violation and a
+        stale allowance at once. The call is the one node present in all three positions.
+  - [x] `no-cast-probe` fires on a type-literal cast target, or a union holding one. The union arm
+        is not defensive: `note-reading-stats.svelte` casts to `{ words: () => number } | undefined`,
+        so without it `| undefined` would be the one-character way to spell a probe the rule cannot
+        see. Three neighbours structurally do not fire and need no allowance — a mapped type
+        (`config.ts:23`), an array of a literal (`utils.ts:138,172`, and the seven repeats in
+        `mcp-tool-factory.spec.ts`), and an object-literal operand, which is `shape-cast`'s.
+  - [x] Baseline it landed against, measured not estimated: 17 `no-cast-probe` (13 fixed, 4
+        excused) and 2 `no-json-parse-cast` (both excused). `artifacts/type-narrowing-audit.md` said
+        24 and 27; it was frozen on 2026-08-30 and four blocks have landed since.
+  - [x] Seven of the thirteen were foreign error shapes, and none of them wanted a schema.
+        `postgres-errors.ts` (4) and `reasoning.ts` (2) use `in` narrowing, which resolves the field
+        to `unknown` and lets a `typeof` do the rest — all of it checked, and it preserves the
+        existing semantics exactly, which a schema did not: a zod object over a whole driver-error
+        link has to decide what one unreadable field means, and drops the readable rest with it. A
+        schema in `reasoning.ts` would also have put a parse in a service, which ADR 0037 forbids.
+        `storage.ts` uses the SDK's own `S3ServiceException`, which declares `$metadata` and
+        duck-types its `instanceof` — so it holds across a second copy of the SDK, which is the
+        usual reason that shape gets asserted instead.
+  - [x] `chat.svelte.ts` uses SvelteKit's `isHttpError`, following `project-actions.svelte.ts:53`.
+        `App.Error` declares `message` required, so the body needs no probing once the guard holds.
+        The dropped arm — a rejection carrying a status without being an `HttpError` — is
+        unproducible on this path, and returned `undefined` before too.
+  - [x] `import-notes-dialog.svelte` parses the response once through
+        `importMarkdownArchiveOutputSchema` in `models/projects`, which also retires the
+        `payload as ImportMarkdownArchiveOutput` beside it — a named type the rule cannot see, and
+        the same guess about the same response. An unreadable report is its own message rather than
+        an empty report: the import ran, and an empty report would claim it imported nothing.
+  - [x] The two eval sites needed no schema at all. `run-case.ts` cast only because `filter` answers
+        a boolean and throws away the narrowing it proved; folding the test into the `map` deletes
+        it. `multi-step.ts` reads its tool output through `readAgentPayload` /
+        `isAgentPayloadObject`, which its three sibling case files already do — it was the one TN-50
+        did not reach. A corrupt output now names itself in the Phoenix explanation instead of
+        scoring as evidence the model missed.
+  - [x] Both checkers were verified to fail before being trusted: reverting one fixed site reports
+        it, and misspelling one allowance's rule name reports the violation and a malformed
+        allowance together.
+  - Not done here: the 12 occurrences in files `scripts/audit-source.ts` does not scan — 11
+    `no-cast-probe` and one `no-json-parse-cast`, across `note-editor.svelte.spec.ts`,
+    `selection-action-plugin.spec.ts`, `instrumentation.spec.ts` (2), `web-research-transport.spec.ts`,
+    `context.spec.ts`, `reasoning.spec.ts`, `workflow.spec.ts` (3), `library.spec.ts`, and
+    `tests/agent-workbench.e2e.ts`. Widening the scan to spec and e2e files belongs with TN-54's
+    sweep, which already owns the same question for `audit-topology.ts`.
+  - Also left: `x as string` on `this.input.prompt` (`multi-step.ts:44`, `diagrams.ts:376`) and the
+    other named-type casts. `no-cast-probe` cannot see a named type, and closing that needs the
+    producer fixed rather than a rule.
+  - Verified with `pnpm test:source` (zero across 1160 files), `pnpm test:unit`, `pnpm check` (0
+    errors across 8898 files), `pnpm test:architecture`, and `prettier`/`eslint` on the touched
+    files. `pnpm test:evals` was not run: it bills a real provider, and both eval changes are
+    covered by `pnpm check` and the payload readers' own specs.
 - [ ] **TN-53: Land strict-layer `no-unknown-type` with reasoned parser/SDK allowances**
 - [ ] **TN-54: Run the all-scope residual sweep and regenerate final before/after counts**
 - [ ] **TN-55: Run `pnpm test:architecture`, `pnpm test:unit`, `pnpm check`,

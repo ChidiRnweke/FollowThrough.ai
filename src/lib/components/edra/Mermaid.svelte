@@ -36,6 +36,7 @@
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
 	const options = $derived(
+		// audit-allow: no-cast-probe — Tiptap types Extension.options as any, so the revise and convert callbacks this node view is configured with cannot be recovered from the framework type.
 		extension.options as {
 			onRevise?: (
 				source: string,

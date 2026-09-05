@@ -74,8 +74,18 @@ describe('source audit rules', () => {
 			13
 		);
 	});
+	// Two rules, because it is two defects: the result is unparsed *and* the
+	// shape it claims is inline. Excusing one must leave the other reported, the
+	// way the weak-record-guard and record-unknown pair do below.
 	it('rejects a concrete cast on response JSON', () => {
-		expect(violations('const body = (await response.json()) as { ok: boolean }')).toHaveLength(1);
+		expect(violations('const body = (await response.json()) as { ok: boolean }')).toHaveLength(2);
+	});
+	it('leaves the inline shape reported when only the response cast is excused', () => {
+		expect(
+			violations(
+				'// audit-allow: no-response-json-cast — Framework supplies runtime validation.\nconst body = (await response.json()) as { ok: boolean }'
+			)
+		).toHaveLength(1);
 	});
 	it('allows an honest unknown response JSON intermediate', () => {
 		expect(violations('const body = (await response.json()) as unknown')).toHaveLength(0);
@@ -194,6 +204,87 @@ describe('source audit rules', () => {
 		expect(
 			violations(
 				'// audit-allow: no-record-unknown — Svelte mounts arbitrary components as open prop records by design.\nconst headers: Record<string, string> = {}'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects a concrete cast on a JSON.parse result', () => {
+		expect(violations('const record = JSON.parse(raw) as NoteSyncRecord')).toHaveLength(1);
+	});
+	it('rejects an annotated declaration over a JSON.parse result', () => {
+		expect(violations('const journal: MigrationJournal = JSON.parse(raw)')).toHaveLength(1);
+	});
+	it('rejects an annotated return of a JSON.parse result', () => {
+		expect(violations('const read = (raw: string): JSONContent => JSON.parse(raw)')).toHaveLength(
+			1
+		);
+	});
+	it('rejects a JSON.parse result returned from an annotated block body', () => {
+		expect(
+			violations('function read(raw: string): JSONContent { return JSON.parse(raw) }')
+		).toHaveLength(1);
+	});
+	it('allows a JSON.parse result returned from a function declaring unknown', () => {
+		expect(
+			violations('function read(raw: string): unknown { return JSON.parse(raw) }')
+		).toHaveLength(0);
+	});
+	it('allows an honest unknown JSON.parse cast', () => {
+		expect(violations('const value = JSON.parse(raw) as unknown')).toHaveLength(0);
+	});
+	it('allows an honest unknown JSON.parse annotation', () => {
+		expect(violations('const parsed: unknown = JSON.parse(raw)')).toHaveLength(0);
+	});
+	it('allows a JSON.parse result handed straight to a schema', () => {
+		expect(violations('const note = noteSchema.parse(JSON.parse(raw))')).toHaveLength(0);
+	});
+	it('allows a JSON.parse result assigned to a separately declared unknown', () => {
+		expect(violations('let parsed: unknown;\nparsed = JSON.parse(raw)')).toHaveLength(0);
+	});
+	it('allows a reasoned JSON.parse framework exception', () => {
+		expect(
+			violations(
+				'// audit-allow: no-json-parse-cast — structuredClone throws on the Svelte $state proxy this strips.\nconst record = JSON.parse(JSON.stringify(input)) as NoteSyncRecord'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale JSON.parse allowance', () => {
+		expect(
+			violations(
+				'// audit-allow: no-json-parse-cast — structuredClone throws on the Svelte $state proxy this strips.\nconst parsed: unknown = JSON.parse(raw)'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects a cast onto an inline object type', () => {
+		expect(violations('const status = (error as { status?: number }).status')).toHaveLength(1);
+	});
+	it('rejects an inline object type hidden in a union', () => {
+		expect(
+			violations('const count = (storage as { words: number } | undefined)?.words')
+		).toHaveLength(1);
+	});
+	it('reports a probe of an optional unknown field once', () => {
+		expect(violations('const status = (error as { status?: unknown }).status')).toHaveLength(1);
+	});
+	it('allows a cast onto a mapped type', () => {
+		expect(violations('const patch = base as { [P in K]?: V }')).toHaveLength(0);
+	});
+	it('allows an empty accumulator seeded with an array of object types', () => {
+		expect(violations('const found = [] as { pos: number }[]')).toHaveLength(0);
+	});
+	it('leaves an asserted object literal to shape-cast alone', () => {
+		expect(violations('const value = { id } as { id: NoteId }')).toHaveLength(1);
+	});
+	it('allows a reasoned cast-probe framework exception', () => {
+		expect(
+			violations(
+				'// audit-allow: no-cast-probe — Tiptap types extension.options as any.\nconst options = extension.options as { onCancel?: () => void }'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale cast-probe allowance', () => {
+		expect(
+			violations(
+				'// audit-allow: no-cast-probe — Tiptap types extension.options as any.\nconst options = extension.options as EditorOptions'
 			)
 		).toHaveLength(1);
 	});

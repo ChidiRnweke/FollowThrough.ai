@@ -6,7 +6,8 @@ import {
 	HeadBucketCommand,
 	HeadObjectCommand,
 	PutObjectCommand,
-	S3Client
+	S3Client,
+	S3ServiceException
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
@@ -96,9 +97,11 @@ export class AttachmentStorage implements IAttachmentStorage {
 		try {
 			await this.client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
 		} catch (error) {
-			const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
-				?.httpStatusCode;
-			if (status !== 404) throw error;
+			// `S3ServiceException` declares `$metadata`, and duck-types its own
+			// `instanceof`, so this holds even when the error crossed a second copy
+			// of the SDK — which is the usual reason the shape gets asserted instead.
+			if (!(error instanceof S3ServiceException) || error.$metadata.httpStatusCode !== 404)
+				throw error;
 			await this.client.send(new CreateBucketCommand({ Bucket: this.config.bucket }));
 		}
 	}
