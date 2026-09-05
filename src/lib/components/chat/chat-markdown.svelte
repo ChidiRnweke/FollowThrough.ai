@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import DiffViewer from './diff-viewer.svelte';
-	import { renderMarkdown } from '$lib/models/markdown';
+	import ChatMermaid from './chat-mermaid.svelte';
+	import { chatMarkdownSegments, renderMarkdown } from '$lib/models/markdown';
 
 	let { content }: { content: string } = $props();
 	let mounted = $state(false);
@@ -11,24 +12,7 @@
 		mounted = true;
 	});
 
-	const segments = $derived.by((): { type: 'markdown' | 'diff'; content: string }[] => {
-		if (!mounted) return [];
-		const parts: { type: 'markdown' | 'diff'; content: string }[] = [];
-		const pattern = /```diff\n([\s\S]*?)```/g;
-		let lastIndex = 0;
-		let match: RegExpExecArray | null;
-		while ((match = pattern.exec(content)) !== null) {
-			if (match.index > lastIndex) {
-				parts.push({ type: 'markdown', content: content.slice(lastIndex, match.index) });
-			}
-			parts.push({ type: 'diff', content: match[1].trim() });
-			lastIndex = match.index + match[0].length;
-		}
-		if (lastIndex < content.length) {
-			parts.push({ type: 'markdown', content: content.slice(lastIndex) });
-		}
-		return parts.length > 0 ? parts : [{ type: 'markdown', content }];
-	});
+	const segments = $derived(mounted ? chatMarkdownSegments(content) : []);
 </script>
 
 <!--
@@ -51,6 +35,8 @@
 		<ErrorBoundary label="part of this message" source={segment.content}>
 			{#if segment.type === 'diff'}
 				<DiffViewer diffText={segment.content} />
+			{:else if segment.type === 'mermaid'}
+				<ChatMermaid source={segment.content} />
 			{:else}
 				{@const rendered = renderMarkdown(segment.content)}
 				{#if rendered.ok}
