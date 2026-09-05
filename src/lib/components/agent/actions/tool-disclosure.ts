@@ -7,6 +7,7 @@ import {
 } from '../../chat/actions/tool-approval-fields';
 import { explainToolFailure } from './tool-result';
 import { toolResultFields, type ToolResultFields } from './tool-result-fields';
+import { noteIdFromPath } from './tool-presentation';
 import {
 	agentPayloadItems,
 	isAgentPayloadObject,
@@ -63,6 +64,13 @@ export interface FieldChange {
 	readonly to: string;
 }
 
+/** One line of what a look inside the virtual files came back with. */
+export interface FileOutputLine {
+	readonly text: string;
+	/** Where the line sits — a line number or the note it matched in — when known. */
+	readonly context?: string;
+}
+
 export type ToolDisclosure =
 	/** Mechanism. Never rendered at all, so it never reaches a row. */
 	| { readonly kind: 'none' }
@@ -71,7 +79,19 @@ export type ToolDisclosure =
 	/** Many things, read. What came back, as rows of their own kind. */
 	| { readonly kind: 'collection'; readonly entities: readonly EntityRef[]; readonly total: number }
 	/** A note or skill body rewritten. The one family with a true before and after. */
-	| { readonly kind: 'note-diff'; readonly noteId: string; readonly revision?: number }
+	| {
+			readonly kind: 'note-diff';
+			readonly noteId: string;
+			readonly revision?: number;
+			/** The note the diff is about, resolved once here so the body can name and open it. */
+			readonly entity: EntityRef;
+	  }
+	/** A look inside the virtual files — a grep, a sed excerpt, an ls — with what came back. */
+	| {
+			readonly kind: 'file-output';
+			readonly headline: string;
+			readonly lines: readonly FileOutputLine[];
+	  }
 	/** Fields set on a record that already existed. */
 	| {
 			readonly kind: 'record';
@@ -108,9 +128,12 @@ const families: Readonly<Record<string, Family>> = {
 	// Mechanism: the agent orienting itself. Never earns a row, let alone a chevron.
 	search_tools: 'none',
 	use_tool: 'none',
-	ls: 'none',
-	grep: 'none',
-	sed: 'none',
+
+	// A look inside the virtual files: the row says what it looked for, the
+	// disclosure shows what came back.
+	ls: 'file-output',
+	grep: 'file-output',
+	sed: 'file-output',
 
 	// One thing, read. The row is the link.
 	get_note: 'link',
@@ -225,6 +248,11 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	list_note_versions: 'plain',
 	diff_note_versions: 'note',
 	create_note: 'note',
+	save_note: 'note',
+	edit_note: 'note',
+	publish_note: 'note',
+	discard_note_draft: 'note',
+	restore_note_version: 'note',
 	archive_note: 'note',
 	restore_note: 'note',
 	delete_note_forever: 'note',
@@ -246,6 +274,11 @@ const kinds: Readonly<Record<string, EntityKind>> = {
 	load_skill: 'skill',
 	list_skills: 'skill',
 	list_skill_versions: 'plain',
+	create_skill: 'skill',
+	create_skill_from_selection: 'skill',
+	save_skill: 'skill',
+	edit_skill: 'skill',
+	restore_skill_version: 'skill',
 	update_skill: 'skill',
 	set_skill_pinned: 'skill',
 	get_artifact: 'artifact',
@@ -399,6 +432,83 @@ const shapeGuess = (tool: ChatToolActivity): Family => {
 	return 'none';
 };
 
+/**
+ * What a look inside the virtual files came back with. The wire shapes are the
+ * `AgentGrepResult` / `AgentSedResult` / `AgentLsResult` unions from
+ * `$lib/models/agent-files`, read off the payload the run journalled. A call
+ * still running has produced nothing, so it earns no chevron yet — the same
+ * "disclosure is earned" rule the rest of this file follows.
+ */
+const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosure => {
+	const output = toolOutput(tool);
+	if (output === undefined || !isAgentPayloadObject(output)) return { kind: 'none' };
+
+	if (output.kind === 'error')
+		return {
+			kind: 'file-output',
+			headline: asString(output.message) ?? 'The file could not be read.',
+			lines: []
+		};
+
+	if (output.kind === 'matches') {
+		const matches = agentPayloadItems(output.matches) ?? [];
+		return {
+			kind: 'file-output',
+			headline: matches.length === 1 ? '1 match' : `${matches.length} matches`,
+			lines: matches.flatMap((match) => {
+				if (!isAgentPayloadObject(match)) return [];
+				const line = match.line;
+				if (typeof line !== 'string') return [];
+				const path = asString(match.path);
+				const title = path ? noteTitle(shell, noteIdFromPath(path)) : undefined;
+				const source = title ? `${title} (${path})` : path;
+				const context =
+					typeof match.lineNumber === 'number'
+						? source
+							? `${source}:${match.lineNumber}`
+							: `Line ${match.lineNumber}`
+						: source;
+				return [{ text: line, ...(context ? { context } : {}) }];
+			})
+		};
+	}
+
+	if (output.kind === 'no_matches')
+		return { kind: 'file-output', headline: 'No matches', lines: [] };
+
+	if (output.kind === 'content') {
+		const content = typeof output.content === 'string' ? output.content : '';
+		const start = typeof output.startLine === 'number' ? output.startLine : undefined;
+		const end = typeof output.endLine === 'number' ? output.endLine : undefined;
+		return {
+			kind: 'file-output',
+			headline: start !== undefined && end !== undefined ? `Lines ${start}–${end}` : 'File excerpt',
+			lines: content.split('\n').map((text, index) => ({
+				text,
+				...(start === undefined ? {} : { context: String(start + index) })
+			}))
+		};
+	}
+
+	if (output.kind === 'listed') {
+		const entries = agentPayloadItems(output.entries) ?? [];
+		return {
+			kind: 'file-output',
+			headline: entries.length === 1 ? '1 entry' : `${entries.length} entries`,
+			lines: entries.flatMap((entry) => {
+				if (!isAgentPayloadObject(entry)) return [];
+				const path = asString(entry.path);
+				if (!path) return [];
+				return [{ text: noteTitle(shell, noteIdFromPath(path)) ?? path }];
+			})
+		};
+	}
+
+	// An output shape this family does not recognise says nothing honest, so the
+	// row stays flat rather than opening onto a guess.
+	return { kind: 'none' };
+};
+
 export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): ToolDisclosure {
 	// A failure outranks the family. Whatever the call was going to show, what it has to say now
 	// is that it did not happen, and what the reader can do about that.
@@ -434,9 +544,13 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 			return {
 				kind: 'note-diff',
 				noteId,
-				...(currentRevision === undefined ? {} : { revision: currentRevision })
+				...(currentRevision === undefined ? {} : { revision: currentRevision }),
+				entity: subjectOf(tool, kind, shell)
 			};
 		}
+
+		case 'file-output':
+			return fileOutput(tool, shell);
 
 		case 'record': {
 			const entity = subjectOf(tool, kind, shell);

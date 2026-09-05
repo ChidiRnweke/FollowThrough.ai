@@ -86,13 +86,148 @@ describe('A body rewritten earns a real before and after', () => {
 			}),
 			shell
 		);
-		expect(disclosure).toEqual({ kind: 'note-diff', noteId: NOTE_ID, revision: 7 });
+		expect(disclosure).toEqual({
+			kind: 'note-diff',
+			noteId: NOTE_ID,
+			revision: 7,
+			entity: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
+		});
+	});
+
+	it('names the note even when the shell cannot, so the body still has a title to show', () => {
+		const disclosure = toolDisclosure(
+			call({
+				name: 'edit_note',
+				arguments: { noteId: '00000000-0000-4000-8000-0000000000bb' },
+				output: { noteId: '00000000-0000-4000-8000-0000000000bb', title: 'Rossel' }
+			}),
+			shell
+		);
+		expect(disclosure).toEqual({
+			kind: 'note-diff',
+			noteId: '00000000-0000-4000-8000-0000000000bb',
+			entity: {
+				kind: 'note',
+				id: '00000000-0000-4000-8000-0000000000bb',
+				title: 'Rossel',
+				named: true
+			}
+		});
 	});
 
 	it('falls back to stating what was sent when there is no note to diff', () => {
 		expect(familyOf({ name: 'save_note', arguments: { markdown: '# New' }, output: {} })).toBe(
 			'record'
 		);
+	});
+});
+
+describe('A look inside the virtual files shows what came back', () => {
+	it('shows the lines a search matched, named by the note they matched in', () => {
+		const disclosure = toolDisclosure(
+			call({
+				name: 'grep',
+				arguments: { pattern: 'element61', path: '/' },
+				output: {
+					kind: 'matches',
+					exitCode: 0,
+					pattern: 'element61',
+					path: '/',
+					matches: [
+						{
+							path: `/projects/proj-1/notes/${NOTE_ID}.md`,
+							lineNumber: 12,
+							line: 'element61 should own the rollout'
+						}
+					]
+				}
+			}),
+			shell
+		);
+		expect(disclosure).toEqual({
+			kind: 'file-output',
+			headline: '1 match',
+			lines: [
+				{
+					text: 'element61 should own the rollout',
+					context: `Infrastructure (/projects/proj-1/notes/${NOTE_ID}.md):12`
+				}
+			]
+		});
+	});
+
+	it('says so plainly when a search matched nothing', () => {
+		const disclosure = toolDisclosure(
+			call({
+				name: 'grep',
+				arguments: { pattern: 'nope', path: '/' },
+				output: {
+					kind: 'no_matches',
+					exitCode: 1,
+					pattern: 'nope',
+					path: '/',
+					searchedFileCount: 4,
+					nextActions: []
+				}
+			}),
+			shell
+		);
+		expect(disclosure).toEqual({ kind: 'file-output', headline: 'No matches', lines: [] });
+	});
+
+	it('numbers the lines of an excerpt', () => {
+		const disclosure = toolDisclosure(
+			call({
+				name: 'sed',
+				arguments: { path: `/projects/proj-1/notes/${NOTE_ID}.md` },
+				output: {
+					kind: 'content',
+					path: `/projects/proj-1/notes/${NOTE_ID}.md`,
+					startLine: 3,
+					endLine: 4,
+					lineCount: 9,
+					content: 'alpha\nbeta',
+					nextActions: []
+				}
+			}),
+			shell
+		);
+		expect(disclosure).toEqual({
+			kind: 'file-output',
+			headline: 'Lines 3–4',
+			lines: [
+				{ text: 'alpha', context: '3' },
+				{ text: 'beta', context: '4' }
+			]
+		});
+	});
+
+	it('states the message of a read that the files refused', () => {
+		const disclosure = toolDisclosure(
+			call({
+				name: 'sed',
+				arguments: { path: '/nowhere' },
+				output: {
+					kind: 'error',
+					code: 'path_not_found',
+					message: 'No file or directory exists at /nowhere.',
+					requestedPath: '/nowhere',
+					nextActions: []
+				}
+			}),
+			shell
+		);
+		expect(disclosure).toEqual({
+			kind: 'file-output',
+			headline: 'No file or directory exists at /nowhere.',
+			lines: []
+		});
+	});
+
+	it('earns no chevron while the call is still running', () => {
+		expect(
+			familyOf({ name: 'grep', arguments: { pattern: 'x', path: '/' }, status: 'running' })
+		).toBe('none');
 	});
 });
 

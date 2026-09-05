@@ -92,6 +92,53 @@ describe('A read names the note it read', () => {
 	});
 });
 
+describe('Every call in the log is named in the reader language', () => {
+	it('names a search of the notes and files by what it looked for', () => {
+		expect(
+			toolStatusLabel({
+				...tool('grep', 'succeeded'),
+				arguments: { pattern: 'element61', path: '/' }
+			})
+		).toBe('Searched notes and files · element61');
+	});
+
+	it('names a mechanism call rather than un-snake-casing it', () => {
+		expect(toolStatusLabel(tool('search_tools', 'succeeded'))).toBe('Looked up available tools');
+	});
+
+	it('names a quiet read rather than un-snake-casing it', () => {
+		expect(toolStatusLabel(tool('list_projects', 'succeeded'))).toBe('Listed projects');
+	});
+});
+
+describe('A file path subject resolves to the note it points at', () => {
+	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
+	const shell = {
+		noteTree: [{ id: noteId, title: 'Runtime notes' }]
+	} as unknown as ShellContext;
+	const excerpt = () => ({
+		...tool('sed', 'succeeded'),
+		arguments: { path: `/projects/proj-1/notes/${noteId}.md` }
+	});
+
+	it('names the note the excerpt came from', () => {
+		expect(toolStatusLabel(excerpt(), shell)).toBe('Read file excerpt · Runtime notes');
+	});
+
+	it('offers the id of the note the excerpt came from', () => {
+		expect(toolStatusParts(excerpt(), shell).noteId).toBe(noteId);
+	});
+
+	it('stays subject-less for a path that names no note', () => {
+		expect(
+			toolStatusParts(
+				{ ...tool('sed', 'succeeded'), arguments: { path: '/projects/proj-1/attachments/a.txt' } },
+				shell
+			).subject
+		).toBeUndefined();
+	});
+});
+
 describe('The subject is what the reader recognises', () => {
 	it('names the note a create is about before it exists in the tree', () => {
 		expect(

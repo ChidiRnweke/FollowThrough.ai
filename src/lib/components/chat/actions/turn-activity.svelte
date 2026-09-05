@@ -169,8 +169,8 @@
 			{/each}
 			{#if hasLog}
 				<!-- The log joins the list rather than sitting under it as a caption: as bare
-				     ghost-button text, nothing said it could be clicked. It states its count
-				     instead of announcing itself.
+				     ghost-button text, nothing said it could be clicked. It says whose calls
+				     they are and how many, instead of announcing itself.
 
 				     It opens in place. As a dialog it was a second surface for the one thing in
 				     the turn that is pure evidence — the reader lost the conversation to read
@@ -191,7 +191,9 @@
 										class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
 									/>
 									<span class="min-w-0 truncate"
-										>{stepCount === 1 ? '1 step' : `${stepCount} steps`}</span
+										>FollowThrough's agent called {stepCount === 1
+											? '1 tool'
+											: `${stepCount} tools`}</span
 									>
 								</Button>
 							{/snippet}

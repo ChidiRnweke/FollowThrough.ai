@@ -60,7 +60,7 @@ describe('A disclosure is earned by having something behind it', () => {
 		const screen = await renderRow(
 			call({ name: 'list_todos', arguments: {}, output: { todos: [{ title: 'Draft the RFC' }] } })
 		);
-		await screen.getByRole('button', { name: /List todos completed/ }).click();
+		await screen.getByRole('button', { name: /Listed todos/ }).click();
 		await expect.element(screen.getByText('Draft the RFC')).toBeVisible();
 	});
 
@@ -91,12 +91,57 @@ describe('A failed call shows the run own message as evidence', () => {
 		await screen.getByRole('button', { name: /Note was not saved/ }).click();
 		await expect.element(screen.getByText('oldText was not found in the note.')).toBeVisible();
 	});
+});
 
-	it('keeps the raw payload behind an action rather than on the page', async () => {
+describe('A search of the notes and files says what it looked for and found', () => {
+	const grepCall = () =>
+		call({
+			name: 'grep',
+			arguments: { pattern: 'element61', path: '/' },
+			output: {
+				kind: 'matches',
+				exitCode: 0,
+				pattern: 'element61',
+				path: '/',
+				matches: [
+					{
+						path: `/projects/proj-1/notes/${NOTE_ID}.md`,
+						lineNumber: 12,
+						line: 'element61 should own the rollout'
+					}
+				]
+			}
+		});
+
+	it('reads as a search, not as the tool that ran it', async () => {
+		const screen = await renderRow(grepCall());
+		await expect.element(screen.getByText('Searched notes and files')).toBeVisible();
+	});
+
+	it('names what it searched for', async () => {
+		const screen = await renderRow(grepCall());
+		await expect.element(screen.getByText('element61', { exact: true })).toBeVisible();
+	});
+
+	it('shows the matching lines behind the row', async () => {
+		const screen = await renderRow(grepCall());
+		await screen.getByRole('button', { name: /Searched notes and files/ }).click();
+		await expect.element(screen.getByText('element61 should own the rollout')).toBeVisible();
+	});
+});
+
+describe('An edited note is named and openable from its disclosure', () => {
+	it('names the note behind the row, as a thing that opens', async () => {
 		const screen = await renderRow(
-			call({ name: 'list_todos', arguments: {}, output: { todos: [{ title: 'Runtime notes' }] } })
+			call({
+				name: 'edit_note',
+				arguments: { noteId: NOTE_ID, edits: [{ oldText: 'a', newText: 'b' }] },
+				output: { noteId: NOTE_ID, title: 'Infrastructure', currentRevision: 3 }
+			})
 		);
-		await screen.getByRole('button', { name: /List todos completed/ }).click();
-		await expect.element(screen.getByRole('button', { name: 'Copy raw' })).toBeInTheDocument();
+		await screen.getByRole('button', { name: /Edited note/ }).click();
+		await expect
+			.element(screen.getByRole('button', { name: 'Infrastructure', exact: true }))
+			.toBeInTheDocument();
 	});
 });

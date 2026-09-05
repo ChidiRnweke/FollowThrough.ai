@@ -18,6 +18,7 @@ export {
 	type EntityKind,
 	type EntityRef,
 	type FieldChange,
+	type FileOutputLine,
 	type ToolDisclosure
 } from './actions/tool-disclosure';
 export {

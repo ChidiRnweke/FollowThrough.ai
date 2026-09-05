@@ -3,13 +3,11 @@
 	import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import type { ToolDisclosure } from '$lib/components/agent';
 	import { summariseToolResult } from '$lib/components/agent';
-	import { Button } from '$lib/components/ui/button';
-	import { FtCopy as Copy } from '$lib/components/icons';
-	import { toast } from 'svelte-sonner';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import EntityList from './entity-list.svelte';
 	import RecordFields from './record-fields.svelte';
 	import NoteDiff from './note-diff.svelte';
+	import FileOutput from './file-output.svelte';
 	import MemoryReview from './memory-review.svelte';
 
 	let {
@@ -27,26 +25,6 @@
 	/** What a proposal that is not about memory came back with — the count, in its own words. */
 	const output = $derived(toolOutput(tool));
 	const summary = $derived(summariseToolResult(output, tool.name));
-
-	async function copyRaw(): Promise<void> {
-		const payload = JSON.stringify(
-			{
-				tool: tool.name,
-				arguments: tool.arguments,
-				...(output === undefined ? {} : { result: output }),
-				...(toolFailure(tool) ? { failure: toolFailure(tool) } : {})
-			},
-			null,
-			2
-		);
-		try {
-			await navigator.clipboard.writeText(payload);
-			toast.success('Copied to clipboard');
-			// audit-allow: silent-catch — the user is told to copy the still-visible expanded text manually.
-		} catch {
-			toast.error('Could not copy. Expand the row and copy the text manually.');
-		}
-	}
 </script>
 
 <!--
@@ -90,7 +68,15 @@
 				</p>
 			</div>
 		{:else if disclosure.kind === 'note-diff'}
+			<!--
+				The note itself leads, and it opens: when the version this call wrote has since
+				left the note's history, the name and the door to the note are the useful thing
+				that remains — the diff's own message below says the rest.
+			-->
+			<EntityList entities={[disclosure.entity]} empty="The note could not be named." />
 			<NoteDiff noteId={disclosure.noteId} revision={disclosure.revision} />
+		{:else if disclosure.kind === 'file-output'}
+			<FileOutput headline={disclosure.headline} lines={disclosure.lines} />
 		{:else if disclosure.kind === 'record'}
 			<RecordFields entity={disclosure.entity} changed={disclosure.changed} />
 		{:else if disclosure.kind === 'proposal' && disclosure.scope === 'memory'}
@@ -118,9 +104,4 @@
 			</div>
 		{/if}
 	</ErrorBoundary>
-
-	<!-- The one place raw payloads belong: available, never rendered. -->
-	<Button variant="ghost" size="xs" class="self-start" onclick={copyRaw}>
-		<Copy data-icon="inline-start" /> Copy raw
-	</Button>
 </div>
