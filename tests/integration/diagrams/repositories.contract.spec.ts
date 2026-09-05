@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	DiagramId,
+	DiagramRevision,
+	DiagramRevisionId,
+	DrawioDiagram
+} from '$lib/models/diagrams';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { actor, context, now, seedNote } from '../database-harness';
@@ -16,6 +22,74 @@ const diagram = (suffix: string, overrides: Partial<Diagram> = {}): Diagram =>
 	}) as Diagram;
 
 describe('Project-owned diagram persistence invariants', () => {
+	it('rejects a draft write after publication moved without changing the working revision', async () => {
+		const { owner, project } = await seedNote('480');
+		const repository = new DiagramRecords(context.db);
+		const draft: DrawioDiagram = {
+			id: 'a0000000-0000-4000-8000-000000000480' as DiagramId,
+			userId: owner.userId,
+			projectId: project.id,
+			kind: 'drawio',
+			source: '<mxfile/>',
+			searchableText: '',
+			currentRevision: 2,
+			publishedRevision: 1,
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, draft);
+		await repository.updateIfRevision(
+			owner,
+			{ ...draft, publishedRevision: 2, publishedAt: now },
+			2,
+			1
+		);
+		expect(
+			await repository.updateIfRevision(
+				owner,
+				{ ...draft, source: '<mxfile>draft</mxfile>', currentRevision: 3 },
+				2,
+				1
+			)
+		).toBeUndefined();
+	});
+
+	it('preserves the first immutable snapshot when publication is retried', async () => {
+		const { owner, project } = await seedNote('481');
+		const repository = new DiagramRecords(context.db);
+		const draft: DrawioDiagram = {
+			id: 'a0000000-0000-4000-8000-000000000481' as DiagramId,
+			userId: owner.userId,
+			projectId: project.id,
+			kind: 'drawio',
+			source: '<mxfile/>',
+			searchableText: '',
+			currentRevision: 1,
+			publishedRevision: 1,
+			publishedAt: now,
+			createdAt: now,
+			updatedAt: now
+		};
+		await repository.insert(owner, draft);
+		const revision: DiagramRevision = {
+			id: 'b0000000-0000-4000-8000-000000000481' as DiagramRevisionId,
+			diagramId: draft.id,
+			revision: 1,
+			source: draft.source,
+			renderedSvg: '<svg/>',
+			searchableText: '',
+			createdAt: now
+		};
+		const original = await repository.insertRevision(owner, revision);
+		expect(
+			await repository.insertRevision(owner, {
+				...revision,
+				id: 'b0000000-0000-4000-8000-000000000482' as DiagramRevisionId,
+				renderedSvg: '<svg>regenerated</svg>'
+			})
+		).toEqual(original);
+	});
+
 	// The point of moving diagrams onto the project: a studio diagram is authored
 	// in a conversation and never belongs to a note at all.
 	it('persists a diagram that names no source note', async () => {

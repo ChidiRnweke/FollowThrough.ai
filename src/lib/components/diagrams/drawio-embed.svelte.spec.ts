@@ -10,7 +10,8 @@ import { DRAWIO_EMBED_ORIGIN } from '$lib/client/diagrams/drawio/embed-adapter';
  * the status it reports.
  */
 const renderEditor = (
-	oncommit: (output: { xml: string; svg: string }) => Promise<void> = async () => undefined
+	oncommit: (output: { xml: string; svg: string }) => Promise<void> = async () => undefined,
+	onautosave?: (xml: string) => Promise<void>
 ) => {
 	const statuses: DrawioStatus[] = [];
 	let control: DrawioControl | undefined;
@@ -18,10 +19,18 @@ const renderEditor = (
 		xml: '<mxfile/>',
 		title: 'Architecture',
 		oncommit: oncommit as never,
+		onautosave,
 		oncontrol: (value: DrawioControl) => (control = value),
 		onstatus: (value: DrawioStatus) => statuses.push(value)
 	});
-	return { screen, statuses, commit: () => control?.commit() };
+	return {
+		screen,
+		statuses,
+		commit: () => control?.commit(),
+		retry: () => control?.retry(),
+		acknowledge: () => control?.acknowledge(),
+		replace: (xml: string) => control?.replace(xml)
+	};
 };
 
 const emit = (iframe: HTMLIFrameElement, data: Readonly<Record<string, unknown>>): void => {
@@ -48,6 +57,61 @@ const frameOf = (screen: ReturnType<typeof renderEditor>['screen']): HTMLIFrameE
 };
 
 describe('Hosted draw.io editor states', () => {
+	it('clears a persistence failure after the host resolves and saves the conflict', async () => {
+		const { screen, statuses, acknowledge } = renderEditor(undefined, async () => {
+			throw new Error('Conflict');
+		});
+		emit(frameOf(screen), { event: 'autosave', xml: '<mxfile/>' });
+		await settle();
+		acknowledge();
+		expect(statuses.at(-1)).toEqual({ phase: 'saved', modified: false });
+	});
+	it('retains and retries autosaved XML after persistence fails', async () => {
+		let unavailable = true;
+		let saved = '';
+		const { screen, retry } = renderEditor(undefined, async (xml) => {
+			if (unavailable) throw new Error('Offline');
+			saved = xml;
+		});
+		emit(frameOf(screen), { event: 'autosave', xml: '<mxfile><diagram/></mxfile>' });
+		await settle();
+		unavailable = false;
+		retry();
+		await settle();
+		expect(saved).toBe('<mxfile><diagram/></mxfile>');
+	});
+
+	it('reports autosave persistence failure without an uncaught rejection', async () => {
+		const { screen, statuses } = renderEditor(undefined, async () => {
+			throw new Error('Offline');
+		});
+		emit(frameOf(screen), { event: 'autosave', xml: '<mxfile/>' });
+		await settle();
+		expect(statuses.at(-1)).toMatchObject({ phase: 'failed', failure: 'Offline' });
+	});
+
+	it('keeps edits made while saving marked as modified', async () => {
+		const deferred = Promise.withResolvers<void>();
+		const { screen, statuses, commit } = renderEditor(() => deferred.promise);
+		const frame = frameOf(screen);
+		emit(frame, { event: 'load' });
+		commit();
+		emit(frame, { event: 'export', xml: '<mxfile/>', data: 'data:image/svg+xml,%3Csvg/%3E' });
+		await settle();
+		emit(frame, { event: 'modified', modified: true });
+		deferred.resolve();
+		await settle();
+		expect(statuses.at(-1)?.modified).toBe(true);
+	});
+
+	it('replaces the frame when accepting a different document', async () => {
+		const { screen, replace } = renderEditor();
+		const old = frameOf(screen);
+		replace('<mxfile><diagram/></mxfile>');
+		await settle();
+		expect(frameOf(screen)).not.toBe(old);
+	});
+
 	it('renders the hosted editor with an accessible title', async () => {
 		const { screen } = renderEditor();
 		await expect.element(screen.getByTitle('draw.io editor for Architecture')).toBeInTheDocument();
@@ -101,7 +165,7 @@ describe('Hosted draw.io editor states', () => {
 			data: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E'
 		});
 		await settle();
-		expect(statuses.at(-1)?.failure).toBe('Save failed');
+		expect(statuses.at(-1)).toMatchObject({ phase: 'failed', failure: 'Save failed' });
 	});
 
 	it('keeps the iframe mounted when persistence fails', async () => {

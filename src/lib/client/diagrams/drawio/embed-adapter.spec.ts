@@ -48,7 +48,9 @@ const setup = () => {
 		onExport: (output) => exports.push(output),
 		onFailure: (message) => failures.push(message),
 		onExit: (modified) => exits.push(modified),
-		onAutosave: (xml) => autosaves.push(xml)
+		onAutosave: (xml) => {
+			autosaves.push(xml);
+		}
 	});
 	adapter.start({ xml: '<mxfile/>' });
 	return { adapter, port, exports, failures, exits, autosaves };
@@ -62,6 +64,40 @@ const setup = () => {
 const exported = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('Safe draw.io iframe messaging invariants', () => {
+	it('discards decoded autosave content after replacing the document', async () => {
+		const { adapter, port, autosaves } = setup();
+		port.emit({ event: 'autosave', xml: '<mxfile><diagram/></mxfile>' });
+		adapter.start({ xml: '<mxfile/>' });
+		await exported();
+		expect(autosaves).toEqual([]);
+	});
+
+	it('discards an export decoded after stopping the editor', async () => {
+		const { adapter, port, exports } = setup();
+		adapter.requestExport('save');
+		port.emit({ event: 'export', xml: '<mxfile/>', data: 'data:image/svg+xml,%3Csvg/%3E' });
+		adapter.stop();
+		await exported();
+		expect(exports).toEqual([]);
+	});
+
+	it('reports rejected asynchronous autosave persistence', async () => {
+		const port = new FakeDrawioPort();
+		const failures: string[] = [];
+		const adapter = new DrawioEmbedAdapter(port, {
+			onAutosave: async () => {
+				throw new Error('Persistence failed');
+			},
+			onFailure: (message) => {
+				failures.push(message);
+			}
+		});
+		adapter.start({ xml: '<mxfile/>' });
+		port.emit({ event: 'autosave', xml: '<mxfile/>' });
+		await exported();
+		expect(failures).toEqual(['Persistence failed']);
+	});
+
 	// The pane header names the diagram. Sending it here too put the same words in
 	// the editor's menubar, so the title was on screen twice.
 	it('does not send the diagram title into the editor chrome', () => {

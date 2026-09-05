@@ -140,6 +140,162 @@ describe('Diagram management invariants', () => {
 });
 
 describe('Diagram publication invariants', () => {
+	it('rejects another diagram ETag even when the submitted source already matches', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		const foreign = drawioBuilder({
+			id: 'b0000000-0000-4000-8000-000000000001' as typeof diagram.id
+		});
+		await expect(
+			service.saveDraftSource(
+				testActor(),
+				diagram.id,
+				diagram.source,
+				diagram.searchableText,
+				diagramEtag(foreign)
+			)
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+
+	it('acknowledges a draft save retried after its response was lost', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		const saved = await service.saveDraftSource(
+			testActor(),
+			diagram.id,
+			'<mxfile>new</mxfile>',
+			'new',
+			diagramEtag(diagram)
+		);
+		expect(
+			await service.saveDraftSource(
+				testActor(),
+				diagram.id,
+				saved.source,
+				'new',
+				diagramEtag(diagram)
+			)
+		).toEqual(saved);
+	});
+
+	it('acknowledges a rename retried after its response was lost', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder();
+		diagrams.diagrams = [diagram];
+		const saved = await service.rename(testActor(), diagram.id, 'New title', diagramEtag(diagram));
+		expect(
+			await service.rename(testActor(), diagram.id, 'New title', diagramEtag(diagram))
+		).toEqual(saved);
+	});
+
+	it('preserves the original publication when a retry exports a different preview', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({ publishedRevision: 0 });
+		diagrams.diagrams = [diagram];
+		const saved = await service.publish(
+			testActor(),
+			diagram.id,
+			'<mxfile>new</mxfile>',
+			'<svg/>',
+			'new',
+			diagramEtag(diagram)
+		);
+		expect(
+			await service.publish(
+				testActor(),
+				diagram.id,
+				saved.source,
+				'<svg>regenerated</svg>',
+				'new',
+				diagramEtag(diagram)
+			)
+		).toEqual(saved);
+	});
+
+	it('does not append another snapshot for a repeated publish', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({ publishedRevision: 0 });
+		diagrams.diagrams = [diagram];
+		await service.publish(
+			testActor(),
+			diagram.id,
+			diagram.source,
+			'<svg/>',
+			'new',
+			diagramEtag(diagram)
+		);
+		await service.publish(
+			testActor(),
+			diagram.id,
+			diagram.source,
+			'<svg>regenerated</svg>',
+			'new',
+			diagramEtag(diagram)
+		);
+		expect(diagrams.diagramRevisions).toHaveLength(1);
+	});
+
+	it('restores a published snapshot as a retry-safe draft', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({ publishedRevision: 0 });
+		diagrams.diagrams = [diagram];
+		const published = await service.publish(
+			testActor(),
+			diagram.id,
+			diagram.source,
+			'<svg/>',
+			'original',
+			diagramEtag(diagram)
+		);
+		const snapshot = diagrams.diagramRevisions[0]!;
+		const edited = await service.saveDraftSource(
+			testActor(),
+			diagram.id,
+			'<mxfile>new</mxfile>',
+			'new',
+			diagramEtag(published)
+		);
+		const restored = await service.restore(
+			testActor(),
+			diagram.id,
+			snapshot.id,
+			diagramEtag(edited)
+		);
+		const retried = await service.restore(
+			testActor(),
+			diagram.id,
+			snapshot.id,
+			diagramEtag(edited)
+		);
+		expect({ restored, retried, snapshots: diagrams.diagramRevisions.length }).toMatchObject({
+			restored: {
+				currentRevision: edited.currentRevision + 1,
+				publishedRevision: published.publishedRevision,
+				source: diagram.source
+			},
+			retried: restored,
+			snapshots: 1
+		});
+	});
+
+	it('rejects a stale publish while keeping the newer draft', async () => {
+		const { service, diagrams } = setup();
+		const diagram = drawioBuilder({ currentRevision: 2, publishedRevision: 1 });
+		diagrams.diagrams = [diagram];
+		await expect(
+			service.publish(
+				testActor(),
+				diagram.id,
+				'<mxfile>other</mxfile>',
+				'<svg/>',
+				'other',
+				diagramEtag(drawioBuilder())
+			)
+		).rejects.toMatchObject({ code: 'STALE_REVISION' });
+	});
+
 	it('autosaves source as an unpublished revision', async () => {
 		const { service, diagrams } = setup();
 		const diagram = drawioBuilder();

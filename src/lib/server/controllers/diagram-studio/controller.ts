@@ -3,6 +3,9 @@ import type {
 	CountDiagramReferencesInput,
 	DeleteProjectDiagramInput,
 	Diagram,
+	DiagramId,
+	DiagramEtag,
+	DiagramWriteOutcome,
 	DrawioDiagram,
 	FindConversationDiagramInput,
 	FindConversationDiagramOutput,
@@ -33,7 +36,7 @@ import type {
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { UnsupportedDiagramOperationError } from '$lib/errors';
+import { StaleRevisionError, UnsupportedDiagramOperationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramConversationFinder,
@@ -164,7 +167,7 @@ export interface DiagramStudioController {
 	renameProjectDiagram(
 		actor: ActorContext,
 		input: RenameProjectDiagramInput
-	): Promise<DrawioDiagram>;
+	): Promise<DiagramWriteOutcome>;
 	/**
 	 * Move a diagram to the trash, restorable with `restoreProjectDiagram`.
 	 *
@@ -262,11 +265,13 @@ export class DiagramStudio implements DiagramStudioController {
 		if (target.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
-		await this.saveProjectDiagramDraft(actor, {
+		const result = await this.saveProjectDiagramDraft(actor, {
 			diagramId: target.id,
 			source,
 			baseEtag: diagramEtag(target)
 		});
+		if (result.outcome === 'conflict')
+			throw new StaleRevisionError('The diagram changed while it was being edited');
 		return { diagramId: target.id, ...(input.title ? { title: input.title } : {}) };
 	}
 
@@ -369,38 +374,42 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: SaveProjectDiagramDraftInput
 	): Promise<PublishProjectDiagramOutput> {
-		const source = this.dependencies.drawioXmlValidator.validate(input.source);
-		const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
-		const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
-			actor,
-			input.diagramId,
-			source,
-			searchableText,
-			input.baseEtag
-		);
-		await this.dependencies.diagramIndexer.index(actor, diagram);
-		return { diagram, etag: diagramEtag(diagram) };
+		return this.writeOutcome(actor, input.diagramId, input.baseEtag, async () => {
+			const source = this.dependencies.drawioXmlValidator.validate(input.source);
+			const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
+			const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
+				actor,
+				input.diagramId,
+				source,
+				searchableText,
+				input.baseEtag
+			);
+			await this.dependencies.diagramIndexer.index(actor, diagram);
+			return diagram;
+		});
 	}
 
 	publishProjectDiagram(
 		actor: ActorContext,
 		input: PublishProjectDiagramInput
 	): Promise<PublishProjectDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const source = this.dependencies.drawioXmlValidator.validate(input.source);
-			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-			const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
-			const diagram = await this.dependencies.diagramDraftWriter.publish(
-				actor,
-				input.diagramId,
-				source,
-				renderedSvg,
-				searchableText,
-				input.baseEtag
-			);
-			await this.dependencies.diagramIndexer.index(actor, diagram);
-			return { diagram, etag: diagramEtag(diagram) };
-		});
+		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
+			this.dependencies.transactionRunner.run(async () => {
+				const source = this.dependencies.drawioXmlValidator.validate(input.source);
+				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
+				const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
+				const diagram = await this.dependencies.diagramDraftWriter.publish(
+					actor,
+					input.diagramId,
+					source,
+					renderedSvg,
+					searchableText,
+					input.baseEtag
+				);
+				await this.dependencies.diagramIndexer.index(actor, diagram);
+				return diagram;
+			})
+		);
 	}
 
 	async listDiagramRevisions(
@@ -440,28 +449,44 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: RestoreDiagramRevisionInput
 	): Promise<RestoreDiagramRevisionOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const diagram = await this.dependencies.diagramDraftWriter.restore(
-				actor,
-				input.diagramId,
-				input.revisionId,
-				input.baseEtag
-			);
-			await this.dependencies.diagramIndexer.index(actor, diagram);
-			return { diagram, etag: diagramEtag(diagram) };
-		});
+		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
+			this.dependencies.transactionRunner.run(async () => {
+				const diagram = await this.dependencies.diagramDraftWriter.restore(
+					actor,
+					input.diagramId,
+					input.revisionId,
+					input.baseEtag
+				);
+				await this.dependencies.diagramIndexer.index(actor, diagram);
+				return diagram;
+			})
+		);
 	}
 
 	renameProjectDiagram(
 		actor: ActorContext,
 		input: RenameProjectDiagramInput
-	): Promise<DrawioDiagram> {
-		return this.dependencies.diagramRenamer.rename(
-			actor,
-			input.diagramId,
-			input.title,
-			input.baseEtag
+	): Promise<DiagramWriteOutcome> {
+		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
+			this.dependencies.diagramRenamer.rename(actor, input.diagramId, input.title, input.baseEtag)
 		);
+	}
+
+	private async writeOutcome(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		baseEtag: DiagramEtag,
+		write: () => Promise<DrawioDiagram>
+	): Promise<DiagramWriteOutcome> {
+		try {
+			const diagram = await write();
+			return { outcome: 'saved', diagram, etag: diagramEtag(diagram) };
+		} catch (error) {
+			if (!(error instanceof StaleRevisionError)) throw error;
+			const diagram = await this.dependencies.diagramFinder.get(actor, diagramId);
+			if (diagram.kind !== 'drawio') throw error;
+			return { outcome: 'conflict', baseEtag, remote: { diagram, etag: diagramEtag(diagram) } };
+		}
 	}
 
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {

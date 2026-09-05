@@ -21,13 +21,14 @@
 		commit(): void;
 		review(): void;
 		retry(): void;
+		replace(xml: string): void;
+		/** Clear a resolved persistence failure once the host has saved the current canvas. */
+		acknowledge(): void;
 	}
 
-	export interface DrawioStatus {
-		readonly phase: DrawioPhase;
-		readonly modified: boolean;
-		readonly failure?: string;
-	}
+	export type DrawioStatus =
+		| { readonly phase: Exclude<DrawioPhase, 'failed'>; readonly modified: boolean }
+		| { readonly phase: 'failed'; readonly modified: boolean; readonly failure: string };
 
 	let {
 		xml,
@@ -37,6 +38,7 @@
 		onclose,
 		onmodifiedchange,
 		onautosave,
+		onretry,
 		onreview,
 		oncapturepreview,
 		oncontrol,
@@ -49,6 +51,7 @@
 		onclose?: () => void;
 		onmodifiedchange?: (modified: boolean) => void;
 		onautosave?: (xml: string) => Promise<void>;
+		onretry?: () => Promise<void>;
 		onreview?: (output: DrawioExport) => void;
 		/**
 		 * Take one export as soon as the editor is ready, without the user asking.
@@ -76,6 +79,14 @@
 	let phase = $state<DrawioPhase>('loading');
 	let failure = $state('');
 	let modified = $state(false);
+	let editGeneration = 0;
+	let documentGeneration = 0;
+	let persistenceGeneration = 0;
+	let retained:
+		| { kind: 'commit'; output: DrawioExport; edit: number }
+		| { kind: 'capture'; output: DrawioExport; edit: number }
+		| { kind: 'autosave'; xml: string; edit: number }
+		| undefined;
 	/** Guards the one silent export `oncapturepreview` takes, so it happens once. */
 	let captured = false;
 	let capturing = false;
@@ -96,7 +107,7 @@
 	 * effect that depended on it would call itself forever.
 	 */
 	function report(): void {
-		onstatus?.({ phase, modified, ...(failure ? { failure } : {}) });
+		onstatus?.(phase === 'failed' ? { phase, modified, failure } : { phase, modified });
 	}
 
 	/**
@@ -157,12 +168,19 @@
 				adapter?.requestExport('review');
 			},
 			onModified: (value) => {
+				if (value) editGeneration += 1;
 				modified = value;
 				onmodifiedchange?.(value);
 				if (phase === 'saved') phase = 'ready';
 				report();
 			},
-			onAutosave: (value) => void onautosave?.(value),
+			onAutosave: (value) => {
+				if (!onautosave) return;
+				editGeneration += 1;
+				modified = true;
+				onmodifiedchange?.(true);
+				return persist({ kind: 'autosave', xml: value, edit: editGeneration });
+			},
 			onExport: (output) => {
 				if (retheming) {
 					retheming = false;
@@ -174,7 +192,7 @@
 				}
 				if (capturing) {
 					capturing = false;
-					void oncapturepreview?.(output);
+					void persist({ kind: 'capture', output, edit: editGeneration });
 					return;
 				}
 				if (reviewing) {
@@ -182,7 +200,7 @@
 					onreview?.(output);
 					return;
 				}
-				void persist(output);
+				void persist({ kind: 'commit', output, edit: editGeneration });
 			},
 			onExit: (isModified) => {
 				modified = isModified;
@@ -197,7 +215,7 @@
 		});
 		appliedDark = colorMode.current === 'dark';
 		adapter.start({ xml: source, dark: appliedDark, config: drawioConfig(palette) });
-		oncontrol?.({ commit, review, retry });
+		oncontrol?.({ commit, review, retry, replace, acknowledge });
 		report();
 	}
 
@@ -214,18 +232,27 @@
 		}
 	});
 
-	async function persist(output: DrawioExport): Promise<void> {
-		phase = 'saving';
+	async function persist(operation: NonNullable<typeof retained>, retrying = false): Promise<void> {
+		retained = operation;
+		const document = documentGeneration;
+		const persistence = ++persistenceGeneration;
+		if (operation.kind !== 'capture') phase = 'saving';
 		failure = '';
 		report();
 		try {
-			await oncommit(output);
-			modified = false;
-			onmodifiedchange?.(false);
-			phase = 'saved';
-			if (output.exit) onclose?.();
+			if (operation.kind === 'capture') await oncapturepreview?.(operation.output);
+			else if (retrying && onretry) await onretry();
+			else if (operation.kind === 'commit') await oncommit(operation.output);
+			else await onautosave?.(operation.xml);
+			if (document !== documentGeneration || persistence !== persistenceGeneration) return;
+			retained = undefined;
+			modified = operation.kind === 'capture' ? modified : editGeneration !== operation.edit;
+			onmodifiedchange?.(modified);
+			phase = modified || operation.kind === 'capture' ? 'ready' : 'saved';
+			if (operation.kind === 'commit' && operation.output.exit && !modified) onclose?.();
 			// audit-allow: silent-catch — the embedded editor enters a visible failed phase and retains the diagram for retry.
 		} catch (error) {
+			if (document !== documentGeneration || persistence !== persistenceGeneration) return;
 			failure = userFacingMessage(error, 'The diagram could not be saved.');
 			phase = 'failed';
 		}
@@ -247,10 +274,39 @@
 	}
 
 	function retry(): void {
+		if (retained) {
+			void persist(retained, true);
+			return;
+		}
 		failure = '';
 		phase = 'loading';
 		report();
 		adapter?.retry();
+	}
+
+	function replace(source: string): void {
+		adapter?.stop();
+		documentGeneration += 1;
+		retained = undefined;
+		loaded = source;
+		capturing = false;
+		reviewing = false;
+		retheming = false;
+		modified = false;
+		onmodifiedchange?.(false);
+		phase = 'loading';
+		failure = '';
+		themeToken += 1;
+		report();
+	}
+
+	function acknowledge(): void {
+		retained = undefined;
+		failure = '';
+		modified = false;
+		phase = 'saved';
+		onmodifiedchange?.(false);
+		report();
 	}
 
 	function requestClose(): void {

@@ -200,7 +200,12 @@ export class DiagramRecords implements DiagramRepository {
 		if (!row) throw new NotFoundError('Diagram was not found');
 		return toDiagram(row);
 	}
-	async updateIfRevision(actor: ActorContext, diagram: DrawioDiagram, expected: number) {
+	async updateIfRevision(
+		actor: ActorContext,
+		diagram: DrawioDiagram,
+		expected: number,
+		expectedPublishedRevision: number
+	) {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
@@ -217,7 +222,9 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, diagram.id),
 					eq(schema.diagrams.userId, actor.userId),
-					eq(schema.diagrams.currentRevision, expected)
+					eq(schema.diagrams.currentRevision, expected),
+					eq(schema.diagrams.publishedRevision, expectedPublishedRevision),
+					isNull(schema.diagrams.archivedAt)
 				)
 			)
 			.returning();
@@ -240,8 +247,22 @@ export class DiagramRecords implements DiagramRepository {
 				searchableText: revision.searchableText,
 				createdAt: new Date(revision.createdAt)
 			})
+			.onConflictDoNothing({
+				target: [schema.diagramRevisions.diagramId, schema.diagramRevisions.revision]
+			})
 			.returning();
-		return toDiagramRevision(row!);
+		if (row) return toDiagramRevision(row);
+		const [existing] = await this.database
+			.select()
+			.from(schema.diagramRevisions)
+			.where(
+				and(
+					eq(schema.diagramRevisions.diagramId, revision.diagramId),
+					eq(schema.diagramRevisions.revision, revision.revision)
+				)
+			);
+		if (!existing) throw new NotFoundError('The published diagram snapshot was not found');
+		return toDiagramRevision(existing);
 	}
 	async listRevisions(actor: ActorContext, id: DiagramId) {
 		if (!(await this.findById(actor, id))) throw new NotFoundError('Diagram was not found');

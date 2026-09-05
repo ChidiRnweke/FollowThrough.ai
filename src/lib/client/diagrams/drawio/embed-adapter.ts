@@ -74,7 +74,7 @@ export interface DrawioEmbedCallbacks {
 	onLoading?: () => void;
 	onLoaded?: () => void;
 	onModified?: (modified: boolean) => void;
-	onAutosave?: (xml: string) => void;
+	onAutosave?: (xml: string) => void | Promise<void>;
 	onExport?: (output: DrawioExport) => void;
 	onExit?: (modified: boolean) => void;
 	onFailure?: (message: string) => void;
@@ -118,6 +118,7 @@ const decodeSvgDataUri = (uri: string): string => {
 };
 
 export class DrawioEmbedAdapter {
+	private generation = 0;
 	private unsubscribe?: () => void;
 	private xml = '';
 	private dark = false;
@@ -152,6 +153,7 @@ export class DrawioEmbedAdapter {
 	}
 
 	stop(): void {
+		this.generation += 1;
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
 		this.pending = undefined;
@@ -251,12 +253,15 @@ export class DrawioEmbedAdapter {
 	}
 
 	private async emitAutosave(raw: string): Promise<void> {
+		const generation = this.generation;
 		try {
 			const xml = await uncompressDrawioXml(raw);
+			if (generation !== this.generation) return;
 			this.xml = xml;
-			this.callbacks.onAutosave?.(xml);
+			await this.callbacks.onAutosave?.(xml);
 			// audit-allow: silent-catch — autosave failures are surfaced through the embed failure callback and the editor stays open for retry.
 		} catch (error) {
+			if (generation !== this.generation) return;
 			this.callbacks.onFailure?.(
 				error instanceof Error ? error.message : 'draw.io autosave failed.'
 			);
@@ -267,10 +272,12 @@ export class DrawioEmbedAdapter {
 		exported: { readonly data: string; readonly xml?: string },
 		pending: { reason: DrawioExportReason; xml?: string; exit: boolean }
 	): Promise<void> {
+		const generation = this.generation;
 		try {
 			const raw = exported.xml ?? pending.xml;
 			if (!raw) throw new Error('draw.io did not return the current XML.');
 			const xml = await uncompressDrawioXml(raw);
+			if (generation !== this.generation) return;
 			this.xml = xml;
 			this.callbacks.onExport?.({
 				xml,
@@ -280,6 +287,7 @@ export class DrawioEmbedAdapter {
 			});
 			// audit-allow: silent-catch — export failures are surfaced through the embed failure callback without closing the editor.
 		} catch (error) {
+			if (generation !== this.generation) return;
 			this.callbacks.onFailure?.(error instanceof Error ? error.message : 'draw.io export failed.');
 		}
 	}

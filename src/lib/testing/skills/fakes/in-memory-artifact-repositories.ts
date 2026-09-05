@@ -143,14 +143,30 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
 		return diagram;
 	}
-	async updateIfRevision(_actor: ActorContext, diagram: DrawioDiagram, expected: number) {
+	async updateIfRevision(
+		_actor: ActorContext,
+		diagram: DrawioDiagram,
+		expected: number,
+		expectedPublishedRevision: number
+	) {
 		const current = this.diagrams.find((item) => item.id === diagram.id);
-		if (!current || current.kind !== 'drawio' || current.currentRevision !== expected)
+		if (
+			!current ||
+			current.userId !== _actor.userId ||
+			current.archivedAt ||
+			current.kind !== 'drawio' ||
+			current.currentRevision !== expected ||
+			current.publishedRevision !== expectedPublishedRevision
+		)
 			return undefined;
 		await this.update(_actor, diagram);
 		return diagram;
 	}
 	async insertRevision(_actor: ActorContext, revision: DiagramRevision) {
+		const existing = this.diagramRevisions.find(
+			(item) => item.diagramId === revision.diagramId && item.revision === revision.revision
+		);
+		if (existing) return existing;
 		this.diagramRevisions.push(revision);
 		return revision;
 	}

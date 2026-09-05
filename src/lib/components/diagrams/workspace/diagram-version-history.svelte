@@ -12,27 +12,34 @@
 	import { FtHistory } from '$lib/components/icons';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import DiagramPreview from '../diagram-preview.svelte';
+	import DiagramDocumentPreview from './diagram-document-preview.svelte';
+	import { userFacingMessage } from '$lib/errors';
 	import { cn } from '$lib/utils';
 
 	let {
 		open = $bindable(false),
 		diagram,
-		currentPreview,
 		revisions,
+		loading = false,
+		loadFailure,
+		selectedFailure,
 		selectedId = $bindable(undefined),
 		selected,
 		onrestore
 	}: {
 		open?: boolean;
 		diagram: DrawioDiagram;
-		currentPreview?: string;
 		revisions: readonly DiagramRevisionSummary[];
+		loading?: boolean;
+		loadFailure?: string;
+		selectedFailure?: string;
 		selectedId?: DiagramRevisionId;
 		selected?: DiagramRevision;
 		onrestore: (revisionId: DiagramRevisionId) => Promise<void>;
 	} = $props();
 
 	let restoring = $state(false);
+	let failure = $state<string>();
 
 	$effect(() => {
 		if (open && !selectedId && revisions[0]) selectedId = revisions[0].id;
@@ -41,8 +48,12 @@
 	async function restore(): Promise<void> {
 		if (!selectedId) return;
 		restoring = true;
+		failure = undefined;
 		try {
 			await onrestore(selectedId);
+			// audit-allow: silent-catch — the history dialog displays the failure and retains the selected version for retry.
+		} catch (error) {
+			failure = userFacingMessage(error, 'The diagram version could not be restored.');
 		} finally {
 			restoring = false;
 		}
@@ -56,7 +67,12 @@
 			<Dialog.Description>Compare a previous publication with the current draft.</Dialog.Description
 			>
 		</Dialog.Header>
-		{#if revisions.length === 0}
+		{#if failure}<p role="alert" class="text-sm text-destructive">{failure}</p>{/if}
+		{#if loadFailure}
+			<p role="alert" class="text-sm text-destructive">{loadFailure}</p>
+		{:else if loading}
+			<p role="status" class="text-sm text-muted-foreground">Loading version history.</p>
+		{:else if revisions.length === 0}
 			<EmptyState
 				icon={FtHistory}
 				title="No versions yet"
@@ -92,7 +108,9 @@
 				<div class="grid min-h-0 gap-4 overflow-auto md:grid-cols-2">
 					<section class="min-w-0">
 						<h3 class="mb-2 text-sm font-medium">Selected publication</h3>
-						{#if selected}
+						{#if selectedFailure}
+							<p role="alert" class="text-sm text-destructive">{selectedFailure}</p>
+						{:else if selected}
 							<DiagramPreview
 								kind="drawio"
 								source={selected.source}
@@ -104,20 +122,15 @@
 					</section>
 					<section class="min-w-0">
 						<h3 class="mb-2 text-sm font-medium">Current draft</h3>
-						<DiagramPreview
-							kind="drawio"
-							source={diagram.source}
-							renderedSvg={currentPreview}
-							title={diagram.title}
-							class="max-w-full"
-						/>
+						<DiagramDocumentPreview source={diagram.source} title={diagram.title} />
 					</section>
 				</div>
 			</div>
 			<Dialog.Footer>
 				<Button variant="outline" onclick={() => (open = false)}>Close</Button>
-				<Button disabled={!selectedId || restoring} onclick={() => void restore()}
-					>Restore as draft</Button
+				<Button
+					disabled={!selected || !!selectedFailure || restoring}
+					onclick={() => void restore()}>Restore as draft</Button
 				>
 			</Dialog.Footer>
 		{/if}

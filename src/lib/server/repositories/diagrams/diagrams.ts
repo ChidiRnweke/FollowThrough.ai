@@ -50,7 +50,8 @@ export interface DiagramRepository {
 	updateIfRevision(
 		actor: ActorContext,
 		diagram: DrawioDiagram,
-		expected: number
+		expected: number,
+		expectedPublishedRevision: number
 	): Promise<DrawioDiagram | undefined>;
 	insertRevision(actor: ActorContext, revision: DiagramRevision): Promise<DiagramRevision>;
 	listRevisions(actor: ActorContext, id: DiagramId): Promise<readonly DiagramRevision[]>;

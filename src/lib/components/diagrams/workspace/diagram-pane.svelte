@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
-	import {
-		diagramEtag,
-		type Diagram,
-		type DiagramEtag,
-		type DiagramId,
-		type DiagramRevisionId
+	import type {
+		Diagram,
+		DiagramId,
+		DiagramRevisionId,
+		DrawioDiagram,
+		DiagramWriteOutcome
 	} from '$lib/models/diagrams';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -22,12 +22,19 @@
 		restoreDiagramRevision
 	} from '$lib/remote/diagrams/diagrams.remote';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+	import {
+		DiagramSaveCoordinator,
+		type DiagramSaveSnapshot,
+		type DiagramSaveResult,
+		type DiagramSaveStatus
+	} from '$lib/client/diagrams/save-coordinator';
 	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
 	import DrawioEmbed, { type DrawioControl, type DrawioStatus } from '../drawio-embed.svelte';
 	import DiagramPreview from '../diagram-preview.svelte';
 	import DiagramStatus from './diagram-status.svelte';
 	import DiagramTitle from './diagram-title.svelte';
 	import DiagramVersionHistory from './diagram-version-history.svelte';
+	import DiagramConflictDialog from './diagram-conflict-dialog.svelte';
 
 	let {
 		diagramId,
@@ -35,152 +42,174 @@
 		onCloseSplit
 	}: {
 		diagramId: DiagramId;
-		/** Server-loaded diagram, so the host route paints the canvas on first render. */
 		initial?: Diagram;
 		onCloseSplit?: () => void;
 	} = $props();
 
-	// The same acquire-on-mount / release-on-destroy lifetime the note and chat
-	// panes use. `diagramId` is stable: the pane is keyed by its tab id.
 	const store = untrack(() => diagramRegistry.for(diagramId));
 	onDestroy(() => diagramRegistry.release(diagramId));
-
 	const diagram = $derived(getProjectDiagram(diagramId));
-	const current = $derived(diagram.current ?? initial);
-	let titleOverride = $state<
-		{ readonly diagramId: DiagramId; readonly title: string } | undefined
-	>();
-	const title = $derived(
-		titleOverride?.diagramId === diagramId
-			? titleOverride.title
-			: (current?.title ?? 'Untitled diagram')
-	);
-
-	// The pane is the only thing that loads a diagram, so it is what tells the tab
-	// strip and the workbench what this tab holds. This writes to state deliberately
-	// rather than deriving it: the readers live in other components and reach the
-	// value through the registry, the same way a chat pane publishes its title.
-	$effect(() => {
-		if (current)
-			store.describe({ title: current.title, projectId: current.projectId, kind: current.kind });
-	});
-
-	let control = $state<DrawioControl | undefined>(undefined);
+	const loaded = $derived(diagram.current ?? initial);
+	let snapshot = $state<DiagramSaveSnapshot>();
+	let coordinator: DiagramSaveCoordinator | undefined;
+	const current = $derived(snapshot?.diagram ?? loaded);
+	const title = $derived(snapshot?.local.title ?? current?.title ?? 'Untitled diagram');
+	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
-	const busy = $derived(editor.phase === 'exporting' || editor.phase === 'saving');
 	let renaming = $state(false);
-	let etag = $state<DiagramEtag | undefined>();
-	let queuedSource = $state<string | undefined>();
-	let autosaving = $state(false);
+	let restoring = $state(false);
 	let historyOpen = $state(false);
-	let currentPreview = $state<string | undefined>();
-	let selectedRevisionId = $state<DiagramRevisionId | undefined>();
-	let mutationTail: Promise<void> = Promise.resolve();
+	let conflictOpen = $state(false);
+	let reviewConflict = $state.raw<Extract<DiagramSaveStatus, { kind: 'conflict' }>>();
+	let capturedConflict: DiagramSaveStatus | undefined;
+	let selectedRevisionId = $state<DiagramRevisionId>();
 	const history = $derived(listDiagramRevisions(diagramId));
 	const selectedRevision = $derived(
 		selectedRevisionId
 			? getDiagramRevision({ diagramId, revisionId: selectedRevisionId })
 			: undefined
 	);
+	const conflict = $derived(snapshot?.status.kind === 'conflict' ? snapshot.status : undefined);
+	const autosaving = $derived(snapshot?.status.kind === 'saving');
+	const busy = $derived(editor.phase === 'exporting' || editor.phase === 'saving' || restoring);
 	const hasUnpublishedChanges = $derived(
 		current?.kind === 'drawio' && current.currentRevision > current.publishedRevision
 	);
 
+	function describe(value: DrawioDiagram): void {
+		store.describe({ title: value.title, projectId: value.projectId, kind: value.kind });
+	}
+
 	$effect(() => {
-		if (current?.kind === 'drawio' && !autosaving && !renaming) etag = diagramEtag(current);
+		const value = loaded;
+		if (!value) return;
+		untrack(() => {
+			if (value.kind !== 'drawio') {
+				store.describe({ title: value.title, projectId: value.projectId, kind: value.kind });
+				return;
+			}
+			if (!coordinator) {
+				coordinator = new DiagramSaveCoordinator(
+					value,
+					{
+						save: async (input) => accept(await saveProjectDiagramDraft(input)),
+						rename: async (input) => accept(await renameProjectDiagram(input)),
+						publish: async (input) => accept(await publishProjectDiagram(input)),
+						restore: async (input) => accept(await restoreDiagramRevision(input))
+					},
+					(next) => {
+						snapshot = next;
+						describe(next.local);
+						if (next.status.kind === 'conflict' && next.status !== reviewConflict) {
+							reviewConflict = next.status;
+							conflictOpen = true;
+						}
+					},
+					(replacement) => control?.replace(replacement.source)
+				);
+			} else coordinator.observe(value);
+		});
 	});
 
-	function mutate<T>(operation: (baseEtag: DiagramEtag) => Promise<T>): Promise<T> {
-		const result = mutationTail.then(() => {
-			if (!etag) throw new Error('The diagram revision is not ready.');
-			return operation(etag);
-		});
-		// audit-allow: silent-catch — the returned operation promise propagates this failure; only the private serialization tail recovers
-		mutationTail = result.then(
-			() => undefined,
-			() => undefined
-		);
+	function accept(result: DiagramWriteOutcome): DiagramWriteOutcome {
+		if (result.outcome === 'saved') getProjectDiagram(diagramId).set(result.diagram);
 		return result;
 	}
 
-	async function rename(title: string): Promise<void> {
-		if (!current || current.kind !== 'drawio' || !etag) return;
-		titleOverride = { diagramId, title };
+	function saves(): DiagramSaveCoordinator {
+		if (!coordinator) throw new Error('The diagram is still loading.');
+		return coordinator;
+	}
+
+	function requireSaved(result: DiagramSaveResult): void {
+		if (result.kind === 'conflict')
+			throw new Error('This diagram changed somewhere else. Review the versions before saving.');
+		if (result.kind === 'failure') throw new Error(result.message);
+	}
+
+	async function refreshHistory(): Promise<void> {
+		try {
+			await history.refresh();
+			// audit-allow: silent-catch — publication is already saved; the toast reports that only refreshing history failed.
+		} catch (error) {
+			toast.error(
+				userFacingMessage(
+					error,
+					'The diagram was saved, but version history could not be refreshed.'
+				)
+			);
+		}
+	}
+
+	async function rename(value: string): Promise<void> {
 		renaming = true;
 		try {
-			const renamed = await mutate((baseEtag) =>
-				renameProjectDiagram({ diagramId, title, baseEtag }).updates(getProjectDiagram(diagramId))
-			);
-			etag = diagramEtag(renamed);
-			store.describe({ title: renamed.title, projectId: renamed.projectId, kind: renamed.kind });
-			toast.success('Diagram title saved');
-			// audit-allow: silent-catch — the optimistic title is discarded and the save failure is shown.
+			requireSaved(await saves().rename(value));
+			// audit-allow: silent-catch — retained title and visible toast let the user retry the failed rename.
 		} catch (error) {
-			titleOverride = undefined;
 			toast.error(userFacingMessage(error, 'The diagram title could not be saved.'));
 		} finally {
 			renaming = false;
 		}
 	}
 
-	async function publish(output: DrawioExport): Promise<void> {
-		if (!etag) return;
-		try {
-			const result = await mutate((baseEtag) =>
-				publishProjectDiagram({
-					diagramId,
-					source: output.xml,
-					renderedSvg: output.svg,
-					baseEtag
-				}).updates(getProjectDiagram(diagramId))
-			);
-			etag = result.etag;
-			await history.refresh();
-			toast.success('Diagram published');
-		} catch (error) {
-			const message = userFacingMessage(error, 'The diagram could not be published.');
-			toast.error(message);
-			throw new Error(message, { cause: error });
-		}
+	async function autosave(source: string): Promise<void> {
+		requireSaved(await saves().save(source));
 	}
 
-	async function autosave(source: string): Promise<void> {
-		queuedSource = source;
-		if (autosaving) return;
-		autosaving = true;
+	async function publish(output: DrawioExport): Promise<void> {
+		requireSaved(await saves().publish(output.xml, output.svg));
+		toast.success('Diagram published');
+		await refreshHistory();
+	}
+
+	async function retry(): Promise<void> {
+		requireSaved(await saves().retry());
+		await refreshHistory();
+	}
+
+	async function retryFromHeader(): Promise<void> {
+		if (editor.phase === 'failed') {
+			control?.retry();
+			return;
+		}
 		try {
-			while (queuedSource) {
-				const next = queuedSource;
-				queuedSource = undefined;
-				const result = await mutate((baseEtag) =>
-					saveProjectDiagramDraft({ diagramId, source: next, baseEtag }).updates(
-						getProjectDiagram(diagramId)
-					)
-				);
-				etag = result.etag;
-			}
+			await retry();
+			// audit-allow: silent-catch — a failed title retry remains in the coordinator and is reported by the toast and header.
 		} catch (error) {
-			toast.error(userFacingMessage(error, 'The diagram draft could not be saved.'));
-			throw error;
-		} finally {
-			autosaving = false;
+			toast.error(userFacingMessage(error, 'The diagram could not be saved.'));
 		}
 	}
 
 	async function restore(revisionId: DiagramRevisionId): Promise<void> {
-		if (!etag) return;
-		const result = await mutate((baseEtag) =>
-			restoreDiagramRevision({ diagramId, revisionId, baseEtag }).updates(
-				getProjectDiagram(diagramId)
-			)
-		);
-		etag = result.etag;
-		historyOpen = false;
+		restoring = true;
+		try {
+			requireSaved(await saves().restore(revisionId));
+			historyOpen = false;
+		} finally {
+			restoring = false;
+		}
+	}
+
+	async function useRemote(): Promise<void> {
+		if (!reviewConflict) throw new Error('There is no diagram conflict to resolve.');
+		saves().useRemote(reviewConflict.remote);
+		getProjectDiagram(diagramId).set(reviewConflict.remote);
+		conflictOpen = false;
+		reviewConflict = undefined;
+		await refreshHistory();
+	}
+
+	async function keepLocal(): Promise<void> {
+		requireSaved(await saves().keepLocal());
+		if (!saves().snapshot.dirty) control?.acknowledge();
+		conflictOpen = false;
+		reviewConflict = undefined;
+		// Resolution only saves a draft. Publication is a separate, explicit gesture.
 	}
 
 	function openHistory(): void {
-		if (editor.modified) control?.review();
-		else currentPreview = current?.renderedSvg;
+		control?.review();
 		historyOpen = true;
 	}
 </script>
@@ -191,15 +220,27 @@
 		of diagram this is, so nothing above it needs to caption it.
 	-->
 	<header class="flex min-h-10 shrink-0 items-center gap-2 px-4 pb-3 @[40rem]:px-8">
-		<DiagramTitle {title} busy={renaming} oncommit={rename} />
-		<DiagramStatus status={editor} onretry={() => control?.retry()} />
+		<DiagramTitle {title} busy={renaming || restoring || !!conflict} oncommit={rename} />
+		{#if conflict}
+			<Button variant="outline" size="sm" onclick={() => (conflictOpen = true)}
+				>Review conflict</Button
+			>
+		{:else if snapshot?.status.kind === 'failure'}
+			<DiagramStatus
+				status={{ phase: 'failed', modified: true, failure: snapshot.status.message }}
+				onretry={() => void retryFromHeader()}
+			/>
+		{:else}
+			<DiagramStatus status={editor} onretry={() => control?.retry()} />
+		{/if}
 		{#if current?.kind === 'drawio'}
-			<Button variant="ghost" size="sm" onclick={openHistory}>History</Button>
+			<Button variant="ghost" size="sm" disabled={busy} onclick={openHistory}>History</Button>
 			<Button
 				size="sm"
 				disabled={busy ||
 					autosaving ||
-					queuedSource !== undefined ||
+					!!conflict ||
+					snapshot?.status.kind === 'failure' ||
 					(!hasUnpublishedChanges && !editor.modified)}
 				onclick={() => control?.commit()}>Publish</Button
 			>
@@ -231,8 +272,13 @@
 
 	<!-- A flex column: the editor sizes itself against this, and a block parent
 	     collapsed it to its 384px floor with the rest of the pane left blank. -->
-	<div class="flex min-h-0 flex-1 flex-col px-4 pb-4 @[40rem]:px-8">
-		{#if diagram.error}
+	<div inert={restoring} class="flex min-h-0 flex-1 flex-col px-4 pb-4 @[40rem]:px-8">
+		{#if diagram.error && current}
+			<p role="alert" class="text-sm text-destructive">
+				The latest diagram could not be refreshed. Your current canvas is still available.
+			</p>
+		{/if}
+		{#if diagram.error && !current}
 			<p class="text-sm text-muted-foreground">
 				This diagram could not be loaded. It may have been deleted.
 			</p>
@@ -244,9 +290,24 @@
 				{title}
 				oncommit={publish}
 				onautosave={autosave}
-				onreview={(output) => (currentPreview = output.svg)}
+				onretry={retry}
+				onreview={(output) => coordinator?.capture(output.xml)}
+				onmodifiedchange={(modified) => {
+					if (modified) coordinator?.modified();
+				}}
 				oncontrol={(value) => (control = value)}
-				onstatus={(value) => (editor = value)}
+				onstatus={(value) => {
+					editor = value;
+					const status = coordinator?.snapshot.status;
+					if (
+						value.phase === 'failed' &&
+						status?.kind === 'conflict' &&
+						status !== capturedConflict
+					) {
+						capturedConflict = status;
+						control?.review();
+					}
+				}}
 			/>
 		{:else}
 			<!--
@@ -270,11 +331,28 @@
 {#if current?.kind === 'drawio'}
 	<DiagramVersionHistory
 		bind:open={historyOpen}
-		diagram={current}
-		currentPreview={currentPreview ?? current.renderedSvg}
+		diagram={snapshot?.local ?? current}
 		revisions={history.current?.revisions ?? []}
+		loading={!history.current && !history.error}
+		loadFailure={history.error
+			? userFacingMessage(history.error, 'Version history could not be loaded.')
+			: undefined}
+		selectedFailure={selectedRevision?.error
+			? userFacingMessage(selectedRevision.error, 'This version could not be loaded.')
+			: undefined}
 		selected={selectedRevision?.current?.revision}
 		bind:selectedId={selectedRevisionId}
 		onrestore={restore}
+	/>
+{/if}
+
+{#if reviewConflict && snapshot}
+	<DiagramConflictDialog
+		bind:open={conflictOpen}
+		base={reviewConflict.base}
+		local={snapshot.local}
+		remote={reviewConflict.remote}
+		onUseRemote={useRemote}
+		onKeepLocal={keepLocal}
 	/>
 {/if}

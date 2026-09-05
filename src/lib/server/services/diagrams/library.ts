@@ -133,17 +133,22 @@ export class DiagramLibrary {
 		await this.get(actor, diagramId);
 		return this.diagrams.countReferencingNotes(actor, diagramId);
 	}
-	private async editable(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
+	private async editable(actor: ActorContext, diagramId: DiagramId): Promise<DrawioDiagram> {
 		const current = await this.get(actor, diagramId);
 		if (current.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
+		if (current.archivedAt) throw new ValidationError('Archived diagrams cannot be edited');
+		return current;
+	}
+
+	private requireBase(current: DrawioDiagram, baseEtag: DiagramEtag): void {
 		if (diagramEtag(current) !== baseEtag)
 			throw new StaleRevisionError('The diagram has changed since it was loaded');
-		return current;
+	}
+
+	private requireIdentity(diagramId: DiagramId, baseEtag: DiagramEtag): void {
+		if (!baseEtag.startsWith(`diagram:${diagramId}:r`))
+			throw new ValidationError('The base ETag does not describe this diagram');
 	}
 
 	private async writeDraft(
@@ -157,9 +162,14 @@ export class DiagramLibrary {
 				...changed,
 				currentRevision: current.currentRevision + 1
 			},
-			current.currentRevision
+			current.currentRevision,
+			current.publishedRevision
 		);
-		if (!updated) throw new StaleRevisionError('The diagram changed while it was being saved');
+		if (!updated) {
+			const remote = await this.editable(actor, current.id);
+			if (remote.source === changed.source && remote.title === changed.title) return remote;
+			throw new StaleRevisionError('The diagram changed while it was being saved');
+		}
 		return updated;
 	}
 
@@ -170,8 +180,10 @@ export class DiagramLibrary {
 		searchableText: string,
 		baseEtag: DiagramEtag
 	): Promise<DrawioDiagram> {
-		const current = await this.editable(actor, diagramId, baseEtag);
+		this.requireIdentity(diagramId, baseEtag);
+		const current = await this.editable(actor, diagramId);
 		if (current.source === source) return current;
+		this.requireBase(current, baseEtag);
 		return this.writeDraft(actor, current, {
 			...current,
 			source,
@@ -187,14 +199,12 @@ export class DiagramLibrary {
 		title: string,
 		baseEtag: DiagramEtag
 	): Promise<DrawioDiagram> {
-		const current = await this.get(actor, diagramId);
-		if (current.kind !== 'drawio')
-			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
-		if (diagramEtag(current) !== baseEtag)
-			throw new StaleRevisionError('The diagram has changed since it was loaded');
+		this.requireIdentity(diagramId, baseEtag);
+		const current = await this.editable(actor, diagramId);
 		const trimmed = title.trim();
 		if (!trimmed) throw new ValidationError('Diagram title is required');
 		if (current.title === trimmed) return current;
+		this.requireBase(current, baseEtag);
 		return this.writeDraft(actor, current, { ...current, title: trimmed, updatedAt: now() });
 	}
 
@@ -206,13 +216,11 @@ export class DiagramLibrary {
 		searchableText: string,
 		baseEtag: DiagramEtag
 	): Promise<DrawioDiagram> {
-		const current = await this.editable(actor, diagramId, baseEtag);
-		if (
-			current.currentRevision === current.publishedRevision &&
-			current.source === source &&
-			current.renderedSvg === renderedSvg
-		)
-			throw new ValidationError('The diagram has no unpublished changes');
+		this.requireIdentity(diagramId, baseEtag);
+		const current = await this.editable(actor, diagramId);
+		if (current.currentRevision === current.publishedRevision && current.source === source)
+			return current;
+		this.requireBase(current, baseEtag);
 		const revision =
 			current.source === source ? current.currentRevision : current.currentRevision + 1;
 		const timestamp = now();
@@ -228,10 +236,15 @@ export class DiagramLibrary {
 				publishedAt: timestamp,
 				updatedAt: timestamp
 			},
-			current.currentRevision
+			current.currentRevision,
+			current.publishedRevision
 		);
-		if (!published)
+		if (!published) {
+			const remote = await this.editable(actor, diagramId);
+			if (remote.currentRevision === remote.publishedRevision && remote.source === source)
+				return remote;
 			throw new StaleRevisionError('The diagram changed while it was being published');
+		}
 		await this.recordRevision(actor, published);
 		return published;
 	}
@@ -269,10 +282,13 @@ export class DiagramLibrary {
 		revisionId: DiagramRevisionId,
 		baseEtag: DiagramEtag
 	): Promise<DrawioDiagram> {
+		this.requireIdentity(diagramId, baseEtag);
 		const [current, revision] = await Promise.all([
-			this.editable(actor, diagramId, baseEtag),
+			this.editable(actor, diagramId),
 			this.revision(actor, diagramId, revisionId)
 		]);
+		if (current.title === revision.title && current.source === revision.source) return current;
+		this.requireBase(current, baseEtag);
 		return this.writeDraft(actor, current, {
 			...current,
 			title: revision.title,

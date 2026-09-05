@@ -325,10 +325,14 @@ export interface PublishProjectDiagramInput {
 	readonly renderedSvg: string;
 	readonly baseEtag: DiagramEtag;
 }
-export interface PublishProjectDiagramOutput {
-	readonly diagram: DrawioDiagram;
-	readonly etag: DiagramEtag;
-}
+export type DiagramWriteOutcome =
+	| { readonly outcome: 'saved'; readonly diagram: DrawioDiagram; readonly etag: DiagramEtag }
+	| {
+			readonly outcome: 'conflict';
+			readonly baseEtag: DiagramEtag;
+			readonly remote: { readonly diagram: DrawioDiagram; readonly etag: DiagramEtag };
+	  };
+export type PublishProjectDiagramOutput = DiagramWriteOutcome;
 export interface ListDiagramRevisionsInput {
 	readonly diagramId: DiagramId;
 }
@@ -345,10 +349,7 @@ export interface GetDiagramRevisionOutput {
 export interface RestoreDiagramRevisionInput extends GetDiagramRevisionInput {
 	readonly baseEtag: DiagramEtag;
 }
-export interface RestoreDiagramRevisionOutput {
-	readonly diagram: DrawioDiagram;
-	readonly etag: DiagramEtag;
-}
+export type RestoreDiagramRevisionOutput = DiagramWriteOutcome;
 
 export interface DeleteProjectDiagramInput {
 	readonly diagramId: DiagramId;
