@@ -252,6 +252,7 @@ export class AgentRunLifecycle {
 	 * stays `running` forever, holding the conversation's single active-run slot
 	 * and keeping its event stream open.
 	 */
+	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this settles a run from one.
 	async failRun(runId: AgentRunId, error: unknown): Promise<void> {
 		try {
 			const code = error instanceof AgentProviderFailure ? error.providerCode : 'INTERNAL';

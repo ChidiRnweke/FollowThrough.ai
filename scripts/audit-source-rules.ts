@@ -16,7 +16,8 @@ const RULES = [
 	'no-weak-record-guard',
 	'no-record-unknown',
 	'no-json-parse-cast',
-	'no-cast-probe'
+	'no-cast-probe',
+	'no-unknown-type'
 ] as const;
 export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
@@ -197,6 +198,59 @@ const weakRecordGuard = (node: ts.Node): boolean => {
 		node.type !== undefined && ts.isTypePredicateNode(node.type) && weakRecordType(node.type.type!)
 	);
 };
+/**
+ * The three layers ADR 0037 keeps total: everything inward of a parse zone.
+ *
+ * Scoped by path the way `no-instanceof-models` is, and for the same reason —
+ * the pattern is not wrong everywhere. `unknown` at a remote function, a DB
+ * mapper, or a client storage reader is the honest type of data nobody has
+ * parsed yet, and those files are the ones whose job is to parse it.
+ */
+const STRICT_LAYERS = [
+	'src/lib/models/',
+	'src/lib/server/services/',
+	'src/lib/server/controllers/'
+] as const;
+const strictLayer = (fileName: string): boolean =>
+	STRICT_LAYERS.some((layer) => fileName.startsWith(layer));
+/**
+ * `unknown` in a position some other piece of code has to read: a parameter, a
+ * return type, a field, a type alias, or any of those reached through a union,
+ * an array, `readonly`, or a generic argument.
+ *
+ * Two positions are excluded, and neither is a softening — landing the rule
+ * without them would break two rules that already shipped.
+ *
+ * A **cast target** is excluded because `x as unknown` is the form §5 and §6 of
+ * the catalog hold up as *correct*, and `shape-cast` already owns the double
+ * cast. The exclusion sweeps the whole ancestor chain rather than the immediate
+ * parent, because a cast target can be a whole signature:
+ * `descriptor.value as (...args: unknown[]) => unknown` puts one `unknown` in a
+ * parameter of a type nobody declared, and stopping at that parameter would
+ * report the one spelling the catalog blesses.
+ *
+ * A **local variable annotation** is excluded because `no-json-parse-cast`
+ * blesses `const parsed: unknown = JSON.parse(text)` by name, and its spec pins
+ * it. A local `unknown` has no consumers to mislead: the next line narrows it.
+ */
+const insideCastTarget = (node: ts.Node): boolean => {
+	let current: ts.Node | undefined = node;
+	while (current.parent) {
+		if (isCast(current.parent) && current.parent.type === current) return true;
+		current = current.parent;
+	}
+	return false;
+};
+const unknownTypePosition = (node: ts.Node): boolean => {
+	if (node.kind !== ts.SyntaxKind.UnknownKeyword || insideCastTarget(node)) return false;
+	let current: ts.Node = node;
+	while (current.parent && ts.isTypeNode(current.parent)) current = current.parent;
+	const parent: ts.Node | undefined = current.parent;
+	if (!parent || ts.isVariableDeclaration(parent)) return false;
+	if (ts.isParameter(parent) || ts.isTypeAliasDeclaration(parent)) return true;
+	if (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent)) return true;
+	return ts.isFunctionLike(parent) && parent.type === current;
+};
 const explicitFailureResult = (node: ts.ReturnStatement): boolean => {
 	const expression = node.expression && unwrap(node.expression);
 	if (!expression || !ts.isObjectLiteralExpression(expression)) return false;
@@ -300,6 +354,8 @@ export const analyzeSource = (
 				node,
 				'uses an open-keyed record of unknown as a struct substitute'
 			);
+		if (strictLayer(fileName) && unknownTypePosition(node))
+			report('no-unknown-type', node, 'leaves unknown on a type inward of a parse zone');
 		if (
 			fileName.startsWith('src/lib/models/') &&
 			ts.isBinaryExpression(node) &&

@@ -1,13 +1,6 @@
 import { ExternalServiceError } from '$lib/errors';
 import OpenAI from 'openai';
-interface OperationObserver {
-	run<T>(
-		name: string,
-		context: unknown,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string
-	): Promise<T>;
-}
+import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';

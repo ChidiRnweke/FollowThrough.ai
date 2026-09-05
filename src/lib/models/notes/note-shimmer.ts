@@ -22,11 +22,19 @@
  * the client only, with no ProseMirror runtime dependency.
  */
 
+/**
+ * The part of a document block this comparison reads, and nothing else.
+ *
+ * Structurally a `ProseMirrorNode` satisfies it, which is what the caller
+ * passes; it cannot say so by name, because a model file may not import its
+ * domain's barrel. Every field this once declared as `unknown` was read through
+ * a `typeof` immediately below, and `attrs` was never read at all — the shape
+ * was already known, it just was not written down.
+ */
 export interface ShimmerNode {
-	readonly type?: unknown;
-	readonly text?: unknown;
-	readonly attrs?: unknown;
-	readonly content?: readonly unknown[];
+	readonly type?: string;
+	readonly text?: string;
+	readonly content?: readonly ShimmerNode[];
 }
 
 export interface ShimmerDocument {
@@ -37,14 +45,9 @@ export interface ShimmerDocument {
 /** The block's full text, descending into content so nested nodes count. */
 const blockText = (block: ShimmerNode | undefined): string => {
 	if (!block) return '';
-	if (typeof block.text === 'string') return block.text;
-	if (!block.content) return '';
+	if (block.text !== undefined) return block.text;
 	let text = '';
-	for (const child of block.content) {
-		if (typeof child === 'object' && child !== null && !Array.isArray(child)) {
-			text += blockText(child as ShimmerNode);
-		}
-	}
+	for (const child of block.content ?? []) text += blockText(child);
 	return text;
 };
 

@@ -70,5 +70,6 @@ const serialized = z
 const toolResult = z.union([failed, serialized.pipe(failed)]);
 
 /** The failure a tool result carries, or `undefined` when it carries none. */
+// audit-allow: no-unknown-type — Catalog section 3 exemplar: a schema at the point of use over an unread tool output.
 export const readToolFailure = (output: unknown): string | undefined =>
 	toolResult.safeParse(output).data?.failure;

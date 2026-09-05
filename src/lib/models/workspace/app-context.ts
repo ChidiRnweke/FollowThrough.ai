@@ -176,6 +176,7 @@ export const appContextSnapshotV1Schema: z.ZodType<AppContextSnapshotV1> = z
 	.strict();
 
 /** Parse an external app-context snapshot before it crosses into application logic. */
+// audit-allow: no-unknown-type — The app-context snapshot as it arrives from the browser.
 export const parseAppContextSnapshotV1 = (value: unknown): AppContextSnapshotV1 =>
 	appContextSnapshotV1Schema.parse(value);
 

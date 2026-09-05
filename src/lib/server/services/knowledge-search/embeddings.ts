@@ -2,14 +2,7 @@ import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors'
 import { getEmbeddingAttributes } from '@arizeai/openinference-core';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import OpenAI from 'openai';
-interface OperationObserver {
-	run<T>(
-		name: string,
-		context: unknown,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string
-	): Promise<T>;
-}
+import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 interface LanguageModelClientOptions {

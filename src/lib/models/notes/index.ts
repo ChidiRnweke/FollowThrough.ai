@@ -1207,6 +1207,7 @@ const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
  * parse is input the caller can fix, so rejecting it loudly is the whole point.
  * Data already sitting in a column is not — see {@link readProseMirrorDocument}.
  */
+// audit-allow: no-unknown-type — The strict write-side parse for a stored or imported document.
 export const parseProseMirrorDocument = (value: unknown): ProseMirrorDocument =>
 	proseMirrorDocumentSchema.parse(value);
 
@@ -1220,6 +1221,7 @@ export const parseProseMirrorDocument = (value: unknown): ProseMirrorDocument =>
  * throw from one row is what took `/today` down. A reported failure the renderer
  * shows beats an exception the page cannot survive (ADR 0015).
  */
+// audit-allow: no-unknown-type — The total read the DB mappers use for a stored document.
 export const readProseMirrorDocument = (value: unknown): ProseMirrorDocument => {
 	const parsed = storedDocumentSchema.safeParse(value);
 	if (parsed.success) return parsed.data;
@@ -1294,6 +1296,7 @@ const issuePath = (path: readonly PropertyKey[]): string =>
  * rejecting the files that imported fine (ADR 0014, ADR 0015).
  */
 export const findProseMirrorDocumentIssue = (
+	// audit-allow: no-unknown-type — Reports why a candidate document is unmodelled, so it has to accept one.
 	document: unknown
 ): ProseMirrorValidationIssue | undefined => {
 	const result = proseMirrorDocumentSchema.safeParse(document);

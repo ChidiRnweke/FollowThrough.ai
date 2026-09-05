@@ -161,6 +161,7 @@ export class DrawioSubmissionCollector {
 
 	constructor(private readonly validator: DrawioSourceValidator) {}
 
+	// audit-allow: no-unknown-type — A co-located adapter that parses on its next line, with SubmitDrawio.parse.
 	submit(value: unknown): z.infer<typeof SubmitDrawio> {
 		if (this.accepted) throw new ValidationError('A diagram has already been submitted.');
 		const candidate = SubmitDrawio.parse(value);
@@ -237,7 +238,8 @@ const parseMermaidSource = async (source: string): Promise<void> => {
 };
 
 export class MermaidSubmissionValidator {
-	constructor(private readonly parse: (source: string) => Promise<unknown> = parseMermaidSource) {}
+	/** The injected parse raises on invalid source; its result is not read. */
+	constructor(private readonly parse: (source: string) => Promise<void> = parseMermaidSource) {}
 
 	async validate(source: string): Promise<void> {
 		if (source.includes('```'))

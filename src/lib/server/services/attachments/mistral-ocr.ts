@@ -1,15 +1,9 @@
 import { ExternalServiceError } from '$lib/errors';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import { z } from 'zod';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { OperationObserver } from '$lib/models/telemetry';
 
-interface OperationObserver {
-	run<T>(
-		name: string,
-		context: unknown,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string
-	): Promise<T>;
-}
 const directObserver: OperationObserver = {
 	run: (_name, _context, body) => body()
 };
@@ -78,7 +72,8 @@ interface OcrResponse {
 	readonly pages?: readonly OcrPage[];
 	readonly usage_info?: { readonly pages_processed?: number };
 	readonly message?: string;
-	readonly detail?: unknown;
+	/** Mistral's error detail: sometimes a string, sometimes a nested object. */
+	readonly detail?: AgentPayload;
 }
 
 const ocrResponseSchema: z.ZodType<OcrResponse> = z.object({

@@ -70,6 +70,7 @@ export const sessionJsonObjectSchema: z.ZodType<SessionJsonObject> = z.record(
  * Absence means "not an object", which is a fact the caller acts on, not a
  * failure it has to guess at.
  */
+// audit-allow: no-unknown-type — Session JSON off a stored row, before any arm has been chosen.
 export const readSessionJsonObject = (value: unknown): SessionJsonObject | undefined => {
 	const parsed = sessionJsonObjectSchema.safeParse(value);
 	return parsed.success ? parsed.data : undefined;
@@ -341,6 +342,7 @@ const storedReasoningSchema = z
 const present = <Value>(key: string, value: Value | undefined) =>
 	value === undefined ? {} : { [key]: value };
 
+// audit-allow: no-unknown-type — Tries each persisted arm against a row nothing has parsed.
 const recognise = (value: unknown): PersistedSessionItem | undefined => {
 	const user = storedUserMessageSchema.safeParse(value);
 	if (user.success)
@@ -401,6 +403,7 @@ const recognise = (value: unknown): PersistedSessionItem | undefined => {
  * worth preserving. Everything else settles into an arm, so a conversation stays
  * readable.
  */
+// audit-allow: no-unknown-type — The repository read boundary for agent_session_items.
 export const parseSessionItem = (value: unknown): PersistedSessionItem => {
 	const recognised = recognise(value);
 	if (recognised) return recognised;

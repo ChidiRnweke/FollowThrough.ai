@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeSource } from './audit-source-rules';
 const violations = (source: string) => analyzeSource('example.ts', source);
+/** A path inside one of the three layers ADR 0037 keeps total. */
+const strict = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
 describe('source audit rules', () => {
 	it('rejects an asserted object shape', () => {
 		expect(violations('const value = ({ id: maybe }) as never')).toHaveLength(1);
@@ -285,6 +287,51 @@ describe('source audit rules', () => {
 		expect(
 			violations(
 				'// audit-allow: no-cast-probe — Tiptap types extension.options as any.\nconst options = extension.options as EditorOptions'
+			)
+		).toHaveLength(1);
+	});
+	it('rejects an unknown parameter in a strict layer', () => {
+		expect(strict('export const read = (value: unknown): Note => parse(value)')).toHaveLength(1);
+	});
+	it('rejects an unknown return type in a strict layer', () => {
+		expect(strict('export const load = (id: NoteId): unknown => fetch(id)')).toHaveLength(1);
+	});
+	it('rejects an unknown field on an interface', () => {
+		expect(strict('export interface OcrResponse { readonly detail?: unknown }')).toHaveLength(1);
+	});
+	it('rejects an unknown type alias', () => {
+		expect(strict('type Handle = unknown')).toHaveLength(1);
+	});
+	it('rejects unknown as a generic argument on a return type', () => {
+		expect(strict('const get = (id: NoteId): Promise<unknown> => read(id)')).toHaveLength(1);
+	});
+	it('rejects a readonly unknown array field', () => {
+		expect(strict('interface Node { readonly content?: readonly unknown[] }')).toHaveLength(1);
+	});
+	it('allows the same signature outside the strict layers', () => {
+		expect(
+			analyzeSource('src/lib/client/example.ts', 'const load = (id: NoteId): unknown => fetch(id)')
+		).toHaveLength(0);
+	});
+	it('allows an honest local unknown intermediate in a strict layer', () => {
+		expect(strict('const parsed: unknown = JSON.parse(raw)')).toHaveLength(0);
+	});
+	it('allows an unknown cast target in a strict layer', () => {
+		expect(
+			strict('const method = descriptor.value as (...args: unknown[]) => unknown')
+		).toHaveLength(0);
+	});
+	it('allows a reasoned parser-input exception', () => {
+		expect(
+			strict(
+				'// audit-allow: no-unknown-type — Model-local parser input; ADR 0037 names this a parse zone.\nexport const read = (value: unknown): Note => parse(value)'
+			)
+		).toHaveLength(0);
+	});
+	it('rejects a stale unknown-type allowance', () => {
+		expect(
+			strict(
+				'// audit-allow: no-unknown-type — Model-local parser input; ADR 0037 names this a parse zone.\nexport const read = (value: NoteJson): Note => parse(value)'
 			)
 		).toHaveLength(1);
 	});

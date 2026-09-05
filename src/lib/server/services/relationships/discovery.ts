@@ -3,14 +3,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type { RelationshipKind } from '$lib/models/relationships';
-interface OperationObserver {
-	run<T>(
-		name: string,
-		context: unknown,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string
-	): Promise<T>;
-}
+import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';

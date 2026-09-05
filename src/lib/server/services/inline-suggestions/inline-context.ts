@@ -11,14 +11,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 import { getEncoding } from 'js-tiktoken';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
-interface OperationObserver {
-	run<T>(
-		name: string,
-		context: unknown,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string
-	): Promise<T>;
-}
+import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const tokenEncoding = getEncoding('cl100k_base');

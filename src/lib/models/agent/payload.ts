@@ -59,6 +59,7 @@ export type AgentPayloadObjectResult =
  * The recursion also builds the value as it goes, so what comes back is proven
  * rather than asserted at the end.
  */
+// audit-allow: no-unknown-type — Names a value readAgentPayload could not read, for the message that says so.
 const describe = (value: unknown): string => {
 	if (value === null) return 'null';
 	if (Array.isArray(value)) return 'an array';
@@ -72,6 +73,7 @@ const isPlainObject = (value: object): boolean => {
 	return prototype === Object.prototype || prototype === null;
 };
 
+// audit-allow: no-unknown-type — The recursive reader itself; classifying unread JSON is its whole job.
 const readAt = (value: unknown, path: string): AgentPayloadResult => {
 	if (value === null) return { kind: 'valid', value: null };
 	switch (typeof value) {
@@ -128,6 +130,7 @@ export const agentPayloadItems = (value: AgentPayload): readonly AgentPayload[] 
 	Array.isArray(value) ? value : undefined;
 
 /** The value, or where reading it stopped. `root` names the whole value in a message. */
+// audit-allow: no-unknown-type — Entry point of the hand-written JSON reader a zod schema cannot replace.
 export const readAgentPayload = (value: unknown): AgentPayloadResult => readAt(value, 'root');
 
 /**
@@ -137,6 +140,7 @@ export const readAgentPayload = (value: unknown): AgentPayloadResult => readAt(v
  * own parameter schema — so a caller that gets an array or a string back has not
  * received arguments and should not pretend it has.
  */
+// audit-allow: no-unknown-type — The same reader, narrowed to the object arm.
 export const readAgentPayloadObject = (value: unknown): AgentPayloadObjectResult => {
 	const read = readAgentPayload(value);
 	if (read.kind === 'corrupt') return read;

@@ -188,6 +188,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		await this.append(runId, { type: 'cancelled', runId, message: 'Generation stopped' });
 	}
 
+	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this settles a workflow run from one.
 	private async settleFailed(runId: AgentRunId, error: unknown): Promise<void> {
 		const message = error instanceof Error ? error.message : String(error);
 		try {

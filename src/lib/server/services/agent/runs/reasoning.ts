@@ -378,6 +378,7 @@ const promotedInConversation = async (
  * `readAgentToolName` because `search_tools` is a read and never parks.
  */
 const parkedCall = (
+	// audit-allow: no-unknown-type — A provider interruption item, read here for the call it parked.
 	item: unknown
 ): ProviderToolCall & { readonly callId: string; readonly name: ToolName } => {
 	const call = parseProviderToolCall(item);
@@ -418,6 +419,7 @@ export class AgentReasoning {
 			readonly run: AgentRun;
 			readonly executor: AgentToolExecutor;
 		}) => Promise<{
+			// audit-allow: no-unknown-type — Tool type parameter belongs to @openai/agents; naming it locally would be a double cast.
 			agentTools(alreadyPromoted?: readonly string[]): Tool<unknown>[];
 			offeredToolNames(alreadyPromoted?: readonly string[]): ToolName[];
 			catalog(): readonly { readonly name: string }[];
@@ -521,6 +523,7 @@ export class AgentReasoning {
 			// Captured by the turn observer before the first update is yielded, so the
 			// checkpoint below can hand the next resume the trace this run belongs to.
 			let traceparent = run.traceparent;
+			// audit-allow: no-unknown-type — Tool as the SDK builds it; the type parameter is @openai/agents own.
 			const buildAgent = (tools: Tool<unknown>[]) => this.buildAgent(context, run, tools);
 			const agent = buildAgent(tools);
 			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
@@ -681,6 +684,7 @@ export class AgentReasoning {
 		}
 	}
 
+	// audit-allow: no-unknown-type — Tool as the SDK builds it; the type parameter is @openai/agents own.
 	private buildAgent(context: AgentRunContext, run: AgentRun, tools: Tool<unknown>[]) {
 		const { skills: catalog, ...rest } = context;
 		const skills = catalog.items;
@@ -727,6 +731,7 @@ export class AgentReasoning {
 	// provider error reaches here through the agents SDK's run loop, which may
 	// rewrap it — so `instanceof OpenAI.APIError` would quietly change which
 	// failures count as retryable.
+	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this reads a provider code off one.
 	private providerErrorCode(error: unknown): string | undefined {
 		if (typeof error !== 'object' || error === null) return undefined;
 		if ('code' in error && typeof error.code === 'string') return error.code;
@@ -734,6 +739,7 @@ export class AgentReasoning {
 		return undefined;
 	}
 
+	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this decides retry on one.
 	private isRetryable(error: unknown): boolean {
 		if (typeof error !== 'object' || error === null) return false;
 		if (!('status' in error) || typeof error.status !== 'number') return false;

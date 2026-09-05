@@ -932,6 +932,7 @@ const pendingAgentDecisionSchema = z
 	.strict() satisfies z.ZodType<PendingAgentDecision>;
 
 /** The call id of a decision that did not parse, for the warning that reports it. */
+// audit-allow: no-unknown-type — Reads a provider row id before anything has parsed the row.
 const readCallId = (row: unknown): string | undefined =>
 	z.object({ callId: z.string() }).safeParse(row).data?.callId;
 
@@ -951,6 +952,7 @@ const readCallId = (row: unknown): string | undefined =>
  * corpus to capture.
  */
 export const readPendingDecisions = (
+	// audit-allow: no-unknown-type — The stored pending_decisions jsonb, which the column hands out unparsed.
 	value: unknown
 ): { readonly decisions: readonly PendingAgentDecision[]; readonly dropped: readonly string[] } => {
 	if (!Array.isArray(value)) return { decisions: [], dropped: [] };
@@ -1105,6 +1107,7 @@ export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefin
  * naming their cursors: replay only drives a run still in flight, and a reopened
  * conversation reads the journal instead.
  */
+// audit-allow: no-unknown-type — The stored event row, at the boundary that turns it into a StoredAgentEvent.
 export const readAgentEvent = (value: unknown): StoredAgentEvent => {
 	const parsed = agentEventSchema.safeParse(value);
 	return parsed.success
@@ -1129,6 +1132,7 @@ const agentRunEventFrameSchema = z.object({
  * or the reverse. The `createdAt` conversion is the visible half of that — JSON
  * has no date — and the rest of the record was riding on the same assertion.
  */
+// audit-allow: no-unknown-type — The SSE frame as it arrives; this function is the frame reader.
 export const readAgentRunEventRecord = (value: unknown): ReadAgentRunEventRecord => {
 	const parsed = agentRunEventFrameSchema.safeParse(value);
 	return parsed.success
@@ -1272,6 +1276,7 @@ const rawModelStreamEventSchema = z.object({
 	])
 });
 
+// audit-allow: no-unknown-type — A tool result straight off the provider SDK, classified rather than trusted.
 const providerToolOutput = (value: unknown): ProviderToolOutput => {
 	if (value === undefined || value === null) return { kind: 'none' };
 	const read = readAgentPayload(value);
@@ -1287,6 +1292,7 @@ const providerToolOutput = (value: unknown): ProviderToolOutput => {
  * arguments nobody can read is a call that must not be presented as though it
  * ran.
  */
+// audit-allow: no-unknown-type — The arguments the model produced, before readAgentPayload classifies them.
 const providerArguments = (value: unknown): AgentPayloadObject => {
 	if (value === undefined) return {};
 	let candidate: unknown = value;
@@ -1371,6 +1377,7 @@ const providerCall = (item: ProviderItem): ProviderToolCall => {
  * Raises only for arguments nobody can read; anything this union does not model
  * settles as `ignored`, so a newer SDK event type cannot fail a turn.
  */
+// audit-allow: no-unknown-type — The provider stream item; this is the run loop single parse point.
 export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent => {
 	const runItem = runItemStreamEventSchema.safeParse(event);
 	if (runItem.success) {
@@ -1397,6 +1404,7 @@ export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent =>
  * means: for an approval it means a parked call nothing can be matched against,
  * which is a failure rather than a call to skip.
  */
+// audit-allow: no-unknown-type — The same provider item, read for the call it names.
 export const parseProviderToolCall = (item: unknown): ProviderToolCall | undefined => {
 	const parsed = providerItemSchema.safeParse(item);
 	return parsed.success ? providerCall(parsed.data) : undefined;
@@ -1795,11 +1803,13 @@ const legacyDiagramRunContextSchema = unpreparedDiagramRunContextSchema.omit({
 	state: true
 });
 
+// audit-allow: no-unknown-type — The stored run context snapshot, versioned at the repository and parsed here.
 export const parseAgentRunContextSnapshot = (value: unknown): AgentRunContext | undefined => {
 	if (emptyContextSchema.safeParse(value).success) return undefined;
 	return agentRunContextSchema.parse(value);
 };
 
+// audit-allow: no-unknown-type — The stored workflow context, at the same repository boundary.
 export const parseWorkflowRunContext = (value: unknown): WorkflowRunContext => {
 	const current = workflowRunContextSchema.safeParse(value);
 	if (current.success) return current.data;
@@ -1888,6 +1898,7 @@ export const resolveAgentRunInput = (
 ): RunAgentInput => runAgentInputSchema.parse({ ...input, conversationId });
 
 export const parseRunAgentInput = (
+	// audit-allow: no-unknown-type — The remote input; catalog section 1 names this function as the exemplar.
 	input: unknown,
 	expectedConversationId: ConversationId
 ): RunAgentInput =>

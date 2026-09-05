@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	startScheduler,
 	type SchedulerClock,
-	type ScheduledTask
+	type ScheduledTask,
+	type TimerHandle
 } from '$lib/server/services/scheduler';
 
 /**
@@ -10,17 +11,17 @@ import {
  * real timers.
  */
 class ManualClock implements SchedulerClock {
-	private queue = new Map<number, () => void>();
+	private queue = new Map<TimerHandle, () => void>();
 	private nextHandle = 1;
 
-	setTimeout(callback: () => void): unknown {
+	setTimeout(callback: () => void): TimerHandle {
 		const handle = this.nextHandle++;
 		this.queue.set(handle, callback);
 		return handle;
 	}
 
-	clearTimeout(handle: unknown): void {
-		this.queue.delete(handle as number);
+	clearTimeout(handle: TimerHandle): void {
+		this.queue.delete(handle);
 	}
 
 	/** Fires everything currently queued, then lets the resulting promises settle. */

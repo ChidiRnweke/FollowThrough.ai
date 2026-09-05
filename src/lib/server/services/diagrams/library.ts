@@ -29,7 +29,13 @@ import type {
 } from '$lib/server/repositories/provenance';
 
 export interface DiagramProjectReader {
-	get(actor: ActorContext, projectId: ProjectId): Promise<unknown>;
+	/**
+	 * Raises unless this actor may read the project. The call *is* the
+	 * authorization check — the only site discards the result — so the port asks
+	 * for the least a project can be rather than answering `unknown`, which said
+	 * the same thing while letting anything at all satisfy it.
+	 */
+	get(actor: ActorContext, projectId: ProjectId): Promise<{ readonly id: ProjectId }>;
 }
 
 const now = (): DateTime => new Date().toISOString() as DateTime;

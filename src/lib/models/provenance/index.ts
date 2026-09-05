@@ -337,6 +337,7 @@ const provenanceSchemas = [
 export const provenanceSchema: z.ZodType<Provenance> = z.union(provenanceSchemas);
 
 /** Parse a stored provenance row before its producer-specific facts enter domain logic. */
+// audit-allow: no-unknown-type — The persisted provenance row, parsed at the model that owns the union.
 export const parseProvenance = (value: unknown): Provenance => provenanceSchema.parse(value);
 
 /**

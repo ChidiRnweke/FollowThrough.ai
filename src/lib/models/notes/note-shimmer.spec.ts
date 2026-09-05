@@ -1,20 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import {
-	changedTopLevelBlockIndices,
-	type ShimmerDocument,
-	type ShimmerNode
-} from './note-shimmer';
+import { changedTopLevelBlockIndices, type ShimmerDocument } from './note-shimmer';
 
-const para = (text: string): ShimmerNode => ({
+/**
+ * What the editor actually stores: attributes and marks the comparison is
+ * deliberately blind to. The fixtures carry them because two of these tests
+ * exist to prove they are ignored — a fixture trimmed to what `ShimmerNode`
+ * names would assert nothing about the noise it was written to describe.
+ */
+interface EditorNode {
+	readonly type?: string;
+	readonly text?: string;
+	readonly attrs?: Record<string, string | number | null>;
+	readonly marks?: readonly { readonly type: string }[];
+	readonly content?: readonly EditorNode[];
+}
+
+const para = (text: string): EditorNode => ({
 	type: 'paragraph',
 	content: [{ type: 'text', text }]
 });
-const heading = (text: string): ShimmerNode => ({
+const heading = (text: string): EditorNode => ({
 	type: 'heading',
 	attrs: { level: 2 },
 	content: [{ type: 'text', text }]
 });
-const doc = (...content: ShimmerNode[]): ShimmerDocument => ({ type: 'doc', content });
+const doc = (...content: readonly EditorNode[]): ShimmerDocument => ({ type: 'doc', content });
 
 describe('changedTopLevelBlockIndices', () => {
 	it('reports nothing for two identical documents', () => {

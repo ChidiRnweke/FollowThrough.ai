@@ -361,7 +361,7 @@ export class Agent implements AgentController {
 			this.executeInBackground(receipt.runId);
 			return receipt;
 		} catch (error) {
-			if (!(error instanceof DuplicateSubmission)) throw this.mapActiveRunConflict(error);
+			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
 			const duplicate = await this.dependencies.runs.findByRequestId(actor, input.requestId);
 			if (!duplicate) throw error;
 			return this.receipt(actor, duplicate);
@@ -523,7 +523,7 @@ export class Agent implements AgentController {
 			this.executeInBackground(receipt.runId);
 			return receipt;
 		} catch (error) {
-			if (!(error instanceof DuplicateSubmission)) throw this.mapActiveRunConflict(error);
+			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
 			const existing = await this.dependencies.runs.findByRequestId(actor, requestId);
 			if (!existing) throw error;
 			return this.receipt(actor, existing);
@@ -723,14 +723,20 @@ export class Agent implements AgentController {
 		};
 	}
 
-	private mapActiveRunConflict(error: unknown): unknown {
+	/**
+	 * Raises, always. It used to answer `unknown` so both call sites could
+	 * `throw` its result, which put an `unknown` on a controller's surface to
+	 * describe a value nobody ever holds: every path out of here is a throw.
+	 */
+	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this is one.
+	private raiseActiveRunConflict(error: unknown): never {
 		if (
 			typeof error === 'object' &&
 			error !== null &&
 			'constraint_name' in error &&
 			error.constraint_name === 'agent_runs_active_conversation_unique'
 		)
-			return new ValidationError('This conversation already has an active agent run');
-		return error;
+			throw new ValidationError('This conversation already has an active agent run');
+		throw error;
 	}
 }

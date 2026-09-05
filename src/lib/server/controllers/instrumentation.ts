@@ -40,6 +40,7 @@ export const instrumentedController = <T extends object>(
 		const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
 		if (!descriptor || typeof descriptor.value !== 'function') continue;
 		const method = descriptor.value as (...args: unknown[]) => unknown;
+		// audit-allow: no-unknown-type — A decorator wrapper stands in for every controller method; no one signature covers them.
 		const wrapped = (...args: unknown[]): unknown => {
 			const result = Reflect.apply(method, controller, args);
 			if (!result || typeof (result as Promise<unknown>).then !== 'function') return result;

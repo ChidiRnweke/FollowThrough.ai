@@ -316,6 +316,7 @@ export type StoredSuggestion =
  */
 export const readSuggestionPayload = (
 	kind: SuggestionKind,
+	// audit-allow: no-unknown-type — A stored suggestion payload, read into the arm its kind names.
 	value: unknown
 ):
 	| { readonly status: 'readable'; readonly payload: Suggestion['payload'] }
@@ -331,6 +332,7 @@ export const readSuggestionPayload = (
 
 export const parseSuggestionPayload = (
 	kind: SuggestionKind,
+	// audit-allow: no-unknown-type — The same row on the strict path, where an unreadable payload has to raise.
 	value: unknown
 ): Suggestion['payload'] => {
 	switch (kind) {

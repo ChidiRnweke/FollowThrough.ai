@@ -618,7 +618,76 @@ DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than a
     errors across 8898 files), `pnpm test:architecture`, and `prettier`/`eslint` on the touched
     files. `pnpm test:evals` was not run: it bills a real provider, and both eval changes are
     covered by `pnpm check` and the payload readers' own specs.
-- [ ] **TN-53: Land strict-layer `no-unknown-type` with reasoned parser/SDK allowances**
+- [x] **TN-53: Land strict-layer `no-unknown-type` with reasoned parser/SDK allowances**
+  - [x] The rule is path-scoped to `models/`, `services/` and `controllers/`, the way
+        `no-instanceof-models` is, because the pattern is not wrong everywhere: a remote function, a
+        DB mapper and a client storage reader are the files whose job is to parse, and `unknown` is
+        what they are handed. It fires on a parameter, a return type, a field, a type alias, or any
+        of those reached through a union, an array, `readonly`, or a generic argument.
+  - [x] Two positions are excluded, and neither is a softening — landing the rule without them
+        would have broken two rules that already shipped. A **cast target**, because
+        `x as unknown` is the form §5 and §6 hold up as correct and `shape-cast` owns the double
+        cast; the check sweeps the whole ancestor chain rather than the immediate parent, since
+        `descriptor.value as (...args: unknown[]) => unknown` puts one `unknown` in a parameter of a
+        type nobody declared, and stopping there would report the spelling the catalog blesses. And
+        a **local variable annotation**, because `no-json-parse-cast` blesses
+        `const parsed: unknown = JSON.parse(text)` by name and its spec pins it. A local `unknown`
+        has no consumers to mislead: the next line narrows it.
+  - [x] Baseline it landed against, measured not estimated: **60** violations across 27 files —
+        26 in `models/`, 32 in `services/`, 2 in `controllers/`. 20 were fixed at the producer and
+        40 carry a reasoned allowance. `artifacts/type-narrowing-audit.md` says 407 `unknown` type
+        positions repo-wide; it was frozen on 2026-08-30 and six blocks have landed since.
+        Regenerating it is TN-54's.
+  - [x] **Ten of the sixty were one shape declared ten times.** `operationObserver` took
+        `params: unknown` and immediately did `params as WorkflowTraceContext`, naming the honest
+        type out loud, and nine services each declared a private six-line `OperationObserver` port
+        with `context: unknown` — not from carelessness but because a service may not import
+        another service, and the type lived in `services/telemetry.ts`. It lives in
+        `models/telemetry/` now, with the port beside it; `telemetry.ts` re-exports it for existing
+        importers. One shape, one declaration, and the cast goes with it.
+  - [x] `ShimmerNode` was the clearest violation: four `unknown` fields on an exported model
+        interface, where `attrs` was never read at all and `type` and `text` were `typeof`-tested
+        two lines below. The shape was already known, it just was not written down. Narrowing it
+        also retired the `child as ShimmerNode` cast and the
+        `typeof child === 'object' && … && !Array.isArray(child)` guard — a weak record guard in
+        everything but signature. It cannot name `ProseMirrorNode` directly: `models/notes/index.ts`
+        is the barrel and a model file may not import a sibling, so it stays structural, and
+        `pnpm check` is what proves a real document still satisfies it.
+  - [x] `mapActiveRunConflict` answered `unknown` so both call sites could `throw` its result — an
+        `unknown` on a controller's surface describing a value nobody ever holds. It is
+        `raiseActiveRunConflict(error): never` now, and the return position is gone rather than
+        excused.
+  - [x] `DiagramProjectReader.get` and `MermaidSubmissionValidator.parse` both answered
+        `Promise<unknown>` for a result their only call site discards. `Promise<void>` looked right
+        and is not assignable from `Promise<Project>`, so the reader asks for the least a project
+        can be (`{ readonly id: ProjectId }`) — which says the same thing `unknown` did while no
+        longer letting anything at all satisfy it. The mermaid port really is `Promise<void>`,
+        because its implementation already was.
+  - [x] `SchedulerClock`'s handle was `unknown` and the default clock then asserted
+        `ReturnType<typeof setTimeout>` back out of it, so the opacity bought nothing.
+        `TimerHandle = ReturnType<typeof setTimeout> | number` is what it actually is — Node answers
+        with a `Timeout`, the browser and the manual test clock with a number — and the scheduler
+        only ever hands the value back to `clearTimeout`. `OcrResponse.detail` is `AgentPayload`,
+        the union TN-31 established for JSON whose shape the provider decides; it narrows under the
+        `typeof` the one reader already used.
+  - [x] The 40 allowances are four families, each written per site rather than pasted: model-local
+        parsers (26, the parse zone ADR 0037 names), caught errors (8, where TypeScript offers no
+        alternative), `@openai/agents` generics (3 × `Tool<unknown>`), and framework seams (3 — the
+        controller decorator, `summarize`, and the drawio adapter that parses on its next line).
+        `z.custom<unknown>(() => true)` in `models/agent/index.ts` needs none: it is a type argument
+        on a call, not a declared type, and `no-zod-unknown` already owns that seam deliberately.
+  - [x] Both failure modes were verified before the checker was trusted: reverting
+        `library.ts`'s return to `Promise<unknown>` reports it, and misspelling one allowance's rule
+        name reports the violation and a malformed allowance together. Verified with
+        `pnpm test:source` (zero across 1165 files), `pnpm check` (0 errors across 8907 files),
+        `pnpm test:architecture`, `pnpm test:unit` (3094), `pnpm test:contracts` (115), and
+        `prettier`/`eslint` on the touched files. `pnpm test:evals` was not run: it bills a real
+        provider, and nothing here changes a provider call path.
+  - Two spec fixtures were narrowed with the code rather than around it. `note-shimmer.spec.ts`
+    names the editor's real node shape, because two of its tests exist to prove `attrs` and `marks`
+    are ignored and a fixture trimmed to the narrow type would assert nothing about the noise it
+    was written to describe. `scheduler.spec.ts`'s `ManualClock` returns a `TimerHandle` and its
+    `handle as number` is gone.
 - [ ] **TN-54: Run the all-scope residual sweep and regenerate final before/after counts**
 - [ ] **TN-55: Run `pnpm test:architecture`, `pnpm test:unit`, `pnpm check`,
       `pnpm docs:check`, and `pnpm lint`; record any unrelated-worktree blocker explicitly**
@@ -637,6 +706,15 @@ differently.
 
 **Remedy:** name the shape and parse into it at the zone. Exemplar: `parseRunAgentInput`
 (`src/lib/models/agent/index.ts`) — zod schema in the model, called by the repository mapper.
+
+The rule fires on a parameter, a return type, a field, a type alias, or any of those reached
+through a union, an array, `readonly`, or a generic argument. Two positions stay legal because
+other rules already bless them: a **cast target**, since `x as unknown` is the honest form §5 and
+§6 hold up and `shape-cast` owns the double cast; and a **local variable annotation**, since
+`const parsed: unknown = JSON.parse(text)` is the form `no-json-parse-cast` blesses by name. A
+local `unknown` has no consumers to mislead — the next line narrows it. A parser input inside a
+parse zone is legal but not invisible: it takes an `audit-allow` naming the boundary, which is how
+the parse zones stay a list a reader can check rather than a claim.
 
 ## 2. `Record<string, unknown>` as a struct substitute — [audit] `no-record-unknown`
 
