@@ -175,9 +175,7 @@ export class NoteCatalog {
 			throw new ValidationError('Skill notes are not deleted from the trash');
 		const trashed = await this.notes.listTrashed(actor, note.projectId);
 		const deleted = await this.purge(actor, this.descendants(trashed, [noteId]));
-		return trashed
-			.filter((row) => deleted.includes(row.id))
-			.map(({ id, title }) => ({ id, title }));
+		return this.inDeletionOrder(trashed, deleted);
 	}
 
 	async emptyTrash(
@@ -195,9 +193,7 @@ export class NoteCatalog {
 				visible.map((note) => note.id)
 			)
 		);
-		return trashed
-			.filter((row) => deleted.includes(row.id))
-			.map(({ id, title }) => ({ id, title }));
+		return this.inDeletionOrder(trashed, deleted);
 	}
 
 	/**
@@ -224,6 +220,21 @@ export class NoteCatalog {
 		// is never removed while something still points at it.
 		for (const id of ids) await this.notes.delete(actor, id);
 		return ids;
+	}
+
+	/**
+	 * Report the deleted rows in the order they were purged — children before the folder
+	 * that holds them — not in trash-listing order.
+	 */
+	private inDeletionOrder(
+		trashed: readonly Note[],
+		deleted: readonly NoteId[]
+	): readonly Pick<Note, 'id' | 'title'>[] {
+		const byId = new Map(trashed.map((row) => [row.id, row]));
+		return deleted.flatMap((id) => {
+			const row = byId.get(id);
+			return row === undefined ? [] : [{ id, title: row.title }];
+		});
 	}
 
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {

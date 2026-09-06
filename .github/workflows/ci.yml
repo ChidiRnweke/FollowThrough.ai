@@ -105,6 +105,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - run: pnpm test:pwa
