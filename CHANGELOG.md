@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.0...v0.3.1) (2026-09-06)
+
+
+### Performance Improvements
+
+* **tests:** cut suite memory ~25% and wall time ~35% ([#14](https://github.com/ChidiRnweke/FollowThrough.ai/issues/14)) ([87f5637](https://github.com/ChidiRnweke/FollowThrough.ai/commit/87f563791341b406f78c701a7bc06474101f8a0b))
+
 ## [0.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.2.0...v0.3.0) (2026-09-06)
 
 
