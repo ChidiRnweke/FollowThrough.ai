@@ -173,7 +173,7 @@
 			<div class="flex min-h-0 flex-1 flex-col {CHAT_GAP_PASS} overflow-y-auto">
 				{#each passages as passage, index (index)}
 					<div class="flex flex-col {CHAT_GAP_BOND}">
-						<!-- The pyramid holds here too, at the dialog's own scale: the request titles the
+						<!-- The hierarchy holds here too, at the dialog's own scale: the request titles the
 						     passage under it, so it never renders smaller than what it titles. At full
 						     width the passage is body size, so the label matches it and takes the weight
 						     and the accent instead — it is still an agent action. -->

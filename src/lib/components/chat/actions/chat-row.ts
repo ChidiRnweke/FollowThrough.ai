@@ -47,7 +47,7 @@ export const CHAT_ROW_DETAIL = 'chat-disclosure';
 export const CHAT_ROW_INDENT = 'pl-6';
 
 /**
- * The one type pyramid inside a turn's activity.
+ * The one type hierarchy inside a turn's activity.
  *
  * The turn stacks four levels in a 384px column, and the app has only two rungs to spend on
  * them — `sm` and `xs`. So a pass label and the excerpt it introduces were the same 12px, and
