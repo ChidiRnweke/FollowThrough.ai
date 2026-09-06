@@ -15,9 +15,11 @@ or online. There are no guessed read windows, silent fallbacks, or automatic con
 ## Execution checklist
 
 - [x] Record the accepted design and implementation checklist.
-- [ ] Define and test pure cache transitions, inventory reconciliation, and mutation lifecycle.
-- [ ] Implement shared coordinator, in-memory fakes, IndexedDB persistence, and account isolation.
-- [ ] Add database sync versions and complete authenticated inventory/object readers.
+- [x] Define and test pure cache transitions, inventory reconciliation, and mutation lifecycle.
+- [x] Implement the read coordinator, in-memory fakes, IndexedDB cache, and account isolation.
+- [ ] Add cross-tab coordination and durable mutation queue persistence.
+- [x] Add database sync versions and the complete authenticated inventory repository.
+- [ ] Add typed object readers and expose synchronization through controller/remote boundaries.
 - [ ] Add atomic guarded mutation replay and durable idempotency receipts.
 - [ ] Build shared normalized projections and migrate app routes to browser-shell loading.
 - [ ] Wire offline mutations across supported domains and preserve legacy note/skill drafts.
@@ -33,3 +35,19 @@ in controllers with factory-provided capabilities. Parse external records at the
 Keep domain mutation rules in their existing services. One assertion per test and shared fakes.
 Do not claim a checkpoint complete until its verification passes. Record blockers and remaining
 integration explicitly. Do not delete the existing note outbox before migration is verified.
+
+## Verified checkpoints
+
+- `d6b24ef`: ADR and execution checklist.
+- `757a77f`: 25 pure cache and mutation behavior tests; type check and architecture checks passed.
+- `b7b5313`: 16 coordinator tests and 6 Chromium IndexedDB tests; lint, type check, and architecture checks passed.
+- Database version registry and inventory: 12 PostgreSQL contract tests; type check and architecture checks passed.
+
+The version metadata lives in one database registry keyed by resource type and a JSON tuple of
+primary-key values. This avoids leaking database synchronization fields into existing domain
+serialization. One trigger function covers all registered resources. Inventory reads are a single
+SQL statement and fail if a source record lacks its required version. PostgreSQL and PGlite result
+formats are parsed at the repository boundary.
+
+The app is not integrated yet. Existing route loaders, note outbox, and service worker remain active
+until replacement and migration are tested. No claim of user-facing caching completion is made.

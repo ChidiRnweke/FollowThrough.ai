@@ -9,6 +9,7 @@ import {
 	integer,
 	jsonb,
 	pgEnum,
+	pgSequence,
 	pgTable,
 	primaryKey,
 	text,
@@ -25,6 +26,28 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+
+export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
+
+/** Sync metadata stays out of existing domain records and their serialization. */
+export const workspaceSyncVersions = pgTable(
+	'workspace_sync_versions',
+	{
+		resourceType: text('resource_type').notNull(),
+		resourceId: jsonb('resource_id').$type<readonly string[]>().notNull(),
+		version: bigint('version', { mode: 'bigint' })
+			.notNull()
+			.default(sql`nextval('workspace_sync_version_sequence')`)
+	},
+	(table) => [
+		primaryKey({ columns: [table.resourceType, table.resourceId] }),
+		check(
+			'workspace_sync_versions_resource_id_check',
+			sql`jsonb_typeof(${table.resourceId}) = 'array'`
+		),
+		check('workspace_sync_versions_version_check', sql`${table.version} > 0`)
+	]
+);
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 /**
