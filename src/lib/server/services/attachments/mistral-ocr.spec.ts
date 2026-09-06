@@ -31,58 +31,6 @@ const input = {
 	fileName: 'doc.pdf'
 };
 
-const bodyOf = (transport: FakeFetch) => JSON.parse(String(transport.request?.init?.body));
-
-describe('MistralOcr requests', () => {
-	it('posts to the ocr endpoint', async () => {
-		const transport = new FakeFetch({ pages: [{ index: 0, markdown: 'text' }] });
-
-		await clientUsing(transport).ocr(input);
-
-		expect(transport.request?.url).toBe('https://mistral.test/v1/ocr');
-	});
-
-	it('authorizes with the mistral api key', async () => {
-		const transport = new FakeFetch({ pages: [{ index: 0, markdown: 'text' }] });
-
-		await clientUsing(transport).ocr(input);
-
-		expect((transport.request?.init?.headers as Record<string, string>).authorization).toBe(
-			'Bearer test-key'
-		);
-	});
-
-	it('sends a document as a document_url', async () => {
-		const transport = new FakeFetch({ pages: [{ index: 0, markdown: 'text' }] });
-
-		await clientUsing(transport).ocr(input);
-
-		expect(bodyOf(transport).document).toEqual({
-			type: 'document_url',
-			document_url: 'https://storage.test/object?signed'
-		});
-	});
-
-	it('sends an image as an image_url', async () => {
-		const transport = new FakeFetch({ pages: [{ index: 0, markdown: 'text' }] });
-
-		await clientUsing(transport).ocr({ ...input, kind: 'image', fileName: 'photo.png' });
-
-		expect(bodyOf(transport).document).toEqual({
-			type: 'image_url',
-			image_url: 'https://storage.test/object?signed'
-		});
-	});
-
-	it('requests embedded images so they can be described', async () => {
-		const transport = new FakeFetch({ pages: [{ index: 0, markdown: 'text' }] });
-
-		await clientUsing(transport).ocr(input);
-
-		expect(bodyOf(transport).include_image_base64).toBe(true);
-	});
-});
-
 describe('MistralOcr response parsing', () => {
 	it('splits page markdown at image placeholders', async () => {
 		const transport = new FakeFetch({

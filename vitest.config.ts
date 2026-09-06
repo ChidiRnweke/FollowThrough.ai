@@ -74,6 +74,11 @@ export default defineConfig({
 						'src/**/*.contract.spec.ts'
 					],
 					isolate: false,
+					// One fork, one retained module graph: the shared server/agent/editor
+					// closure is ~1GB across ~250 files, so a second fork would duplicate
+					// it (measured ~1.17GB peak total at maxWorkers: 1). Bump only on a
+					// machine with >=32GB RAM; the memory cuts belong in the specs and
+					// graph, not in more workers.
 					maxWorkers: 1,
 					sequence: { groupOrder: 0 }
 				}
@@ -112,7 +117,6 @@ export default defineConfig({
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
 						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts',
 						'src/lib/client/notes/sync/indexeddb-workspace-repository.svelte.spec.ts',
-						'src/lib/client/proofreading/harper-linter.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'
 					],

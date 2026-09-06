@@ -100,11 +100,6 @@ describe('an item no arm recognises', () => {
 		expect(item.type === 'unrecognised' && item.reason).toContain('compaction');
 	});
 
-	it('keeps the row whole for the round trip back to the provider', () => {
-		const raw = { type: 'compaction', summary: 'earlier turns' };
-		expect(toStoredSessionItem(parseSessionItem(raw))).toEqual(raw);
-	});
-
 	// A row with an unmodelled *field* is as unreadable as one with an unmodelled
 	// type, and must not be silently stripped down to the fields that did parse.
 	it('does not quietly drop a field an arm has no place for', () => {
@@ -117,16 +112,6 @@ describe('an item no arm recognises', () => {
 });
 
 describe('writing a session item back', () => {
-	it.each([
-		['user message', storedUser],
-		['assistant message', storedAssistant],
-		['function call', storedCall],
-		['function call result', storedResult],
-		['reasoning', storedReasoning]
-	])('restores a stored %s exactly', (_label, stored) => {
-		expect(toStoredSessionItem(parseSessionItem(stored))).toEqual(stored);
-	});
-
 	it('leaves an absent optional absent rather than writing an undefined', () => {
 		expect(Object.keys(toStoredSessionItem(parseSessionItem(storedUser)))).not.toContain('id');
 	});

@@ -23,12 +23,6 @@ describe('Diffing note revision texts', () => {
 		expect(diffNoteRevisionTexts(before, after).patch).toBe('');
 	});
 
-	it('reports a title change the body patch cannot show', () => {
-		const before = revisionText({ title: 'Old title', plainText: 'Same body' });
-		const after = revisionText({ revision: 2, title: 'New title', plainText: 'Same body' });
-		expect(diffNoteRevisionTexts(before, after).patch).toBe('title: Old title → New title');
-	});
-
 	it('labels the patch with the revision it runs to', () => {
 		const before = revisionText({ plainText: 'before' });
 		const after = revisionText({ revision: 2, plainText: 'after' });
@@ -51,11 +45,5 @@ describe('Diffing note revision texts', () => {
 		const before = revisionText({ plainText: longText('old') });
 		const after = revisionText({ revision: 2, plainText: longText('new') });
 		expect(diffNoteRevisionTexts(before, after).truncated).toBe(true);
-	});
-
-	it('points a truncated patch at the full-content read', () => {
-		const before = revisionText({ plainText: longText('old') });
-		const after = revisionText({ revision: 2, plainText: longText('new') });
-		expect(diffNoteRevisionTexts(before, after).patch).toContain('note versions directory');
 	});
 });

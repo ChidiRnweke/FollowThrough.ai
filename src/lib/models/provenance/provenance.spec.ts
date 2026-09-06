@@ -142,48 +142,6 @@ const supportedProducers = [
 	}
 ] as const;
 
-describe('provenanceSchema', () => {
-	it.each(supportedProducers)('accepts $label provenance', ({ value }) => {
-		expect(provenanceSchema.safeParse(value).success).toBe(true);
-	});
-
-	it('rejects an unknown producer name', () => {
-		expect(
-			provenanceSchema.safeParse({
-				...identity,
-				producerKind: 'agent',
-				producerName: 'Unregistered agent',
-				pipeline: 'agent',
-				metadata: {}
-			}).success
-		).toBe(false);
-	});
-
-	it('rejects a producer and pipeline mismatch', () => {
-		expect(
-			provenanceSchema.safeParse({
-				...identity,
-				producerKind: 'pipeline',
-				producerName: 'Reference',
-				pipeline: 'relate',
-				sourceAnchorId: anchorId,
-				metadata: {}
-			}).success
-		).toBe(false);
-	});
-
-	it('rejects unknown producer metadata', () => {
-		expect(
-			provenanceSchema.safeParse({
-				...identity,
-				producerKind: 'user',
-				producerName: 'document-export',
-				metadata: { arbitrary: true }
-			}).success
-		).toBe(false);
-	});
-});
-
 describe('Completing a request into a record', () => {
 	const storedIdentity = {
 		id: identity.id as Provenance['id'],

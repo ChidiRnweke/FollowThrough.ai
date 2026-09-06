@@ -10,10 +10,25 @@ interface LanguageModelClientOptions {
 	readonly appURL?: string;
 }
 
+/**
+ * The narrow surface the batch embedder calls, so tests can inject a
+ * hand-written reply without a mocking library.
+ */
+export interface EmbeddingClient {
+	readonly embeddings: {
+		create(
+			body: { readonly model: string; readonly input: string[] },
+			options?: { readonly signal?: AbortSignal }
+		): Promise<{
+			readonly data: readonly { readonly index: number; readonly embedding: readonly number[] }[];
+		}>;
+	};
+}
+
 const createLanguageModelClient = (
 	apiKey: string,
 	options: LanguageModelClientOptions = {}
-): OpenAI =>
+): EmbeddingClient =>
 	new OpenAI({
 		apiKey,
 		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
@@ -47,16 +62,17 @@ export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-large';
 export interface EmbeddingOptions extends LanguageModelClientOptions {
 	readonly model?: string;
 	readonly observer?: OperationObserver;
+	readonly client?: EmbeddingClient;
 }
 
 export class Embeddings implements IEmbeddings {
-	private readonly client;
+	private readonly client: EmbeddingClient;
 	readonly model: string;
 	private readonly observer: OperationObserver;
 
 	constructor(apiKey: string, options: EmbeddingOptions = {}) {
 		this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
-		this.client = createLanguageModelClient(apiKey, options);
+		this.client = options.client ?? createLanguageModelClient(apiKey, options);
 		this.observer = options.observer ?? directObserver;
 	}
 
