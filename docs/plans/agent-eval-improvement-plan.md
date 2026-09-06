@@ -4,9 +4,13 @@
 
 - Subject model: `openai/gpt-5.6-luna`
 - Acceptance sample count: one per case
-- Branch and commit policy: work and commit directly on `master`; never push implicitly
+- Branch and commit policy: use a dedicated linked worktree and task branch. Follow
+  `AGENTS.md` for commits, PRs, and required checks; never work directly on `master`.
 - Result ledger: `/tmp/followthrough-eval-results.json` unless `EVAL_RESULTS_PATH` overrides it
 - A section is complete only when every selected case passes once.
+
+Historical results below record the workflow used at the time. For resumed work, use the
+current branch and commit policy above.
 
 ## Calibration
 

@@ -128,7 +128,7 @@
 
 	This block is the panel's anchor — the largest type in the panel. That is a
 	deliberate inversion of "orientation text stays quiet": with zeros rendered
-	(see DESIGN_SYSTEM.md, the one sanctioned empty-value exception) the row is a
+	(see docs/design/design-system.md, the one sanctioned empty-value exception) the row is a
 	standing map of what the agent can and cannot see, not a sentence you read
 	once. It carries no card: a border and wash here made the panel's calmest
 	content look like its loudest control. Type scale and the space beneath the

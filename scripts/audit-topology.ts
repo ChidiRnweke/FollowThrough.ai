@@ -136,8 +136,8 @@ for (const include of vitestSource.matchAll(/\binclude:\s*(\[[\s\S]*?\]|'[^']+'|
 
 const maintainedDocuments = [
 	'README.md',
-	'ARCHITECTURE.md',
-	'DESIGN_SYSTEM.md',
+	'docs/architecture/README.md',
+	'docs/design/design-system.md',
 	...readdirSync(resolve(root, 'docs'))
 		.filter((name) => name.endsWith('.md') && name !== 'TEST_GAPS.md')
 		.map((name) => `docs/${name}`)

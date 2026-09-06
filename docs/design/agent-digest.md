@@ -1,6 +1,6 @@
-# design-system.agent.md — compressed reference
+# Design system — derived agent digest
 
-> Machine-oriented digest of DESIGN_SYSTEM.md. Usage rules only. Values live in src/routes/layout.css. Conflict → flag, don't guess. Uncovered decision → append to DESIGN_SYSTEM.md.
+> Machine-oriented digest of docs/design/design-system.md. Usage rules only. Values live in src/routes/layout.css. Conflict → flag, don't guess. Uncovered decision → append to docs/design/design-system.md.
 
 ## identity
 
@@ -123,6 +123,6 @@
 
 ## hard rules
 
-- missing token → add token first (src/routes/layout.css + DESIGN_SYSTEM.md) → then build
+- missing token → add token first (src/routes/layout.css + docs/design/design-system.md) → then build
 - check shadcn/edra component exists before creating new
-- src/routes/layout.css=values, DESIGN_SYSTEM.md=usage, this file=digest. digest conflicts with source → source wins, update digest
+- src/routes/layout.css=values, docs/design/design-system.md=usage, this file=digest. digest conflicts with source → source wins, update digest

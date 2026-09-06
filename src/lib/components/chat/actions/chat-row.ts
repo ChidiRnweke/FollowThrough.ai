@@ -18,7 +18,7 @@
  * case — what it opened is directly underneath it — and `Collapsible.Trigger` sets the
  * same attribute. So an open "N steps" row and the open call row inside it each became a
  * filled rectangle, one nested in the other, which is the one thing the surface rule in
- * DESIGN_SYSTEM.md ("list before card") exists to prevent. Hover still washes; the row is
+ * docs/design/design-system.md ("list before card") exists to prevent. Hover still washes; the row is
  * still plainly a control.
  */
 export const CHAT_ROW =

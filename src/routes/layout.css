@@ -9,7 +9,7 @@
 @plugin '@tailwindcss/typography';
 
 /* ============================================================
-   DESIGN SYSTEM TOKENS — see DESIGN_SYSTEM.md for rationale
+   DESIGN SYSTEM TOKENS — see docs/design/design-system.md for rationale
    ============================================================ */
 
 :root {
@@ -459,7 +459,7 @@
 		font-variant-ligatures: none;
 	}
 
-	/* Interaction contract — see DESIGN_SYSTEM.md "Interaction states".
+	/* Interaction contract — see docs/design/design-system.md "Interaction states".
 	   Tailwind v4's preflight dropped the `cursor: pointer` that browsers and
 	   every previous version gave clickable things, which left the whole app —
 	   shadcn controls, the vendored editor's toolbars, bare buttons — reading as
@@ -728,7 +728,7 @@
 	height: var(--dialog-fill-height);
 }
 
-/* Named type scale — see DESIGN_SYSTEM.md "Type scale". App code uses these
+/* Named type scale — see docs/design/design-system.md "Type scale". App code uses these
    instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
    → body (sm) → section-title (base) → page-title (2xl). */
 @utility page-title {
