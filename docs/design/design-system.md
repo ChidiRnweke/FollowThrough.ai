@@ -56,7 +56,7 @@
   portalled popovers must retain their own palette.
 
 - Find candidates without a browser using `pnpm audit:surface-text` (`--json` for structured
-  output). See [the audit guide](docs/src/content/docs/guides/audit-surface-text.md) for review
+  output). See [the audit guide](../src/content/docs/guides/audit-surface-text.md) for review
   rules, the quick ripgrep searches, and optional rendered contrast checks.
 
 ## Tokens and composition

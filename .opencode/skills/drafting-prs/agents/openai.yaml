@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drafting PRs"
+  short_description: "Write PRs that preserve intent and verified evidence"
+  default_prompt: "Use $drafting-prs to draft a self-contained PR with clear rationale and captioned evidence."

@@ -1,5 +1,5 @@
 /*
-	FollowThrough docs theme — maps DESIGN_SYSTEM.md tokens onto Starlight's
+	FollowThrough docs theme — maps docs/design/design-system.md tokens onto Starlight's
 	`--sl-*` surface. Token values mirror src/routes/layout.css (OKLCH); the
 	accent discipline, type ladder, and flat-surface rules carry over.
 
@@ -184,7 +184,7 @@ summary {
 }
 
 /* ============================================================
-   Typography ladder (DESIGN_SYSTEM.md "Type scale")
+   Typography ladder (docs/design/design-system.md "Type scale")
    ============================================================ */
 /* Page title = Newsreader medium (the display face reaches content only here). */
 .content-panel h1,
@@ -249,7 +249,7 @@ summary {
 }
 
 /* Sidebar: active item carries the brand accent on a brand wash — not a new
-   colored fill (DESIGN_SYSTEM.md "Accent discipline"). */
+   colored fill (docs/design/design-system.md "Accent discipline"). */
 .sidebar a[aria-current='page'] {
 	color: var(--sl-color-text-accent);
 	background-color: var(--ft-brand-wash);

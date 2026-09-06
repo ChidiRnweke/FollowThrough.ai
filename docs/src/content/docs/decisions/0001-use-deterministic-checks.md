@@ -25,7 +25,7 @@ Run these checks in `pnpm test:architecture`:
 - The topology audit checks rules that are specific to this repository.
 - The test audit checks the test rules.
 
-Keep the human-readable rules in `AGENTS.md`, `ARCHITECTURE.md`, and `DESIGN_SYSTEM.md`.
+Keep the human-readable rules in `AGENTS.md`, `docs/architecture/README.md`, and `docs/design/design-system.md`.
 
 ## Consequences
 

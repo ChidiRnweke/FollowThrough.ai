@@ -6,7 +6,7 @@
 
 	let { data } = $props();
 
-	// Nothing to read until something is uploaded, and DESIGN_SYSTEM.md is explicit
+	// Nothing to read until something is uploaded, and docs/design/design-system.md is explicit
 	// that a control for a value that is not set reads as noise.
 	let reportedCount = $state<number>();
 	const attachmentCount = $derived(reportedCount ?? data.attachments.length);

@@ -36,7 +36,7 @@ FollowThrough is the editor those agents should have been running inside.
 
 Real screens, both themes, in [`static/product-screenshots/`](static/product-screenshots/). The
 feature-by-feature tour — what each screen is and why it matters — is in
-[`product-walkthrough.md`](product-walkthrough.md).
+the [usage guides](docs/src/content/docs/using/).
 
 **The centerpiece: the editor with AI inside it.** Select a passage and the AI toolbar is right
 there — ask about it, extract its promises, find related notes, turn it into a diagram. Open
@@ -138,16 +138,20 @@ a repository can be checked against a real schema without booting the app.
 | `src/lib/components/ui/`                    | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                             |
 
 UI conventions — tokens, type scale, the interaction contract — are in
-[`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Read it before adding a component.
+[`docs/design/design-system.md`](docs/design/design-system.md). Read it before adding a component.
+
+## Repository documentation
+
+- [Architecture rules](docs/architecture/README.md) and [type narrowing](docs/architecture/type-narrowing.md)
+- [Design system](docs/design/design-system.md) and its [derived agent digest](docs/design/agent-digest.md)
+- [Implementation plans](docs/plans/)
+- [Contribution and PR evidence rules](AGENTS.md)
+- [Published documentation source](docs/src/content/docs/)
 
 ## Observability
 
 Agent runs are instrumented with OpenTelemetry and exported to Arize Phoenix, so every model call,
 tool call, and retrieval is inspectable after the fact.
-
-![Agent run traces in Phoenix](docs/screenshots/llm-traces.png)
-
-![Span detail for a single agent run](docs/screenshots/llm-spans.png)
 
 Collector config is in `otel-collector-config.yaml`; the Node instrumentation bootstrap is
 `scripts/otel-instrumentation.js`, loaded via `--import` in `pnpm start`.

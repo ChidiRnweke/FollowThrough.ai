@@ -7,7 +7,7 @@ import Mermaid from '../../../components/mermaid.astro';
 
 FollowThrough is a SvelteKit (Svelte 5, TypeScript) monolith, organized capability-first: every layer is sliced by product capability (notes, todos, memory, agent) rather than by technology. It runs on PostgreSQL 17 with pgvector (Drizzle ORM), S3-compatible object storage, and OpenRouter for chat models and embeddings. One Docker image serves both the web app and a worker sidecar; secrets come from Infisical; traces go to Arize Phoenix over OpenTelemetry.
 
-The enforcement-level rules live in `ARCHITECTURE.md` at the repository root; this page is the map.
+The enforcement-level rules live in `docs/architecture/README.md` in the repository; this page is the map.
 
 ## Software architecture
 

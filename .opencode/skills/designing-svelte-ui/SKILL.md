@@ -136,7 +136,7 @@ These files contain:
 
 Once the Style & UX plans are confirmed, write to the following files to persist state across sessions:
 
-### 1) `DESIGN_SYSTEM.md` (project root)
+### 1) `docs/design/design-system.md`
 
 Must include:
 
@@ -152,7 +152,7 @@ Must include:
 Keep short — this file is loaded into every agent context, so don't pollute it with the full design system. It should only point to the right file:
 
 ```md
-For UI design decisions (tokens, style, components) and UX patterns, see @DESIGN_SYSTEM.md.
+For UI design decisions (tokens, style, components) and UX patterns, see @docs/design/design-system.md.
 ```
 
 ### 3) `CLAUDE.md` (project root)
@@ -165,7 +165,7 @@ Put tokens at the top of `src/app.css` (or `src/lib/styles/tokens.css`), with a 
 
 ```css
 /* ============================================================
-   DESIGN SYSTEM TOKENS — see DESIGN_SYSTEM.md for rationale
+   DESIGN SYSTEM TOKENS — see docs/design/design-system.md for rationale
    ============================================================ */
 ```
 
@@ -217,7 +217,7 @@ src/lib/components/
 - Never hand-roll spacing ad-hoc → use `Stack` / tokens
 - Never use Tailwind default palette as final colors → tokens only
 - **Never hand-roll complex structural layouts** (like resizable panes or virtualized feeds) without consulting the matching UX Pattern spec in `references/ux-`.
-- If a visual request conflicts with `DESIGN_SYSTEM.md`, **flag it** (don't silently change style).
+- If a visual request conflicts with `docs/design/design-system.md`, **flag it** (don't silently change style).
 
 ### 5.3 Style repository integration in primitives
 
@@ -279,7 +279,7 @@ When reviewing or improving UI, the agent must audit for:
 
 ### 8.2 Style & UX drift (new)
 
-Compare code against `DESIGN_SYSTEM.md`:
+Compare code against `docs/design/design-system.md`:
 
 - Is the Style Application Plan being followed?
 - Are modifiers leaking into banned zones?
@@ -316,7 +316,7 @@ Before concluding any UI implementation:
 ## Checklist Before Shipping Any UI
 
 Copy this checklist into your initial response scratchpad to track your progress:
-- [ ] Style Application Plan exists in `DESIGN_SYSTEM.md` and matches implementation.
+- [ ] Style Application Plan exists in `docs/design/design-system.md` and matches implementation.
 - [ ] **Primary UX Pattern identified** for the feature and Reference file read.
 - [ ] UX Pattern Do/Don't rules strictly followed (e.g., proper scrolling, URL syncing, focus states).
 - [ ] Tokens are full `hsl()` (or OKLCH) values, not bare triples.

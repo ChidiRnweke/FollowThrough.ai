@@ -2,7 +2,7 @@
  * What an empty project space is *for*, said one way at a time.
  *
  * A resource with nothing in it renders a tip instead of a zero — a count of
- * none is a dead stat, while a tip is an invitation to act (see DESIGN_SYSTEM.md
+ * none is a dead stat, while a tip is an invitation to act (see docs/design/design-system.md
  * "Empty states"). Tips rotate so the page teaches something different on a
  * return visit rather than nagging with the same line.
  *
