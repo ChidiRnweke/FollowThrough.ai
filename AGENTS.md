@@ -27,6 +27,31 @@ separate check validates the PR title (under squash-merge the title is the commi
 There are no local hooks. A rejected message means rewriting it before merge; a rejected commit
 already on the branch can be reworded with a rebase.
 
+## How changes land
+
+`master` is protected and shared by several agents; work in a linked worktree on a task branch,
+never on the main checkout or directly on `master`.
+
+```bash
+git worktree add ../<task-slug> -b <type>/<task-slug> origin/master
+cd ../<task-slug> && pnpm install
+```
+
+- One PR per coherent task. Finish the work, commit conventionally (see Commit messages), push
+  the branch, and open the PR with `gh pr create --head <branch> --title "<type(scope): subject>"`
+  and a body saying what changed and why.
+- A PR is done when its required checks pass: `commitlint`, `pr-title`, `quality` (lint, check,
+  architecture, docs check), `unit` (node and browser), and `contracts`. Run the cheap gates
+  locally first (`pnpm lint`, `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`) instead
+  of spending CI cycles on preventable failures. The e2e suite is not part of CI.
+- Address review by committing, or by rebasing the branch and pushing with `--force-with-lease`.
+- Each agent owns its worktree and branch: do not edit, reset, or delete another worktree or its
+  branch, and never push to `master` from anyone's worktree.
+- Releases are cut through release-please release PRs. Do not tag, bump versions, or edit
+  `CHANGELOG.md` by hand.
+- Remove your worktree (`git worktree remove`) and delete the branch once the PR is merged or
+  the task is abandoned.
+
 ## Seeing the running app
 
 Auth stays enabled in dev, so an unauthenticated request to any `(app)` route `303`s to
