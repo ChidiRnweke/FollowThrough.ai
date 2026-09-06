@@ -82,6 +82,27 @@ state for before/after comparisons where possible. Include the affected hover, f
 error, or loading state when that is the issue. Inspect each capture for the claimed result.
 Never substitute a generated mockup or label an after capture as before.
 
+When a state needs a live agent run or is otherwise impractical to reach in the full app, render
+the component instead. Point the fixture route at a component that supplies seeded props, then
+serve it:
+
+```bash
+pnpm exec vite dev --config vite.surface-text.config.ts --host 127.0.0.1 --port 5174
+```
+
+That config loads the real `src/routes/layout.css`, so the capture carries the real tokens and
+utilities. The vitest browser runner does not, so do not screenshot from it. Drive the page with
+Playwright, and give the region an id so the capture is the surface rather than the viewport.
+
+For the before state, stash the source and shoot again against the same running server:
+`git stash push -- src docs`, capture, `git stash pop`. This keeps the data, viewport and server
+identical across the pair, which a second worktree does not. Remove the temporary fixture and
+restore the route file before committing; the images are the only artifact that lands.
+
+Two mechanics that silently spoil a capture: the theme is `document.documentElement.classList`
+with `dark`, not a `data-theme` attribute; and a click leaves a focus ring, so blur the active
+element and move the pointer away before shooting.
+
 Keep temporary captures under ignored `artifacts/`. Commit only useful evidence images under
 `docs/pr-evidence/<task>/`, using descriptive names such as `sidebar-before.png`.
 Exclude credentials and private content; use synthetic data where needed.
