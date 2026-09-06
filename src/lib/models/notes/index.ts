@@ -375,6 +375,8 @@ export interface ListNoteDocumentsInput {
 export const MAX_NOTE_DOCUMENTS = 50;
 
 export interface CreateNoteInput {
+	/** Offline creation supplies the final identity before this note reaches the server. */
+	readonly id?: NoteId;
 	/**
 	 * Required, because there is no honest way to fill it in. It was optional, and
 	 * a note created without one landed in whichever project sorted first — or in a

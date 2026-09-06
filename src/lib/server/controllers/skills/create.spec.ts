@@ -34,6 +34,16 @@ const setup = () => {
 };
 
 describe('Create skill invariants', () => {
+	it('preserves the locally assigned identity of the skill and its backing note', async () => {
+		const { controller } = setup();
+		const id = testNoteId(501);
+		const output = await controller.create(testActor(), {
+			id,
+			name: 'Offline skill',
+			projectId: testProjectId()
+		});
+		expect(output.skill.note.id).toBe(id);
+	});
 	it('creates a skill named after the input', async () => {
 		const { controller } = setup();
 		const output = await controller.create(testActor(), {

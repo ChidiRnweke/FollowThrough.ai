@@ -171,6 +171,7 @@ interface MemoryChangePayload {
 }
 
 export interface CreateTodoInput {
+	readonly id?: TodoId;
 	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly description?: string;

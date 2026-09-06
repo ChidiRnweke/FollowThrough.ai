@@ -25,6 +25,16 @@ const setup = () => {
 };
 
 describe('Note management invariants', () => {
+	it('preserves the final identity assigned to a note before it was synchronized', async () => {
+		const { service } = setup();
+		const id = testNoteId(501);
+		const note = await service.create(testActor(), {
+			id,
+			projectId: projectBuilder().id,
+			title: 'Offline note'
+		});
+		expect(note.id).toBe(id);
+	});
 	it('rejects a stale save without replacing the note', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder({ currentRevision: 2 })];

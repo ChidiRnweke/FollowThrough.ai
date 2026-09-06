@@ -110,6 +110,7 @@ export class Skills implements SkillsController {
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteCreator.create(actor, {
+				id: input.id,
 				title: input.name,
 				projectId: input.projectId,
 				parentId: input.parentId

@@ -37,7 +37,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		)
 			throw new ConflictError('An active project with this name already exists');
 		const project = projectBuilder({
-			id: testProjectId(this.nextProject++),
+			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,
 			name: input.name,
 			description: input.description
@@ -130,7 +130,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		position: number
 	): Promise<Note> {
 		const folder = noteBuilder({
-			id: testNoteId(this.nextEntry++),
+			id: input.id ?? testNoteId(this.nextEntry++),
 			userId: actor.userId,
 			projectId: input.projectId,
 			parentId: input.parentId,

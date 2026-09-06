@@ -129,6 +129,7 @@ export interface CreateSkillFromSelectionOutput {
 }
 
 export interface CreateSkillInput {
+	readonly id?: NoteId;
 	readonly name: string;
 	readonly description?: string;
 	readonly triggerHints?: readonly string[];
