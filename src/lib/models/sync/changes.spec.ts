@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyResourceChanges, syncEtag, type ResourceState } from './index';
+import { applyResourceChanges, receiveResource, syncEtag, type ResourceState } from './index';
 
 const present: ResourceState<string> = {
 	kind: 'present',
@@ -10,6 +10,30 @@ const present: ResourceState<string> = {
 };
 
 describe('applying compact resource changes', () => {
+	it('does not let a late deletion erase a newer recreation', () => {
+		const newer = receiveResource(present, { etag: syncEtag(3n), value: 'Recreated' });
+		expect(
+			applyResourceChanges(new Map([['note:1', newer]]), [
+				{ kind: 'delete', key: 'note:1', etag: syncEtag(2n) }
+			]).get('note:1')
+		).toEqual(newer);
+	});
+
+	it('does not let an earlier upsert resurrect a deleted version', () => {
+		const deleted: ResourceState<string> = { kind: 'deleted', etag: syncEtag(2n) };
+		expect(
+			applyResourceChanges(new Map([['note:1', deleted]]), [
+				{ kind: 'upsert', key: 'note:1', etag: syncEtag(2n) }
+			]).get('note:1')
+		).toEqual(deleted);
+	});
+
+	it('does not let a body received after deletion restore the deleted version', () => {
+		const deleted: ResourceState<string> = { kind: 'deleted', etag: syncEtag(2n) };
+		expect(receiveResource(deleted, { etag: syncEtag(2n), value: 'Deleted copy' })).toEqual(
+			deleted
+		);
+	});
 	it('preserves a cached resource absent from the change batch', () => {
 		const current = new Map([['note:1', present]]);
 		expect(applyResourceChanges(current, [])).toEqual(current);
@@ -40,12 +64,14 @@ describe('applying compact resource changes', () => {
 
 	it('records deletion even for an object this device never downloaded', () => {
 		expect(
-			applyResourceChanges(new Map(), [{ kind: 'delete', key: 'note:1' }]).get('note:1')
-		).toEqual({ kind: 'deleted' });
+			applyResourceChanges(new Map(), [{ kind: 'delete', key: 'note:1', etag: syncEtag(1n) }]).get(
+				'note:1'
+			)
+		).toEqual({ kind: 'deleted', etag: syncEtag(1n) });
 	});
 
 	it('makes a recreated identity fetchable without restoring its deleted old content', () => {
-		const deleted: ResourceState<string> = { kind: 'deleted' };
+		const deleted: ResourceState<string> = { kind: 'deleted', etag: syncEtag(1n) };
 		expect(
 			applyResourceChanges(new Map([['note:1', deleted]]), [
 				{ kind: 'upsert', key: 'note:1', etag: syncEtag(2n) }

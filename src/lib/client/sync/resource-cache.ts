@@ -1,6 +1,8 @@
 import {
 	accessCache,
 	cachedSnapshot,
+	receiveResource,
+	type ResourceDeletion,
 	applyResourceChanges,
 	initialSyncCursor,
 	type SyncCursor,
@@ -130,25 +132,17 @@ export class ResourceCache<T> {
 	}
 
 	/** Mutation receipts feed the same cache; an older change batch cannot undo an accepted write. */
-	async accept(key: string, snapshot: SyncSnapshot<T> | null): Promise<void> {
+	async accept(key: string, received: SyncSnapshot<T> | ResourceDeletion): Promise<void> {
 		await this.initialize();
 		if (this.stopped) return;
 		this.epoch += 1;
-		await this.commit(() =>
-			snapshot
-				? {
-						put: [
-							{
-								key,
-								entry: {
-									kind: 'present',
-									cache: transitionCache(this.entry(key), { kind: 'receive', snapshot })
-								}
-							}
-						],
-						remove: []
-					}
-				: { put: [{ key, entry: { kind: 'deleted' } }], remove: [] }
+		await this.commit(() => ({ put: [{ key, entry: this.receive(key, received) }], remove: [] }));
+	}
+
+	private receive(key: string, received: SyncSnapshot<T> | ResourceDeletion): ResourceState<T> {
+		return receiveResource(
+			this.entries.get(key) ?? { kind: 'present', cache: { kind: 'uncached' } },
+			received
 		);
 	}
 
@@ -295,7 +289,7 @@ export class ResourceCache<T> {
 			if (epoch !== this.epoch) return { kind: 'complete' };
 			if (response.kind === 'deleted') {
 				await this.commit(
-					() => ({ put: [{ key, entry: { kind: 'deleted' } }], remove: [] }),
+					() => ({ put: [{ key, entry: this.receive(key, response) }], remove: [] }),
 					epoch
 				);
 				return { kind: 'complete' };
@@ -313,10 +307,7 @@ export class ResourceCache<T> {
 					put: [
 						{
 							key,
-							entry: {
-								kind: 'present',
-								cache: transitionCache(this.entry(key), { kind: 'receive', snapshot: received })
-							}
+							entry: this.receive(key, received)
 						}
 					],
 					remove: []

@@ -48,7 +48,7 @@ export class WorkspaceSyncChanges implements SyncChangesRepository {
 			changes: batch.changes.map((change) => {
 				const key = workspaceResourceKey(workspaceResourceIdentitySchema.parse(change));
 				return change.operation === 'delete'
-					? { kind: 'delete', key }
+					? { kind: 'delete', key, etag: syncEtag(BigInt(change.version)) }
 					: { kind: 'upsert', key, etag: syncEtag(BigInt(change.version)) };
 			})
 		};

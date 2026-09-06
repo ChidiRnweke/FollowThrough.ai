@@ -161,6 +161,14 @@ export const agentToolCoverage = {
 		sed: { kind: 'read', tools: ['sed'] }
 	},
 	workspace: {
+		pullChanges: {
+			kind: 'excluded',
+			reason: 'Browser synchronization uses the account change journal.'
+		},
+		readResource: {
+			kind: 'excluded',
+			reason: 'Conditional resource reads are a browser persistence protocol.'
+		},
 		getShellContext: { kind: 'read', tools: ['get_workspace_context'] },
 		getTodayView: { kind: 'read', tools: ['get_today_view'] }
 	},

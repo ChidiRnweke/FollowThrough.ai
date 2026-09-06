@@ -26,7 +26,7 @@ export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
 
 export const resourceChangeSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('upsert'), key: z.string().min(1), etag: syncEtagSchema }),
-	z.object({ kind: z.literal('delete'), key: z.string().min(1) })
+	z.object({ kind: z.literal('delete'), key: z.string().min(1), etag: syncEtagSchema })
 ]);
 export type ResourceChange = z.infer<typeof resourceChangeSchema>;
 export const syncChangesSchema = z
@@ -45,10 +45,13 @@ export interface SyncSnapshot<T> {
 	readonly value: T;
 }
 
+export const deletionSchema = z.object({ kind: z.literal('deleted'), etag: syncEtagSchema });
+export type ResourceDeletion = z.infer<typeof deletionSchema>;
+
 export type SyncObjectRead<T> =
 	| { readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> }
 	| { readonly kind: 'unchanged'; readonly etag: SyncEtag }
-	| { readonly kind: 'deleted' }
+	| ResourceDeletion
 	| { readonly kind: 'unavailable' };
 
 export type TransferState =
@@ -68,13 +71,39 @@ export type CacheEntry<T> =
 
 /** Server existence is independent of cache freshness and of a pending local draft. */
 export type ResourceState<T> =
-	{ readonly kind: 'present'; readonly cache: CacheEntry<T> } | { readonly kind: 'deleted' };
+	{ readonly kind: 'present'; readonly cache: CacheEntry<T> } | ResourceDeletion;
 
 export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceState<T>> =>
 	z.discriminatedUnion('kind', [
 		z.object({ kind: z.literal('present'), cache: cacheEntrySchema(value) }),
-		z.object({ kind: z.literal('deleted') })
+		deletionSchema
 	]);
+
+export const resourceVersion = <T>(state: ResourceState<T>): SyncEtag | null =>
+	state.kind === 'deleted'
+		? state.etag
+		: state.cache.kind === 'updating'
+			? (state.cache.target ?? state.cache.previous?.etag ?? null)
+			: state.cache.kind === 'cached'
+				? state.cache.snapshot.etag
+				: null;
+
+export const receiveResource = <T>(
+	state: ResourceState<T>,
+	received: SyncSnapshot<T> | ResourceDeletion
+): ResourceState<T> => {
+	const known = resourceVersion(state);
+	if (known && compareSyncEtags(received.etag, known) < 0) return state;
+	if ('kind' in received) return received;
+	if (state.kind === 'deleted' && received.etag === state.etag) return state;
+	return {
+		kind: 'present',
+		cache: transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
+			kind: 'receive',
+			snapshot: received
+		})
+	};
+};
 
 /** A compact journal batch changes only the named resources, never infers deletion from absence. */
 export const applyResourceChanges = <T>(
@@ -84,10 +113,16 @@ export const applyResourceChanges = <T>(
 	const next = new Map(current);
 	for (const change of changes) {
 		const previous = current.get(change.key);
+		if (previous) {
+			const known = resourceVersion(previous);
+			if (known && compareSyncEtags(change.etag, known) < 0) continue;
+			if (previous.kind === 'deleted' && change.kind === 'upsert' && change.etag === previous.etag)
+				continue;
+		}
 		next.set(
 			change.key,
 			change.kind === 'delete'
-				? { kind: 'deleted' }
+				? { kind: 'deleted', etag: change.etag }
 				: {
 						kind: 'present',
 						cache: transitionCache(

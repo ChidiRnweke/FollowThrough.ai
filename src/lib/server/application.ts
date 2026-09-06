@@ -18,6 +18,7 @@ import type { AgentEventBus } from './services/agent/runs/events';
 import type { ScheduledTask } from './services/scheduler';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
+import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
 import { createNotesCapability } from './factories/capabilities/notes-capability-factory';
 import { createReferencesCapability } from './factories/capabilities/references-capability-factory';
 import { createRelationshipsCapability } from './factories/capabilities/relationships-capability-factory';
@@ -116,6 +117,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
+	const synchronization = createSyncCapability({ db });
 	const projectCapability = createProjectsCapability({ db });
 	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
 	const todoCapability = createTodosCapability({
@@ -450,6 +452,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
+			syncChanges: synchronization.changes,
+			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
 			projectLister: projects,
 			noteTreeReader: notes,

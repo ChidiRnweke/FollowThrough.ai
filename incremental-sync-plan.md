@@ -20,7 +20,7 @@ or online. There are no guessed read windows, silent fallbacks, or automatic con
 - [x] Implement the generic resource cache, in-memory fakes, IndexedDB cache, and account isolation.
 - [ ] Add cross-tab coordination and durable mutation queue persistence.
 - [x] Add database sync versions and a compact authenticated journal with commit-ordered account cursors.
-- [ ] Add typed object readers and expose synchronization through controller/remote boundaries.
+- [x] Add typed object readers and expose synchronization through controller/remote boundaries.
 - [ ] Add atomic guarded mutation replay and durable idempotency receipts.
 - [ ] Build shared normalized projections and migrate app routes to browser-shell loading.
 - [ ] Wire offline mutations across supported domains and preserve legacy note/skill drafts.
@@ -46,6 +46,8 @@ integration explicitly. Do not delete the existing note outbox before migration 
   polling path is superseded by the compact journal.
 - `32a6307`: conditional typed resource reads and the explicit foreground read barrier; 18 PostgreSQL
   contracts, 45 focused node tests, type check, scoped lint, and architecture checks passed.
+- `f26ada5`: compact journal, account cursor, durable tombstones, and offline read-barrier release;
+  48 focused node tests, 24 PostgreSQL contracts, and 7 browser persistence tests passed.
 
 The version metadata lives in one database registry keyed by resource type and a JSON tuple of
 primary-key values. This avoids leaking database synchronization fields into existing domain

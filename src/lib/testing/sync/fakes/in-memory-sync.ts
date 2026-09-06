@@ -59,10 +59,10 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 				change: { kind: 'upsert', key, etag: snapshot.etag }
 			});
 		}
-		for (const key of this.versions.keys()) {
+		for (const [key, etag] of this.versions) {
 			if (this.records.has(key)) continue;
 			this.versions.delete(key);
-			this.changes.set(key, { cursor: ++this.cursor, change: { kind: 'delete', key } });
+			this.changes.set(key, { cursor: ++this.cursor, change: { kind: 'delete', key, etag } });
 		}
 		const batch = {
 			cursor: String(this.cursor) as SyncCursor,

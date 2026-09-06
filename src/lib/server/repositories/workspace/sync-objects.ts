@@ -104,7 +104,7 @@ export class WorkspaceSyncObjects implements SyncObjectRepository {
 			left join workspace_sync_versions v on v.resource_type = ${identity.type}
 				and v.resource_id = ${syncIdentitySql(registration)}
 			where ${registration.scope(actor)} and ${syncIdentitySql(registration)} = ${JSON.stringify(identity.id)}::jsonb
-			union all select jsonb_build_object('kind', 'deleted') as result
+			union all select jsonb_build_object('kind', 'deleted', 'etag', 'sync-v1-' || c.version::text) as result
 			from workspace_sync_changes c where c.account_id = ${actor.userId}
 				and c.resource_type = ${identity.type} and c.resource_id = ${JSON.stringify(identity.id)}::jsonb
 				and c.operation = 'delete'`);

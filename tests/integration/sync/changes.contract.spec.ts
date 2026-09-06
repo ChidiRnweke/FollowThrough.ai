@@ -47,6 +47,7 @@ describe('compact account synchronization journal', () => {
 		const batch = await journal.pull(owner, initial.cursor);
 		expect(batch.changes).toContainEqual({
 			kind: 'delete',
+			etag: expect.stringMatching(/^sync-v1-/),
 			key: workspaceResourceKey({ type: 'notes', id: [note.id] })
 		});
 	});

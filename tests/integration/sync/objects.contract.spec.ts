@@ -55,7 +55,7 @@ describe('conditional normalized object reads', () => {
 		await context.client`delete from notes where id = ${note.id}`;
 		expect(
 			await new WorkspaceSyncObjects(context.db).read(owner, { type: 'notes', id: [note.id] }, null)
-		).toEqual({ kind: 'deleted' });
+		).toEqual({ kind: 'deleted', etag: expect.stringMatching(/^sync-v1-/) });
 	});
 
 	it('normalizes absent todo fields instead of leaking database nulls', async () => {

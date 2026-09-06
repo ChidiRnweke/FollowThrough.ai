@@ -33,6 +33,9 @@ The client downloads new or changed bodies. A matching ETag never schedules a bo
 Deletion is an explicit durable tombstone, including for objects this device never downloaded;
 absence from a change batch means nothing changed. A never-known identity remains distinct from
 a deleted identity. Recreating an identity replaces its tombstone with an upsert.
+Tombstones retain the deleted resource's ETag. A deletion wins over an upsert of that same
+version, while a newer recreation wins over the old tombstone. Delayed batches and reads cannot
+undo this ordering.
 
 Cursors are account-scoped decimal integers. Updating an account's head row acquires a lock held
 until the domain transaction commits. Later writers for that account cannot commit a higher

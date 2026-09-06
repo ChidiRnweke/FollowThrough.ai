@@ -35,13 +35,13 @@ describe('durable workspace cache', () => {
 	it('retains the deletion and acknowledged cursor together after reopening storage', async () => {
 		const { name, repository } = setup();
 		await repository.commit('user-a', {
-			put: [{ key: 'note:1', entry: { kind: 'deleted' } }],
+			put: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			remove: [],
 			cursor: initialSyncCursor
 		});
 		await repository.close();
 		expect(await setup(name).repository.load('user-a')).toEqual({
-			records: [{ key: 'note:1', entry: { kind: 'deleted' } }],
+			records: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			cursor: initialSyncCursor
 		});
 	});
