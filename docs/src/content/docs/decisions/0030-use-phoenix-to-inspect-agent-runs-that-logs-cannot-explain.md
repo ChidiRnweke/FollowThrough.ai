@@ -1,9 +1,7 @@
 ---
-title: "ADR 0030: Use Phoenix to inspect agent runs that logs cannot explain"
+title: 'ADR 0030: Use Phoenix to inspect agent runs that logs cannot explain'
 description: View model, tool, retrieval, token, and evaluation work as one structured run.
 ---
-
-# ADR 0030: Use Phoenix to inspect agent runs that logs cannot explain
 
 ## Status
 

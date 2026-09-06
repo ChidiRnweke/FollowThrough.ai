@@ -1,9 +1,7 @@
 ---
-title: "ADR 0025: Save agent runs before starting them so retries and cancellation are safe"
+title: 'ADR 0025: Save agent runs before starting them so retries and cancellation are safe'
 description: Make long agent work survive refreshes, lost responses, and process interruption.
 ---
-
-# ADR 0025: Save agent runs before starting them so retries and cancellation are safe
 
 ## Status
 

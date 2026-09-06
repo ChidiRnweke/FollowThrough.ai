@@ -1,9 +1,7 @@
 ---
-title: "ADR 0009: Archive a project without archiving each item inside it"
+title: 'ADR 0009: Archive a project without archiving each item inside it'
 description: Hide a project as one unit while keeping its content stored.
 ---
-
-# ADR 0009: Archive a project without archiving each item inside it
 
 ## Status
 

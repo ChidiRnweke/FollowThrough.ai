@@ -3,8 +3,6 @@ title: 'ADR 0038: Adopt conventional commits, squash-only merges, and server-sid
 description: Why every commit entering master carries a machine-readable type, and why the check lives in CI rather than in local hooks.
 ---
 
-# ADR 0038: Adopt conventional commits, squash-only merges, and server-side commit enforcement
-
 ## Status
 
 Accepted.

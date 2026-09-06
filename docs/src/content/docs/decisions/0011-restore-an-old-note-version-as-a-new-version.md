@@ -3,8 +3,6 @@ title: 'ADR 0011: Restore an old version as a new version'
 description: Keep note and diagram history intact so a restore can also be undone.
 ---
 
-# ADR 0011: Restore an old version as a new version
-
 ## Status
 
 Accepted. Extended to diagrams.

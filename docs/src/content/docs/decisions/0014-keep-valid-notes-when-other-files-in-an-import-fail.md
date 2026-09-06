@@ -1,9 +1,7 @@
 ---
-title: "ADR 0014: Keep valid notes when other files in an import fail"
+title: 'ADR 0014: Keep valid notes when other files in an import fail'
 description: Report import failures without rolling back useful imported work.
 ---
-
-# ADR 0014: Keep valid notes when other files in an import fail
 
 ## Status
 

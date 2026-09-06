@@ -1,9 +1,7 @@
 ---
-title: "ADR 0021: Use unfinished database records as the embedding work queue"
+title: 'ADR 0021: Use unfinished database records as the embedding work queue'
 description: Resume embedding work from durable index state without a separate job table.
 ---
-
-# ADR 0021: Use unfinished database records as the embedding work queue
 
 ## Status
 

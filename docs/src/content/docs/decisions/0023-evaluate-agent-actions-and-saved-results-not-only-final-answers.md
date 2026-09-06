@@ -1,9 +1,7 @@
 ---
-title: "ADR 0023: Evaluate agent actions and saved results, not only final answers"
+title: 'ADR 0023: Evaluate agent actions and saved results, not only final answers'
 description: Test what the agent chose and what changed in the real application.
 ---
-
-# ADR 0023: Evaluate agent actions and saved results, not only final answers
 
 ## Status
 

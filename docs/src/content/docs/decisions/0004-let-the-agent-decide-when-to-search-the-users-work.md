@@ -3,8 +3,6 @@ title: "ADR 0004: Let the agent decide when to search the user's work"
 description: Give the agent a search tool instead of searching before every prompt.
 ---
 
-# ADR 0004: Let the agent decide when to search the user's work
-
 ## Status
 
 Accepted.

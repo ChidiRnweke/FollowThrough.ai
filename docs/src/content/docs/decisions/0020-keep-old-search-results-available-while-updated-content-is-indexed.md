@@ -1,9 +1,7 @@
 ---
-title: "ADR 0020: Keep old search results available while updated content is indexed"
+title: 'ADR 0020: Keep old search results available while updated content is indexed'
 description: Prefer briefly stale semantic results to making edited content disappear from search.
 ---
-
-# ADR 0020: Keep old search results available while updated content is indexed
 
 ## Status
 

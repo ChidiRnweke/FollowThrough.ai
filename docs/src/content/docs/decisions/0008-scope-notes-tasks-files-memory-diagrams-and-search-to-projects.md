@@ -1,9 +1,7 @@
 ---
-title: "ADR 0008: Scope notes, tasks, files, memory, diagrams, and search to projects"
+title: 'ADR 0008: Scope notes, tasks, files, memory, diagrams, and search to projects'
 description: Use a project as the common boundary for durable work and context.
 ---
-
-# ADR 0008: Scope notes, tasks, files, memory, diagrams, and search to projects
 
 ## Status
 

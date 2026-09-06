@@ -1,9 +1,7 @@
 ---
-title: "ADR 0015: Report a failure instead of silently returning a weaker result"
+title: 'ADR 0015: Report a failure instead of silently returning a weaker result'
 description: Tell users when requested work failed or returned an incomplete result.
 ---
-
-# ADR 0015: Report a failure instead of silently returning a weaker result
 
 ## Status
 

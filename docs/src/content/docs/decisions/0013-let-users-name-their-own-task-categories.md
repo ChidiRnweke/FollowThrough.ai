@@ -1,9 +1,7 @@
 ---
-title: "ADR 0013: Let users name their own task categories"
+title: 'ADR 0013: Let users name their own task categories'
 description: Store task categories as text instead of a fixed product list.
 ---
-
-# ADR 0013: Let users name their own task categories
 
 ## Status
 

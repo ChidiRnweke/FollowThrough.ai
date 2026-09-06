@@ -3,8 +3,6 @@ title: 'ADR 0039: Use release-please for commit-driven, human-gated releases'
 description: Why releases are generated from conventional commits by release-please, gated by a release PR, and fed into the docs from CHANGELOG.md.
 ---
 
-# ADR 0039: Use release-please for commit-driven, human-gated releases
-
 ## Status
 
 Accepted.

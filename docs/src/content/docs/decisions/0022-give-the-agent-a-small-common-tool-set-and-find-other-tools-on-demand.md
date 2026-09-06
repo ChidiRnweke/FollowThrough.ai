@@ -1,9 +1,7 @@
 ---
-title: "ADR 0022: Give the agent a small common tool set and find other tools on demand"
+title: 'ADR 0022: Give the agent a small common tool set and find other tools on demand'
 description: Keep tool schemas out of the prompt until the agent needs them.
 ---
-
-# ADR 0022: Give the agent a small common tool set and find other tools on demand
 
 ## Status
 

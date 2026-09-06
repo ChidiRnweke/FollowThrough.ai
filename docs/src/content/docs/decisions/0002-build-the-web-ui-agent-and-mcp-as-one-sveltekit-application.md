@@ -1,9 +1,7 @@
 ---
-title: "ADR 0002: Build the web UI, agent, and MCP as one SvelteKit application"
+title: 'ADR 0002: Build the web UI, agent, and MCP as one SvelteKit application'
 description: Use one TypeScript application instead of separate web and agent backends.
 ---
-
-# ADR 0002: Build the web UI, agent, and MCP as one SvelteKit application
 
 ## Status
 

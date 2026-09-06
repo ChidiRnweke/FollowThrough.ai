@@ -1,9 +1,7 @@
 ---
-title: "ADR 0016: Store files in object storage and keep links in authored text"
+title: 'ADR 0016: Store files in object storage and keep links in authored text'
 description: Keep binary data out of notes, tasks, exports, sync messages, and agent context.
 ---
-
-# ADR 0016: Store files in object storage and keep links in authored text
 
 ## Status
 

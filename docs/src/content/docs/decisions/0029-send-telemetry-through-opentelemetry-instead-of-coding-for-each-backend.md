@@ -1,9 +1,7 @@
 ---
-title: "ADR 0029: Send telemetry through OpenTelemetry instead of coding for each backend"
+title: 'ADR 0029: Send telemetry through OpenTelemetry instead of coding for each backend'
 description: Let deployment route one portable telemetry stream to its chosen services.
 ---
-
-# ADR 0029: Send telemetry through OpenTelemetry instead of coding for each backend
 
 ## Status
 

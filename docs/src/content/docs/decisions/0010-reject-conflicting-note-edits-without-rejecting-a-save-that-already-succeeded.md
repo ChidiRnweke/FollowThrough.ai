@@ -3,8 +3,6 @@ title: 'ADR 0010: Reject conflicting document edits without rejecting a save tha
 description: Protect edits from other tabs and from the agent while making save retries safe.
 ---
 
-# ADR 0010: Reject conflicting document edits without rejecting a save that already succeeded
-
 ## Status
 
 Accepted. Extended to diagrams.

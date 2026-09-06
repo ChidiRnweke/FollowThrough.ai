@@ -3,8 +3,6 @@ title: 'ADR 0003: Require approval before agent-proposed changes become saved da
 description: Let a user or an explicit trust policy decide which agent-proposed changes are saved.
 ---
 
-# ADR 0003: Require approval before agent-proposed changes become saved data
-
 ## Status
 
 Accepted.

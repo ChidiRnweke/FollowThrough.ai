@@ -1,9 +1,7 @@
 ---
-title: "ADR 0001: Use deterministic checks"
+title: 'ADR 0001: Use deterministic checks'
 description: Why shared project rules use automated checks.
 ---
-
-# ADR 0001: Use deterministic checks
 
 ## Status
 

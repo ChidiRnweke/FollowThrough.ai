@@ -3,8 +3,6 @@ title: "ADR 0033: Publish the maintainer's deployment as a reference that consum
 description: Keep today's product and deployment together without claiming one topology fits every operator.
 ---
 
-# ADR 0033: Publish the maintainer's deployment as a reference that consumers may fork
-
 ## Status
 
 Accepted.
