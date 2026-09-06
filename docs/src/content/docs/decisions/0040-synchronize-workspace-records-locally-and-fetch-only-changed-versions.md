@@ -91,6 +91,13 @@ objects retain their server base; local deletions retain that base with a deleti
 These facts belong to pending mutations, independently of the cache lifecycle and server
 tombstones. A server deletion must not discard a conflicting local draft.
 
+Queue entries preserve their command, base, local representation, and preceding operation IDs.
+Only unsent document edits can coalesce; once submission starts, its operation identity and input
+remain immutable, including after a transport failure. Publication and other distinct operations
+preserve their positions between edits. Successful acknowledgement supplies the base for the next
+dependent edit. References to locally created parents wait for those parents' acknowledgement.
+Conflicts retain dependent entries while unrelated resources remain sendable.
+
 The server checks the base version, applies the domain mutation, and stores an operation receipt
 in one transaction. Retrying the same operation returns its receipt. An operation identifier
 cannot be reused for different input. Client-generated identities let offline-created objects
