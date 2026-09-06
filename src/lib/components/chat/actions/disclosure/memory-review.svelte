@@ -56,7 +56,7 @@
 		<div class="flex items-start gap-2 rounded-md bg-brand/10 px-2 py-1.5 dark:bg-brand/15">
 			<FtPlus class="{CHAT_ROW_ICON} mt-0.5 text-brand" />
 			<div class="flex min-w-0 flex-col gap-0.5">
-				<p class="provenance-caption">{verb}, about {scope}</p>
+				<p class="provenance-caption text-brand-muted-foreground">{verb}, about {scope}</p>
 				<p class="break-words text-xs text-foreground">{content}</p>
 			</div>
 		</div>

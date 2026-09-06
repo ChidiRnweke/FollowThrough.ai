@@ -117,7 +117,7 @@
 									{/if}
 								</span>
 								{#if selectedId === revision.id && counts}
-									<span class="block pt-0.5 text-xs font-normal text-muted-foreground">
+									<span class="block pt-0.5 text-xs font-normal text-brand-muted-foreground">
 										{counts.added} added · {counts.removed} removed
 									</span>
 								{/if}

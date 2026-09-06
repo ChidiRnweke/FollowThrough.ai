@@ -314,14 +314,14 @@
 										{...props}
 										type="button"
 										aria-expanded={!folded.has(group.projectId)}
-										class="h-full shrink-0 cursor-pointer gap-1.5 rounded-none border-0 bg-transparent px-3 text-xs tracking-wide text-muted-foreground uppercase hover:translate-y-0 hover:bg-foreground/5 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-foreground/10"
+										class="h-full shrink-0 cursor-pointer gap-1.5 rounded-none border-0 bg-transparent px-3 text-xs tracking-wide text-brand-muted-foreground uppercase hover:translate-y-0 hover:bg-foreground/5 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-brand-muted-foreground dark:hover:bg-foreground/10"
 										onclick={() => toggleFold(group.projectId)}
 									>
 										<span class="truncate">{group.projectName}</span>
 										{#if folded.has(group.projectId)}
-											<ChevronDown class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+											<ChevronDown class="size-3 shrink-0" aria-hidden="true" />
 										{:else}
-											<ChevronUp class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+											<ChevronUp class="size-3 shrink-0" aria-hidden="true" />
 										{/if}
 									</Button>
 								{/snippet}
@@ -416,7 +416,7 @@
 
 						     Same weight, different colour. `buttonVariants.base` already sets
 						     `font-medium`, so neither state states a weight and both inherit the same
-						     one; `text-foreground` against `text-muted-foreground` is the entire
+						     one; `text-foreground` against `text-brand-muted-foreground` is the entire
 						     difference. Do not bold the active tab. -->
 											<Button
 												variant="ghost"
@@ -436,21 +436,24 @@
 													? 'z-10 h-9 self-end rounded-t-lg rounded-b-none bg-brand/30 text-foreground shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-brand/30 dark:bg-brand/35 dark:hover:bg-brand/35'
 													: split
 														? 'h-9 self-end rounded-t-lg rounded-b-none bg-brand/20 text-foreground shadow-[inset_0_-1px_0_var(--color-border)] hover:bg-brand/25 dark:bg-brand/25 dark:hover:bg-brand/30'
-														: 'h-full rounded-none text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10'}"
+														: 'h-full rounded-none text-brand-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10'}"
 												ondragstart={(event) => {
 													if (event.dataTransfer) writeTabDrag(event.dataTransfer, noteId);
 												}}
 												onclick={() => void workbench.focusTab(noteId)}
 											>
 												{#if workbench.isPinned(noteId)}
-													<Pin class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+													<Pin
+														class="size-3 shrink-0 text-brand-muted-foreground"
+														aria-hidden="true"
+													/>
 												{/if}
 												<span class="min-w-0 flex-1 truncate text-left">{titleOf(noteId)}</span>
 												<span
 													role="button"
 													tabindex={-1}
 													aria-label={`Close ${titleOf(noteId)}`}
-													class="tactile ml-1 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex group-focus-within:flex {active
+													class="tactile ml-1 hidden size-4 shrink-0 items-center justify-center rounded-sm text-brand-muted-foreground hover:bg-accent hover:text-foreground group-hover:flex group-focus-within:flex {active
 														? 'flex'
 														: ''}"
 													onclick={(event) => {
@@ -478,7 +481,7 @@
 					<!-- Empty strip on non-note routes: keep the 40px height so opening
 			     the first note doesn't shift the editor's vertical footprint. -->
 					<span
-						class="flex shrink-0 items-center px-2 text-sm text-muted-foreground"
+						class="flex shrink-0 items-center px-2 text-sm text-brand-muted-foreground"
 						aria-label="No notes open"
 					>
 						No notes open
@@ -505,7 +508,7 @@
 								{...props}
 								variant="ghost"
 								size="icon-sm"
-								class="shrink-0 self-center text-primary hover:text-primary"
+								class="shrink-0 self-center text-brand-muted-foreground hover:text-brand-muted-foreground"
 								aria-label="New note"
 								onclick={oncreateNote}
 							>
@@ -521,7 +524,7 @@
 			     controls so bulk cleanup is one click from any strip state.
 			     Labelled rather than icon-only: a third bare × next to every
 			     tab's own × and the + says nothing about what it closes. Muted
-			     at rest so it stays subordinate to the tabs, red only on hover
+			     with opaque teal ink at rest so it stays subordinate to the tabs, red only on hover
 			     (the todo-detail-panel delete idiom), and the count states the
 			     blast radius up front — which is why there's no confirm step. -->
 				{#if hasTabs}
@@ -532,13 +535,13 @@
 								size="xs"
 								{...props}
 								type="button"
-								class="tactile shrink-0 self-center rounded-sm text-muted-foreground/70 hover:bg-destructive/10 hover:text-destructive"
+								class="tactile shrink-0 self-center rounded-sm text-brand-muted-foreground hover:bg-destructive/10 hover:text-destructive-muted-foreground"
 								aria-label={`Close all ${tabCount} tabs`}
 								onclick={() => void workbench.closeTabs(workbench.openTabs)}
 							>
 								<X class="size-3.5" />
 								<span>Close all</span>
-								<span class="tabular-nums opacity-70" aria-hidden="true">· {tabCount}</span>
+								<span class="tabular-nums" aria-hidden="true">· {tabCount}</span>
 							</Button>
 						{/snippet}
 					</Tip>

@@ -62,6 +62,10 @@
 	   Same teal as --primary in light mode; dark mode lifts it for AA contrast
 	   on washes, mirroring --sidebar-primary. */
 	--brand: oklch(0.511 0.096 186.391);
+	/* Opaque secondary ink for teal and error washes. Hue follows the surface;
+	   lightness clears AA even on the stacked workspace tab fills. */
+	--brand-muted-foreground: oklch(0.43 0.055 186.391);
+	--destructive-muted-foreground: oklch(0.48 0.075 27.325);
 	/* The system I-beam is a 1px line with no contrast guarantee: over the paper
 	   surface it antialiases into the background (and on some Windows/Chrome
 	   setups renders outright white), so the pointer goes missing exactly where
@@ -276,6 +280,8 @@
 	--sidebar-border: oklch(1 0 0 / 14%);
 	--sidebar-ring: oklch(0.58 0.031 107.3);
 	--brand: oklch(0.704 0.14 182.503);
+	--brand-muted-foreground: oklch(0.82 0.065 182.503);
+	--destructive-muted-foreground: oklch(0.8 0.065 22.216);
 	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%23fbfbf9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
 		12 12;
 }
@@ -322,6 +328,8 @@
 	--color-foreground: var(--foreground);
 	--color-background: var(--background);
 	--color-brand: var(--brand);
+	--color-brand-muted-foreground: var(--brand-muted-foreground);
+	--color-destructive-muted-foreground: var(--destructive-muted-foreground);
 	--radius-sm: calc(var(--radius) * 0.6);
 	--radius-md: calc(var(--radius) * 0.8);
 	--radius-lg: var(--radius);
@@ -1136,6 +1144,15 @@
 		--tw-prose-invert-td-borders: var(--border);
 		font-size: 1rem;
 		line-height: 1.55;
+	}
+
+	.prose[data-surface='brand'] {
+		--tw-prose-lead: var(--brand-muted-foreground);
+		--tw-prose-counters: var(--brand-muted-foreground);
+		--tw-prose-captions: var(--brand-muted-foreground);
+		--tw-prose-invert-lead: var(--brand-muted-foreground);
+		--tw-prose-invert-counters: var(--brand-muted-foreground);
+		--tw-prose-invert-captions: var(--brand-muted-foreground);
 	}
 
 	.prose :where(code):not(:where(pre *)) {
