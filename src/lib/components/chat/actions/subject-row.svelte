@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isWriteVerb, type ThingActivity } from '$lib/components/agent';
+	import { isWriteVerb, type SubjectActivity } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -15,20 +15,20 @@
 		CHAT_ROW_DETAIL,
 		chatActionEmphasis
 	} from './chat-row';
-	import ThingPasses from './thing-passes.svelte';
+	import SubjectPasses from './subject-passes.svelte';
 	import FileOutput from './disclosure/file-output.svelte';
 
 	let {
-		thing,
+		subject,
 		title
 	}: {
-		thing: ThingActivity;
+		subject: SubjectActivity;
 		/** The display name, so a title resolved after the fact reaches the row. */
 		title: string;
 	} = $props();
 
-	const Icon = $derived(entityIcon[thing.entity.kind]);
-	const openable = $derived(canOpenEntity(thing.entity));
+	const Icon = $derived(entityIcon[subject.entity.kind]);
+	const openable = $derived(canOpenEntity(subject.entity));
 
 	/**
 	 * A pass whose evidence is nothing but its own label has nothing behind it. A row of those
@@ -36,10 +36,10 @@
 	 * teaches a reader to stop opening the next one, including the one that would have shown a
 	 * real change.
 	 */
-	const opens = $derived(thing.passes.some((pass) => pass.evidence.kind !== 'none'));
+	const opens = $derived(subject.passes.some((pass) => pass.evidence.kind !== 'none'));
 
 	const passages = $derived(
-		thing.passes.flatMap((pass) =>
+		subject.passes.flatMap((pass) =>
 			pass.evidence.kind === 'passages' ? [{ label: pass.label, lines: pass.evidence.lines }] : []
 		)
 	);
@@ -53,7 +53,7 @@
 </script>
 
 {#snippet statement()}
-	{#if thing.outcome === 'running'}
+	{#if subject.outcome === 'running'}
 		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
 	{:else}
 		<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
@@ -62,11 +62,11 @@
 	     entries scan as the columns of a table that has no other rows. -->
 	<span class="min-w-0 truncate font-medium" {title}>{title}</span>
 	<span
-		class="shrink-0 {thing.outcome === 'failed'
+		class="shrink-0 {subject.outcome === 'failed'
 			? 'text-destructive'
-			: thing.outcome === 'rejected'
+			: subject.outcome === 'rejected'
 				? 'text-muted-foreground'
-				: chatActionEmphasis(isWriteVerb(thing.verb))}"
+				: chatActionEmphasis(isWriteVerb(subject.verb))}"
 	>
 		<!--
 			A refusal reports itself here and nowhere else: it is not a failure, so no
@@ -75,7 +75,7 @@
 			because nothing went wrong; they did this on purpose. Muted rather than emphasised for
 			the same reason: nothing was written, so nothing here is news.
 		-->
-		· {thing.outcome === 'rejected' ? 'declined' : thing.verb}
+		· {subject.outcome === 'rejected' ? 'declined' : subject.verb}
 	</span>
 {/snippet}
 
@@ -85,8 +85,8 @@
 			variant="ghost"
 			size="icon-xs"
 			class="shrink-0"
-			aria-label={entityActionLabel(thing.entity)}
-			onclick={() => openEntity(thing.entity)}
+			aria-label={entityActionLabel(subject.entity)}
+			onclick={() => openEntity(subject.entity)}
 		>
 			<FtExternal />
 		</Button>
@@ -94,25 +94,37 @@
 {/snippet}
 
 <!--
-	One thing the turn touched, and everything it did to it.
+	One subject the turn touched, and everything it did to it.
 
-	The row is the unit because the thing is: six calls over one note are one fact about one
+	The row is the unit because the subject is: six calls over one note are one fact about one
 	note, and a list keyed by call could only ever state it six times. The arrow sits beside the
 	name it opens — never on a search row, where it would stand for however many results came
 	back and open none of them in particular.
 -->
 {#if opens}
 	<Collapsible.Root>
-		<!-- The disclosure and the thing it names are two different actions, so the thing is not
+		<!-- The disclosure and the subject it names are two different actions, so the subject is not
 		     inside the trigger: clicking a title to open it must not also toggle a panel. -->
 		<div class="flex min-w-0 items-center gap-1">
-			<Collapsible.Trigger class="min-w-0 flex-1">
+			<!--
+				`min-w-0 flex-1 shrink` belongs on the Button, not on the Trigger, and both halves
+				of that are load-bearing.
+
+				The Trigger hands its own `class` to the snippet inside `props`, and the Button
+				writes `class=` after `{...props}`, so Svelte's later attribute replaces it —
+				anything set on the Trigger never reaches the element. And `buttonVariants` base
+				carries `shrink-0`, which `CHAT_ROW_STATEMENT` has no `flex-*`/`shrink-*` to cancel,
+				so tailwind-merge keeps it. A `w-full` trigger that also refuses to shrink pushed
+				the open-in-a-tab button 28px past the panel's edge, where `overflow-hidden` ate it.
+				`shrink` is what cancels the base; `flex-1` alone would not.
+			-->
+			<Collapsible.Trigger>
 				{#snippet child({ props })}
 					<Button
 						{...props}
 						variant="ghost"
 						size="sm"
-						class="{CHAT_ROW_STATEMENT} min-w-0 [&[data-state=open]>svg:first-child]:rotate-90"
+						class="{CHAT_ROW_STATEMENT} min-w-0 flex-1 shrink [&[data-state=open]>svg:first-child]:rotate-90"
 					>
 						<FtChevronRight
 							class="{CHAT_ROW_ICON} shrink-0 text-muted-foreground transition-transform duration-(--duration-micro)"
@@ -127,7 +139,7 @@
 			<!-- pt-1 is the bond step: this detail belongs to the row directly above it. -->
 			<div class="{CHAT_ROW_INDENT} pt-1">
 				<ErrorBoundary label="what the agent did here" class="my-0">
-					<ThingPasses passes={thing.passes} onexpand={() => (expanded = true)} />
+					<SubjectPasses passes={subject.passes} onexpand={() => (expanded = true)} />
 				</ErrorBoundary>
 			</div>
 		</Collapsible.Content>
@@ -161,8 +173,12 @@
 			<div class="flex min-h-0 flex-1 flex-col {CHAT_GAP_PASS} overflow-y-auto">
 				{#each passages as passage, index (index)}
 					<div class="flex flex-col {CHAT_GAP_BOND}">
-						<p class="provenance-caption">{passage.label}</p>
-						<FileOutput lines={passage.lines} bounded={false} />
+						<!-- The pyramid holds here too, at the dialog's own scale: the request titles the
+						     passage under it, so it never renders smaller than what it titles. At full
+						     width the passage is body size, so the label matches it and takes the weight
+						     and the accent instead — it is still an agent action. -->
+						<p class="text-sm font-medium text-brand">{passage.label}</p>
+						<FileOutput lines={passage.lines} place="dialog" />
 					</div>
 				{/each}
 			</div>

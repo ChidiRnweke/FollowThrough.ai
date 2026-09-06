@@ -146,9 +146,17 @@ primitive appends its caller's `class` last, so a caller can always override.
 The trap is the reverse case — a `<Button>` passed into another primitive's `child` snippet: the
 receiving primitive's classes arrive as Button's `className` and therefore win, but only for
 utilities that actually conflict. `buttonVariants` **base** has no counterpart for
-`justify-center`, `font-medium`, `inline-flex`, and `whitespace-nowrap`, so those survive. When
-slotting a Button into a sidebar/menu primitive, neutralise them explicitly on the _outer_
-primitive's `class`.
+`justify-center`, `font-medium`, `inline-flex`, `whitespace-nowrap`, and `shrink-0`, so those
+survive. When slotting a Button into a sidebar/menu primitive, neutralise them explicitly on the
+_outer_ primitive's `class`. `flex-1` does not cancel `shrink-0` — they are different merge
+groups, so both are emitted and stylesheet order decides; write `shrink` when you need the
+element to give way.
+
+A second trap sits on top of it: a class set on the wrapping primitive reaches the Button through
+`props`, so `<Button {...props} class="…">` **replaces** it — Svelte applies the later attribute.
+Anything the layout depends on belongs in the Button's own `class`, not on the trigger. Both
+faults together once pushed a row's trailing button past the panel edge, where `overflow-hidden`
+hid it and a `toBeInTheDocument()` assertion still passed.
 
 ## Adding a controller capability
 

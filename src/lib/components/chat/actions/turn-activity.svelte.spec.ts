@@ -55,11 +55,31 @@ describe('A settled turn reports the things it touched, once each', () => {
 		await expect.element(screen.getByText('· edited')).toBeVisible();
 	});
 
+	// `toBeVisible`, not `toBeInTheDocument`. The button was rendered and then pushed past the
+	// panel's edge by a row that could not shrink, so it was on the page and on nobody's screen.
+	// The weaker assertion is what let that ship.
 	it('offers to open it, beside the name it opens', async () => {
 		const screen = await renderTurn([call({ name: 'save_note' })]);
 		await expect
 			.element(screen.getByRole('button', { name: 'Open Infrastructure in a tab' }))
-			.toBeInTheDocument();
+			.toBeVisible();
+	});
+
+	it('offers to open it from a row that has evidence behind it too', async () => {
+		const screen = await renderTurn([grep(), call({ name: 'save_note' })]);
+		await expect
+			.element(screen.getByRole('button', { name: 'Open Infrastructure in a tab' }))
+			.toBeVisible();
+	});
+
+	it('keeps the statement row inside the width it was given', async () => {
+		const screen = await renderTurn([grep(), call({ name: 'save_note' })]);
+		const row = screen
+			.getByRole('button', { name: /Infrastructure/ })
+			.first()
+			.element();
+		const parent = row.parentElement as HTMLElement;
+		expect(parent.scrollWidth).toBeLessThanOrEqual(parent.clientWidth);
 	});
 
 	it('leaves the agent finding its own tools out of the reckoning', async () => {
@@ -150,6 +170,38 @@ describe('Teal is what the agent did, and nothing else', () => {
 		await expect
 			.element(screen.getByText('rollout', { exact: true }))
 			.not.toHaveClass(/text-brand/);
+	});
+});
+
+describe('Depth in the turn is legible as size', () => {
+	// A request titles the block beneath it, and at one size it did not read as a title at all.
+	// Asserted as the rung each line claims rather than as a measured pixel: this runner serves
+	// no stylesheet, so every computed size here is the browser default and would prove nothing.
+	// What the component owns is which rung it asks for; that the rungs differ is `layout.css`.
+	const opened = async () => {
+		const screen = await renderTurn([grep(), call({ name: 'save_note' })]);
+		await screen
+			.getByRole('button', { name: /Infrastructure/ })
+			.first()
+			.click();
+		return screen;
+	};
+
+	it('sets a request at the rung that titles a block', async () => {
+		const screen = await opened();
+		await expect.element(screen.getByText(/^Searched for/)).toHaveClass(/text-label/);
+	});
+
+	it('sets what came back a rung below the request', async () => {
+		const screen = await opened();
+		const line = screen.getByText('northwind should own the rollout').element();
+		expect(line.closest('ul')?.className).toMatch(/text-2xs/);
+	});
+
+	it('leaves the subject above both, at body size', async () => {
+		const screen = await opened();
+		const row = screen.getByRole('button', { name: /Infrastructure/ }).first();
+		await expect.element(row).toHaveClass(/text-sm/);
 	});
 });
 
