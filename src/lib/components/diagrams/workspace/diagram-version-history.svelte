@@ -96,8 +96,10 @@
 									<span class="block truncate text-sm font-medium"
 										>{formatRelativeTime(revision.createdAt)}</span
 									>
-									<span class="block truncate text-xs text-muted-foreground"
-										>{revision.title ?? 'Untitled diagram'}</span
+									<span
+										class="block truncate text-xs {selectedId === revision.id
+											? 'text-brand-muted-foreground'
+											: 'text-muted-foreground'}">{revision.title ?? 'Untitled diagram'}</span
 									>
 								</span>
 								{#if revision.isPublished}<Badge variant="secondary">Published</Badge>{/if}

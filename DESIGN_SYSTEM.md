@@ -23,7 +23,8 @@
   per-context, or repeated inside content surfaces.
 - **Accent discipline:** Teal marks the live thing; olive-neutral is everything at rest. Active
   sidebar navigation, the selected segment of tabs/toggle groups, and provenance chips carry
-  `--brand`. Data values, metadata, and resting chrome stay gray. `--brand` equals `--primary`
+  `--brand`. Data values, metadata, and resting chrome use neutral ink on neutral surfaces.
+  On colored surfaces, secondary ink follows the surface hue (see below). `--brand` equals `--primary`
   in light mode and lifts to the sidebar teal in dark mode for AA contrast on washes.
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
@@ -40,6 +41,23 @@
 - **The reader's own words carry the accent:** the user's chat turn takes the same `bg-brand/10`
   (`dark:bg-brand/15`) wash; `bg-muted` is the fill of disabled notices and hover rows. The text
   stays `foreground` — a wash marks the turn, tinted prose would be reading it aloud in colour.
+
+## Text on colored surfaces
+
+- Secondary labels, metadata, placeholders, and control icons on brand washes use opaque
+  `text-brand-muted-foreground`; error-wash explanations use `text-destructive-muted-foreground`.
+  The tokens have separate light/dark values. Neutral surfaces retain `text-muted-foreground`.
+- Never reduce text opacity to create hierarchy on a colored surface. Primary prose keeps
+  `text-foreground`; solid buttons retain their paired foreground token. Disabled controls and
+  reveal/hide transitions are distinct states, not recipes for secondary text.
+- Check actual composited backgrounds, including nested tab fills, hover, focus, and selected
+  states: normal text needs 4.5:1 contrast, essential control icons 3:1. A hue match alone does
+  not establish legibility. Scope corrections to the surface owner; neutral nested controls and
+  portalled popovers must retain their own palette.
+
+- Find candidates without a browser using `pnpm audit:surface-text` (`--json` for structured
+  output). See [the audit guide](docs/src/content/docs/guides/audit-surface-text.md) for review
+  rules, the quick ripgrep searches, and optional rendered contrast checks.
 
 ## Tokens and composition
 

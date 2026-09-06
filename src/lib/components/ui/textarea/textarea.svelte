@@ -23,7 +23,7 @@
 		// (a ScrollArea viewport, say) and reads as a lopsided glow. `--brand` rather than
 		// `--primary`: they are the same teal in light, but dark lifts brand to stay teal
 		// where primary goes muddy.
-		'border-input text-foreground bg-background dark:bg-input/30 focus-visible:border-brand focus-visible:bg-brand/12 dark:focus-visible:bg-brand/20 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 resize-none rounded-xl border px-3 py-3 text-base transition-colors md:text-sm placeholder:text-muted-foreground flex field-sizing-content min-h-16 w-full outline-none disabled:cursor-not-allowed disabled:opacity-50',
+		'border-input text-foreground bg-background dark:bg-input/30 focus-visible:border-brand focus-visible:bg-brand/12 dark:focus-visible:bg-brand/20 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 resize-none rounded-xl border px-3 py-3 text-base transition-colors md:text-sm placeholder:text-muted-foreground focus-visible:placeholder:text-brand-muted-foreground flex field-sizing-content min-h-16 w-full outline-none disabled:cursor-not-allowed disabled:opacity-50',
 		className
 	)}
 	bind:value

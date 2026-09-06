@@ -95,7 +95,9 @@
 						<span
 							{...props}
 							use:dragHandle
-							class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity outline-none group-hover/card:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+							class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm {lifted
+								? 'text-brand-muted-foreground'
+								: 'text-muted-foreground'} opacity-0 transition-opacity outline-none group-hover/card:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
 							aria-label="Drag {view.todo.title}"
 						>
 							<GripVertical />
@@ -119,7 +121,9 @@
 					variant="ghost"
 					class={[
 						'tactile h-auto min-w-0 flex-1 justify-start rounded-sm p-0 text-left text-sm leading-snug font-medium whitespace-normal break-words underline-offset-2 outline-none hover:bg-transparent focus-visible:underline',
-						done ? 'text-muted-foreground line-through' : 'text-foreground'
+						done
+							? [lifted ? 'text-brand-muted-foreground' : 'text-muted-foreground', 'line-through']
+							: 'text-foreground'
 					]}
 					onclick={() => onopen(view.todo.id)}
 				>
@@ -129,7 +133,10 @@
 				<span
 					class={[
 						'min-w-0 flex-1 leading-snug break-words',
-						done && 'text-muted-foreground line-through'
+						done && [
+							lifted ? 'text-brand-muted-foreground' : 'text-muted-foreground',
+							'line-through'
+						]
 					]}>{view.todo.title}</span
 				>
 			{/if}
@@ -175,8 +182,11 @@
 			{#if view.todo.dueDate}
 				<Badge
 					variant="ghost"
-					class={overdue ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'}
-					>{formatDate(view.todo.dueDate)}</Badge
+					class={overdue
+						? 'bg-destructive/10 text-destructive'
+						: lifted
+							? 'text-brand-muted-foreground'
+							: 'text-muted-foreground'}>{formatDate(view.todo.dueDate)}</Badge
 				>
 			{/if}
 			{#if showPriority && view.todo.priority}
@@ -198,11 +208,19 @@
 					/>
 				{/if}
 				{#if view.sourceNote}
-					<span class="provenance-caption max-w-28 truncate">{view.sourceNote.title}</span>
+					<span
+						class="provenance-caption max-w-28 truncate {lifted
+							? 'text-brand-muted-foreground'
+							: ''}">{view.sourceNote.title}</span
+					>
 				{/if}
 			</span>
 			{#if waiting}
-				<span class="shrink-0 text-xs text-muted-foreground">
+				<span
+					class="shrink-0 text-xs {lifted
+						? 'text-brand-muted-foreground'
+						: 'text-muted-foreground'}"
+				>
 					Waiting on {view.todo.waitingOn ?? 'someone'}
 				</span>
 			{/if}
