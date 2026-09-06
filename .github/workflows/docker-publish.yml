@@ -1,8 +1,25 @@
 name: Publish production image
 
+# Called by the release workflow rather than triggered by the tag it pushes.
+# release-please tags with the default GITHUB_TOKEN, and GitHub does not start a
+# workflow run from an event created with that token — so `on: push: tags` never
+# fired for a single release-please tag. It went unnoticed while a `branches:
+# [master]` trigger was also here doing the work, and every release since that
+# trigger was removed has built nothing and deployed nothing.
 on:
-  push:
-    tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  # The way to deploy a release that already exists, or to re-deploy without
+  # cutting a version.
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+        description: 'Release tag to build and deploy, e.g. v0.3.3'
 
 permissions:
   contents: read
@@ -12,7 +29,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # The tag, not the branch: by the time this job starts, master may already
+      # carry commits that are not part of the release being shipped.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -23,12 +44,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/chidirnweke/followthrough.ai
+          # `type=ref,event=tag` reads the ref of the triggering event, and this
+          # workflow is no longer triggered by one. The input is the tag.
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ inputs.tag }}
             type=raw,value=latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version={{tag}}
+            org.opencontainers.image.version=${{ inputs.tag }}
             org.opencontainers.image.revision=${{ github.sha }}
       - uses: docker/build-push-action@v6
         with:

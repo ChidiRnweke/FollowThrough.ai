@@ -50,11 +50,11 @@ The mechanics, for the record:
   SemVer. Only `docs` and `test` are excluded, because neither can reach the runtime image: the
   documentation site deploys through its own Pages workflow, and specs are not in the bundle.
 
-  The bar is deliberately not "is this a feature or a fix". `docker-publish.yml` builds only on
-  `v*` tags, and tags come only from a release, so a type that cuts no release does not ship at
-  all — a `refactor` that redesigned a panel sat on `master` unbuilt until an unrelated `feat`
-  happened along and carried it out. Shipping is the thing being gated, and a refactor,
-  a dependency bump and a CI fix all change what is deployed.
+  The bar is deliberately not "is this a feature or a fix". The image is built only for a
+  release, so a type that cuts no release does not ship at all — a `refactor` that redesigned a
+  panel sat on `master` unbuilt until an unrelated `feat` happened along and carried it out.
+  Shipping is the thing being gated, and a refactor, a dependency bump and a CI fix all change
+  what is deployed.
 
   In release-please the two questions are one dial: a type that is visible in the changelog is
   the same type that triggers a release, so `chore` and `ci` earn changelog lines as the price
@@ -67,8 +67,21 @@ The mechanics, for the record:
 - The Release PR is a normal PR on `master`: the commitlint and PR-title checks from ADR 0038
   apply to it, and it merges only with a squash merge.
 - When the Release PR is merged, release-please creates the `v*` tag and a GitHub Release whose
-  notes are the changelog entry for that version. `docker-publish.yml` then builds the versioned
-  image and triggers Komodo exactly as it does for a manually created tag.
+  notes are the changelog entry for that version. The same workflow run then **calls**
+  `docker-publish.yml` directly, passing the tag it just created; that workflow checks the tag
+  out, builds the versioned image and triggers Komodo.
+
+  The call is deliberate and the tag push is not enough. release-please tags with the default
+  `GITHUB_TOKEN`, and GitHub does not start a workflow run from an event created with that token,
+  so `on: push: tags` never fired for a single release-please tag. It went unnoticed while
+  `docker-publish.yml` also triggered on pushes to `master` — that trigger was doing all the
+  work — and when it was removed, three releases in a row built no image and deployed nothing.
+  Ordering it inside the release run also puts the Komodo webhook where it has to be: a run on
+  `master`.
+
+  `workflow_dispatch` on `docker-publish.yml`, taking the same tag, is how a release that already
+  exists is deployed, and how a deploy is repeated without cutting a version.
+
 - Cadence is human: the Release PR sits until it is merged. Release happens when someone decides
   it does; the release never happens without the changelog being reviewed.
 
@@ -85,8 +98,11 @@ wraps it into a Starlight "Releases" page, and GitHub Releases display the same 
 - Version numbers and release notes are generated, never hand-typed; `v*` tags appear only when
   the tagged commit really is the release commit.
 - Every release passes the ADR 0038 checks and presents a changelog for review before merging.
-- The deployment pipeline is untouched: image builds, the `latest` tag on master pushes, and the
-  Komodo webhook all behave as before.
+- The deployment pipeline does the same work, reached a different way: the image build and the
+  Komodo webhook are unchanged, but they are now invoked by the release workflow rather than by a
+  tag push, and `:latest` follows the release rather than every push to `master`. Deploying is
+  therefore something a release does, and something a `workflow_dispatch` can repeat — never
+  something that happens because a branch moved.
 - A release costs one PR merge, and nearly every merge to `master` produces something to
   release. That is the intent: the Release PR is how work reaches production, so it should be
   waiting whenever there is work that has not. The cost is a busier changelog, including
@@ -103,8 +119,12 @@ wraps it into a Starlight "Releases" page, and GitHub Releases display the same 
 
 ## Evidence
 
-- `docker-publish.yml` triggers on `tags: ['v*']` and pushes to `master`, and calls the Komodo
-  webhook after build — the release process only needs to supply tags.
+- `docker-publish.yml` is a `workflow_call` / `workflow_dispatch` workflow taking the release tag
+  as its input, and calls the Komodo webhook after the build. `release-please.yml` calls it when
+  its `release_created` output is `true`, passing `tag_name`.
+- The run history records the failure this replaced: the last `docker-publish` run before the fix
+  was a push to `master` at `2026-09-06T16:40:52Z`, and tags `v0.3.1`, `v0.3.2` and `v0.3.3` —
+  all created by release-please — started no run at all.
 - The docs deploy (`docs-pages.yml`) is triggered by pushes touching `docs/**`; after this
   decision it also triggers on `CHANGELOG.md`, and `docs/scripts/generate-changelog.mjs` renders
   the Releases page at build time from the root changelog.
