@@ -14,6 +14,19 @@ test-quality audits supplement Chisel; do not silence one checker to satisfy ano
 
 `node` is not on `PATH` by default — prepend the nvm bin directory before any `pnpm` script.
 
+## Commit messages
+
+Commits and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/): a type
+from the Angular set (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`,
+`style`, `revert`), an optional free-form scope, then a lowercase subject —
+`feat(agent): type the tool executor seam and its call ids`. Use `!` or a `BREAKING CHANGE:`
+footer for breaking changes.
+
+Enforcement is server-side and applies to every PR: `commitlint` checks the PR's commits, and a
+separate check validates the PR title (under squash-merge the title is the commit that lands).
+There are no local hooks. A rejected message means rewriting it before merge; a rejected commit
+already on the branch can be reworded with a rebase.
+
 ## Seeing the running app
 
 Auth stays enabled in dev, so an unauthenticated request to any `(app)` route `303`s to
