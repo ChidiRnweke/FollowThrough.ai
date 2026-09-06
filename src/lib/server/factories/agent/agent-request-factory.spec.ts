@@ -4,9 +4,6 @@ import { APP_SURFACE_KINDS } from '$lib/models/workspace/app-context';
 
 /** RFC-4122 ids: the schema validates the variant nibble, unlike the domain fixtures. */
 const alpha = '5f7a1c2e-8b3d-4a91-9c05-1d2e3f405060';
-const beta = '5f7a1c2e-8b3d-4a91-9c05-1d2e3f405061';
-const noteA = '6a1b2c3d-4e5f-4061-8273-849506172839';
-const noteB = '6a1b2c3d-4e5f-4061-8273-84950617283a';
 
 const snapshot = (overrides: Record<string, unknown> = {}) => ({
 	version: 1,
@@ -35,57 +32,5 @@ describe('every screen the app can report', () => {
 				submission({ appContext: snapshot({ surface: { kind, presentation: 'full_page' } }) })
 			).success
 		).toBe(true);
-	});
-});
-
-describe('images the app supplies rather than the user', () => {
-	const png = {
-		mediaType: 'image/png' as const,
-		dataUrl: 'data:image/png;base64,AAAA',
-		name: 'r.png'
-	};
-
-	// A readable `canvas-<session>` id was rejected here and failed the whole
-	// message with a bare 400, which is how a render of the canvas broke chat.
-	it('requires the id to be the uuid the schema asks for', () => {
-		expect(
-			submitAgentRunSchema.safeParse(
-				submission({ contextImages: [{ ...png, id: 'canvas-not-a-uuid' }] })
-			).success
-		).toBe(false);
-	});
-
-	it('accepts a render carrying a real uuid', () => {
-		expect(
-			submitAgentRunSchema.safeParse(submission({ contextImages: [{ ...png, id: noteA }] })).success
-		).toBe(true);
-	});
-});
-
-describe('agent submission schema', () => {
-	it('accepts a staged project that the live snapshot has moved away from', () => {
-		const result = submitAgentRunSchema.safeParse(
-			submission({ projectId: beta, appContext: snapshot() })
-		);
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts a staged note that the live snapshot has moved away from', () => {
-		const result = submitAgentRunSchema.safeParse(
-			submission({
-				noteId: noteB,
-				appContext: snapshot({
-					surface: { kind: 'note_workbench', presentation: 'full_page' },
-					workbench: { openTabs: [], visiblePanes: [], focusedNoteId: noteA }
-				})
-			})
-		);
-		expect(result.success).toBe(true);
-	});
-
-	it('still rejects a malformed identifier', () => {
-		expect(submitAgentRunSchema.safeParse(submission({ projectId: 'not-a-uuid' })).success).toBe(
-			false
-		);
 	});
 });

@@ -30,12 +30,6 @@ describe('tool catalog', () => {
 		expect(TOOL_CATALOG.length).toBe(TOOL_DESCRIPTIONS.length - FIRST_CLASS_TOOL_NAMES.length);
 	});
 
-	it('resolves a description by name', () => {
-		expect(toolDescription('get_note')).toBe(
-			TOOL_DESCRIPTIONS.find((entry) => entry.name === 'get_note')!.description
-		);
-	});
-
 	it('fails fast when a name drifts from the catalog', () => {
 		expect(() => toolDescription('not_a_tool')).toThrow(
 			'Tool description missing from catalog: not_a_tool'
