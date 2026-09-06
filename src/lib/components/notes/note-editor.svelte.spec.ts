@@ -478,12 +478,20 @@ describe('Diagram insert point tracking', () => {
 			onInsertionPointMoved: (runId: string, position: number) => void moved.push([runId, position])
 		});
 		await untilMounted();
+		const firstParagraphText = () =>
+			(screen.component.getDocument() as {
+				content?: readonly { content?: readonly { text?: string }[] }[];
+			}).content?.[0]?.content?.map((node) => node.text ?? '').join('') ?? '';
 		screen.component.holdInsertionPoint('run-1', 7);
 		screen.component.focusStart();
+		const before = firstParagraphText();
 		await userEvent.keyboard('Well, ');
-		// The last move arrives asynchronously after the final keystroke; wait for
-		// the store to settle on the position the doc actually reached.
-		await vi.waitFor(() => expect(moved.at(-1)).toEqual(['run-1', 13]));
+		// The trailing keystroke can be dropped by the input simulation, so assert
+		// against what actually landed: the point is held at 7 and every typed
+		// character lands before it, so the mapped point is 7 + the typed delta.
+		await vi.waitFor(() => {
+			expect(moved.at(-1)).toEqual(['run-1', 7 + (firstParagraphText().length - before.length)]);
+		});
 	});
 });
 
