@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.1...v0.3.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **release:** release on every change that can reach production ([#17](https://github.com/ChidiRnweke/FollowThrough.ai/issues/17)) ([8a93631](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8a93631235d4de47585007725d589ff9da1112db))
+
+
+### Code Refactoring
+
+* **chat:** fold a turn's activity into the things it touched ([#16](https://github.com/ChidiRnweke/FollowThrough.ai/issues/16)) ([9dcfd10](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9dcfd1093cf847969cfd403de9c697be3f8f722e))
+
 ## [0.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.0...v0.3.1) (2026-09-06)
 
 
