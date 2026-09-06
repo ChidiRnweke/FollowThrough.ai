@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
 	syncEtagSchema,
+	cachedSnapshot,
+	type ResourceState,
+	type CacheAccess,
 	deletionSchema,
 	type SyncSnapshot,
 	type SyncObjectRead
@@ -189,4 +192,33 @@ export const settleWrite = <C, T>(
 			? { ...entry, delivery: outcome }
 			: entry
 	);
+};
+
+/** Lists may use retained bodies while detail reads enforce the cache's online barrier. */
+export const visibleResources = <C, T>(
+	records: ReadonlyMap<string, ResourceState<T>>,
+	pending: readonly OutboxEntry<C, T>[]
+): ReadonlyMap<string, T> => {
+	const visible = new Map<string, T>();
+	for (const [key, entry] of records) {
+		const snapshot = entry.kind === 'present' ? cachedSnapshot(entry.cache) : null;
+		if (snapshot) visible.set(key, snapshot.value);
+	}
+	for (const { intent } of pending) {
+		if (intent.local === null) visible.delete(intent.key);
+		else visible.set(intent.key, intent.local);
+	}
+	return visible;
+};
+
+/** A local edit remains usable even while its server base is refreshing or conflicted. */
+export const localResource = <C, T>(
+	pending: readonly OutboxEntry<C, T>[],
+	key: string
+): CacheAccess<T> | null => {
+	const last = pending.findLast((entry) => entry.intent.key === key);
+	if (!last) return null;
+	return last.intent.local === null
+		? { kind: 'deleted' }
+		: { kind: 'ready', value: last.intent.local };
 };

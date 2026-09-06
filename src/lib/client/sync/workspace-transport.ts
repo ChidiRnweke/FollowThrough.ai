@@ -3,6 +3,12 @@ import { syncChangesSchema } from '$lib/models/sync';
 import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
 import { workspaceObjectReadSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { pullWorkspaceChanges, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
+import {
+	workspaceMutationResultSchema,
+	type WorkspaceCommand
+} from '$lib/models/workspace-mutations';
+import { pushWorkspaceMutation } from '$lib/remote/workspace/mutations.remote';
+import type { OutboxTransport } from './outbox-contracts';
 import type { SyncReadTransport } from './contracts';
 
 const identityFromKey = (key: string) => {
@@ -21,5 +27,15 @@ export const workspaceReadTransport = (accountId: string): SyncReadTransport<Wor
 		const request = readWorkspaceResource({ accountId, identity: identityFromKey(key), etag });
 		await request.refresh();
 		return workspaceObjectReadSchema.parse(await request);
+	}
+});
+
+export const workspaceWriteTransport = (
+	accountId: string
+): OutboxTransport<WorkspaceCommand, WorkspaceRecord> => ({
+	async send(input) {
+		return workspaceMutationResultSchema.parse(
+			await pushWorkspaceMutation({ ...input, accountId })
+		);
 	}
 });
