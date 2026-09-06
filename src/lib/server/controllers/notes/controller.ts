@@ -1,3 +1,5 @@
+import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveNoteInput,
@@ -109,6 +111,7 @@ import type {
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
+	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * Load the full read model for one note: the document, its ETag, backlinks,
 	 * references, diagrams, todos, and pending suggestions.
@@ -279,6 +282,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
@@ -320,6 +324,55 @@ const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
 };
 
 export class Notes implements NotesController {
+	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async (current) => {
+			const command = input.command;
+			switch (command.kind) {
+				case 'createNote':
+					await this.create(actor, command);
+					break;
+				case 'renameNote':
+					await this.rename(actor, command);
+					break;
+				case 'archiveNote':
+					await this.archive(actor, command);
+					break;
+				case 'restoreNote':
+					await this.restore(actor, command);
+					break;
+				case 'publishNote':
+					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+						throw new ValidationError('The note no longer exists');
+					await this.publish(actor, {
+						noteId: command.noteId,
+						baseEtag: noteEtag(current.snapshot.value.value)
+					});
+					break;
+				case 'discardNoteDraft':
+					await this.discardDraft(actor, command);
+					break;
+				case 'deleteNote':
+					await this.deleteForever(actor, command);
+					break;
+				case 'noteNumbering':
+					await this.setSectionNumbering(actor, command);
+					break;
+				case 'saveNote': {
+					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+						throw new ValidationError('The note no longer exists');
+					await this.save(actor, {
+						note: {
+							...current.snapshot.value.value,
+							document: command.document,
+							plainText: command.plainText
+						}
+					});
+					break;
+				}
+			}
+		});
+	}
+
 	constructor(private readonly dependencies: NotesDependencies) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView> {
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([

@@ -173,6 +173,10 @@ export const agentToolCoverage = {
 		getTodayView: { kind: 'read', tools: ['get_today_view'] }
 	},
 	projects: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_projects'] },
 		get: { kind: 'read', tools: ['get_project'] },
 		create: { kind: 'mutation', tools: ['create_project'] },
@@ -186,6 +190,10 @@ export const agentToolCoverage = {
 		}
 	},
 	notes: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		get: { kind: 'read', tools: ['get_note'] },
 		listDocuments: {
 			kind: 'excluded',
@@ -231,6 +239,10 @@ export const agentToolCoverage = {
 		}
 	},
 	todos: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_todos'] },
 		get: {
 			kind: 'excluded',
@@ -385,6 +397,10 @@ export const agentToolCoverage = {
 		revert: { kind: 'mutation', tools: ['revert_suggestion'] }
 	},
 	skills: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_skills'] },
 		get: {
 			kind: 'excluded',

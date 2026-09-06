@@ -21,7 +21,7 @@ or online. There are no guessed read windows, silent fallbacks, or automatic con
 - [ ] Add cross-tab coordination and durable mutation queue persistence.
 - [x] Add database sync versions and a compact authenticated journal with commit-ordered account cursors.
 - [x] Add typed object readers and expose synchronization through controller/remote boundaries.
-- [ ] Add atomic guarded mutation replay and durable idempotency receipts.
+- [x] Add atomic guarded mutation replay and durable idempotency receipts for the initial command set.
 - [ ] Build shared normalized projections and migrate app routes to browser-shell loading.
 - [ ] Wire offline mutations across supported domains and preserve legacy note/skill drafts.
 - [ ] Replace private page snapshots with a data-free service-worker app shell.
@@ -48,6 +48,16 @@ integration explicitly. Do not delete the existing note outbox before migration 
   contracts, 45 focused node tests, type check, scoped lint, and architecture checks passed.
 - `f26ada5`: compact journal, account cursor, durable tombstones, and offline read-barrier release;
   48 focused node tests, 24 PostgreSQL contracts, and 7 browser persistence tests passed.
+- `541d2d5`: shared controller/remote reads and versioned deletion ordering; 51 focused node tests,
+  24 PostgreSQL contracts, and 7 browser persistence tests passed.
+- `0e86091`: durable operation receipts; 29 PostgreSQL synchronization contracts passed.
+- `e92797e`: stable IDs for projects, folders, notes, tasks, and skill notes; creation checks passed.
+
+The initial guarded commands cover project create/rename/archive/numbering; folder creation and
+note moves; note create/rename/save/archive/restore/publish/discard/delete/numbering; task
+create/update/delete; and skill creation. Each owning controller supplies its existing operation
+to the shared transaction service. Further ordinary operations and the browser queue remain to be
+connected; this checkpoint does not claim complete offline mutation support.
 
 The version metadata lives in one database registry keyed by resource type and a JSON tuple of
 primary-key values. This avoids leaking database synchronization fields into existing domain
