@@ -2,7 +2,6 @@ name: Publish production image
 
 on:
   push:
-    branches: [master]
     tags: ['v*']
 
 permissions:
@@ -25,8 +24,12 @@ jobs:
         with:
           images: ghcr.io/chidirnweke/followthrough.ai
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version={{tag}}
+            org.opencontainers.image.revision=${{ github.sha }}
       - uses: docker/build-push-action@v6
         with:
           context: .
