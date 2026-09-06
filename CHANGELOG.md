@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.2...v0.3.3) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ui:** improve secondary text on colored surfaces ([#19](https://github.com/ChidiRnweke/FollowThrough.ai/issues/19)) ([f358294](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f35829472337edb2fa9b770d3addb8cd1ff9034b))
+
 ## [0.3.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.1...v0.3.2) (2026-09-06)
 
 
