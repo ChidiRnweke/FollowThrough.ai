@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.1.0...v0.2.0) (2026-09-06)
+
+
+### Features
+
+* **chat:** open a chat diagram at full size on click ([#6](https://github.com/ChidiRnweke/FollowThrough.ai/issues/6)) ([a23bed4](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a23bed46d3e196781800abde1b85e35e1a8fa305))
+
+
+### Bug Fixes
+
+* **release:** use release-please's default node input mode ([#8](https://github.com/ChidiRnweke/FollowThrough.ai/issues/8)) ([d60757f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/d60757f6f73962db3ac2d390f405947783eb5956))
+
 ## [0.1.0] — 2026-09-06
 
 First versioned release, tagged as the baseline for commit-driven releases. Everything before
