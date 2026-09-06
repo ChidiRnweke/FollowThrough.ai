@@ -308,7 +308,7 @@ Kanban columns keep their drop zone and center the voice line inside it.
   retry, not news — its record stays inside the subject, where a reader who opens it can see the
   agent correcting itself.
 
-  The type pyramid, one rung per level, declared in `chat-row.ts` and never chosen at a call
+  The type hierarchy, one rung per level, declared in `chat-row.ts` and never chosen at a call
   site: a subject's statement line at `sm` (14px), level with the answer beside it rather than
   under it; a request at `text-label` (13px); what came back at `text-2xs` (11px). Nothing
   inside the block is ever larger than the answer. A search query renders italic and
