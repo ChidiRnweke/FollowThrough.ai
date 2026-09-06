@@ -37,7 +37,7 @@ describe('What came back is shown as the things themselves', () => {
 
 	it('counts the rows it did not show rather than listing them', async () => {
 		const screen = await renderList([todo('One'), todo('Two')], 9);
-		await expect.element(screen.getByText('…and 7 more')).toBeVisible();
+		await expect.element(screen.getByText('2 of 9 returned')).toBeVisible();
 	});
 
 	it('says so plainly when a read found nothing, which is an answer and not an error', async () => {

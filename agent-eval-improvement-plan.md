@@ -290,7 +290,7 @@ Final gate evidence:
   which returns generic pictograms, and restricting the search to brand collections is worse still:
   it offers Google Cloud Storage for "storage" and Tableau for "table". Icon guidance is now an
   ordered pair of steps, product brand then vendor word, with the note that reaching the second step
-  is the normal outcome; a first attempt that only said what *not* to search cut `search_icons` calls
+  is the normal outcome; a first attempt that only said what _not_ to search cut `search_icons` calls
   from eight to two and left boxes bare. Separately, nothing in the skill had ever said that shapes
   must not overlap, which was both remaining overlap failures. V3 now carries its own full body
   rather than concatenating V2's, since retired bodies must not be edited. Overlaps and crossings
@@ -304,7 +304,7 @@ Final gate evidence:
   `pnpm check` is clean; the last trustworthy numbers are 9/12 and 8/12.
 - Scope boundary, recorded deliberately: this section measures the first draft only. The agent cannot
   see what it drew, and production is blind on turn one too — the canvas render rides back on the
-  *next user message*. The repair loop that follows, where the agent looks at the picture and fixes a
+  _next user message_. The repair loop that follows, where the agent looks at the picture and fixes a
   broken icon or an overlapping label, is not covered by any case here and a regression in it would
   be invisible. Reproducing it needs a browser to rasterise the XML, since nothing on the server can.
 
