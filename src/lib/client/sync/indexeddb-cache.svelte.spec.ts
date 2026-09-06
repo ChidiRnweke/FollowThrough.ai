@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { syncEtag, type CacheEntry } from '$lib/models/sync';
+import { syncEtag, initialSyncCursor, type ResourceState } from '$lib/models/sync';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases: string[] = [];
@@ -12,9 +12,12 @@ const setup = (name = `workspace-sync-test-${crypto.randomUUID()}`) => {
 	return { name, repository };
 };
 
-const entry: CacheEntry<string> = {
-	kind: 'cached',
-	snapshot: { etag: syncEtag(1n), value: 'My note' }
+const entry: ResourceState<string> = {
+	kind: 'present',
+	cache: {
+		kind: 'cached',
+		snapshot: { etag: syncEtag(1n), value: 'My note' }
+	}
 };
 
 afterEach(async () => {
@@ -29,18 +32,31 @@ afterEach(async () => {
 });
 
 describe('durable workspace cache', () => {
-	it('distinguishes an unknown inventory from a confirmed empty workspace', async () => {
+	it('retains the deletion and acknowledged cursor together after reopening storage', async () => {
+		const { name, repository } = setup();
+		await repository.commit('user-a', {
+			put: [{ key: 'note:1', entry: { kind: 'deleted' } }],
+			remove: [],
+			cursor: initialSyncCursor
+		});
+		await repository.close();
+		expect(await setup(name).repository.load('user-a')).toEqual({
+			records: [{ key: 'note:1', entry: { kind: 'deleted' } }],
+			cursor: initialSyncCursor
+		});
+	});
+	it('distinguishes an unknown cursor from a confirmed empty workspace', async () => {
 		const { repository } = setup();
-		expect(await repository.load('user-a')).toEqual({ records: [], inventory: null });
+		expect(await repository.load('user-a')).toEqual({ records: [], cursor: null });
 	});
 
-	it('persists the complete inventory together with its cache entries', async () => {
+	it('persists the complete cursor together with its cache entries', async () => {
 		const { repository } = setup();
-		const inventory = [{ key: 'note:1', etag: syncEtag(1n) }];
-		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [], inventory });
+		const cursor = initialSyncCursor;
+		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [], cursor });
 		expect(await repository.load('user-a')).toEqual({
 			records: [{ key: 'note:1', entry }],
-			inventory
+			cursor
 		});
 	});
 
@@ -52,14 +68,14 @@ describe('durable workspace cache', () => {
 		expect((await reopened.load('user-a')).records).toEqual([{ key: 'note:1', entry }]);
 	});
 
-	it('isolates both content and inventory between accounts', async () => {
+	it('isolates both content and cursor between accounts', async () => {
 		const { repository } = setup();
 		await repository.commit('user-a', {
 			put: [{ key: 'note:1', entry }],
 			remove: [],
-			inventory: []
+			cursor: initialSyncCursor
 		});
-		expect(await repository.load('user-b')).toEqual({ records: [], inventory: null });
+		expect(await repository.load('user-b')).toEqual({ records: [], cursor: null });
 	});
 
 	it('deletes only the requested account’s record', async () => {

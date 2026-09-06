@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 export type SyncEtag = string & { readonly __brand: 'SyncEtag' };
+export const syncCursorSchema = z
+	.string()
+	.regex(/^(0|[1-9][0-9]*)$/)
+	.transform((value) => value as string & { readonly __brand: 'SyncCursor' });
+export type SyncCursor = z.infer<typeof syncCursorSchema>;
+export const initialSyncCursor = '0' as SyncCursor;
 export const syncEtagSchema = z
 	.string()
 	.regex(/^sync-v1-[1-9][0-9]*$/)
@@ -18,14 +24,21 @@ export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
 	return a < b ? -1 : a > b ? 1 : 0;
 };
 
-export const inventoryEntrySchema = z.object({ key: z.string().min(1), etag: syncEtagSchema });
-export type InventoryEntry = z.infer<typeof inventoryEntrySchema>;
-export const inventorySchema = z
-	.array(inventoryEntrySchema)
+export const resourceChangeSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('upsert'), key: z.string().min(1), etag: syncEtagSchema }),
+	z.object({ kind: z.literal('delete'), key: z.string().min(1) })
+]);
+export type ResourceChange = z.infer<typeof resourceChangeSchema>;
+export const syncChangesSchema = z
+	.object({
+		cursor: syncCursorSchema,
+		changes: z.array(resourceChangeSchema)
+	})
 	.refine(
-		(entries) => new Set(entries.map((entry) => entry.key)).size === entries.length,
-		'An inventory must contain each resource exactly once'
+		(batch) => new Set(batch.changes.map((change) => change.key)).size === batch.changes.length,
+		'A change batch must contain each resource only once'
 	);
+export type SyncChanges = z.infer<typeof syncChangesSchema>;
 
 export interface SyncSnapshot<T> {
 	readonly etag: SyncEtag;
@@ -35,6 +48,7 @@ export interface SyncSnapshot<T> {
 export type SyncObjectRead<T> =
 	| { readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> }
 	| { readonly kind: 'unchanged'; readonly etag: SyncEtag }
+	| { readonly kind: 'deleted' }
 	| { readonly kind: 'unavailable' };
 
 export type TransferState =
@@ -51,6 +65,40 @@ export type CacheEntry<T> =
 			readonly target: SyncEtag | null;
 			readonly transfer: TransferState;
 	  };
+
+/** Server existence is independent of cache freshness and of a pending local draft. */
+export type ResourceState<T> =
+	{ readonly kind: 'present'; readonly cache: CacheEntry<T> } | { readonly kind: 'deleted' };
+
+export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceState<T>> =>
+	z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('present'), cache: cacheEntrySchema(value) }),
+		z.object({ kind: z.literal('deleted') })
+	]);
+
+/** A compact journal batch changes only the named resources, never infers deletion from absence. */
+export const applyResourceChanges = <T>(
+	current: ReadonlyMap<string, ResourceState<T>>,
+	changes: readonly ResourceChange[]
+): ReadonlyMap<string, ResourceState<T>> => {
+	const next = new Map(current);
+	for (const change of changes) {
+		const previous = current.get(change.key);
+		next.set(
+			change.key,
+			change.kind === 'delete'
+				? { kind: 'deleted' }
+				: {
+						kind: 'present',
+						cache: transitionCache(
+							previous?.kind === 'present' ? previous.cache : { kind: 'uncached' },
+							{ kind: 'observe', etag: change.etag }
+						)
+					}
+		);
+	}
+	return next;
+};
 
 export type CacheEvent<T> =
 	| { readonly kind: 'observe'; readonly etag: SyncEtag }
@@ -121,6 +169,7 @@ export type CacheAccess<T> =
 	| { readonly kind: 'ready'; readonly value: T }
 	| { readonly kind: 'wait' }
 	| { readonly kind: 'unavailable' }
+	| { readonly kind: 'deleted' }
 	| { readonly kind: 'failure'; readonly message: string };
 
 export const accessCache = <T>(entry: CacheEntry<T>, online: boolean): CacheAccess<T> => {
@@ -131,34 +180,6 @@ export const accessCache = <T>(entry: CacheEntry<T>, online: boolean): CacheAcce
 	if (entry.kind === 'updating' && entry.transfer.kind === 'failed')
 		return { kind: 'failure', message: entry.transfer.message };
 	return { kind: 'wait' };
-};
-
-export interface InventoryChange<T> {
-	readonly entries: ReadonlyMap<string, CacheEntry<T>>;
-	readonly removed: readonly string[];
-	readonly fetch: readonly string[];
-}
-
-/** Call only with a completed authoritative inventory, never an error fallback. */
-export const reconcileInventory = <T>(
-	current: ReadonlyMap<string, CacheEntry<T>>,
-	inventory: readonly InventoryEntry[]
-): InventoryChange<T> => {
-	const entries = new Map<string, CacheEntry<T>>();
-	const fetch: string[] = [];
-	for (const item of inventory) {
-		const entry = transitionCache(current.get(item.key) ?? { kind: 'uncached' }, {
-			kind: 'observe',
-			etag: item.etag
-		});
-		entries.set(item.key, entry);
-		if (entry.kind === 'updating' && entry.transfer.kind !== 'fetching') fetch.push(item.key);
-	}
-	return {
-		entries,
-		fetch,
-		removed: [...current.keys()].filter((key) => !entries.has(key))
-	};
 };
 
 export interface LocalChange<T> {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cacheEntrySchema, inventorySchema } from '$lib/models/sync';
+import { cacheEntrySchema, resourceStateSchema, syncCursorSchema } from '$lib/models/sync';
 import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
 
 const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -17,7 +17,7 @@ const completed = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-/** Parses persisted data here; the coordinator never handles weak storage values. */
+/** Parses persisted data here; the resource cache never handles weak storage values. */
 export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 	private opening: Promise<IDBDatabase> | null = null;
 
@@ -28,47 +28,55 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		const database = await this.open();
-		const transaction = database.transaction(['records', 'inventories'], 'readonly');
+		const transaction = database.transaction(['records', 'cursors'], 'readonly');
 		const done = completed(transaction);
-		const [rows, inventory] = await Promise.all([
+		const [rows, cursor] = await Promise.all([
 			requestValue(transaction.objectStore('records').index('accountId').getAll(accountId)),
-			requestValue(transaction.objectStore('inventories').get(accountId)),
+			requestValue(transaction.objectStore('cursors').get(accountId)),
 			done
 		]);
+		const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
 		const records = z
 			.array(
-				z.object({
-					schemaVersion: z.literal(1),
-					accountId: z.literal(accountId),
-					key: z.string().min(1),
-					entry: cacheEntrySchema(this.valueSchema)
-				})
+				z.union([
+					z.object({
+						...identity,
+						schemaVersion: z.literal(2),
+						entry: resourceStateSchema(this.valueSchema)
+					}),
+					z
+						.object({
+							...identity,
+							schemaVersion: z.literal(1),
+							entry: cacheEntrySchema(this.valueSchema)
+						})
+						.transform((record) => ({
+							...record,
+							entry: { kind: 'present' as const, cache: record.entry }
+						}))
+				])
 			)
 			.parse(rows);
 		return {
 			records: records.map(({ key, entry }) => ({ key, entry })),
-			inventory:
-				inventory === undefined
+			cursor:
+				cursor === undefined
 					? null
-					: z
-							.object({
-								accountId: z.literal(accountId),
-								entries: inventorySchema
-							})
-							.parse(inventory).entries
+					: z.object({ accountId: z.literal(accountId), cursor: syncCursorSchema }).parse(cursor)
+							.cursor
 		};
 	}
 
 	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
 		const database = await this.open();
-		const transaction = database.transaction(['records', 'inventories'], 'readwrite');
+		const transaction = database.transaction(['records', 'cursors'], 'readwrite');
 		const done = completed(transaction);
 		try {
 			const records = transaction.objectStore('records');
-			for (const record of changes.put) records.put({ schemaVersion: 1, accountId, ...record });
+			for (const record of changes.put) records.put({ schemaVersion: 2, accountId, ...record });
 			for (const key of changes.remove) records.delete([accountId, key]);
-			if (changes.inventory)
-				transaction.objectStore('inventories').put({ accountId, entries: changes.inventory });
+			if (changes.cursor !== undefined)
+				transaction.objectStore('cursors').put({ accountId, cursor: changes.cursor });
 		} catch (error) {
 			transaction.abort();
 			await done.catch(() => {
@@ -88,13 +96,16 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 
 	private open(): Promise<IDBDatabase> {
 		this.opening ??= new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open(this.databaseName, 1);
+			const request = indexedDB.open(this.databaseName, 2);
 			let blocked = false;
 			request.onupgradeneeded = () => {
 				const database = request.result;
-				const records = database.createObjectStore('records', { keyPath: ['accountId', 'key'] });
-				records.createIndex('accountId', 'accountId');
-				database.createObjectStore('inventories', { keyPath: 'accountId' });
+				if (!database.objectStoreNames.contains('records')) {
+					const records = database.createObjectStore('records', { keyPath: ['accountId', 'key'] });
+					records.createIndex('accountId', 'accountId');
+				}
+				if (!database.objectStoreNames.contains('cursors'))
+					database.createObjectStore('cursors', { keyPath: 'accountId' });
 			};
 			request.onsuccess = () => {
 				if (blocked) {

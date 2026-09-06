@@ -1,19 +1,25 @@
-import type { CacheEntry, InventoryEntry, SyncEtag, SyncObjectRead } from '$lib/models/sync';
+import type {
+	ResourceState,
+	SyncCursor,
+	SyncChanges,
+	SyncEtag,
+	SyncObjectRead
+} from '$lib/models/sync';
 
 export interface CachedRecord<T> {
 	readonly key: string;
-	readonly entry: CacheEntry<T>;
+	readonly entry: ResourceState<T>;
 }
 
 export interface CacheCommit<T> {
 	readonly put: readonly CachedRecord<T>[];
 	readonly remove: readonly string[];
-	readonly inventory?: readonly InventoryEntry[];
+	readonly cursor?: SyncCursor;
 }
 
 export interface StoredCache<T> {
 	readonly records: readonly CachedRecord<T>[];
-	readonly inventory: readonly InventoryEntry[] | null;
+	readonly cursor: SyncCursor | null;
 }
 
 export interface SyncCacheRepository<T> {
@@ -24,7 +30,7 @@ export interface SyncCacheRepository<T> {
 export type ObjectRead<T> = SyncObjectRead<T>;
 
 export interface SyncReadTransport<T> {
-	inventory(): Promise<readonly InventoryEntry[]>;
+	pull(since: SyncCursor): Promise<SyncChanges>;
 	read(key: string, etag: SyncEtag | null): Promise<ObjectRead<T>>;
 }
 

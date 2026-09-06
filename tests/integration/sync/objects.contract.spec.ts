@@ -1,18 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
-import { WorkspaceSyncInventory } from '$lib/server/repositories/workspace/sync-inventory';
+import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { initialSyncCursor } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { actor, context, seedNote } from '../database-harness';
 
 describe('conditional normalized object reads', () => {
+	it('fails loudly when a source record lacks its synchronization version', async () => {
+		const { note, owner } = await seedNote('8710');
+		await context.client`delete from workspace_sync_versions where resource_type = 'notes'
+			and resource_id = jsonb_build_array(${note.id}::text)`;
+		await expect(
+			new WorkspaceSyncObjects(context.db).read(owner, { type: 'notes', id: [note.id] }, null)
+		).rejects.toThrow(ZodError);
+	});
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const inventory = await new WorkspaceSyncInventory(context.db).list(owner);
-		const entry = inventory.find((entry) => entry.key === workspaceResourceKey(identity));
+		const batch = await new WorkspaceSyncChanges(context.db).pull(owner, initialSyncCursor);
+		const entry = batch.changes.find((entry) => entry.key === workspaceResourceKey(identity));
+		if (entry?.kind !== 'upsert') throw new Error('Seeded note is missing from the journal');
 		expect(await new WorkspaceSyncObjects(context.db).read(owner, identity, null)).toEqual({
 			kind: 'found',
-			snapshot: { etag: entry?.etag, value: { type: 'notes', value: note } }
+			snapshot: { etag: entry.etag, value: { type: 'notes', value: note } }
 		});
 	});
 
@@ -39,12 +50,12 @@ describe('conditional normalized object reads', () => {
 		).toEqual({ kind: 'unavailable' });
 	});
 
-	it('reports a record deleted since the inventory as unavailable', async () => {
+	it('distinguishes a server-deleted record from an unknown identity', async () => {
 		const { note, owner } = await seedNote('8705');
 		await context.client`delete from notes where id = ${note.id}`;
 		expect(
 			await new WorkspaceSyncObjects(context.db).read(owner, { type: 'notes', id: [note.id] }, null)
-		).toEqual({ kind: 'unavailable' });
+		).toEqual({ kind: 'deleted' });
 	});
 
 	it('normalizes absent todo fields instead of leaking database nulls', async () => {

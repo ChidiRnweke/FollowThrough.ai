@@ -1,1 +1,6 @@
-export { workspaceSyncVersions, workspaceSyncVersionSequence } from './registry';
+export {
+	workspaceSyncVersions,
+	workspaceSyncVersionSequence,
+	workspaceSyncHeads,
+	workspaceSyncChanges
+} from './registry';

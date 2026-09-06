@@ -1,4 +1,4 @@
-import type { SyncSnapshot, InventoryEntry } from '$lib/models/sync';
+import type { SyncSnapshot, SyncCursor, ResourceChange } from '$lib/models/sync';
 import type {
 	CacheCommit,
 	CachedRecord,
@@ -10,13 +10,13 @@ import type {
 
 export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
-	private readonly inventories = new Map<string, readonly InventoryEntry[]>();
+	private readonly cursors = new Map<string, SyncCursor>();
 	writeFailure: string | null = null;
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		return {
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
-			inventory: this.inventories.get(accountId) ?? null
+			cursor: this.cursors.get(accountId) ?? null
 		};
 	}
 
@@ -26,7 +26,7 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 		for (const record of changes.put) records.set(record.key, record);
 		for (const key of changes.remove) records.delete(key);
 		this.accounts.set(accountId, records);
-		if (changes.inventory) this.inventories.set(accountId, changes.inventory);
+		if (changes.cursor !== undefined) this.cursors.set(accountId, changes.cursor);
 	}
 }
 
@@ -34,7 +34,7 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	readonly records = new Map<string, SyncSnapshot<T>>();
 	readonly deliveredBodies: string[] = [];
-	inventoryFailure: string | null = null;
+	pullFailure: string | null = null;
 	readFailure: string | null = null;
 	private readonly paused = new Map<string, { start: () => void; ready: Promise<void> }>();
 
@@ -45,11 +45,33 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 		return { started: started.promise, release: ready.resolve };
 	}
 
-	async inventory() {
-		if (this.inventoryFailure) throw new Error(this.inventoryFailure);
-		const entries = [...this.records].map(([key, snapshot]) => ({ key, etag: snapshot.etag }));
-		await this.wait('inventory');
-		return entries;
+	private cursor = 0n;
+	private readonly versions = new Map<string, SyncSnapshot<T>['etag']>();
+	private readonly changes = new Map<string, { cursor: bigint; change: ResourceChange }>();
+
+	async pull(since: SyncCursor) {
+		if (this.pullFailure) throw new Error(this.pullFailure);
+		for (const [key, snapshot] of this.records) {
+			if (this.versions.get(key) === snapshot.etag) continue;
+			this.versions.set(key, snapshot.etag);
+			this.changes.set(key, {
+				cursor: ++this.cursor,
+				change: { kind: 'upsert', key, etag: snapshot.etag }
+			});
+		}
+		for (const key of this.versions.keys()) {
+			if (this.records.has(key)) continue;
+			this.versions.delete(key);
+			this.changes.set(key, { cursor: ++this.cursor, change: { kind: 'delete', key } });
+		}
+		const batch = {
+			cursor: String(this.cursor) as SyncCursor,
+			changes: [...this.changes.values()]
+				.filter((item) => item.cursor > BigInt(since))
+				.map((item) => item.change)
+		};
+		await this.wait('changes');
+		return batch;
 	}
 
 	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<ObjectRead<T>> {

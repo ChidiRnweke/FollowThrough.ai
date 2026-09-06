@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { workspaceResourceTypeSchema } from '$lib/models/workspace-sync';
 import { context, seedNote } from '../database-harness';
 
 const version = async (type: string, id: string): Promise<string | null> => {
@@ -9,6 +10,14 @@ const version = async (type: string, id: string): Promise<string | null> => {
 };
 
 describe('database-maintained synchronization versions', () => {
+	it('registers change tracking for every synchronized resource type', async () => {
+		const rows = await context.client<{ table_name: string }[]>`
+			select distinct event_object_table as table_name from information_schema.triggers
+			where trigger_name = 'workspace_sync_version'`;
+		expect(rows.map((row) => row.table_name).sort()).toEqual(
+			[...workspaceResourceTypeSchema.options].sort()
+		);
+	});
 	it('assigns a version when a domain repository creates a record', async () => {
 		const { note } = await seedNote('8501');
 		expect(await version('notes', note.id)).toMatch(/^[1-9][0-9]*$/);

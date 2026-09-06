@@ -1,59 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-	accessCache,
-	reconcileInventory,
-	syncEtag,
-	transitionCache,
-	type CacheEntry
-} from './index';
+import { accessCache, syncEtag, transitionCache, type CacheEntry } from './index';
 
 const cached: CacheEntry<string> = {
 	kind: 'cached',
 	snapshot: { etag: syncEtag(1n), value: 'Saved note' }
 };
 const updating = () => transitionCache(cached, { kind: 'observe', etag: syncEtag(2n) });
-
-describe('incremental inventory reconciliation', () => {
-	it('does not download the payload of an unchanged record', () => {
-		expect(
-			reconcileInventory(new Map([['note:1', cached]]), [{ key: 'note:1', etag: syncEtag(1n) }])
-				.fetch
-		).toEqual([]);
-	});
-
-	it('downloads a changed task without downloading its unchanged note', () => {
-		expect(
-			reconcileInventory(
-				new Map([
-					['note:1', cached],
-					['todo:1', cached]
-				]),
-				[
-					{ key: 'note:1', etag: syncEtag(1n) },
-					{ key: 'todo:1', etag: syncEtag(2n) }
-				]
-			).fetch
-		).toEqual(['todo:1']);
-	});
-
-	it('schedules newly discovered records', () => {
-		expect(reconcileInventory(new Map(), [{ key: 'note:2', etag: syncEtag(2n) }]).fetch).toEqual([
-			'note:2'
-		]);
-	});
-
-	it('reports records absent from the completed inventory', () => {
-		expect(reconcileInventory(new Map([['note:1', cached]]), []).removed).toEqual(['note:1']);
-	});
-
-	it('does not queue a second fetch for a record already being downloaded', () => {
-		const fetching = transitionCache(updating(), { kind: 'request' });
-		expect(
-			reconcileInventory(new Map([['note:1', fetching]]), [{ key: 'note:1', etag: syncEtag(2n) }])
-				.fetch
-		).toEqual([]);
-	});
-});
 
 describe('opening cached content', () => {
 	it('opens cached content online without waiting for inventory validation', () => {

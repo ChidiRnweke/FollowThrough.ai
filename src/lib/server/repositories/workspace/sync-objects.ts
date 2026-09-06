@@ -103,7 +103,11 @@ export class WorkspaceSyncObjects implements SyncObjectRepository {
 			from ${sql.identifier(identity.type)} r
 			left join workspace_sync_versions v on v.resource_type = ${identity.type}
 				and v.resource_id = ${syncIdentitySql(registration)}
-			where ${registration.scope(actor)} and ${syncIdentitySql(registration)} = ${JSON.stringify(identity.id)}::jsonb`);
+			where ${registration.scope(actor)} and ${syncIdentitySql(registration)} = ${JSON.stringify(identity.id)}::jsonb
+			union all select jsonb_build_object('kind', 'deleted') as result
+			from workspace_sync_changes c where c.account_id = ${actor.userId}
+				and c.resource_type = ${identity.type} and c.resource_id = ${JSON.stringify(identity.id)}::jsonb
+				and c.operation = 'delete'`);
 		const resultRows = z.array(z.object({ result: workspaceObjectReadSchema }));
 		const parsed = z
 			.union([resultRows, z.object({ rows: resultRows })])

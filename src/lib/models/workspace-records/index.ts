@@ -385,5 +385,6 @@ export const workspaceObjectReadSchema = z.discriminatedUnion('kind', [
 		snapshot: z.object({ etag: syncEtagSchema, value: workspaceRecordSchema })
 	}),
 	z.object({ kind: z.literal('unchanged'), etag: syncEtagSchema }),
+	z.object({ kind: z.literal('deleted') }),
 	z.object({ kind: z.literal('unavailable') })
 ]);
