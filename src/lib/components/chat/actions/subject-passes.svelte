@@ -1,17 +1,23 @@
 <script lang="ts">
-	import type { ThingPass } from '$lib/components/agent';
+	import type { SubjectPass } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal } from '$lib/components/icons';
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import FileOutput from './disclosure/file-output.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
-	import { CHAT_GAP_BOND, CHAT_GAP_PASS, chatActionEmphasis } from './chat-row';
+	import {
+		CHAT_GAP_BOND,
+		CHAT_GAP_PASS,
+		CHAT_TEXT_EVIDENCE,
+		CHAT_TEXT_REQUEST,
+		chatActionEmphasis
+	} from './chat-row';
 
 	let {
 		passes,
 		onexpand
 	}: {
-		passes: readonly ThingPass[];
+		passes: readonly SubjectPass[];
 		/** Offered only where there is more to read than the column can hold. */
 		onexpand?: () => void;
 	} = $props();
@@ -48,7 +54,7 @@
 <div class="flex flex-col {CHAT_GAP_PASS}">
 	{#each passes as pass, index (index)}
 		<div class="flex flex-col {CHAT_GAP_BOND}">
-			<p class="text-xs {chatActionEmphasis(pass.mutating)}">
+			<p class="{CHAT_TEXT_REQUEST} {chatActionEmphasis(pass.mutating)}">
 				{pass.label}{#if pass.query}&nbsp;<span class="italic text-foreground">{pass.query}</span
 					>{/if}
 			</p>
@@ -64,7 +70,7 @@
 					<Button
 						variant="link"
 						size="xs"
-						class="h-auto self-start p-0 text-muted-foreground"
+						class="{CHAT_TEXT_EVIDENCE} h-auto self-start p-0 text-muted-foreground"
 						onclick={onexpand}
 					>
 						Read all of it
@@ -72,12 +78,17 @@
 					</Button>
 				{/if}
 			{:else if pass.evidence.kind === 'fields'}
-				<div class="text-xs text-muted-foreground">
+				<div class="{CHAT_TEXT_EVIDENCE} text-muted-foreground">
 					<RecordFields changed={pass.evidence.changed} />
 				</div>
 			{:else if pass.evidence.kind === 'prose'}
-				<div class="max-h-56 overflow-y-auto overscroll-contain rounded-md bg-muted/40 px-2 py-1.5">
-					<ChatMarkdown content={pass.evidence.text} />
+				<!-- `surface="brand"` is not decoration: it retargets the prose plugin's secondary
+				     inks (lead, counters, captions) onto `--brand-muted-foreground`, which is what
+				     the wash requires of anything grey sitting on it. -->
+				<div
+					class="max-h-56 overflow-y-auto overscroll-contain rounded-md bg-brand/10 px-2 py-1.5 dark:bg-brand/15"
+				>
+					<ChatMarkdown content={pass.evidence.text} surface="brand" />
 				</div>
 			{:else if pass.evidence.kind === 'failure'}
 				<!--
@@ -87,7 +98,7 @@
 
 					Not `role="alert"`: the alert was announced once when the failure was stated.
 				-->
-				<p class="break-words text-xs text-destructive">{pass.evidence.raw}</p>
+				<p class="{CHAT_TEXT_EVIDENCE} break-words text-destructive">{pass.evidence.raw}</p>
 			{/if}
 		</div>
 	{/each}

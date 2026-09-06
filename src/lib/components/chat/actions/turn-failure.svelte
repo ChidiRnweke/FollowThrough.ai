@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal, FtWarning } from '$lib/components/icons';
 	import type { FailureGroup } from '$lib/components/agent';
-	import { CHAT_ROW, CHAT_ROW_ICON } from './chat-row';
+	import { CHAT_ROW, CHAT_ROW_ICON, CHAT_TEXT_REQUEST } from './chat-row';
 	import { canOpenEntity, entityActionLabel, entityIcon, openEntity } from './open-entity';
 
 	let {
@@ -37,7 +37,7 @@
 	whole signal, and a box around it would be the fourth edge in a panel that has none. The
 	subject rows stay muted so the colour states the failure once.
 -->
-<div class="flex gap-2 text-xs" role="alert">
+<div class="{CHAT_TEXT_REQUEST} flex gap-2" role="alert">
 	<FtWarning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
 	<div class="flex min-w-0 flex-1 flex-col gap-1">
 		<p class="text-destructive">{headline}</p>

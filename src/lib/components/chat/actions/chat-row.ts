@@ -1,5 +1,5 @@
 /**
- * One geometry for every row inside a turn: the things the turn touched, and the calls
+ * One geometry for every row inside a turn: the subjects the turn touched, and the calls
  * behind its log door. The two had drifted to two paddings, two gaps and two heights, which
  * in a 384px column reads as two kinds of list rather than one.
  *
@@ -22,16 +22,13 @@
  * still plainly a control.
  */
 export const CHAT_ROW =
-	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-xs font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
+	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-label font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
 
 /**
- * The statement line of a thing the turn touched: the name, its verb, and the way in.
+ * The statement line of a subject the turn touched: the name, its verb, and the way in.
  *
- * One step above `CHAT_ROW`, and that step is the whole hierarchy. Everything subordinate to a
- * thing — what the agent asked it, what came back, what it changed — renders at
- * `provenance-caption` beneath it, and `xs` is the floor: with the statement also at `xs` there
- * was no room left to put anything below it, so a call, its arguments and its results all
- * arrived at one size and the reader had to parse them apart by punctuation.
+ * The top of the turn's own ladder, one rung under the answer it belongs to. See
+ * `CHAT_TEXT_REQUEST` for the rest of it.
  */
 export const CHAT_ROW_STATEMENT =
 	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-sm font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
@@ -48,6 +45,46 @@ export const CHAT_ROW_DETAIL = 'chat-disclosure';
 
 /** The indent detail sits at, matching the row text above it. */
 export const CHAT_ROW_INDENT = 'pl-6';
+
+/**
+ * The one type pyramid inside a turn's activity.
+ *
+ * The turn stacks four levels in a 384px column, and the app has only two rungs to spend on
+ * them — `sm` and `xs`. So a pass label and the excerpt it introduces were the same 12px, and
+ * the label did not read as the title of the block underneath it. Depth was carried by
+ * indentation alone.
+ *
+ *     14px  the assistant's answer      the prose this whole block explains
+ *     14px  a subject                   `CHAT_ROW_STATEMENT` — atlas · edited
+ *     13px  a request                   `CHAT_TEXT_REQUEST` — Read lines 124–136
+ *     11px  the evidence                `CHAT_TEXT_EVIDENCE` — what came back
+ *
+ * A subject sits level with the answer rather than under it, and that is the right reading: the
+ * activity block is not subordinate prose, it is the record standing beside the answer. Nothing
+ * inside it is ever larger.
+ *
+ * The steps below that are 1 / 2. The 1px step is deliberate and it is placed where size is
+ * doing the least work: a subject is a foreground name at medium weight and its requests are
+ * teal and indented 24px beneath it, so three other signals already separate them. One pixel is
+ * not a level on its own — nobody can see 13 against 14 in isolation — and it is never asked to
+ * be one here. The 13→11 step is the boundary a reader must actually see, so it gets 2px, plus
+ * mono, plus the wash edge.
+ *
+ * Declared here and never picked at a call site, for the reason the gaps are: two components
+ * each reaching for "about an `xs`" is how the flatness arrived.
+ */
+
+/** 13px. A line that titles the block beneath it: a request, the read door, a failure. */
+export const CHAT_TEXT_REQUEST = 'text-label';
+
+/**
+ * 11px. What came back — an excerpt, a field list, a matched line.
+ *
+ * Below the 12px floor that holds for UI text, and allowed to be, because this rung only ever
+ * carries quoted machine output in a column too narrow to read it in anyway. The reader skims
+ * it here and opens "Read all of it" to actually read it, where it renders at body size.
+ */
+export const CHAT_TEXT_EVIDENCE = 'text-2xs';
 
 /**
  * The one vertical ladder inside a turn's activity.
@@ -70,17 +107,17 @@ export const CHAT_ROW_INDENT = 'pl-6';
 /** 4px. A request and the evidence it introduces, plus that evidence's own footer link. */
 export const CHAT_GAP_BOND = 'gap-1';
 
-/** 12px. Between passes over one thing. Three times the bond, which is what makes it visible. */
+/** 12px. Between passes over one subject. Three times the bond, which is what makes it visible. */
 export const CHAT_GAP_PASS = 'gap-3';
 
 /**
- * 20px. Between things, failures and the read door.
+ * 20px. Between subjects, failures and the read door.
  *
  * 20 rather than 24, and not to be tidied: `chat-thread.svelte` spends 24px separating one turn
  * from the next, and a gap inside a turn must stay under the gap between turns or the turn stops
  * reading as one thing.
  */
-export const CHAT_GAP_THING = 'gap-5';
+export const CHAT_GAP_SUBJECT = 'gap-5';
 
 /**
  * What the agent did, against everything on this surface that is not the agent acting.
@@ -92,14 +129,13 @@ export const CHAT_GAP_THING = 'gap-5';
  * write carries medium, a look stays regular. So the column answers two questions in one
  * glance — what did it do, and which of those changed my work.
  *
- * No size change: the size ladder is already spoken for by `CHAT_ROW_STATEMENT` over
- * `provenance-caption`, and a third size would say "bigger thing" where this only means "this
- * one is the agent". The caller supplies the size, so one rule serves the `xs` pass labels, the
- * `xs` running steps and the `sm` verb on a statement row.
+ * Carries no size of its own: size says how deep a line sits, and this says who acted. The
+ * caller supplies the rung, so one rule serves a request label, a running step and the verb on
+ * a subject row, each at its own level.
  *
  * The consequence elsewhere is "Read all of it", which is a control the reader operates rather
  * than something the agent did. It gave up the teal it had as a link variant; see
- * `thing-passes.svelte`.
+ * `subject-passes.svelte`.
  */
 export const chatActionEmphasis = (mutating: boolean): string =>
 	mutating ? 'font-medium text-brand' : 'text-brand';

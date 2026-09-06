@@ -38,11 +38,15 @@
 	{/each}
 	{#each prose as change (change.label)}
 		<div class="flex flex-col gap-1">
-			<p class="provenance-caption">{change.label}</p>
+			<p class="text-muted-foreground">{change.label}</p>
 			<!-- Bounded, because a note body pasted whole pushes the rest of the transcript off
-			     the screen for a row that is only evidence. -->
-			<div class="max-h-56 overflow-y-auto overscroll-contain rounded-md bg-muted/40 px-2 py-1.5">
-				<ChatMarkdown content={change.to} />
+			     the screen for a row that is only evidence. The teal wash is the same surface every
+			     other piece of evidence in a turn sits on, so `surface="brand"` retargets the prose
+			     plugin's secondary inks onto the hue-matched token. -->
+			<div
+				class="max-h-56 overflow-y-auto overscroll-contain rounded-md bg-brand/10 px-2 py-1.5 dark:bg-brand/15"
+			>
+				<ChatMarkdown content={change.to} surface="brand" />
 			</div>
 		</div>
 	{/each}

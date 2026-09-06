@@ -30,8 +30,8 @@ export {
 	type PassEvidence,
 	type PassOutcome,
 	type RunningStep,
-	type ThingActivity,
-	type ThingPass,
+	type SubjectActivity,
+	type SubjectPass,
 	type TurnContext,
 	type Verb
 } from './actions/turn-context';

@@ -74,8 +74,16 @@
 - **Type scale:** app code uses the named utilities in `layout.css` — `page-title` (one per
   page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group),
   `provenance-caption` (per-item metadata). The ladder is
-  eyebrow/caption → body → section-title → page-title. Form labels are small and muted so values
-  lead; `Field.Title` stays at body size above its muted description.
+  2xs → eyebrow/caption → label → body → section-title → page-title. Form labels are small and
+  muted so values lead; `Field.Title` stays at body size above its muted description.
+- **Two rungs below caption, for nested chrome only.** `text-label` (13px) is a line that titles
+  the block under it; `text-2xs` (11px) is quoted machine output — an excerpt, a field list, a
+  matched line. They exist because one surface stacks four levels inside a 384px column, and two
+  rungs could not carry that. `caption` remains the floor for anything a reader reads as text: a
+  label, a control, prose, a value. `2xs` is only ever skimmed, and the surface that uses it must
+  offer a full-size way to actually read the content — the chat turn's "Read all of it" dialog is
+  the reference. One pixel is not a level: a 1px step may narrow a boundary that colour, weight
+  or indentation is already carrying, never carry one alone.
 - **Authored note scale:** rich note and skill-editor content has its own document ladder: body
   16px/24.8px at 400/600; H1 32px/38px at 800; H2 24px/32px at 700; H3 20px/28px at 600; H4
   18px/26px at 600. Full-size read-only note diffs inherit it; compact diff previews embedded in
@@ -241,8 +249,8 @@ Kanban columns keep their drop zone and center the voice line inside it.
   accessibly. User messages expose copy and edit-in-composer; assistant messages copy and retry
   when eligible — retrying never duplicates the visible user turn. Conversation origin is fixed
   on its first turn and distinct from context chips added later.
-- **A turn reports the things it touched, not the calls it made.** Running, its steps arrive in
-  order, because the point is watching it work. Settled, every call folds into the thing it was
+- **A turn reports the subjects it touched, not the calls it made.** Running, its steps arrive in
+  order, because the point is watching it work. Settled, every call folds into the subject it was
   about — one entry per note, todo, project, skill or diagram, carrying the strongest verb that
   befell it. Six calls over one note are one row. The fold is the deduplication: keyed by call,
   a list can only state the same name once per call that mentioned it, and no amount of
@@ -250,32 +258,32 @@ Kanban columns keep their drop zone and center the voice line inside it.
 
   Seven rules follow from it, and they hold everywhere on this surface:
 
-  1. **Navigation follows naming.** A row carries a way in only when it names one thing. A
+  1. **Navigation follows naming.** A row carries a way in only when it names one subject. A
      search is not a row, so no arrow ever stands for however many results came back and opens
-     none of them in particular. The entry opens where that kind of thing opens — never by
+     none of them in particular. The entry opens where that kind of subject opens — never by
      taking over the panel it was clicked in — and something the agent just created is openable
      too, its id arriving in the result rather than the arguments.
-  2. **A thing is one line.** What the agent asked it, what came back, what it changed, and the
+  2. **A subject is one line.** What the agent asked it, what came back, what it changed, and the
      passages it read are all behind its own disclosure.
-  3. **Show the things; count only what you hide; word only what is absent.** `1 match` above
+  3. **Show the subjects; count only what you hide; word only what is absent.** `1 match` above
      one match and `1 edit` above one edit state the same fact twice. `…and 4 more` stays,
      because it counts what is not on screen; `nothing found` stays, because an absence has
      nothing to show. Results are otherwise stated in the reader's terms or not at all — an
      etag, a revision, or an internal tool name is faithful and useless.
-  4. **Input and result are told apart by structure.** Inside a thing, each pass is a request
+  4. **Input and result are told apart by structure.** Inside a subject, each pass is a request
      line with what came back indented beneath it. Dot-joining the two into one string put the
      question and the answer at one size, separated by the same character that separated their
      own parts.
   5. **Three depths, one door.** The thread carries what changed. **One door per turn** carries
      what was only read, and it is labelled by what it holds — "Read 4 notes and your project
-     memory" — rather than by how many calls it took to get there. A dialog, offered per thing,
+     memory" — rather than by how many calls it took to get there. A dialog, offered per subject,
      carries the passages at full width — the panel is 384px and file content is mono, so more
      than a few lines of it there is a column of fragments. That dialog is an escalation for
      raw passages only; the depths above it stay in place, and the reader never loses the
      conversation to read what was said about it.
   6. **One vertical ladder, declared once.** 4px binds a request to the evidence it introduces
      and to that evidence's own footer link; 12px separates one pass from the next; 20px
-     separates one thing from another and from the read door. Each step is at least 1.6× the
+     separates one subject from another and from the read door. Each step is at least 1.6× the
      one below it, because a 4px difference at 12px type is below the size the eye reads as a
      grouping — which is exactly what an opened row was before: two gaps, 4 and 8, so the
      excerpt sat as far from its own request as the next request sat from it. 20px and not 24
@@ -285,25 +293,33 @@ Kanban columns keep their drop zone and center the voice line inside it.
      there.
   7. **Teal is what the agent did, and nothing else here.** Every action the agent took takes
      the brand teal — "Read note", "Searched for", "Read lines 130–159", "Edited note", and a
-     thing's verb on its statement line. Nothing else on the surface does: the search string is
-     the reader's own words, the excerpt is the note's own content, the thing's name is the
-     thing, and "Read all of it" is a control the reader operates, so it gave up the `link`
+     subject's verb on its statement line. Nothing else on the surface does: the search string is
+     the reader's own words, the excerpt is the note's own content, the subject's name is the
+     subject, and "Read all of it" is a control the reader operates, so it gave up the `link`
      variant's `text-primary` for muted. Weight then separates the actions from each other — a
      write is medium, a look is regular — so the column answers "what did it do" and "which of
-     those changed my work" in one glance. No size change: the size ladder already says "bigger
-     thing", and this only says "this is the agent". A refusal reads as a look, because nothing
-     was written. The fold carries the fact (`ThingPass.mutating`, `isWriteVerb`); no view reads
-     a label back as English to recover it.
+     those changed my work" in one glance. Colour carries no size of its own: size says how deep
+     a line sits, this says who acted. A refusal reads as a look, because nothing was written.
+     The fold carries the fact (`SubjectPass.mutating`, `isWriteVerb`); no view reads a label
+     back as English to recover it.
 
   Mechanism (tool searches, wrapper envelopes, workspace context, preference reads) never earns
   an entry; it is named once, last, behind the door. A failure a later call put right is a
-  retry, not news — its record stays inside the thing, where a reader who opens it can see the
+  retry, not news — its record stays inside the subject, where a reader who opens it can see the
   agent correcting itself.
 
-  The ladder: a thing's statement line is `sm`, its own metadata is `provenance-caption`, and a
-  search query renders italic because it is the reader's words handed to a tool rather than our
-  copy. `xs` is the floor, so a statement at `xs` leaves nothing to put beneath it — which is
-  how a call, its arguments and its results once all arrived at one size.
+  The type pyramid, one rung per level, declared in `chat-row.ts` and never chosen at a call
+  site: a subject's statement line at `sm` (14px), level with the answer beside it rather than
+  under it; a request at `text-label` (13px); what came back at `text-2xs` (11px). Nothing
+  inside the block is ever larger than the answer. A search query renders italic and
+  uncoloured, because it is the reader's words handed to a tool rather than our copy. Going
+  deeper is smaller or equal, never larger — a request that titles an excerpt must never be set
+  smaller than the excerpt.
+
+  Evidence sits on the shared `bg-brand/10` (`dark:bg-brand/15`) wash wherever it appears —
+  excerpt, field list, quoted prose — so quoted output is a surface rather than more page. Its
+  ink follows the wash and not taste: the gutter takes `text-brand-muted-foreground`, the content
+  takes full `text-foreground`, and neither grey nor an opacity is available here.
 
 - **An approval is a flat block, never a card** — three same-weight rectangles nested inside a
   384px column. Marked by a pair of teal hairlines and 8px of air outside them: a pending
@@ -369,7 +385,7 @@ Kanban columns keep their drop zone and center the voice line inside it.
   current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token,
   duplicate a prompt during retry, or hide chat entirely on mobile.
-- Do not give a tool call a row, a name, or a disclosure of its own. The row is the thing it
+- Do not give a tool call a row, a name, or a disclosure of its own. The row is the subject it
   touched; the call is a pass inside it. Do not label a door by how many calls it opens onto, and
   do not print a count above the items it counts. Do not echo raw payloads or version-retention
   housekeeping copy.

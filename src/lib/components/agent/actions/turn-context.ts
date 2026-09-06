@@ -11,7 +11,7 @@ import { toolDisclosure, type FieldChange, type FileOutputLine } from './tool-di
 import { toolPresentationKind } from './tool-catalog-presentation';
 
 /**
- * What a turn did, keyed by the things it did it to.
+ * What a turn did, keyed by the subjects it did it to.
  *
  * The unit here is deliberately not the call. Six calls over one note state one fact — the
  * agent worked on that note — and a list keyed by call can only ever say it six times, which
@@ -24,14 +24,14 @@ import { toolPresentationKind } from './tool-catalog-presentation';
  */
 
 /**
- * What the agent saw or wrote in one pass over one thing.
+ * What the agent saw or wrote in one pass over one subject.
  *
  * A union rather than a bag of optionals: a pass that read passages has no field list, and a
  * pass that set fields has no line numbers. Written as `lines?` and `changed?` beside a kind,
  * both halves would be sayable together and neither would be guaranteed.
  */
 export type PassEvidence =
-	/** The pass is fully described by its own label — a read whose payload is the thing itself. */
+	/** The pass is fully described by its own label — a read whose payload is the subject itself. */
 	| { readonly kind: 'none' }
 	/** What it saw: matched lines, an excerpt, a listing. */
 	| { readonly kind: 'passages'; readonly lines: readonly FileOutputLine[] }
@@ -42,13 +42,13 @@ export type PassEvidence =
 	/** The run's own message, kept as evidence. The reader-facing sentence is stated above. */
 	| { readonly kind: 'failure'; readonly raw: string };
 
-export interface ThingPass {
+export interface SubjectPass {
 	/** What the agent asked for, in the reader's words: `Searched for`, `Read lines 188–221`. */
 	readonly label: string;
 	/** The reader's own words handed to a tool. Rendered italic; absent when there were none. */
 	readonly query?: string;
 	/**
-	 * Whether this pass left the thing changed.
+	 * Whether this pass left the subject changed.
 	 *
 	 * Carried rather than re-derived: the fold already ranks the verbs, so it knows, and a view
 	 * that guessed from the label would be reading English to recover a fact the data had. It is
@@ -60,20 +60,20 @@ export interface ThingPass {
 
 export type PassOutcome = 'running' | 'done' | 'failed' | 'rejected';
 
-export interface ThingActivity {
+export interface SubjectActivity {
 	readonly entity: EntityRef;
 	/** The strongest verb that befell it across the turn. */
 	readonly verb: Verb;
 	readonly outcome: PassOutcome;
 	/** Every pass the agent made over it, in the order it made them. */
-	readonly passes: readonly ThingPass[];
+	readonly passes: readonly SubjectPass[];
 }
 
 /**
  * One thing that went wrong, and everything it went wrong to.
  *
  * A cause and its subjects rather than a list of failed calls: three changes abandoned by the
- * same stopped run are one piece of news about three things, not three pieces of news.
+ * same stopped run are one piece of news about three subjects, not three pieces of news.
  */
 export interface FailureGroup {
 	/** The reason, in the reader's terms, stated once. */
@@ -86,11 +86,11 @@ export interface FailureGroup {
 
 export interface TurnContext {
 	/** Things the turn changed. These lead, because they are what the reader now owns. */
-	readonly changed: readonly ThingActivity[];
+	readonly changed: readonly SubjectActivity[];
 	/** Things it only read. This is the context it answered from. */
-	readonly read: readonly ThingActivity[];
+	readonly read: readonly SubjectActivity[];
 	/** Looks that came back with nothing. An absence explains a thin answer. */
-	readonly barren: readonly ThingPass[];
+	readonly barren: readonly SubjectPass[];
 	/** The agent finding its footing: named, reachable, never prominent. */
 	readonly setup: readonly string[];
 	/** What failed and nothing later put right. */
@@ -98,7 +98,7 @@ export interface TurnContext {
 }
 
 /**
- * Which verb survives when one thing was worked on several times. A note searched, excerpted
+ * Which verb survives when one subject was worked on several times. A note searched, excerpted
  * and then edited was edited; saying "searched" of it would be true of a call and false of the
  * turn.
  *
@@ -135,7 +135,7 @@ const verbRank = [
 
 export type Verb = (typeof verbRank)[number];
 
-/** The verbs that leave a thing exactly as it was. Everything else changed something. */
+/** The verbs that leave a subject exactly as it was. Everything else changed something. */
 const readVerbs: ReadonlySet<Verb> = new Set<Verb>([
 	'searched',
 	'listed',
@@ -145,7 +145,7 @@ const readVerbs: ReadonlySet<Verb> = new Set<Verb>([
 ]);
 
 /**
- * Whether a verb changed the thing it befell.
+ * Whether a verb changed the subject it befell.
  *
  * Exported so a row can mark a write without keeping its own copy of `readVerbs`. A second copy
  * would be a second answer the day a verb is added, and the one in the component is the copy
@@ -157,7 +157,7 @@ const strongerVerb = (left: Verb, right: Verb): Verb =>
 	verbRank.indexOf(right) > verbRank.indexOf(left) ? right : left;
 
 /**
- * What each call leaves behind on the thing it touched.
+ * What each call leaves behind on the subject it touched.
  *
  * Total over every tool that is not mechanism, so a tool added tomorrow does not compile until
  * someone says what it does to your work. Mechanism tools are absent by construction: they
@@ -301,13 +301,13 @@ function passRequest(tool: ChatToolActivity): { label: string; query?: string } 
  *
  * The fold is for auditing a turn that is over; while one is running the point is watching it
  * work, and a list that reordered itself under the reader as calls settled would be the worst
- * of both. Same passes, no fold, no rows for things — nothing here has finished being about
+ * of both. Same passes, no fold, no rows for subjects — nothing here has finished being about
  * anything yet.
  */
 export interface RunningStep {
 	readonly label: string;
 	readonly query?: string;
-	/** Whether this step is changing the thing, marked while it happens rather than after. */
+	/** Whether this step is changing the subject, marked while it happens rather than after. */
 	readonly mutating: boolean;
 	readonly outcome: PassOutcome;
 }
@@ -325,11 +325,11 @@ export function runningSteps(tools: readonly ChatToolActivity[]): readonly Runni
 }
 
 /**
- * The lines of a file result that belong to one thing.
+ * The lines of a file result that belong to one subject.
  *
  * A grep across the workspace hits several notes in one call, and each note's row must show
  * its own matches and nobody else's — that split is the whole reason the fold can absorb a
- * search at all. Lines with no source belong to the one thing the call was about.
+ * search at all. Lines with no source belong to the one subject the call was about.
  */
 const linesFor = (
 	lines: readonly FileOutputLine[],
@@ -381,16 +381,16 @@ function memoryScope(
 	};
 }
 
-/** One thing this call touched, and what it left there. */
+/** One subject this call touched, and what it left there. */
 interface CallEntry {
 	readonly entity: EntityRef;
 	readonly verb: Verb;
 	readonly outcome: PassOutcome;
-	readonly pass: ThingPass;
+	readonly pass: SubjectPass;
 }
 
 /**
- * Which things a call touched, and the evidence it left on each.
+ * Which subjects a call touched, and the evidence it left on each.
  *
  * The disclosure has already resolved the payload into entities; this reads it the other way
  * round, asking not "what should this call show" but "whose row does this belong in".
@@ -486,8 +486,8 @@ function callEntries(
 
 export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellContext): TurnContext {
 	const order: string[] = [];
-	const things = new Map<string, ThingActivity>();
-	const barren: ThingPass[] = [];
+	const subjects = new Map<string, SubjectActivity>();
+	const barren: SubjectPass[] = [];
 	const setup: string[] = [];
 
 	for (const tool of tools) {
@@ -513,10 +513,10 @@ export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellCon
 		}
 		for (const found of entries) {
 			const key = identityOf(found.entity);
-			const existing = things.get(key);
+			const existing = subjects.get(key);
 			if (!existing) {
 				order.push(key);
-				things.set(key, {
+				subjects.set(key, {
 					entity: found.entity,
 					verb: found.verb,
 					outcome: found.outcome,
@@ -524,37 +524,37 @@ export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellCon
 				});
 				continue;
 			}
-			things.set(key, {
+			subjects.set(key, {
 				// A later call that resolved a name wins over a placeholder.
 				entity: found.entity.named ? found.entity : existing.entity,
 				verb: strongerVerb(existing.verb, found.verb),
-				// A failure a later call on the same thing made good is a retry, not news, so
-				// the last call on a thing is what its row reports.
+				// A failure a later call on the same subject made good is a retry, not news, so
+				// the last call on a subject is what its row reports.
 				outcome: found.outcome,
 				passes: [...existing.passes, found.pass]
 			});
 		}
 	}
 
-	const all = order.map((key) => things.get(key) as ThingActivity);
-	const changed = all.filter((thing) => !readVerbs.has(thing.verb));
-	const read = all.filter((thing) => readVerbs.has(thing.verb));
+	const all = order.map((key) => subjects.get(key) as SubjectActivity);
+	const changed = all.filter((subject) => !readVerbs.has(subject.verb));
+	const read = all.filter((subject) => readVerbs.has(subject.verb));
 
-	return { changed, read, barren, setup, failures: failuresOf(tools, shell, things) };
+	return { changed, read, barren, setup, failures: failuresOf(tools, shell, subjects) };
 }
 
 /**
  * What failed and nothing later put right.
  *
  * Judged over the whole turn rather than call by call: the agent typically corrects itself
- * mid-turn, and a save that eventually worked did not fail to save the note. A thing whose row
+ * mid-turn, and a save that eventually worked did not fail to save the note. A subject whose row
  * ends in any outcome but `failed` was put right, which is the same question the fold has
  * already answered — so this reads the folded rows rather than re-deriving recovery.
  */
 function failuresOf(
 	tools: readonly ChatToolActivity[],
 	shell: ShellContext | undefined,
-	things: ReadonlyMap<string, ThingActivity>
+	bySubject: ReadonlyMap<string, SubjectActivity>
 ): readonly FailureGroup[] {
 	const byCause = new Map<string, { raw: string; subjects: EntityRef[] }>();
 	for (const tool of tools) {
@@ -562,7 +562,7 @@ function failuresOf(
 		if (raw === undefined || mechanismTools.has(tool.name)) continue;
 		const entries = callEntries(tool, shell, verbOf(tool.name) ?? 'read');
 		const unresolved = entries.filter(
-			(found) => things.get(identityOf(found.entity))?.outcome === 'failed'
+			(found) => bySubject.get(identityOf(found.entity))?.outcome === 'failed'
 		);
 		// A call that named nothing cannot be matched against a retry by identity, so it is
 		// reported unless a later call of the same tool succeeded.
@@ -588,16 +588,16 @@ function failuresOf(
 }
 
 /**
- * What the door onto the read things says, in the reader's terms.
+ * What the door onto the read subjects says, in the reader's terms.
  *
  * A count of tool calls was the old label and it named mechanism: "called 6 tools" tells you
- * how hard it worked, never what it worked from. This counts things, and only where they are
+ * how hard it worked, never what it worked from. This counts subjects, and only where they are
  * not on screen — the rule the rest of this surface follows.
  */
 export function readDoorLabel(context: TurnContext): string {
 	const kinds = new Map<string, number>();
-	for (const thing of context.read)
-		kinds.set(thing.entity.kind, (kinds.get(thing.entity.kind) ?? 0) + 1);
+	for (const subject of context.read)
+		kinds.set(subject.entity.kind, (kinds.get(subject.entity.kind) ?? 0) + 1);
 	const nouns: Readonly<Record<string, readonly [string, string]>> = {
 		note: ['note', 'notes'],
 		folder: ['folder', 'folders'],

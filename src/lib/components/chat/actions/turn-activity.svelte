@@ -10,14 +10,15 @@
 		readDoorLabel,
 		runningSteps,
 		turnContext,
-		type ThingActivity
+		type SubjectActivity
 	} from '$lib/components/agent';
-	import ThingRow from './thing-row.svelte';
-	import ThingPasses from './thing-passes.svelte';
+	import SubjectRow from './subject-row.svelte';
+	import SubjectPasses from './subject-passes.svelte';
 	import TurnFailure from './turn-failure.svelte';
 	import {
-		CHAT_GAP_THING,
+		CHAT_GAP_SUBJECT,
 		CHAT_ROW,
+		CHAT_TEXT_REQUEST,
 		CHAT_ROW_DETAIL,
 		CHAT_ROW_ICON,
 		CHAT_ROW_INDENT,
@@ -50,7 +51,7 @@
 	const everything = $derived(turnTools ?? tools);
 	// A group settles on its own rather than with the turn. Running, its steps arrive one by one
 	// in the order they happened, because the point is watching it work; settled, the whole turn
-	// folds into the things it was about, because the point is auditing what it saw.
+	// folds into the subjects it was about, because the point is auditing what it saw.
 	const running = $derived(tools.some((tool) => tool.status === 'running'));
 	const context = $derived(turnContext(everything, shell));
 	const steps = $derived(running ? runningSteps(tools) : []);
@@ -101,14 +102,14 @@
 		};
 	});
 
-	const titleOf = (thing: ThingActivity): string =>
-		(thing.entity.id ? todoTitles.get(thing.entity.id) : undefined) ?? thing.entity.title;
+	const titleOf = (subject: SubjectActivity): string =>
+		(subject.entity.id ? todoTitles.get(subject.entity.id) : undefined) ?? subject.entity.title;
 </script>
 
 <!--
-	What the turn did, in the reader's things rather than in the agent's calls.
+	What the turn did, in the reader's own notes and todos rather than in the agent's calls.
 
-	The unit is the thing, not the call. One instruction ("tighten this note") ran six calls over
+	The unit is the subject, not the call. One instruction ("tighten this note") ran six calls over
 	one note — a read, a search, two excerpts, an edit — and as a list of calls that is six rows
 	saying one fact, with the note's name on three of them. Folded, it is one row that opens onto
 	all six.
@@ -139,15 +140,15 @@
 		</ul>
 	{/if}
 {:else if summarise && (context.changed.length > 0 || behindTheDoor > 0 || context.failures.length > 0)}
-	<div class="flex flex-col {CHAT_GAP_THING}">
-		<!-- What went wrong leads: it is the one thing here that might need something from the
+	<div class="flex flex-col {CHAT_GAP_SUBJECT}">
+		<!-- What went wrong leads: it is the one entry here that might need something from the
 		     reader. The record of what did work, and the door to the evidence, follow. -->
 		{#each context.failures as failed, index (`${failed.cause}-${index}`)}
 			<TurnFailure failure={failed} {retryable} {onretry} />
 		{/each}
 
-		{#each context.changed as thing (`${thing.entity.kind}-${thing.entity.id ?? thing.entity.title}`)}
-			<ThingRow {thing} title={titleOf(thing)} />
+		{#each context.changed as subject (`${subject.entity.kind}-${subject.entity.id ?? subject.entity.title}`)}
+			<SubjectRow {subject} title={titleOf(subject)} />
 		{/each}
 
 		{#if behindTheDoor > 0}
@@ -173,9 +174,9 @@
 					{/snippet}
 				</Collapsible.Trigger>
 				<Collapsible.Content class={CHAT_ROW_DETAIL}>
-					<div class="flex flex-col {CHAT_GAP_THING} {CHAT_ROW_INDENT} pt-1">
-						{#each context.read as thing (`${thing.entity.kind}-${thing.entity.id ?? thing.entity.title}`)}
-							<ThingRow {thing} title={titleOf(thing)} />
+					<div class="flex flex-col {CHAT_GAP_SUBJECT} {CHAT_ROW_INDENT} pt-1">
+						{#each context.read as subject (`${subject.entity.kind}-${subject.entity.id ?? subject.entity.title}`)}
+							<SubjectRow {subject} title={titleOf(subject)} />
 						{/each}
 
 						{#if context.barren.length > 0}
@@ -183,15 +184,15 @@
 							     words: there is no passage to show, and its absence is often the whole
 							     explanation for a thin answer. -->
 							<div class="px-2">
-								<ThingPasses passes={context.barren} />
-								<p class="provenance-caption pt-1">Nothing came back.</p>
+								<SubjectPasses passes={context.barren} />
+								<p class="{CHAT_TEXT_REQUEST} pt-1 text-muted-foreground">Nothing came back.</p>
 							</div>
 						{/if}
 
 						{#if context.setup.length > 0}
 							<!-- The agent finding its footing. Named, so nothing is hidden; last and
 							     quiet, because none of it is the reader's work. -->
-							<p class="provenance-caption flex items-start gap-2 px-2">
+							<p class="{CHAT_TEXT_REQUEST} flex items-start gap-2 px-2 text-muted-foreground">
 								<FtReading class="{CHAT_ROW_ICON} mt-0.5" />
 								<span class="min-w-0">{context.setup.join(' · ')}</span>
 							</p>
