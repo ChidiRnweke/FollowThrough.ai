@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyResourceChanges, receiveResource, syncEtag, type ResourceState } from './index';
+import {
+	applyResourceChanges,
+	receiveResource,
+	mergeResourceStates,
+	syncEtag,
+	type ResourceState
+} from './index';
 
 const present: ResourceState<string> = {
 	kind: 'present',
@@ -10,6 +16,27 @@ const present: ResourceState<string> = {
 };
 
 describe('applying compact resource changes', () => {
+	it('retains the newest available body when another tab invalidates the resource', () => {
+		const current = receiveResource(present, { etag: syncEtag(2n), value: 'Newest available' });
+		const incoming: ResourceState<string> = {
+			kind: 'present',
+			cache: {
+				kind: 'updating',
+				previous: { etag: syncEtag(1n), value: 'Older' },
+				target: syncEtag(3n),
+				transfer: { kind: 'queued' }
+			}
+		};
+		expect(mergeResourceStates(current, incoming)).toEqual({
+			kind: 'present',
+			cache: {
+				kind: 'updating',
+				previous: { etag: syncEtag(2n), value: 'Newest available' },
+				target: syncEtag(3n),
+				transfer: { kind: 'queued' }
+			}
+		});
+	});
 	it('does not let a late deletion erase a newer recreation', () => {
 		const newer = receiveResource(present, { etag: syncEtag(3n), value: 'Recreated' });
 		expect(

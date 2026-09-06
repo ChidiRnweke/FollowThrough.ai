@@ -13,6 +13,23 @@ const first = { etag: syncEtag(1n), value: 'First copy' };
 const second = { etag: syncEtag(2n), value: 'Second copy' };
 
 describe('generic resource cache', () => {
+	it('uses a newer body already persisted by another tab instead of downloading it again', async () => {
+		const { repository, transport, cache } = setup();
+		transport.records.set('note:1', first);
+		await cache.refresh();
+		await cache.warm();
+		const other = new ResourceCache('user-a', { repository, transport });
+		await other.initialize();
+		transport.records.set('note:1', second);
+		await cache.refresh();
+		await cache.warm();
+		await other.refresh();
+		await other.warm();
+		expect({ opened: await other.open('note:1'), bodies: transport.deliveredBodies }).toEqual({
+			opened: { kind: 'ready', value: 'Second copy' },
+			bodies: ['note:1', 'note:1']
+		});
+	});
 	it('does not claim a workspace is available before learning its change batch', () => {
 		expect(setup().cache.availability).toBe('unknown');
 	});

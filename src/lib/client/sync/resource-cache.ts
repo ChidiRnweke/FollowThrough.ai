@@ -2,6 +2,7 @@ import {
 	accessCache,
 	cachedSnapshot,
 	receiveResource,
+	resourceVersion,
 	type ResourceDeletion,
 	applyResourceChanges,
 	initialSyncCursor,
@@ -173,11 +174,10 @@ export class ResourceCache<T> {
 	private async commit(compute: () => CacheCommit<T>, expectedEpoch?: number): Promise<void> {
 		const work = this.committing.then(async () => {
 			if (this.stopped || (expectedEpoch !== undefined && expectedEpoch !== this.epoch)) return;
-			const changes = compute();
-			await this.dependencies.repository.commit(this.accountId, changes);
+			const changes = await this.dependencies.repository.commit(this.accountId, compute());
 			if (this.stopped) return;
 			for (const record of changes.put) this.entries.set(record.key, record.entry);
-			for (const key of changes.remove) {
+			for (const { key } of changes.remove) {
 				this.entries.delete(key);
 				this.queue.delete(key);
 			}
@@ -282,7 +282,11 @@ export class ResourceCache<T> {
 			);
 			if (this.stopped) return { kind: 'stopped' };
 			if (this.entries.get(key)?.kind === 'deleted') return { kind: 'complete' };
+			if (this.entry(key).kind === 'cached') return { kind: 'complete' };
 			const snapshot = cachedSnapshot(this.entry(key));
+			const expected = resourceVersion(
+				this.entries.get(key) ?? { kind: 'present', cache: { kind: 'uncached' } }
+			);
 			const epoch = this.epoch;
 			const response = await this.dependencies.transport.read(key, snapshot?.etag ?? null);
 			if (this.stopped) return { kind: 'stopped' };
@@ -295,8 +299,11 @@ export class ResourceCache<T> {
 				return { kind: 'complete' };
 			}
 			if (response.kind === 'unavailable') {
-				await this.commit(() => ({ put: [], remove: [key] }), epoch);
-				return this.entries.has(key) ? { kind: 'complete' } : { kind: 'unavailable' };
+				await this.commit(() => ({ put: [], remove: [{ key, etag: expected }] }), epoch);
+				const current = this.entries.get(key);
+				return current && resourceVersion(current) !== expected
+					? { kind: 'complete' }
+					: { kind: 'unavailable' };
 			}
 			if (response.kind === 'unchanged' && (!snapshot || snapshot.etag !== response.etag))
 				throw new Error('The server confirmed a version this device does not have');

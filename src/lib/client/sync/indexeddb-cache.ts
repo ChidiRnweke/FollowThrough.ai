@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { cacheEntrySchema, resourceStateSchema, syncCursorSchema } from '$lib/models/sync';
+import {
+	cacheEntrySchema,
+	resourceStateSchema,
+	syncCursorSchema,
+	mergeResourceStates,
+	resourceVersion
+} from '$lib/models/sync';
 import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
 
 const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -35,28 +41,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			requestValue(transaction.objectStore('cursors').get(accountId)),
 			done
 		]);
-		const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
-		const records = z
-			.array(
-				z.union([
-					z.object({
-						...identity,
-						schemaVersion: z.literal(2),
-						entry: resourceStateSchema(this.valueSchema)
-					}),
-					z
-						.object({
-							...identity,
-							schemaVersion: z.literal(1),
-							entry: cacheEntrySchema(this.valueSchema)
-						})
-						.transform((record) => ({
-							...record,
-							entry: { kind: 'present' as const, cache: record.entry }
-						}))
-				])
-			)
-			.parse(rows);
+		const records = z.array(this.recordSchema(accountId)).parse(rows);
 		return {
 			records: records.map(({ key, entry }) => ({ key, entry })),
 			cursor:
@@ -67,15 +52,76 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 		};
 	}
 
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
+	private recordSchema(accountId: string) {
+		const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
+		return z.union([
+			z.object({
+				...identity,
+				schemaVersion: z.literal(2),
+				entry: resourceStateSchema(this.valueSchema)
+			}),
+			z
+				.object({
+					...identity,
+					schemaVersion: z.literal(1),
+					entry: cacheEntrySchema(this.valueSchema)
+				})
+				.transform((record) => ({
+					...record,
+					entry: { kind: 'present' as const, cache: record.entry }
+				}))
+		]);
+	}
+
+	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
 		const database = await this.open();
 		const transaction = database.transaction(['records', 'cursors'], 'readwrite');
 		const done = completed(transaction);
+		const put: CacheCommit<T>['put'][number][] = [];
+		const remove: CacheCommit<T>['remove'][number][] = [];
 		try {
 			const records = transaction.objectStore('records');
-			for (const record of changes.put) records.put({ schemaVersion: 2, accountId, ...record });
-			for (const key of changes.remove) records.delete([accountId, key]);
-			if (changes.cursor !== undefined)
+			const keys = [
+				...changes.put.map((record) => record.key),
+				...changes.remove.map((record) => record.key)
+			];
+			if (new Set(keys).size !== keys.length)
+				throw new Error('A cache commit must touch each resource only once');
+			const [rows, cursor] = await Promise.all([
+				Promise.all(keys.map((key) => requestValue(records.get([accountId, key])))),
+				requestValue(transaction.objectStore('cursors').get(accountId))
+			]);
+			const current = new Map(
+				keys.map((key, index) => [
+					key,
+					rows[index] === undefined ? null : this.recordSchema(accountId).parse(rows[index])
+				])
+			);
+			for (const proposed of changes.put) {
+				const previous = current.get(proposed.key);
+				const record = {
+					key: proposed.key,
+					entry: previous ? mergeResourceStates(previous.entry, proposed.entry) : proposed.entry
+				};
+				records.put({ schemaVersion: 2, accountId, ...record });
+				put.push(record);
+			}
+			for (const removal of changes.remove) {
+				const previous = current.get(removal.key);
+				if (!previous || resourceVersion(previous.entry) === removal.etag) {
+					records.delete([accountId, removal.key]);
+					remove.push(removal);
+				} else put.push({ key: removal.key, entry: previous.entry });
+			}
+			const storedCursor =
+				cursor === undefined
+					? null
+					: z.object({ accountId: z.literal(accountId), cursor: syncCursorSchema }).parse(cursor)
+							.cursor;
+			if (
+				changes.cursor !== undefined &&
+				(storedCursor === null || BigInt(changes.cursor) > BigInt(storedCursor))
+			)
 				transaction.objectStore('cursors').put({ accountId, cursor: changes.cursor });
 		} catch (error) {
 			transaction.abort();
@@ -85,6 +131,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			throw error;
 		}
 		await done;
+		return { ...changes, put, remove };
 	}
 
 	async close(): Promise<void> {

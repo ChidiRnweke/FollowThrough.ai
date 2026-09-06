@@ -93,15 +93,45 @@ export const receiveResource = <T>(
 	received: SyncSnapshot<T> | ResourceDeletion
 ): ResourceState<T> => {
 	const known = resourceVersion(state);
-	if (known && compareSyncEtags(received.etag, known) < 0) return state;
-	if ('kind' in received) return received;
-	if (state.kind === 'deleted' && received.etag === state.etag) return state;
+	if ('kind' in received)
+		return known && compareSyncEtags(received.etag, known) < 0 ? state : received;
+	if (state.kind === 'deleted' && compareSyncEtags(received.etag, state.etag) <= 0) return state;
 	return {
 		kind: 'present',
 		cache: transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
 			kind: 'receive',
 			snapshot: received
 		})
+	};
+};
+
+/** Storage merges knowledge from independent tabs before publishing a proposed cache write. */
+export const mergeResourceStates = <T>(
+	current: ResourceState<T>,
+	incoming: ResourceState<T>
+): ResourceState<T> => {
+	if (incoming.kind === 'deleted') return receiveResource(current, incoming);
+	if (incoming.cache.kind === 'cached') return receiveResource(current, incoming.cache.snapshot);
+	if (incoming.cache.kind === 'uncached') return current;
+	const state = incoming.cache.previous
+		? receiveResource(current, incoming.cache.previous)
+		: current;
+	if (incoming.cache.target === null) {
+		if (state.kind === 'present' && state.cache.kind === 'uncached') return incoming;
+		return state;
+	}
+	if (state.kind === 'deleted' && compareSyncEtags(incoming.cache.target, state.etag) <= 0)
+		return state;
+	const observed = transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
+		kind: 'observe',
+		etag: incoming.cache.target
+	});
+	return {
+		kind: 'present',
+		cache:
+			observed.kind === 'updating' && observed.target === incoming.cache.target
+				? { ...observed, transfer: incoming.cache.transfer }
+				: observed
 	};
 };
 

@@ -13,7 +13,7 @@ export interface CachedRecord<T> {
 
 export interface CacheCommit<T> {
 	readonly put: readonly CachedRecord<T>[];
-	readonly remove: readonly string[];
+	readonly remove: readonly { readonly key: string; readonly etag: SyncEtag | null }[];
 	readonly cursor?: SyncCursor;
 }
 
@@ -24,7 +24,7 @@ export interface StoredCache<T> {
 
 export interface SyncCacheRepository<T> {
 	load(accountId: string): Promise<StoredCache<T>>;
-	commit(accountId: string, changes: CacheCommit<T>): Promise<void>;
+	commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>>;
 }
 
 export type ObjectRead<T> = SyncObjectRead<T>;

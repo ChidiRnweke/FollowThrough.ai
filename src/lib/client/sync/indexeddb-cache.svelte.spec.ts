@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { syncEtag, initialSyncCursor, type ResourceState } from '$lib/models/sync';
+import {
+	syncEtag,
+	initialSyncCursor,
+	syncCursorSchema,
+	type ResourceState
+} from '$lib/models/sync';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases: string[] = [];
@@ -32,6 +37,33 @@ afterEach(async () => {
 });
 
 describe('durable workspace cache', () => {
+	it('does not let a stale tab replace a newer durable body', async () => {
+		const { name, repository } = setup();
+		const other = setup(name).repository;
+		const newer: ResourceState<string> = {
+			kind: 'present',
+			cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Newer' } }
+		};
+		await repository.commit('user-a', { put: [{ key: 'note:1', entry: newer }], remove: [] });
+		await other.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
+		expect((await repository.load('user-a')).records).toEqual([{ key: 'note:1', entry: newer }]);
+	});
+
+	it('does not move a durable change cursor backwards when a stale tab commits', async () => {
+		const { name, repository } = setup();
+		const other = setup(name).repository;
+		await repository.commit('user-a', { put: [], remove: [], cursor: syncCursorSchema.parse('2') });
+		await other.commit('user-a', { put: [], remove: [], cursor: syncCursorSchema.parse('1') });
+		expect((await repository.load('user-a')).cursor).toBe('2');
+	});
+
+	it('does not evict another tab’s new body because an earlier request found no object', async () => {
+		const { name, repository } = setup();
+		const other = setup(name).repository;
+		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
+		await other.commit('user-a', { put: [], remove: [{ key: 'note:1', etag: null }] });
+		expect((await repository.load('user-a')).records).toEqual([{ key: 'note:1', entry }]);
+	});
 	it('retains the deletion and acknowledged cursor together after reopening storage', async () => {
 		const { name, repository } = setup();
 		await repository.commit('user-a', {
@@ -82,7 +114,7 @@ describe('durable workspace cache', () => {
 		const { repository } = setup();
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
 		await repository.commit('user-b', { put: [{ key: 'note:1', entry }], remove: [] });
-		await repository.commit('user-a', { put: [], remove: ['note:1'] });
+		await repository.commit('user-a', { put: [], remove: [{ key: 'note:1', etag: syncEtag(1n) }] });
 		expect((await repository.load('user-b')).records).toEqual([{ key: 'note:1', entry }]);
 	});
 

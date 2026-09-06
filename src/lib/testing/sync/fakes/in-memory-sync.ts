@@ -1,4 +1,10 @@
-import type { SyncSnapshot, SyncCursor, ResourceChange } from '$lib/models/sync';
+import {
+	mergeResourceStates,
+	resourceVersion,
+	type SyncSnapshot,
+	type SyncCursor,
+	type ResourceChange
+} from '$lib/models/sync';
 import type {
 	CacheCommit,
 	CachedRecord,
@@ -20,13 +26,35 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 		};
 	}
 
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
+	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
 		if (this.writeFailure) throw new Error(this.writeFailure);
 		const records = this.accounts.get(accountId) ?? new Map<string, CachedRecord<T>>();
-		for (const record of changes.put) records.set(record.key, record);
-		for (const key of changes.remove) records.delete(key);
+		const put: CachedRecord<T>[] = [];
+		const remove: CacheCommit<T>['remove'][number][] = [];
+		for (const proposed of changes.put) {
+			const previous = records.get(proposed.key);
+			const record = {
+				key: proposed.key,
+				entry: previous ? mergeResourceStates(previous.entry, proposed.entry) : proposed.entry
+			};
+			records.set(record.key, record);
+			put.push(record);
+		}
+		for (const removal of changes.remove) {
+			const previous = records.get(removal.key);
+			if (!previous || resourceVersion(previous.entry) === removal.etag) {
+				records.delete(removal.key);
+				remove.push(removal);
+			} else put.push(previous);
+		}
 		this.accounts.set(accountId, records);
-		if (changes.cursor !== undefined) this.cursors.set(accountId, changes.cursor);
+		const cursor = this.cursors.get(accountId);
+		if (
+			changes.cursor !== undefined &&
+			(cursor === undefined || BigInt(changes.cursor) > BigInt(cursor))
+		)
+			this.cursors.set(accountId, changes.cursor);
+		return { ...changes, put, remove };
 	}
 }
 
