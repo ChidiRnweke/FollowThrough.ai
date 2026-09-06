@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.4...v0.3.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* **chat:** space and colour a turn's activity so its groups and its actions read ([#24](https://github.com/ChidiRnweke/FollowThrough.ai/issues/24)) ([f156670](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f1566709d4a39053dd881830e82ff1eb87b62d38))
+
 ## [0.3.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.3...v0.3.4) (2026-09-06)
 
 
