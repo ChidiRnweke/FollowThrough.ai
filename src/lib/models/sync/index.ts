@@ -32,6 +32,11 @@ export interface SyncSnapshot<T> {
 	readonly value: T;
 }
 
+export type SyncObjectRead<T> =
+	| { readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> }
+	| { readonly kind: 'unchanged'; readonly etag: SyncEtag }
+	| { readonly kind: 'unavailable' };
+
 export type TransferState =
 	| { readonly kind: 'queued' }
 	| { readonly kind: 'fetching' }

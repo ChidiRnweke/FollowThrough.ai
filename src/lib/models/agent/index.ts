@@ -923,7 +923,7 @@ const toolNameSchema = z.enum(TOOL_NAME_VALUES);
  */
 export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
 
-const pendingAgentDecisionSchema = z
+export const pendingAgentDecisionSchema = z
 	.object({
 		callId: z.string().min(1),
 		toolName: toolNameSchema,

@@ -46,6 +46,13 @@ known-updating record online promotes or joins its fetch and waits for the live 
 the previous copy is available. An online failure is reported and never makes an old copy current.
 There is one in-flight fetch per object, and obsolete responses cannot replace newer state.
 
+Resource identity, durable cache metadata, and the optional in-flight operation belong to this
+generic mechanism. Routes and features request resources through it; they do not choose their
+own freshness policy. Updating is a foreground read barrier, not permission to render stale
+content while fetching. A complete inventory check by itself does not make every cached record
+updating: only evidence of a changed tag does. This preserves immediate navigation for unchanged
+objects. Offline access to the retained copy is the explicit exception to that barrier.
+
 The write lifecycle is separate. Ordinary creates, edits, moves, publication, archive/restore,
 and deletions enter a durable local queue before being sent. Dependent operations retain their
 order. Conflicts block dependent work, not unrelated objects. A refresh cannot erase a draft.

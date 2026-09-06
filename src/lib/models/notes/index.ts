@@ -1194,10 +1194,18 @@ export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
  * gives what the arm is for: a document with one unreadable block instead of a
  * list read that throws.
  */
-const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
+export const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	.object({
 		type: z.literal('doc'),
-		content: z.array(z.union([proseMirrorNodeSchema, unknownNodeSchema])).optional()
+		content: z
+			.array(
+				z.union([
+					proseMirrorNodeSchema,
+					z.object({ type: z.literal('unknown'), raw: attrValueSchema, reason: z.string() }),
+					unknownNodeSchema
+				])
+			)
+			.optional()
 	})
 	.strict();
 

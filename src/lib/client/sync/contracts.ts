@@ -1,4 +1,4 @@
-import type { CacheEntry, InventoryEntry, SyncEtag, SyncSnapshot } from '$lib/models/sync';
+import type { CacheEntry, InventoryEntry, SyncEtag, SyncObjectRead } from '$lib/models/sync';
 
 export interface CachedRecord<T> {
 	readonly key: string;
@@ -21,10 +21,7 @@ export interface SyncCacheRepository<T> {
 	commit(accountId: string, changes: CacheCommit<T>): Promise<void>;
 }
 
-export type ObjectRead<T> =
-	| { readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> }
-	| { readonly kind: 'unchanged'; readonly etag: SyncEtag }
-	| { readonly kind: 'unavailable' };
+export type ObjectRead<T> = SyncObjectRead<T>;
 
 export interface SyncReadTransport<T> {
 	inventory(): Promise<readonly InventoryEntry[]>;

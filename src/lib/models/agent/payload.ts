@@ -24,6 +24,8 @@
  * map will generalise it. An open index signature is the right type only where
  * the surface genuinely renders whatever keys it is given.
  */
+import { z } from 'zod';
+
 export type AgentPayload =
 	string | number | boolean | null | readonly AgentPayload[] | AgentPayloadObject;
 
@@ -149,3 +151,16 @@ export const readAgentPayloadObject = (value: unknown): AgentPayloadObjectResult
 		? { kind: 'valid', value: parsed }
 		: { kind: 'corrupt', message: `root is ${describe(value)}, not an object` };
 };
+
+/** Keep the existing prototype-aware reader in front of Zod's recursive JSON validation. */
+export const agentPayloadObjectSchema: z.ZodType<AgentPayloadObject> = z.preprocess(
+	(value, context) => {
+		const result = readAgentPayloadObject(value);
+		if (result.kind === 'corrupt') {
+			context.addIssue({ code: 'custom', message: result.message });
+			return z.NEVER;
+		}
+		return result.value;
+	},
+	z.record(z.string(), z.json())
+);

@@ -101,6 +101,39 @@ describe('workspace cache coordination', () => {
 		expect(opened).toEqual({ kind: 'ready', value: 'Second copy' });
 	});
 
+	it('keeps an updating object behind the read barrier until its live value arrives', async () => {
+		const { transport, coordinator } = setup();
+		await coordinator.accept('note:1', first);
+		transport.records.set('note:1', second);
+		await coordinator.refresh();
+		const gate = transport.pause('note:1');
+		const warming = coordinator.warm();
+		await gate.started;
+		const during = coordinator.access('note:1');
+		const opened = coordinator.open('note:1');
+		gate.release();
+		await warming;
+		expect({ during, after: await opened }).toEqual({
+			during: { kind: 'wait' },
+			after: { kind: 'ready', value: 'Second copy' }
+		});
+	});
+
+	it('allows the retained copy offline while a background refresh is in flight', async () => {
+		const { transport, coordinator } = setup();
+		await coordinator.accept('note:1', first);
+		transport.records.set('note:1', second);
+		await coordinator.refresh();
+		const gate = transport.pause('note:1');
+		const warming = coordinator.warm();
+		await gate.started;
+		coordinator.setOnline(false);
+		const opened = await coordinator.open('note:1');
+		gate.release();
+		await warming;
+		expect(opened).toEqual({ kind: 'ready', value: 'First copy' });
+	});
+
 	it('does not replace an accepted mutation with a late read response', async () => {
 		const { transport, coordinator } = setup();
 		transport.records.set('note:1', first);
