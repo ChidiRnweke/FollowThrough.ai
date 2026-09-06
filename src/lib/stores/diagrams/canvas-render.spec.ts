@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ConversationImageInput } from '$lib/models/agent';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { forgetCanvasRender, rememberCanvasRender, takeCanvasRender } from './canvas-render.svelte';
@@ -12,6 +12,12 @@ const attachment = (kilobytes: number): ConversationImageInput => ({
 	mediaType: 'image/png',
 	dataUrl: png(kilobytes),
 	name: 'user.png'
+});
+
+afterEach(() => {
+	for (const name of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']) {
+		forgetCanvasRender(session(name));
+	}
 });
 
 describe('The picture of what the agent drew', () => {

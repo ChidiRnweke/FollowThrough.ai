@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import noteDocuments from '../corpus/note-documents.json' with { type: 'json' };
-import noteRevisionDocuments from '../corpus/note-revision-documents.json' with { type: 'json' };
 import sessionItems from '../corpus/agent-session-items.json' with { type: 'json' };
-import runEvents from '../corpus/agent-run-events.json' with { type: 'json' };
 import toolMessages from '../corpus/agent-tool-messages.json' with { type: 'json' };
 import messageContents from '../corpus/agent-message-contents.json' with { type: 'json' };
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
@@ -15,6 +13,16 @@ import { readAgentPayloadObject } from '$lib/models/agent/payload';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { parseProvenance } from '$lib/models/provenance';
 import { parseSuggestionPayload, readSuggestionPayload } from '$lib/models/suggestions';
+
+let runEvents: readonly unknown[];
+let noteRevisionDocuments: readonly unknown[];
+
+beforeAll(async () => {
+	runEvents = (await import('../corpus/agent-run-events.json', { with: { type: 'json' } })).default;
+	noteRevisionDocuments = (
+		await import('../corpus/note-revision-documents.json', { with: { type: 'json' } })
+	).default;
+});
 
 /**
  * Every schema in this repository, checked against what is genuinely stored.

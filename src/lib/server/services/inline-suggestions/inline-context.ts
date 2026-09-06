@@ -9,13 +9,12 @@ import type { Note } from '$lib/models/notes';
 import { searchDocumentIdSchema, type SearchMatch } from '$lib/models/knowledge-search';
 import type { ProjectId } from '$lib/models/projects';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
-import { getEncoding } from 'js-tiktoken';
+import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
-const tokenEncoding = getEncoding('cl100k_base');
-const countRetrievalTokens = (value: string): number => tokenEncoding.encode(value).length;
+const countRetrievalTokens = (value: string): number => tokenEncoding().encode(value).length;
 
 interface KnowledgeSearcher {
 	search(

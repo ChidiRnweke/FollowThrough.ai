@@ -1,10 +1,8 @@
 import { createHash } from 'node:crypto';
-import { getEncoding } from 'js-tiktoken';
+import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
-
-const encoding = getEncoding('cl100k_base');
 
 /** Reuses the measured boundary already enforced for attached context notes. */
 const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
@@ -70,7 +68,7 @@ export class AgentReplayVirtualizer {
 		location: string
 	): Promise<T> {
 		if (typeof value === 'string') {
-			if (encoding.encode(value).length <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
+			if (tokenEncoding().encode(value).length <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
 			const checksum = createHash('sha256').update(value).digest('hex');
 			const category = location.startsWith('message.') ? 'history' : 'tool-results';
 			const path = `/conversations/${conversationId}/${category}/${callId}/${safeSegment(location)}-${checksum.slice(0, 12)}.txt`;
