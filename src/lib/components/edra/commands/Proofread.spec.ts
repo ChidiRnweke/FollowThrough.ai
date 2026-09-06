@@ -2,7 +2,7 @@
 
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Proofread, proofreadKey, type ProofreadIssueReport } from './Proofread';
 
 /**
@@ -46,7 +46,7 @@ const createEditor = (content: Record<string, unknown>, check?: ReturnType<typeo
 
 /** Let the zero-delay timer fire and its awaited checker pass resolve. */
 const settle = async (): Promise<void> => {
-	for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+	for (let turn = 0; turn < 4; turn += 1) await vi.advanceTimersByTimeAsync(0);
 };
 
 const decorations = (editor: Editor) =>
@@ -60,6 +60,8 @@ const paragraph = (text: string) => ({
 const doc = (...content: Record<string, unknown>[]) => ({ type: 'doc', content });
 
 describe('Proofread', () => {
+	beforeEach(() => vi.useFakeTimers());
+
 	it('underlines a misspelling once the writer pauses', async () => {
 		const editor = createEditor(doc(paragraph('I saw teh dog')), stubChecker());
 		await settle();

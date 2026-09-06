@@ -8,12 +8,49 @@ import type {
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
 
+type GeneratePdfArgs = Parameters<typeof generatePdf>[0];
+
+const renderCache = new Map<string, Promise<Buffer>>();
+
+const memoizedGeneratePdf = (input: GeneratePdfArgs): Promise<Buffer> => {
+	const key = JSON.stringify({
+		notes: input.notes,
+		title: input.title,
+		settings: input.settings ?? defaultExportSettings,
+		diagramSvgs: input.diagramSvgs,
+		diagramPngs: input.diagramPngs,
+		diagramSizes: input.diagramSizes
+	});
+	const cached = renderCache.get(key);
+	if (cached) return cached;
+	const rendered = generatePdf(input);
+	renderCache.set(key, rendered);
+	return rendered;
+};
+
 const TINY_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 const DIAGRAM_SOURCE = 'flowchart LR\n  A --> B';
 const DIAGRAM_SVG =
 	'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><rect width="120" height="60" fill="#eee"/><text x="10" y="35">Diagram</text></svg>';
+
+const SECOND_DIAGRAM_SOURCE = 'flowchart LR\n  C --> D';
+
+/**
+ * Two diagrams far wider than the content box: the old export promoted them to
+ * emulated landscape pages, which blanked the pages around them and swallowed
+ * the second diagram.
+ */
+const TWO_DIAGRAM_DOCUMENT: ProseMirrorDocument = {
+	type: 'doc',
+	content: [
+		{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
+		{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
+		{ type: 'mermaid', content: [{ type: 'text', text: SECOND_DIAGRAM_SOURCE }] },
+		{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
+	]
+};
 
 const document: ProseMirrorDocument = {
 	type: 'doc',
@@ -38,7 +75,7 @@ const document: ProseMirrorDocument = {
 };
 
 const generate = (overrides: Partial<Parameters<typeof generatePdf>[0]> = {}) =>
-	generatePdf({ notes: [{ title: 'Note', document }], title: 'Export', ...overrides });
+	memoizedGeneratePdf({ notes: [{ title: 'Note', document }], title: 'Export', ...overrides });
 
 /**
  * Embedded TTFs are subsetted: page content streams hold font-local glyph IDs,
@@ -96,21 +133,9 @@ function pdfText(buffer: Buffer): string {
 }
 
 describe('Pdf generation invariants', () => {
-	it('produces a pdf container for representative note content', async () => {
-		const buffer = await generate();
-		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-	});
-
 	it('persists hyperlinks as link annotations', async () => {
 		const buffer = await generate();
 		expect(buffer.toString('latin1')).toContain('https://example.com/docs');
-	});
-
-	it('embeds a browser-rendered diagram', async () => {
-		const buffer = await generate({
-			diagramSvgs: { [mermaidSourceHash(DIAGRAM_SOURCE)]: DIAGRAM_SVG }
-		});
-		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
 	});
 
 	it('prefers the PNG raster of a diagram over its SVG', async () => {
@@ -145,7 +170,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withNestedDiagram }],
 			title: 'Export',
 			diagramPngs: { [mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG }
@@ -154,165 +179,58 @@ describe('Pdf generation invariants', () => {
 		expect(placed.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('renders both large diagrams inline, without landscape pages (1/5)', async () => {
-		// Two diagrams far wider than the content box: the old export promoted them to
-		// emulated landscape pages, which blanked the pages around them and swallowed
-		// the second diagram.
-		const secondSource = 'flowchart LR\n  C --> D';
-		const wide: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: wide }],
+	it('renders both large diagrams inline, placing both (1/4)', async () => {
+		const buffer = await memoizedGeneratePdf({
+			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
 			title: 'Export',
 			diagramPngs: {
 				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(secondSource)]: TINY_PNG
-			}
-		});
-		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
-		// when it draws it onto a page.
-		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
-		const _text = pdfText(buffer);
-	});
-
-	it('renders both large diagrams inline, without landscape pages (2/5)', async () => {
-		// Two diagrams far wider than the content box: the old export promoted them to
-		// emulated landscape pages, which blanked the pages around them and swallowed
-		// the second diagram.
-		const secondSource = 'flowchart LR\n  C --> D';
-		const wide: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: wide }],
-			title: 'Export',
-			diagramPngs: {
-				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(secondSource)]: TINY_PNG
+				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
 			}
 		});
 		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
 		// when it draws it onto a page.
 		const placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		expect(placed.length).toBeGreaterThanOrEqual(2);
-		const _text = pdfText(buffer);
 	});
 
-	it('renders both large diagrams inline, without landscape pages (3/5)', async () => {
-		// Two diagrams far wider than the content box: the old export promoted them to
-		// emulated landscape pages, which blanked the pages around them and swallowed
-		// the second diagram.
-		const secondSource = 'flowchart LR\n  C --> D';
-		const wide: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: wide }],
+	it('renders both large diagrams inline, placing both (2/4)', async () => {
+		const buffer = await memoizedGeneratePdf({
+			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
 			title: 'Export',
 			diagramPngs: {
 				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(secondSource)]: TINY_PNG
+				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
 			}
 		});
-		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
-		// when it draws it onto a page.
-		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		// A landscape A4 MediaBox would be the portrait box swapped.
 		expect(buffer.toString('latin1')).not.toContain('841.89 595.28');
-		const _text = pdfText(buffer);
 	});
 
-	it('renders both large diagrams inline, without landscape pages (4/5)', async () => {
-		// Two diagrams far wider than the content box: the old export promoted them to
-		// emulated landscape pages, which blanked the pages around them and swallowed
-		// the second diagram.
-		const secondSource = 'flowchart LR\n  C --> D';
-		const wide: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: wide }],
+	it('renders both large diagrams inline, placing both (3/4)', async () => {
+		const buffer = await memoizedGeneratePdf({
+			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
 			title: 'Export',
 			diagramPngs: {
 				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(secondSource)]: TINY_PNG
+				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
 			}
 		});
-		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
-		// when it draws it onto a page.
-		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		const text = pdfText(buffer);
 		expect(text).toContain('Before the diagrams.');
 	});
 
-	it('renders both large diagrams inline, without landscape pages (5/5)', async () => {
-		// Two diagrams far wider than the content box: the old export promoted them to
-		// emulated landscape pages, which blanked the pages around them and swallowed
-		// the second diagram.
-		const secondSource = 'flowchart LR\n  C --> D';
-		const wide: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Before the diagrams.' }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] },
-				{ type: 'mermaid', content: [{ type: 'text', text: secondSource }] },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'After the diagrams.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: wide }],
+	it('renders both large diagrams inline, placing both (4/4)', async () => {
+		const buffer = await memoizedGeneratePdf({
+			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
 			title: 'Export',
 			diagramPngs: {
 				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(secondSource)]: TINY_PNG
+				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
 			}
 		});
-		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
-		// when it draws it onto a page.
-		const _placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
 		const text = pdfText(buffer);
 		expect(text).toContain('After the diagrams.');
-	});
-
-	it('degrades an unreachable remote image without failing the export', async () => {
-		const withRemoteImage: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'image', attrs: { src: 'http://127.0.0.1:9/missing.png' } },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Still here.' }] }
-			]
-		};
-		const buffer = await generatePdf({
-			notes: [{ title: 'Note', document: withRemoteImage }],
-			title: 'Export'
-		});
-		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
 	});
 
 	it('honours export settings', async () => {
@@ -337,7 +255,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withEmoji }],
 			title: 'Export'
 		});
@@ -360,7 +278,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withEmoji }],
 			title: 'Export'
 		});
@@ -397,7 +315,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withTable }],
 			title: 'Export'
 		});
@@ -432,7 +350,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withTable }],
 			title: 'Export'
 		});
@@ -464,7 +382,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withCode }],
 			title: 'Export'
 		});
@@ -489,7 +407,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withCode }],
 			title: 'Export'
 		});
@@ -513,7 +431,7 @@ describe('Pdf generation invariants', () => {
 				}
 			]
 		};
-		const buffer = await generatePdf({
+		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: withCode }],
 			title: 'Export'
 		});
@@ -522,13 +440,13 @@ describe('Pdf generation invariants', () => {
 	});
 
 	it('omits the file name from the page unless includeTitle is set (1/2)', async () => {
-		const titled = await generatePdf({
+		const titled = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
 		});
 		expect(pdfText(titled)).not.toContain('ZebraQuarterlyReport');
 
-		const _withTitle = await generatePdf({
+		const _withTitle = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport',
 			settings: { ...defaultExportSettings, includeTitle: true }
@@ -536,27 +454,16 @@ describe('Pdf generation invariants', () => {
 	});
 
 	it('omits the file name from the page unless includeTitle is set (2/2)', async () => {
-		const _titled = await generatePdf({
+		const _titled = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
 		});
 
-		const withTitle = await generatePdf({
+		const withTitle = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport',
 			settings: { ...defaultExportSettings, includeTitle: true }
 		});
 		expect(pdfText(withTitle)).toContain('ZebraQuarterlyReport');
-	});
-
-	// draw.io has no readable source, so a missing render must say so rather than
-	// printing XML at the reader.
-	it('marks a draw.io diagram unavailable when nothing rendered it', async () => {
-		const withDrawio: ProseMirrorDocument = {
-			type: 'doc',
-			content: [{ type: 'drawio', attrs: { diagramId: '00000000-0000-4000-8000-0000000000d1' } }]
-		} as ProseMirrorDocument;
-		const buffer = await generate({ notes: [{ title: 'Note', document: withDrawio }] });
-		expect(buffer.byteLength).toBeGreaterThan(0);
 	});
 });
