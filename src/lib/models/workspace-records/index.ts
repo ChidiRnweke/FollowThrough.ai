@@ -4,7 +4,7 @@ import { storedDocumentSchema } from '$lib/models/notes';
 import { provenanceSchema } from '$lib/models/provenance';
 import { suggestionSchema } from '$lib/models/suggestions';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
-import { pendingAgentDecisionSchema } from '$lib/models/agent';
+import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent';
 import { projectTemplateStylesSchema } from '$lib/models/projects';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 
@@ -260,7 +260,7 @@ export const resourceDataSchemas = {
 		defaultVisionModel: z.string().optional(),
 		inlineModel: z.string().optional(),
 		attachmentVisionModel: z.string().optional(),
-		webSearchEngine: z.string().optional(),
+		webSearchEngine: z.enum(webSearchEngines).optional(),
 		webSearchMaxResults: z.number().int().optional(),
 		webSearchMaxTotalResults: z.number().int().optional(),
 		agentMaxTurns: z.number().int().optional(),

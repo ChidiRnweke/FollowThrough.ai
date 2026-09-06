@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { workspaceBootstrapSchema } from '$lib/models/workspace-bootstrap';
+import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
 import { syncChangesSchema } from '$lib/models/sync';
 import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
 import { workspaceObjectReadSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
@@ -39,3 +41,9 @@ export const workspaceWriteTransport = (
 		);
 	}
 });
+
+export const fetchWorkspaceBootstrap = async () => {
+	const request = readWorkspaceBootstrap({});
+	await request.refresh();
+	return workspaceBootstrapSchema.parse(await request);
+};

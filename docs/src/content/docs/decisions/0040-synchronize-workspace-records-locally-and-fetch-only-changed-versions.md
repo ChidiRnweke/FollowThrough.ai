@@ -109,6 +109,15 @@ in one transaction. Retrying the same operation returns its receipt. An operatio
 cannot be reused for different input. Client-generated identities let offline-created objects
 refer to each other without changing identity after synchronization.
 
+Deployment model metadata and resolved deployment-dependent defaults are not database resources.
+A small, validated bootstrap binds the active account and retains these settings for offline
+startup. It is refreshed on app start and never contains workspace page snapshots. A readable,
+non-secret account-hint cookie must match before cached bootstrap data can be restored. The server
+sets that hint only after resolving the actor and clears it when sign-in starts, the session is
+invalid, or the user signs out. It is not an authentication credential; synchronization requests
+still validate the real session and account. Clearing the hint blocks offline reopening without
+deleting unsent drafts from IndexedDB. Ordinary workspace records and mutation intents remain in account-scoped IndexedDB.
+
 Account changes stop synchronization and remove access to the previous account's local records.
 Unsent changes remain recoverable after that same account authenticates again. Invalid storage,
 failed downloads, and unavailable server actions are explicit failures under ADR 0015.
