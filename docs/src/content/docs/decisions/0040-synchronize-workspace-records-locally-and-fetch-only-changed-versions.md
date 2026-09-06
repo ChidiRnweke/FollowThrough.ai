@@ -94,8 +94,14 @@ tombstones. A server deletion must not discard a conflicting local draft.
 Queue entries preserve their command, base, local representation, and preceding operation IDs.
 Only unsent document edits can coalesce; once submission starts, its operation identity and input
 remain immutable, including after a transport failure. Publication and other distinct operations
-preserve their positions between edits. Successful acknowledgement supplies the base for the next
-dependent edit. References to locally created parents wait for those parents' acknowledgement.
+preserve their positions between edits. Queue order and edit ancestry are distinct: a draft names
+its pending local base with `basedOn`. Successful acknowledgement supplies a new server base only
+for edits made against that local version. Competing tabs retain their original server bases and
+therefore conflict instead of silently rebasing over each other. Coalescing requires that exact
+local predecessor and no dependent entries; it replaces the unsent operation identity so a stale
+tab cannot mistake changed local content for the version it edited. If the named local predecessor
+was already acknowledged before persistence, we conservatively retain the original server base;
+a resulting conflict preserves the edit for explicit review. References to locally created parents wait for those parents' acknowledgement.
 Conflicts retain dependent entries while unrelated resources remain sendable.
 
 The server checks the base version, applies the domain mutation, and stores an operation receipt

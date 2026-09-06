@@ -63,6 +63,7 @@ describe('shared workspace reads', () => {
 			key,
 			command: { kind: 'createProject', id: project.value.id, name: project.value.name },
 			base: null,
+			basedOn: null,
 			local: project,
 			coalesce: null,
 			references: []

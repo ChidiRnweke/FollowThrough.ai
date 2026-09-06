@@ -7,6 +7,7 @@ const draft: WriteDraft<string, string> = {
 	key: 'note:1',
 	command: 'edit',
 	base: null,
+	basedOn: null,
 	local: 'Offline note',
 	coalesce: null,
 	references: []

@@ -24,6 +24,8 @@ export interface WriteDraft<C, T> {
 	readonly key: string;
 	readonly command: C;
 	readonly base: SyncSnapshot<T> | null;
+	/** The pending local version this edit was made against, separate from queue order. */
+	readonly basedOn: string | null;
 	readonly local: T | null;
 	readonly coalesce: string | null;
 	readonly references: readonly string[];
@@ -56,6 +58,7 @@ export const outboxEntrySchema = <C, T>(
 			key: z.string().min(1),
 			command,
 			base: snapshot.nullable(),
+			basedOn: z.string().uuid().nullable(),
 			local: value.nullable(),
 			coalesce: z.string().nullable(),
 			dependencies: z.array(z.string().uuid())
@@ -85,6 +88,10 @@ export const appendWrite = <C, T>(
 ): readonly OutboxEntry<C, T>[] => {
 	if (entries.some((entry) => entry.intent.operationId === draft.operationId))
 		throw new Error('A local operation identity must be unique');
+	if (draft.basedOn === draft.operationId) throw new Error('An edit cannot be based on itself');
+	const parent = entries.find((entry) => entry.intent.operationId === draft.basedOn);
+	if (parent && parent.intent.key !== draft.key)
+		throw new Error('A local base must belong to the edited resource');
 	const latest = new Map(entries.map((entry) => [entry.intent.key, entry]));
 	const previous = latest.get(draft.key);
 	const dependencies = [
@@ -99,6 +106,7 @@ export const appendWrite = <C, T>(
 	void references;
 	if (
 		previous?.delivery.kind === 'queued' &&
+		draft.basedOn === previous.intent.operationId &&
 		draft.coalesce !== null &&
 		previous.intent.coalesce === draft.coalesce &&
 		!entries.some((entry) => entry.intent.dependencies.includes(previous.intent.operationId))
@@ -110,6 +118,7 @@ export const appendWrite = <C, T>(
 						...entry,
 						intent: {
 							...entry.intent,
+							operationId: draft.operationId,
 							command: draft.command,
 							local: draft.local,
 							dependencies: [
@@ -165,8 +174,9 @@ export const acknowledgeWrite = <C, T>(
 				intent: {
 					...entry.intent,
 					dependencies: entry.intent.dependencies.filter((id) => id !== receipt.operationId),
+					basedOn: entry.intent.basedOn === receipt.operationId ? null : entry.intent.basedOn,
 					base:
-						entry.intent.key === sent.intent.key
+						entry.intent.basedOn === receipt.operationId
 							? receipt.resource.kind === 'found'
 								? receipt.resource.snapshot
 								: null
@@ -221,4 +231,41 @@ export const localResource = <C, T>(
 	return last.intent.local === null
 		? { kind: 'deleted' }
 		: { kind: 'ready', value: last.intent.local };
+};
+
+/** Explicitly retaining a conflicting edit starts a new version-guarded operation. */
+export const retryConflictedWrite = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	operationId: string,
+	replacementId: string
+): readonly OutboxEntry<C, T>[] => {
+	const conflict = entries.find((entry) => entry.intent.operationId === operationId);
+	if (!conflict || conflict.delivery.kind !== 'conflict')
+		throw new Error('This edit has no unresolved server conflict');
+	if (
+		replacementId === operationId ||
+		entries.some((entry) => entry.intent.operationId === replacementId)
+	)
+		throw new Error('Conflict resolution requires a new operation identity');
+	if (conflict.delivery.remote.kind !== 'found')
+		throw new Error('A deleted or unavailable resource must be explicitly recreated');
+	const base = conflict.delivery.remote.snapshot;
+	return entries.map((entry) =>
+		entry === conflict
+			? {
+					...entry,
+					intent: { ...entry.intent, operationId: replacementId, base, basedOn: null },
+					delivery: { kind: 'queued' }
+				}
+			: {
+					...entry,
+					intent: {
+						...entry.intent,
+						dependencies: entry.intent.dependencies.map((id) =>
+							id === operationId ? replacementId : id
+						),
+						basedOn: entry.intent.basedOn === operationId ? replacementId : entry.intent.basedOn
+					}
+				}
+	);
 };

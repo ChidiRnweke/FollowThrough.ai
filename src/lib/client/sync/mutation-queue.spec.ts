@@ -16,6 +16,7 @@ const draft = (operationId: string, command = 'Edited'): WriteDraft<string, stri
 	command,
 	key: 'note:1',
 	base: null,
+	basedOn: null,
 	local: command,
 	coalesce: null,
 	references: []

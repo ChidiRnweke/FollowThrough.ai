@@ -19,6 +19,7 @@ const draft = (key = 'note:1', command = 'create'): WriteDraft<string, string> =
 	key,
 	command,
 	base: null,
+	basedOn: null,
 	local: command,
 	coalesce: null,
 	references: []
@@ -97,7 +98,10 @@ describe('durable local writes', () => {
 		await outbox.append('alice', draft());
 		const sent = await outbox.take('alice');
 		if (!sent) throw new Error('Expected a submitted write');
-		await outbox.append('alice', draft('note:1', 'edited'));
+		await outbox.append('alice', {
+			...draft('note:1', 'edited'),
+			basedOn: sent.intent.operationId
+		});
 		await outbox.settle('alice', sent, {
 			kind: 'applied',
 			receipt: { operationId: sent.intent.operationId, resource: { kind: 'found', snapshot } }
