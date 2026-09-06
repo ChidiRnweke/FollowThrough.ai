@@ -53,6 +53,24 @@ export type CacheEvent<T> =
 	| { readonly kind: 'receive'; readonly snapshot: SyncSnapshot<T> }
 	| { readonly kind: 'failure'; readonly message: string };
 
+export const cacheEntrySchema = <T>(value: z.ZodType<T>): z.ZodType<CacheEntry<T>> => {
+	const snapshot = z.object({ etag: syncEtagSchema, value });
+	return z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('uncached') }),
+		z.object({ kind: z.literal('cached'), snapshot }),
+		z.object({
+			kind: z.literal('updating'),
+			previous: snapshot.nullable(),
+			target: syncEtagSchema.nullable(),
+			transfer: z.discriminatedUnion('kind', [
+				z.object({ kind: z.literal('queued') }),
+				z.object({ kind: z.literal('fetching') }),
+				z.object({ kind: z.literal('failed'), message: z.string() })
+			])
+		})
+	]);
+};
+
 export const cachedSnapshot = <T>(entry: CacheEntry<T>): SyncSnapshot<T> | null =>
 	entry.kind === 'cached' ? entry.snapshot : entry.kind === 'updating' ? entry.previous : null;
 
