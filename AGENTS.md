@@ -33,9 +33,13 @@ already on the branch can be reworded with a rebase.
 never on the main checkout or directly on `master`.
 
 ```bash
-git worktree add ../<task-slug> -b <type>/<task-slug> origin/master
-cd ../<task-slug> && pnpm install
+git worktree add artifacts/worktrees/<task-slug> -b <type>/<task-slug> origin/master
+cd artifacts/worktrees/<task-slug> && pnpm install
 ```
+
+Worktrees live under `artifacts/worktrees/`, which is ignored, so they stay inside the repository
+and out of its parent directory. A worktree starts without `.env`; copy or link one before
+running anything that loads SvelteKit environment variables.
 
 - One PR per coherent task. Finish the work, commit conventionally (see Commit messages), push
   the branch, and open the PR with `gh pr create --head <branch> --title "<type(scope): subject>"`
