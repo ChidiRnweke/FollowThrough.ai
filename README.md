@@ -17,6 +17,13 @@ producing artifacts — always proposing, never committing anything important si
 > **Write notes → the agent extracts commitments and context → you triage on Today →
 > the agent acts (with your approval) → work becomes artifacts and deliverables.**
 
+## Documentation
+
+The published documentation — usage guides, architecture decisions, the API reference, and the
+release history — lives at <https://chidirnweke.github.io/FollowThrough.ai/>. The
+[contributing guide](https://chidirnweke.github.io/FollowThrough.ai/contribute/) explains how
+changes and releases land. Docs source is in [`docs/`](docs/).
+
 ## Why I built it
 
 I was running Claude, Codex, and opencode in terminals inside VS Code, having them write markdown, then rendering that markdown somewhere else to actually read it. Every session started by re-explaining the same project. The context lived in my head, the notes lived in files, the tasks lived nowhere, and the agent knew none of it.
