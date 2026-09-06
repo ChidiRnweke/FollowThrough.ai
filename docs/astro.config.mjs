@@ -140,11 +140,20 @@ export default defineConfig({
 						{ label: 'Capability factories', link: '/reference/factories/' },
 						factoriesSidebarGroup,
 						{
+							label: 'Architecture decisions',
+							collapsed: true,
+							items: [{ autogenerate: { directory: 'decisions' } }]
+						},
+						{
 							label: 'How each feature works',
 							collapsed: true,
 							items: [{ autogenerate: { directory: 'subsystems' } }]
 						}
 					]
+				},
+				{
+					label: 'Contribute',
+					items: [{ label: 'Contributing guide', link: '/contribute/' }]
 				}
 			],
 			plugins: [
