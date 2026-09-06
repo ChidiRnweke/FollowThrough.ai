@@ -388,3 +388,15 @@ export const workspaceObjectReadSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('deleted'), etag: syncEtagSchema }),
 	z.object({ kind: z.literal('unavailable') })
 ]);
+
+export const workspaceWriteReceiptSchema = z.object({
+	operationId: z.string().uuid(),
+	resource: z.discriminatedUnion('kind', [
+		z.object({
+			kind: z.literal('found'),
+			snapshot: z.object({ etag: syncEtagSchema, value: workspaceRecordSchema })
+		}),
+		z.object({ kind: z.literal('deleted'), etag: syncEtagSchema })
+	])
+});
+export type WorkspaceWriteReceipt = z.infer<typeof workspaceWriteReceiptSchema>;

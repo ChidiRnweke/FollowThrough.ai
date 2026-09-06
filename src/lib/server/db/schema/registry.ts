@@ -26,6 +26,7 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 
 export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
 
@@ -79,6 +80,20 @@ export const workspaceSyncChanges = pgTable(
 );
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
+
+export const workspaceSyncReceipts = pgTable(
+	'workspace_sync_receipts',
+	{
+		accountId: uuid('account_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		operationId: uuid('operation_id').notNull(),
+		requestHash: text('request_hash').notNull(),
+		result: jsonb('result').$type<WorkspaceWriteReceipt>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.accountId, table.operationId] })]
+);
 /**
  * What a project is for, so the inbox stops being a project that happens to be
  * called "General".
