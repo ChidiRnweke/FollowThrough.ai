@@ -1,3 +1,4 @@
+import { knowledgeSearchSource, type KnowledgeSearchSource } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId, StoredMessage } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
@@ -19,6 +20,7 @@ export interface SearchKnowledgeInput {
 }
 
 export interface KnowledgeSearchResult {
+	readonly source: KnowledgeSearchSource;
 	readonly noteId?: NoteId;
 	readonly content: string;
 	readonly score: number;
@@ -74,6 +76,7 @@ export class Retrieval implements RetrievalController {
 			}
 		);
 		return matches.map((match) => ({
+			source: knowledgeSearchSource(match.document),
 			noteId: match.document.noteId,
 			content: match.document.content,
 			score: match.score,

@@ -30,3 +30,5 @@ export {
 	type TurnAction,
 	type TurnRow
 } from './actions/turn-activity';
+
+export { toolRowContext, toolRowTargets, toolRowHeadline } from './actions/tool-row-content';

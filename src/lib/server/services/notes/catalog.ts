@@ -164,28 +164,40 @@ export class NoteCatalog {
 			}));
 	}
 
-	async deleteForever(actor: ActorContext, noteId: NoteId): Promise<readonly NoteId[]> {
+	async deleteForever(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
 		const note = await this.get(actor, noteId);
 		if (!note.archivedAt)
 			throw new ValidationError('Only notes in the trash can be deleted permanently');
 		if (note.kind === 'skill')
 			throw new ValidationError('Skill notes are not deleted from the trash');
 		const trashed = await this.notes.listTrashed(actor, note.projectId);
-		return this.purge(actor, this.descendants(trashed, [noteId]));
+		const deleted = await this.purge(actor, this.descendants(trashed, [noteId]));
+		return trashed
+			.filter((row) => deleted.includes(row.id))
+			.map(({ id, title }) => ({ id, title }));
 	}
 
-	async emptyTrash(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteId[]> {
+	async emptyTrash(
+		actor: ActorContext,
+		projectId?: Note['projectId']
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
 		const trashed = await this.notes.listTrashed(actor, projectId);
 		// Skills are filtered out of the trash listing, so they are not something the user
 		// can see they are about to destroy. Emptying the trash empties what is on screen.
 		const visible = trashed.filter((note) => note.kind !== 'skill');
-		return this.purge(
+		const deleted = await this.purge(
 			actor,
 			this.descendants(
 				trashed,
 				visible.map((note) => note.id)
 			)
 		);
+		return trashed
+			.filter((row) => deleted.includes(row.id))
+			.map(({ id, title }) => ({ id, title }));
 	}
 
 	/**

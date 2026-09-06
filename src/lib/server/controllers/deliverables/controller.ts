@@ -109,7 +109,10 @@ export interface DeliverablesController {
 	/** Return a presigned URL that streams an artifact's file bytes. */
 	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	/** Permanently delete an artifact. */
-	deleteArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<void>;
+	deleteArtifact(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<Pick<Artifact, 'id' | 'title'>>;
 	/**
 	 * Re-run generation for an existing artifact, replacing its content with a fresh
 	 * render of the current note state. Used to refresh a document whose source changed.
@@ -217,8 +220,11 @@ export class Deliverables implements DeliverablesController {
 		return this.dependencies.artifactReader.download(actor, artifactId);
 	}
 
-	async deleteArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<void> {
-		await this.dependencies.artifactDeleter.delete(actor, artifactId);
+	async deleteArtifact(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<Pick<Artifact, 'id' | 'title'>> {
+		return this.dependencies.artifactDeleter.delete(actor, artifactId);
 	}
 
 	async regenerateArtifact(

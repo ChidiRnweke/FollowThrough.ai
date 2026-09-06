@@ -24,6 +24,6 @@ export interface ApiTokenRepository {
 	 */
 	findByHashWithUser(tokenHash: string): Promise<{ user: User; token: ApiToken } | null>;
 	listForUser(actor: ActorContext): Promise<readonly ApiToken[]>;
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<void>;
+	revoke(actor: ActorContext, id: ApiTokenId): Promise<ApiToken | undefined>;
 	touchLastUsed(id: ApiTokenId, at: Date): Promise<void>;
 }

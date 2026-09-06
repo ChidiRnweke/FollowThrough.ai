@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import { describe, expect, it } from 'vitest';
 import type {
 	ActorContext,
@@ -44,10 +45,15 @@ class FakeAccessTokens implements IAccessTokens {
 		return this.tokens.filter((candidate) => candidate.userId === actor.userId);
 	}
 
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<void> {
+	async revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
+		const revoked = this.tokens.find(
+			(candidate) => candidate.id === id && candidate.userId === actor.userId
+		);
+		if (!revoked) throw new NotFoundError('Access token not found');
 		this.tokens = this.tokens.filter(
 			(candidate) => candidate.id !== id || candidate.userId !== actor.userId
 		);
+		return { id: revoked.id, name: revoked.name };
 	}
 }
 
@@ -68,7 +74,8 @@ describe('API token controller behavior', () => {
 	it('does not revoke another actor’s credential', async () => {
 		const tokens = new FakeAccessTokens();
 		const controller = new ApiTokens({ tokens });
-		await controller.revoke(testActor(2), tokenId);
-		expect(tokens.tokens).toEqual([token()]);
+		await expect(controller.revoke(testActor(2), tokenId)).rejects.toThrow(
+			'Access token not found'
+		);
 	});
 });

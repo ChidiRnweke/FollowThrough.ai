@@ -42,11 +42,13 @@ export class ApiTokenRecords implements ApiTokenRepository {
 		return rows.map(toApiToken);
 	}
 
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<void> {
-		await this.database
+	async revoke(actor: ActorContext, id: ApiTokenId): Promise<ApiToken | undefined> {
+		const [row] = await this.database
 			.update(schema.apiTokens)
 			.set({ revokedAt: new Date() })
-			.where(and(eq(schema.apiTokens.id, id), eq(schema.apiTokens.userId, actor.userId)));
+			.where(and(eq(schema.apiTokens.id, id), eq(schema.apiTokens.userId, actor.userId)))
+			.returning();
+		return row ? toApiToken(row) : undefined;
 	}
 
 	async touchLastUsed(id: ApiTokenId, at: Date): Promise<void> {

@@ -46,7 +46,4 @@
 			</div>
 		</div>
 	{/each}
-	{#if changed.length === 0}
-		<p class="text-muted-foreground">This call changed nothing.</p>
-	{/if}
 </div>

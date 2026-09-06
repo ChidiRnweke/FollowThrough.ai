@@ -1,3 +1,4 @@
+import { toolEntity } from './tool-entities';
 import type { ShellContext } from '$lib/models/workspace';
 import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
@@ -305,8 +306,9 @@ export function turnSteps(
 			});
 			continue;
 		}
-		const id = identify(tool, subject);
-		const name = nameOf(tool, subject, id, shell);
+		const entity = toolEntity(tool, shell);
+		const id = entity.id;
+		const name = entity.named ? entity.title : nameOf(tool, subject, id, shell);
 		steps.push({
 			kind: subject.kind,
 			...(id ? { id } : {}),
