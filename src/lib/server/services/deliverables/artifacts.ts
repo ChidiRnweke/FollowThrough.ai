@@ -335,10 +335,14 @@ export class ArtifactLibrary {
 		};
 	}
 
-	async delete(actor: ActorContext, artifactId: ArtifactId): Promise<void> {
+	async delete(
+		actor: ActorContext,
+		artifactId: ArtifactId
+	): Promise<Pick<Artifact, 'id' | 'title'>> {
 		const artifact = await this.artifactRepo.findById(actor, artifactId);
 		if (!artifact) throw new NotFoundError('Artifact not found');
 		await this.artifactRepo.delete(actor, artifactId);
+		return { id: artifact.id, title: artifact.title };
 	}
 
 	async regenerate(

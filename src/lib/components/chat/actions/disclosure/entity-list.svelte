@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal } from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
-	import { canOpenEntity, entityIcon, openEntity } from '../open-entity';
+	import { canOpenEntity, entityIcon, openEntity, entityActionLabel } from '../open-entity';
 
 	let {
 		entities,
@@ -17,7 +17,11 @@
 		empty: string;
 	} = $props();
 
-	const hidden = $derived(Math.max(0, (total ?? entities.length) - entities.length));
+	// A preview, never a read limit: expansion exposes every returned entity.
+	let expanded = $state(false);
+	const visible = $derived(expanded ? entities : entities.slice(0, 5));
+	const hidden = $derived(entities.length - visible.length);
+	const unreturned = $derived(Math.max(0, (total ?? entities.length) - entities.length));
 </script>
 
 <!--
@@ -26,11 +30,11 @@
 	them whether the agent was looking at the right things, which is the only reason to open a
 	read at all.
 -->
-{#if entities.length === 0}
+{#if entities.length === 0 && empty}
 	<p class="px-2 py-1.5 text-xs text-muted-foreground">{empty}</p>
-{:else}
+{:else if entities.length > 0}
 	<ul class="flex flex-col">
-		{#each entities as entity, index (`${entity.kind}-${entity.id ?? entity.title}-${index}`)}
+		{#each visible as entity, index (`${entity.kind}-${entity.id ?? entity.title}-${index}`)}
 			{@const Icon = entityIcon[entity.kind]}
 			<li>
 				{#if canOpenEntity(entity)}
@@ -38,13 +42,12 @@
 						variant="ghost"
 						size="sm"
 						class="group/entity {CHAT_ROW}"
+						aria-label={entityActionLabel(entity)}
 						onclick={() => openEntity(entity)}
 					>
 						<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
 						<span class="min-w-0 truncate" title={entity.title}>{entity.title}</span>
-						<FtExternal
-							class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--duration-micro) group-hover/entity:opacity-100"
-						/>
+						<FtExternal class="size-3 shrink-0 text-muted-foreground " />
 					</Button>
 				{:else}
 					<!-- Nothing to open, so nothing that looks like it opens. -->
@@ -55,10 +58,19 @@
 				{/if}
 			</li>
 		{/each}
-		{#if hidden > 0}
-			<!-- Counted rather than listed: the point of the first five is whether the agent was
-			     looking in the right place, and a sixth through fiftieth does not add to that. -->
-			<li class="px-2 py-1.5 text-xs text-muted-foreground">…and {hidden} more</li>
-		{/if}
+		{#if entities.length > 5}<li>
+				<Button
+					variant="ghost"
+					size="sm"
+					class={CHAT_ROW}
+					aria-expanded={expanded}
+					onclick={() => {
+						expanded = !expanded;
+					}}>{expanded ? 'Show fewer' : `Show ${hidden} more`}</Button
+				>
+			</li>{/if}
+		{#if unreturned > 0}<li class="px-2 text-xs text-muted-foreground">
+				{entities.length} of {total} returned
+			</li>{/if}
 	</ul>
 {/if}

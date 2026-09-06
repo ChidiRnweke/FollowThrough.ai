@@ -67,17 +67,17 @@ describe('A read of many things shows what came back', () => {
 		});
 	});
 
-	it('caps the rows it hands over while still reporting the true total', () => {
+	it('retains every returned row for user-controlled expansion', () => {
 		const todos = Array.from({ length: 9 }, (_, index) => ({ title: `Todo ${index}` }));
 		const disclosure = toolDisclosure(call({ name: 'list_todos', output: { todos } }), shell);
 		expect(
 			disclosure.kind === 'collection' && [disclosure.entities.length, disclosure.total]
-		).toEqual([5, 9]);
+		).toEqual([9, 9]);
 	});
 });
 
-describe('A body rewritten earns a real before and after', () => {
-	it('carries the note and the revision the diff is taken against', () => {
+describe('A completed write names its target without fetching history', () => {
+	it('carries an openable note without a diff', () => {
 		const disclosure = toolDisclosure(
 			call({
 				name: 'save_note',
@@ -87,9 +87,7 @@ describe('A body rewritten earns a real before and after', () => {
 			shell
 		);
 		expect(disclosure).toEqual({
-			kind: 'note-diff',
-			noteId: NOTE_ID,
-			revision: 7,
+			kind: 'link',
 			entity: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
 		});
 	});
@@ -104,8 +102,7 @@ describe('A body rewritten earns a real before and after', () => {
 			shell
 		);
 		expect(disclosure).toEqual({
-			kind: 'note-diff',
-			noteId: '00000000-0000-4000-8000-0000000000bb',
+			kind: 'link',
 			entity: {
 				kind: 'note',
 				id: '00000000-0000-4000-8000-0000000000bb',
@@ -115,10 +112,8 @@ describe('A body rewritten earns a real before and after', () => {
 		});
 	});
 
-	it('falls back to stating what was sent when there is no note to diff', () => {
-		expect(familyOf({ name: 'save_note', arguments: { markdown: '# New' }, output: {} })).toBe(
-			'record'
-		);
+	it('does not synthesize a diff for a legacy receipt without a target', () => {
+		expect(familyOf({ name: 'save_note', arguments: {}, output: {} })).toBe('link');
 	});
 });
 
@@ -147,10 +142,13 @@ describe('A look inside the virtual files shows what came back', () => {
 		expect(disclosure).toEqual({
 			kind: 'file-output',
 			headline: '1 match',
+			sources: [{ kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }],
 			lines: [
 				{
 					text: 'element61 should own the rollout',
-					context: `Infrastructure (/projects/proj-1/notes/${NOTE_ID}.md):12`
+					context: 'Infrastructure:12',
+					lineNumber: 12,
+					source: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
 				}
 			]
 		});
@@ -172,7 +170,12 @@ describe('A look inside the virtual files shows what came back', () => {
 			}),
 			shell
 		);
-		expect(disclosure).toEqual({ kind: 'file-output', headline: 'No matches', lines: [] });
+		expect(disclosure).toEqual({
+			kind: 'file-output',
+			headline: 'No matches',
+			lines: [],
+			sources: []
+		});
 	});
 
 	it('numbers the lines of an excerpt', () => {
@@ -195,6 +198,7 @@ describe('A look inside the virtual files shows what came back', () => {
 		expect(disclosure).toEqual({
 			kind: 'file-output',
 			headline: 'Lines 3–4',
+			sources: [{ kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }],
 			lines: [
 				{ text: 'alpha', context: '3' },
 				{ text: 'beta', context: '4' }
@@ -220,7 +224,8 @@ describe('A look inside the virtual files shows what came back', () => {
 		expect(disclosure).toEqual({
 			kind: 'file-output',
 			headline: 'No file or directory exists at /nowhere.',
-			lines: []
+			lines: [],
+			sources: []
 		});
 	});
 
@@ -263,7 +268,7 @@ describe('A field set on an existing record shows what moved', () => {
 		);
 		expect(
 			disclosure.kind === 'record' && disclosure.changed.map((change) => change.label)
-		).toEqual(['Title']);
+		).toEqual([]);
 	});
 });
 
@@ -310,7 +315,7 @@ describe('A change to whether a thing exists says whether it can be undone', () 
 			toolDisclosure(call({ name: 'delete_note_forever', arguments: { noteId: NOTE_ID } }), shell)
 		).toEqual({
 			kind: 'lifecycle',
-			entity: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true },
+			entity: { kind: 'note', title: 'Infrastructure', named: true },
 			recoverable: false
 		});
 	});
@@ -347,5 +352,53 @@ describe('A failure outranks whatever the call was going to show', () => {
 			explanation:
 				'The text it meant to change was not where it expected. The note may have moved on since it read it.'
 		});
+	});
+});
+
+describe('Grouped and heterogeneous results preserve their targets', () => {
+	it('includes every Today group', () => {
+		const result = toolDisclosure(
+			call({
+				name: 'get_today_view',
+				output: {
+					overdue: [{ id: TODO_ID, title: 'Overdue' }],
+					dueToday: [{ title: 'Today' }],
+					waitingOn: [{ title: 'Waiting' }],
+					pinnedNotes: [{ id: NOTE_ID, title: 'Pinned' }],
+					recentNotes: [{ title: 'Recent' }],
+					pendingSuggestionCount: 2
+				}
+			}),
+			shell
+		);
+		expect(result.kind === 'collection' && result.entities.map((entity) => entity.title)).toEqual([
+			'Overdue',
+			'Today',
+			'Waiting',
+			'Pinned',
+			'Recent',
+			'2 pending suggestions'
+		]);
+	});
+	it('uses the actual source kind in mixed search results', () => {
+		const result = toolDisclosure(
+			call({
+				name: 'search',
+				output: [
+					{ source: { kind: 'note', noteId: NOTE_ID, title: 'Note' } },
+					{ source: { kind: 'diagram', diagramId: TODO_ID, title: 'Diagram' } }
+				]
+			}),
+			shell
+		);
+		expect(
+			result.kind === 'collection' && result.entities.map(({ kind, id }) => ({ kind, id }))
+		).toEqual([
+			{ kind: 'note', id: NOTE_ID },
+			{ kind: 'diagram', id: TODO_ID }
+		]);
+	});
+	it('does not report missing recorded output as an empty collection', () => {
+		expect(toolDisclosure(call({ name: 'list_todos' }), shell)).toEqual({ kind: 'none' });
 	});
 });

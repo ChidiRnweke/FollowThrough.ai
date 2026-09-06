@@ -56,19 +56,17 @@ describe('A disclosure is earned by having something behind it', () => {
 		expect(await screen.getByRole('button', { name: /Read note/ }).all()).toHaveLength(0);
 	});
 
-	it('gives a read of many things a disclosure onto what came back', async () => {
+	it('shows returned targets immediately', async () => {
 		const screen = await renderRow(
 			call({ name: 'list_todos', arguments: {}, output: { todos: [{ title: 'Draft the RFC' }] } })
 		);
-		await screen.getByRole('button', { name: /Listed todos/ }).click();
 		await expect.element(screen.getByText('Draft the RFC')).toBeVisible();
 	});
 
-	it('gives a write a disclosure onto what changed', async () => {
+	it('shows changed fields immediately', async () => {
 		const screen = await renderRow(
 			call({ name: 'update_todo', arguments: { todoId: NOTE_ID, status: 'done' }, output: {} })
 		);
-		await screen.getByRole('button', { name: /Updated todo/ }).click();
 		await expect.element(screen.getByText('done', { exact: true })).toBeVisible();
 	});
 });
@@ -88,7 +86,6 @@ describe('A failed call shows the run own message as evidence', () => {
 				failure: 'oldText was not found in the note.'
 			})
 		);
-		await screen.getByRole('button', { name: /Note was not saved/ }).click();
 		await expect.element(screen.getByText('oldText was not found in the note.')).toBeVisible();
 	});
 });
@@ -130,7 +127,7 @@ describe('A search of the notes and files says what it looked for and found', ()
 	});
 });
 
-describe('An edited note is named and openable from its disclosure', () => {
+describe('An edited note is named and openable inline', () => {
 	it('names the note behind the row, as a thing that opens', async () => {
 		const screen = await renderRow(
 			call({
@@ -139,9 +136,8 @@ describe('An edited note is named and openable from its disclosure', () => {
 				output: { noteId: NOTE_ID, title: 'Infrastructure', currentRevision: 3 }
 			})
 		);
-		await screen.getByRole('button', { name: /Edited note/ }).click();
 		await expect
-			.element(screen.getByRole('button', { name: 'Infrastructure', exact: true }))
+			.element(screen.getByRole('button', { name: 'Open Infrastructure in a tab', exact: true }))
 			.toBeInTheDocument();
 	});
 });

@@ -37,10 +37,11 @@ export class InMemoryApiTokenRepository implements ApiTokenRepository {
 		return this.tokens.filter((token) => token.userId === actor.userId && !token.revokedAt);
 	}
 
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<void> {
+	async revoke(actor: ActorContext, id: ApiTokenId): Promise<ApiToken | undefined> {
 		this.replace(id, (token) =>
 			token.userId === actor.userId ? { ...token, revokedAt: instant(new Date()) } : token
 		);
+		return this.tokens.find((token) => token.id === id && token.userId === actor.userId);
 	}
 
 	async touchLastUsed(id: ApiTokenId, at: Date): Promise<void> {

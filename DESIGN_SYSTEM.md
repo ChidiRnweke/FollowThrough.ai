@@ -296,8 +296,11 @@ Kanban columns keep their drop zone and center the voice line inside it.
   current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token,
   duplicate a prompt during retry, or hide chat entirely on mobile.
-- Do not render a settled tool call as its own row in the transcript, give each call its own
-  disclosure, or echo a tool's payload back at the reader.
+- Keep settled calls inside the turn's collapsed tool log. Inside that log, show friendly actions,
+  meaningful scope, outcomes, and directly openable targets inline. Completed edits open the
+  current note; version history owns diffs. Only longer excerpts expand, with linked source
+  headings and line numbers. Collection previews must offer access to every returned item.
+  Do not echo raw payloads or version-retention housekeeping copy.
 - Do not wrap an approval, or the change preview inside it, in a card; do not repeat the change
   awaiting approval in the turn's touched list — it is already on screen in full.
 

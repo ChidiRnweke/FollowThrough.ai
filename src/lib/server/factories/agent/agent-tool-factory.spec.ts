@@ -1747,7 +1747,7 @@ describe('Explicit mutation receipts', () => {
 
 	it('reports the revoked token id', async () => {
 		const apiTokens = capabilityDependencies<ApiTokensController>({
-			revoke: async () => undefined
+			revoke: async (_actor, id) => ({ id, name: 'Local integration' })
 		});
 		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
 		const tool = registry('auto_accept', { factory })
@@ -1755,13 +1755,14 @@ describe('Explicit mutation receipts', () => {
 			.find((definition) => definition.name === 'revoke_api_token');
 		expect(await tool?.execute({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' })).toEqual({
 			tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013',
+			name: 'Local integration',
 			revoked: true
 		});
 	});
 
 	it('reports the deleted artifact id', async () => {
 		const deliverables = capabilityDependencies<DeliverablesController>({
-			deleteArtifact: async () => undefined
+			deleteArtifact: async (_actor, id) => ({ id, title: 'Report' })
 		});
 		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
 		const tool = registry('auto_accept', { factory })
@@ -1769,6 +1770,7 @@ describe('Explicit mutation receipts', () => {
 			.find((definition) => definition.name === 'delete_artifact');
 		expect(await tool?.execute({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' })).toEqual({
 			artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124',
+			title: 'Report',
 			deleted: true
 		});
 	});
