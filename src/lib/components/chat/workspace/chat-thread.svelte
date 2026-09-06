@@ -281,12 +281,12 @@
 											onreject={() => onrejectapproval(entry, group.tools)}
 										/>
 									{:else if group.kind === 'activity'}
-										<!-- The log is the turn's, so it hangs off the last group and opens onto
-									     every call, not just that group's. -->
+										<!-- The summary is the turn's, folded over every call it made, so it
+									     hangs off the last group rather than repeating per group. -->
 										<TurnActivity
 											tools={group.tools}
 											turnTools={entryTools(entry)}
-											showLog={index === lastActivityIndex(entry)}
+											summarise={index === lastActivityIndex(entry)}
 											{shell}
 											retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
 											onretry={() => onretry(entry)}

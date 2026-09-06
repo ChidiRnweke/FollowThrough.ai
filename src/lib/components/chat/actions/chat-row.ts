@@ -24,6 +24,18 @@
 export const CHAT_ROW =
 	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-xs font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
 
+/**
+ * The statement line of a thing the turn touched: the name, its verb, and the way in.
+ *
+ * One step above `CHAT_ROW`, and that step is the whole hierarchy. Everything subordinate to a
+ * thing — what the agent asked it, what came back, what it changed — renders at
+ * `provenance-caption` beneath it, and `xs` is the floor: with the statement also at `xs` there
+ * was no room left to put anything below it, so a call, its arguments and its results all
+ * arrived at one size and the reader had to parse them apart by punctuation.
+ */
+export const CHAT_ROW_STATEMENT =
+	'flex h-auto w-full items-center justify-start gap-2 rounded-md px-2 py-1 text-left text-sm font-normal aria-expanded:bg-transparent aria-expanded:text-inherit';
+
 /** Every icon on a chat row, so a column of rows shares one optical grid. */
 export const CHAT_ROW_ICON = 'size-3.5 shrink-0';
 

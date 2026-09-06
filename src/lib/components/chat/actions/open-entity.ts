@@ -4,7 +4,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
-import type { EntityKind, EntityRef, TurnRow } from '$lib/components/agent';
+import type { EntityKind, EntityRef } from '$lib/components/agent';
 import { workbench } from '$lib/stores/workbench/workbench.svelte';
 import { diagramTab } from '$lib/stores/workbench/tab-ref';
 import {
@@ -87,16 +87,6 @@ export function openEntity(entity: Pick<EntityRef, 'kind' | 'id' | 'destination'
 	}
 	void goto(`/projects/${id}`);
 }
-
-/**
- * The mark for a row of a turn's summary. An action is not one of the workspace's own
- * things, so it takes the neutral workflow mark rather than borrowing a note's or a
- * project's; everything else shares the map above. Both the touched list and the failure
- * block read it, which is the point — they each had their own copy, and a diagram was
- * openable in one of them and not the other.
- */
-export const rowIcon = (row: TurnRow): typeof FtDocument =>
-	row.kind === 'action' ? FtWorkflow : entityIcon[row.kind];
 
 /** Sign a fresh URL instead of replaying an expired download URL. */
 async function downloadEntity(artifactId: string) {
