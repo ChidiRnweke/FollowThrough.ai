@@ -45,9 +45,23 @@ The mechanics, for the record:
 
 - On every push to `master`, the `release-please-action` parses commits since the last release
   tag (`v*`).
-- Releasable units are `feat` (minor) and `fix` (patch) commits; `BREAKING CHANGE` (major) is
-  reserved for real compatibility breaks under SemVer. `chore`, `ci`, `docs`, `refactor`, and
-  `test` commits do not create releases but appear in a release's notes when one happens.
+- **Anything that can change what runs is releasable.** `feat` bumps the minor, everything else
+  bumps the patch, and `BREAKING CHANGE` (major) is reserved for real compatibility breaks under
+  SemVer. Only `docs` and `test` are excluded, because neither can reach the runtime image: the
+  documentation site deploys through its own Pages workflow, and specs are not in the bundle.
+
+  The bar is deliberately not "is this a feature or a fix". `docker-publish.yml` builds only on
+  `v*` tags, and tags come only from a release, so a type that cuts no release does not ship at
+  all — a `refactor` that redesigned a panel sat on `master` unbuilt until an unrelated `feat`
+  happened along and carried it out. Shipping is the thing being gated, and a refactor,
+  a dependency bump and a CI fix all change what is deployed.
+
+  In release-please the two questions are one dial: a type that is visible in the changelog is
+  the same type that triggers a release, so `chore` and `ci` earn changelog lines as the price
+  of being able to ship. This changelog is a deployment record rather than a marketing
+  document, and that trade is the right way round for it. `release-please-config.json` holds the
+  sections; the manifest holds the current version.
+
 - If releasable commits exist, release-please opens or updates a Release PR titled
   `chore(main): release vX.Y.Z`, bumping `package.json` and appending to `CHANGELOG.md`.
 - The Release PR is a normal PR on `master`: the commitlint and PR-title checks from ADR 0038
@@ -73,8 +87,11 @@ wraps it into a Starlight "Releases" page, and GitHub Releases display the same 
 - Every release passes the ADR 0038 checks and presents a changelog for review before merging.
 - The deployment pipeline is untouched: image builds, the `latest` tag on master pushes, and the
   Komodo webhook all behave as before.
-- A release costs one PR merge, and only when there is something releasable. There is no release
-  noise on `chore`/`docs`/`refactor` commits.
+- A release costs one PR merge, and nearly every merge to `master` produces something to
+  release. That is the intent: the Release PR is how work reaches production, so it should be
+  waiting whenever there is work that has not. The cost is a busier changelog, including
+  `chore` and `ci` lines that no user cares about; the alternative was changes that silently
+  never deployed.
 - The docs "Releases" page updates itself whenever a release lands, because the docs deploy
   triggers on `CHANGELOG.md` changes and the page is generated from it at build time.
 - Quirks accepted: release-please parses the squashed commit (the PR title, per ADR 0038), so a
