@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { Editor, Node } from '@tiptap/core';
@@ -481,8 +481,9 @@ describe('Diagram insert point tracking', () => {
 		screen.component.holdInsertionPoint('run-1', 7);
 		screen.component.focusStart();
 		await userEvent.keyboard('Well, ');
-
-		expect(moved.at(-1)).toEqual(['run-1', 13]);
+		// The last move arrives asynchronously after the final keystroke; wait for
+		// the store to settle on the position the doc actually reached.
+		await vi.waitFor(() => expect(moved.at(-1)).toEqual(['run-1', 13]));
 	});
 });
 
