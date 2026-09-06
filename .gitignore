@@ -38,3 +38,6 @@ artifacts
 
 # Editor settings are per-developer, not per-repo.
 .vscode/
+
+# Generated at docs build time from the root CHANGELOG.md.
+docs/src/content/docs/releases.md

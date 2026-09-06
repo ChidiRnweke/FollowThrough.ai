@@ -102,6 +102,7 @@ export default defineConfig({
 						{ label: 'Search', link: '/using/search/' },
 						{ label: 'Projects', link: '/using/projects/' },
 						{ label: 'Self-hosting', link: '/self-hosting/' },
+						{ label: 'Releases', link: '/releases/' },
 						{
 							label: 'Building on FollowThrough',
 							collapsed: true,

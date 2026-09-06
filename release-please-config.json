@@ -1,0 +1,10 @@
+{
+	"release-type": "node",
+	"extra-files": [
+		{
+			"type": "json",
+			"path": "docs/package.json",
+			"jsonpath": "$.version"
+		}
+	]
+}
