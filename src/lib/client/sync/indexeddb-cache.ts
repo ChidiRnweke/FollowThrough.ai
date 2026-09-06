@@ -1,27 +1,8 @@
 import { z } from 'zod';
-import {
-	cacheEntrySchema,
-	resourceStateSchema,
-	syncCursorSchema,
-	mergeResourceStates,
-	resourceVersion
-} from '$lib/models/sync';
+import { syncCursorSchema, mergeResourceStates, resourceVersion } from '$lib/models/sync';
 import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
 
-const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
-	new Promise((resolve, reject) => {
-		request.onsuccess = () => resolve(request.result);
-		request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-	});
-
-const completed = (transaction: IDBTransaction): Promise<void> =>
-	new Promise((resolve, reject) => {
-		transaction.oncomplete = () => resolve();
-		transaction.onerror = () =>
-			reject(transaction.error ?? new Error('IndexedDB transaction failed'));
-		transaction.onabort = () =>
-			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
-	});
+import { requestValue, completed, openSyncDatabase, storedResourceSchema } from './database';
 
 /** Parses persisted data here; the resource cache never handles weak storage values. */
 export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
@@ -41,7 +22,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			requestValue(transaction.objectStore('cursors').get(accountId)),
 			done
 		]);
-		const records = z.array(this.recordSchema(accountId)).parse(rows);
+		const records = z.array(storedResourceSchema(accountId, this.valueSchema)).parse(rows);
 		return {
 			records: records.map(({ key, entry }) => ({ key, entry })),
 			cursor:
@@ -50,27 +31,6 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 					: z.object({ accountId: z.literal(accountId), cursor: syncCursorSchema }).parse(cursor)
 							.cursor
 		};
-	}
-
-	private recordSchema(accountId: string) {
-		const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
-		return z.union([
-			z.object({
-				...identity,
-				schemaVersion: z.literal(2),
-				entry: resourceStateSchema(this.valueSchema)
-			}),
-			z
-				.object({
-					...identity,
-					schemaVersion: z.literal(1),
-					entry: cacheEntrySchema(this.valueSchema)
-				})
-				.transform((record) => ({
-					...record,
-					entry: { kind: 'present' as const, cache: record.entry }
-				}))
-		]);
 	}
 
 	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
@@ -94,7 +54,9 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			const current = new Map(
 				keys.map((key, index) => [
 					key,
-					rows[index] === undefined ? null : this.recordSchema(accountId).parse(rows[index])
+					rows[index] === undefined
+						? null
+						: storedResourceSchema(accountId, this.valueSchema).parse(rows[index])
 				])
 			);
 			for (const proposed of changes.put) {
@@ -142,35 +104,8 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 	}
 
 	private open(): Promise<IDBDatabase> {
-		this.opening ??= new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open(this.databaseName, 2);
-			let blocked = false;
-			request.onupgradeneeded = () => {
-				const database = request.result;
-				if (!database.objectStoreNames.contains('records')) {
-					const records = database.createObjectStore('records', { keyPath: ['accountId', 'key'] });
-					records.createIndex('accountId', 'accountId');
-				}
-				if (!database.objectStoreNames.contains('cursors'))
-					database.createObjectStore('cursors', { keyPath: 'accountId' });
-			};
-			request.onsuccess = () => {
-				if (blocked) {
-					request.result.close();
-					return;
-				}
-				request.result.onversionchange = () => {
-					request.result.close();
-					this.opening = null;
-				};
-				resolve(request.result);
-			};
-			request.onerror = () =>
-				reject(request.error ?? new Error('Workspace storage could not be opened'));
-			request.onblocked = () => {
-				blocked = true;
-				reject(new Error('Close other app tabs to upgrade workspace storage'));
-			};
+		this.opening ??= openSyncDatabase(this.databaseName, () => {
+			this.opening = null;
 		}).catch((error) => {
 			this.opening = null;
 			throw error;

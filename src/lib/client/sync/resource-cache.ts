@@ -2,6 +2,7 @@ import {
 	accessCache,
 	cachedSnapshot,
 	receiveResource,
+	mergeResourceStates,
 	resourceVersion,
 	type ResourceDeletion,
 	applyResourceChanges,
@@ -34,8 +35,6 @@ export class ResourceCache<T> {
 	private initializing: Promise<void> | null = null;
 	private checking: Promise<SynchronizationResult> | null = null;
 	private draining: Promise<SynchronizationResult> | null = null;
-	private committing: Promise<void | { kind: 'failure' }> = Promise.resolve();
-	private epoch = 0;
 	private stopped = false;
 	private online = true;
 	private cursor: SyncCursor | null = null;
@@ -81,7 +80,6 @@ export class ResourceCache<T> {
 
 	stop(): void {
 		this.stopped = true;
-		this.epoch += 1;
 		this.queue.clear();
 		this.entries.clear();
 		this.result = { kind: 'stopped' };
@@ -136,7 +134,6 @@ export class ResourceCache<T> {
 	async accept(key: string, received: SyncSnapshot<T> | ResourceDeletion): Promise<void> {
 		await this.initialize();
 		if (this.stopped) return;
-		this.epoch += 1;
 		await this.commit(() => ({ put: [{ key, entry: this.receive(key, received) }], remove: [] }));
 	}
 
@@ -171,27 +168,26 @@ export class ResourceCache<T> {
 		this.notify();
 	}
 
-	private async commit(compute: () => CacheCommit<T>, expectedEpoch?: number): Promise<void> {
-		const work = this.committing.then(async () => {
-			if (this.stopped || (expectedEpoch !== undefined && expectedEpoch !== this.epoch)) return;
-			const changes = await this.dependencies.repository.commit(this.accountId, compute());
-			if (this.stopped) return;
-			for (const record of changes.put) this.entries.set(record.key, record.entry);
-			for (const { key } of changes.remove) {
-				this.entries.delete(key);
-				this.queue.delete(key);
+	private async commit(compute: () => CacheCommit<T>): Promise<void> {
+		if (this.stopped) return;
+		const changes = await this.dependencies.repository.commit(this.accountId, compute());
+		if (this.stopped) return;
+		for (const record of changes.put) {
+			const current = this.entries.get(record.key);
+			this.entries.set(
+				record.key,
+				current ? mergeResourceStates(current, record.entry) : record.entry
+			);
+		}
+		for (const removal of changes.remove) {
+			const current = this.entries.get(removal.key);
+			if (!current || resourceVersion(current) === removal.etag) {
+				this.entries.delete(removal.key);
+				this.queue.delete(removal.key);
 			}
-			if (changes.cursor !== undefined) this.cursor = changes.cursor;
-			this.notify();
-		});
-		// The caller receives the rejection. Later operations can still attempt durable storage.
-		this.committing = work.then(
-			() => {},
-			() => {
-				return { kind: 'failure' };
-			}
-		);
-		await work;
+		}
+		if (changes.cursor !== undefined) this.cursor = changes.cursor;
+		this.notify();
 	}
 
 	private async pullChanges(): Promise<SynchronizationResult> {
@@ -199,19 +195,11 @@ export class ResourceCache<T> {
 			await this.initialize();
 			if (this.stopped) return { kind: 'stopped' };
 			if (!this.online) return { kind: 'offline' };
-			const epoch = this.epoch;
 			const batch = await this.dependencies.transport.pull(this.cursor ?? initialSyncCursor);
-			let obsolete = false;
 			await this.commit(() => {
-				// Check inside the durable commit lane, not before waiting for it.
-				if (epoch !== this.epoch) {
-					obsolete = true;
-					return { put: [], remove: [] };
-				}
 				if (BigInt(batch.cursor) < BigInt(this.cursor ?? initialSyncCursor))
 					throw new Error('The server change cursor moved backwards');
 				const next = applyResourceChanges(this.entries, batch.changes);
-				if (batch.changes.some((change) => change.kind === 'delete')) this.epoch += 1;
 				return {
 					put: [...next]
 						.filter(([key, entry]) => entry !== this.entries.get(key))
@@ -221,7 +209,6 @@ export class ResourceCache<T> {
 				};
 			});
 			if (this.stopped) return { kind: 'stopped' };
-			if (obsolete) return this.pullChanges();
 			for (const [key, entry] of this.entries) {
 				if (entry.kind === 'present' && entry.cache.kind === 'updating') this.queue.add(key);
 				else this.queue.delete(key);
@@ -287,19 +274,17 @@ export class ResourceCache<T> {
 			const expected = resourceVersion(
 				this.entries.get(key) ?? { kind: 'present', cache: { kind: 'uncached' } }
 			);
-			const epoch = this.epoch;
 			const response = await this.dependencies.transport.read(key, snapshot?.etag ?? null);
 			if (this.stopped) return { kind: 'stopped' };
-			if (epoch !== this.epoch) return { kind: 'complete' };
 			if (response.kind === 'deleted') {
-				await this.commit(
-					() => ({ put: [{ key, entry: this.receive(key, response) }], remove: [] }),
-					epoch
-				);
+				await this.commit(() => ({
+					put: [{ key, entry: this.receive(key, response) }],
+					remove: []
+				}));
 				return { kind: 'complete' };
 			}
 			if (response.kind === 'unavailable') {
-				await this.commit(() => ({ put: [], remove: [{ key, etag: expected }] }), epoch);
+				await this.commit(() => ({ put: [], remove: [{ key, etag: expected }] }));
 				const current = this.entries.get(key);
 				return current && resourceVersion(current) !== expected
 					? { kind: 'complete' }
@@ -309,18 +294,15 @@ export class ResourceCache<T> {
 				throw new Error('The server confirmed a version this device does not have');
 			const received = response.kind === 'found' ? response.snapshot : snapshot;
 			if (!received) throw new Error('The object response contains no usable version');
-			await this.commit(
-				() => ({
-					put: [
-						{
-							key,
-							entry: this.receive(key, received)
-						}
-					],
-					remove: []
-				}),
-				epoch
-			);
+			await this.commit(() => ({
+				put: [
+					{
+						key,
+						entry: this.receive(key, received)
+					}
+				],
+				remove: []
+			}));
 			if (this.entry(key).kind === 'updating') this.queue.add(key);
 			return { kind: 'complete' };
 		} catch (error) {

@@ -42,6 +42,24 @@ describe('durable mutation queue rules', () => {
 		]);
 	});
 
+	it('preserves dependency order when a later edit refers back to a dependent object', () => {
+		const dependent = appendWrite(
+			queued(),
+			{ ...draft(secondId, 'Related'), key: 'notes:2', references: ['notes:1'] },
+			2
+		);
+		const entries = appendWrite(
+			dependent,
+			{ ...draft(thirdId, 'More typing'), references: ['notes:2'] },
+			3
+		);
+		expect(entries.map((entry) => entry.intent.dependencies)).toEqual([
+			[],
+			[firstId],
+			[firstId, secondId]
+		]);
+	});
+
 	it('keeps the submitted input immutable when typing continues during a send', () => {
 		const entries = appendWrite(sending(), draft(secondId, 'More typing'), 2);
 		expect(entries.map((entry) => [entry.intent.command, entry.intent.dependencies])).toEqual([

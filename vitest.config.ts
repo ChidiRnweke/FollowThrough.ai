@@ -117,6 +117,7 @@ export default defineConfig({
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
 						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
+						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
 						'src/lib/client/notes/sync/indexeddb-workspace-repository.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'

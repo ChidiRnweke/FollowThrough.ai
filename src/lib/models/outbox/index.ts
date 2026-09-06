@@ -97,7 +97,8 @@ export const appendWrite = <C, T>(
 	if (
 		previous?.delivery.kind === 'queued' &&
 		draft.coalesce !== null &&
-		previous.intent.coalesce === draft.coalesce
+		previous.intent.coalesce === draft.coalesce &&
+		!entries.some((entry) => entry.intent.dependencies.includes(previous.intent.operationId))
 	) {
 		return entries.map((entry) =>
 			entry !== previous
@@ -170,4 +171,22 @@ export const acknowledgeWrite = <C, T>(
 				}
 			};
 		});
+};
+
+export const settleWrite = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	operationId: string,
+	outcome: WriteOutcome<T>
+): readonly OutboxEntry<C, T>[] => {
+	if (outcome.kind === 'applied') {
+		if (outcome.receipt.operationId !== operationId)
+			throw new Error('The receipt identifies another operation');
+		return acknowledgeWrite(entries, outcome.receipt);
+	}
+	return entries.map((entry) =>
+		entry.intent.operationId === operationId &&
+		(entry.delivery.kind === 'sending' || entry.delivery.kind === 'retry')
+			? { ...entry, delivery: outcome }
+			: entry
+	);
 };
