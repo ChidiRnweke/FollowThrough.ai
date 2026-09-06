@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.5...v0.3.6) (2026-09-06)
+
+
+### Bug Fixes
+
+* **chat:** give a turn's activity a type pyramid, a teal evidence surface, and its open link back ([#27](https://github.com/ChidiRnweke/FollowThrough.ai/issues/27)) ([4c05107](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4c051073382f5e5e255ef3c4cdf14ca00806e682))
+
 ## [0.3.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.4...v0.3.5) (2026-09-06)
 
 
