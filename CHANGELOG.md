@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.3...v0.3.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ci:** call the image publish from the release run so deploys happen ([#21](https://github.com/ChidiRnweke/FollowThrough.ai/issues/21)) ([b6daaa8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b6daaa83dc8d1495c168c628be2047b573a43b35))
+
 ## [0.3.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.2...v0.3.3) (2026-09-06)
 
 
