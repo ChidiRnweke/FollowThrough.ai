@@ -224,14 +224,48 @@ Kanban columns keep their drop zone and center the voice line inside it.
   when eligible — retrying never duplicates the visible user turn. Conversation origin is fixed
   on its first turn and distinct from context chips added later.
 - **A turn reports the things it touched, not the calls it made.** Running, its steps arrive in
-  order; settled, they fold into one entry per note, todo, or project, carrying the strongest
-  verb that befell it. The entry opens where that kind of thing opens — and never by taking over
-  the panel it was clicked in; something the agent just created is openable too, its id arriving
-  in the result rather than the arguments. Mechanism (tool searches, wrapper envelopes,
-  workspace context, preference reads) never earns an entry; a failure a later call put right is
-  a retry, not news. The full call log is **one door per turn** — the last row of the same list,
-  stating its count — never one per call. Results are stated in the reader's terms or not at
-  all: an etag, a revision, or an internal tool name is faithful and useless.
+  order, because the point is watching it work. Settled, every call folds into the thing it was
+  about — one entry per note, todo, project, skill or diagram, carrying the strongest verb that
+  befell it. Six calls over one note are one row. The fold is the deduplication: keyed by call,
+  a list can only state the same name once per call that mentioned it, and no amount of
+  filtering afterwards fixes that.
+
+  Five rules follow from it, and they hold everywhere on this surface:
+
+  1. **Navigation follows naming.** A row carries a way in only when it names one thing. A
+     search is not a row, so no arrow ever stands for however many results came back and opens
+     none of them in particular. The entry opens where that kind of thing opens — never by
+     taking over the panel it was clicked in — and something the agent just created is openable
+     too, its id arriving in the result rather than the arguments.
+  2. **A thing is one line.** What the agent asked it, what came back, what it changed, and the
+     passages it read are all behind its own disclosure.
+  3. **Show the things; count only what you hide; word only what is absent.** `1 match` above
+     one match and `1 edit` above one edit state the same fact twice. `…and 4 more` stays,
+     because it counts what is not on screen; `nothing found` stays, because an absence has
+     nothing to show. Results are otherwise stated in the reader's terms or not at all — an
+     etag, a revision, or an internal tool name is faithful and useless.
+  4. **Input and result are told apart by structure.** Inside a thing, each pass is a request
+     line with what came back indented beneath it. Dot-joining the two into one string put the
+     question and the answer at one size, separated by the same character that separated their
+     own parts.
+  5. **Three depths, one door.** The thread carries what changed. **One door per turn** carries
+     what was only read, and it is labelled by what it holds — "Read 4 notes and your project
+     memory" — rather than by how many calls it took to get there. A dialog, offered per thing,
+     carries the passages at full width — the panel is 384px and file content is mono, so more
+     than a few lines of it there is a column of fragments. That dialog is an escalation for
+     raw passages only; the depths above it stay in place, and the reader never loses the
+     conversation to read what was said about it.
+
+  Mechanism (tool searches, wrapper envelopes, workspace context, preference reads) never earns
+  an entry; it is named once, last, behind the door. A failure a later call put right is a
+  retry, not news — its record stays inside the thing, where a reader who opens it can see the
+  agent correcting itself.
+
+  The ladder: a thing's statement line is `sm`, its own metadata is `provenance-caption`, and a
+  search query renders italic because it is the reader's words handed to a tool rather than our
+  copy. `xs` is the floor, so a statement at `xs` leaves nothing to put beneath it — which is
+  how a call, its arguments and its results once all arrived at one size.
+
 - **An approval is a flat block, never a card** — three same-weight rectangles nested inside a
   384px column. Marked by a pair of teal hairlines and 8px of air outside them: a pending
   approval is the live thing on screen. It leads with the action and its subject, then the
@@ -296,11 +330,10 @@ Kanban columns keep their drop zone and center the voice line inside it.
   current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token,
   duplicate a prompt during retry, or hide chat entirely on mobile.
-- Keep settled calls inside the turn's collapsed tool log. Inside that log, show friendly actions,
-  meaningful scope, outcomes, and directly openable targets inline. Completed edits open the
-  current note; version history owns diffs. Only longer excerpts expand, with linked source
-  headings and line numbers. Collection previews must offer access to every returned item.
-  Do not echo raw payloads or version-retention housekeeping copy.
+- Do not give a tool call a row, a name, or a disclosure of its own. The row is the thing it
+  touched; the call is a pass inside it. Do not label a door by how many calls it opens onto, and
+  do not print a count above the items it counts. Do not echo raw payloads or version-retention
+  housekeeping copy.
 - Do not wrap an approval, or the change preview inside it, in a card; do not repeat the change
   awaiting approval in the turn's touched list — it is already on screen in full.
 

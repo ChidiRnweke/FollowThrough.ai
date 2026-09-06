@@ -2,34 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import FileOutput from './file-output.svelte';
 
-const renderOutput = (
-	headline: string,
-	lines: readonly { readonly text: string; readonly context?: string }[]
-) => render(FileOutput, { headline, lines });
+const renderOutput = (lines: readonly { readonly text: string; readonly lineNumber?: number }[]) =>
+	render(FileOutput, { lines });
 
 describe('What a look inside the files came back with', () => {
-	it('states the answer on its own line', async () => {
-		const screen = await renderOutput('2 matches', []);
-		await expect.element(screen.getByText('2 matches')).toBeVisible();
-	});
-
 	it('shows each line that came back', async () => {
-		const screen = await renderOutput('1 match', [
-			{ text: 'element61 should own the rollout', context: 'Infrastructure' }
-		]);
+		const screen = await renderOutput([{ text: 'element61 should own the rollout' }]);
 		await expect.element(screen.getByText('element61 should own the rollout')).toBeVisible();
 	});
 
 	it('says where a line sits, when that is known', async () => {
-		const screen = await renderOutput('Lines 3–4', [
-			{ text: 'alpha', context: '3' },
-			{ text: 'beta', context: '4' }
+		const screen = await renderOutput([
+			{ text: 'alpha', lineNumber: 3 },
+			{ text: 'beta', lineNumber: 4 }
 		]);
 		await expect.element(screen.getByText('3', { exact: true })).toBeVisible();
 	});
 
-	it('renders no list when the answer is the headline alone', async () => {
-		const screen = await renderOutput('No matches', []);
+	/**
+	 * The count and the thing it counts said the same fact twice. Nothing came back, so
+	 * nothing renders — the row above says so in words, where an absence belongs.
+	 */
+	it('renders nothing at all when nothing came back', async () => {
+		const screen = await renderOutput([]);
 		expect(await screen.getByRole('list').all()).toHaveLength(0);
 	});
 });

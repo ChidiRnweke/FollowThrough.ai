@@ -5,81 +5,81 @@
 	import { getTodo } from '$lib/remote/todos/todos.remote';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
-	import { FtChevronRight, FtExternal, FtLoader } from '$lib/components/icons';
-	import { turnActivity, turnSteps, type TouchedThing, type TurnRow } from '$lib/components/agent';
-	import ToolRow from './tool-row.svelte';
+	import { FtChevronRight, FtLoader, FtReading } from '$lib/components/icons';
+	import {
+		readDoorLabel,
+		runningSteps,
+		turnContext,
+		type ThingActivity
+	} from '$lib/components/agent';
+	import ThingRow from './thing-row.svelte';
+	import ThingPasses from './thing-passes.svelte';
 	import TurnFailure from './turn-failure.svelte';
-	import { openEntity, rowIcon } from './open-entity';
 	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
 
 	let {
 		tools,
 		turnTools,
 		shell,
-		showLog = false,
+		summarise = false,
 		retryable = false,
 		onretry
 	}: {
 		tools: readonly ChatToolActivity[];
-		/** Every call of the turn, so a failure put right later in it is not reported here. */
+		/** Every call of the turn, which is what the summary is folded over. */
 		turnTools?: readonly ChatToolActivity[];
 		shell?: ShellContext;
 		/**
-		 * Whether this group carries the turn's log. Set on the last group only: the log is one
-		 * door per turn, not one per group — several "1 step" rows down a turn are doors onto
-		 * attempts the agent already put right, and say nothing on their way past.
+		 * Whether this group carries the turn's summary. Set on the last group only: the fold is
+		 * over the whole turn, and one per group would state the same note once per group it was
+		 * touched in — the duplication this surface exists to avoid, one level up.
 		 */
-		showLog?: boolean;
+		summarise?: boolean;
 		/** Whether the run this group belongs to can be run again. */
 		retryable?: boolean;
 		onretry?: () => void;
 	} = $props();
 
-	const activity = $derived(turnActivity(tools, shell, turnTools ?? tools));
-	// A group is a run of consecutive calls, so it settles on its own rather than with the
-	// turn. Running, its steps arrive one by one in the order they happened; settled, they
-	// fold into the things they were about — a list of calls is only interesting as it grows.
-	const settled = $derived(!tools.some((tool) => tool.status === 'running'));
-	// A thing that failed is stated once, by the failure below, which says what went wrong
-	// and what to do about it. A red row above saying the same name is the duplication all
-	// over again.
-	const rows = $derived(
-		(settled ? activity.touched : turnSteps(tools, shell)).filter((row) => row.outcome !== 'failed')
-	);
+	const everything = $derived(turnTools ?? tools);
+	// A group settles on its own rather than with the turn. Running, its steps arrive one by one
+	// in the order they happened, because the point is watching it work; settled, the whole turn
+	// folds into the things it was about, because the point is auditing what it saw.
+	const running = $derived(tools.some((tool) => tool.status === 'running'));
+	const context = $derived(turnContext(everything, shell));
+	const steps = $derived(running ? runningSteps(tools) : []);
 
-	/** Every call of the turn, which is what the log opens onto. */
-	const logged = $derived(turnTools ?? tools);
-	const stepCount = $derived(logged.length);
-	const hasLog = $derived(showLog && stepCount > 0);
+	/** Everything the reader can see at a glance, so the door knows whether it has a job. */
+	const behindTheDoor = $derived(
+		context.read.length + context.barren.length + context.setup.length
+	);
 
 	/**
 	 * State, never `$derived` of the run: a turn that is still streaming re-renders on every
 	 * delta, and a derived flag would throw away the reader's click each time — the same trap
 	 * `chat-reasoning.svelte` documents.
 	 */
-	let logOpen = $state(false);
+	let doorOpen = $state(false);
 
 	/**
-	 * `update_todo` names its subject by id alone, so a resolved title is the difference
-	 * between a row a user recognises and one they have to open to identify. Same pattern as
-	 * the approval card: fetch, degrade silently, never block the row on it.
+	 * `update_todo` names its subject by id alone, so a resolved title is the difference between
+	 * a row a reader recognises and one they have to open to identify. Fetch, degrade visibly,
+	 * never block the row on it.
 	 */
 	const todoTitles = new SvelteMap<string, string>();
 	$effect(() => {
-		// A predicate rather than a cast: the narrowing is real — an action row has no
-		// `kind: 'todo'` and no id — and stating it here is what lets the loop below read
-		// `row.id` without asserting anything.
-		// Failure subjects too: a todo whose change was abandoned is exactly the row a
-		// reader needs to recognise, and it never appears in `rows`.
-		const named = [...rows, ...activity.failures.flatMap((failure) => failure.subjects)];
-		const unnamed = named.filter(
-			(row): row is TouchedThing & { id: string } =>
-				row.kind === 'todo' && row.id !== undefined && !row.named && !todoTitles.has(row.id)
-		);
+		const rows = [
+			...context.changed,
+			...context.read,
+			...context.failures.flatMap((failure) => failure.subjects)
+		];
+		const unnamed = rows
+			.map((row) => ('entity' in row ? row.entity : row))
+			.filter((entity) => entity.kind === 'todo' && entity.id && !entity.named)
+			.map((entity) => entity.id as string)
+			.filter((id) => !todoTitles.has(id));
 		let cancelled = false;
-		for (const row of unnamed) {
-			const id = row.id;
-			// audit-allow: silent-catch — activity remains usable and labels the unavailable todo title explicitly.
+		for (const id of unnamed) {
+			// audit-allow: silent-catch — the row states the unavailable title in place of the name.
 			void getTodo(id)
 				.then((todo) => {
 					if (!cancelled) todoTitles.set(id, todo.title);
@@ -94,122 +94,101 @@
 		};
 	});
 
-	const titleOf = (row: TurnRow): string =>
-		row.kind === 'action'
-			? row.label
-			: ((row.id ? todoTitles.get(row.id) : undefined) ?? row.title);
+	const titleOf = (thing: ThingActivity): string =>
+		(thing.entity.id ? todoTitles.get(thing.entity.id) : undefined) ?? thing.entity.title;
 </script>
 
-{#snippet rowBody(row: TurnRow)}
-	{@const Icon = rowIcon(row)}
-	{#if row.outcome === 'running'}
-		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
-	{:else}
-		<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
-	{/if}
-	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
-	     entries scan as the columns of a table that has no other rows. -->
-	<span class="min-w-0 truncate {row.outcome === 'failed' ? 'text-destructive' : ''}">
-		{titleOf(row)}
-	</span>
-	{#if row.kind !== 'action'}
-		<!--
-			A refusal reports itself here and nowhere else: it is not a failure, so no
-			`TurnFailure` sentence explains it, and it is not what the verb says happened —
-			the note was not edited, the user declined to let it be. Muted rather than
-			destructive, because nothing went wrong; the reader did this on purpose.
-		-->
-		<span class="shrink-0 text-muted-foreground">
-			· {row.outcome === 'rejected' ? 'declined' : row.verb}
-		</span>
-	{:else if row.outcome === 'rejected'}
-		<span class="shrink-0 text-muted-foreground">· declined</span>
-	{/if}
-{/snippet}
+<!--
+	What the turn did, in the reader's things rather than in the agent's calls.
 
-{#if rows.length > 0 || activity.failures.length > 0 || hasLog}
-	<!--
-		What the turn did, in the user's things rather than in calls. The log is the last row
-		of the same list rather than a caption below it, so it carries the same hover wash and
-		reads as the same kind of clickable thing. No dividers: two or three rows inside a turn
-		are not a page list, and hairlines here would outweigh the transcript they sit in.
-	-->
+	The unit is the thing, not the call. One instruction ("tighten this note") ran six calls over
+	one note — a read, a search, two excerpts, an edit — and as a list of calls that is six rows
+	saying one fact, with the note's name on three of them. Folded, it is one row that opens onto
+	all six.
+
+	Two levels, because there are two questions. What changed is the reader's own work and leads.
+	What was only read is the context the answer stands on, and lives behind one door — nobody
+	needs it to trust an answer that looks right, and everybody needs it the moment one does not.
+-->
+{#if running}
+	{#if steps.length > 0}
+		<ul class="flex flex-col">
+			{#each steps as step, index (index)}
+				<li class="{CHAT_ROW} text-muted-foreground">
+					{#if step.outcome === 'running'}
+						<FtLoader class="{CHAT_ROW_ICON} animate-spin" />
+					{:else}
+						<span class={CHAT_ROW_ICON} aria-hidden="true"></span>
+					{/if}
+					<span class="min-w-0 truncate">
+						{step.label}{#if step.query}&nbsp;<span class="italic">{step.query}</span
+							>{/if}{step.outcome === 'running' ? '…' : ''}
+					</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+{:else if summarise && (context.changed.length > 0 || behindTheDoor > 0 || context.failures.length > 0)}
 	<div class="flex flex-col gap-2">
 		<!-- What went wrong leads: it is the one thing here that might need something from the
 		     reader. The record of what did work, and the door to the evidence, follow. -->
-		{#each activity.failures as failed, index (`${failed.cause}-${index}`)}
-			<TurnFailure failure={failed} titleFor={titleOf} {retryable} {onretry} />
+		{#each context.failures as failed, index (`${failed.cause}-${index}`)}
+			<TurnFailure failure={failed} {retryable} {onretry} />
 		{/each}
 
-		<ul class="flex flex-col">
-			{#each rows as row, index (`${row.kind}-${index}`)}
-				<li>
-					{#if row.kind !== 'action' && row.id}
-						<!-- `CHAT_ROW` neutralises the variant's centring and weight explicitly:
-						     they have no counterpart in a bare geometry class and would otherwise
-						     survive into a row that has to read as a list item. -->
+		{#each context.changed as thing (`${thing.entity.kind}-${thing.entity.id ?? thing.entity.title}`)}
+			<ThingRow {thing} title={titleOf(thing)} />
+		{/each}
+
+		{#if behindTheDoor > 0}
+			<!--
+				One door, and it says what it holds rather than how hard the agent worked. "Called 6
+				tools" named mechanism: it told the reader the number of times something happened and
+				nothing about what. A count of notes is a count of things they own.
+			-->
+			<Collapsible.Root bind:open={doorOpen}>
+				<Collapsible.Trigger>
+					{#snippet child({ props })}
 						<Button
+							{...props}
 							variant="ghost"
 							size="sm"
-							class="group/touched {CHAT_ROW}"
-							onclick={() => openEntity(row)}
+							class="{CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
 						>
-							{@render rowBody(row)}
-							<FtExternal
-								class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--duration-micro) group-hover/touched:opacity-100"
+							<FtChevronRight
+								class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
 							/>
+							<span class="min-w-0 truncate">{readDoorLabel(context)}</span>
 						</Button>
-					{:else}
-						<!-- Nothing to open, so nothing that looks like it opens. -->
-						<div class={CHAT_ROW}>
-							{@render rowBody(row)}
-						</div>
-					{/if}
-				</li>
-			{/each}
-			{#if hasLog}
-				<!-- The log joins the list rather than sitting under it as a caption: as bare
-				     ghost-button text, nothing said it could be clicked. It says whose calls
-				     they are and how many, instead of announcing itself.
+					{/snippet}
+				</Collapsible.Trigger>
+				<Collapsible.Content class={CHAT_ROW_DETAIL}>
+					<div class="flex flex-col gap-2 {CHAT_ROW_INDENT} pt-1">
+						{#each context.read as thing (`${thing.entity.kind}-${thing.entity.id ?? thing.entity.title}`)}
+							<ThingRow {thing} title={titleOf(thing)} />
+						{/each}
 
-				     It opens in place. As a dialog it was a second surface for the one thing in
-				     the turn that is pure evidence — the reader lost the conversation to read
-				     what was said about it, and came back having to find their place again. A
-				     chevron says the same thing the external-link glyph used to, and tells the
-				     truth about where the content will appear. -->
-				<li>
-					<Collapsible.Root bind:open={logOpen}>
-						<Collapsible.Trigger>
-							{#snippet child({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="sm"
-									class="group/touched {CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
-								>
-									<FtChevronRight
-										class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
-									/>
-									<span class="min-w-0 truncate"
-										>FollowThrough's agent called {stepCount === 1
-											? '1 tool'
-											: `${stepCount} tools`}</span
-									>
-								</Button>
-							{/snippet}
-						</Collapsible.Trigger>
-						<Collapsible.Content class={CHAT_ROW_DETAIL}>
-							<!-- Indented under the door it opened from, so the calls read as belonging
-							     to it rather than as more rows of the touched list. -->
-							<div class="flex flex-col {CHAT_ROW_INDENT}">
-								{#each logged as tool, index (tool.callId || index)}
-									<ToolRow {tool} {shell} />
-								{/each}
+						{#if context.barren.length > 0}
+							<!-- A look that came back with nothing is the one result worth stating in
+							     words: there is no passage to show, and its absence is often the whole
+							     explanation for a thin answer. -->
+							<div class="px-2">
+								<ThingPasses passes={context.barren} />
+								<p class="provenance-caption pt-1">Nothing came back.</p>
 							</div>
-						</Collapsible.Content>
-					</Collapsible.Root>
-				</li>
-			{/if}
-		</ul>
+						{/if}
+
+						{#if context.setup.length > 0}
+							<!-- The agent finding its footing. Named, so nothing is hidden; last and
+							     quiet, because none of it is the reader's work. -->
+							<p class="provenance-caption flex items-start gap-2 px-2">
+								<FtReading class="{CHAT_ROW_ICON} mt-0.5" />
+								<span class="min-w-0">{context.setup.join(' · ')}</span>
+							</p>
+						{/if}
+					</div>
+				</Collapsible.Content>
+			</Collapsible.Root>
+		{/if}
 	</div>
 {/if}

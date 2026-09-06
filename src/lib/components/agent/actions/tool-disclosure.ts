@@ -25,9 +25,9 @@ export interface FieldChange {
 /** One line of what a look inside the virtual files came back with. */
 export interface FileOutputLine {
 	readonly text: string;
-	/** Where the line sits — a line number or the note it matched in — when known. */
-	readonly context?: string;
+	/** Which note the line came out of, so a grep across many can be filed under each. */
 	readonly source?: EntityRef;
+	/** Where the line sits in that note, when the tool says. */
 	readonly lineNumber?: number;
 }
 
@@ -41,9 +41,14 @@ export type ToolDisclosure =
 	/** A look inside the virtual files — a grep, a sed excerpt, an ls — with what came back. */
 	| {
 			readonly kind: 'file-output';
-			readonly headline: string;
 			readonly lines: readonly FileOutputLine[];
 			readonly sources: readonly EntityRef[];
+			/**
+			 * Why there is nothing to show, when the look itself could not be made. A count of
+			 * what came back is deliberately absent: the lines are the count, and stating both
+			 * put "1 match" directly above one match.
+			 */
+			readonly problem?: string;
 	  }
 	/** Fields set on a record that already existed. */
 	| {
@@ -169,16 +174,15 @@ const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosur
 	if (output.kind === 'error')
 		return {
 			kind: 'file-output',
-			headline: asString(output.message) ?? 'The file could not be read.',
 			lines: [],
-			sources: []
+			sources: [],
+			problem: asString(output.message) ?? 'The file could not be read.'
 		};
 
 	if (output.kind === 'matches') {
 		const matches = agentPayloadItems(output.matches) ?? [];
 		return {
 			kind: 'file-output',
-			headline: matches.length === 1 ? '1 match' : `${matches.length} matches`,
 			sources: [
 				...new Set(
 					matches.flatMap((match) =>
@@ -192,18 +196,9 @@ const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosur
 				if (typeof line !== 'string') return [];
 				const path = asString(match.path);
 				const target = path ? fileEntity(path, shell) : undefined;
-				const title = target?.named ? target.title : undefined;
-				const source = title ?? path;
-				const context =
-					typeof match.lineNumber === 'number'
-						? source
-							? `${source}:${match.lineNumber}`
-							: `Line ${match.lineNumber}`
-						: source;
 				return [
 					{
 						text: line,
-						...(context ? { context } : {}),
 						...(target ? { source: target } : {}),
 						...(typeof match.lineNumber === 'number' ? { lineNumber: match.lineNumber } : {})
 					}
@@ -212,20 +207,17 @@ const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosur
 		};
 	}
 
-	if (output.kind === 'no_matches')
-		return { kind: 'file-output', headline: 'No matches', lines: [], sources: [] };
+	if (output.kind === 'no_matches') return { kind: 'file-output', lines: [], sources: [] };
 
 	if (output.kind === 'content') {
 		const content = typeof output.content === 'string' ? output.content : '';
 		const start = typeof output.startLine === 'number' ? output.startLine : undefined;
-		const end = typeof output.endLine === 'number' ? output.endLine : undefined;
 		return {
 			kind: 'file-output',
-			headline: start !== undefined && end !== undefined ? `Lines ${start}–${end}` : 'File excerpt',
 			sources: typeof output.path === 'string' ? [fileEntity(output.path, shell)] : [],
 			lines: content.split('\n').map((text, index) => ({
 				text,
-				...(start === undefined ? {} : { context: String(start + index) })
+				...(start === undefined ? {} : { lineNumber: start + index })
 			}))
 		};
 	}
@@ -234,7 +226,6 @@ const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosur
 		const entries = agentPayloadItems(output.entries) ?? [];
 		return {
 			kind: 'file-output',
-			headline: entries.length === 1 ? '1 entry' : `${entries.length} entries`,
 			sources: entries.flatMap((entry) =>
 				isAgentPayloadObject(entry) && typeof entry.path === 'string'
 					? [fileEntity(entry.path, shell)]
