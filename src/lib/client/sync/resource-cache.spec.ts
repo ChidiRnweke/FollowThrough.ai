@@ -13,6 +13,20 @@ const first = { etag: syncEtag(1n), value: 'First copy' };
 const second = { etag: syncEtag(2n), value: 'Second copy' };
 
 describe('generic resource cache', () => {
+	it('keeps the stopped account state when an old download subsequently fails', async () => {
+		const { transport, cache } = setup();
+		transport.records.set('note:1', first);
+		await cache.refresh();
+		const paused = transport.pause('note:1');
+		const warming = cache.warm();
+		await paused.started;
+		cache.stop();
+		transport.readFailure = 'Expired session';
+		paused.release();
+		await warming;
+		expect(cache.status).toEqual({ kind: 'stopped' });
+	});
+
 	it('uses a newer body already persisted by another tab instead of downloading it again', async () => {
 		const { repository, transport, cache } = setup();
 		transport.records.set('note:1', first);

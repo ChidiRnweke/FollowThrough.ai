@@ -2,6 +2,7 @@ import { visibleResources, localResource, type WriteDraft } from '$lib/models/ou
 import { workspaceRecordSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceCommandSchema, type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { WorkspaceViews } from '$lib/models/workspace-views';
 import type { CacheAccess } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
@@ -42,6 +43,9 @@ export class WorkspaceResources {
 	get records(): ReadonlyMap<string, WorkspaceRecord> {
 		void this.revision;
 		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
+	}
+	get views(): WorkspaceViews {
+		return new WorkspaceViews(this.records);
 	}
 	get pending() {
 		void this.revision;

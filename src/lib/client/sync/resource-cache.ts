@@ -217,6 +217,7 @@ export class ResourceCache<T> {
 			this.notify();
 			return this.result;
 		} catch (error) {
+			if (this.stopped) return { kind: 'stopped' };
 			const message = error instanceof Error ? error.message : 'Change synchronization failed';
 			this.result = { kind: 'failure', message };
 			this.notify();
@@ -306,6 +307,7 @@ export class ResourceCache<T> {
 			if (this.entry(key).kind === 'updating') this.queue.add(key);
 			return { kind: 'complete' };
 		} catch (error) {
+			if (this.stopped) return { kind: 'stopped' };
 			const message = error instanceof Error ? error.message : 'Object download failed';
 			// Preserve the last durable copy even if persisting the failure itself is unavailable.
 			if (!this.stopped && this.entries.get(key)?.kind !== 'deleted')
