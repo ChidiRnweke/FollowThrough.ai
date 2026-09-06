@@ -1,10 +1,13 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { webSearchEngines } from '$lib/models/agent';
+import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 import { ValidationError } from '$lib/errors';
-import type {
-	AgentModelCatalog,
-	AgentPreferencesStore
+import {
+	resolveDefaultAgentModel,
+	resolveDefaultVisionModel,
+	type AgentModelCatalog,
+	type AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
 
 /**
@@ -46,11 +49,24 @@ export interface AgentSettingsController {
 	): Promise<AgentPreferences>;
 	/** List the models the user can choose from for the agent. */
 	listModels(actor: ActorContext): Promise<readonly AgentModel[]>;
+	/**
+	 * The chat and vision models a conversation with no override of its own runs on.
+	 *
+	 * The composer names this model beside the one a chat has chosen, so the client
+	 * needs the resolved answer rather than the ingredients: the last fallback is
+	 * deployment configuration the browser cannot see, and a guess there would label
+	 * a model the run does not use.
+	 */
+	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
 }
 
 export interface AgentSettingsDependencies {
 	preferences: AgentPreferencesStore;
 	models: AgentModelCatalog;
+	/** Deployment fallback chat model when the user has not chosen one. */
+	defaultModel: string;
+	/** Deployment fallback vision model when the user has not chosen one. */
+	defaultVisionModel: string;
 }
 
 export class AgentSettings implements AgentSettingsController {
@@ -85,5 +101,13 @@ export class AgentSettings implements AgentSettingsController {
 	listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
 		void _actor;
 		return this.dependencies.models.list();
+	}
+
+	async resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
+		const preferences = await this.dependencies.preferences.get(actor);
+		return {
+			chatModelId: resolveDefaultAgentModel(preferences, this.dependencies.defaultModel),
+			visionModelId: resolveDefaultVisionModel(preferences, this.dependencies.defaultVisionModel)
+		};
 	}
 }

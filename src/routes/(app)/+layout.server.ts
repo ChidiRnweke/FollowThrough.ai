@@ -12,9 +12,12 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 	const actor = AppFactory.actor(locals);
 
 	const factory = AppFactory.controllers();
-	const [shell, agentPreferences, sessions] = await Promise.all([
+	const [shell, agentPreferences, agentDefaults, sessions] = await Promise.all([
 		factory.workspace().getShellContext(actor),
 		factory.agentSettings().getPreferences(actor),
+		// The composer names the model a chat inherits, so the resolved answer has to
+		// travel: its last fallback is deployment config the browser cannot read.
+		factory.agentSettings().resolveDefaults(actor),
 		factory.agent().listSessions(actor, { limit: 5 })
 	]);
 	let agentModels = await factory.agentSettings().listModels(actor);
@@ -38,6 +41,7 @@ export const load: LayoutServerLoad = async ({ cookies, locals }) => {
 		shell,
 		sessions,
 		agentPreferences,
+		agentDefaults,
 		agentModels,
 		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
 		sidebarOpen: cookies.get('sidebar_state') !== 'false',

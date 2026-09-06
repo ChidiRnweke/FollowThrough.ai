@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -12,7 +13,6 @@
 	import { chatTab } from '$lib/stores/workbench/tab-ref';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
 	import { ChatPanel } from '$lib/components/chat';
-	import { AgentSettingsPopover } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtClose as X } from '$lib/components/icons';
@@ -23,6 +23,7 @@
 		sessions,
 		agentPreferences,
 		agentModels,
+		agentDefaults,
 		agentAvailable,
 		onCloseSplit
 	}: {
@@ -31,6 +32,7 @@
 		sessions: readonly Conversation[];
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
+		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
@@ -95,7 +97,6 @@
 	<header class="mx-auto flex min-h-10 w-full max-w-3xl shrink-0 items-center gap-2 pb-4">
 		<h2 class="truncate text-sm font-medium">{title}</h2>
 		<div class="ml-auto flex items-center gap-1">
-			<AgentSettingsPopover {agentModels} {chat} />
 			{#if onCloseSplit}
 				<Tip text="Close split view">
 					{#snippet children({ props })}
@@ -119,6 +120,8 @@
 			{shell}
 			{sessions}
 			{agentPreferences}
+			{agentModels}
+			{agentDefaults}
 			{agentAvailable}
 			activeProjectId={chatProjectId}
 			showHistory={false}

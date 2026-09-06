@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import ChatComposer from './chat-composer.svelte';
 import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
+import type { AgentModel } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 
 const skillChip: ContextChip = { kind: 'skill', id: '1' as NoteId, name: 'Note analyzer' };
@@ -27,6 +28,26 @@ const selectionChip: SelectionChip = {
 	}
 };
 
+const sonnet: AgentModel = {
+	id: 'anthropic/claude-sonnet-4.5',
+	name: 'Anthropic: Claude Sonnet 4.5',
+	provider: 'anthropic',
+	supportsTools: true,
+	supportsVision: true,
+	recommended: true,
+	capabilities: ['tools']
+};
+
+const flash: AgentModel = {
+	id: 'deepseek/deepseek-v4-flash',
+	name: 'DeepSeek: V4 Flash',
+	provider: 'deepseek',
+	supportsTools: true,
+	supportsVision: false,
+	recommended: true,
+	capabilities: ['tools']
+};
+
 const base = {
 	chips: [],
 	mentionCandidates: [],
@@ -36,6 +57,13 @@ const base = {
 	isStreaming: false,
 	connection: 'connected',
 	executionMode: 'approval_required',
+	models: [sonnet, flash],
+	modelOverride: null,
+	defaultModelId: flash.id,
+	visionModelOverride: null,
+	defaultVisionModelId: sonnet.id,
+	onmodelchange: () => undefined,
+	onvisionmodelchange: () => undefined,
 	onremovechip: () => undefined,
 	onpinselection: () => undefined,
 	onpick: () => undefined,
@@ -162,6 +190,125 @@ describe('ChatComposer execution mode', () => {
 		});
 		await screen.getByRole('button', { name: 'Approval' }).click();
 		expect(toggles).toBe(1);
+	});
+});
+
+/**
+ * The bar exists to answer one question the app could not answer before: which
+ * model is this chat on. Naming a model is only half of it — a reader also has to
+ * be able to tell their own choice from the workspace's.
+ */
+describe('ChatComposer model', () => {
+	it('names the model this chat chose', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
+		await expect
+			.element(screen.getByLabelText('Model for this chat: Claude Sonnet 4.5'))
+			.toBeInTheDocument();
+	});
+
+	it('names the workspace default when the chat chose none', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: null });
+		await expect
+			.element(screen.getByLabelText('Model for this chat: V4 Flash'))
+			.toBeInTheDocument();
+	});
+
+	it('marks an inherited model as the default rather than passing it off as a choice', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: null });
+		await expect.element(screen.getByText('· default')).toBeInTheDocument();
+	});
+
+	it('leaves the default marking off a model the chat chose for itself', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
+		await expect.element(screen.getByText('· default')).not.toBeInTheDocument();
+	});
+
+	/**
+	 * Two DeepSeek models used to render as the same truncated string, because the
+	 * row repeated the vendor the metadata line was already going to carry.
+	 */
+	it('names a picker row without repeating the vendor into the title', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: null });
+		await screen.getByLabelText('Model for this chat: V4 Flash').click();
+		await expect.element(screen.getByRole('option', { name: /^V4 Flash/ })).toBeInTheDocument();
+	});
+
+	it('says why a chat model that cannot see images needs a describer', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: flash.id });
+		await screen.getByLabelText('Model for this chat: V4 Flash').click();
+		await expect
+			.element(
+				screen.getByLabelText('V4 Flash cannot see images. This model describes them for it.')
+			)
+			.toBeInTheDocument();
+	});
+
+	/**
+	 * The server ignores a describer when the chat model reads images itself, so
+	 * offering the list would be offering a setting that changes nothing.
+	 */
+	it('closes the vision tab when the chat model reads images itself', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
+		await screen.getByLabelText('Model for this chat: Claude Sonnet 4.5').click();
+		expect(await screen.getByRole('tab', { name: 'Vision model' }).element()).toHaveProperty(
+			'disabled',
+			true
+		);
+	});
+
+	it('says why the vision tab is closed rather than leaving it inert', async () => {
+		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
+		await screen.getByLabelText('Model for this chat: Claude Sonnet 4.5').click();
+		await expect
+			.element(screen.getByLabelText('Claude Sonnet 4.5 supports both text and image inputs.'))
+			.toBeInTheDocument();
+	});
+
+	/**
+	 * The vision model used to be a picker nested inside this popover. It is the same
+	 * list doing the same job, so it is the same list on a tab of its own.
+	 */
+	it('reports a chosen vision model through onvisionmodelchange', async () => {
+		const chosen: (string | null)[] = [];
+		const screen = await render(ChatComposer, {
+			...base,
+			modelOverride: flash.id,
+			onvisionmodelchange: (value) => chosen.push(value)
+		});
+		await screen.getByLabelText('Model for this chat: V4 Flash').click();
+		await screen.getByRole('tab', { name: 'Vision model' }).click();
+		// By the row's full name: the workspace-default row names this same model as
+		// its subtitle, so a loose match hits both.
+		await screen.getByRole('option', { name: 'Claude Sonnet 4.5 anthropic' }).click();
+		expect(chosen).toEqual([sonnet.id]);
+	});
+
+	/**
+	 * `OPENROUTER_RECOMMENDED_MODELS` is unset on a fresh deployment, which used to
+	 * open the popover onto a "Recommended" heading with nothing under it.
+	 */
+	it('invites a search when nothing is recommended', async () => {
+		const screen = await render(ChatComposer, {
+			...base,
+			models: [
+				{ ...flash, recommended: false },
+				{ ...sonnet, recommended: false }
+			]
+		});
+		await screen.getByLabelText('Model for this chat: V4 Flash').click();
+		await expect.element(screen.getByText('No recommended models')).toBeInTheDocument();
+	});
+
+	it('reports a chosen model through onmodelchange', async () => {
+		const chosen: (string | null)[] = [];
+		const screen = await render(ChatComposer, {
+			...base,
+			modelOverride: null,
+			onmodelchange: (value) => chosen.push(value)
+		});
+		await screen.getByLabelText('Model for this chat: V4 Flash').click();
+		await screen.getByRole('option', { name: /Claude Sonnet 4.5/ }).click();
+		expect(chosen).toEqual([sonnet.id]);
 	});
 });
 

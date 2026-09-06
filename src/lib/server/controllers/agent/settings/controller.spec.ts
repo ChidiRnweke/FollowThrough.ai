@@ -65,13 +65,22 @@ class FakeAgentModelCatalog implements AgentModelCatalog {
 	}
 }
 
+/** What the deployment falls back to when the user has chosen nothing. */
+const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
+const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
+
 const setup = () => {
 	const preferences = new FakeAgentPreferencesStore();
 	const models = new FakeAgentModelCatalog();
 	return {
 		preferences,
 		models,
-		controller: new AgentSettings({ preferences, models })
+		controller: new AgentSettings({
+			preferences,
+			models,
+			defaultModel: DEPLOYMENT_CHAT_MODEL,
+			defaultVisionModel: DEPLOYMENT_VISION_MODEL
+		})
 	};
 };
 
@@ -99,5 +108,30 @@ describe('agent settings controller behavior', () => {
 		await expect(
 			controller.updatePreferences(testActor(), { defaultModel: 'missing/model' })
 		).rejects.toThrow('Model is not selectable');
+	});
+});
+
+/**
+ * The composer names this model on screen. It has to be resolved here because the
+ * last link in the chain is deployment configuration the browser cannot read, and
+ * a client guessing at it would label a model no run actually uses.
+ */
+describe('agent settings model defaults', () => {
+	it('falls back to the deployment chat model when the user has chosen none', async () => {
+		const { controller } = setup();
+		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe(DEPLOYMENT_CHAT_MODEL);
+	});
+
+	it('prefers the user default chat model over the deployment one', async () => {
+		const { controller } = setup();
+		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
+		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe('vendor/tool-model');
+	});
+
+	it('falls back to the deployment vision model when the user has chosen none', async () => {
+		const { controller } = setup();
+		expect((await controller.resolveDefaults(testActor())).visionModelId).toBe(
+			DEPLOYMENT_VISION_MODEL
+		);
 	});
 });

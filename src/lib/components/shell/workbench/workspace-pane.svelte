@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteView } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
@@ -14,6 +15,7 @@
 		sessions,
 		agentPreferences,
 		agentModels,
+		agentDefaults,
 		agentAvailable,
 		initialView,
 		inlineSuggestionsEnabled = true,
@@ -24,6 +26,7 @@
 		sessions: readonly Conversation[];
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
+		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 		initialView?: NoteView;
 		inlineSuggestionsEnabled?: boolean;
@@ -45,6 +48,7 @@
 		{sessions}
 		{agentPreferences}
 		{agentModels}
+		{agentDefaults}
 		{agentAvailable}
 		{onCloseSplit}
 	/>

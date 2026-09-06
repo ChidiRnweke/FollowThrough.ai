@@ -442,6 +442,12 @@ export class ChatStore {
 	connection = $state<'detached' | 'connected' | 'reconnecting' | 'offline'>('detached');
 	persistenceError = $state<string | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
+	/**
+	 * The user's own default, remembered from `initialize`. A conversation that
+	 * chose no mode of its own falls back to it on hydration, which is the same
+	 * chain the server resolves the run with.
+	 */
+	private defaultExecutionMode: AgentExecutionMode = 'approval_required';
 	private eventConnection?: AgentRunEventConnection;
 	private activeReply?: ChatEntry;
 	private readonly storageKey: string;
@@ -459,6 +465,7 @@ export class ChatStore {
 	}
 
 	initialize(defaultMode: AgentExecutionMode): void {
+		this.defaultExecutionMode = defaultMode;
 		if (this.initialized) return;
 		const persisted = persistedConversation(this.storageKey);
 		if (persisted.kind === 'corrupt')
@@ -487,6 +494,15 @@ export class ChatStore {
 		this.loading = true;
 		try {
 			const data = await this.transport.getSession(conversationId);
+			// The conversation's own settings, not the ones the last chat left behind.
+			// These were read from `sessionStorage` and never reconciled with the row
+			// the server actually resolves the run against, so the composer could read
+			// "Approval" over a conversation set to auto-accept, and name a model no
+			// run on it would use.
+			this.modelOverride = data.conversation.modelOverride ?? null;
+			this.visionModelOverride = data.conversation.visionModelOverride ?? null;
+			this.executionModeOverride =
+				data.conversation.executionModeOverride ?? this.defaultExecutionMode;
 			// The latest run is the only one that can still be waiting on the user: a
 			// conversation runs one at a time, so nothing older holds a live question.
 			const awaiting =
@@ -820,6 +836,12 @@ export class ChatStore {
 		this.entries = [];
 		this.conversationId = id;
 		this.hydratedConversationId = undefined;
+		// Dropped before the fetch rather than replaced after it: a hydration that
+		// fails must leave the composer showing nothing borrowed from the chat being
+		// left, not that chat's model and mode over this one's transcript.
+		this.modelOverride = null;
+		this.visionModelOverride = null;
+		this.executionModeOverride = this.defaultExecutionMode;
 		this.chips = [];
 		this.autoChipDismissedFor = undefined;
 		this.dismissedSelectionId = undefined;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
@@ -11,7 +12,6 @@
 	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, searchTab } from '$lib/stores/workbench/tab-ref';
-	import AgentSettingsPopover from '../../agent/preferences/agent-settings-popover.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -27,6 +27,7 @@
 		sessions,
 		agentPreferences,
 		agentModels,
+		agentDefaults,
 		agentAvailable,
 		activeNoteId,
 		activeProjectId
@@ -35,6 +36,7 @@
 		sessions: readonly Conversation[];
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
+		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;
@@ -77,7 +79,6 @@
 </script>
 
 {#snippet chatHeaderActions()}
-	<AgentSettingsPopover {agentModels} chat={chatSession} />
 	<!-- The same session key, so the transcript moves into the workbench rather
 	     than forking: the tab and the panel are two views of one conversation. -->
 	<Tip text="Open in workbench">
@@ -159,6 +160,8 @@
 							{activeNoteId}
 							{activeProjectId}
 							{agentPreferences}
+							{agentModels}
+							{agentDefaults}
 							{agentAvailable}
 							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
 						/>
@@ -252,6 +255,8 @@
 							{activeNoteId}
 							{activeProjectId}
 							{agentPreferences}
+							{agentModels}
+							{agentDefaults}
 							{agentAvailable}
 							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
 						/>

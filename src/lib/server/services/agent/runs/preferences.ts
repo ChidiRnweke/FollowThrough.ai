@@ -153,14 +153,34 @@ export class AgentModels implements AgentModelCatalog {
 	}
 }
 
+/**
+ * The tail of the resolution chain: what a conversation with no override of its
+ * own runs on. Split out because the composer names this model on screen, and a
+ * client that guessed it would confidently label a model the run does not use —
+ * the deployment fallback is server-only configuration.
+ */
+export function resolveDefaultAgentModel(
+	preferences: Pick<AgentPreferences, 'defaultModel'>,
+	environmentDefault: string
+): string {
+	return normalizeLanguageModelId(preferences.defaultModel ?? environmentDefault);
+}
+
+export function resolveDefaultVisionModel(
+	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+	environmentDefault: string
+): string {
+	return normalizeLanguageModelId(preferences.defaultVisionModel ?? environmentDefault);
+}
+
 export function resolveAgentModel(
 	conversation: Pick<Conversation, 'modelOverride'>,
 	preferences: Pick<AgentPreferences, 'defaultModel'>,
 	environmentDefault: string
 ): string {
-	return normalizeLanguageModelId(
-		conversation.modelOverride ?? preferences.defaultModel ?? environmentDefault
-	);
+	return conversation.modelOverride
+		? normalizeLanguageModelId(conversation.modelOverride)
+		: resolveDefaultAgentModel(preferences, environmentDefault);
 }
 
 export function resolveVisionModel(
@@ -168,9 +188,9 @@ export function resolveVisionModel(
 	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
 	environmentDefault: string
 ): string {
-	return normalizeLanguageModelId(
-		conversation.visionModelOverride ?? preferences.defaultVisionModel ?? environmentDefault
-	);
+	return conversation.visionModelOverride
+		? normalizeLanguageModelId(conversation.visionModelOverride)
+		: resolveDefaultVisionModel(preferences, environmentDefault);
 }
 
 export function resolveMaxTurns(

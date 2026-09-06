@@ -480,7 +480,12 @@ export const agentToolCoverage = {
 	agentSettings: {
 		getPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
 		updatePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
-		listModels: { kind: 'read', tools: ['list_agent_models'] }
+		listModels: { kind: 'read', tools: ['list_agent_models'] },
+		resolveDefaults: {
+			kind: 'excluded',
+			reason:
+				'The deployment fallback the composer names on screen; the agent already runs on a model resolved for it.'
+		}
 	},
 	apiTokens: {
 		list: { kind: 'read', tools: ['list_api_tokens'] },

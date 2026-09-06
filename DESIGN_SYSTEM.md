@@ -336,9 +336,38 @@ zone and center the voice line inside it.
   they belong to the project overview's "Produced here" group. Navigating re-derives the row with a
   short staggered re-entry, so a change of project reads as the agent re-orienting rather than as a
   number quietly changing.
-- Execution mode stays visible in the composer. Auto-accept lets the agent change notes and todos
-  without asking; a mode that consequential is not a preference to hide behind a settings popover.
-  Model choice and prompt preferences, which are set once, do belong there.
+- **What the next turn will do is stated in the composer, not hidden behind a gear.** Execution
+  mode and model both live in the composer's own toolbar, inside the field rather than in a row
+  beneath it: which model answers and whether it may write without asking are properties of the
+  message being written, and the field's single focus wash says they belong to it.
+  - Auto-accept lets the agent change notes and todos without asking. A mode that consequential is
+    not a preference to hide.
+  - The model reads as a name plus, when the chat has chosen none of its own, a muted `· default`.
+    Both halves are load-bearing. Model choice used to sit behind a settings gear on the reasoning
+    that it is "set once and then forgotten" — which stopped being true once a workspace could pick
+    from several hundred OpenRouter models and every conversation could override. Worse, the gear
+    showed whatever the last chat left in session storage rather than the conversation's own stored
+    choice, so the composer could name a model no run on that chat would use, and read "Approval"
+    over a conversation the server would auto-accept. A control that names the model without saying
+    whose choice it is only moves the problem: the reader still cannot tell their own pick from the
+    workspace's.
+  - Prompt preferences and the workspace-wide defaults stay on `/settings`; those genuinely are set
+    once. The composer's model popover links to them rather than restating them.
+  - Chat model and vision model are the same list doing the same job, so they are two tabs of one
+    picker, not a picker nested inside a picker. The vision tab is disabled when the chat model
+    reads images itself — the server ignores a describer in that case, and offering a setting that
+    changes nothing is worse than offering none. An info icon beside the tab says why, and it sits
+    _outside_ the trigger: a disabled control emits no pointer events, so a tooltip hung on it goes
+    quiet exactly when it has the most to explain.
+  - **A popover's bands own their padding, and the popover owns none.** `Popover.Content` defaults
+    to `flex flex-col gap-4`; leave that in place under `p-0` bands and every divider gains 16px of
+    air the list above it never had — which is how the vision block came to float in a pool of
+    space while the rows above it were tight. Set `gap-0`, give each band the same `p-1`, and let
+    the divider carry the separation. One inset for everything: a row's text, a group heading, the
+    tab labels and a footer link all land on the same line.
+  - The catalogue's long tail is reached by typing, not by scrolling. The popover shows the
+    recommended models at rest and renders matches once there is a query — with no cap on what
+    matches, because a cap would hide models silently.
 
 ## Anti-patterns
 

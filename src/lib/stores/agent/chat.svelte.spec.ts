@@ -825,3 +825,92 @@ describe('the context a send carries', () => {
 		expect(sent.contextNoteIds).toEqual([noteId]);
 	});
 });
+
+/**
+ * The composer used to show whatever the last chat in this session left behind:
+ * hydration restored the transcript and never reconciled the settings alongside
+ * it. So the bar could name a model no run on this conversation would use, and —
+ * worse — read "Approval" over a conversation the server would auto-accept.
+ */
+describe('a conversation carries its own settings', () => {
+	const otherConversationId = '20000000-0000-4000-8000-000000000002' as ConversationId;
+
+	const sessionFor = (
+		conversation: Readonly<Record<string, unknown>>
+	): Awaited<ReturnType<AgentRunTransport['getSession']>> =>
+		({
+			conversation: { id: conversationId, ...conversation },
+			messages: []
+		}) as unknown as Awaited<ReturnType<AgentRunTransport['getSession']>>;
+
+	let opens = 0;
+	const opened = async (conversation: Readonly<Record<string, unknown>>) => {
+		opens += 1;
+		const store = new ChatStore(
+			`open-${opens}`,
+			new HydratingTransport(sessionFor(conversation)),
+			new MemoryStorage()
+		);
+		store.initialize('approval_required');
+		store.conversationId = conversationId;
+		await store.hydrate();
+		return store;
+	};
+
+	it('adopts the model the conversation chose', async () => {
+		const store = await opened({ modelOverride: 'anthropic/claude-sonnet-4.5' });
+		expect(store.modelOverride).toBe('anthropic/claude-sonnet-4.5');
+	});
+
+	it('adopts the vision model the conversation chose', async () => {
+		const store = await opened({ visionModelOverride: 'mistral/pixtral-large' });
+		expect(store.visionModelOverride).toBe('mistral/pixtral-large');
+	});
+
+	it('adopts the execution mode the conversation chose', async () => {
+		const store = await opened({ executionModeOverride: 'auto_accept' });
+		expect(store.executionModeOverride).toBe('auto_accept');
+	});
+
+	it('falls back to the user default for a conversation that chose no mode', async () => {
+		const store = await opened({});
+		expect(store.executionModeOverride).toBe('approval_required');
+	});
+
+	it('reports no model of its own for a conversation that chose none', async () => {
+		const store = await opened({});
+		expect(store.modelOverride).toBeNull();
+	});
+
+	/**
+	 * A store already sitting on one chat, moved to another that chose nothing.
+	 *
+	 * Its own session key, because the key is what `sessionStorage` is scoped by
+	 * and the switch persists through it — a shared one lets an earlier test's
+	 * conversation id arrive here and make the switch a no-op.
+	 */
+	const switchedAway = async (key: string, settle: (store: ChatStore) => void) => {
+		const store = new ChatStore(key, new HydratingTransport(sessionFor({})), new MemoryStorage());
+		store.initialize('approval_required');
+		store.conversationId = otherConversationId;
+		settle(store);
+		await store.switchToConversation(conversationId);
+		return store;
+	};
+
+	it('does not carry one chat’s model over to the next', async () => {
+		const store = await switchedAway(
+			'switch-model',
+			(chat) => (chat.modelOverride = 'anthropic/claude-sonnet-4.5')
+		);
+		expect(store.modelOverride).toBeNull();
+	});
+
+	it('does not carry one chat’s execution mode over to the next', async () => {
+		const store = await switchedAway(
+			'switch-mode',
+			(chat) => (chat.executionModeOverride = 'auto_accept')
+		);
+		expect(store.executionModeOverride).toBe('approval_required');
+	});
+});

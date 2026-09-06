@@ -412,7 +412,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			defaultVisionModel,
 			executor
 		},
-		agentSettings: { preferences, models: modelCatalog },
+		agentSettings: {
+			preferences,
+			models: modelCatalog,
+			defaultModel: defaultAgentModel,
+			defaultVisionModel
+		},
 		userSettings: { preferences: identity.userPreferences },
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences },

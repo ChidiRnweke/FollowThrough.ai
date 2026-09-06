@@ -1,13 +1,14 @@
 <script lang="ts">
-	import type { AgentExecutionMode, ConversationImageInput } from '$lib/models/agent';
+	import type { AgentExecutionMode, AgentModel, ConversationImageInput } from '$lib/models/agent';
 	import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as HoverCard from '$lib/components/ui/hover-card';
+	import * as InputGroup from '$lib/components/ui/input-group';
+	import { ModelInlinePicker } from '$lib/components/agent';
 	import {
 		FtSend as SendHorizontal,
 		FtDocument as FileText,
@@ -18,6 +19,7 @@
 		FtWorkflow as Workflow,
 		FtAttachments as Paperclip,
 		FtClose as X,
+		FtLoader as Loader,
 		FtStop as Square
 	} from '$lib/components/icons';
 	import ImageLightbox from '../image-lightbox.svelte';
@@ -35,6 +37,11 @@
 		isStreaming,
 		connection,
 		executionMode,
+		models,
+		modelOverride,
+		defaultModelId,
+		visionModelOverride,
+		defaultVisionModelId,
 		onremovechip,
 		onpinselection,
 		onpick,
@@ -45,6 +52,8 @@
 		oninput,
 		onpaste,
 		ontoggleexecutionmode,
+		onmodelchange,
+		onvisionmodelchange,
 		onsend,
 		onstop
 	}: {
@@ -61,6 +70,13 @@
 		isStreaming: boolean;
 		connection: 'detached' | 'connected' | 'reconnecting' | 'offline';
 		executionMode: AgentExecutionMode;
+		models: readonly AgentModel[];
+		/** This conversation's own model, or null when it inherits the workspace default. */
+		modelOverride: string | null;
+		/** The workspace default, resolved on the server so it names a real model. */
+		defaultModelId: string;
+		visionModelOverride: string | null;
+		defaultVisionModelId: string;
 		onremovechip: (chip: ContextChip, automatic: boolean) => void;
 		/** Promotes the highlighted passage to a pin, which stops it following the caret. */
 		onpinselection: (chip: SelectionChip) => void;
@@ -72,6 +88,8 @@
 		oninput: () => void;
 		onpaste: (event: ClipboardEvent) => void;
 		ontoggleexecutionmode: () => void;
+		onmodelchange: (value: string | null) => void;
+		onvisionmodelchange: (value: string | null) => void;
 		onsend: () => void;
 		onstop: () => void;
 	} = $props();
@@ -240,106 +258,156 @@
 				{/each}
 			</div>
 		{/if}
-		{#if selectedImages.length}
-			<div class="flex flex-wrap gap-2" aria-label="Attached images">
-				{#each selectedImages as image (image.id)}
-					<div class="relative">
-						<ImageLightbox
-							src={image.dataUrl}
-							alt={image.name}
-							class="size-16 rounded-md object-cover"
-						/>
-						<Button
-							variant="secondary"
-							size="icon-xs"
-							class="absolute -right-1 -top-1"
-							aria-label={`Remove ${image.name}`}
-							onclick={() => onremoveimage(image.id)}
-						>
-							<X />
-						</Button>
-					</div>
-				{/each}
-			</div>
-		{/if}
-		<!-- The base textarea is `field-sizing-content` with no ceiling, so a long draft
-	     grows until it owns the panel. The cap turns it into an internal scroll; the
-	     `@layer base` scrollbar rules already style it to match the ScrollArea panes. -->
-		<Textarea
-			id="chat-composer"
-			bind:value={prompt}
-			bind:ref={textareaRef}
-			placeholder="Ask the agent… (@ to add context)"
-			rows={2}
-			class="max-h-56 min-h-16 resize-none overflow-y-auto"
-			{onkeydown}
-			{oninput}
-			{onpaste}
-			disabled={!agentAvailable}
+		<!--
+			Outside the group on purpose. `InputGroupAddon` focuses the first `<input>` it
+			finds inside the group when its blank space is clicked, and a hidden file input
+			in the toolbar is exactly that element — clicking beside the paperclip would
+			focus the file picker instead of the draft.
+		-->
+		<Input
+			id="chat-composer-attach"
+			type="file"
+			accept="image/png,image/jpeg,image/webp"
+			multiple
+			class="sr-only"
+			onchange={(event) => {
+				const input = event.currentTarget;
+				onfiles([...(input.files ?? [])]);
+				input.value = '';
+			}}
 		/>
-		<div class="flex items-center gap-2">
-			<Label
-				class="tactile inline-flex size-8 items-center justify-center rounded-md"
-				aria-label="Attach images"
-			>
-				<Paperclip class="size-4" />
-				<Input
-					type="file"
-					accept="image/png,image/jpeg,image/webp"
-					multiple
-					class="sr-only"
-					onchange={(event) => {
-						const input = event.currentTarget;
-						onfiles([...(input.files ?? [])]);
-						input.value = '';
-					}}
-				/>
-			</Label>
-			<Tip
-				text={executionMode === 'auto_accept'
-					? 'The agent applies changes without asking. Click to require approval.'
-					: 'The agent asks before it changes anything. Click to auto-accept.'}
-			>
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="xs"
-						aria-pressed={executionMode === 'auto_accept'}
-						class={executionMode === 'auto_accept'
-							? 'bg-brand/10 text-brand dark:bg-brand/15'
-							: 'text-muted-foreground'}
-						onclick={ontoggleexecutionmode}
+		<!--
+			Field and toolbar are one control, not a box with a row under it: what the next
+			turn will do — which model, whether it asks first, what it carries — is part of
+			the message being written, and the group's single focus wash says so.
+		-->
+		<InputGroup.Root>
+			{#if selectedImages.length}
+				<InputGroup.Addon align="block-start" class="flex-wrap gap-2">
+					{#each selectedImages as image (image.id)}
+						<div class="relative">
+							<ImageLightbox
+								src={image.dataUrl}
+								alt={image.name}
+								class="size-16 rounded-md object-cover"
+							/>
+							<Button
+								variant="secondary"
+								size="icon-xs"
+								class="absolute -right-1 -top-1"
+								aria-label={`Remove ${image.name}`}
+								onclick={() => onremoveimage(image.id)}
+							>
+								<X />
+							</Button>
+						</div>
+					{/each}
+				</InputGroup.Addon>
+			{/if}
+			<!-- The base textarea is `field-sizing-content` with no ceiling, so a long draft
+		     grows until it owns the panel. The cap turns it into an internal scroll; the
+		     `@layer base` scrollbar rules already style it to match the ScrollArea panes. -->
+			<InputGroup.Textarea
+				id="chat-composer"
+				bind:value={prompt}
+				bind:ref={textareaRef}
+				placeholder="Ask the agent… (@ to add context)"
+				rows={2}
+				class="max-h-56 min-h-16 px-3 overflow-y-auto"
+				{onkeydown}
+				{oninput}
+				{onpaste}
+				disabled={!agentAvailable}
+			/>
+			<!--
+				One rule for this row: the model name is the only thing whose length varies, so
+				it is the only thing allowed to give. Everything else holds its size. Without
+				that, `buttonVariants` makes every control `shrink-0` and the row simply
+				overflows — the send button ended up sitting on the box's right border.
+			-->
+			<InputGroup.Addon align="block-end" class="gap-2">
+				<Tip text="Attach images">
+					{#snippet children({ props })}
+						<Label
+							{...props}
+							for="chat-composer-attach"
+							class="tactile inline-flex size-8 shrink-0 items-center justify-center rounded-md"
+							aria-label="Attach images"
+						>
+							<Paperclip class="size-4" />
+						</Label>
+					{/snippet}
+				</Tip>
+				<Tip
+					text={executionMode === 'auto_accept'
+						? 'The agent applies changes without asking. Click to require approval.'
+						: 'The agent asks before it changes anything. Click to auto-accept.'}
+				>
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="xs"
+							aria-pressed={executionMode === 'auto_accept'}
+							class={executionMode === 'auto_accept'
+								? 'bg-brand/10 text-brand dark:bg-brand/15'
+								: 'text-muted-foreground'}
+							onclick={ontoggleexecutionmode}
+						>
+							{#if executionMode === 'auto_accept'}
+								<Workflow data-icon="inline-start" /> Auto-accept
+							{:else}
+								<Check data-icon="inline-start" /> Approval
+							{/if}
+						</Button>
+					{/snippet}
+				</Tip>
+				<!--
+					One `ml-auto`, on the group rather than on whichever member happens to be
+					rendered. Three conditional members each claiming it is how the row jumped
+					when a run started.
+				-->
+				<div class="ml-auto flex min-w-0 shrink items-center gap-2">
+					<Badge
+						variant="secondary"
+						class={isStreaming && connection !== 'connected' ? 'shrink-0' : 'hidden'}
+						aria-live="polite"
 					>
-						{#if executionMode === 'auto_accept'}
-							<Workflow data-icon="inline-start" /> Auto-accept
+						{connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
+					</Badge>
+					<!--
+						A run in flight, in the toolbar's own quiet register. The stop button says
+						the same thing, but it is a control the eye skips over; this is the part
+						that reads as motion.
+					-->
+					{#if isStreaming && connection === 'connected'}
+						<Loader class="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+					{/if}
+					<ModelInlinePicker
+						{models}
+						value={modelOverride}
+						{defaultModelId}
+						visionValue={visionModelOverride}
+						{defaultVisionModelId}
+						disabled={!agentAvailable}
+						onchange={onmodelchange}
+						onvisionchange={onvisionmodelchange}
+					/>
+					<Button
+						size="icon-sm"
+						aria-label={isStreaming ? 'Stop generation' : 'Send message'}
+						onclick={isStreaming ? onstop : onsend}
+						disabled={!agentAvailable ||
+							(!isStreaming && prompt.trim() === '' && !selectedImages.length)}
+					>
+						{#if isStreaming}
+							<Square />
 						{:else}
-							<Check data-icon="inline-start" /> Approval
+							<SendHorizontal class="size-4" />
 						{/if}
 					</Button>
-				{/snippet}
-			</Tip>
-			<Badge
-				variant="secondary"
-				class={isStreaming && connection !== 'connected' ? undefined : 'hidden'}
-				aria-live="polite"
-			>
-				{connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
-			</Badge>
-			<Button
-				size="icon-sm"
-				class="ml-auto"
-				aria-label={isStreaming ? 'Stop generation' : 'Send message'}
-				onclick={isStreaming ? onstop : onsend}
-				disabled={!agentAvailable ||
-					(!isStreaming && prompt.trim() === '' && !selectedImages.length)}
-			>
-				{#if isStreaming}
-					<Square />
-				{:else}
-					<SendHorizontal class="size-4" />
-				{/if}
-			</Button>
-		</div>
+				</div>
+			</InputGroup.Addon>
+		</InputGroup.Root>
 	</div>
 </div>

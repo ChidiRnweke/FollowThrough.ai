@@ -18,6 +18,7 @@
 		sessions={data.sessions}
 		agentPreferences={data.agentPreferences}
 		agentModels={data.agentModels}
+		agentDefaults={data.agentDefaults}
 		agentAvailable={data.agentAvailable}
 	/>
 {:else}

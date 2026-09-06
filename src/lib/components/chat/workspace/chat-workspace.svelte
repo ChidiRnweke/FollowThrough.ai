@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { ShellContext } from '$lib/models/workspace';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import ChatPanel from './chat-panel.svelte';
-	import { AgentSettingsPopover } from '$lib/components/agent';
 	import { onDestroy, untrack } from 'svelte';
 	import { ChatStore } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -14,6 +14,7 @@
 		conversation,
 		agentPreferences,
 		agentModels,
+		agentDefaults,
 		agentAvailable
 	}: {
 		shell: ShellContext;
@@ -21,6 +22,7 @@
 		conversation?: Conversation;
 		agentPreferences: AgentPreferences;
 		agentModels: readonly AgentModel[];
+		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 	} = $props();
 
@@ -76,9 +78,6 @@
 				>
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
-		<div class="ml-auto">
-			<AgentSettingsPopover {agentModels} {chat} />
-		</div>
 	</header>
 	<div class="safe-panel-bottom mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 pt-4 md:px-8">
 		<ChatPanel
@@ -86,6 +85,8 @@
 			{shell}
 			{sessions}
 			{agentPreferences}
+			{agentModels}
+			{agentDefaults}
 			{agentAvailable}
 			initialConversationId={conversation?.id ?? null}
 			activeNoteId={conversation?.contextNoteId}

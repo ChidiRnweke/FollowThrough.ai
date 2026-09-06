@@ -3,11 +3,13 @@
 	import { z } from 'zod';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
+		AgentModel,
 		AgentPreferences,
 		ConversationImageInput,
 		Conversation,
 		RunAgentInput
 	} from '$lib/models/agent';
+	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
@@ -58,6 +60,8 @@
 		initialConversationId,
 		showHistory = true,
 		agentPreferences,
+		agentModels,
+		agentDefaults,
 		agentAvailable,
 		registerComposerFocus
 	}: {
@@ -74,6 +78,9 @@
 		initialConversationId?: Conversation['id'] | null;
 		showHistory?: boolean;
 		agentPreferences: AgentPreferences;
+		agentModels: readonly AgentModel[];
+		/** What a conversation with no model of its own runs on, resolved server-side. */
+		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 		registerComposerFocus?: (focus: () => void) => () => void;
 	} = $props();
@@ -715,6 +722,13 @@
 				isStreaming={chat.isStreaming}
 				connection={chat.connection}
 				executionMode={chat.executionModeOverride}
+				models={agentModels}
+				modelOverride={chat.modelOverride}
+				defaultModelId={agentDefaults.chatModelId}
+				visionModelOverride={chat.visionModelOverride}
+				defaultVisionModelId={agentDefaults.visionModelId}
+				onmodelchange={(value) => (chat.modelOverride = value)}
+				onvisionmodelchange={(value) => (chat.visionModelOverride = value)}
 				onremovechip={(chip, automatic) => {
 					// Two chips arrive automatic — the open note and the live selection — and neither
 					// is held in `chat.chips`, so dismissing them is remembering not to offer them
