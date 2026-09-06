@@ -479,9 +479,13 @@ describe('Diagram insert point tracking', () => {
 		});
 		await untilMounted();
 		const firstParagraphText = () =>
-			(screen.component.getDocument() as {
-				content?: readonly { content?: readonly { text?: string }[] }[];
-			}).content?.[0]?.content?.map((node) => node.text ?? '').join('') ?? '';
+			(
+				screen.component.getDocument() as {
+					content?: readonly { content?: readonly { text?: string }[] }[];
+				}
+			).content?.[0]?.content
+				?.map((node) => node.text ?? '')
+				.join('') ?? '';
 		screen.component.holdInsertionPoint('run-1', 7);
 		screen.component.focusStart();
 		const before = firstParagraphText();
