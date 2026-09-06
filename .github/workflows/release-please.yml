@@ -11,8 +11,28 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # The publish is called from here rather than left to the tag push, because a
+  # tag pushed with the default GITHUB_TOKEN starts no workflow run. This job is
+  # part of the master push run that cut the release, which is also where the
+  # Komodo webhook needs to be called from.
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag }}
+    # Carries KOMODO_WEBHOOK_URL and KOMODO_WEBHOOK_SECRET into the called workflow.
+    secrets: inherit
