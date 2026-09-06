@@ -1,9 +1,7 @@
 ---
-title: "ADR 0006: Group code by product capability so features can change independently"
+title: 'ADR 0006: Group code by product capability so features can change independently'
 description: Keep feature ownership visible and reduce overlap between parallel changes.
 ---
-
-# ADR 0006: Group code by product capability so features can change independently
 
 ## Status
 

@@ -1,9 +1,7 @@
 ---
-title: "ADR 0007: Keep feature rules in services and coordinate features in controllers"
+title: 'ADR 0007: Keep feature rules in services and coordinate features in controllers'
 description: Prevent hidden service coupling while keeping feature rules reusable.
 ---
-
-# ADR 0007: Keep feature rules in services and coordinate features in controllers
 
 ## Status
 

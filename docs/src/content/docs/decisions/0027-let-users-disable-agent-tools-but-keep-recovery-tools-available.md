@@ -1,9 +1,7 @@
 ---
-title: "ADR 0027: Let users disable agent tools but keep recovery tools available"
+title: 'ADR 0027: Let users disable agent tools but keep recovery tools available'
 description: Give users control without letting the agent remove every way to recover.
 ---
-
-# ADR 0027: Let users disable agent tools but keep recovery tools available
 
 ## Status
 

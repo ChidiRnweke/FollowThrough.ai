@@ -1,9 +1,7 @@
 ---
-title: "ADR 0019: Design search chunks around what users need to find"
+title: 'ADR 0019: Design search chunks around what users need to find'
 description: Treat content boundaries and carried context as product behavior, not only tuning.
 ---
-
-# ADR 0019: Design search chunks around what users need to find
 
 ## Status
 

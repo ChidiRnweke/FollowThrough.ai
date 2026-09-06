@@ -1,9 +1,7 @@
 ---
-title: "ADR 0026: Always include small profile facts and search project memory when needed"
+title: 'ADR 0026: Always include small profile facts and search project memory when needed'
 description: Separate facts that always apply from the larger history of one project.
 ---
-
-# ADR 0026: Always include small profile facts and search project memory when needed
 
 ## Status
 

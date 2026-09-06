@@ -3,8 +3,6 @@ title: 'ADR 0035: Expose large agent-readable text as files with Unix reads and 
 description: Let agents navigate large text with familiar commands while making failures explicit and recoverable.
 ---
 
-# ADR 0035: Expose large agent-readable text as files with Unix reads and typed recovery
-
 ## Status
 
 Accepted.

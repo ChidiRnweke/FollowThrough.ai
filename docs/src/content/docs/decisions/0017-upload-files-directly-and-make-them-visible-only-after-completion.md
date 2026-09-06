@@ -1,9 +1,7 @@
 ---
-title: "ADR 0017: Upload files directly and make them visible only after completion"
+title: 'ADR 0017: Upload files directly and make them visible only after completion'
 description: Avoid proxying large bytes while preventing partial uploads from appearing ready.
 ---
-
-# ADR 0017: Upload files directly and make them visible only after completion
 
 ## Status
 

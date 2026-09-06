@@ -3,8 +3,6 @@ title: 'ADR 0034: Model each agent execution path with distinct input types'
 description: Keep submission, resolved runs, in-app tools, MCP tools, and catalog generation separate while sharing product operations.
 ---
 
-# ADR 0034: Model each agent execution path with distinct input types
-
 ## Status
 
 Accepted.

@@ -3,8 +3,6 @@ title: "ADR 0012: Proofread notes on the user's device without sending drafts to
 description: Keep proofreading private and responsive while accepting a device-local dictionary.
 ---
 
-# ADR 0012: Proofread notes on the user's device without sending drafts to a server
-
 ## Status
 
 Accepted.

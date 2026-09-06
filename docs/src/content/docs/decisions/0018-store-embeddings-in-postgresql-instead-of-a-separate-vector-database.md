@@ -1,9 +1,7 @@
 ---
-title: "ADR 0018: Store embeddings in PostgreSQL instead of a separate vector database"
+title: 'ADR 0018: Store embeddings in PostgreSQL instead of a separate vector database'
 description: Keep search vectors near their source data and avoid another data service.
 ---
-
-# ADR 0018: Store embeddings in PostgreSQL instead of a separate vector database
 
 ## Status
 

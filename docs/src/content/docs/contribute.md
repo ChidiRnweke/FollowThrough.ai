@@ -3,8 +3,6 @@ title: Contributing
 description: How changes land on master, the commit convention, and how releases are produced.
 ---
 
-# Contributing
-
 ## How changes land
 
 `master` is protected: every change arrives through a pull request, squash-merge is the only

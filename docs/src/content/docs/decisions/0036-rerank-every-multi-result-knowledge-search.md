@@ -3,8 +3,6 @@ title: 'ADR 0036: Rerank every multi-result knowledge search before the agent re
 description: Improve the order of search results even when search returns fewer items than requested.
 ---
 
-# ADR 0036: Rerank every multi-result knowledge search before the agent reads it
-
 ## Status
 
 Accepted.

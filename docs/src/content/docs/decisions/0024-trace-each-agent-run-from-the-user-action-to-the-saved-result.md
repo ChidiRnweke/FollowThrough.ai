@@ -1,9 +1,7 @@
 ---
-title: "ADR 0024: Trace each agent run from the user action to the saved result"
+title: 'ADR 0024: Trace each agent run from the user action to the saved result'
 description: Join agent behavior and application outcomes in one trace.
 ---
-
-# ADR 0024: Trace each agent run from the user action to the saved result
 
 ## Status
 

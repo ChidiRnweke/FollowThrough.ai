@@ -3,8 +3,6 @@ title: 'ADR 0037: Parse external data at the boundary and keep resolved types to
 description: Why weakly typed values may not cross into models, services, and controllers.
 ---
 
-# ADR 0037: Parse external data at the boundary and keep resolved types total
-
 ## Status
 
 Accepted.
@@ -81,8 +79,7 @@ allowance rather than weakening the rule.
 - A wrong assumption about external data fails at the boundary with a reported error, under ADR
   0015, instead of producing a wrong value deep in a service.
 - Consumers of a parsed value share one type, and duplicate narrowing code is deleted.
-- Each new external shape needs a schema at its boundary. We accept this duplication, as in ADR
-  0034.
+- Each new external shape needs a schema at its boundary. We accept this duplication, as in ADR 0034.
 - The schema is a new artifact that can be wrong. A schema stricter than its producer rejects
   valid data, and a list read maps every row, so one mismatch can take a whole page down. This
   happened on `/today`; see Evidence.

@@ -1,9 +1,7 @@
 ---
-title: "ADR 0031: Manage application secrets across environments with Infisical"
+title: 'ADR 0031: Manage application secrets across environments with Infisical'
 description: Give the app, worker, and provisioning one rotatable source of application secrets.
 ---
-
-# ADR 0031: Manage application secrets across environments with Infisical
 
 ## Status
 

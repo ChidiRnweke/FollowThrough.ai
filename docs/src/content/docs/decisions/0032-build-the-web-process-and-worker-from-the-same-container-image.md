@@ -1,9 +1,7 @@
 ---
-title: "ADR 0032: Build the web process and worker from the same container image"
+title: 'ADR 0032: Build the web process and worker from the same container image'
 description: Keep both processes on the same release while allowing separate execution.
 ---
-
-# ADR 0032: Build the web process and worker from the same container image
 
 ## Status
 

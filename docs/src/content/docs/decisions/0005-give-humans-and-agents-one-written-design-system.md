@@ -1,9 +1,7 @@
 ---
-title: "ADR 0005: Give humans and agents one written design system"
+title: 'ADR 0005: Give humans and agents one written design system'
 description: Use shared UI rules so the product does not change with its author.
 ---
-
-# ADR 0005: Give humans and agents one written design system
 
 ## Status
 

@@ -1,9 +1,7 @@
 ---
-title: "ADR 0028: Use Mistral directly to turn uploaded documents into Markdown"
+title: 'ADR 0028: Use Mistral directly to turn uploaded documents into Markdown'
 description: Preserve reading order and document structure before indexing uploaded files.
 ---
-
-# ADR 0028: Use Mistral directly to turn uploaded documents into Markdown
 
 ## Status
 

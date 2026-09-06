@@ -68,8 +68,10 @@ export default defineConfig({
 				}
 			],
 			components: {
-				SocialIcons: './src/components/nav-extras.astro'
+				SocialIcons: './src/components/nav-extras.astro',
+				Sidebar: './src/components/sidebar.astro'
 			},
+			routeMiddleware: './src/route-data.ts',
 			expressiveCode: {
 				styleOverrides: {
 					borderRadius: '0.5rem',
@@ -129,15 +131,11 @@ export default defineConfig({
 				{
 					label: 'Reference',
 					items: [
-						{ label: 'Models', link: '/reference/models/' },
+						{ label: 'How to navigate the references', link: '/reference/navigate/' },
 						modelsSidebarGroup,
-						{ label: 'Repositories', link: '/reference/repositories/' },
 						repositoriesSidebarGroup,
-						{ label: 'Services', link: '/reference/services/' },
 						servicesSidebarGroup,
-						{ label: 'Controllers', link: '/reference/controllers/' },
 						controllersSidebarGroup,
-						{ label: 'Capability factories', link: '/reference/factories/' },
 						factoriesSidebarGroup,
 						{
 							label: 'Architecture decisions',
