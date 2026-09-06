@@ -49,8 +49,7 @@ The mechanics, for the record:
   reserved for real compatibility breaks under SemVer. `chore`, `ci`, `docs`, `refactor`, and
   `test` commits do not create releases but appear in a release's notes when one happens.
 - If releasable commits exist, release-please opens or updates a Release PR titled
-  `chore(main): release vX.Y.Z`, bumping `package.json`, appending to `CHANGELOG.md`, and
-  updating `docs/package.json` so no workspace package sits on a stale version.
+  `chore(main): release vX.Y.Z`, bumping `package.json` and appending to `CHANGELOG.md`.
 - The Release PR is a normal PR on `master`: the commitlint and PR-title checks from ADR 0038
   apply to it, and it merges only with a squash merge.
 - When the Release PR is merged, release-please creates the `v*` tag and a GitHub Release whose
