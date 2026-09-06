@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.2.0...v0.3.0) (2026-09-06)
+
+
+### Features
+
+* **agent:** make tool activity directly navigable ([#10](https://github.com/ChidiRnweke/FollowThrough.ai/issues/10)) ([70611d3](https://github.com/ChidiRnweke/FollowThrough.ai/commit/70611d3ac8243f23592944c95171c1b3e3243239))
+
 ## [0.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.1.0...v0.2.0) (2026-09-06)
 
 
