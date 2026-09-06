@@ -98,9 +98,9 @@ describe('Every call in the log is named in the reader language', () => {
 		expect(
 			toolStatusLabel({
 				...tool('grep', 'succeeded'),
-				arguments: { pattern: 'element61', path: '/' }
+				arguments: { pattern: 'northwind', path: '/' }
 			})
-		).toBe('Searched notes and files · element61');
+		).toBe('Searched notes and files · northwind');
 	});
 
 	it('names a mechanism call rather than un-snake-casing it', () => {

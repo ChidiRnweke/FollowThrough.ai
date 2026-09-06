@@ -19,7 +19,7 @@
 	Show the passage and the count is on screen already.
 
 	No source header either. This renders inside the row for the note it came from, which has
-	already named it once and offers to open it; naming it again here was the third `rossel` on
+	already named it once and offers to open it; naming it again here was the third `atlas` on
 	one screen. A grep that spans several notes files each note's lines under that note's own
 	row, so the split is done before this ever renders.
 

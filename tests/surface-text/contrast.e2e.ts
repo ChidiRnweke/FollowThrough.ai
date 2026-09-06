@@ -41,7 +41,7 @@ for (const theme of ['light', 'dark']) {
 		await page.keyboard.press('Tab');
 		await page.getByRole('button', { name: 'Close all 3 tabs' }).focus();
 		await sample('close all focus');
-		for (const title of ['rossel', 'portima RFP', 'Meeting notes']) {
+		for (const title of ['atlas', 'vendor RFP', 'Meeting notes']) {
 			await page.getByRole('tab', { name: title, exact: true }).hover();
 			await sample(`${title} hover`);
 		}

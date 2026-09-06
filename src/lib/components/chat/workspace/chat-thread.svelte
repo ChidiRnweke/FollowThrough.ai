@@ -244,8 +244,12 @@
 							its speaker for one.
 						-->
 							<span class="sr-only">{isUser ? 'You said' : 'The agent replied'}</span>
+							<!-- gap-3 rather than gap-2: the activity block below now spaces the things it
+							     touched 20px apart, and 8px from the prose above it would make the join
+							     to the answer the tightest gap on screen. Same step as one pass to the
+							     next inside that block. -->
 							<div
-								class="flex flex-col gap-2 {isUser
+								class="flex flex-col gap-3 {isUser
 									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-brand/10 px-3 py-2 dark:bg-brand/15'
 									: ''}"
 							>

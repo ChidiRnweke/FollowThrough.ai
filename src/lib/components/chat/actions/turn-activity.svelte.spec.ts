@@ -34,7 +34,7 @@ const grep = () =>
 				{
 					path: `/projects/proj-1/notes/${NOTE_ID}.md`,
 					lineNumber: 12,
-					line: 'element61 should own the rollout'
+					line: 'northwind should own the rollout'
 				}
 			]
 		}
@@ -90,7 +90,7 @@ describe('What was only read is context, and lives behind one door', () => {
 describe('Evidence waits until it is asked for', () => {
 	it('keeps the matched line behind the thing it was found in', async () => {
 		const screen = await renderTurn([grep(), call({ name: 'save_note' })]);
-		await expect.element(screen.getByText('element61 should own the rollout')).not.toBeVisible();
+		await expect.element(screen.getByText('northwind should own the rollout')).not.toBeVisible();
 	});
 
 	it('shows it once the thing is opened', async () => {
@@ -99,7 +99,7 @@ describe('Evidence waits until it is asked for', () => {
 			.getByRole('button', { name: /Infrastructure/ })
 			.first()
 			.click();
-		await expect.element(screen.getByText('element61 should own the rollout')).toBeVisible();
+		await expect.element(screen.getByText('northwind should own the rollout')).toBeVisible();
 	});
 
 	it('names what the agent searched for, apart from what it found', async () => {
@@ -109,6 +109,47 @@ describe('Evidence waits until it is asked for', () => {
 			.first()
 			.click();
 		await expect.element(screen.getByText('rollout', { exact: true })).toBeVisible();
+	});
+});
+
+describe('Teal is what the agent did, and nothing else', () => {
+	// Every label used to be the same muted xs, so nothing on the surface said which lines were
+	// the agent acting and which were the material it acted on.
+	const opened = async () => {
+		const screen = await renderTurn([grep(), call({ name: 'edit_note' })]);
+		await screen
+			.getByRole('button', { name: /Infrastructure/ })
+			.first()
+			.click();
+		return screen;
+	};
+
+	it('marks a look as an action', async () => {
+		const screen = await opened();
+		await expect.element(screen.getByText(/^Searched for/)).toHaveClass(/text-brand/);
+	});
+
+	it('marks a write as an action too', async () => {
+		const screen = await opened();
+		await expect.element(screen.getByText('Edited note')).toHaveClass(/text-brand/);
+	});
+
+	it('tells the write apart from the look by weight rather than by colour', async () => {
+		const screen = await opened();
+		await expect.element(screen.getByText('Edited note')).toHaveClass(/font-medium/);
+	});
+
+	it('leaves the look at regular weight', async () => {
+		const screen = await opened();
+		await expect.element(screen.getByText(/^Searched for/)).not.toHaveClass(/font-medium/);
+	});
+
+	// The reader's own words handed to a tool, not something the agent did.
+	it('does not colour the search string as an action', async () => {
+		const screen = await opened();
+		await expect
+			.element(screen.getByText('rollout', { exact: true }))
+			.not.toHaveClass(/text-brand/);
 	});
 });
 

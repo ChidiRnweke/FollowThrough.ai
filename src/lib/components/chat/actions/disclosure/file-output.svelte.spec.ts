@@ -7,8 +7,8 @@ const renderOutput = (lines: readonly { readonly text: string; readonly lineNumb
 
 describe('What a look inside the files came back with', () => {
 	it('shows each line that came back', async () => {
-		const screen = await renderOutput([{ text: 'element61 should own the rollout' }]);
-		await expect.element(screen.getByText('element61 should own the rollout')).toBeVisible();
+		const screen = await renderOutput([{ text: 'northwind should own the rollout' }]);
+		await expect.element(screen.getByText('northwind should own the rollout')).toBeVisible();
 	});
 
 	it('says where a line sits, when that is known', async () => {
