@@ -3,23 +3,23 @@ import type { NoteSummary } from '$lib/models/notes';
 import type { ShellContext } from '$lib/models/workspace';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
-import { readDoorLabel, turnContext } from './turn-context';
+import { readDoorLabel, runningSteps, turnContext } from './turn-context';
 
-const ROSSEL = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
+const ATLAS = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const BRIEF = '2f0f5a2c-1c22-4a7f-9d1f-7cf4a1f2b0d1';
 
 const shell = {
-	projects: [{ id: 'proj-1', name: 'Rossel' }],
+	projects: [{ id: 'proj-1', name: 'Atlas' }],
 	noteTree: [
-		{ id: ROSSEL, title: 'rossel', projectId: 'proj-1' },
-		{ id: BRIEF, title: 'element61 brief', projectId: 'proj-1' }
+		{ id: ATLAS, title: 'atlas', projectId: 'proj-1' },
+		{ id: BRIEF, title: 'northwind brief', projectId: 'proj-1' }
 	] as unknown as NoteSummary[]
 } as unknown as ShellContext;
 
 const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
 	name: 'get_note',
-	arguments: { noteId: ROSSEL },
+	arguments: { noteId: ATLAS },
 	status: 'succeeded',
 	...over
 });
@@ -29,13 +29,13 @@ const notePath = (id: string) => `/projects/proj-1/notes/${id}.md`;
 const grep = (over: { readonly noteIds?: readonly string[] } = {}) =>
 	call({
 		name: 'grep',
-		arguments: { pattern: 'element61', path: '/' },
+		arguments: { pattern: 'northwind', path: '/' },
 		output: {
 			kind: 'matches',
-			matches: (over.noteIds ?? [ROSSEL]).map((id, index) => ({
+			matches: (over.noteIds ?? [ATLAS]).map((id, index) => ({
 				path: notePath(id),
 				lineNumber: 198 + index,
-				line: `element61 line for ${id}`
+				line: `northwind line for ${id}`
 			}))
 		}
 	});
@@ -43,10 +43,10 @@ const grep = (over: { readonly noteIds?: readonly string[] } = {}) =>
 const sed = () =>
 	call({
 		name: 'sed',
-		arguments: { path: notePath(ROSSEL), range: { kind: 'range', startLine: 188, endLine: 221 } },
+		arguments: { path: notePath(ATLAS), range: { kind: 'range', startLine: 188, endLine: 221 } },
 		output: {
 			kind: 'content',
-			path: notePath(ROSSEL),
+			path: notePath(ATLAS),
 			startLine: 188,
 			endLine: 221,
 			content: 'GOV -. governs .-> TOOL'
@@ -56,8 +56,8 @@ const sed = () =>
 const edit = () =>
 	call({
 		name: 'edit_note',
-		arguments: { noteId: ROSSEL, edits: [{ oldText: 'a', newText: 'b' }] },
-		output: { noteId: ROSSEL, title: 'rossel', appliedEdits: 1, currentRevision: 3 }
+		arguments: { noteId: ATLAS, edits: [{ oldText: 'a', newText: 'b' }] },
+		output: { noteId: ATLAS, title: 'atlas', appliedEdits: 1, currentRevision: 3 }
 	});
 
 describe('A turn is folded into the things it touched', () => {
@@ -68,7 +68,7 @@ describe('A turn is folded into the things it touched', () => {
 	});
 
 	it('names it', () => {
-		expect(turn().changed[0]?.entity.title).toBe('rossel');
+		expect(turn().changed[0]?.entity.title).toBe('atlas');
 	});
 
 	it('reports the strongest verb that befell it, not the last or the first', () => {
@@ -92,7 +92,7 @@ describe('A turn is folded into the things it touched', () => {
 
 describe('A pass carries what the agent asked for', () => {
 	it('names the search string apart, so the row can render it as the reader own words', () => {
-		expect(turnContext([grep()], shell).read[0]?.passes[0]?.query).toBe('element61');
+		expect(turnContext([grep()], shell).read[0]?.passes[0]?.query).toBe('northwind');
 	});
 
 	it('names the lines an excerpt took', () => {
@@ -100,11 +100,40 @@ describe('A pass carries what the agent asked for', () => {
 	});
 });
 
+describe('A pass says whether it wrote', () => {
+	// A turn is mostly looking, with one or two lines in it that changed the reader's work. The
+	// flag is what lets a row find those lines without reading their labels back as English.
+	const firstPass = (tools: readonly ChatToolActivity[]) => {
+		const context = turnContext(tools, shell);
+		return (context.changed[0] ?? context.read[0])?.passes[0];
+	};
+
+	it('marks the pass that changed the note', () => {
+		expect(firstPass([edit()])?.mutating).toBe(true);
+	});
+
+	it('leaves an excerpt unmarked', () => {
+		expect(firstPass([sed()])?.mutating).toBe(false);
+	});
+
+	it('leaves a search unmarked', () => {
+		expect(firstPass([grep()])?.mutating).toBe(false);
+	});
+
+	it('marks a write while it is still running, not only once it settles', () => {
+		expect(runningSteps([call({ name: 'edit_note', status: 'running' })])[0]?.mutating).toBe(true);
+	});
+
+	it('leaves a running read unmarked', () => {
+		expect(runningSteps([call({ status: 'running' })])[0]?.mutating).toBe(false);
+	});
+});
+
 describe('A search files its matches under the notes they were found in', () => {
-	const spread = () => turnContext([grep({ noteIds: [ROSSEL, BRIEF] })], shell);
+	const spread = () => turnContext([grep({ noteIds: [ATLAS, BRIEF] })], shell);
 
 	it('gives every matched note a row of its own', () => {
-		expect(spread().read.map((thing) => thing.entity.title)).toEqual(['rossel', 'element61 brief']);
+		expect(spread().read.map((thing) => thing.entity.title)).toEqual(['atlas', 'northwind brief']);
 	});
 
 	it('shows each note only the lines that matched in it', () => {
@@ -156,10 +185,10 @@ describe('Work that touched nothing is reachable but never prominent', () => {
 	it('records a search that came back with nothing, because the absence explains the answer', () => {
 		const empty = call({
 			name: 'grep',
-			arguments: { pattern: 'element62', path: '/' },
+			arguments: { pattern: 'southwind', path: '/' },
 			output: { kind: 'no_matches' }
 		});
-		expect(turnContext([empty], shell).barren[0]?.query).toBe('element62');
+		expect(turnContext([empty], shell).barren[0]?.query).toBe('southwind');
 	});
 });
 
@@ -168,7 +197,7 @@ describe('A proposal awaiting a decision is already on screen', () => {
 		const pending = call({
 			name: 'propose_memory_change',
 			status: 'approval_required',
-			arguments: { scope: 'project', operation: 'add', content: 'Rossel runs on element61.' }
+			arguments: { scope: 'project', operation: 'add', content: 'Atlas runs on northwind.' }
 		});
 		const context = turnContext([pending], shell);
 		expect([...context.changed, ...context.read, ...context.barren]).toHaveLength(0);
@@ -180,7 +209,7 @@ describe('A failure is news only when nothing put it right', () => {
 		call({
 			name: 'edit_note',
 			status: 'failed',
-			arguments: { noteId: ROSSEL },
+			arguments: { noteId: ATLAS },
 			failure: 'oldText was not found in the note.'
 		});
 
@@ -193,6 +222,6 @@ describe('A failure is news only when nothing put it right', () => {
 	});
 
 	it('names what the failure befell, so the reader can go and look', () => {
-		expect(turnContext([failed()], shell).failures[0]?.subjects[0]?.title).toBe('rossel');
+		expect(turnContext([failed()], shell).failures[0]?.subjects[0]?.title).toBe('atlas');
 	});
 });

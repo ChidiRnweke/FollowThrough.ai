@@ -21,8 +21,8 @@
 	} from '$lib/testing/workspace/fixtures/domain-builders';
 
 	const notes = [
-		noteBuilder({ title: 'rossel' }),
-		noteBuilder({ id: testNoteId(2), title: 'portima RFP' }),
+		noteBuilder({ title: 'atlas' }),
+		noteBuilder({ id: testNoteId(2), title: 'vendor RFP' }),
 		noteBuilder({ id: testNoteId(3), title: 'Meeting notes' })
 	];
 	const shell: ShellContext = {

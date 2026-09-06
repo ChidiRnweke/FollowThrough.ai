@@ -15,7 +15,14 @@
 	import ThingRow from './thing-row.svelte';
 	import ThingPasses from './thing-passes.svelte';
 	import TurnFailure from './turn-failure.svelte';
-	import { CHAT_ROW, CHAT_ROW_DETAIL, CHAT_ROW_ICON, CHAT_ROW_INDENT } from './chat-row';
+	import {
+		CHAT_GAP_THING,
+		CHAT_ROW,
+		CHAT_ROW_DETAIL,
+		CHAT_ROW_ICON,
+		CHAT_ROW_INDENT,
+		chatActionEmphasis
+	} from './chat-row';
 
 	let {
 		tools,
@@ -120,7 +127,10 @@
 					{:else}
 						<span class={CHAT_ROW_ICON} aria-hidden="true"></span>
 					{/if}
-					<span class="min-w-0 truncate">
+					<!-- The emphasis sits on the label, not the row: `CHAT_ROW` carries `font-normal`,
+					     and this is a plain class attribute rather than `cn()`, so a `font-medium`
+					     beside it would be settled by stylesheet order instead of by intent. -->
+					<span class="min-w-0 truncate {chatActionEmphasis(step.mutating)}">
 						{step.label}{#if step.query}&nbsp;<span class="italic">{step.query}</span
 							>{/if}{step.outcome === 'running' ? '…' : ''}
 					</span>
@@ -129,7 +139,7 @@
 		</ul>
 	{/if}
 {:else if summarise && (context.changed.length > 0 || behindTheDoor > 0 || context.failures.length > 0)}
-	<div class="flex flex-col gap-2">
+	<div class="flex flex-col {CHAT_GAP_THING}">
 		<!-- What went wrong leads: it is the one thing here that might need something from the
 		     reader. The record of what did work, and the door to the evidence, follow. -->
 		{#each context.failures as failed, index (`${failed.cause}-${index}`)}
@@ -163,7 +173,7 @@
 					{/snippet}
 				</Collapsible.Trigger>
 				<Collapsible.Content class={CHAT_ROW_DETAIL}>
-					<div class="flex flex-col gap-2 {CHAT_ROW_INDENT} pt-1">
+					<div class="flex flex-col {CHAT_GAP_THING} {CHAT_ROW_INDENT} pt-1">
 						{#each context.read as thing (`${thing.entity.kind}-${thing.entity.id ?? thing.entity.title}`)}
 							<ThingRow {thing} title={titleOf(thing)} />
 						{/each}

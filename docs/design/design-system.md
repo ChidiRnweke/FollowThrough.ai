@@ -248,7 +248,7 @@ Kanban columns keep their drop zone and center the voice line inside it.
   a list can only state the same name once per call that mentioned it, and no amount of
   filtering afterwards fixes that.
 
-  Five rules follow from it, and they hold everywhere on this surface:
+  Seven rules follow from it, and they hold everywhere on this surface:
 
   1. **Navigation follows naming.** A row carries a way in only when it names one thing. A
      search is not a row, so no arrow ever stands for however many results came back and opens
@@ -273,6 +273,27 @@ Kanban columns keep their drop zone and center the voice line inside it.
      than a few lines of it there is a column of fragments. That dialog is an escalation for
      raw passages only; the depths above it stay in place, and the reader never loses the
      conversation to read what was said about it.
+  6. **One vertical ladder, declared once.** 4px binds a request to the evidence it introduces
+     and to that evidence's own footer link; 12px separates one pass from the next; 20px
+     separates one thing from another and from the read door. Each step is at least 1.6× the
+     one below it, because a 4px difference at 12px type is below the size the eye reads as a
+     grouping — which is exactly what an opened row was before: two gaps, 4 and 8, so the
+     excerpt sat as far from its own request as the next request sat from it. 20px and not 24
+     is deliberate: the turn stack spends 24px, and a gap inside a turn must stay under the gap
+     between turns. The values live in `CHAT_GAP_*` in `chat-row.ts` and are never chosen at a
+     call site, because two components each picking "about a `gap-2`" is how the flatness got
+     there.
+  7. **Teal is what the agent did, and nothing else here.** Every action the agent took takes
+     the brand teal — "Read note", "Searched for", "Read lines 130–159", "Edited note", and a
+     thing's verb on its statement line. Nothing else on the surface does: the search string is
+     the reader's own words, the excerpt is the note's own content, the thing's name is the
+     thing, and "Read all of it" is a control the reader operates, so it gave up the `link`
+     variant's `text-primary` for muted. Weight then separates the actions from each other — a
+     write is medium, a look is regular — so the column answers "what did it do" and "which of
+     those changed my work" in one glance. No size change: the size ladder already says "bigger
+     thing", and this only says "this is the agent". A refusal reads as a look, because nothing
+     was written. The fold carries the fact (`ThingPass.mutating`, `isWriteVerb`); no view reads
+     a label back as English to recover it.
 
   Mechanism (tool searches, wrapper envelopes, workspace context, preference reads) never earns
   an entry; it is named once, last, behind the door. A failure a later call put right is a

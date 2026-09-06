@@ -1,12 +1,20 @@
 <script lang="ts">
-	import type { ThingActivity } from '$lib/components/agent';
+	import { isWriteVerb, type ThingActivity } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { FtChevronRight, FtExternal, FtLoader } from '$lib/components/icons';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { canOpenEntity, entityActionLabel, entityIcon, openEntity } from './open-entity';
-	import { CHAT_ROW_ICON, CHAT_ROW_INDENT, CHAT_ROW_STATEMENT, CHAT_ROW_DETAIL } from './chat-row';
+	import {
+		CHAT_GAP_BOND,
+		CHAT_GAP_PASS,
+		CHAT_ROW_ICON,
+		CHAT_ROW_INDENT,
+		CHAT_ROW_STATEMENT,
+		CHAT_ROW_DETAIL,
+		chatActionEmphasis
+	} from './chat-row';
 	import ThingPasses from './thing-passes.svelte';
 	import FileOutput from './disclosure/file-output.svelte';
 
@@ -54,13 +62,18 @@
 	     entries scan as the columns of a table that has no other rows. -->
 	<span class="min-w-0 truncate font-medium" {title}>{title}</span>
 	<span
-		class="shrink-0 {thing.outcome === 'failed' ? 'text-destructive' : 'text-muted-foreground'}"
+		class="shrink-0 {thing.outcome === 'failed'
+			? 'text-destructive'
+			: thing.outcome === 'rejected'
+				? 'text-muted-foreground'
+				: chatActionEmphasis(isWriteVerb(thing.verb))}"
 	>
 		<!--
 			A refusal reports itself here and nowhere else: it is not a failure, so no
 			`TurnFailure` sentence explains it, and it is not what the verb says happened — the
 			note was not edited, the reader declined to let it be. Muted rather than destructive,
-			because nothing went wrong; they did this on purpose.
+			because nothing went wrong; they did this on purpose. Muted rather than emphasised for
+			the same reason: nothing was written, so nothing here is news.
 		-->
 		· {thing.outcome === 'rejected' ? 'declined' : thing.verb}
 	</span>
@@ -111,6 +124,7 @@
 			{@render openAction()}
 		</div>
 		<Collapsible.Content class={CHAT_ROW_DETAIL}>
+			<!-- pt-1 is the bond step: this detail belongs to the row directly above it. -->
 			<div class="{CHAT_ROW_INDENT} pt-1">
 				<ErrorBoundary label="what the agent did here" class="my-0">
 					<ThingPasses passes={thing.passes} onexpand={() => (expanded = true)} />
@@ -144,9 +158,9 @@
 				<Dialog.Title>{title}</Dialog.Title>
 				<Dialog.Description>What the agent read here, in full.</Dialog.Description>
 			</Dialog.Header>
-			<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+			<div class="flex min-h-0 flex-1 flex-col {CHAT_GAP_PASS} overflow-y-auto">
 				{#each passages as passage, index (index)}
-					<div class="flex flex-col gap-1">
+					<div class="flex flex-col {CHAT_GAP_BOND}">
 						<p class="provenance-caption">{passage.label}</p>
 						<FileOutput lines={passage.lines} bounded={false} />
 					</div>

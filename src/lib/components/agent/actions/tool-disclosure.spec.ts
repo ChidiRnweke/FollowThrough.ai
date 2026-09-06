@@ -97,7 +97,7 @@ describe('A completed write names its target without fetching history', () => {
 			call({
 				name: 'edit_note',
 				arguments: { noteId: '00000000-0000-4000-8000-0000000000bb' },
-				output: { noteId: '00000000-0000-4000-8000-0000000000bb', title: 'Rossel' }
+				output: { noteId: '00000000-0000-4000-8000-0000000000bb', title: 'Atlas' }
 			}),
 			shell
 		);
@@ -106,7 +106,7 @@ describe('A completed write names its target without fetching history', () => {
 			entity: {
 				kind: 'note',
 				id: '00000000-0000-4000-8000-0000000000bb',
-				title: 'Rossel',
+				title: 'Atlas',
 				named: true
 			}
 		});
@@ -122,17 +122,17 @@ describe('A look inside the virtual files shows what came back', () => {
 		const disclosure = toolDisclosure(
 			call({
 				name: 'grep',
-				arguments: { pattern: 'element61', path: '/' },
+				arguments: { pattern: 'northwind', path: '/' },
 				output: {
 					kind: 'matches',
 					exitCode: 0,
-					pattern: 'element61',
+					pattern: 'northwind',
 					path: '/',
 					matches: [
 						{
 							path: `/projects/proj-1/notes/${NOTE_ID}.md`,
 							lineNumber: 12,
-							line: 'element61 should own the rollout'
+							line: 'northwind should own the rollout'
 						}
 					]
 				}
@@ -146,7 +146,7 @@ describe('A look inside the virtual files shows what came back', () => {
 			sources: [{ kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }],
 			lines: [
 				{
-					text: 'element61 should own the rollout',
+					text: 'northwind should own the rollout',
 					lineNumber: 12,
 					source: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
 				}

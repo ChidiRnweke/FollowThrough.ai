@@ -48,3 +48,58 @@ export const CHAT_ROW_DETAIL = 'chat-disclosure';
 
 /** The indent detail sits at, matching the row text above it. */
 export const CHAT_ROW_INDENT = 'pl-6';
+
+/**
+ * The one vertical ladder inside a turn's activity.
+ *
+ * Everything here used to be spaced by one of two values, 4px and 8px. At 12px type a 4px
+ * difference is below the size the eye reads as a grouping, so an opened row arrived as a flat
+ * column: the excerpt under "Searched for" sat as far from its own request as the next request
+ * sat from it, and "Read all of it" scanned as a sibling of the labels rather than as the footer
+ * of the block it opens. Equal gaps flatten a surface however well its content is grouped —
+ * docs/design/design-system.md says so, and this surface was the counter-example.
+ *
+ * Three levels, and each step is large enough to be seen without being measured. Declared here
+ * beside the row geometry, and never picked by hand at a call site, because two components each
+ * choosing "about a gap-2" is how the flatness got here in the first place.
+ *
+ * With the code lines above them and the turn stack below, the full ladder is
+ * 2 → 4 → 12 → 20 → 24.
+ */
+
+/** 4px. A request and the evidence it introduces, plus that evidence's own footer link. */
+export const CHAT_GAP_BOND = 'gap-1';
+
+/** 12px. Between passes over one thing. Three times the bond, which is what makes it visible. */
+export const CHAT_GAP_PASS = 'gap-3';
+
+/**
+ * 20px. Between things, failures and the read door.
+ *
+ * 20 rather than 24, and not to be tidied: `chat-thread.svelte` spends 24px separating one turn
+ * from the next, and a gap inside a turn must stay under the gap between turns or the turn stops
+ * reading as one thing.
+ */
+export const CHAT_GAP_THING = 'gap-5';
+
+/**
+ * What the agent did, against everything on this surface that is not the agent acting.
+ *
+ * Teal marks an agent action and nothing else. "Read note", "Searched for", "Read lines
+ * 130–159", "Edited note" are the things the agent did; the search string beside one of them is
+ * the reader's own words, the excerpt beneath it is the note's own content, and neither is an
+ * action, so neither takes the colour. Weight then separates the actions from each other: a
+ * write carries medium, a look stays regular. So the column answers two questions in one
+ * glance — what did it do, and which of those changed my work.
+ *
+ * No size change: the size ladder is already spoken for by `CHAT_ROW_STATEMENT` over
+ * `provenance-caption`, and a third size would say "bigger thing" where this only means "this
+ * one is the agent". The caller supplies the size, so one rule serves the `xs` pass labels, the
+ * `xs` running steps and the `sm` verb on a statement row.
+ *
+ * The consequence elsewhere is "Read all of it", which is a control the reader operates rather
+ * than something the agent did. It gave up the teal it had as a link variant; see
+ * `thing-passes.svelte`.
+ */
+export const chatActionEmphasis = (mutating: boolean): string =>
+	mutating ? 'font-medium text-brand' : 'text-brand';

@@ -22,6 +22,7 @@ export {
 	type ToolDisclosure
 } from './actions/tool-disclosure';
 export {
+	isWriteVerb,
 	readDoorLabel,
 	runningSteps,
 	turnContext,

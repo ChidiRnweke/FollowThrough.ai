@@ -47,6 +47,14 @@ export interface ThingPass {
 	readonly label: string;
 	/** The reader's own words handed to a tool. Rendered italic; absent when there were none. */
 	readonly query?: string;
+	/**
+	 * Whether this pass left the thing changed.
+	 *
+	 * Carried rather than re-derived: the fold already ranks the verbs, so it knows, and a view
+	 * that guessed from the label would be reading English to recover a fact the data had. It is
+	 * what lets the one line that wrote stand out from the column of looks around it.
+	 */
+	readonly mutating: boolean;
 	readonly evidence: PassEvidence;
 }
 
@@ -135,6 +143,15 @@ const readVerbs: ReadonlySet<Verb> = new Set<Verb>([
 	'read history',
 	'read'
 ]);
+
+/**
+ * Whether a verb changed the thing it befell.
+ *
+ * Exported so a row can mark a write without keeping its own copy of `readVerbs`. A second copy
+ * would be a second answer the day a verb is added, and the one in the component is the copy
+ * nobody would think to update.
+ */
+export const isWriteVerb = (verb: Verb): boolean => !readVerbs.has(verb);
 
 const strongerVerb = (left: Verb, right: Verb): Verb =>
 	verbRank.indexOf(right) > verbRank.indexOf(left) ? right : left;
@@ -241,7 +258,7 @@ const outcomeOf = (tool: ChatToolActivity): PassOutcome => {
  * What the agent asked this call for.
  *
  * Most calls are named well enough by their own completed label — inside a row already titled
- * `rossel`, "Edited note" is the whole of what happened. The overrides are the calls whose
+ * `atlas`, "Edited note" is the whole of what happened. The overrides are the calls whose
  * arguments are the point: a search is only judgeable against what it searched for, and an
  * excerpt against which lines it took.
  */
@@ -290,13 +307,21 @@ function passRequest(tool: ChatToolActivity): { label: string; query?: string } 
 export interface RunningStep {
 	readonly label: string;
 	readonly query?: string;
+	/** Whether this step is changing the thing, marked while it happens rather than after. */
+	readonly mutating: boolean;
 	readonly outcome: PassOutcome;
 }
 
 export function runningSteps(tools: readonly ChatToolActivity[]): readonly RunningStep[] {
 	return tools
 		.filter((tool) => !mechanismTools.has(tool.name) && tool.status !== 'approval_required')
-		.map((tool) => ({ ...passRequest(tool), outcome: outcomeOf(tool) }));
+		.map((tool) => ({
+			...passRequest(tool),
+			// A tool with no verb is one this module does not classify, and a look is the weakest
+			// thing it could be doing — the same reading `callEntries` takes.
+			mutating: isWriteVerb(verbOf(tool.name) ?? 'read'),
+			outcome: outcomeOf(tool)
+		}));
 }
 
 /**
@@ -382,7 +407,7 @@ function callEntries(
 		entity,
 		verb,
 		outcome,
-		pass: { ...request, evidence }
+		pass: { ...request, mutating: isWriteVerb(verb), evidence }
 	});
 
 	if (disclosure.kind === 'failure') {
@@ -480,6 +505,7 @@ export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellCon
 				const problem = fileProblem(tool, shell);
 				barren.push({
 					...passRequest(tool),
+					mutating: isWriteVerb(verb ?? 'read'),
 					evidence: problem ? { kind: 'prose', text: problem } : { kind: 'none' }
 				});
 			}
