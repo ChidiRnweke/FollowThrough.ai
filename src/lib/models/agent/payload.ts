@@ -62,6 +62,7 @@ export type AgentPayloadObjectResult =
 // audit-allow: no-unknown-type — Names a value readAgentPayload could not read, for the message that says so.
 const describe = (value: unknown): string => {
 	if (value === null) return 'null';
+	if (value === undefined) return 'undefined';
 	if (Array.isArray(value)) return 'an array';
 	if (typeof value !== 'object') return `a ${typeof value}`;
 	const name: unknown = value.constructor?.name;
@@ -104,6 +105,14 @@ const readAt = (value: unknown, path: string): AgentPayloadResult => {
 	if (!isPlainObject(value)) return { kind: 'corrupt', message: `${path} is ${describe(value)}` };
 	const entries: [string, AgentPayload][] = [];
 	for (const [key, item] of Object.entries(value)) {
+		// A property holding `undefined` is exactly what `JSON.stringify` drops, so the wire
+		// never carried the key at all and reading it as corrupt refuses a value JSON can
+		// represent perfectly. The db mappers build every optional field this way —
+		// `noteId: row.noteId ?? undefined` writes the key with no value — so a tool returning
+		// a domain object failed *after* its row was already committed, and no retry could
+		// ever succeed. `undefined` in an array and at the root stay corrupt: `stringify`
+		// turns the first into `null` and the second into nothing, so neither came off a wire.
+		if (item === undefined) continue;
 		const read = readAt(item, `${path}.${key}`);
 		if (read.kind === 'corrupt') return read;
 		entries.push([key, read.value]);
