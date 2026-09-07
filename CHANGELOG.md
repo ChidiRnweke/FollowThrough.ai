@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.6...v0.4.0) (2026-09-07)
+
+
+### Features
+
+* **design:** enforce refactoring ui checks with a ui audit and skill ([#30](https://github.com/ChidiRnweke/FollowThrough.ai/issues/30)) ([5e045c6](https://github.com/ChidiRnweke/FollowThrough.ai/commit/5e045c6d13b2cc2a3ba6d7060b5c991e98a89e96))
+
 ## [0.3.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.5...v0.3.6) (2026-09-06)
 
 
