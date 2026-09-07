@@ -2,7 +2,6 @@
 	import { noteWrite } from '$lib/models/workspace-mutations';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { Separator } from '$lib/components/ui/separator';
@@ -23,16 +22,17 @@
 		renameSkill,
 		saveSkillDescription
 	} from '$lib/remote/skills/skills.remote';
-	import type { SkillView } from '$lib/models/skills';
-	import { parseProseMirrorDocument, type Note, type NoteEtag } from '$lib/models/notes';
+	import { serializeSkillManifest } from '$lib/models/skills';
+	import type { WorkspaceSkill } from '$lib/models/workspace-views';
+	import { parseProseMirrorDocument, type Note } from '$lib/models/notes';
 
-	let { data }: { data: { view: SkillView; raw: string; etag: NoteEtag } } = $props();
+	let { skill }: { skill: WorkspaceSkill } = $props();
 	const syncableNote = (): Note => ({
-		...data.view.skill.note,
-		document: parseProseMirrorDocument(data.view.skill.note.document)
+		...skill.note,
+		document: parseProseMirrorDocument(skill.note.document)
 	});
 
-	const noteId = $derived(data.view.skill.note.id);
+	const noteId = $derived(skill.note.id);
 
 	// Same store the notes workspace uses, acquired per note id — the etag and
 	// conflict handling below are exactly the notes save path.
@@ -56,9 +56,9 @@
 	let activeSave: Promise<void> | undefined;
 	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
-	// Local copies so sync results and device-copy content survive between loads.
+	// Editor buffers preserve typing while the shared resources refresh.
 	let note = $state(untrack(syncableNote));
-	let savedDescription = $state(untrack(() => data.view.skill.description));
+	let savedDescription = $state(untrack(() => skill.description));
 
 	// Any state where the device copy has not reached the server.
 	const unsynced = $derived(
@@ -77,7 +77,7 @@
 			// Server-authoritative fields come from the load; content fields come
 			// from the device copy, which may hold unsynced edits.
 			note = {
-				...data.view.skill.note,
+				...skill.note,
 				title: local.title,
 				document: local.document,
 				plainText: local.plainText,
@@ -170,8 +170,6 @@
 			if (draft.status === 'conflict') {
 				conflictOpen = true;
 				if (!saveQueued) return;
-			} else if (draft.status === 'synced') {
-				await invalidateAll();
 			}
 		}
 	}
@@ -185,8 +183,7 @@
 		}
 		note = { ...local };
 		conflictOpen = draft.status === 'conflict';
-		if (draft.status === 'synced') await invalidateAll();
-		else if (draft.lastError) toast.error(draft.lastError);
+		if (draft.lastError) toast.error(draft.lastError);
 	}
 
 	async function useRemoteVersion(): Promise<void> {
@@ -195,7 +192,6 @@
 		note = { ...remote.value };
 		editorEpoch += 1;
 		dirty = false;
-		await invalidateAll();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
@@ -205,7 +201,6 @@
 		note = { ...local };
 		conflictOpen = draft.status === 'conflict';
 		editorEpoch += 1;
-		if (draft.status === 'synced') await invalidateAll();
 	}
 
 	function commitTitle(title: string): void {
@@ -247,9 +242,11 @@
 		try {
 			// The export must reflect the canvas, so flush pending edits first.
 			if (!(await ensureSynchronized('Save the skill before exporting.'))) return;
-			await invalidateAll();
-			const slug = data.view.skill.slug ?? 'skill';
-			const blob = new Blob([data.raw], { type: 'text/markdown;charset=utf-8' });
+			await workspaceSession.synchronize();
+			const slug = skill.slug;
+			const blob = new Blob([serializeSkillManifest({ ...skill, instructions: note.plainText })], {
+				type: 'text/markdown;charset=utf-8'
+			});
 			const url = URL.createObjectURL(blob);
 			const anchor = document.createElement('a');
 			anchor.href = url;
@@ -269,7 +266,6 @@
 		try {
 			const raw = await file.text();
 			await importSkillMarkdown({ noteId: note.id, raw });
-			await invalidateAll();
 			// The import rewrote the note server-side, so rebase the sync store on
 			// the fresh version before the next save, then remount the editors.
 			await workspaceSession.synchronize();
@@ -277,7 +273,7 @@
 			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
 			const local = opened.value;
 			note = { ...local };
-			savedDescription = data.view.skill.description;
+			savedDescription = skill.description;
 			dirty = false;
 			editorEpoch += 1;
 			toast.success('Skill imported');

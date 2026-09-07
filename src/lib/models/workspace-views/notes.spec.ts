@@ -75,3 +75,33 @@ describe('normalized note views', () => {
 		});
 	});
 });
+
+describe('normalized skill detail', () => {
+	it('joins metadata to the current local instruction document', () => {
+		const records = new Map(entries);
+		records.set(JSON.stringify(['notes', note.id]), {
+			type: 'notes',
+			value: { ...note, kind: 'skill', plainText: 'Local instructions' }
+		});
+		const metadata = resourceDataSchemas.skills.parse({
+			noteId: note.id,
+			name: 'Review',
+			slug: 'review',
+			description: 'Review a note',
+			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: true,
+			isEnabled: true,
+			createdAt: testNow,
+			updatedAt: testNow
+		});
+		records.set(JSON.stringify(['skills', note.id]), { type: 'skills', value: metadata });
+		expect(new WorkspaceViews(records).skill(note.id)).toEqual({
+			...metadata,
+			note: { ...note, kind: 'skill', plainText: 'Local instructions' }
+		});
+	});
+	it('does not invent skill metadata when only the note is downloaded', () => {
+		expect(new WorkspaceViews(new Map(entries)).skill(note.id)).toBeNull();
+	});
+});

@@ -17,6 +17,10 @@ import { provenanceOrigin } from '$lib/models/provenance';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 
+export type WorkspaceSkill = WorkspaceValues['skills'] & {
+	readonly note: WorkspaceValues['notes'];
+};
+
 /** Pure projections of the normalized workspace, including the caller's local write overlays. */
 export class WorkspaceViews {
 	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {}
@@ -49,6 +53,12 @@ export class WorkspaceViews {
 					a.id.localeCompare(b.id)
 			);
 	}
+	skill(noteId: NoteId): WorkspaceSkill | null {
+		const note = this.get('notes', noteId);
+		const metadata = this.get('skills', noteId);
+		return note && metadata && note.kind === 'skill' ? { ...metadata, note } : null;
+	}
+
 	skills(projectId?: ProjectId): readonly SkillSummary[] {
 		const notes = new Map(this.notes.map((note) => [note.id, note]));
 		const pins = this.all('project_skill_pins');
