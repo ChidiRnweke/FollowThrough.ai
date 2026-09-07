@@ -218,7 +218,7 @@ describe('durable conflict resolution', () => {
 	});
 	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
 		const { outbox } = setup();
-		const input = draft();
+		const input = { ...draft('note:1', 'Edited'), base: { etag: null, value: 'Original' } };
 		await outbox.importOnce('alice', 'conflict', input, { kind: 'found', snapshot });
 		const replacement = crypto.randomUUID();
 		await outbox.keepLocal('alice', input.operationId, replacement);
@@ -228,6 +228,27 @@ describe('durable conflict resolution', () => {
 			base: sent?.intent.base,
 			local: sent?.intent.local
 		}).toEqual({ id: replacement, base: snapshot, local: input.local });
+	});
+	it('preserves both creation-conflict copies when keep-local is refused', async () => {
+		const { outbox, name } = setup();
+		const input = draft();
+		await outbox.importOnce('alice', 'creation-conflict', input, { kind: 'found', snapshot });
+		const [original] = await outbox.list('alice');
+		const outcome = await outbox
+			.keepLocal('alice', input.operationId, crypto.randomUUID())
+			.catch((error) => ({
+				kind: 'failure' as const,
+				message: error instanceof Error ? error.message : 'Storage failure'
+			}));
+		await outbox.close();
+		const [retained] = await setup(name).outbox.list('alice');
+		expect({ outcome, retained }).toEqual({
+			outcome: {
+				kind: 'failure',
+				message: 'A new item must be explicitly recreated to retain both copies'
+			},
+			retained: original
+		});
 	});
 	it('stores the authoritative tombstone while retaining the offline edit', async () => {
 		const { outbox, cache } = setup();
