@@ -23,6 +23,7 @@ const setup = async (suffix: string) => {
 			syncMutations: synchronization.mutations,
 			transactionRunner,
 			noteReader: catalog,
+			noteArchiver: catalog,
 			noteEditor: catalog,
 			noteSectionNumbering: catalog,
 			noteCreator: catalog,
@@ -39,7 +40,7 @@ const setup = async (suffix: string) => {
 		null
 	);
 	if (resource.kind !== 'found') throw new Error('Seeded note was not readable');
-	return { ...seeded, controller, baseEtag: resource.snapshot.etag };
+	return { ...seeded, controller, synchronization, catalog, baseEtag: resource.snapshot.etag };
 };
 
 describe('synchronized domain mutations on PostgreSQL', () => {
@@ -141,5 +142,38 @@ describe('imported note metadata', () => {
 			{ title: string; pinned: boolean }[]
 		>`select title, is_pinned as pinned from notes where id = ${note.id}`;
 		expect(rows[0]).toEqual({ title: note.title, pinned: note.isPinned });
+	});
+});
+
+describe('guarded note trash actions', () => {
+	it('archives a note once even after a lost acknowledgement', async () => {
+		const { owner, note, controller, baseEtag } = await setup('9107');
+		const request = {
+			operationId: crypto.randomUUID(),
+			baseEtag,
+			command: { kind: 'archiveNote' as const, noteId: note.id }
+		};
+		const first = await controller.synchronize(owner, request);
+		expect(await controller.synchronize(owner, request)).toEqual(first);
+	});
+	it('restores the guarded note through the owning trash rules', async () => {
+		const { owner, note, controller, synchronization, catalog } = await setup('9108');
+		await catalog.archive(owner, note.id);
+		const current = await synchronization.objects.read(
+			owner,
+			{ type: 'notes', id: [note.id] },
+			null
+		);
+		if (current.kind !== 'found') throw new Error('The archived note must exist');
+		const result = await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: current.snapshot.etag,
+			command: { kind: 'restoreNote', noteId: note.id }
+		});
+		const restored = await catalog.get(owner, note.id);
+		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
+			result: 'applied',
+			archivedAt: undefined
+		});
 	});
 });

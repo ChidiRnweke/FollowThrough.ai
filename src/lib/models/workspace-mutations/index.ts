@@ -422,3 +422,49 @@ export const noteHasUnpublishedChanges = (
 	}
 	return unpublished;
 };
+
+/** Match the trash placement rules while retaining the complete local note. */
+export const noteTrashWrite = (
+	note: Note,
+	action: 'archive' | 'restore',
+	notes: readonly Note[],
+	timestamp: DateTime
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
+	if (action === 'archive') {
+		if (note.archivedAt) throw new Error('The note is already archived');
+		if (
+			note.kind === 'folder' &&
+			notes.some((entry) => entry.parentId === note.id && !entry.archivedAt)
+		)
+			throw new Error('A folder with active contents cannot be archived');
+		return {
+			command: { kind: 'archiveNote', noteId: note.id },
+			local: { type: 'notes', value: { ...note, archivedAt: timestamp, updatedAt: timestamp } },
+			coalesce: null,
+			references: []
+		};
+	}
+	if (!note.archivedAt) throw new Error('The note is not archived');
+	const { archivedAt, ...rest } = note;
+	void archivedAt;
+	const parent = notes.find((entry) => entry.id === note.parentId);
+	const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
+	const { parentId, ...detached } = rest;
+	void parentId;
+	const local: Note = orphaned
+		? {
+				...detached,
+				position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
+					.length,
+				updatedAt: timestamp
+			}
+		: { ...rest, updatedAt: timestamp };
+	return {
+		command: { kind: 'restoreNote', noteId: note.id },
+		local: { type: 'notes', value: local },
+		coalesce: null,
+		references: local.parentId
+			? [workspaceResourceKey({ type: 'notes', id: [local.parentId] })]
+			: []
+	};
+};

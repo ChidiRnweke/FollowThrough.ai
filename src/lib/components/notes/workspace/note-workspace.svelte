@@ -400,7 +400,11 @@
 	}
 
 	async function archive(): Promise<void> {
-		if (!(await ensureSynchronized('Sync the note before deleting it.'))) return;
+		if (dirty) await save({ auto: true });
+		if (dirty || draft.status === 'error' || draft.status === 'conflict') {
+			toast.error('Save or resolve the note before moving it to trash.');
+			return;
+		}
 		const output = await projectActions.archiveNote(note.id);
 		if (!output) {
 			toast.error('Could not delete the note. Try again.');

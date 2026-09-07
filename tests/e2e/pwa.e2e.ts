@@ -293,3 +293,27 @@ test('refreshes another tab’s offline changes when returning to the app', asyn
 	await other.evaluate(() => window.dispatchEvent(new Event('focus')));
 	await expect(other.getByRole('link', { name, exact: true }).first()).toBeVisible();
 });
+
+test('moves a note to trash and restores it offline through reload', async ({ page, context }) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	await page.locator('a[href^="/notes/"]:visible').first().click();
+	await page.getByLabel('Note body', { exact: true }).waitFor();
+	const href = page.url();
+	const title = (await noteTitleCrumb(page).textContent())?.trim();
+	if (!title) throw new Error('The seeded note must have a title');
+	await context.setOffline(true);
+	await page.getByRole('button', { name: 'Note actions', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
+	await page.getByText('Moved to trash', { exact: true }).waitFor();
+	await page.goto('/trash');
+	await page.reload();
+	await page
+		.getByRole('listitem')
+		.filter({ hasText: title })
+		.getByRole('button', { name: 'Restore', exact: true })
+		.click();
+	await page.getByText('Restored', { exact: true }).waitFor();
+	await page.goto(href);
+	await expect(page.getByLabel('Note body', { exact: true })).toBeVisible();
+});

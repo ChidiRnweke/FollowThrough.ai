@@ -3,13 +3,7 @@ import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { MoveProjectEntryInput, ProjectId } from '$lib/models/projects';
-import type {
-	ArchiveNoteInput,
-	DeleteNoteForeverInput,
-	EmptyNoteTrashInput,
-	NoteId,
-	RestoreNoteInput
-} from '$lib/models/notes';
+import type { DeleteNoteForeverInput, EmptyNoteTrashInput, NoteId } from '$lib/models/notes';
 
 /**
  * Parsed, branded ids — the schema establishes the type instead of a cast
@@ -39,18 +33,6 @@ export const moveEntry = command(
 			.move(requestActor(), input as MoveProjectEntryInput);
 	}
 );
-
-export const archiveNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.archive(requestActor(), input as ArchiveNoteInput);
-});
-
-export const restoreNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.restore(requestActor(), input as RestoreNoteInput);
-});
 
 export const deleteNoteForever = command(z.object({ noteId: z.string().uuid() }), async (input) => {
 	return AppFactory.controllers()

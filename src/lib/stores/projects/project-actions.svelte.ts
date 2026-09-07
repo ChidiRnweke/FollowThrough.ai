@@ -20,14 +20,12 @@ import type {
 } from '$lib/models/projects';
 import type { CreateSkillOutput } from '$lib/models/skills';
 import {
-	archiveNote,
-	restoreNote,
 	moveEntry,
 	deleteNoteForever,
 	emptyNoteTrash,
 	createSkill
 } from '$lib/remote/projects/projects.remote';
-import { newProject, newNote } from '$lib/models/workspace-mutations';
+import { newProject, newNote, noteTrashWrite } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import type { DateTime } from '$lib/models/workspace';
 import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
@@ -222,10 +220,35 @@ class ProjectActionsStore {
 			return { note: result.value };
 		});
 
+	private async changeTrash(noteId: NoteId, action: 'archive' | 'restore'): Promise<Note> {
+		const session = await workspaceSession.start();
+		return this.edit('notes', noteId, (note) =>
+			noteTrashWrite(
+				note,
+				action,
+				session.resources.views.all('notes'),
+				new Date().toISOString() as DateTime
+			)
+		);
+	}
 	archiveNote = (noteId: NoteId) =>
-		this.serverAction<ArchiveNoteOutput>(() => archiveNote({ noteId }));
+		this.run<ArchiveNoteOutput>(async () => ({ note: await this.changeTrash(noteId, 'archive') }));
 	restoreNote = (noteId: NoteId) =>
-		this.serverAction<RestoreNoteOutput>(() => restoreNote({ noteId }));
+		this.run<RestoreNoteOutput>(async () => {
+			const session = await workspaceSession.start();
+			const opened = await session.resources.open({ type: 'notes', id: [noteId] });
+			if (opened.kind !== 'ready' || opened.value.type !== 'notes')
+				throw new Error('The note is unavailable');
+			if (opened.value.value.parentId) {
+				const parent = await session.resources.lookup({
+					type: 'notes',
+					id: [opened.value.value.parentId]
+				});
+				if (parent.kind !== 'ready' && parent.kind !== 'absent' && parent.kind !== 'deleted')
+					throw new Error('The parent folder is unavailable on this device');
+			}
+			return { note: await this.changeTrash(noteId, 'restore') };
+		});
 	deleteNoteForever = (noteId: NoteId) =>
 		this.serverAction<DeleteNoteForeverOutput>(() => deleteNoteForever({ noteId }));
 	emptyNoteTrash = (projectId?: ProjectId) =>
