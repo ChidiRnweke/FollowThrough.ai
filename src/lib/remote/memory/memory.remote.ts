@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -7,15 +7,6 @@ import type { ProjectId } from '$lib/models/projects';
 
 const projectId = z.uuid().transform((value) => value as ProjectId);
 const memoryEntryId = z.uuid().transform((value) => value as MemoryEntryId);
-
-export const getEntries = query(projectId.optional(), async (projectId) => {
-	const factory = AppFactory.controllers();
-	return factory.memory().list(requestActor(), { projectId });
-});
-
-export const getPendingSuggestions = query(projectId.optional(), async (projectId) =>
-	AppFactory.controllers().suggestions().listPendingMemory(requestActor(), { projectId })
-);
 
 export const createEntry = command(
 	z.object({

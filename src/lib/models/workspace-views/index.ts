@@ -1,4 +1,11 @@
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { AttachmentView } from '$lib/models/attachments';
+import type { MemoryEntry, MemorySuggestionView } from '$lib/models/memory';
+import {
+	isWorkspaceRecord,
+	type WorkspaceRecord,
+	type WorkspaceValues,
+	type WorkspaceRecordOf
+} from '$lib/models/workspace-records';
 import type { ShellContext, TodayView, LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectTreeNode, ProjectView } from '$lib/models/projects';
@@ -7,31 +14,20 @@ import { provenanceOrigin } from '$lib/models/provenance';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 
-type ResourceValues = { [R in WorkspaceRecord as R['type']]: R['value'] };
-type ResourceOf<K extends keyof ResourceValues> = WorkspaceRecord & {
-	type: K;
-	value: ResourceValues[K];
-};
-
-const hasType = <K extends WorkspaceRecord['type']>(
-	record: WorkspaceRecord,
-	type: K
-): record is ResourceOf<K> => record.type === type;
-
 /** Pure projections of the normalized workspace, including the caller's local write overlays. */
 export class WorkspaceViews {
 	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {}
-	all<K extends WorkspaceRecord['type']>(type: K): ResourceValues[K][] {
+	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][] {
 		return [...this.records.values()]
-			.filter((record): record is ResourceOf<K> => record.type === type)
+			.filter((record): record is WorkspaceRecordOf<K> => record.type === type)
 			.map((record) => record.value);
 	}
 	get<K extends WorkspaceRecord['type']>(
 		type: K,
 		...id: [string, ...string[]]
-	): ResourceValues[K] | undefined {
+	): WorkspaceValues[K] | undefined {
 		const record = this.records.get(JSON.stringify([type, ...id]));
-		if (!record || !hasType(record, type)) return undefined;
+		if (!record || !isWorkspaceRecord(record, type)) return undefined;
 		return record.value;
 	}
 	get projects() {
@@ -107,6 +103,56 @@ export class WorkspaceViews {
 			]
 		};
 	}
+	memories(projectId?: ProjectId): readonly MemoryEntry[] {
+		return this.all('memory_entries')
+			.filter((entry) => !entry.deletedAt && entry.projectId === projectId)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+	}
+	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
+		return this.all('suggestions')
+			.flatMap((suggestion) => {
+				if (
+					suggestion.kind !== 'memory' ||
+					suggestion.status !== 'proposed' ||
+					suggestion.payload.projectId !== projectId
+				)
+					return [];
+				const provenance = suggestion.provenanceId
+					? this.get('provenance', suggestion.provenanceId)
+					: undefined;
+				if (!provenance) return [];
+				const anchor = suggestion.sourceAnchorId
+					? this.get('source_anchors', suggestion.sourceAnchorId)
+					: undefined;
+				return [
+					{
+						suggestion,
+						origin: provenanceOrigin(provenance),
+						...(provenance ? { provenance } : {}),
+						...(anchor ? { anchor } : {})
+					}
+				];
+			})
+			.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt));
+	}
+	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
+		return this.all('attachments')
+			.filter((attachment) =>
+				owner.kind === 'project'
+					? attachment.projectId === owner.id && !attachment.noteId
+					: attachment.noteId === owner.id
+			)
+			.flatMap((attachment) => {
+				const version = attachment.currentVersionId
+					? this.get('attachment_versions', attachment.currentVersionId)
+					: undefined;
+				return version
+					? [{ attachment: { ...attachment, currentVersionId: version.id }, version }]
+					: [];
+			})
+			.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path));
+	}
+
 	project(projectId: ProjectId): ProjectView | null {
 		const project = this.get('projects', projectId);
 		if (!project || project.archivedAt) return null;

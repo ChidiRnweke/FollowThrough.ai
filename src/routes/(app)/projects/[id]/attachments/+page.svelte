@@ -5,41 +5,35 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
+	const project = $derived(data.session.resources.views.get('projects', data.projectId));
 
-	// Nothing to read until something is uploaded, and DESIGN_SYSTEM.md is explicit
-	// that a control for a value that is not set reads as noise.
-	let reportedCount = $state<number>();
-	const attachmentCount = $derived(reportedCount ?? data.attachments.length);
+	const attachmentCount = $derived(
+		data.session.resources.views.attachments({ kind: 'project', id: data.projectId }).length
+	);
 </script>
 
-<PageShell
-	title="Attachments"
-	description="Files and images available to {data.project.name} and its agents."
->
-	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
-	{#snippet breadcrumb()}
-		<Breadcrumb.Root>
-			<Breadcrumb.List>
-				<Breadcrumb.Item>
-					<Breadcrumb.Link href="/projects/{data.project.id}">
-						{data.project.name}
-					</Breadcrumb.Link>
-				</Breadcrumb.Item>
-			</Breadcrumb.List>
-		</Breadcrumb.Root>
-	{/snippet}
-	{#snippet actions()}
-		{#if attachmentCount > 0}
-			<AgentAction
-				action={agentActions.projectAttachments}
-				context={{ projectId: data.project.id }}
-			/>
-		{/if}
-	{/snippet}
-	<AttachmentList
-		projectId={data.project.id}
-		initial={data.attachments}
-		oncount={(count) => (reportedCount = count)}
-		heroEmpty
-	/>
-</PageShell>
+{#if project && !project.archivedAt}
+	<PageShell
+		title="Attachments"
+		description="Files and images available to {project.name} and its agents."
+	>
+		<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
+		{#snippet breadcrumb()}
+			<Breadcrumb.Root>
+				<Breadcrumb.List>
+					<Breadcrumb.Item>
+						<Breadcrumb.Link href="/projects/{project.id}">
+							{project.name}
+						</Breadcrumb.Link>
+					</Breadcrumb.Item>
+				</Breadcrumb.List>
+			</Breadcrumb.Root>
+		{/snippet}
+		{#snippet actions()}
+			{#if attachmentCount > 0}
+				<AgentAction action={agentActions.projectAttachments} context={{ projectId: project.id }} />
+			{/if}
+		{/snippet}
+		<AttachmentList owner={{ kind: 'project', id: project.id }} heroEmpty />
+	</PageShell>
+{:else}<p>This project is no longer available.</p>{/if}

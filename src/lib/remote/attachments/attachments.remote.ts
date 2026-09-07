@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, form, query, requested } from '$app/server';
+import { command, form } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
@@ -13,17 +13,6 @@ const path = z.string().min(1).max(512);
 /** Every attachment is scoped to exactly one owner, so the query key stays unambiguous. */
 const exactlyOneOwner = (value: { noteId?: string; projectId?: string }): boolean =>
 	Number(Boolean(value.noteId)) + Number(Boolean(value.projectId)) === 1;
-
-const ownerSchema = z
-	.object({ noteId: id.optional(), projectId: id.optional() })
-	.refine(exactlyOneOwner, 'Provide exactly one owner');
-
-export const listAttachments = query(ownerSchema, async (owner) => {
-	const controller = AppFactory.controllers().attachments();
-	return owner.projectId
-		? controller.listForProject(requestActor(), owner.projectId as ProjectId)
-		: controller.list(requestActor(), owner.noteId as NoteId);
-});
 
 export const initiateAttachmentUpload = command(
 	z
@@ -49,17 +38,10 @@ export const initiateAttachmentUpload = command(
 			})
 );
 
-// A list only ever has one owner in flight per caller, so one requested refresh
-// is all the client can legitimately ask for.
-const refreshRequestedLists = async (): Promise<void> => {
-	await requested(listAttachments, 1).refreshAll();
-};
-
 export const completeAttachmentUpload = command(z.object({ uploadId: id }), async (input) => {
 	const view = await AppFactory.controllers()
 		.attachments()
 		.complete(requestActor(), input.uploadId as AttachmentUploadId);
-	await refreshRequestedLists();
 	return view;
 });
 
@@ -79,7 +61,6 @@ export const completeTodoScreenshotUpload = command(
 				input.uploadId as AttachmentUploadId,
 				input.todoId as TodoId
 			);
-		await refreshRequestedLists();
 		return view;
 	}
 );
@@ -88,7 +69,6 @@ export const retryAttachment = command(z.object({ attachmentId: id }), async (in
 	const view = await AppFactory.controllers()
 		.attachments()
 		.retry(requestActor(), input.attachmentId as AttachmentId);
-	await refreshRequestedLists();
 	return view;
 });
 
@@ -110,7 +90,6 @@ export const removeAttachment = command(z.object({ attachmentId: id }), async (i
 	const result = await AppFactory.controllers()
 		.attachments()
 		.removeById(requestActor(), input.attachmentId as AttachmentId);
-	if (result.kind === 'removed') await refreshRequestedLists();
 	return result;
 });
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import type { AttachmentView } from '$lib/models/attachments';
@@ -13,7 +14,6 @@
 	import { userFacingMessage } from '$lib/errors';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import {
-		listAttachments,
 		initiateAttachmentUpload,
 		completeAttachmentUpload,
 		downloadAttachment,
@@ -22,44 +22,34 @@
 	} from '$lib/remote/attachments/attachments.remote';
 
 	let {
-		projectId,
-		noteId,
-		initial,
-		oncount,
+		owner,
 		heroEmpty = false
-	}: {
-		projectId?: string;
-		noteId?: string;
-		/** Server-loaded list, so the page renders its attachments without a client round trip. */
-		initial?: readonly AttachmentView[];
-		/** Reports how many attachments there are, for chrome that only makes sense with files. */
-		oncount?: (count: number) => void;
-		/** The attachments page gets the hero-sized empty state; the dialog keeps the slot size. */
-		heroEmpty?: boolean;
-	} = $props();
+	}: { owner: { kind: 'project' | 'note'; id: string }; heroEmpty?: boolean } = $props();
 
 	let busy = $state(false);
 	let removeTarget = $state<AttachmentView | undefined>(undefined);
 	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
-	const owner = $derived<{ projectId?: string; noteId?: string }>(
-		projectId ? { projectId } : { noteId }
+	const resources = $derived(workspaceSession.current?.resources);
+	const items = $derived(resources?.views.attachments(owner) ?? []);
+	const inputOwner = $derived(
+		owner.kind === 'project' ? { projectId: owner.id } : { noteId: owner.id }
 	);
-
-	// Mounted in the attachments page (which passes `initial`) and in a dialog (which
-	// cannot, having no load function of its own), so the query has to cover both: it
-	// backs the dialog outright, and elsewhere it carries post-mutation refreshes.
-	const query = $derived(listAttachments(owner));
-	const items = $derived<readonly AttachmentView[]>(query.current ?? initial ?? []);
-
-	$effect(() => oncount?.(items.length));
+	let loadError = $state<string | null>(null);
+	$effect(() => {
+		if (!resources) return;
+		void resources.prepare(['attachments', 'attachment_versions']).catch((error) => {
+			loadError = error instanceof Error ? error.message : 'Could not load attachments';
+			return { kind: 'failure', message: loadError };
+		});
+	});
 
 	async function upload(file: File): Promise<void> {
 		busy = true;
 		try {
 			const intent = await initiateAttachmentUpload({
-				...owner,
+				...inputOwner,
 				path: file.name,
 				mediaType: file.type || 'application/octet-stream',
 				byteSize: file.size,
@@ -78,10 +68,8 @@
 						: `Object storage rejected the upload (${stored.status})`
 				);
 			}
-			// Single-flight: the mutation and the refreshed list arrive in one response.
-			await completeAttachmentUpload({ uploadId: intent.upload.id }).updates(
-				listAttachments(owner)
-			);
+			await completeAttachmentUpload({ uploadId: intent.upload.id });
+			await workspaceSession.synchronize();
 			toast.success('Attachment queued for processing');
 			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
 		} catch (error) {
@@ -103,7 +91,8 @@
 
 	async function retry(attachmentId: string): Promise<void> {
 		try {
-			await retryAttachment({ attachmentId }).updates(listAttachments(owner));
+			await retryAttachment({ attachmentId });
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
 		} catch {
 			toast.error('The attachment action failed');
@@ -130,7 +119,9 @@
 
 	async function remove(attachmentId: string) {
 		try {
-			return await removeAttachment({ attachmentId });
+			const result = await removeAttachment({ attachmentId });
+			await workspaceSession.synchronize();
+			return result;
 			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
 		} catch (error) {
 			toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
@@ -160,7 +151,11 @@
 <!-- The spacing ladder: a 24px step separates adding files from the files
      themselves, and 8px binds the list's heading to its rows. -->
 <div class="flex flex-col gap-6">
-	{#if items.length === 0}
+	{#if loadError}<p role="alert">
+			{loadError}
+		</p>{:else if items.length === 0 && resources?.availability !== 'complete'}<p role="status">
+			Attachment data is not fully available on this device yet.
+		</p>{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
 		<EmptyState
@@ -177,7 +172,9 @@
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}
-			<Button variant="ghost" size="sm" onclick={() => void query.refresh()}>Refresh</Button>
+			<Button variant="ghost" size="sm" onclick={() => void workspaceSession.synchronize()}
+				>Refresh</Button
+			>
 		</div>
 		<section class="flex flex-col gap-2">
 			<h2 class="eyebrow">Files · {items.length}</h2>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
-	import { invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type {
 		MemoryEntry,
 		MemoryEntryId,
@@ -25,13 +25,7 @@
 		FtPlus as Plus
 	} from '$lib/components/icons';
 	import EmptyState from '../shared/empty-state.svelte';
-	import {
-		getEntries,
-		getPendingSuggestions,
-		createEntry,
-		updateEntry,
-		deleteEntry
-	} from '$lib/remote/memory/memory.remote';
+	import { createEntry, updateEntry, deleteEntry } from '$lib/remote/memory/memory.remote';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
@@ -59,8 +53,10 @@
 		heroEmpty?: boolean;
 	} = $props();
 
-	let entries = $state<MemoryEntry[]>([]);
-	let pending = $state<MemorySuggestionView[]>([]);
+	const resources = $derived(workspaceSession.current?.resources);
+	const entries = $derived(resources?.views.memories(projectId) ?? []);
+	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
+	let loadError = $state<string | null>(null);
 	let loading = $state(false);
 	let busyIds = $state<SuggestionId[]>([]);
 	let draft = $state('');
@@ -92,22 +88,18 @@
 	const isEmpty = $derived(pendingItems.length === 0 && savedItems.length === 0);
 
 	$effect(() => {
-		void load(projectId);
-	});
-
-	async function load(id: ProjectId | undefined): Promise<void> {
+		if (!resources) return;
 		loading = true;
-		try {
-			const [saved, proposed] = await Promise.all([getEntries(id), getPendingSuggestions(id)]);
-			entries = [...saved.entries];
-			pending = [...proposed.suggestions];
-			// audit-allow: silent-catch — load failure is reported instead of presenting an empty list as success.
-		} catch {
-			toast.error('Could not load memory.');
-		} finally {
-			loading = false;
-		}
-	}
+		void resources
+			.prepare(['memory_entries', 'suggestions', 'source_anchors', 'provenance'])
+			.catch((error) => {
+				loadError = error instanceof Error ? error.message : 'Could not load memory';
+				return { kind: 'failure', message: loadError };
+			})
+			.finally(() => {
+				loading = false;
+			});
+	});
 
 	function proposalContent(view: MemorySuggestionView): string {
 		const suggestion = view.suggestion;
@@ -122,14 +114,8 @@
 		try {
 			const output = await acceptSuggestion({ suggestionId: id });
 			if (output.suggestion.kind !== 'memory') throw new Error('Expected a memory suggestion');
-			pending = pending.filter((item) => item.suggestion.id !== id);
-			const targetId = output.suggestion.payload.memoryEntryId;
-			const remaining = targetId ? entries.filter((entry) => entry.id !== targetId) : entries;
-			entries =
-				output.suggestion.payload.operation === 'remove'
-					? remaining
-					: [output.artifact as MemoryEntry, ...remaining];
-			await invalidateAll();
+
+			await workspaceSession.synchronize();
 			toast.success('Memory accepted.');
 			// audit-allow: silent-catch — acceptance failure is reported and the suggestion remains pending.
 		} catch {
@@ -144,8 +130,7 @@
 		busyIds = [...busyIds, id];
 		try {
 			await rejectSuggestion({ suggestionId: id });
-			pending = pending.filter((item) => item.suggestion.id !== id);
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Memory suggestion dismissed.');
 			// audit-allow: silent-catch — dismissal failure is reported and the suggestion remains pending.
 		} catch {
@@ -159,12 +144,12 @@
 		const content = draft.trim();
 		if (!content) return false;
 		try {
-			const { entry } = await createEntry({
+			await createEntry({
 				projectId,
 				content,
 				...(draftType !== 'none' ? { type: draftType } : {})
 			});
-			entries = [entry, ...entries];
+			await workspaceSession.synchronize();
 			draft = '';
 			draftType = 'none';
 			return true;
@@ -184,38 +169,32 @@
 	async function saveEdit(entry: MemoryEntry): Promise<void> {
 		const content = editingContent.trim();
 		if (!content) return;
-		const previous = entries;
-		entries = entries.map((item) => (item.id === entry.id ? { ...item, content } : item));
-		editingId = undefined;
 		try {
 			await updateEntry({ memoryEntryId: entry.id, content });
-			// audit-allow: silent-catch — the optimistic content update is rolled back and reported.
+			editingId = undefined;
+			await workspaceSession.synchronize();
+			// audit-allow: silent-catch — the saved content remains visible and the edit failure is reported.
 		} catch {
-			entries = previous;
 			toast.error('Could not update the memory entry.');
 		}
 	}
 
 	async function toggleShare(entry: MemoryEntry, shareWithAgents: boolean): Promise<void> {
-		const previous = entries;
-		entries = entries.map((item) => (item.id === entry.id ? { ...item, shareWithAgents } : item));
 		try {
 			await updateEntry({ memoryEntryId: entry.id, shareWithAgents });
-			// audit-allow: silent-catch — the optimistic sharing update is rolled back and reported.
+			await workspaceSession.synchronize();
+			// audit-allow: silent-catch — the saved sharing value remains visible and the edit failure is reported.
 		} catch {
-			entries = previous;
 			toast.error('Could not update the memory entry.');
 		}
 	}
 
 	async function remove(entry: MemoryEntry): Promise<void> {
-		const previous = entries;
-		entries = entries.filter((item) => item.id !== entry.id);
 		try {
 			await deleteEntry({ memoryEntryId: entry.id });
-			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported.
+			await workspaceSession.synchronize();
+			// audit-allow: silent-catch — the entry remains visible and the deletion failure is reported.
 		} catch {
-			entries = previous;
 			toast.error('Could not delete the memory entry.');
 		}
 	}
@@ -225,9 +204,11 @@
      always-on composer competing with what is already remembered. The spacing ladder:
      a 24px step between the action row and the sections, 8px inside each section. -->
 <div class="flex h-full min-h-0 flex-col gap-6">
-	{#if loading && isEmpty}
+	{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
 		<p class="text-sm text-muted-foreground">Loading memory…</p>
-	{:else if isEmpty}
+	{:else if isEmpty && resources?.availability !== 'complete'}<p role="status">
+			Memory data is not fully available on this device yet.
+		</p>{:else if isEmpty}
 		<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
 		     EmptyState; the side panel keeps the slot size. -->
 		<EmptyState
