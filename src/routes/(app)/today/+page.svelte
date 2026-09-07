@@ -6,6 +6,7 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
+	const view = $derived(data.session.resources.views.today(data.today));
 
 	const now = new Date();
 	const dateLine = `${now.toLocaleDateString('en-GB', { weekday: 'long' })} · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
@@ -33,5 +34,5 @@
 		projectId={data.inboxProjectId}
 		focusOnMount={page.url.searchParams.has('quickCapture')}
 	/>
-	<TodayTriage view={data.view} projects={data.session.shell.projects} />
+	<TodayTriage {view} projects={data.session.shell.projects} />
 </PageShell>
