@@ -3,6 +3,13 @@ import { readStoredBootstrap, workspaceAccountHint } from './bootstrap-storage';
 const accountId = 'a0000000-0000-4000-8000-000000000001';
 const bootstrap = {
 	accountId,
+	agentPreferences: {
+		userId: accountId,
+		executionMode: 'approval_required',
+		inlineSuggestionsEnabled: true,
+		createdAt: '2026-09-07T10:00:00.000Z',
+		updatedAt: '2026-09-07T10:00:00.000Z'
+	},
 	agentDefaults: { chatModelId: 'provider/chat', visionModelId: 'provider/vision' },
 	agentModels: [
 		{

@@ -17,7 +17,7 @@
 	{/snippet}
 	<TodoDetailPanel
 		view={data.view}
-		notes={data.shell.noteTree}
+		notes={data.session.shell.noteTree}
 		ondeleted={() => void goto(data.returnTo)}
 	/>
 </PageShell>

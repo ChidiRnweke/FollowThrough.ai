@@ -99,6 +99,57 @@ describe('shared workspace reads', () => {
 		await opening;
 		expect(during).toEqual({ listed: project, opened: false });
 	});
+	it('does not wait for a retained collection body that is already refreshing', async () => {
+		const { resources, repository, transport, cache } = setup();
+		await repository.commit('alice', {
+			put: [
+				{
+					key,
+					entry: {
+						kind: 'present',
+						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+					}
+				}
+			],
+			remove: []
+		});
+		transport.records.set(key, { etag: syncEtag(2n), value: project });
+		await cache.refresh();
+		const paused = transport.pause(key);
+		const warming = cache.warm();
+		await paused.started;
+		await resources.prepare(['projects']);
+		const listed = resources.records.get(key);
+		paused.release();
+		await warming;
+		expect(listed).toEqual(project);
+	});
+	it('prepares missing collection bodies without downloading unrelated resource types', async () => {
+		const { resources, transport, cache } = setup();
+		const user = workspaceRecordSchema.parse({
+			type: 'users',
+			value: {
+				id: 'a0000000-0000-4000-8000-000000000002',
+				email: 'alice@example.test',
+				displayName: 'Alice',
+				role: 'USER',
+				createdAt: '2026-09-07T10:00:00Z',
+				updatedAt: '2026-09-07T10:00:00Z'
+			}
+		});
+		const userKey = workspaceResourceKey({
+			type: 'users',
+			id: ['a0000000-0000-4000-8000-000000000002']
+		});
+		transport.records.set(key, { etag: syncEtag(1n), value: project });
+		transport.records.set(userKey, { etag: syncEtag(2n), value: user });
+		await resources.prepare(['projects']);
+		expect({ listed: resources.records.get(key), unrelated: cache.access(userKey) }).toEqual({
+			listed: project,
+			unrelated: { kind: 'wait' }
+		});
+	});
+
 	it('clears exposed records when the account stops', async () => {
 		const { resources, repository } = setup();
 		await repository.commit('alice', {

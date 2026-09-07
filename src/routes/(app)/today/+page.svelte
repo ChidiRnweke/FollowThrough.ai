@@ -33,5 +33,5 @@
 		projectId={data.inboxProjectId}
 		focusOnMount={page.url.searchParams.has('quickCapture')}
 	/>
-	<TodayTriage view={data.view} projects={data.shell.projects} />
+	<TodayTriage view={data.view} projects={data.session.shell.projects} />
 </PageShell>

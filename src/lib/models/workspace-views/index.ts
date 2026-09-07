@@ -2,7 +2,9 @@ import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { ShellContext, TodayView, LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectTreeNode, ProjectView } from '$lib/models/projects';
-import type { NoteId } from '$lib/models/notes';
+import { noteEtag, sectionNumberingView, type NoteId, type NoteView } from '$lib/models/notes';
+import { provenanceOrigin } from '$lib/models/provenance';
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 
 type ResourceValues = { [R in WorkspaceRecord as R['type']]: R['value'] };
@@ -118,6 +120,86 @@ export class WorkspaceViews {
 			(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
 		return { project, tree: build(undefined) };
 	}
+	note(noteId: NoteId): { view: NoteView; missing: readonly WorkspaceResourceIdentity[] } | null {
+		const note = this.get('notes', noteId);
+		if (!note) return null;
+		const missing: WorkspaceResourceIdentity[] = [];
+		const project = this.get('projects', note.projectId);
+		if (!project) missing.push({ type: 'projects', id: [note.projectId] });
+		const preferences = this.get('user_preferences', note.userId);
+		const backlinks = this.all('note_relationships')
+			.filter(
+				(relationship) =>
+					relationship.sourceNoteId === noteId || relationship.targetNoteId === noteId
+			)
+			.flatMap((relationship) => {
+				const source = this.get('notes', relationship.sourceNoteId);
+				const target = this.get('notes', relationship.targetNoteId);
+				if (!source) missing.push({ type: 'notes', id: [relationship.sourceNoteId] });
+				if (!target) missing.push({ type: 'notes', id: [relationship.targetNoteId] });
+				return source && target
+					? [
+							{
+								relationship,
+								sourceNote: { id: source.id, title: source.title },
+								targetNote: { id: target.id, title: target.title }
+							}
+						]
+					: [];
+			});
+		const references = this.all('references')
+			.filter((reference) => reference.noteId === noteId)
+			.map((reference) => {
+				const anchor = reference.sourceAnchorId
+					? this.get('source_anchors', reference.sourceAnchorId)
+					: undefined;
+				if (reference.sourceAnchorId && !anchor)
+					missing.push({ type: 'source_anchors', id: [reference.sourceAnchorId] });
+				return { reference, ...(anchor ? { anchor } : {}) };
+			});
+		const pendingSuggestions = this.all('suggestions')
+			.filter((suggestion) => suggestion.noteId === noteId && suggestion.status === 'proposed')
+			.flatMap((suggestion) => {
+				const provenance = this.get('provenance', suggestion.provenanceId);
+				if (!provenance) {
+					missing.push({ type: 'provenance', id: [suggestion.provenanceId] });
+					return [];
+				}
+				const anchor = suggestion.sourceAnchorId
+					? this.get('source_anchors', suggestion.sourceAnchorId)
+					: undefined;
+				if (suggestion.sourceAnchorId && !anchor)
+					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
+				return [
+					{
+						suggestion,
+						note: { id: note.id, title: note.title },
+						...(anchor ? { anchor } : {}),
+						origin: provenanceOrigin(provenance)
+					}
+				];
+			});
+		return {
+			view: {
+				note,
+				etag: noteEtag(note),
+				backlinks,
+				references,
+				diagrams: this.all('diagrams').filter(
+					(diagram) => diagram.sourceNoteId === noteId && !diagram.archivedAt
+				),
+				todos: this.todos({ noteId }),
+				pendingSuggestions,
+				sectionNumbering: sectionNumberingView(
+					note.sectionNumbering,
+					project?.sectionNumberingDefault,
+					preferences?.sectionNumberingDefault
+				)
+			},
+			missing
+		};
+	}
+
 	todo(todo: Todo): TodoView {
 		const anchor = todo.sourceAnchorId
 			? this.get('source_anchors', todo.sourceAnchorId)

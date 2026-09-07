@@ -6,9 +6,10 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 export const readWorkspaceBootstrap = query(z.object({}), async () => {
 	const actor = requestActor();
 	const settings = AppFactory.controllers().agentSettings();
-	const [agentDefaults, models] = await Promise.all([
+	const [agentDefaults, models, agentPreferences] = await Promise.all([
 		settings.resolveDefaults(actor),
-		settings.listModels(actor)
+		settings.listModels(actor),
+		settings.getPreferences(actor)
 	]);
 	const agentModels = models.some((model) => model.id === agentDefaults.chatModelId)
 		? models
@@ -26,6 +27,7 @@ export const readWorkspaceBootstrap = query(z.object({}), async () => {
 			];
 	return {
 		accountId: actor.userId,
+		agentPreferences,
 		agentDefaults,
 		agentModels,
 		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim())

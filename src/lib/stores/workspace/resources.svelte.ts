@@ -1,9 +1,14 @@
+import type { NoteId, NoteView } from '$lib/models/notes';
 import { visibleResources, localResource, type WriteDraft } from '$lib/models/outbox';
 import { workspaceRecordSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceCommandSchema, type WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import {
+	workspaceResourceKey,
+	type WorkspaceResourceType,
+	type WorkspaceResourceIdentity
+} from '$lib/models/workspace-sync';
 import { WorkspaceViews } from '$lib/models/workspace-views';
-import type { CacheAccess } from '$lib/models/sync';
+import { cachedSnapshot, type CacheAccess } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
@@ -24,6 +29,10 @@ export interface WorkspaceResourcesDependencies {
 /** Features share resource identity, local overlays, and the same explicit-open read barrier. */
 export class WorkspaceResources {
 	private revision = $state(0);
+	private connected = $state(true);
+	get online(): boolean {
+		return this.connected;
+	}
 	private readonly unsubscribe: (() => void)[];
 	private syncing: Promise<void> | null = null;
 	private initializing: Promise<void> | null = null;
@@ -75,6 +84,18 @@ export class WorkspaceResources {
 			});
 		return this.initializing;
 	}
+	/** List reads wait only for missing bodies; retained bodies remain renderable during updates. */
+	async prepare(types: readonly WorkspaceResourceType[]): Promise<void> {
+		await this.initialize();
+		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
+		const missing = [...this.dependencies.cache.records].filter(
+			([key, entry]) =>
+				entry.kind === 'present' &&
+				cachedSnapshot(entry.cache) === null &&
+				types.some((type) => key.startsWith(`["${type}",`))
+		);
+		await Promise.all(missing.map(([key]) => this.dependencies.cache.open(key)));
+	}
 	async open(identity: WorkspaceResourceIdentity): Promise<CacheAccess<WorkspaceRecord>> {
 		await this.initialize();
 		const key = workspaceResourceKey(identity);
@@ -83,11 +104,19 @@ export class WorkspaceResources {
 		const result = await this.dependencies.cache.open(key);
 		return localResource(this.dependencies.writes.pending, key) ?? result;
 	}
+	async openNote(noteId: NoteId): Promise<CacheAccess<NoteView>> {
+		const opened = await this.open({ type: 'notes', id: [noteId] });
+		if (opened.kind !== 'ready') return opened;
+		const projected = this.views.note(noteId);
+		return projected ? { kind: 'ready', value: projected.view } : { kind: 'unavailable' };
+	}
+
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		return this.dependencies.writes.append(plain(draft));
 	}
 	setOnline(online: boolean): void {
+		this.connected = online;
 		this.dependencies.cache.setOnline(online);
 		this.dependencies.writes.setOnline(online);
 	}

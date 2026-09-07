@@ -11,10 +11,10 @@
 	search included, renders through the same kind-agnostic host.
 -->
 <WorkspacePanes
-	shell={data.shell}
-	sessions={data.sessions}
-	agentPreferences={data.agentPreferences}
-	agentModels={data.agentModels}
-	agentDefaults={data.agentDefaults}
-	agentAvailable={data.agentAvailable}
+	shell={data.session.shell}
+	sessions={data.session.sessions}
+	agentPreferences={data.session.preferences}
+	agentModels={data.session.bootstrap.agentModels}
+	agentDefaults={data.session.bootstrap.agentDefaults}
+	agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
 />

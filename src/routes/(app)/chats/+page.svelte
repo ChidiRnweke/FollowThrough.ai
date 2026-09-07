@@ -4,7 +4,7 @@
 </script>
 
 <ChatHistoryPage
-	shell={data.shell}
+	shell={data.session.shell}
 	sessions={data.sessions}
 	query={data.query}
 	page={data.page}

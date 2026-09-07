@@ -6,6 +6,7 @@ export const workspaceAccountCookieName = 'workspace_account';
 /** Deployment data has no database journal; refresh this small bootstrap once per app start. */
 export const workspaceBootstrapSchema = z.object({
 	accountId: resourceDataSchemas.users.shape.id,
+	agentPreferences: resourceDataSchemas.agent_preferences,
 	agentDefaults: z.object({ chatModelId: z.string().min(1), visionModelId: z.string().min(1) }),
 	agentModels: z.array(
 		z.object({

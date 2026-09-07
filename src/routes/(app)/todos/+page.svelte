@@ -10,8 +10,8 @@
 		todos={data.todos}
 		view={data.view}
 		basePath="/todos"
-		projects={data.shell.projects}
-		notes={data.shell.noteTree}
+		projects={data.session.shell.projects}
+		notes={data.session.shell.noteTree}
 		categories={data.categories}
 	/>
 </PageShell>

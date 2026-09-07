@@ -6,12 +6,11 @@
 </script>
 
 <WorkspacePanes
-	shell={data.shell}
-	sessions={data.sessions}
-	agentPreferences={data.agentPreferences}
-	agentModels={data.agentModels}
-	agentDefaults={data.agentDefaults}
-	agentAvailable={data.agentAvailable}
-	focusedInitialView={data.focusedNoteView}
-	inlineSuggestionsEnabled={data.agentPreferences.inlineSuggestionsEnabled}
+	shell={data.session.shell}
+	sessions={data.session.sessions}
+	agentPreferences={data.session.preferences}
+	agentModels={data.session.bootstrap.agentModels}
+	agentDefaults={data.session.bootstrap.agentDefaults}
+	agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
+	inlineSuggestionsEnabled={data.session.preferences.inlineSuggestionsEnabled}
 />

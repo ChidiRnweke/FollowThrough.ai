@@ -68,5 +68,20 @@ The read cache consumes only journal deltas; it persists each cursor with its in
 tombstones, then downloads bodies. Offline transitions release waiting readers to their saved copy.
 The helper is `client/sync/resource-cache.ts`, not an additional architectural layer.
 
-The app is not integrated yet. Existing route loaders, note outbox, and service worker remain active
-until replacement and migration are tested. No claim of user-facing caching completion is made.
+The browser shell now initializes the shared account resource store. Note panes read through its
+foreground barrier, and normalized shell/list/note projections have focused tests. Remaining page
+server loaders, the legacy note mutation outbox, and the old service worker still need replacement.
+This is an integration checkpoint, not completed offline support. Before retiring the old writer,
+migrate and test its drafts, including drafts with no synchronization ETag and interrupted sends.
+
+Further verified checkpoints:
+
+- `44226c7`: atomic IndexedDB queue acknowledgement and authoritative cache persistence; 18 browser tests passed.
+- `eebadff`: account writer lock, frozen retries, conflict isolation, and logout handling; 8 submission tests passed.
+- `a012235`: shared workspace resource entry point and local overlays; browser and model tests passed.
+- `54246c0`: explicit edit ancestry, competing-tab conflict protection, and removal of the superseded mutation model; 72 focused node tests and 11 browser tests passed.
+- `75a9659`: normalized shell, task, and project projections and stopped-account error handling.
+- `e263dd3`: validated bootstrap and server-set account hint; 30 focused configuration/startup tests passed.
+
+The browser shell integration passes type, scoped lint, and architecture checks, 13 focused
+bootstrap/view tests, and 5 browser resource-store tests. Full app/PWA validation remains pending.

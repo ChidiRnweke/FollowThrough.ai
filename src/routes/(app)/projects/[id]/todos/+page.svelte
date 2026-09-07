@@ -29,7 +29,7 @@
 		view={data.view}
 		basePath="/projects/{data.project.id}/todos"
 		projectId={data.project.id}
-		notes={data.shell.noteTree}
+		notes={data.session.shell.noteTree}
 		categories={data.categories}
 	/>
 </PageShell>
