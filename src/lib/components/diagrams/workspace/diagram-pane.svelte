@@ -235,13 +235,16 @@
 		{/if}
 		{#if current?.kind === 'drawio'}
 			<Button variant="ghost" size="sm" disabled={busy} onclick={openHistory}>History</Button>
+			<!--
+				A failed save does not disable this. It used to, and that was the state in which
+				pressing it was the whole of what the user wanted: the one control that would
+				send the document again was switched off precisely because the document had not
+				been sent. A conflict still disables it, because there the pane is asking a
+				question and the answer is not "publish".
+			-->
 			<Button
 				size="sm"
-				disabled={busy ||
-					autosaving ||
-					!!conflict ||
-					snapshot?.status.kind === 'failure' ||
-					(!hasUnpublishedChanges && !editor.modified)}
+				disabled={busy || autosaving || !!conflict || (!hasUnpublishedChanges && !editor.modified)}
 				onclick={() => control?.commit()}>Publish</Button
 			>
 		{/if}

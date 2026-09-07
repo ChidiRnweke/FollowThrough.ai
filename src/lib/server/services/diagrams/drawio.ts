@@ -29,6 +29,50 @@ const unsafeUrl = (value: string): boolean => {
 };
 
 /**
+ * A draw.io style is `key=value;key=value;`, and some of those values are URLs.
+ *
+ * `image=` is the one that matters: draw.io writes a pasted or imported picture
+ * straight into the style as a data URI, and it spells it `data:image/png,<payload>`
+ * rather than `data:image/png;base64,<payload>` precisely because the semicolon is
+ * its own pair separator. Base64 has no semicolon either, so splitting on `;` is
+ * safe against draw.io's own output.
+ */
+const styleValues = (style: string): readonly string[] =>
+	style.split(';').flatMap((pair) => {
+		const separator = pair.indexOf('=');
+		return separator === -1 ? [] : [pair.slice(separator + 1).trim()];
+	});
+
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * What a style value may point at.
+ *
+ * Raster only, deliberately. `data:image/svg+xml` is the other thing draw.io
+ * writes here, and an SVG can carry script — so admitting it would rest the
+ * guarantee on the document never being rendered anywhere but draw.io's own
+ * sandboxed frame, which is a promise this file cannot keep on behalf of every
+ * future reader of `source`. A pasted SVG is refused by name below, and the
+ * message says to insert it as a shape instead.
+ *
+ * The subtype may end the fragment, because `styleValues` split on the `;` that
+ * a `data:image/png;base64,…` spelling puts right after it. draw.io writes the
+ * comma form to avoid exactly that collision, but a document that arrived from
+ * anywhere else should still be judged on its media type rather than on which
+ * of the two spellings it used.
+ */
+const SAFE_STYLE_URL = /^(?:https:\/\/|data:image\/(?:png|jpe?g|gif|webp)(?:[,;]|$))/i;
+const EMBEDDED_SVG = /^data:image\/svg\+xml(?:[,;]|$)/i;
+
+/** Which cell a reader has to go and find, for a message they can act on. */
+const locate = (element: Element): string => {
+	const id = element.closest('[id]')?.getAttribute('id')?.trim();
+	return id ? `cell "${id}"` : `a ${element.nodeName} element`;
+};
+
+const excerpt = (value: string): string => (value.length > 60 ? `${value.slice(0, 60)}…` : value);
+
+/**
  * One HTML document, kept only to borrow its entity table.
  *
  * Created lazily so a process that never parses a diagram never builds it.
@@ -94,25 +138,86 @@ const parseXml = (source: string, label: string): JSDOM => {
 	}
 };
 
+/** One attribute, lowercased once so no check has to remember to. */
+interface NamedAttribute {
+	readonly name: string;
+	readonly value: string;
+}
+
+/**
+ * A check answers with what is wrong, or with nothing.
+ *
+ * A returned sentence rather than a thrown error, so each check is a plain
+ * function of its input: the loop below owns the raising, and a reader can see
+ * all three rules side by side instead of tracing which `continue` skips what.
+ */
+type AttributeCheck = (attribute: NamedAttribute, where: string) => string | undefined;
+
+/**
+ * Escaped markup, wherever it lands.
+ *
+ * Global on purpose, unlike the URL rules: a draw.io label is HTML from a
+ * rich-text editor, so a handler or a `<script` can arrive in any attribute,
+ * and it is a real vector in all of them.
+ */
+const noSmuggledMarkup: AttributeCheck = ({ name, value }) => {
+	if (name.startsWith('on')) return 'draw.io XML cannot contain event handlers.';
+	if (/<\s*script\b/i.test(value)) return 'draw.io XML cannot contain scripts.';
+	if (/\bon[a-z]+\s*=/i.test(value)) return 'draw.io XML cannot contain event handlers.';
+	return undefined;
+};
+
+/**
+ * The attributes something will actually follow.
+ *
+ * `unsafeUrl` admits only `https://` and a `#` fragment, so it already covers
+ * every scheme a separate `javascript:|vbscript:|data:` test would have listed.
+ */
+const safeUrlAttribute: AttributeCheck = ({ name, value }, where) =>
+	URL_ATTRIBUTES.has(name) && unsafeUrl(value)
+		? `draw.io XML contains an unsafe URL in the ${name} of ${where}: ${excerpt(value)}`
+		: undefined;
+
+const styleUrlComplaint = (styled: string, where: string): string | undefined => {
+	if (!HAS_SCHEME.test(styled) || SAFE_STYLE_URL.test(styled)) return undefined;
+	if (EMBEDDED_SVG.test(styled))
+		return `draw.io XML embeds an SVG image in the style of ${where}. Insert it as a shape rather than pasting the image.`;
+	return `draw.io XML contains an unsafe URL in the style of ${where}: ${excerpt(styled)}`;
+};
+
+/**
+ * The URL-valued halves of a style, and the CSS functions a style may not use.
+ *
+ * Both of these used to run over every attribute of every element, and that
+ * refused two ordinary documents. A label reading "Data: user records" matched
+ * the scheme test, and so did the `image=` draw.io writes into a style for any
+ * pasted picture — so an ordinary edit made a diagram permanently unsavable,
+ * with a message that named nothing the author could go and fix.
+ */
+const safeStyle: AttributeCheck = ({ name, value }, where) => {
+	if (name !== 'style') return undefined;
+	const url = styleValues(value)
+		.map((styled) => styleUrlComplaint(styled, where))
+		.find((complaint) => complaint !== undefined);
+	if (url) return url;
+	return /(?:url\s*\(|@import|expression\s*\()/i.test(value)
+		? `draw.io XML contains an unsafe style on ${where}: ${excerpt(value)}`
+		: undefined;
+};
+
+const ATTRIBUTE_CHECKS: readonly AttributeCheck[] = [noSmuggledMarkup, safeUrlAttribute, safeStyle];
+
 const assertSafeAttributes = (document: Document): void => {
 	for (const element of Array.from(document.querySelectorAll('*'))) {
 		if (element.nodeName.toLowerCase() === 'script')
 			throw new ValidationError('draw.io XML cannot contain scripts.');
+		const where = locate(element);
 		for (const attribute of Array.from(element.attributes)) {
-			const name = attribute.name.toLowerCase();
-			const value = attribute.value;
-			if (name.startsWith('on'))
-				throw new ValidationError('draw.io XML cannot contain event handlers.');
-			if (/<\s*script\b/i.test(value))
-				throw new ValidationError('draw.io XML cannot contain scripts.');
-			if (/\bon[a-z]+\s*=/i.test(value))
-				throw new ValidationError('draw.io XML cannot contain event handlers.');
-			if (URL_ATTRIBUTES.has(name) && unsafeUrl(value))
-				throw new ValidationError('draw.io XML contains an unsafe URL.');
-			if (/\b(?:javascript|vbscript|data)\s*:/i.test(value))
-				throw new ValidationError('draw.io XML contains an unsafe URL.');
-			if (/(?:url\s*\(|@import|expression\s*\()/i.test(value))
-				throw new ValidationError('draw.io XML contains an unsafe style.');
+			const named = { name: attribute.name.toLowerCase(), value: attribute.value };
+			for (const check of ATTRIBUTE_CHECKS) {
+				const complaint = check(named, where);
+				if (complaint) throw new ValidationError(complaint);
+			}
 		}
 	}
 };
