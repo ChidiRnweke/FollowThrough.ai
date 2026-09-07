@@ -25,6 +25,7 @@ export interface MutationQueueDependencies<C, T> {
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
 export class MutationQueue<C, T> {
 	private entries: readonly OutboxEntry<C, T>[] = [];
+	private reloadGeneration = 0;
 	private readonly listeners = new Set<() => void>();
 	private flushing: Promise<SubmissionResult> | null = null;
 	private online = true;
@@ -55,8 +56,9 @@ export class MutationQueue<C, T> {
 		this.notify();
 	}
 	async reload(): Promise<void> {
+		const generation = ++this.reloadGeneration;
 		const entries = await this.dependencies.repository.list(this.accountId);
-		if (this.stopped) return;
+		if (this.stopped || generation !== this.reloadGeneration) return;
 		this.entries = entries;
 		this.notify();
 	}
@@ -87,6 +89,8 @@ export class MutationQueue<C, T> {
 	}
 	private async submit(): Promise<SubmissionResult> {
 		try {
+			if (this.stopped) return { kind: 'stopped' };
+			await this.reload();
 			if (this.stopped) return { kind: 'stopped' };
 			if (!this.online) return { kind: 'offline' };
 			const result = await this.dependencies.writerLock.run(

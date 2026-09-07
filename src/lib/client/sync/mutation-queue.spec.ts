@@ -213,3 +213,34 @@ describe('conflict cache publication', () => {
 		});
 	});
 });
+
+describe('shared offline queue reload', () => {
+	it('shows another tab’s durable edit without requiring a network connection', async () => {
+		const { queue, dependencies } = setup({
+			send: async () => {
+				throw new Error('Offline transport used');
+			}
+		});
+		queue.setOnline(false);
+		await queue.reload();
+		const other = new MutationQueue('alice', dependencies);
+		other.setOnline(false);
+		await other.append(draft(firstId));
+		await queue.flush();
+		expect(queue.pending.map((entry) => entry.intent.local)).toEqual(['Edited']);
+	});
+	it('removes another tab’s discarded edit from the offline projection', async () => {
+		const { queue, dependencies } = setup({
+			send: async () => {
+				throw new Error('Offline transport used');
+			}
+		});
+		queue.setOnline(false);
+		await queue.append(draft(firstId));
+		const other = new MutationQueue('alice', dependencies);
+		other.setOnline(false);
+		await other.discard([firstId]);
+		await queue.flush();
+		expect(queue.pending).toEqual([]);
+	});
+});

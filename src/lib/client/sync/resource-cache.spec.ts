@@ -285,3 +285,29 @@ describe('generic resource cache', () => {
 		expect(await cache.open('note:1')).toEqual({ kind: 'failure', message: 'Storage full' });
 	});
 });
+
+describe('shared device cache reload', () => {
+	it('reads a body downloaded by another tab while offline', async () => {
+		const { repository, transport, cache } = setup();
+		await cache.initialize();
+		const other = new ResourceCache('user-a', { repository, transport });
+		transport.records.set('note:1', first);
+		await other.refresh();
+		await other.warm();
+		cache.setOnline(false);
+		await cache.refresh();
+		expect(await cache.open('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
+	});
+	it('honors a deletion downloaded by another tab while offline', async () => {
+		const { repository, transport, cache } = setup();
+		transport.records.set('note:1', first);
+		await cache.refresh();
+		await cache.warm();
+		const other = new ResourceCache('user-a', { repository, transport });
+		transport.records.delete('note:1');
+		await other.refresh();
+		cache.setOnline(false);
+		await cache.refresh();
+		expect(await cache.open('note:1')).toEqual({ kind: 'deleted' });
+	});
+});

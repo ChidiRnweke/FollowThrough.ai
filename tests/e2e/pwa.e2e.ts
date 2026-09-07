@@ -272,3 +272,24 @@ test('retains an offline note edit and publishes it after reconnecting', async (
 		}))
 		.toEqual({ retained: 'An offline edit retained through publication.', applied: 2 });
 });
+
+test('refreshes another tab’s offline changes when returning to the app', async ({
+	page,
+	context
+}) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	const other = await context.newPage();
+	await other.goto('/today');
+	await other.getByRole('button', { name: 'New project', exact: true }).waitFor();
+	await context.setOffline(true);
+	const name = `Shared offline project ${crypto.randomUUID()}`;
+	await page.getByRole('button', { name: 'New project', exact: true }).click();
+	const creation = page.getByRole('dialog');
+	await creation.getByRole('textbox', { name: 'Project name' }).fill(name);
+	await creation.getByRole('button', { name: 'Create', exact: true }).click();
+	await page.getByRole('heading', { name, exact: true }).waitFor();
+	await other.bringToFront();
+	await other.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(other.getByRole('link', { name, exact: true }).first()).toBeVisible();
+});

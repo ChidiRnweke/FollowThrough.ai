@@ -94,6 +94,12 @@ export class ResourceCache<T> {
 		return this.initializing;
 	}
 
+	/** Incorporate another tab's durable records without replacing newer local knowledge. */
+	async reload(): Promise<void> {
+		await this.initialize();
+		await this.restore();
+	}
+
 	refresh(): Promise<SynchronizationResult> {
 		if (!this.checking)
 			this.checking = this.pullChanges().finally(() => {
@@ -155,15 +161,18 @@ export class ResourceCache<T> {
 	private async restore(): Promise<void> {
 		const { records, cursor } = await this.dependencies.repository.load(this.accountId);
 		if (this.stopped) return;
-		this.cursor = cursor;
+		if (cursor !== null && (this.cursor === null || BigInt(cursor) > BigInt(this.cursor)))
+			this.cursor = cursor;
 		for (const { key, entry } of records) {
-			this.entries.set(
-				key,
+			const restored: ResourceState<T> =
 				entry.kind === 'present' && entry.cache.kind === 'updating'
 					? { kind: 'present', cache: { ...entry.cache, transfer: { kind: 'queued' } } }
-					: entry
-			);
-			if (entry.kind === 'present' && entry.cache.kind === 'updating') this.queue.add(key);
+					: entry;
+			const current = this.entries.get(key);
+			const merged = current ? mergeResourceStates(current, restored) : restored;
+			this.entries.set(key, merged);
+			if (merged.kind === 'present' && merged.cache.kind === 'updating') this.queue.add(key);
+			else this.queue.delete(key);
 		}
 		this.notify();
 	}
@@ -192,7 +201,7 @@ export class ResourceCache<T> {
 
 	private async pullChanges(): Promise<SynchronizationResult> {
 		try {
-			await this.initialize();
+			await this.reload();
 			if (this.stopped) return { kind: 'stopped' };
 			if (!this.online) return { kind: 'offline' };
 			const batch = await this.dependencies.transport.pull(this.cursor ?? initialSyncCursor);
