@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import { discardWrites, retryConflictedWrite, type OutboxEntry } from './index';
+import { discardWrites, dependentWrites, retryConflictedWrite, type OutboxEntry } from './index';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const replacementId = 'a0000000-0000-4000-8000-000000000002';
@@ -118,4 +118,57 @@ describe('explicit local edit discard', () => {
 	it('rejects a stale discard decision after an edit was replaced', () => {
 		expect(() => discardWrites([conflicted], [replacementId])).toThrow('review them again');
 	});
+});
+
+describe('reviewing dependent edits', () => {
+	it('includes indirect descendants but leaves independent edits alone', () => {
+		const child: OutboxEntry<string, string> = {
+			...conflicted,
+			sequence: 2,
+			intent: {
+				...conflicted.intent,
+				operationId: 'a0000000-0000-4000-8000-000000000003',
+				basedOn: firstId
+			},
+			delivery: { kind: 'queued' }
+		};
+		const grandchild: OutboxEntry<string, string> = {
+			...child,
+			sequence: 3,
+			intent: {
+				...child.intent,
+				operationId: 'a0000000-0000-4000-8000-000000000004',
+				basedOn: null,
+				dependencies: ['a0000000-0000-4000-8000-000000000003']
+			}
+		};
+		const independent: OutboxEntry<string, string> = {
+			...child,
+			sequence: 4,
+			intent: {
+				...child.intent,
+				operationId: 'a0000000-0000-4000-8000-000000000005',
+				basedOn: null
+			}
+		};
+		expect(
+			dependentWrites([grandchild, independent, child, conflicted], firstId).map(
+				(entry) => entry.intent.operationId
+			)
+		).toEqual([
+			'a0000000-0000-4000-8000-000000000004',
+			'a0000000-0000-4000-8000-000000000003',
+			firstId
+		]);
+	});
+});
+
+it('does not turn a conflicting creation into an update of an existing item', () => {
+	expect(() =>
+		retryConflictedWrite(
+			[{ ...conflicted, intent: { ...conflicted.intent, base: null } }],
+			firstId,
+			replacementId
+		)
+	).toThrow('retain both copies');
 });

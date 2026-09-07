@@ -8,3 +8,4 @@ export { default as NoteSyncStatus } from './note-sync-status.svelte';
 export { default as NoteVersionHistory } from './note-version-history.svelte';
 export { default as NoteTitleInlineInput } from './note-title-inline-input.svelte';
 export { default as NoteWorkspace } from './workspace/note-workspace.svelte';
+export { default as NoteVersionDiff } from './note-version-diff.svelte';

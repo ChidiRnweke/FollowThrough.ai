@@ -97,3 +97,13 @@ describe('legacy drafts opened by the shared editor', () => {
 		});
 	});
 });
+
+it('does not label an editor buffer synced after its saved edit is discarded elsewhere', async () => {
+	const { store, resources, local } = await setup();
+	await store.read();
+	await resources.discard(resources.pending.map((entry) => entry.intent.operationId));
+	expect({ status: store.status, retained: store.value?.plainText }).toEqual({
+		status: 'error',
+		retained: local.plainText
+	});
+});

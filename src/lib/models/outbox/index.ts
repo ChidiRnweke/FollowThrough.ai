@@ -296,6 +296,8 @@ export const retryConflictedWrite = <C, T>(
 		entries.some((entry) => entry.intent.operationId === replacementId)
 	)
 		throw new Error('Conflict resolution requires a new operation identity');
+	if (conflict.intent.base === null)
+		throw new Error('A new item must be explicitly recreated to retain both copies');
 	if (conflict.delivery.remote.kind !== 'found')
 		throw new Error('A deleted or unavailable resource must be explicitly recreated');
 	const base = conflict.delivery.remote.snapshot;
@@ -348,6 +350,29 @@ export const resolveWriteBase = <C, T>(
 			? { ...entry, intent: { ...entry.intent, base: resolution.snapshot } }
 			: { ...entry, delivery: resolution };
 	});
+
+/** Include every descendant so a review cannot hide edits that depend on the selected base. */
+export const dependentWrites = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	operationId: string
+): readonly OutboxEntry<C, T>[] => {
+	const selected = new Set([operationId]);
+	let changed = true;
+	while (changed) {
+		changed = false;
+		for (const { intent } of entries) {
+			if (
+				!selected.has(intent.operationId) &&
+				((intent.basedOn !== null && selected.has(intent.basedOn)) ||
+					intent.dependencies.some((id) => selected.has(id)))
+			) {
+				selected.add(intent.operationId);
+				changed = true;
+			}
+		}
+	}
+	return entries.filter((entry) => selected.has(entry.intent.operationId));
+};
 
 /** Discard exactly the reviewed set. Unknown outcomes and unselected dependents must be resolved first. */
 export const discardWrites = <C, T>(

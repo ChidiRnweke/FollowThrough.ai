@@ -109,6 +109,14 @@ outcome preserves later edits as conflicts instead of authorizing recreation. Mo
 their own observed content, and explicit keep-local adopts only the replacement operation it reviewed. References to locally created parents wait for those parents' acknowledgement.
 Conflicts retain dependent entries while unrelated resources remain sendable.
 
+A shared review dialog exposes pending writes, rejection reasons, and the retained base/local/server
+copies. Review captures the exact operation identities, including all dependent edits. Discard refuses
+unknown send outcomes and any newly added, unreviewed descendants. A download preserves the reviewed
+records before an explicit discard. Keeping a conflict replays its original command against the
+reviewed server version; creation conflicts and server-deleted items require explicit recreation.
+Editors whose saved operation is discarded elsewhere in the same app retain their buffer with an
+error until reopened, rather than presenting that buffer as synchronized.
+
 The server checks the base version, applies the domain mutation, and stores an operation receipt
 in one transaction. Retrying the same operation returns its receipt. An operation identifier
 cannot be reused for different input. Client-generated identities let offline-created objects

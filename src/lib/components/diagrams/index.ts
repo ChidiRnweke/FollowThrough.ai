@@ -6,3 +6,4 @@ export { default as DiagramPane } from './workspace/diagram-pane.svelte';
 export { default as StudioHandoff } from './workspace/studio-handoff.svelte';
 export { default as DiagramGallery } from './library/diagram-gallery.svelte';
 export type { DiagramGalleryData } from './library/diagram-gallery.svelte';
+export { default as DiagramDocumentPreview } from './workspace/diagram-document-preview.svelte';

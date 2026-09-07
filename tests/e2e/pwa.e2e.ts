@@ -215,3 +215,29 @@ test('opens saved chat history offline and disables execution', async ({ page, c
 		.waitFor();
 	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
 });
+
+test('reviews and discards an offline project without losing unreviewed work', async ({
+	page,
+	context
+}, testInfo) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	await context.setOffline(true);
+	await page.getByRole('button', { name: 'New project', exact: true }).click();
+	const creation = page.getByRole('dialog');
+	await creation.getByRole('textbox', { name: 'Project name' }).fill('Offline review project');
+	await creation.getByRole('button', { name: 'Create', exact: true }).click();
+	await page.getByRole('heading', { name: 'Offline review project', exact: true }).waitFor();
+	await page.goto('/today');
+	await page.getByRole('button', { name: 'Review changes', exact: true }).waitFor();
+	await page.screenshot({ path: testInfo.outputPath('saved-offline-project.png'), fullPage: true });
+	await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+	await page.getByRole('button', { name: 'Review', exact: true }).click();
+	await page.getByRole('heading', { name: 'Your change', exact: true }).waitFor();
+	await page.screenshot({
+		path: testInfo.outputPath('review-offline-project.png'),
+		fullPage: true
+	});
+	await page.getByRole('button', { name: 'Discard local change', exact: true }).click();
+	await expect(page.getByText('No changes are waiting to send.')).toBeVisible();
+});

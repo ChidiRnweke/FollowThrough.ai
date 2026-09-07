@@ -23,6 +23,8 @@
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
+	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
+	let reviewWrites = $state(false);
 	import { MemoryNotificationMenu } from '$lib/components/memory';
 
 	let { data, children } = $props();
@@ -259,6 +261,11 @@
 							? ` · ${pendingChanges} pending`
 							: ''}{conflicts ? ` · ${conflicts} need review` : ''}</span
 					>
+					{#if pendingChanges}<Button
+							variant="ghost"
+							size="sm"
+							onclick={() => (reviewWrites = true)}>Review changes</Button
+						>{/if}
 					{#if syncError && data.session.resources.online}<Button
 							variant="ghost"
 							size="sm"
@@ -302,3 +309,5 @@
 		This workspace is not available on this device. Reconnect to sign in.
 	</div>
 {/if}
+
+<WorkspaceWriteReview resources={data.session.resources} bind:open={reviewWrites} />
