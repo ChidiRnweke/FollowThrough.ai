@@ -231,14 +231,58 @@ describe('A failure is news only when nothing put it right', () => {
 			call({ name: 'save_note', status: 'failed', failure: 'Not callable directly.' }),
 			call({ name: 'save_note' })
 		]);
-		expect(await screen.getByText('One change was not applied').all()).toHaveLength(0);
+		expect(await screen.getByText(/not applied/).all()).toHaveLength(0);
 	});
 
-	it('states one that stood', async () => {
+	it('states one that stood, on the subject it befell', async () => {
 		const screen = await renderTurn([
 			call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })
 		]);
-		await expect.element(screen.getByText('One change was not applied')).toBeVisible();
+		await expect.element(screen.getByText(/not applied/)).toBeVisible();
+	});
+
+	// The banner that used to head this block named the same subjects the rows below it named,
+	// so the failure was stated twice. The row keeps the name, the colour and the way in.
+	it('states it once, not in a banner above the rows as well', async () => {
+		const screen = await renderTurn([
+			call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })
+		]);
+		expect(await screen.getByText(/changes? (was|were) not applied/).all()).toHaveLength(0);
+	});
+});
+
+describe('Looks that found nothing are a row like everything else behind the door', () => {
+	const fruitless = () =>
+		call({
+			name: 'grep',
+			arguments: { pattern: 'southwind', path: '/' },
+			output: { kind: 'no_matches' }
+		});
+
+	const openDoor = async (tools: ChatToolActivity[]) => {
+		const screen = await renderTurn(tools);
+		await screen.getByText('What it looked at').click();
+		return screen;
+	};
+
+	it('counts them on the statement line, which the flat sentence could not do', async () => {
+		const screen = await openDoor([fruitless(), fruitless()]);
+		await expect.element(screen.getByText('2 looks came back with nothing')).toBeVisible();
+	});
+
+	// The pass labels used to sit at the top of the door's column with no statement above them,
+	// so a request rung stood where a subject's name belongs. `toBeVisible` rather than a count
+	// of matches, for the reason this file already records above: the collapsible keeps its
+	// content mounted, so presence in the document says nothing about what is on screen.
+	it('keeps the looks themselves behind their own chevron', async () => {
+		const screen = await openDoor([fruitless()]);
+		await expect.element(screen.getByText(/Searched for/)).not.toBeVisible();
+	});
+
+	it('shows them once that chevron is opened', async () => {
+		const screen = await openDoor([fruitless()]);
+		await screen.getByText('One look came back with nothing').click();
+		await expect.element(screen.getByText(/Searched for/)).toBeVisible();
 	});
 });
 

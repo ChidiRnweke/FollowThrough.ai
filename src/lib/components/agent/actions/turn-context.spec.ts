@@ -214,14 +214,52 @@ describe('A failure is news only when nothing put it right', () => {
 		});
 
 	it('reports a change nothing recovered', () => {
-		expect(turnContext([failed()], shell).failures).toHaveLength(1);
+		expect(turnContext([failed()], shell).changed[0]?.outcome).toBe('failed');
 	});
 
 	it('says nothing about an attempt the turn later got right', () => {
-		expect(turnContext([failed(), edit()], shell).failures).toHaveLength(0);
+		expect(turnContext([failed(), edit()], shell).changed[0]?.outcome).not.toBe('failed');
 	});
 
 	it('names what the failure befell, so the reader can go and look', () => {
-		expect(turnContext([failed()], shell).failures[0]?.subjects[0]?.title).toBe('atlas');
+		expect(turnContext([failed()], shell).changed[0]?.entity.title).toBe('atlas');
+	});
+
+	it("explains the failure in the reader's terms on the subject it befell", () => {
+		const evidence = turnContext([failed()], shell).changed[0]?.passes.at(-1)?.evidence;
+		expect(evidence?.kind === 'failure' && evidence.cause).toContain(
+			'The text it meant to change was not where it expected'
+		);
+	});
+
+	it("keeps the run's own words as the evidence under that explanation", () => {
+		const evidence = turnContext([failed()], shell).changed[0]?.passes.at(-1)?.evidence;
+		expect(evidence?.kind === 'failure' && evidence.raw).toBe('oldText was not found in the note.');
+	});
+
+	// `explainToolFailure` hands back anything it does not recognise, so carrying both would
+	// print one sentence twice — the duplication this surface exists to remove.
+	it('drops the raw message when it is already the explanation', () => {
+		const opaque = call({
+			name: 'edit_note',
+			status: 'failed',
+			arguments: { noteId: ATLAS },
+			failure: 'Tool output could not be represented as JSON.'
+		});
+		const evidence = turnContext([opaque], shell).changed[0]?.passes.at(-1)?.evidence;
+		expect(evidence?.kind === 'failure' && evidence.raw).toBeUndefined();
+	});
+});
+
+describe('A failure the call could not name still gets a row', () => {
+	const nameless = (status: 'failed' | 'succeeded') =>
+		call({ name: 'search', status, arguments: {}, failure: 'The index is unavailable.' });
+
+	it('names it by the tool, which is the only identity it has', () => {
+		expect(turnContext([nameless('failed')], shell).read[0]?.entity.title).toBe('Search');
+	});
+
+	it('drops it when a later call of the same tool succeeded', () => {
+		expect(turnContext([nameless('failed'), nameless('succeeded')], shell).read).toHaveLength(0);
 	});
 });

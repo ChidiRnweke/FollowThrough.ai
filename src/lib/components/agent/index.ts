@@ -22,11 +22,11 @@ export {
 	type ToolDisclosure
 } from './actions/tool-disclosure';
 export {
+	barrenLabel,
 	isWriteVerb,
 	readDoorLabel,
 	runningSteps,
 	turnContext,
-	type FailureGroup,
 	type PassEvidence,
 	type PassOutcome,
 	type RunningStep,

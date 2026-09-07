@@ -292,8 +292,6 @@
 											turnTools={entryTools(entry)}
 											summarise={index === lastActivityIndex(entry)}
 											{shell}
-											retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
-											onretry={() => onretry(entry)}
 										/>
 									{:else}
 										{@const part = group.part}
