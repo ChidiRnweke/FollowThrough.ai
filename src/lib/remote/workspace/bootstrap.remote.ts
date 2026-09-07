@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+	CHAT_WEB_SEARCH_DEFAULTS,
+	DEFAULT_AGENT_MAX_TURNS,
+	webSearchOptionsFromEnvironment
+} from '$lib/models/agent';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
@@ -6,10 +11,9 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 export const readWorkspaceBootstrap = command(z.object({}), async () => {
 	const actor = requestActor();
 	const settings = AppFactory.controllers().agentSettings();
-	const [agentDefaults, models, agentPreferences] = await Promise.all([
-		settings.resolveDefaults(actor),
-		settings.listModels(actor),
-		settings.getPreferences(actor)
+	const [agentDefaults, models] = await Promise.all([
+		settings.deploymentDefaults(actor),
+		settings.listModels(actor)
 	]);
 	const agentModels = models.some((model) => model.id === agentDefaults.chatModelId)
 		? models
@@ -25,11 +29,17 @@ export const readWorkspaceBootstrap = command(z.object({}), async () => {
 					capabilities: ['configured']
 				}
 			];
+	const environment = webSearchOptionsFromEnvironment(process.env);
 	return {
 		accountId: actor.userId,
-		agentPreferences,
 		agentDefaults,
 		agentModels,
+		numericDefaults: {
+			webSearchMaxResults: environment.maxResults ?? CHAT_WEB_SEARCH_DEFAULTS.maxResults,
+			webSearchMaxTotalResults:
+				environment.maxTotalResults ?? CHAT_WEB_SEARCH_DEFAULTS.maxTotalResults,
+			agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
+		},
 		agentAvailable: Boolean(process.env.OPENROUTER_API_KEY?.trim())
 	};
 });

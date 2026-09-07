@@ -1,6 +1,7 @@
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
+import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
@@ -104,15 +105,9 @@ export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
  * `agentTools()` and in the MCP surface rather than being definitions, so no
  * preference can reach them.
  */
-export const LOCKED_TOOL_NAMES = [
-	'get_workspace_context',
-	'load_skill',
-	'list_tool_preferences',
-	'set_tool_enabled'
-] as const satisfies readonly ToolName[];
 
 /** Membership for callers holding a {@link ToolName}; see {@link FIRST_CLASS_TOOL_SET}. */
-export const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
+const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
 
 /**
  * The user's resolved tool selection, already collapsed from the stored user
@@ -499,6 +494,11 @@ export const agentToolCoverage = {
 		}
 	},
 	agentSettings: {
+		deploymentDefaults: {
+			kind: 'excluded',
+			reason:
+				'Deployment metadata for the offline app bootstrap; user overrides are synchronized separately.'
+		},
 		getPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
 		updatePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
 		listModels: { kind: 'read', tools: ['list_agent_models'] },

@@ -1,12 +1,9 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
-	import {
-		listToolPreferences,
-		resetToolOverride,
-		setToolEnabled
-	} from '$lib/remote/settings/settings.remote';
+	import { resetToolOverride, setToolEnabled } from '$lib/remote/settings/settings.remote';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -37,6 +34,14 @@
 	let page = $state(1);
 	let busy = $state<string | null>(null);
 
+	const session = workspaceSession.current;
+	if (!session) throw new Error('Open the workspace before editing settings');
+	const preferences = $derived(
+		session.resources.views.toolPreferences(session.bootstrap.accountId, projectId)
+	);
+	const filtered = $derived(matching(preferences, search.trim().toLowerCase()));
+	const start = $derived((page - 1) * PAGE_SIZE);
+	const visible = $derived(filtered.slice(start, start + PAGE_SIZE));
 	const scope = $derived(projectId ? { projectId } : {});
 	const scopeName = $derived(projects.find((project) => project.id === projectId)?.name);
 
@@ -129,6 +134,7 @@
 		busy = preference.name;
 		try {
 			await setToolEnabled({ ...scope, toolName: preference.name, enabled });
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — the failed authority change is reported and refreshed state remains authoritative.
 		} catch {
 			toast.error(`Could not change ${readable(preference.name)}. Try again.`);
@@ -142,6 +148,7 @@
 		busy = preference.name;
 		try {
 			await resetToolOverride({ toolName: preference.name, projectId });
+			await workspaceSession.synchronize();
 			toast.success(`${readable(preference.name)} follows your default again`);
 			// audit-allow: silent-catch — the failed authority reset is reported and the existing override remains visible.
 		} catch {
@@ -182,16 +189,12 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
-			<!-- Its own boundary so a scope change reloads the tally without blanking
-			     the controls the user is standing on. Remote queries dedupe by
-			     argument, so this and the list below are one request. -->
-			<svelte:boundary>
-				{@const preferences = await listToolPreferences(scope)}
-				<p class="provenance-caption">
-					{preferences.filter((preference) => preference.enabled).length} of {preferences.length} on ·
-					{preferences.filter((preference) => preference.locked).length} always on
-				</p>
-			</svelte:boundary>
+			<!-- The tally and rows use the same reactive resource projection. -->
+
+			<p class="provenance-caption">
+				{preferences.filter((preference) => preference.enabled).length} of {preferences.length} on ·
+				{preferences.filter((preference) => preference.locked).length} always on
+			</p>
 		</div>
 		{#if projectId}
 			<p class="provenance-caption">
@@ -241,101 +244,91 @@
 			</ToggleGroup.Root>
 		</div>
 
-		<svelte:boundary>
-			{#snippet pending()}
-				<p class="text-sm text-muted-foreground">Loading tools…</p>
-			{/snippet}
-			{@const preferences = await listToolPreferences(scope)}
-			{@const filtered = matching(preferences, search.trim().toLowerCase())}
-			{@const start = (page - 1) * PAGE_SIZE}
-			{@const visible = filtered.slice(start, start + PAGE_SIZE)}
-
-			{#if filtered.length === 0}
-				<p class="text-sm text-muted-foreground">No tool matches these filters.</p>
-			{:else}
-				<div class="flex flex-col gap-3">
-					{#each chunksOf(visible) as chunk (chunk.title)}
-						<div class="flex flex-col gap-1.5">
-							<h3 class="eyebrow">{chunk.title}</h3>
-							<!-- Bled 12px past the measure so names align with the controls above
+		{#if filtered.length === 0}
+			<p class="text-sm text-muted-foreground">No tool matches these filters.</p>
+		{:else}
+			<div class="flex flex-col gap-3">
+				{#each chunksOf(visible) as chunk (chunk.title)}
+					<div class="flex flex-col gap-1.5">
+						<h3 class="eyebrow">{chunk.title}</h3>
+						<!-- Bled 12px past the measure so names align with the controls above
 							     while the hairlines still read as one continuous list. -->
-							<ul class="-mx-3 divide-y divide-border border-t border-border">
-								{#each chunk.items as preference (preference.name)}
-									<li class="flex items-center gap-3 px-3 py-2">
-										<div
-											class={[
-												'flex min-w-0 flex-1 items-baseline gap-3',
-												!preference.enabled && 'opacity-60'
-											]}
+						<ul class="-mx-3 divide-y divide-border border-t border-border">
+							{#each chunk.items as preference (preference.name)}
+								<li class="flex items-center gap-3 px-3 py-2">
+									<div
+										class={[
+											'flex min-w-0 flex-1 items-baseline gap-3',
+											!preference.enabled && 'opacity-60'
+										]}
+									>
+										<span class="shrink-0 font-mono text-sm">{preference.name}</span>
+										<span
+											class="truncate text-sm text-muted-foreground"
+											title={preference.description}
 										>
-											<span class="shrink-0 font-mono text-sm">{preference.name}</span>
-											<span
-												class="truncate text-sm text-muted-foreground"
-												title={preference.description}
-											>
-												{preference.description}
-											</span>
-										</div>
-										{#if preference.locked}
-											<Badge variant="secondary" class="shrink-0">Always on</Badge>
-										{:else if preference.source === 'project'}
-											<Button
-												variant="ghost"
-												size="sm"
-												class="shrink-0"
-												disabled={busy !== null}
-												onclick={() => void reset(preference)}
-											>
-												Reset
-											</Button>
-										{/if}
-										<Switch
+											{preference.description}
+										</span>
+									</div>
+									{#if preference.locked}
+										<Badge variant="secondary" class="shrink-0">Always on</Badge>
+									{:else if preference.source === 'project'}
+										<Button
+											variant="ghost"
+											size="sm"
 											class="shrink-0"
-											aria-label={readable(preference.name)}
-											checked={preference.enabled}
-											disabled={preference.locked || busy !== null}
-											onCheckedChange={(enabled) => void toggle(preference, enabled)}
-										/>
-									</li>
-								{/each}
-							</ul>
-						</div>
-					{/each}
-				</div>
-
-				{#if filtered.length > PAGE_SIZE}
-					<div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-						<p class="provenance-caption">
-							Showing {start + 1}–{start + visible.length} of {filtered.length}
-						</p>
-						<!-- Pagination.Root centres itself by default; pulled right of the range. -->
-						<Pagination.Root
-							class="mx-0 w-auto"
-							count={filtered.length}
-							perPage={PAGE_SIZE}
-							bind:page
-						>
-							{#snippet children({ pages, currentPage })}
-								<Pagination.Content>
-									<Pagination.Item><Pagination.Previous /></Pagination.Item>
-									{#each pages as entry (entry.key)}
-										<Pagination.Item>
-											{#if entry.type === 'ellipsis'}
-												<Pagination.Ellipsis />
-											{:else}
-												<Pagination.Link page={entry} isActive={currentPage === entry.value}>
-													{entry.value}
-												</Pagination.Link>
-											{/if}
-										</Pagination.Item>
-									{/each}
-									<Pagination.Item><Pagination.Next /></Pagination.Item>
-								</Pagination.Content>
-							{/snippet}
-						</Pagination.Root>
+											disabled={busy !== null}
+											onclick={() => void reset(preference)}
+										>
+											Reset
+										</Button>
+									{/if}
+									<Switch
+										class="shrink-0"
+										aria-label={readable(preference.name)}
+										checked={preference.enabled}
+										disabled={preference.locked || busy !== null}
+										onCheckedChange={(enabled) => void toggle(preference, enabled)}
+									/>
+								</li>
+							{/each}
+						</ul>
 					</div>
-				{/if}
+				{/each}
+			</div>
+
+			{#if filtered.length > PAGE_SIZE}
+				<div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+					<p class="provenance-caption">
+						Showing {start + 1}–{start + visible.length} of {filtered.length}
+					</p>
+					<!-- Pagination.Root centres itself by default; pulled right of the range. -->
+					<Pagination.Root
+						class="mx-0 w-auto"
+						count={filtered.length}
+						perPage={PAGE_SIZE}
+						bind:page
+					>
+						{#snippet children({ pages, currentPage })}
+							<Pagination.Content>
+								<Pagination.Item><Pagination.Previous /></Pagination.Item>
+								{#each pages as entry (entry.key)}
+									<Pagination.Item>
+										{#if entry.type === 'ellipsis'}
+											<Pagination.Ellipsis />
+										{:else}
+											<Pagination.Link page={entry} isActive={currentPage === entry.value}>
+												{entry.value}
+											</Pagination.Link>
+										{/if}
+									</Pagination.Item>
+								{/each}
+								<Pagination.Item><Pagination.Next /></Pagination.Item>
+							</Pagination.Content>
+						{/snippet}
+					</Pagination.Root>
+				</div>
 			{/if}
-		</svelte:boundary>
+		{/if}
 	</div>
 </section>

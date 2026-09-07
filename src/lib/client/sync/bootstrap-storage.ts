@@ -4,7 +4,7 @@ import {
 	type WorkspaceBootstrap
 } from '$lib/models/workspace-bootstrap';
 
-export const workspaceBootstrapKey = 'followthrough-workspace-bootstrap-v1';
+export const workspaceBootstrapKey = 'followthrough-workspace-bootstrap-v2';
 export type StoredBootstrap =
 	| { kind: 'absent' }
 	| { kind: 'stored'; value: WorkspaceBootstrap }
@@ -28,10 +28,11 @@ export const readStoredBootstrap = (
 	}
 };
 export const storeBootstrap = (
-	storage: Pick<Storage, 'setItem'>,
+	storage: Pick<Storage, 'setItem' | 'removeItem'>,
 	value: WorkspaceBootstrap
 ): void => {
 	storage.setItem(workspaceBootstrapKey, JSON.stringify(value));
+	storage.removeItem('followthrough-workspace-bootstrap-v1');
 };
 export const clearBootstrap = (storage: Pick<Storage, 'removeItem'>): void => {
 	storage.removeItem(workspaceBootstrapKey);

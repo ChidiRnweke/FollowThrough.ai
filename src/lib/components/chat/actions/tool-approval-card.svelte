@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { Note } from '$lib/models/notes';
-	import type { AgentPreferences } from '$lib/models/agent';
+	import type { AgentPreferenceValues } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
@@ -35,7 +35,7 @@
 		tool: ChatToolActivity;
 		shell?: ShellContext;
 		/** The settings in force, so a change to them can be shown as a change and not a value. */
-		preferences?: AgentPreferences;
+		preferences?: AgentPreferenceValues;
 		onapprove: () => void;
 		onreject: () => void;
 		/** False inside a bundle, where one footer answers every change at once. */

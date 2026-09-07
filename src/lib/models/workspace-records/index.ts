@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { syncEtagSchema } from '$lib/models/sync';
 import { storedDocumentSchema, noteSyncContentEquals } from '$lib/models/notes';
-import { provenanceSchema } from '$lib/models/provenance';
+import { provenanceSchema, type Confidence } from '$lib/models/provenance';
 import { suggestionSchema } from '$lib/models/suggestions';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent';
@@ -289,7 +289,12 @@ export const resourceDataSchemas = {
 		...owned,
 		pipeline,
 		autoAcceptEnabled: z.boolean(),
-		minimumConfidence: z.number().optional(),
+		minimumConfidence: z
+			.number()
+			.min(0)
+			.max(1)
+			.transform((value) => value as Confidence)
+			.optional(),
 		...timestamps
 	}),
 	memory_entries: z.object({

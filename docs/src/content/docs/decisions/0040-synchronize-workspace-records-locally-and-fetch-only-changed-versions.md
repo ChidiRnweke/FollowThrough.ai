@@ -110,8 +110,9 @@ cannot be reused for different input. Client-generated identities let offline-cr
 refer to each other without changing identity after synchronization.
 
 Deployment model metadata and resolved deployment-dependent defaults are not database resources.
-A small, validated bootstrap binds the active account and retains these settings for offline
-startup. It is refreshed on app start and never contains workspace page snapshots. A readable,
+A small, validated bootstrap binds the active account and retains deployment defaults and the
+model catalog for offline startup. User preferences, tool overrides, and trust policies are ordinary
+synchronized records; deleting an override immediately restores its deployment or product default. It is refreshed on app start and never contains workspace page snapshots. A readable,
 non-secret account-hint cookie must match before cached bootstrap data can be restored. The server
 sets that hint only after resolving the actor and clears it when sign-in starts, the session is
 invalid, or the user signs out. It is not an authentication credential; synchronization requests

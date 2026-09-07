@@ -4,7 +4,7 @@
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
 		AgentModel,
-		AgentPreferences,
+		AgentPreferenceValues,
 		ConversationImageInput,
 		Conversation,
 		RunAgentInput
@@ -77,7 +77,7 @@
 		activeProjectId?: ProjectId;
 		initialConversationId?: Conversation['id'] | null;
 		showHistory?: boolean;
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		/** What a conversation with no model of its own runs on, resolved server-side. */
 		agentDefaults: AgentModelDefaults;

@@ -1,3 +1,6 @@
+import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
+import type { UserId } from '$lib/models/identity';
+import type { ToolPreference, AgentPreferenceValues } from '$lib/models/agent';
 import type { ArtifactView } from '$lib/models/deliverables';
 import type { Diagram } from '$lib/models/diagrams';
 import type { TrashedNote } from '$lib/models/notes';
@@ -229,6 +232,46 @@ export class WorkspaceViews {
 					artifact.templateName?.toLowerCase().includes(search)
 			)
 			.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+	}
+
+	agentPreferences(userId: UserId): AgentPreferenceValues {
+		return (
+			this.get('agent_preferences', userId) ?? {
+				userId,
+				executionMode: 'approval_required',
+				inlineSuggestionsEnabled: true
+			}
+		);
+	}
+
+	toolPreferences(userId: string, projectId?: ProjectId): readonly ToolPreference[] {
+		const user = new Map(
+			this.all('tool_preferences')
+				.filter((entry) => entry.userId === userId)
+				.map((entry) => [entry.toolName, entry.enabled])
+		);
+		const project = new Map(
+			this.all('project_tool_overrides')
+				.filter((entry) => entry.userId === userId && entry.projectId === projectId)
+				.map((entry) => [entry.toolName, entry.enabled])
+		);
+		return TOOL_DESCRIPTIONS.map((tool): ToolPreference => {
+			const locked = LOCKED_TOOL_NAMES.some((name) => name === tool.name);
+			const override = project.get(tool.name);
+			const preference = user.get(tool.name);
+			return {
+				...tool,
+				locked,
+				enabled: locked ? true : (override ?? preference ?? true),
+				source: locked
+					? 'default'
+					: override !== undefined
+						? 'project'
+						: preference !== undefined
+							? 'user'
+							: 'default'
+			};
+		});
 	}
 
 	project(projectId: ProjectId): ProjectView | null {

@@ -135,3 +135,14 @@ describe('agent settings model defaults', () => {
 		);
 	});
 });
+
+describe('offline bootstrap deployment defaults', () => {
+	it('keeps deployment models independent of the users current overrides', async () => {
+		const { controller } = setup();
+		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
+		expect(await controller.deploymentDefaults(testActor())).toEqual({
+			chatModelId: DEPLOYMENT_CHAT_MODEL,
+			visionModelId: DEPLOYMENT_VISION_MODEL
+		});
+	});
+});

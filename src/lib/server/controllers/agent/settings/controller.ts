@@ -58,6 +58,7 @@ export interface AgentSettingsController {
 	 * a model the run does not use.
 	 */
 	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
+	deploymentDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
 }
 
 export interface AgentSettingsDependencies {
@@ -101,6 +102,14 @@ export class AgentSettings implements AgentSettingsController {
 	listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
 		void _actor;
 		return this.dependencies.models.list();
+	}
+
+	async deploymentDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
+		void actor;
+		return {
+			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
+			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
+		};
 	}
 
 	async resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults> {

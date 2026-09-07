@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Form } from '$lib/components/ui/form';
-	import type { AgentModel, AgentPreferences } from '$lib/models/agent';
+	import type { AgentModel, AgentPreferenceValues } from '$lib/models/agent';
 	import { saveModelPreferences } from '$lib/remote/settings/settings.remote';
 	import { ModelPicker } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
@@ -9,8 +10,10 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { toast } from 'svelte-sonner';
 
-	let { preferences, models }: { preferences: AgentPreferences; models: readonly AgentModel[] } =
-		$props();
+	let {
+		preferences,
+		models
+	}: { preferences: AgentPreferenceValues; models: readonly AgentModel[] } = $props();
 	let model = $state<string | null>(null);
 	let visionModel = $state<string | null>(null);
 	let inlineModel = $state<string | null>(null);
@@ -39,8 +42,10 @@
 	// issue and throws on a failed request; both are the same story to tell here.
 	const enhanced = saveModelPreferences.enhance(async (form) => {
 		try {
-			if (await form.submit()) toast.success('Model defaults saved');
-			else toast.error('Could not save model defaults. Check the values and try again.');
+			if (await form.submit()) {
+				await workspaceSession.synchronize();
+				toast.success('Model defaults saved');
+			} else toast.error('Could not save model defaults. Check the values and try again.');
 			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save model defaults. Try again.');

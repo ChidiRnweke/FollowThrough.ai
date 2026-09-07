@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
-	import { invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { updateTrustPolicy } from '$lib/remote/settings/settings.remote';
 	import TrustPolicyControl from '../trust-policy-control.svelte';
 	import * as Field from '$lib/components/ui/field';
@@ -14,7 +14,7 @@
 		try {
 			await updateTrustPolicy(input);
 			// The policies come from the page load, so that is what has to be re-read.
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Policy updated');
 			// audit-allow: silent-catch — policy failure is reported and the persisted policy remains authoritative.
 		} catch {

@@ -613,3 +613,10 @@ export const toolDescription = (name: string): string => {
 	if (!entry) throw new Error(`Tool description missing from catalog: ${name}`);
 	return entry.description;
 };
+
+export const LOCKED_TOOL_NAMES = [
+	'get_workspace_context',
+	'load_skill',
+	'list_tool_preferences',
+	'set_tool_enabled'
+] as const satisfies readonly ToolName[];

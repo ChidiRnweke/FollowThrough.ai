@@ -182,3 +182,20 @@ test('creates a project and note offline with stable links through reload and re
 		}))
 		.toEqual({ url: noteUrl, acknowledged: 2 });
 });
+
+test('opens collection and settings routes offline without server page data', async ({
+	page,
+	context
+}) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	await context.setOffline(true);
+	const headings: string[] = [];
+	for (const route of ['/skills', '/trash', '/settings?tab=tools']) {
+		await page.goto(route);
+		const heading = page.getByRole('heading', { level: 1 });
+		await heading.waitFor();
+		headings.push((await heading.textContent())?.trim() ?? '');
+	}
+	expect(headings).toEqual(['Skills', 'Trash', 'Settings']);
+});

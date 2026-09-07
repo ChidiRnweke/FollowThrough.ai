@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Form } from '$lib/components/ui/form';
 	import type { UserPreferences } from '$lib/models/identity';
 	import { saveDocumentPreferences } from '$lib/remote/settings/settings.remote';
@@ -8,7 +9,7 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { toast } from 'svelte-sonner';
 
-	let { preferences }: { preferences: UserPreferences } = $props();
+	let { preferences }: { preferences: Pick<UserPreferences, 'sectionNumberingDefault'> } = $props();
 	// Writable derived: the switch's local choice wins until a reload brings back
 	// the stored preference.
 	let sectionNumberingDefault = $derived(preferences.sectionNumberingDefault ?? false);
@@ -16,8 +17,10 @@
 	// The switch already shows what was chosen, so without a toast a save reads as dead.
 	const enhanced = saveDocumentPreferences.enhance(async (form) => {
 		try {
-			if (await form.submit()) toast.success('Document defaults saved');
-			else toast.error('Could not save document defaults. Check the values and try again.');
+			if (await form.submit()) {
+				await workspaceSession.synchronize();
+				toast.success('Document defaults saved');
+			} else toast.error('Could not save document defaults. Check the values and try again.');
 			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save document defaults. Try again.');

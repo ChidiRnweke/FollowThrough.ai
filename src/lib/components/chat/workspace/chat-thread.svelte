@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { SuggestionId } from '$lib/models/suggestions';
@@ -65,7 +65,7 @@
 	}: {
 		shell?: ShellContext;
 		/** The settings in force, so an approval that changes them can show what they were. */
-		preferences?: AgentPreferences;
+		preferences?: AgentPreferenceValues;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;

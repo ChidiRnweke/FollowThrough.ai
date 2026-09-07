@@ -1,5 +1,9 @@
 import type { ShellContext } from '$lib/models/workspace';
-import type { AgentPreferences, Conversation } from '$lib/models/agent';
+import {
+	normalizeLanguageModelId,
+	type AgentPreferenceValues,
+	type Conversation
+} from '$lib/models/agent';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import {
 	readStoredBootstrap,
@@ -16,7 +20,8 @@ export interface WorkspaceSession {
 	bootstrap: WorkspaceBootstrap;
 	startupError: string | null;
 	readonly shell: ShellContext;
-	readonly preferences: AgentPreferences;
+	readonly preferences: AgentPreferenceValues;
+	readonly agentDefaults: WorkspaceBootstrap['agentDefaults'];
 	readonly sessions: readonly Conversation[];
 }
 let current = $state<WorkspaceSession | null>(null);
@@ -113,10 +118,22 @@ const begin = async (): Promise<WorkspaceSession> => {
 			return shell;
 		},
 		get preferences() {
-			return (
-				resources.views.get('agent_preferences', bootstrap.accountId) ??
-				this.bootstrap.agentPreferences
-			);
+			const preferences = resources.views.get('agent_preferences', bootstrap.accountId);
+			if (preferences) return preferences;
+			const state = resources.state({ type: 'agent_preferences', id: [bootstrap.accountId] });
+			if (state?.kind === 'present' || resources.availability === 'unknown')
+				throw new Error('Agent preferences have not been downloaded to this device');
+			return resources.views.agentPreferences(bootstrap.accountId);
+		},
+		get agentDefaults() {
+			return {
+				chatModelId: normalizeLanguageModelId(
+					this.preferences.defaultModel ?? this.bootstrap.agentDefaults.chatModelId
+				),
+				visionModelId: normalizeLanguageModelId(
+					this.preferences.defaultVisionModel ?? this.bootstrap.agentDefaults.visionModelId
+				)
+			};
 		},
 		get sessions() {
 			return resources.views

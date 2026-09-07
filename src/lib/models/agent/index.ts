@@ -347,6 +347,9 @@ export interface AgentPreferences {
 	readonly updatedAt: DateTime;
 }
 
+/** Resolved settings have no database timestamps when the account uses defaults. */
+export type AgentPreferenceValues = Omit<AgentPreferences, 'createdAt' | 'updatedAt'>;
+
 /**
  * One agent tool as the settings surface sees it: its identity from the code,
  * its resolved on/off state, and which layer decided that state.

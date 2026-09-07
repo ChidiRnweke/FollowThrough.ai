@@ -114,17 +114,9 @@ export const revokeApiToken = command(z.string().uuid(), async (id) => {
 
 /**
  * Tool selection. `projectId` is the scope being edited: absent means the
- * workspace default, present means that project's overrides — and it is part of
- * the query key, so switching scope reads a different list rather than
- * invalidating the one on screen.
+ * workspace default, present means that project's overrides. Reads use the shared workspace records.
  */
 const toolScope = z.object({ projectId: z.string().uuid().optional() });
-
-export const listToolPreferences = query(toolScope, async (input) =>
-	AppFactory.controllers()
-		.toolPreferences()
-		.list(requestActor(), input.projectId ? { projectId: input.projectId as ProjectId } : {})
-);
 
 export const setToolEnabled = command(
 	toolScope.extend({ toolName: z.string().min(1), enabled: z.boolean() }),
@@ -136,7 +128,6 @@ export const setToolEnabled = command(
 				enabled: input.enabled,
 				...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
 			});
-		await listToolPreferences(input.projectId ? { projectId: input.projectId } : {}).refresh();
 	}
 );
 
@@ -149,7 +140,6 @@ export const resetToolOverride = command(
 				toolName: input.toolName,
 				projectId: input.projectId as ProjectId
 			});
-		await listToolPreferences({ projectId: input.projectId }).refresh();
 	}
 );
 

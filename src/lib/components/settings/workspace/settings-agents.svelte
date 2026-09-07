@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Form } from '$lib/components/ui/form';
-	import type { AgentExecutionMode, AgentPreferences } from '$lib/models/agent';
+	import type { AgentExecutionMode, AgentPreferenceValues } from '$lib/models/agent';
 	import { webSearchEngines } from '$lib/models/agent';
 	import { saveAgentPreferences } from '$lib/remote/settings/settings.remote';
 	import { ExecutionModeControl } from '$lib/components/agent';
@@ -17,8 +18,10 @@
 		readonly agentMaxTurns: number;
 	}
 
-	let { preferences, defaults }: { preferences: AgentPreferences; defaults: AgentNumericDefaults } =
-		$props();
+	let {
+		preferences,
+		defaults
+	}: { preferences: AgentPreferenceValues; defaults: AgentNumericDefaults } = $props();
 	let searchEngine = $state('');
 	let searchMaxResults = $state<number | null>(null);
 	let searchMaxTotalResults = $state<number | null>(null);
@@ -37,8 +40,10 @@
 	// issue and throws on a failed request; both are the same story to tell here.
 	const enhanced = saveAgentPreferences.enhance(async (form) => {
 		try {
-			if (await form.submit()) toast.success('Agent defaults saved');
-			else toast.error('Could not save agent defaults. Check the values and try again.');
+			if (await form.submit()) {
+				await workspaceSession.synchronize();
+				toast.success('Agent defaults saved');
+			} else toast.error('Could not save agent defaults. Check the values and try again.');
 			// audit-allow: silent-catch — the settings form reports the failed save and preserves its editable values.
 		} catch {
 			toast.error('Could not save agent defaults. Try again.');
