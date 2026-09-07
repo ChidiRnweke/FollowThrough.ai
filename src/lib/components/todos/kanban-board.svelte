@@ -159,10 +159,11 @@
 	async function addTodo(status: TodoStatus): Promise<void> {
 		const title = newTitle.trim();
 		if (!title) return;
-		newTitle = '';
-		addingTo = null;
 		const ok = await todoUpdates.create(title, projectId, status);
-		if (!ok) toast.error('Could not add the todo. Try again.');
+		if (ok) {
+			newTitle = '';
+			addingTo = null;
+		} else toast.error(todoUpdates.lastError ?? 'Could not add the todo. Try again.');
 	}
 </script>
 

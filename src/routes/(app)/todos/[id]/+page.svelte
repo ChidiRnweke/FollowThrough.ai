@@ -16,7 +16,7 @@
 		</Button>
 	{/snippet}
 	<TodoDetailPanel
-		view={data.view}
+		todoId={data.todoId}
 		notes={data.session.shell.noteTree}
 		ondeleted={() => void goto(data.returnTo)}
 	/>

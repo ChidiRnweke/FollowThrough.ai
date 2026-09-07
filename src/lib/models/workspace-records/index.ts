@@ -421,11 +421,24 @@ export const workspaceEditContentEquals = (
 			noteSyncContentEquals(left.value, right.value) &&
 			left.value.sectionNumbering === right.value.sectionNumbering
 		);
+	if (left.type === 'todos' && right.type === 'todos') {
+		const content = (record: typeof left) => {
+			const { updatedAt, completedAt, ...value } = record.value;
+			void updatedAt;
+			void completedAt;
+			return Object.entries(value)
+				.filter(([, value]) => value !== undefined)
+				.sort(([a], [b]) => a.localeCompare(b));
+		};
+		return JSON.stringify(content(left)) === JSON.stringify(content(right));
+	}
 	const content = (record: WorkspaceRecord) => {
 		if (!('updatedAt' in record.value)) return record.value;
 		const { updatedAt, ...value } = record.value;
 		void updatedAt;
-		return value;
+		return Object.entries(value)
+			.filter(([, value]) => value !== undefined)
+			.sort(([a], [b]) => a.localeCompare(b));
 	};
 	return JSON.stringify(content(left)) === JSON.stringify(content(right));
 };

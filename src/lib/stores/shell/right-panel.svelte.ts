@@ -1,5 +1,5 @@
 import type { ProjectId } from '$lib/models/projects';
-import type { TodoView } from '$lib/models/todos';
+import type { TodoId } from '$lib/models/todos';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 
@@ -8,7 +8,7 @@ export type RightPanelMode =
 
 export class RightPanelStore {
 	mode = $state<RightPanelMode>('closed');
-	todoView = $state<TodoView | undefined>(undefined);
+	todoId = $state<TodoId | undefined>(undefined);
 	memoryProjectId = $state<ProjectId | undefined>(undefined);
 	chatTrigger: HTMLElement | undefined;
 	/**
@@ -80,8 +80,8 @@ export class RightPanelStore {
 		this.chatTrigger?.focus();
 		this.chatTrigger = undefined;
 	}
-	openTodo(view: TodoView): void {
-		this.todoView = view;
+	openTodo(todoId: TodoId): void {
+		this.todoId = todoId;
 		this.mode = 'todo-detail';
 	}
 	openMemory(projectId: ProjectId): void {

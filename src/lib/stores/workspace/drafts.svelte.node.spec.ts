@@ -204,3 +204,16 @@ describe('shared draft identity and resource semantics', () => {
 		});
 	});
 });
+
+describe('a rendered form base', () => {
+	it('retains the displayed version when synchronization updates the cache during typing', async () => {
+		const { store, cache, key, note, resources } = await setup();
+		store.capture();
+		await cache.accept(key, {
+			etag: syncEtag(2n),
+			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
+		});
+		await store.stage(noteWrite({ ...note, plainText: 'Still typing' }));
+		expect(resources.pending[0].intent.base?.etag).toBe(syncEtag(1n));
+	});
+});

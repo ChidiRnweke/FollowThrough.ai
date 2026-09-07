@@ -41,7 +41,6 @@
 	import { suggestionToView } from '$lib/stores/suggestions/suggestion-view';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import type { NoteTodosStore } from '$lib/stores/notes/note-todos.svelte';
 	import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
@@ -64,7 +63,6 @@
 		view,
 		shell,
 		draft,
-		noteTodos,
 		suggestionTray,
 		editorSelection,
 		inlineSuggestionsEnabled = true,
@@ -73,7 +71,6 @@
 		view: NoteView;
 		shell: ShellContext;
 		draft: WorkspaceDraft<'notes'>;
-		noteTodos: NoteTodosStore;
 		suggestionTray: SuggestionTrayStore;
 		editorSelection: EditorSelectionStore;
 		inlineSuggestionsEnabled?: boolean;
@@ -85,7 +82,6 @@
 	// a given `noteId`, so this capture is intentional and does not need to
 	// track prop identity changes that will never happen.
 	const perNote: PerNoteEditorSlot = untrack(() => ({
-		todos: noteTodos,
 		suggestions: suggestionTray,
 		selection: editorSelection
 	}));
@@ -266,10 +262,8 @@
 	});
 
 	$effect(() => {
-		noteTodos.replace(view.todos);
 		suggestionTray.replace(view.pendingSuggestions);
 		return () => {
-			noteTodos.clear();
 			editorSelection.clear();
 		};
 	});

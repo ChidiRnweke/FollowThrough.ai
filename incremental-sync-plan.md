@@ -88,7 +88,7 @@ bootstrap/view tests, and 5 browser resource-store tests. Full app/PWA validatio
 
 Legacy migration foundation now retains unversioned base/local/remote copies, excludes unresolved
 bases from submission, validates before sending, and imports with atomic durable markers while
-keeping the source database. It is deliberately not invoked until the old writer is replaced.
+keeping the source database. Startup now invokes this migration before exposing the shared outbox; the old writer has been deleted.
 Validation: 42 focused node tests, 15 IndexedDB browser tests, 6 PostgreSQL mutation contracts,
 type checking and architecture audits. The contract exposed and fixed numbering persistence in
 guarded imported saves.
@@ -107,3 +107,13 @@ Verification: 9 editor business tests, 2 full IndexedDB upgrade/editor tests, 22
 tests in the final batch (including upgrade tests), 23 earlier browser integration checks, type
 checking, scoped ESLint and architecture audits. Other mutation call sites and offline navigation
 through the remaining server page loaders still need integration.
+
+Replacement cleanup checkpoints:
+
+- `86fe41a`: Today and both task list routes render shared normalized projections.
+- `2874ebf`: deleted the old note coordinator, transport, IndexedDB writer, inventory API, and their superseded tests. Historical storage survives only as the one-time migration source; workbench layout persistence is separate UI state.
+- `280a0ad`: deleted the note sync store and its registry. Note and skill document editors use generic resource drafts, which capture an editor's observed base without owning a second cache. Verified with 11 business tests, 13 browser tests, lint, type checking, and architecture audits.
+
+Task integration now removes the per-note todo cache, manual cross-pane fan-out, right-panel resource copy, chat title cache, task server page loader, and direct task read/write remotes. Shared projections supply lists, embedded tasks, and detail panels. Creates use stable IDs and the provisioned inbox; edits and deletes use the durable outbox. Rendered text fields retain their observed base and dirty input across background refreshes. Creation forms retain input until persistence succeeds. Verification includes 72 business tests, 14 draft/base tests (overlapping draft coverage), two PostgreSQL contracts, and nine task browser tests.
+
+Still outstanding: remaining resource route loaders, project/note action mutations, other ordinary mutation domains, cross-tab refresh notifications, generic conflict review beyond documents, service-worker replacement, full app/PWA validation, full required gates, and PR checks. This remains an implementation checkpoint.

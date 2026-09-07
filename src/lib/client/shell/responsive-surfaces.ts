@@ -7,7 +7,7 @@ import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 
 export function openTodoSurface(view: TodoView, returnTo: string): void {
 	if (dockedPanelFits()) {
-		rightPanel.openTodo(view);
+		rightPanel.openTodo(view.todo.id);
 		return;
 	}
 	void goto(`/todos/${view.todo.id}?returnTo=${encodeURIComponent(returnTo)}`);

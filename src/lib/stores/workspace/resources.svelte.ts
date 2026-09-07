@@ -341,6 +341,11 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 					: remote
 		};
 	}
+	/** Capture the base of a form that is already rendered; this performs no resource read. */
+	capture(): void {
+		this.current = this.resources.editBase(this.identity);
+	}
+
 	async read(): Promise<CacheAccess<WorkspaceValues[K]>> {
 		this.error = null;
 		try {

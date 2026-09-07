@@ -171,7 +171,7 @@
 						     loses its border to the track. -->
 						<ScrollArea class="h-full">
 							<div class="pr-3">
-								<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
+								<TodoDetailPanel todoId={rightPanel.todoId} notes={shell?.noteTree} />
 							</div>
 						</ScrollArea>
 					{:else if renderedMode === 'project-memory'}

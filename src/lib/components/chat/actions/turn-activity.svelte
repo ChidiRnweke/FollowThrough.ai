@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { SvelteMap } from 'svelte/reactivity';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { getTodo } from '$lib/remote/todos/todos.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { FtChevronRight, FtExternal, FtLoader } from '$lib/components/icons';
-	import { turnActivity, turnSteps, type TouchedThing, type TurnRow } from '$lib/components/agent';
+	import { turnActivity, turnSteps, type TurnRow } from '$lib/components/agent';
 	import ToolRow from './tool-row.svelte';
 	import TurnFailure from './turn-failure.svelte';
 	import { openEntity, rowIcon } from './open-entity';
@@ -59,45 +58,22 @@
 	 */
 	let logOpen = $state(false);
 
-	/**
-	 * `update_todo` names its subject by id alone, so a resolved title is the difference
-	 * between a row a user recognises and one they have to open to identify. Same pattern as
-	 * the approval card: fetch, degrade silently, never block the row on it.
-	 */
-	const todoTitles = new SvelteMap<string, string>();
+	let titleError = $state<string | null>(null);
+	const resources = $derived(workspaceSession.current?.resources);
 	$effect(() => {
-		// A predicate rather than a cast: the narrowing is real — an action row has no
-		// `kind: 'todo'` and no id — and stating it here is what lets the loop below read
-		// `row.id` without asserting anything.
-		// Failure subjects too: a todo whose change was abandoned is exactly the row a
-		// reader needs to recognise, and it never appears in `rows`.
-		const named = [...rows, ...activity.failures.flatMap((failure) => failure.subjects)];
-		const unnamed = named.filter(
-			(row): row is TouchedThing & { id: string } =>
-				row.kind === 'todo' && row.id !== undefined && !row.named && !todoTitles.has(row.id)
-		);
-		let cancelled = false;
-		for (const row of unnamed) {
-			const id = row.id;
-			// audit-allow: silent-catch — activity remains usable and labels the unavailable todo title explicitly.
-			void getTodo(id)
-				.then((todo) => {
-					if (!cancelled) todoTitles.set(id, todo.title);
-				})
-				.catch(() => {
-					if (!cancelled) todoTitles.set(id, 'Todo title unavailable');
-					console.warn('Todo title unavailable', id);
-				});
-		}
-		return () => {
-			cancelled = true;
-		};
+		if (!resources) return;
+		void resources.prepare(['todos']).catch((error) => {
+			titleError = error instanceof Error ? error.message : 'Todo titles unavailable';
+			return { kind: 'failure', message: titleError };
+		});
 	});
-
 	const titleOf = (row: TurnRow): string =>
 		row.kind === 'action'
 			? row.label
-			: ((row.id ? todoTitles.get(row.id) : undefined) ?? row.title);
+			: ((row.kind === 'todo' && row.id
+					? resources?.views.get('todos', row.id)?.title
+					: undefined) ??
+				(row.kind === 'todo' && titleError ? 'Todo title unavailable' : row.title));
 </script>
 
 {#snippet rowBody(row: TurnRow)}

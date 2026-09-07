@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
 import { noteEtag, noteSyncContentEquals, type Note } from '$lib/models/notes';
 import type {
 	WriteContent,
@@ -77,7 +78,8 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		id: todoId,
 		projectId,
 		title: z.string().trim().min(1),
-		responsibility: todoRecordSchema.shape.responsibility
+		responsibility: todoRecordSchema.shape.responsibility,
+		status: todoRecordSchema.shape.status.optional()
 	}),
 	z.object({
 		kind: z.literal('updateTodo'),
@@ -278,4 +280,17 @@ export const noteWrite = (note: Note): WriteContent<WorkspaceCommand, WorkspaceR
 	local: { type: 'notes', value: note },
 	coalesce: 'document',
 	references: []
+});
+
+export const todoWrite = (
+	todo: Todo,
+	patch: Omit<UpdateTodoInput, 'todoId'>,
+	timestamp: Todo['updatedAt']
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+	command: { kind: 'updateTodo', todoId: todo.id, ...patch },
+	local: { type: 'todos', value: applyTodoEdit(todo, patch, timestamp) },
+	coalesce: null,
+	references: patch.linkedNoteId
+		? [workspaceResourceKey({ type: 'notes', id: [patch.linkedNoteId] })]
+		: []
 });
