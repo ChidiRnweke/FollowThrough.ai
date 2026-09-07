@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
 	authoritativeWriteResource,
+	writeReceiptSchema,
+	retainWriteReceipt,
 	retryConflictedWrite,
 	discardWrites,
 	appendWrite,
@@ -103,7 +105,8 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			throw new Error('The local queue sequence head precedes its writes');
 		const sequence = previous + 1;
 		if (!Number.isSafeInteger(sequence)) throw new Error('The local queue sequence is exhausted');
-		const next = appendWrite(entries, draft, sequence);
+		const receipt = await this.appliedReceipt(accountId, draft.key, transaction);
+		const next = appendWrite(entries, draft, sequence, receipt);
 		const appended = next.findLast((entry) => entry.intent.key === draft.key);
 		if (!appended) throw new Error('The queued resource was not appended');
 		heads.put({ accountId, sequence });
@@ -170,10 +173,37 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	settle(accountId: string, sent: OutboxEntry<C, T>, outcome: WriteOutcome<T>): Promise<void> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const next = settleWrite(entries, sent.intent.operationId, outcome);
+			if (outcome.kind === 'applied') {
+				const previous = await this.appliedReceipt(accountId, sent.intent.key, transaction);
+				const receipt = retainWriteReceipt(
+					previous,
+					writeReceiptSchema(this.valueSchema).parse(outcome.receipt)
+				);
+				transaction.objectStore('write-receipts').put({ accountId, key: sent.intent.key, receipt });
+			}
 			const resource = authoritativeWriteResource(outcome);
 			if (resource) await this.saveResource(accountId, sent.intent.key, resource, transaction);
 			return { entries: next, result: undefined };
 		});
+	}
+
+	private async appliedReceipt(
+		accountId: string,
+		key: string,
+		transaction: IDBTransaction
+	): Promise<WriteReceipt<T> | null> {
+		const stored = await requestValue(
+			transaction.objectStore('write-receipts').get([accountId, key])
+		);
+		return stored === undefined
+			? null
+			: z
+					.object({
+						accountId: z.literal(accountId),
+						key: z.literal(key),
+						receipt: writeReceiptSchema(this.valueSchema)
+					})
+					.parse(stored).receipt;
 	}
 
 	private async saveResource(
@@ -211,7 +241,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	): Promise<R> {
 		const database = await this.open();
 		const transaction = database.transaction(
-			['outbox', 'queue-heads', 'records', 'imports'],
+			['outbox', 'queue-heads', 'records', 'imports', 'write-receipts'],
 			'readwrite'
 		);
 		const done = completed(transaction);

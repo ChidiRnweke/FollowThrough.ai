@@ -66,10 +66,12 @@ export class MutationQueue<C, T> {
 		await this.reload();
 		return id;
 	}
-	async keepLocal(operationId: string): Promise<void> {
+	async keepLocal(operationId: string): Promise<string> {
 		if (this.stopped) throw new Error('This account is no longer active');
-		await this.dependencies.repository.keepLocal(this.accountId, operationId, crypto.randomUUID());
+		const replacementId = crypto.randomUUID();
+		await this.dependencies.repository.keepLocal(this.accountId, operationId, replacementId);
 		await this.reload();
+		return replacementId;
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
 		if (this.stopped) throw new Error('This account is no longer active');

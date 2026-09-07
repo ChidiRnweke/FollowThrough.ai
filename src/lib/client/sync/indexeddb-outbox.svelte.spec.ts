@@ -270,3 +270,57 @@ describe('local write validation', () => {
 		expect((await outbox.list('alice')).map((entry) => entry.sequence)).toEqual([1]);
 	});
 });
+
+describe('durable acknowledgement ancestry', () => {
+	it('joins a late edit from another connection to its exact acknowledgement despite a newer cache body', async () => {
+		const { outbox, cache, name } = setup();
+		const first = draft();
+		await outbox.append('alice', first);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected submitted write');
+		const later = { ...draft('note:1', 'Later typing'), basedOn: first.operationId };
+		await outbox.settle('alice', sent, {
+			kind: 'applied',
+			receipt: { operationId: first.operationId, resource: { kind: 'found', snapshot } }
+		});
+		await cache.commit('alice', {
+			put: [
+				{
+					key: first.key,
+					entry: {
+						kind: 'present',
+						cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Other client' } }
+					}
+				}
+			],
+			remove: []
+		});
+		const other = setup(name).outbox;
+		await other.append('alice', later);
+		expect((await other.list('alice'))[0].intent.base).toEqual(snapshot);
+	});
+	it('retains the original base after a newer local acknowledgement replaces its proof', async () => {
+		const { outbox } = setup();
+		const first = draft();
+		await outbox.append('alice', first);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected submitted write');
+		await outbox.settle('alice', sent, {
+			kind: 'applied',
+			receipt: { operationId: first.operationId, resource: { kind: 'found', snapshot } }
+		});
+		const second = { ...draft(), basedOn: first.operationId };
+		await outbox.append('alice', second);
+		const next = await outbox.take('alice');
+		if (!next) throw new Error('Expected next submitted write');
+		await outbox.settle('alice', next, {
+			kind: 'applied',
+			receipt: {
+				operationId: second.operationId,
+				resource: { kind: 'found', snapshot: { etag: syncEtag(2n), value: 'Second edit' } }
+			}
+		});
+		await outbox.append('alice', { ...draft(), basedOn: first.operationId });
+		expect((await outbox.list('alice'))[0].intent.base).toBeNull();
+	});
+});

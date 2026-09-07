@@ -1,5 +1,7 @@
 import {
 	retryConflictedWrite,
+	retainWriteReceipt,
+	type WriteReceipt,
 	discardWrites,
 	appendWrite,
 	beginWrite,
@@ -18,13 +20,19 @@ import type { AccountWriterLock } from '$lib/client/sync/mutation-queue';
 export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
+	private readonly receipts = new Map<string, WriteReceipt<T>>();
 	appendFailure: string | null = null;
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		return this.accounts.get(accountId) ?? [];
 	}
 	async append(accountId: string, draft: WriteDraft<C, T>): Promise<string> {
 		if (this.appendFailure) throw new Error(this.appendFailure);
-		const next = appendWrite(await this.list(accountId), draft, ++this.sequence);
+		const next = appendWrite(
+			await this.list(accountId),
+			draft,
+			++this.sequence,
+			this.receipts.get(JSON.stringify([accountId, draft.key])) ?? null
+		);
 		this.accounts.set(accountId, next);
 		const appended = next.findLast((entry) => entry.intent.key === draft.key);
 		if (!appended) throw new Error('The queued resource was not appended');
@@ -87,6 +95,10 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 			accountId,
 			settleWrite(await this.list(accountId), sent.intent.operationId, outcome)
 		);
+		if (outcome.kind === 'applied') {
+			const key = JSON.stringify([accountId, sent.intent.key]);
+			this.receipts.set(key, retainWriteReceipt(this.receipts.get(key) ?? null, outcome.receipt));
+		}
 	}
 }
 

@@ -217,3 +217,40 @@ describe('a rendered form base', () => {
 		expect(resources.pending[0].intent.base?.etag).toBe(syncEtag(1n));
 	});
 });
+
+describe('a mounted editor after acknowledgement', () => {
+	it('conflicts with a later server revision even when that revision has identical editor content', async () => {
+		const { note, key, store, transport, resources, cache } = await setup();
+		await store.read();
+		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		const changed = {
+			etag: syncEtag(3n),
+			value: {
+				type: 'notes' as const,
+				value: { ...note, plainText: 'My edit', currentRevision: 3 }
+			}
+		};
+		transport.records.set(key, changed);
+		await cache.accept(key, changed);
+		await store.stage(noteWrite({ ...note, plainText: 'Later typing' }));
+		await resources.synchronize();
+		expect(store.status).toBe('conflict');
+	});
+	it('can save again after explicitly keeping its conflicting write', async () => {
+		const { note, key, store, transport, resources } = await setup();
+		await store.read();
+		transport.records.set(key, {
+			etag: syncEtag(2n),
+			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
+		});
+		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		await store.keep();
+		await store.stage(noteWrite({ ...note, plainText: 'After explicit keep' }));
+		await resources.synchronize();
+		expect(store.status).toBe('synced');
+	});
+});

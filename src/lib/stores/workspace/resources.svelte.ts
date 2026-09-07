@@ -11,7 +11,6 @@ import {
 import {
 	workspaceRecordSchema,
 	isWorkspaceRecord,
-	workspaceEditContentEquals,
 	type WorkspaceValues,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
@@ -181,9 +180,8 @@ export class WorkspaceResources {
 		const entry = this.dependencies.cache.records.get(workspaceResourceKey(identity));
 		return entry?.kind === 'present' ? cachedSnapshot(entry.cache) : null;
 	}
-	async keepLocal(operationId: string): Promise<void> {
-		await this.dependencies.writes.keepLocal(operationId);
-		void this.synchronize();
+	async keepLocal(operationId: string): Promise<string> {
+		return this.dependencies.writes.keepLocal(operationId);
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
 		await this.dependencies.writes.discard(operationIds);
@@ -286,24 +284,12 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			throw new Error('The editor received another resource type');
 		return record.value;
 	}
-	private get observed(): EditContext | null {
-		const context = this.current;
-		if (
-			!context?.basedOn ||
-			this.resources.pending.some((entry) => entry.intent.operationId === context.basedOn)
-		)
-			return context;
-		const snapshot = this.resources.snapshot(this.identity);
-		return snapshot && workspaceEditContentEquals(context.local, snapshot.value)
-			? { base: snapshot, basedOn: null, local: snapshot.value }
-			: context;
-	}
 	get value(): WorkspaceValues[K] | null {
 		if (!this.resources.active) return null;
 		if (!this.entries.length && this.resources.state(this.identity)?.kind === 'deleted')
 			return null;
 		const last = this.entries.at(-1);
-		const record = last ? last.intent.local : this.observed?.local;
+		const record = last ? last.intent.local : this.current?.local;
 		return record ? this.valueOf(record) : null;
 	}
 	get status(): DraftStatus {
@@ -371,7 +357,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	> {
 		this.error = null;
 		try {
-			const context = this.observed;
+			const context = this.current;
 			if (!context) throw new Error('Open the resource before editing');
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
@@ -398,7 +384,18 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	async keep(): Promise<void> {
 		const conflict = this.entries.find((entry) => entry.delivery.kind === 'conflict');
 		if (!conflict) throw new Error('This resource has no unresolved conflict');
-		await this.resources.keepLocal(conflict.intent.operationId);
+		const replacementId = await this.resources.keepLocal(conflict.intent.operationId);
+		if (
+			this.current?.basedOn === conflict.intent.operationId &&
+			conflict.delivery.kind === 'conflict' &&
+			conflict.delivery.remote.kind === 'found'
+		) {
+			this.current = {
+				...this.current,
+				basedOn: replacementId,
+				base: conflict.delivery.remote.snapshot
+			};
+		}
 		await this.resources.synchronize();
 	}
 	async discard(): Promise<CacheAccess<WorkspaceValues[K]>> {

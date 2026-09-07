@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { syncEtagSchema } from '$lib/models/sync';
-import { storedDocumentSchema, noteSyncContentEquals } from '$lib/models/notes';
+import { storedDocumentSchema } from '$lib/models/notes';
 import { provenanceSchema, type Confidence } from '$lib/models/provenance';
 import { suggestionSchema } from '$lib/models/suggestions';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
@@ -415,35 +415,3 @@ export const isWorkspaceRecord = <K extends WorkspaceRecord['type']>(
 	record: WorkspaceRecord,
 	type: K
 ): record is WorkspaceRecordOf<K> => record.type === type;
-/** Server acknowledgement fields do not change the content an editor's next edit was based on. */
-export const workspaceEditContentEquals = (
-	left: WorkspaceRecord,
-	right: WorkspaceRecord
-): boolean => {
-	if (left.type !== right.type) return false;
-	if (left.type === 'notes' && right.type === 'notes')
-		return (
-			noteSyncContentEquals(left.value, right.value) &&
-			left.value.sectionNumbering === right.value.sectionNumbering
-		);
-	if (left.type === 'todos' && right.type === 'todos') {
-		const content = (record: typeof left) => {
-			const { updatedAt, completedAt, ...value } = record.value;
-			void updatedAt;
-			void completedAt;
-			return Object.entries(value)
-				.filter(([, value]) => value !== undefined)
-				.sort(([a], [b]) => a.localeCompare(b));
-		};
-		return JSON.stringify(content(left)) === JSON.stringify(content(right));
-	}
-	const content = (record: WorkspaceRecord) => {
-		if (!('updatedAt' in record.value)) return record.value;
-		const { updatedAt, ...value } = record.value;
-		void updatedAt;
-		return Object.entries(value)
-			.filter(([, value]) => value !== undefined)
-			.sort(([a], [b]) => a.localeCompare(b));
-	};
-	return JSON.stringify(content(left)) === JSON.stringify(content(right));
-};

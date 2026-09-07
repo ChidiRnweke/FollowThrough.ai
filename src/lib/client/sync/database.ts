@@ -32,7 +32,7 @@ export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) 
 /** Cache and outbox share a database so acknowledgement and the resulting body commit together. */
 export const openSyncDatabase = (name: string, onVersionChange: () => void): Promise<IDBDatabase> =>
 	new Promise((resolve, reject) => {
-		const request = indexedDB.open(name, 4);
+		const request = indexedDB.open(name, 5);
 		let blocked = false;
 		request.onupgradeneeded = () => {
 			const database = request.result;
@@ -51,6 +51,8 @@ export const openSyncDatabase = (name: string, onVersionChange: () => void): Pro
 					unique: true
 				});
 			}
+			if (!database.objectStoreNames.contains('write-receipts'))
+				database.createObjectStore('write-receipts', { keyPath: ['accountId', 'key'] });
 			if (!database.objectStoreNames.contains('imports'))
 				database.createObjectStore('imports', { keyPath: ['accountId', 'source'] });
 			if (!database.objectStoreNames.contains('queue-heads'))

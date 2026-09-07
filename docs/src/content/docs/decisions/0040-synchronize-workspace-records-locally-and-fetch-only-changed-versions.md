@@ -99,9 +99,14 @@ its pending local base with `basedOn`. Successful acknowledgement supplies a new
 for edits made against that local version. Competing tabs retain their original server bases and
 therefore conflict instead of silently rebasing over each other. Coalescing requires that exact
 local predecessor and no dependent entries; it replaces the unsent operation identity so a stale
-tab cannot mistake changed local content for the version it edited. If the named local predecessor
-was already acknowledged before persistence, we conservatively retain the original server base;
-a resulting conflict preserves the edit for explicit review. References to locally created parents wait for those parents' acknowledgement.
+tab cannot mistake changed local content for the version it edited. Acknowledgement, cached body, and queue settlement commit atomically. The device retains one exact
+applied receipt per account/resource, independently of subsequent cache refreshes. Appending a late
+descendant checks that receipt inside the same storage transaction: only its exact operation ID can
+supply a new base. Content equality and queue disappearance never prove acknowledgement. A newer
+local receipt may replace the proof; an older editor then retains its original base and can conflict
+conservatively. This bounds retained snapshots by resource count rather than autosave count. A deleted
+outcome preserves later edits as conflicts instead of authorizing recreation. Mounted drafts retain
+their own observed content, and explicit keep-local adopts only the replacement operation it reviewed. References to locally created parents wait for those parents' acknowledgement.
 Conflicts retain dependent entries while unrelated resources remain sendable.
 
 The server checks the base version, applies the domain mutation, and stores an operation receipt

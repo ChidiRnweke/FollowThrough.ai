@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
 	syncEtagSchema,
+	compareSyncEtags,
 	cachedSnapshot,
 	type ResourceState,
 	type CacheAccess,
@@ -15,6 +16,27 @@ export type WriteReceipt<T> = {
 	readonly operationId: string;
 	readonly resource: Exclude<ServerResource<T>, { kind: 'unavailable' }>;
 };
+/** One exact applied outcome per resource; ordinary cache refreshes never replace this proof. */
+export const writeReceiptSchema = <T>(value: z.ZodType<T>): z.ZodType<WriteReceipt<T>> =>
+	z.object({
+		operationId: z.string().uuid(),
+		resource: z.discriminatedUnion('kind', [
+			z.object({ kind: z.literal('found'), snapshot: z.object({ etag: syncEtagSchema, value }) }),
+			deletionSchema
+		])
+	});
+
+export const retainWriteReceipt = <T>(
+	previous: WriteReceipt<T> | null,
+	received: WriteReceipt<T>
+): WriteReceipt<T> => {
+	const version = (receipt: WriteReceipt<T>) =>
+		receipt.resource.kind === 'found' ? receipt.resource.snapshot.etag : receipt.resource.etag;
+	return previous && compareSyncEtags(version(previous), version(received)) >= 0
+		? previous
+		: received;
+};
+
 export type WriteOutcome<T> =
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
 	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
@@ -94,7 +116,8 @@ export const outboxEntrySchema = <C, T>(
 export const appendWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	draft: WriteDraft<C, T>,
-	sequence: number
+	sequence: number,
+	receipt: WriteReceipt<T> | null = null
 ): readonly OutboxEntry<C, T>[] => {
 	if (entries.some((entry) => entry.intent.operationId === draft.operationId))
 		throw new Error('A local operation identity must be unique');
@@ -102,6 +125,9 @@ export const appendWrite = <C, T>(
 	const parent = entries.find((entry) => entry.intent.operationId === draft.basedOn);
 	if (parent && parent.intent.key !== draft.key)
 		throw new Error('A local base must belong to the edited resource');
+	const applied = !parent && receipt?.operationId === draft.basedOn ? receipt : null;
+	if (applied?.resource.kind === 'found')
+		draft = { ...draft, base: applied.resource.snapshot, basedOn: null };
 	const latest = new Map(entries.map((entry) => [entry.intent.key, entry]));
 	const previous = latest.get(draft.key);
 	const dependencies = [
@@ -143,7 +169,14 @@ export const appendWrite = <C, T>(
 	}
 	return [
 		...entries,
-		{ sequence, intent: { ...intent, dependencies }, delivery: { kind: 'queued' } }
+		{
+			sequence,
+			intent: { ...intent, dependencies },
+			delivery:
+				applied?.resource.kind === 'deleted'
+					? { kind: 'conflict', remote: applied.resource }
+					: { kind: 'queued' }
+		}
 	];
 };
 
@@ -183,6 +216,10 @@ export const acknowledgeWrite = <C, T>(
 			if (!entry.intent.dependencies.includes(receipt.operationId)) return entry;
 			return {
 				...entry,
+				delivery:
+					entry.intent.basedOn === receipt.operationId && receipt.resource.kind === 'deleted'
+						? { kind: 'conflict' as const, remote: receipt.resource }
+						: entry.delivery,
 				intent: {
 					...entry.intent,
 					dependencies: entry.intent.dependencies.filter((id) => id !== receipt.operationId),
@@ -191,7 +228,7 @@ export const acknowledgeWrite = <C, T>(
 						entry.intent.basedOn === receipt.operationId
 							? receipt.resource.kind === 'found'
 								? receipt.resource.snapshot
-								: null
+								: entry.intent.base
 							: entry.intent.base
 				}
 			};
