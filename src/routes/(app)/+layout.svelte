@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { NoteId } from '$lib/models/notes';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import type { NoteId } from '$lib/models/notes';
+	import { parseTabId, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
@@ -87,17 +88,19 @@
 
 	// Pre-compute the noteId → projectId map once per shell reload so the
 	// workbench can resolve the focused tab's project without re-scanning.
-	const shellProjectOf = $derived.by(
-		() => (noteId: NoteId) =>
-			shell?.noteTree.find((entry) => entry.id === noteId)?.projectId as ProjectId | undefined
-	);
+	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
+		const ref = parseTabId(tabId);
+		if (ref?.kind === 'diagram')
+			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
+		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
+	});
 
 	onMount(() => {
 		// Injected rather than imported by the store: the agent stores reach back
 		// into the workbench through the app context, so importing them there would
 		// close an initialisation loop.
 		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
-		void workbench.hydrate(shellProjectOf);
+		void workbench.hydrate(projectOfTab);
 		// Read here rather than in the note editor so the answer is already known
 		// when a note pane mounts; a pane that started before it would spend its
 		// first seconds underlining words the reader had already dismissed. This
@@ -115,7 +118,7 @@
 		if (!shell) return;
 		appContext.configure(shell, page.url);
 		workbench.syncFromUrl();
-		workbench.refreshActiveProjectId(shellProjectOf);
+		workbench.refreshActiveProjectId(projectOfTab);
 		void pruneClosedTabs();
 	});
 

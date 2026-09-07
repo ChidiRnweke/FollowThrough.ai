@@ -371,6 +371,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			workflowRunner: agentCapability.workflowRunner
 		},
 		diagramStudio: {
+			syncMutations: synchronization.mutations,
 			transactionRunner,
 			diagramFinder: diagrams,
 			diagramLister: diagrams,

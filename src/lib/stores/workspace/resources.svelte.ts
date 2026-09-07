@@ -268,6 +268,8 @@ type EditContext = ReturnType<WorkspaceResources['editBase']>;
 /** An editor's observed base, not another resource cache. All persistence and delivery use its workspace. */
 export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	private current = $state<EditContext | null>(null);
+	private staging: Promise<void> = Promise.resolve();
+	private savingLocal = $state(0);
 	private error = $state<string | null>(null);
 	private readonly key: string;
 	constructor(
@@ -295,6 +297,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	get status(): DraftStatus {
 		if (this.error) return 'error';
 		if (!this.current) return 'loading';
+		if (this.savingLocal) return 'saving';
 		if (this.entries.some((entry) => entry.delivery.kind === 'conflict')) return 'conflict';
 		if (
 			this.entries.some(
@@ -350,7 +353,19 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			return { kind: 'failure', message: this.error };
 		}
 	}
-	async stage(
+	stage(
+		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
+	): ReturnType<WorkspaceDraft<K>['save']> {
+		this.savingLocal++;
+		const operation = this.staging
+			.then(() => this.save(content))
+			.finally(() => {
+				this.savingLocal--;
+			});
+		this.staging = operation.then(() => undefined);
+		return operation;
+	}
+	private async save(
 		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
 	): Promise<
 		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }

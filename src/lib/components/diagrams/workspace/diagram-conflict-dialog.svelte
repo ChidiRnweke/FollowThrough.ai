@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { DrawioDiagram } from '$lib/models/diagrams';
+	import type { Diagram } from '$lib/models/diagrams';
+	import type { WriteConflictView } from '$lib/models/outbox';
 	import { userFacingMessage } from '$lib/errors';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -8,16 +9,12 @@
 
 	let {
 		open = $bindable(false),
-		base,
-		local,
-		remote,
+		record,
 		onUseRemote,
 		onKeepLocal
 	}: {
 		open?: boolean;
-		base: DrawioDiagram;
-		local: DrawioDiagram;
-		remote: DrawioDiagram;
+		record: WriteConflictView<Diagram>;
 		onUseRemote: () => Promise<void>;
 		onKeepLocal: () => Promise<void>;
 	} = $props();
@@ -45,22 +42,29 @@
 			<Dialog.Title>This diagram changed somewhere else</Dialog.Title>
 			<Dialog.Description>
 				Compare the shared base, your changes, and the latest saved version before choosing which
-				diagram to keep. Keeping your changes saves a draft. Publishing is a separate action.
+				diagram to keep. Keeping your changes retries the action you originally requested against
+				the reviewed version.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid min-h-0 flex-1 gap-6 overflow-auto md:grid-cols-3">
-			{#each [{ label: 'Shared base', document: base }, { label: 'Your changes', document: local }, { label: 'Latest saved version', document: remote }] as comparison (comparison.label)}
+			{#each [{ label: 'Shared base', document: record.base }, { label: 'Your changes', document: record.local }, { label: 'Latest saved version', document: record.remote.kind === 'found' ? record.remote.value : null }] as comparison (comparison.label)}
 				<section aria-label={comparison.label} class="flex min-h-0 flex-col gap-3">
 					<div class="border-b pb-3">
 						<h3 class="text-sm font-medium">{comparison.label}</h3>
 						<p class="text-sm text-muted-foreground">
-							{comparison.document.title ?? 'Untitled diagram'}
+							{comparison.document?.title ?? 'Untitled diagram'}
 						</p>
 					</div>
-					<DiagramDocumentPreview
-						source={comparison.document.source}
-						title={comparison.document.title}
-					/>
+					{#if comparison.document}
+						<DiagramDocumentPreview
+							source={comparison.document.source}
+							title={comparison.document.title}
+						/>
+					{:else}<p>
+							{comparison.label === 'Latest saved version' && record.remote.kind === 'deleted'
+								? 'This diagram was deleted on the server. Your local changes are retained.'
+								: 'No document is available for this version.'}
+						</p>{/if}
 				</section>
 			{/each}
 		</div>
@@ -77,7 +81,10 @@
 				{#if resolving === 'remote'}<Spinner data-icon="inline-start" />{/if}
 				Use latest
 			</Button>
-			<Button disabled={resolving !== undefined} onclick={() => void resolve('local')}>
+			<Button
+				disabled={resolving !== undefined || record.remote.kind !== 'found'}
+				onclick={() => void resolve('local')}
+			>
 				{#if resolving === 'local'}<Spinner data-icon="inline-start" />{/if}
 				Keep mine
 			</Button>

@@ -23,6 +23,6 @@
 	/>
 {:else}
 	<div class="flex min-h-0 flex-1 flex-col">
-		<DiagramPane diagramId={data.diagramId} initial={data.diagram} />
+		<DiagramPane diagramId={data.diagramId} />
 	</div>
 {/if}

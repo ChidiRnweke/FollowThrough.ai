@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
@@ -25,6 +26,10 @@ import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/model
 const noteId = noteRecordSchema.shape.id;
 const projectId = projectRecordSchema.shape.id;
 const todoId = todoRecordSchema.shape.id;
+const diagramId = z
+	.string()
+	.uuid()
+	.transform((value) => value as DiagramId);
 
 export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('createProject'), id: projectId, name: z.string().trim().min(1) }),
@@ -97,7 +102,30 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		waitingOn: z.string().nullable().optional(),
 		linkedNoteId: noteId.nullable().optional()
 	}),
-	z.object({ kind: z.literal('deleteTodo'), todoId })
+	z.object({ kind: z.literal('deleteTodo'), todoId }),
+	z.object({ kind: z.literal('saveDiagram'), diagramId, source: z.string().min(1).max(2_000_000) }),
+	z.object({
+		kind: z.literal('renameDiagram'),
+		diagramId,
+		title: z.string().trim().min(1).max(200)
+	}),
+	z.object({
+		kind: z.literal('publishDiagram'),
+		diagramId,
+		source: z.string().min(1).max(2_000_000),
+		renderedSvg: z.string().min(1).max(3_000_000)
+	}),
+	z.object({
+		kind: z.literal('restoreDiagramRevision'),
+		diagramId,
+		revisionId: z
+			.string()
+			.uuid()
+			.transform((value) => value as DiagramRevisionId)
+	}),
+	z.object({ kind: z.literal('archiveDiagram'), diagramId }),
+	z.object({ kind: z.literal('restoreDiagram'), diagramId }),
+	z.object({ kind: z.literal('deleteDiagram'), diagramId })
 ]);
 export type WorkspaceCommand = z.infer<typeof workspaceCommandSchema>;
 
@@ -132,6 +160,15 @@ export type ProjectMutationRequest = MutationFor<
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
 export type SkillMutationRequest = MutationFor<'createSkill'>;
+export type DiagramMutationRequest = MutationFor<
+	| 'saveDiagram'
+	| 'renameDiagram'
+	| 'publishDiagram'
+	| 'restoreDiagramRevision'
+	| 'archiveDiagram'
+	| 'restoreDiagram'
+	| 'deleteDiagram'
+>;
 
 export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),
@@ -150,6 +187,14 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'saveDiagram':
+		case 'renameDiagram':
+		case 'publishDiagram':
+		case 'restoreDiagramRevision':
+		case 'archiveDiagram':
+		case 'restoreDiagram':
+		case 'deleteDiagram':
+			return { type: 'diagrams', id: [command.diagramId] };
 		case 'createProject':
 			return { type: 'projects', id: [command.id] };
 		case 'renameProject':

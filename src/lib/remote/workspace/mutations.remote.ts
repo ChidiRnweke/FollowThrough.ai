@@ -14,6 +14,14 @@ export const pushWorkspaceMutation = command(
 		const controllers = AppFactory.controllers();
 		const command = mutation.command;
 		switch (command.kind) {
+			case 'saveDiagram':
+			case 'renameDiagram':
+			case 'publishDiagram':
+			case 'restoreDiagramRevision':
+			case 'archiveDiagram':
+			case 'restoreDiagram':
+			case 'deleteDiagram':
+				return controllers.diagramStudio().synchronize(actor, { ...mutation, command });
 			case 'createProject':
 			case 'renameProject':
 			case 'archiveProject':

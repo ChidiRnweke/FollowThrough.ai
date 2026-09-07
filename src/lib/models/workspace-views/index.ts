@@ -190,6 +190,9 @@ export class WorkspaceViews {
 			.filter((diagram) => diagram.archivedAt && (!projectId || diagram.projectId === projectId))
 			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
 	}
+	diagram(diagramId: string): Diagram | null {
+		return this.all('diagrams').find((diagram) => diagram.id === diagramId) ?? null;
+	}
 	diagrams(projectId: ProjectId, query = ''): readonly Diagram[] {
 		const search = query.toLowerCase();
 		return this.all('diagrams')

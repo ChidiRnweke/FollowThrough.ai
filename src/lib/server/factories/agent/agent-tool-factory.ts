@@ -319,6 +319,10 @@ export const agentToolCoverage = {
 		}
 	},
 	diagramStudio: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Deliver version-guarded device mutations through the shared outbox.'
+		},
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.

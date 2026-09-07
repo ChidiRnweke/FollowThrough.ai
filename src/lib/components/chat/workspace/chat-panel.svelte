@@ -33,7 +33,7 @@
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
-	import { getProjectDiagram } from '$lib/remote/diagrams/diagrams.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
@@ -101,23 +101,13 @@
 	 */
 	const canvas = $derived(canvasFor(chat.sessionKey));
 	const canvasOnScreen = $derived(canvas !== undefined && workbench.openTabs.includes(canvas.tab));
-	/**
-	 * Pull a diagram the agent revised back into the pane showing it.
-	 *
-	 * A diagram pane renders `getProjectDiagram`, and every client write refreshes
-	 * that cache by pairing itself with `.updates(...)`. The agent's revision is
-	 * written inside a tool, so nothing invalidates it — the row changed and the
-	 * canvas went on showing the version before it.
-	 *
-	 * Keyed on the call rather than the diagram: two revisions of one diagram share
-	 * an id, so comparing ids would refresh the first and ignore every one after.
-	 */
+	/** Pull journal changes after an agent applies a diagram edit. */
 	let refreshedRevisionCallId = $state<string | undefined>(undefined);
 	$effect(() => {
 		const applied = latestDiagramWrite(chat.sessionKey);
 		if (!applied || applied.callId === refreshedRevisionCallId) return;
 		refreshedRevisionCallId = applied.callId;
-		void getProjectDiagram(applied.diagramId).refresh();
+		void workspaceSession.synchronize();
 	});
 	/**
 	 * The diagram this conversation produced, when this chat has nowhere to show it.

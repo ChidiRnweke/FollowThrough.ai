@@ -7,18 +7,27 @@
 	let {
 		title,
 		busy = false,
-		oncommit
+		oncommit,
+		onstart
 	}: {
 		title: string;
 		busy?: boolean;
+		onstart: () => void;
 		oncommit: (title: string) => void | Promise<void>;
 	} = $props();
 
 	let editing = $state(false);
 
-	function commit(value: string): void {
-		editing = false;
-		if (value && value !== title) void oncommit(value);
+	let failure = $state<string | null>(null);
+	async function commit(value: string): Promise<void | { kind: 'failure' }> {
+		failure = null;
+		try {
+			if (value && value !== title) await oncommit(value);
+			editing = false;
+		} catch (error) {
+			failure = error instanceof Error ? error.message : 'The title could not be saved';
+			return { kind: 'failure' };
+		}
 	}
 </script>
 
@@ -30,6 +39,7 @@
 			onsubmit={commit}
 			oncancel={() => (editing = false)}
 		/>
+		{#if failure}<p role="alert" class="text-sm text-destructive">{failure}</p>{/if}
 	{:else}
 		<h2 class="min-w-0 truncate text-sm font-medium">{title}</h2>
 		<Tip text="Rename diagram">
@@ -41,7 +51,10 @@
 					class="size-11 shrink-0 transition-opacity sm:size-6 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/title:opacity-100"
 					aria-label="Rename diagram"
 					disabled={busy}
-					onclick={() => (editing = true)}
+					onclick={() => {
+						onstart();
+						editing = true;
+					}}
 				>
 					<Pencil />
 				</Button>

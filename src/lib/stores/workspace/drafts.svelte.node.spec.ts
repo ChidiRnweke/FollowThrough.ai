@@ -254,3 +254,15 @@ describe('a mounted editor after acknowledgement', () => {
 		expect(store.status).toBe('synced');
 	});
 });
+
+it('coalesces overlapping local saves using their serialized observed ancestry', async () => {
+	const { note, store, resources } = await setup();
+	await store.read();
+	await Promise.all([
+		store.stage(noteWrite({ ...note, plainText: 'First' })),
+		store.stage(noteWrite({ ...note, plainText: 'Second' }))
+	]);
+	expect(resources.pending.map((entry) => entry.intent.local)).toEqual([
+		{ type: 'notes', value: { ...note, plainText: 'Second' } }
+	]);
+});

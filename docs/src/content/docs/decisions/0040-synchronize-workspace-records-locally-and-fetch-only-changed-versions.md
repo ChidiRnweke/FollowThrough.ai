@@ -173,5 +173,5 @@ the existing repositories, services, controllers, and factories. No architectura
 - The note route now opens through `stores/workspace/resources.svelte.ts`; its former server loader
   required a live view before local drafts could load.
 - `src/service-worker.ts` serves the generated SPA fallback during offline workspace navigation and removes the old private page snapshots. Remaining server page loaders must be replaced before their routes support offline navigation.
-- `incremental-sync-plan.md` tracks implementation and verification; acceptance of this decision
+- `docs/plans/incremental-sync-plan.md` tracks implementation and verification; acceptance of this decision
   does not claim that the existing application already implements it.

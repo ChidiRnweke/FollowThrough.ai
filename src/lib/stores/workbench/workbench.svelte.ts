@@ -19,8 +19,7 @@ import {
 	setSplitInState,
 	type WorkbenchUrlState
 } from './workbench-url';
-import { diagramIdOf, noteIdOf, type TabId } from './tab-ref';
-import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+import { noteIdOf, type TabId } from './tab-ref';
 import { toast } from 'svelte-sonner';
 
 /**
@@ -259,7 +258,7 @@ export class WorkbenchStore {
 	 * the layout's `onMount` (browser-only); a no-op when running on the
 	 * server.
 	 */
-	async hydrate(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): Promise<void> {
+	async hydrate(projectOfTab: (tabId: TabId) => ProjectId | undefined): Promise<void> {
 		if (this.hydrated) return;
 		this.hydrated = true;
 		// Display preference: read synchronously from localStorage so the
@@ -293,7 +292,7 @@ export class WorkbenchStore {
 					error instanceof Error ? error.message : 'Workspace state could not be restored'
 				);
 			}
-			void this.refreshActiveProjectId(shellProjectOf);
+			void this.refreshActiveProjectId(projectOfTab);
 			return;
 		}
 		// Deep link to `/notes/<id>`.  If a previous working set exists in
@@ -335,7 +334,7 @@ export class WorkbenchStore {
 					}
 				);
 				this.restoring = false;
-				void this.refreshActiveProjectId(shellProjectOf);
+				void this.refreshActiveProjectId(projectOfTab);
 				return;
 			}
 			// audit-allow: silent-catch — tab restoration failure is reported before URL state is applied as recovery.
@@ -343,7 +342,7 @@ export class WorkbenchStore {
 			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
 		}
 		this.applyUrlState(urlState);
-		void this.refreshActiveProjectId(shellProjectOf);
+		void this.refreshActiveProjectId(projectOfTab);
 	}
 
 	/**
@@ -396,17 +395,9 @@ export class WorkbenchStore {
 	 * tree.  Called by the layout whenever the shell reloads or the focused
 	 * tab changes.
 	 */
-	refreshActiveProjectId(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): void {
-		if (this.focusedNoteId) {
-			this._activeProjectId = shellProjectOf(this.focusedNoteId);
-			return;
-		}
-		// A diagram is project-owned, so a focused diagram tab still tells the
-		// sidebar and the agent which project the user is working in. The note tree
-		// cannot answer for it, so the diagram's own pane does, through the registry.
-		const diagramId = diagramIdOf(this.focusedTabId);
-		this._activeProjectId =
-			diagramId === undefined ? undefined : diagramRegistry.peek(diagramId)?.description?.projectId;
+	refreshActiveProjectId(projectOfTab: (tabId: TabId) => ProjectId | undefined): void {
+		const tabId = this.focusedTabId;
+		this._activeProjectId = tabId ? projectOfTab(tabId) : undefined;
 	}
 
 	/** Returns the user's working set in URL-state form. */
