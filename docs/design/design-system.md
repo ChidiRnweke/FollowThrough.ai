@@ -316,10 +316,13 @@ while the region is empty; the empty state and its one action are the whole surf
      below it; the row is the better of the two places, because it is the one already carrying
      the identity and the way in. A run that failed outright is the turn's own error line, which
      sits under the whole turn with its Retry — never a second copy inside the block.
-     **Everything behind the door is a row too**, including the looks that found nothing: their
-     count goes on a statement line ("3 looks came back with nothing") and the looks themselves
-     go behind its chevron. Written flat, their pass labels stood where a subject's name belongs,
-     and one closing sentence had to speak for every look at once.
+     **Everything behind the door is a row too**, including the looks that found nothing. Such a
+     look has no subject to be titled by, so its row is titled by what it did — "Read project
+     memory" — and the emptiness goes behind its chevron, on the same evidence wash a result
+     would have used. An empty result is still a result, and it belongs where a result goes.
+     Counting them instead ("3 looks came back with nothing") named a quantity where every
+     neighbouring row names a thing; writing them flat put a request rung where a subject's name
+     belongs and left one closing sentence speaking for every look at once.
   3. **Show the subjects; count only what you hide; word only what is absent.** `1 match` above
      one match and `1 edit` above one edit state the same fact twice. `…and 4 more` stays,
      because it counts what is not on screen; `nothing found` stays, because an absence has

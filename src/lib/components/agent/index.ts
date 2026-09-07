@@ -22,7 +22,6 @@ export {
 	type ToolDisclosure
 } from './actions/tool-disclosure';
 export {
-	barrenLabel,
 	isWriteVerb,
 	readDoorLabel,
 	runningSteps,

@@ -265,24 +265,30 @@ describe('Looks that found nothing are a row like everything else behind the doo
 		return screen;
 	};
 
-	it('counts them on the statement line, which the flat sentence could not do', async () => {
-		const screen = await openDoor([fruitless(), fruitless()]);
-		await expect.element(screen.getByText('2 looks came back with nothing')).toBeVisible();
-	});
-
-	// The pass labels used to sit at the top of the door's column with no statement above them,
-	// so a request rung stood where a subject's name belongs. `toBeVisible` rather than a count
-	// of matches, for the reason this file already records above: the collapsible keeps its
-	// content mounted, so presence in the document says nothing about what is on screen.
-	it('keeps the looks themselves behind their own chevron', async () => {
+	// Named by what it did, because that is the only identity it has. A count named a quantity
+	// where every neighbouring row names a thing.
+	it('titles the row with the request, not with how many looks there were', async () => {
 		const screen = await openDoor([fruitless()]);
-		await expect.element(screen.getByText(/Searched for/)).not.toBeVisible();
-	});
-
-	it('shows them once that chevron is opened', async () => {
-		const screen = await openDoor([fruitless()]);
-		await screen.getByText('One look came back with nothing').click();
 		await expect.element(screen.getByText(/Searched for/)).toBeVisible();
+	});
+
+	it('gives each look its own row', async () => {
+		const screen = await openDoor([fruitless(), fruitless()]);
+		expect(await screen.getByText(/Searched for/).all()).toHaveLength(2);
+	});
+
+	// `toBeVisible` rather than a count of matches, for the reason this file already records
+	// above: the collapsible keeps its content mounted, so presence in the document says nothing
+	// about what is on screen.
+	it('keeps the emptiness behind that row chevron', async () => {
+		const screen = await openDoor([fruitless()]);
+		await expect.element(screen.getByText('Nothing came back.')).not.toBeVisible();
+	});
+
+	it('states it on the evidence surface once the chevron is opened', async () => {
+		const screen = await openDoor([fruitless()]);
+		await screen.getByText(/Searched for/).click();
+		await expect.element(screen.getByText('Nothing came back.')).toBeVisible();
 	});
 });
 

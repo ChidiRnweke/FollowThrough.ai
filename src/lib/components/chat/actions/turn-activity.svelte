@@ -7,14 +7,13 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { FtChevronRight, FtLoader, FtReading } from '$lib/components/icons';
 	import {
-		barrenLabel,
 		readDoorLabel,
 		runningSteps,
 		turnContext,
 		type SubjectActivity
 	} from '$lib/components/agent';
 	import SubjectRow from './subject-row.svelte';
-	import BarrenGroup from './barren-group.svelte';
+	import BarrenRow from './barren-row.svelte';
 	import {
 		CHAT_GAP_SUBJECT,
 		CHAT_ROW,
@@ -174,9 +173,9 @@
 							<SubjectRow {subject} title={titleOf(subject)} />
 						{/each}
 
-						{#if context.barren.length > 0}
-							<BarrenGroup passes={context.barren} label={barrenLabel(context)} />
-						{/if}
+						{#each context.barren as pass, index (index)}
+							<BarrenRow {pass} />
+						{/each}
 
 						{#if context.setup.length > 0}
 							<!-- The agent finding its footing. Named, so nothing is hidden; last and

@@ -566,19 +566,6 @@ function recovered(subject: SubjectActivity, tools: readonly ChatToolActivity[])
 }
 
 /**
- * What the looks that found nothing say from the outside.
- *
- * The count is the part the old flat sentence could not carry. "Nothing came back." sat under a
- * list of pass labels and applied to all of them at once, so it stated a fact about no particular
- * look and the labels above it had to be read to find out how many there were. A row states it
- * once and holds the labels behind itself, like every other row here.
- */
-export function barrenLabel(context: TurnContext): string {
-	const count = context.barren.length;
-	return count === 1 ? 'One look came back with nothing' : `${count} looks came back with nothing`;
-}
-
-/**
  * What the door onto the read subjects says, in the reader's terms.
  *
  * A count of tool calls was the old label and it named mechanism: "called 6 tools" tells you
