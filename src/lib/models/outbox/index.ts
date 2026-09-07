@@ -311,3 +311,36 @@ export const resolveWriteBase = <C, T>(
 			? { ...entry, intent: { ...entry.intent, base: resolution.snapshot } }
 			: { ...entry, delivery: resolution };
 	});
+
+/** Discard exactly the reviewed set. Unknown outcomes and unselected dependents must be resolved first. */
+export const discardWrites = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	operationIds: readonly string[]
+): readonly OutboxEntry<C, T>[] => {
+	const selected = new Set(operationIds);
+	if (operationIds.some((id) => !entries.some((entry) => entry.intent.operationId === id)))
+		throw new Error('The selected local edits changed; review them again');
+	for (const entry of entries) {
+		if (selected.has(entry.intent.operationId)) {
+			if (entry.delivery.kind === 'sending' || entry.delivery.kind === 'retry')
+				throw new Error('Check the server receipt before discarding an attempted edit');
+		} else if (
+			entry.intent.dependencies.some((id) => selected.has(id)) ||
+			(entry.intent.basedOn !== null && selected.has(entry.intent.basedOn))
+		)
+			throw new Error('Review dependent edits before discarding their base');
+	}
+	return entries.filter((entry) => !selected.has(entry.intent.operationId));
+};
+
+export const authoritativeWriteResource = <T>(
+	outcome: WriteOutcome<T>
+): WriteReceipt<T>['resource'] | null => {
+	const resource =
+		outcome.kind === 'applied'
+			? outcome.receipt.resource
+			: outcome.kind === 'conflict'
+				? outcome.remote
+				: null;
+	return resource?.kind === 'unavailable' ? null : resource;
+};

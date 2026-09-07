@@ -31,7 +31,7 @@ const applied = (operationId: string, value: string) => ({
 const setup = (transport: OutboxTransport<string, string>) => {
 	const repository = new InMemoryOutbox<string, string>();
 	const writerLock = new InMemoryAccountWriterLock();
-	const accepted: WriteReceipt<string>[] = [];
+	const accepted: WriteReceipt<string>['resource'][] = [];
 	const dependencies = {
 		repository,
 		writerLock,
@@ -39,8 +39,8 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		resolveBase: async () => {
 			throw new Error('This fixture has no imported draft');
 		},
-		accepted: async (_key: string, receipt: WriteReceipt<string>) => {
-			accepted.push(receipt);
+		received: async (_key: string, resource: WriteReceipt<string>['resource']) => {
+			accepted.push(resource);
 		}
 	};
 	return { repository, dependencies, accepted, queue: new MutationQueue('alice', dependencies) };
@@ -114,7 +114,7 @@ describe('shared mutation submission', () => {
 		await queue.flush();
 		expect({ pending: await repository.list('alice'), accepted }).toEqual({
 			pending: [],
-			accepted: [applied(firstId, 'Edited').receipt]
+			accepted: [applied(firstId, 'Edited').receipt.resource]
 		});
 	});
 	it('continues unrelated writes after a conflict without discarding the conflicting edit', async () => {
@@ -195,6 +195,21 @@ describe('shared mutation submission', () => {
 			durable: [],
 			exposed: [],
 			accepted: []
+		});
+	});
+});
+
+describe('conflict cache publication', () => {
+	it('publishes the server version while keeping the local conflict queued', async () => {
+		const snapshot = { etag: syncEtag(2n), value: 'Other client' };
+		const { queue, accepted } = setup({
+			send: async () => ({ kind: 'conflict', remote: { kind: 'found', snapshot } })
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		expect({ received: accepted, local: queue.pending[0].intent.local }).toEqual({
+			received: [{ kind: 'found', snapshot }],
+			local: 'Edited'
 		});
 	});
 });

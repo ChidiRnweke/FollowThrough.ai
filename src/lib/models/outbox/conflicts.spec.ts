@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import { retryConflictedWrite, type OutboxEntry } from './index';
+import { discardWrites, retryConflictedWrite, type OutboxEntry } from './index';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const replacementId = 'a0000000-0000-4000-8000-000000000002';
@@ -65,5 +65,57 @@ describe('explicit conflict resolution', () => {
 		expect(retryConflictedWrite([conflicted, dependent], firstId, replacementId)[1].intent).toEqual(
 			{ ...dependent.intent, basedOn: replacementId, dependencies: [replacementId] }
 		);
+	});
+});
+
+describe('explicit local edit discard', () => {
+	it('removes only the selected reviewed edit', () => {
+		const other = {
+			...conflicted,
+			sequence: 2,
+			intent: { ...conflicted.intent, operationId: replacementId, key: 'note:2' }
+		};
+		expect(discardWrites([conflicted, other], [firstId])).toEqual([other]);
+	});
+	it('refuses to strand an unselected dependent edit', () => {
+		const dependent = {
+			...conflicted,
+			sequence: 2,
+			intent: {
+				...conflicted.intent,
+				operationId: replacementId,
+				dependencies: [firstId],
+				basedOn: firstId
+			},
+			delivery: { kind: 'queued' as const }
+		};
+		expect(() => discardWrites([conflicted, dependent], [firstId])).toThrow(
+			'Review dependent edits'
+		);
+	});
+	it('allows discarding a reviewed conflict and all its unsent descendants together', () => {
+		const dependent = {
+			...conflicted,
+			sequence: 2,
+			intent: {
+				...conflicted.intent,
+				operationId: replacementId,
+				dependencies: [firstId],
+				basedOn: firstId
+			},
+			delivery: { kind: 'queued' as const }
+		};
+		expect(discardWrites([conflicted, dependent], [firstId, replacementId])).toEqual([]);
+	});
+	it('requires receipt recovery before discarding an attempted write', () => {
+		expect(() =>
+			discardWrites(
+				[{ ...conflicted, delivery: { kind: 'retry', message: 'Connection lost' } }],
+				[firstId]
+			)
+		).toThrow('Check the server receipt');
+	});
+	it('rejects a stale discard decision after an edit was replaced', () => {
+		expect(() => discardWrites([conflicted], [replacementId])).toThrow('review them again');
 	});
 });

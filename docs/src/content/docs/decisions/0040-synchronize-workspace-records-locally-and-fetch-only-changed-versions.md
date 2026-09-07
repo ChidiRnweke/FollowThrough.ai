@@ -132,6 +132,12 @@ The import marker and queued draft commit atomically, so restarting migration ca
 an acknowledged draft. The original database is retained and upgraded to exclude old writers;
 a blocked upgrade explicitly asks the user to close older tabs before retrying.
 
+Conflict responses persist the authoritative body or tombstone alongside the retained local edit.
+Keeping an edit uses a new operation identity guarded against the reviewed server version.
+Discarding removes exactly the reviewed set: an attempted write first needs receipt recovery,
+and every dependent edit must be included explicitly. This prevents an apparently local discard
+from silently destroying or unblocking work the user did not review.
+
 ## Consequences
 
 - Subsequent synchronization transfers changed identities and content only.

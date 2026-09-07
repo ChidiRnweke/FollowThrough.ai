@@ -158,8 +158,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 				throw new Error('An imported base requires a complete server representation');
 			return resolveImportedNoteBase(base, local, remote);
 		},
-		accepted: async (key, receipt) => {
-			const resource = receipt.resource;
+		received: async (key, resource) => {
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
 		}
 	});

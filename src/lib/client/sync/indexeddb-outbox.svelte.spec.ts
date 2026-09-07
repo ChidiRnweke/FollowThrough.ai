@@ -198,3 +198,64 @@ describe('durable draft import', () => {
 		]);
 	});
 });
+
+describe('durable conflict resolution', () => {
+	it('keeps the authoritative server copy after discarding a rejected local edit', async () => {
+		const { outbox, cache } = setup();
+		const input = draft();
+		await outbox.append('alice', input);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected submitted edit');
+		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'found', snapshot } });
+		await outbox.discard('alice', [input.operationId]);
+		expect({
+			pending: await outbox.list('alice'),
+			records: (await cache.load('alice')).records
+		}).toEqual({
+			pending: [],
+			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+		});
+	});
+	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
+		const { outbox } = setup();
+		const input = draft();
+		await outbox.importOnce('alice', 'conflict', input, { kind: 'found', snapshot });
+		const replacement = crypto.randomUUID();
+		await outbox.keepLocal('alice', input.operationId, replacement);
+		const sent = await outbox.take('alice');
+		expect({
+			id: sent?.intent.operationId,
+			base: sent?.intent.base,
+			local: sent?.intent.local
+		}).toEqual({ id: replacement, base: snapshot, local: input.local });
+	});
+	it('stores the authoritative tombstone while retaining the offline edit', async () => {
+		const { outbox, cache } = setup();
+		const input = draft();
+		await outbox.append('alice', input);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected submitted edit');
+		const remote = { kind: 'deleted' as const, etag: syncEtag(2n) };
+		await outbox.settle('alice', sent, { kind: 'conflict', remote });
+		expect({
+			local: (await outbox.list('alice'))[0].intent.local,
+			records: (await cache.load('alice')).records
+		}).toEqual({ local: input.local, records: [{ key: input.key, entry: remote }] });
+	});
+	it('persists an imported base validation alongside its authoritative server copy', async () => {
+		const { outbox, cache } = setup();
+		const input = { ...draft(), base: { etag: null, value: 'Original' } };
+		await outbox.append('alice', input);
+		await outbox.resolveBase('alice', input.operationId, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
+		expect({
+			delivery: (await outbox.list('alice'))[0].delivery,
+			records: (await cache.load('alice')).records
+		}).toEqual({
+			delivery: { kind: 'conflict', remote: { kind: 'found', snapshot } },
+			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+		});
+	});
+});

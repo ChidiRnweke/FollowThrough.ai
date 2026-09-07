@@ -43,8 +43,7 @@ const setup = () => {
 		resolveBase: async () => {
 			throw new Error('This fixture has no imported draft');
 		},
-		accepted: async (key, receipt) => {
-			const resource = receipt.resource;
+		received: async (key, resource) => {
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
 		}
 	});

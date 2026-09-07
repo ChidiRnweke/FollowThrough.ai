@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+	authoritativeWriteResource,
+	retryConflictedWrite,
+	discardWrites,
 	appendWrite,
 	beginWrite,
 	failWrite,
@@ -11,6 +14,7 @@ import {
 	type WriteObservation,
 	type OutboxEntry,
 	type WriteDraft,
+	type WriteReceipt,
 	type WriteOutcome
 } from '$lib/models/outbox';
 import { receiveResource } from '$lib/models/sync';
@@ -111,8 +115,27 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		operationId: string,
 		resolution: WriteBaseResolution<T>
 	): Promise<void> {
+		return this.edit(accountId, async (entries, transaction) => {
+			const original = entries.find((entry) => entry.intent.operationId === operationId);
+			const resource =
+				resolution.kind === 'matched'
+					? { kind: 'found' as const, snapshot: resolution.snapshot }
+					: resolution.remote;
+			if (original && resource.kind !== 'unavailable')
+				await this.saveResource(accountId, original.intent.key, resource, transaction);
+			return { entries: resolveWriteBase(entries, operationId, resolution), result: undefined };
+		});
+	}
+
+	keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void> {
 		return this.edit(accountId, async (entries) => ({
-			entries: resolveWriteBase(entries, operationId, resolution),
+			entries: retryConflictedWrite(entries, operationId, replacementId),
+			result: undefined
+		}));
+	}
+	discard(accountId: string, operationIds: readonly string[]): Promise<void> {
+		return this.edit(accountId, async (entries) => ({
+			entries: discardWrites(entries, operationIds),
 			result: undefined
 		}));
 	}
@@ -147,22 +170,27 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	settle(accountId: string, sent: OutboxEntry<C, T>, outcome: WriteOutcome<T>): Promise<void> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const next = settleWrite(entries, sent.intent.operationId, outcome);
-			if (outcome.kind === 'applied') {
-				const records = transaction.objectStore('records');
-				const stored = await requestValue(records.get([accountId, sent.intent.key]));
-				const current =
-					stored === undefined
-						? null
-						: storedResourceSchema(accountId, this.valueSchema).parse(stored);
-				const resource = outcome.receipt.resource;
-				const entry = receiveResource(
-					current?.entry ?? { kind: 'present', cache: { kind: 'uncached' } },
-					resource.kind === 'found' ? resource.snapshot : resource
-				);
-				records.put({ schemaVersion: 2, accountId, key: sent.intent.key, entry });
-			}
+			const resource = authoritativeWriteResource(outcome);
+			if (resource) await this.saveResource(accountId, sent.intent.key, resource, transaction);
 			return { entries: next, result: undefined };
 		});
+	}
+
+	private async saveResource(
+		accountId: string,
+		key: string,
+		resource: WriteReceipt<T>['resource'],
+		transaction: IDBTransaction
+	): Promise<void> {
+		const records = transaction.objectStore('records');
+		const stored = await requestValue(records.get([accountId, key]));
+		const current =
+			stored === undefined ? null : storedResourceSchema(accountId, this.valueSchema).parse(stored);
+		const entry = receiveResource(
+			current?.entry ?? { kind: 'present', cache: { kind: 'uncached' } },
+			resource.kind === 'found' ? resource.snapshot : resource
+		);
+		records.put({ schemaVersion: 2, accountId, key: key, entry });
 	}
 
 	private entriesSchema(accountId: string) {

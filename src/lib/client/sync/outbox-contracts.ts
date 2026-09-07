@@ -14,6 +14,8 @@ export interface OutboxRepository<C, T> {
 		operationId: string,
 		resolution: WriteBaseResolution<T>
 	): Promise<void>;
+	keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void>;
+	discard(accountId: string, operationIds: readonly string[]): Promise<void>;
 	take(accountId: string): Promise<OutboxEntry<C, T> | null>;
 	retry(accountId: string, operationId: string, message: string): Promise<void>;
 	/** Call only after acquiring the account's exclusive writer lock. */

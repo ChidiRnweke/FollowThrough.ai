@@ -92,3 +92,8 @@ keeping the source database. It is deliberately not invoked until the old writer
 Validation: 42 focused node tests, 15 IndexedDB browser tests, 6 PostgreSQL mutation contracts,
 type checking and architecture audits. The contract exposed and fixed numbering persistence in
 guarded imported saves.
+
+Shared conflict recovery now persists authoritative conflict bodies/tombstones atomically, exposes
+keep-local and exact-set discard through the queue, and refuses to strand unreviewed descendants
+or discard unknown submission outcomes. Verified with 40 business tests, 20 browser tests, type
+checking, scoped ESLint and architecture audits. Feature conflict UI is still being integrated.

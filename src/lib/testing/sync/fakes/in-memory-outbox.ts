@@ -1,4 +1,6 @@
 import {
+	retryConflictedWrite,
+	discardWrites,
 	appendWrite,
 	beginWrite,
 	failWrite,
@@ -35,6 +37,16 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 			accountId,
 			resolveWriteBase(await this.list(accountId), operationId, resolution)
 		);
+	}
+
+	async keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void> {
+		this.accounts.set(
+			accountId,
+			retryConflictedWrite(await this.list(accountId), operationId, replacementId)
+		);
+	}
+	async discard(accountId: string, operationIds: readonly string[]): Promise<void> {
+		this.accounts.set(accountId, discardWrites(await this.list(accountId), operationIds));
 	}
 
 	async take(accountId: string): Promise<OutboxEntry<C, T> | null> {

@@ -1,4 +1,5 @@
 import {
+	authoritativeWriteResource,
 	unresolvedWrite,
 	nextWrite,
 	type WriteBaseResolution,
@@ -18,7 +19,7 @@ export interface MutationQueueDependencies<C, T> {
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
 	resolveBase(key: string, value: T, local: T | null): Promise<WriteBaseResolution<T>>;
-	accepted(key: string, receipt: WriteReceipt<T>): Promise<void>;
+	received(key: string, resource: WriteReceipt<T>['resource']): Promise<void>;
 }
 
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
@@ -65,6 +66,17 @@ export class MutationQueue<C, T> {
 		await this.reload();
 		return id;
 	}
+	async keepLocal(operationId: string): Promise<void> {
+		if (this.stopped) throw new Error('This account is no longer active');
+		await this.dependencies.repository.keepLocal(this.accountId, operationId, crypto.randomUUID());
+		await this.reload();
+	}
+	async discard(operationIds: readonly string[]): Promise<void> {
+		if (this.stopped) throw new Error('This account is no longer active');
+		await this.dependencies.repository.discard(this.accountId, operationIds);
+		await this.reload();
+	}
+
 	flush(): Promise<SubmissionResult> {
 		this.flushing ??= this.submit().finally(() => {
 			this.flushing = null;
@@ -96,6 +108,12 @@ export class MutationQueue<C, T> {
 								unresolved.intent.operationId,
 								resolution
 							);
+							const resource =
+								resolution.kind === 'matched'
+									? { kind: 'found' as const, snapshot: resolution.snapshot }
+									: resolution.remote;
+							if (resource.kind !== 'unavailable' && !this.stopped)
+								await this.dependencies.received(unresolved.intent.key, resource);
 							await this.reload();
 							continue;
 						}
@@ -115,8 +133,9 @@ export class MutationQueue<C, T> {
 								command: sent.intent.command
 							});
 							await this.dependencies.repository.settle(this.accountId, sent, outcome);
-							if (outcome.kind === 'applied' && !this.stopped)
-								await this.dependencies.accepted(sent.intent.key, outcome.receipt);
+							const resource = authoritativeWriteResource(outcome);
+							if (resource && !this.stopped)
+								await this.dependencies.received(sent.intent.key, resource);
 						} catch (error) {
 							const message = error instanceof Error ? error.message : 'Submission failed';
 							await this.dependencies.repository.retry(
