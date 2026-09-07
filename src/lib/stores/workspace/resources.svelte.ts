@@ -22,6 +22,7 @@ import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
 import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
+import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
@@ -31,6 +32,7 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
+	restoreLocalWrites(): Promise<void>;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
 }
@@ -85,10 +87,11 @@ export class WorkspaceResources {
 		return this.dependencies.writes.status;
 	}
 	initialize(): Promise<void> {
-		this.initializing ??= Promise.all([
-			this.dependencies.cache.initialize(),
-			this.dependencies.writes.reload()
-		])
+		this.initializing ??= this.dependencies
+			.restoreLocalWrites()
+			.then(() =>
+				Promise.all([this.dependencies.cache.initialize(), this.dependencies.writes.reload()])
+			)
 			.then(() => undefined)
 			.catch((error) => {
 				this.initializing = null;
@@ -144,6 +147,11 @@ export class WorkspaceResources {
 		if (!snapshot) throw new Error('Open the resource before editing it');
 		return { base: snapshot, basedOn: null, local: snapshot.value };
 	}
+	state(identity: WorkspaceResourceIdentity) {
+		void this.revision;
+		return this.dependencies.cache.records.get(workspaceResourceKey(identity));
+	}
+
 	snapshot(identity: WorkspaceResourceIdentity): SyncSnapshot<WorkspaceRecord> | null {
 		void this.revision;
 		const entry = this.dependencies.cache.records.get(workspaceResourceKey(identity));
@@ -211,8 +219,9 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		repository: new IndexedDbSyncCache(workspaceRecordSchema),
 		transport: workspaceReadTransport(accountId)
 	});
+	const repository = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema);
 	const writes = new MutationQueue(accountId, {
-		repository: new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema),
+		repository,
 		transport: workspaceWriteTransport(accountId),
 		writerLock: browserWriterLock,
 		resolveBase: async (key, base, local) => {
@@ -225,5 +234,10 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
 		}
 	});
-	return new WorkspaceResources(accountId, { cache, writes });
+	return new WorkspaceResources(accountId, {
+		cache,
+		writes,
+		restoreLocalWrites: () =>
+			browserWriterLock.run(accountId, () => migrateLegacyNotes(accountId, repository))
+	});
 };

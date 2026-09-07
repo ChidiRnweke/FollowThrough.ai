@@ -18,10 +18,12 @@ import type { AccountWriterLock } from '$lib/client/sync/mutation-queue';
 export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
+	appendFailure: string | null = null;
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		return this.accounts.get(accountId) ?? [];
 	}
 	async append(accountId: string, draft: WriteDraft<C, T>): Promise<string> {
+		if (this.appendFailure) throw new Error(this.appendFailure);
 		const next = appendWrite(await this.list(accountId), draft, ++this.sequence);
 		this.accounts.set(accountId, next);
 		const appended = next.findLast((entry) => entry.intent.key === draft.key);

@@ -5,7 +5,7 @@
 		NoteRevision,
 		NoteRevisionId,
 		NoteRevisionSummary,
-		NoteSyncRecord
+		NoteEditConflict
 	} from '$lib/models/notes';
 	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
@@ -42,7 +42,7 @@
 		historySelected?: NoteRevision;
 		historyLoading?: boolean;
 		note: Note;
-		conflictRecord?: NoteSyncRecord;
+		conflictRecord?: NoteEditConflict;
 		reviewingSuggestion: DiagramSuggestion | null;
 		perNote?: PerNoteEditorSlot;
 		/** Passed through so the history panes render draw.io blocks as they look in the note. */
@@ -69,7 +69,7 @@
 	onrestore={onRestoreRevision}
 />
 
-{#if conflictRecord?.state === 'conflict'}
+{#if conflictRecord}
 	<NoteConflictDialog
 		bind:open={conflictOpen}
 		record={conflictRecord}

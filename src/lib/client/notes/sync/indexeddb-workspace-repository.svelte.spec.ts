@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { readLegacyNoteImports } from '$lib/client/sync/legacy-notes';
 import type { NoteId } from '$lib/models/notes';
 import {
 	IndexedDbWorkspaceRepository,
@@ -95,34 +96,13 @@ describe('IndexedDB workspace storage', () => {
 		expect(stored).toBeUndefined();
 	});
 
-	it('coexists with the note-sync repository in the same database (1/2)', async () => {
+	it('retains the shell layout while reading migrated note drafts', async () => {
 		const { databaseName, repository } = setup();
-		const { IndexedDbNoteSyncRepository } = await import('./indexeddb-note-sync-repository');
-		const noteSync = new IndexedDbNoteSyncRepository(databaseName);
 		await repository.put(record());
+		await readLegacyNoteImports('00000000-0000-4000-8000-000000000099', databaseName);
 		const stored = await repository.get();
-		const _noteSyncRoundtrip = await noteSync.get(
-			'00000000-0000-4000-8000-000000000099' as never,
-			id(1)
-		);
-		noteSync.close();
 		repository.close();
-		expect(stored?.focusedNoteId).toBe(id(2));
-	});
-
-	it('coexists with the note-sync repository in the same database (2/2)', async () => {
-		const { databaseName, repository } = setup();
-		const { IndexedDbNoteSyncRepository } = await import('./indexeddb-note-sync-repository');
-		const noteSync = new IndexedDbNoteSyncRepository(databaseName);
-		await repository.put(record());
-		const _stored = await repository.get();
-		const noteSyncRoundtrip = await noteSync.get(
-			'00000000-0000-4000-8000-000000000099' as never,
-			id(1)
-		);
-		noteSync.close();
-		repository.close();
-		expect(noteSyncRoundtrip).toBeUndefined();
+		expect(stored).toEqual(record());
 	});
 
 	it('round-trips a non-default split ratio', async () => {

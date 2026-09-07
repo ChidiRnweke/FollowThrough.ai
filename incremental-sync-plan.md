@@ -70,9 +70,9 @@ The helper is `client/sync/resource-cache.ts`, not an additional architectural l
 
 The browser shell now initializes the shared account resource store. Note panes read through its
 foreground barrier, and normalized shell/list/note projections have focused tests. Remaining page
-server loaders, the legacy note mutation outbox, and the old service worker still need replacement.
-This is an integration checkpoint, not completed offline support. Before retiring the old writer,
-migrate and test its drafts, including drafts with no synchronization ETag and interrupted sends.
+server loaders and the old service worker still need replacement. The note editor now uses the shared
+outbox, with legacy draft migration completed before exposing local writes.
+This is an integration checkpoint, not completed offline support. Legacy drafts without synchronization ETags and interrupted sends are covered by migration and submission tests.
 
 Further verified checkpoints:
 
@@ -97,3 +97,13 @@ Shared conflict recovery now persists authoritative conflict bodies/tombstones a
 keep-local and exact-set discard through the queue, and refuses to strand unreviewed descendants
 or discard unknown submission outcomes. Verified with 40 business tests, 20 browser tests, type
 checking, scoped ESLint and architecture audits. Feature conflict UI is still being integrated.
+
+The note and skill document editors now use the shared durable outbox. They capture their observed
+base, preserve later typing through acknowledgements, and expose shared conflicts. Browser startup
+imports old drafts before loading the queue; workbench layout storage remains compatible with the
+upgraded legacy database. Conflict UI shows explicit server deletion and retains the dialog on
+failed resolution. Invalid queue input rolls back before it can corrupt persisted state.
+Verification: 9 editor business tests, 2 full IndexedDB upgrade/editor tests, 22 focused browser
+tests in the final batch (including upgrade tests), 23 earlier browser integration checks, type
+checking, scoped ESLint and architecture audits. Other mutation call sites and offline navigation
+through the remaining server page loaders still need integration.

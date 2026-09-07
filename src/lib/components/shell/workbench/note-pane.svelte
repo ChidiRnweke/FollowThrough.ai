@@ -40,6 +40,9 @@
 
 	let opened = $state(false);
 	const projection = $derived(workspaceSession.current?.resources.views.note(noteId));
+	const serverDeleted = $derived(
+		workspaceSession.current?.resources.state({ type: 'notes', id: [noteId] })?.kind === 'deleted'
+	);
 	async function refreshView(): Promise<void> {
 		try {
 			const session = await workspaceSession.start();
@@ -97,6 +100,10 @@
 
 <div class="flex w-full min-w-0 flex-1 flex-col" data-note-pane={noteId}>
 	{#if view}
+		{#if serverDeleted}<p role="status" class="px-4 py-1 text-xs text-muted-foreground">
+				This note was deleted on the server. This document remains open so you can preserve your
+				work.
+			</p>{/if}
 		{#if projection?.missing.length}<p
 				role="status"
 				class="px-4 py-1 text-xs text-muted-foreground"

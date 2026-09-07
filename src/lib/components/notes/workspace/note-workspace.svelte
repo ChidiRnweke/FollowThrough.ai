@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import type {
@@ -177,7 +178,6 @@
 		// delivers its result the moment the stream reattaches.
 		registerActionHandlers();
 		actionRuns.hydrate();
-		const stopListening = noteSync.listenForReconnect();
 		void noteSync.initialize({ note: view.note, etag: view.etag }).then((local) => {
 			if (cancelled) return;
 			// Use view.note as the base for all server-authoritative fields
@@ -200,7 +200,6 @@
 		});
 		return () => {
 			cancelled = true;
-			stopListening();
 			actionRuns.detach();
 			noteSync.reset();
 		};
@@ -324,6 +323,7 @@
 	 */
 	async function refreshView(): Promise<void> {
 		try {
+			await workspaceSession.synchronize();
 			await invalidateAll();
 			// audit-allow: silent-catch — the save succeeded; refresh failure is explicitly reported with reload as recovery.
 		} catch {
@@ -727,6 +727,7 @@
 				baseEtag: noteEtag(note)
 			});
 			const output = result as VersionedNote;
+			await workspaceSession.synchronize();
 			const local = await noteSync.initialize(output);
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
@@ -784,6 +785,7 @@
 				noteId: note.id,
 				revisionId
 			})) as VersionedNote;
+			await workspaceSession.synchronize();
 			const local = await noteSync.initialize(output);
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
@@ -806,6 +808,7 @@
 		try {
 			const result = await discardNoteDraft({ noteId: note.id });
 			const output = result as VersionedNote;
+			await workspaceSession.synchronize();
 			const local = await noteSync.initialize(output);
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
@@ -950,7 +953,7 @@
 		{historySelected}
 		{historyLoading}
 		{note}
-		conflictRecord={noteSync.record}
+		conflictRecord={noteSync.conflict}
 		{reviewingSuggestion}
 		{perNote}
 		diagrams={view.diagrams}

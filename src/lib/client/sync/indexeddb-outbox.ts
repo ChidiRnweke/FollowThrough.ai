@@ -233,7 +233,11 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			for (const entry of previous)
 				if (!retained.has(entry.sequence)) store.delete([accountId, entry.sequence]);
 			for (const entry of change.entries)
-				if (!previous.includes(entry)) store.put({ accountId, entry });
+				if (!previous.includes(entry))
+					store.put({
+						accountId,
+						entry: outboxEntrySchema(this.commandSchema, this.valueSchema).parse(entry)
+					});
 			await done;
 			return change.result;
 		} catch (error) {

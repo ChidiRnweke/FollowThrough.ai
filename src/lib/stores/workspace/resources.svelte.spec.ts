@@ -54,7 +54,11 @@ const setup = (
 		repository,
 		transport,
 		cache,
-		resources: new WorkspaceResources('alice', { cache, writes })
+		resources: new WorkspaceResources('alice', {
+			cache,
+			writes,
+			restoreLocalWrites: async () => undefined
+		})
 	};
 };
 

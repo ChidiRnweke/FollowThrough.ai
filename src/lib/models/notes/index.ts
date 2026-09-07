@@ -259,6 +259,18 @@ export interface ListNoteSyncInventoryOutput {
 	readonly entries: readonly NoteSyncInventoryEntry[];
 }
 
+/** Editor presentation of shared resource writes; it does not own cache or delivery state. */
+export interface NoteEditRecord {
+	readonly local: Note;
+	readonly state: 'synced' | 'pending' | 'syncing' | 'conflict';
+}
+export interface NoteEditConflict {
+	readonly base: Note | null;
+	readonly local: Note;
+	readonly remote:
+		{ readonly kind: 'found'; readonly note: Note } | { readonly kind: 'deleted' | 'unavailable' };
+}
+
 export type NoteSyncRecordState = 'synced' | 'pending' | 'syncing' | 'conflict';
 
 /** The offline client's three-way state for one note: the last agreed version, the device copy, and an optional diverged remote copy. */

@@ -107,12 +107,8 @@ export class IndexedDbWorkspaceRepository {
 				reject(new Error('Device storage is unavailable'));
 				return;
 			}
-			// Version 2 of the existing note-sync database: the new
-			// `workspace` object store is created alongside the original
-			// `note-sync-records` store.  Opening at v2 is a no-op for users
-			// who have already upgraded to v1 of the database; we only add
-			// the new store on upgrade.
-			const request = indexedDB.open(this.databaseName, 2);
+			// Version three retains shell layout while excluding the retired note writer.
+			const request = indexedDB.open(this.databaseName, 3);
 			request.onupgradeneeded = () => {
 				const database = request.result;
 				// Whichever repo triggers the v1→v2 upgrade owns the full
@@ -125,7 +121,13 @@ export class IndexedDbWorkspaceRepository {
 					database.createObjectStore('note-sync-records', { keyPath: 'key' });
 				}
 			};
-			request.onsuccess = () => resolve(request.result);
+			request.onsuccess = () => {
+				request.result.onversionchange = () => {
+					request.result.close();
+					this.database = undefined;
+				};
+				resolve(request.result);
+			};
 			request.onerror = () => reject(request.error ?? new Error('Could not open device storage'));
 			request.onblocked = () => reject(new Error('Device storage upgrade is blocked'));
 		});

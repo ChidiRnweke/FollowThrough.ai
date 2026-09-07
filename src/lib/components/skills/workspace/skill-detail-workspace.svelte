@@ -65,7 +65,6 @@
 
 	onMount(() => {
 		let cancelled = false;
-		const stopListening = noteSync.listenForReconnect();
 		void noteSync.initialize({ note: syncableNote(), etag: data.etag }).then((local) => {
 			if (cancelled) return;
 			// Server-authoritative fields come from the load; content fields come
@@ -83,7 +82,6 @@
 		});
 		return () => {
 			cancelled = true;
-			stopListening();
 			noteSync.reset();
 		};
 	});
@@ -464,10 +462,10 @@
 	</div>
 </div>
 
-{#if noteSync.record}
+{#if noteSync.conflict}
 	<NoteConflictDialog
 		bind:open={conflictOpen}
-		record={noteSync.record}
+		record={noteSync.conflict}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
 	/>

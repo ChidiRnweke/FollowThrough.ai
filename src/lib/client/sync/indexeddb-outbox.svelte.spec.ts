@@ -259,3 +259,14 @@ describe('durable conflict resolution', () => {
 		});
 	});
 });
+
+describe('local write validation', () => {
+	it('rejects invalid local input without poisoning the queue or consuming a sequence', async () => {
+		const { outbox } = setup();
+		await outbox
+			.append('alice', { ...draft(), operationId: 'invalid' })
+			.catch(() => ({ kind: 'failure' }));
+		await outbox.append('alice', draft());
+		expect((await outbox.list('alice')).map((entry) => entry.sequence)).toEqual([1]);
+	});
+});
