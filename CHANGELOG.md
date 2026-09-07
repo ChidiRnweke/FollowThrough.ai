@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.1...v0.4.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* **chat:** state a turn's failure on the subject it befell, and put "nothing" behind its own row ([#35](https://github.com/ChidiRnweke/FollowThrough.ai/issues/35)) ([e44c031](https://github.com/ChidiRnweke/FollowThrough.ai/commit/e44c031a80a53987fe7cec64b831115073709ac1))
+
 ## [0.4.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.0...v0.4.1) (2026-09-07)
 
 
