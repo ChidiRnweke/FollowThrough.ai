@@ -10,6 +10,7 @@ import {
 	projectBuilder,
 	suggestionBuilder,
 	testNoteId,
+	testSuggestionId,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -104,4 +105,41 @@ describe('normalized skill detail', () => {
 	it('does not invent skill metadata when only the note is downloaded', () => {
 		expect(new WorkspaceViews(new Map(entries)).skill(note.id)).toBeNull();
 	});
+});
+
+it('keeps suggestions scoped to their note without a mutable per-pane copy', () => {
+	const first = suggestionBuilder({ sourceAnchorId: undefined });
+	const secondNote = noteBuilder({ id: testNoteId(2) });
+	const second = suggestionBuilder({
+		id: testSuggestionId(2),
+		noteId: secondNote.id,
+		sourceAnchorId: undefined
+	});
+	const provenance = resourceDataSchemas.provenance.parse({
+		id: first.provenanceId,
+		userId: testActor().userId,
+		createdAt: testNow,
+		producerKind: 'agent',
+		producerName: 'FollowThrough Workbench Agent',
+		pipeline: 'agent',
+		runId: 'a0000000-0000-4000-8000-000000000008',
+		model: 'fixture',
+		metadata: {}
+	});
+	const records = new Map(entries);
+	records.set(JSON.stringify(['notes', secondNote.id]), {
+		type: 'notes',
+		value: noteRecordSchema.parse(secondNote)
+	});
+	records.set(JSON.stringify(['suggestions', first.id]), { type: 'suggestions', value: first });
+	records.set(JSON.stringify(['suggestions', second.id]), { type: 'suggestions', value: second });
+	records.set(JSON.stringify(['provenance', provenance.id]), {
+		type: 'provenance',
+		value: provenance
+	});
+	const views = new WorkspaceViews(records);
+	expect([
+		views.note(note.id)?.view.pendingSuggestions.map((item) => item.suggestion.id),
+		views.note(secondNote.id)?.view.pendingSuggestions.map((item) => item.suggestion.id)
+	]).toEqual([[first.id], [second.id]]);
 });

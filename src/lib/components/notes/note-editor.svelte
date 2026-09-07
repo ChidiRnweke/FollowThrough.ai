@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
@@ -34,7 +35,8 @@
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
-	import type { Editor, PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { PerNoteEditorSlot } from './editor-context';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import BubbleMenu from '$lib/components/edra/BubbleMenu.svelte';
@@ -362,14 +364,14 @@
 				(await onconvertMermaid(source, instruction)).id,
 			onCancelMermaid: (kind) => oncancelmermaid?.(kind),
 			onReviewDrawio: (reference) => {
-				const candidate = perNote?.suggestions.items.find(
+				const candidate = perNote?.suggestions.find(
 					(item) => item.suggestion.id === reference
 				)?.suggestion;
 				if (candidate?.kind === 'diagram' && candidate.payload.kind === 'drawio')
-					perNote?.suggestions.requestReview(candidate);
+					suggestionActions.requestReview(candidate.id);
 			},
 			onDismissDrawio: async (reference) => {
-				const candidate = perNote?.suggestions.items.find(
+				const candidate = perNote?.suggestions.find(
 					(item) => item.suggestion.id === reference
 				)?.suggestion;
 				if (candidate?.kind !== 'diagram' || candidate.payload.kind !== 'drawio')
@@ -643,7 +645,7 @@
 
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
-		(perNote?.suggestions.items ?? []).flatMap((item) =>
+		(perNote?.suggestions ?? []).flatMap((item) =>
 			item.anchor &&
 			item.suggestion.noteId === noteId &&
 			item.suggestion.status === 'proposed' &&
@@ -669,7 +671,7 @@
 					]
 				: []
 		),
-		...(perNote?.suggestions.items ?? []).flatMap((view) =>
+		...(perNote?.suggestions ?? []).flatMap((view) =>
 			view.anchor &&
 			view.suggestion.noteId === noteId &&
 			view.suggestion.status === 'proposed' &&
@@ -1366,4 +1368,10 @@
 	</div>
 {/if}
 
-<ProjectDiagramPicker bind:open={pickingProjectDiagram} {projectId} onpick={insertProjectDiagram} />
+{#if pickingProjectDiagram}
+	<ProjectDiagramPicker
+		bind:open={pickingProjectDiagram}
+		{projectId}
+		onpick={insertProjectDiagram}
+	/>
+{/if}

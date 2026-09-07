@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { MoveProjectEntryInput, ProjectId } from '$lib/models/projects';
@@ -7,7 +7,6 @@ import type {
 	ArchiveNoteInput,
 	DeleteNoteForeverInput,
 	EmptyNoteTrashInput,
-	ListNoteTrashInput,
 	NoteId,
 	RestoreNoteInput
 } from '$lib/models/notes';
@@ -52,15 +51,6 @@ export const restoreNote = command(z.object({ noteId: z.string().uuid() }), asyn
 		.notes()
 		.restore(requestActor(), input as RestoreNoteInput);
 });
-
-export const listNoteTrash = query(
-	z.object({ projectId: z.string().uuid().optional() }),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.listTrash(requestActor(), input as ListNoteTrashInput);
-	}
-);
 
 export const deleteNoteForever = command(z.object({ noteId: z.string().uuid() }), async (input) => {
 	return AppFactory.controllers()

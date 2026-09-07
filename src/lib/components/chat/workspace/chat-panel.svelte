@@ -22,10 +22,9 @@
 	} from '$lib/stores/agent/chat.svelte';
 	import { liveSelectionChipOf, selectionChipOf } from '$lib/stores/agent/selection-chip';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
-	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { toast } from 'svelte-sonner';
-	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
 	import {
@@ -582,30 +581,9 @@
 			.uuid()
 			.transform((value) => value as SuggestionId)
 			.parse(id);
-		const tray = workbench.focusedNoteId
-			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
-			: undefined;
-		// The tray only exists while a note pane is mounted. In the right panel there
-		// often is none, and routing through it there rejected every decision — so
-		// fall back to the controller, which is what the tray calls anyway.
-		const ok = tray
-			? await tray.decide(suggestionId, decision)
-			: await decideDirectly(suggestionId, decision);
+		const ok = await suggestionActions.decide(suggestionId, decision);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
-	}
-
-	async function decideDirectly(id: string, decision: 'accept' | 'reject'): Promise<boolean> {
-		try {
-			if (decision === 'accept') await acceptSuggestion({ suggestionId: id });
-			else await rejectSuggestion({ suggestionId: id });
-			chat.resolveSuggestion(id);
-			await workspaceSession.synchronize();
-			return true;
-			// audit-allow: silent-catch — false is the typed decision outcome consumed by the tool card, which keeps the decision available.
-		} catch {
-			return false;
-		}
 	}
 
 	async function requestRetry(entry: ChatEntry): Promise<void> {
@@ -698,10 +676,7 @@
 			onstartediting={startEditing}
 			onaskagain={askAgain}
 			onsuggestion={(id, decision) => void decide(id, decision)}
-			onsuggestionbusy={(id) =>
-				(workbench.focusedNoteId &&
-					suggestionTrayRegistry.peek(workbench.focusedNoteId)?.busyIds.includes(id)) ??
-				false}
+			onsuggestionbusy={(id) => suggestionActions.busyIds.includes(id)}
 			onjumptolatest={jumpToLatest}
 		/>
 		{#if studioOffer}

@@ -5,7 +5,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
-	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
 	import NoteWorkspace from '../../notes/workspace/note-workspace.svelte';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
 
@@ -31,7 +30,6 @@
 	if (!session) throw new Error('Open the workspace before mounting an editor');
 	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
-	const suggestionTray = untrack(() => suggestionTrayRegistry.for(noteId));
 
 	let view = $state<NoteView | undefined>(untrack(() => initialView));
 	let loadingError = $state<string | undefined>(undefined);
@@ -88,7 +86,6 @@
 	onDestroy(() => {
 		releaseContext?.();
 		editorSelectionRegistry.release(noteId);
-		suggestionTrayRegistry.release(noteId);
 	});
 </script>
 
@@ -109,7 +106,6 @@
 			{shell}
 			{inlineSuggestionsEnabled}
 			{draft}
-			{suggestionTray}
 			{editorSelection}
 			{onCloseSplit}
 		/>

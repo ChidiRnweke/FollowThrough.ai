@@ -34,10 +34,6 @@ export const completeTemplateUpload = command(
 		AppFactory.controllers().deliverables().completeTemplateUpload(requestActor(), input.templateId)
 );
 
-export const listTemplates = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers().deliverables().listTemplates(requestActor(), projectId)
-);
-
 export const deleteTemplate = command(z.object({ templateId: templateIdSchema }), async (input) =>
 	AppFactory.controllers().deliverables().deleteTemplate(requestActor(), input.templateId)
 );
@@ -113,10 +109,6 @@ export const updateExportSettings = command(
 		AppFactory.controllers()
 			.deliverables()
 			.updateExportSettings(requestActor(), input.projectId, input.settings)
-);
-
-export const listArtifacts = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers().deliverables().listArtifacts(requestActor(), projectId)
 );
 
 export const downloadArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>

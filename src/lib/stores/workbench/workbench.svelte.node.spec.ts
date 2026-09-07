@@ -29,7 +29,6 @@ class FakeRouter implements WorkbenchRouter {
 	url: URL;
 	onNavigationPending?: () => void;
 	gotoCount = 0;
-	invalidateAllCount = 0;
 
 	constructor(href: string) {
 		this.url = new URL(href, 'https://followthrough.test');
@@ -40,10 +39,6 @@ class FakeRouter implements WorkbenchRouter {
 		this.onNavigationPending?.();
 		await Promise.resolve();
 		this.url = new URL(url, 'https://followthrough.test');
-	}
-
-	async invalidateAll(): Promise<void> {
-		this.invalidateAllCount += 1;
 	}
 
 	currentUrl(): URL {
@@ -165,12 +160,6 @@ describe('Workbench store pruning away from the workbench', () => {
 		const { router, store } = todaySetup(twoTabs, NOTE_A);
 		await store.pruneClosedNotes(new Set([NOTE_B]));
 		expect(router.gotoCount).toBe(0);
-	});
-
-	it('does not reload the page data', async () => {
-		const { router, store } = todaySetup(twoTabs, NOTE_A);
-		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(router.invalidateAllCount).toBe(0);
 	});
 
 	it('persists the pruned strip', async () => {

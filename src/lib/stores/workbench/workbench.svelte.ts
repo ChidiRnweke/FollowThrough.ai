@@ -1,4 +1,4 @@
-import { goto, invalidateAll } from '$app/navigation';
+import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -30,7 +30,6 @@ import { toast } from 'svelte-sonner';
  */
 export type WorkbenchRouter = {
 	goto: (url: string, options?: { replaceState?: boolean; noScroll?: boolean }) => Promise<void>;
-	invalidateAll: () => Promise<void>;
 	currentUrl: () => URL;
 };
 
@@ -42,7 +41,6 @@ export type WorkspaceRepository = {
 
 const sveltekitRouter: WorkbenchRouter = {
 	goto: (url, options) => goto(url, options),
-	invalidateAll: () => invalidateAll(),
 	currentUrl: () => page.url
 };
 
@@ -416,7 +414,7 @@ export class WorkbenchStore {
 	 */
 	async openTab(noteId: TabId): Promise<void> {
 		const next = openTabInState(this.toUrlState(), noteId);
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -431,7 +429,7 @@ export class WorkbenchStore {
 	async openSplit(tabId: TabId, splitTabId: TabId): Promise<void> {
 		const opened = openTabInState(this.toUrlState(), tabId);
 		const next = setSplitInState(opened, splitTabId);
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Focus an already-open tab.  Pushes a new history entry. */
@@ -447,7 +445,7 @@ export class WorkbenchStore {
 		// into the workbench rather than the no-op it is on `/notes/*`.  Without this
 		// the tab you arrived from is the one tab in the strip that does nothing.
 		if (next === current && this.isWorkbenchPath) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Close an open tab.  Pushes a new history entry; if the last tab is closed, redirects away from `/notes/*`. */
@@ -467,7 +465,7 @@ export class WorkbenchStore {
 			});
 			return;
 		}
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -494,7 +492,7 @@ export class WorkbenchStore {
 			});
 			return;
 		}
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Reorder a tab relative to another.  Replaces the current URL so Back doesn't walk reorderings. */
@@ -503,7 +501,7 @@ export class WorkbenchStore {
 		if (!current) return;
 		const next = moveTabInState(current, from, to);
 		if (next === current) return;
-		await this.navigate(next, { replace: true, invalidate: false });
+		await this.navigate(next, { replace: true });
 	}
 
 	/** Add a tab without changing focus, split context, ordering, or strip visibility. */
@@ -511,7 +509,7 @@ export class WorkbenchStore {
 		const current = this.toUrlState();
 		const next = addTabInBackgroundInState(current, noteId);
 		if (next === current) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -526,7 +524,7 @@ export class WorkbenchStore {
 		if (!current) return;
 		const next = setSplitInState(current, noteId);
 		if (next === current) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -541,7 +539,7 @@ export class WorkbenchStore {
 		const next = replaceTabInState(current, from, to);
 		if (next === current) return;
 		this.pinnedTabs = this.pinnedTabs.map((id) => (id === from ? to : id));
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Pin or unpin a tab.  Persists the change without touching the URL. */
@@ -616,7 +614,7 @@ export class WorkbenchStore {
 					openTabs: remaining,
 					...(split ? { splitNoteId: split } : {})
 				},
-				{ replace: true, invalidate: true }
+				{ replace: true }
 			);
 		} finally {
 			this.pruning = false;
@@ -685,17 +683,13 @@ export class WorkbenchStore {
 		}
 	}
 
-	private async navigate(
-		next: WorkbenchUrlState,
-		options: { replace: boolean; invalidate: boolean }
-	): Promise<void> {
+	private async navigate(next: WorkbenchUrlState, options: { replace: boolean }): Promise<void> {
 		const url = serializeWorkbenchUrl(next, { conversationOf: this.conversationOf });
 		await this.router.goto(url, { replaceState: options.replace, noScroll: true });
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
 		// disagrees with the URL (e.g. a reload mid-navigation).
 		await this.persist();
-		if (options.invalidate) await this.router.invalidateAll();
 	}
 
 	private async persist(override?: Partial<WorkbenchLayoutRecord>): Promise<void> {

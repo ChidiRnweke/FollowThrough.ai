@@ -2,7 +2,7 @@
 	import type { WriteConflictView } from '$lib/models/outbox';
 	import type { Diagram, DiagramSuggestion } from '$lib/models/diagrams';
 	import type { Note, NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { PerNoteEditorSlot } from '../editor-context';
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';

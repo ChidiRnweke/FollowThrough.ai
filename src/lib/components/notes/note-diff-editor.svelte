@@ -3,7 +3,7 @@
 	import type { Diagram } from '$lib/models/diagrams';
 	import type { DiffSideBlock } from '$lib/models/notes/note-diff';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
 	import { toEditorContent } from './editor-document';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';

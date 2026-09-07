@@ -43,13 +43,6 @@ const textSelection = z
 
 const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
 
-export const getNote = query(z.string().uuid(), async (noteId) => {
-	const view = await AppFactory.controllers()
-		.notes()
-		.get(requestActor(), { noteId: noteId as NoteId });
-	return view.note;
-});
-
 export const listNoteDocuments = query(
 	z.array(z.string().uuid()).min(1).max(MAX_NOTE_DOCUMENTS),
 	async (noteIds) =>

@@ -2,7 +2,7 @@
 	import { noteWrite } from '$lib/models/workspace-mutations';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import type {
 		ConvertInlineMermaidOutput,
 		DiagramSuggestion,
@@ -38,10 +38,9 @@
 	} from '$lib/stores/notes/note-action-runs.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
-	import { suggestionToView } from '$lib/stores/suggestions/suggestion-view';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { PerNoteEditorSlot } from '../editor-context';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
@@ -63,7 +62,6 @@
 		view,
 		shell,
 		draft,
-		suggestionTray,
 		editorSelection,
 		inlineSuggestionsEnabled = true,
 		onCloseSplit
@@ -71,20 +69,17 @@
 		view: NoteView;
 		shell: ShellContext;
 		draft: WorkspaceDraft<'notes'>;
-		suggestionTray: SuggestionTrayStore;
 		editorSelection: EditorSelectionStore;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
 
-	// `perNote` is built once from the registry-backed store props supplied by
-	// the owning `WorkspacePane`.  Each registry returns a stable instance for
-	// a given `noteId`, so this capture is intentional and does not need to
-	// track prop identity changes that will never happen.
-	const perNote: PerNoteEditorSlot = untrack(() => ({
-		suggestions: suggestionTray,
-		selection: editorSelection
-	}));
+	const perNote: PerNoteEditorSlot = {
+		get suggestions() {
+			return view.pendingSuggestions;
+		},
+		selection: untrack(() => editorSelection)
+	};
 
 	let exportOpen = $state(false);
 	let conflictOpen = $state(false);
@@ -135,7 +130,7 @@
 				enabled: sectionNumberingOverrideFor(level)
 			});
 			sectionNumbering = output.sectionNumbering;
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — numbering failure is reported and refreshed server state remains authoritative.
 		} catch {
 			toast.error('Could not update section numbering. Try again.');
@@ -204,12 +199,7 @@
 		};
 	});
 
-	const noteRef = $derived({ id: note.id, title: note.title });
-	const pendingCount = $derived(
-		suggestionTray.items.filter(
-			(item) => item.suggestion.noteId === note.id && item.suggestion.status === 'proposed'
-		).length
-	);
+	const pendingCount = $derived(view.pendingSuggestions.length);
 
 	const folders = $derived(
 		shell.noteTree.filter(
@@ -262,18 +252,19 @@
 	});
 
 	$effect(() => {
-		suggestionTray.replace(view.pendingSuggestions);
 		return () => {
 			editorSelection.clear();
 		};
 	});
 
 	$effect(() => {
-		const requested = suggestionTray.reviewRequested;
-		if (requested) {
+		const requested = view.pendingSuggestions.find(
+			(item) => item.suggestion.id === suggestionActions.reviewRequested
+		)?.suggestion;
+		if (requested?.kind === 'diagram') {
 			reviewingSuggestion = requested;
 			reviewDialogOpen = true;
-			suggestionTray.clearReview();
+			suggestionActions.clearReview();
 		}
 	});
 
@@ -317,22 +308,6 @@
 		return activeSave;
 	}
 
-	/**
-	 * Pulls the server's view of the note back in after a write. The write itself
-	 * has already succeeded by the time this runs, so a failed refresh is stale
-	 * data rather than lost work: report it and let the caller finish, instead of
-	 * throwing out of a user action and taking the page down with it.
-	 */
-	async function refreshView(): Promise<void> {
-		try {
-			await workspaceSession.synchronize();
-			await invalidateAll();
-			// audit-allow: silent-catch — the save succeeded; refresh failure is explicitly reported with reload as recovery.
-		} catch {
-			toast.error('Saved, but this note’s view could not be refreshed. Reload to catch up.');
-		}
-	}
-
 	async function flushSaves(options: { auto?: boolean }): Promise<void> {
 		while (saveQueued && editorRef) {
 			saveQueued = false;
@@ -369,7 +344,7 @@
 				conflictOpen = true;
 				if (!saveQueued) return;
 			} else if (draft.status === 'synced') {
-				await refreshView();
+				await workspaceSession.synchronize();
 			}
 		}
 	}
@@ -402,7 +377,7 @@
 			dirty = false;
 			conflictOpen = draft.status === 'conflict';
 			toast.success(note.isPinned ? 'Pinned' : 'Unpinned');
-			if (draft.status === 'synced') await refreshView();
+			if (draft.status === 'synced') await workspaceSession.synchronize();
 		} else {
 			toast.error('Could not update pin. Try again.');
 		}
@@ -488,18 +463,14 @@
 	function registerActionHandlers(): void {
 		actionRuns.on('promises', async (result) => {
 			const output = result as ExtractPromisesOutput;
-			suggestionTray.add(
-				output.suggestions.map((s) => suggestionToView(s, 'extract_promises', noteRef))
-			);
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
-				await refreshView();
+				await workspaceSession.synchronize();
 			}
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('relate', (result) => {
 			const output = result as RelateSelectionOutput;
-			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'relate', noteRef)));
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('reference', async (result) => {
@@ -508,8 +479,7 @@
 				toast.info('Nothing sufficiently relevant found.');
 				return;
 			}
-			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'reference', noteRef)));
-			await refreshView();
+			await workspaceSession.synchronize();
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('diagram', async (result, context, runId) => {
@@ -527,20 +497,16 @@
 				toast.error(
 					'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
 				);
-				suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 				return;
 			}
 			markDirty();
-			const view = suggestionToView(output.suggestion, 'agent', noteRef);
-			suggestionTray.add([view]);
-			await suggestionTray.decide(view.suggestion.id, 'accept');
+			await suggestionActions.decide(output.suggestion.id, 'accept');
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {
 			const output = result as ConvertInlineMermaidOutput;
 			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
-			suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 			toast.success('draw.io conversion ready to review');
 		});
 		actionRuns.on('revise', (result, context) => {
@@ -612,8 +578,7 @@
 			throw new Error('Sync the note before accepting its diagram.');
 		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
 		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
-		suggestionTray.remove(suggestionId);
-		await refreshView();
+		await workspaceSession.synchronize();
 		toast.success('draw.io diagram accepted');
 		return diagram;
 	}
@@ -622,7 +587,7 @@
 		const rejected = await noteActions.rejectDrawio(suggestionId);
 		if (!rejected)
 			throw new Error(noteActions.lastError ?? 'The conversion could not be dismissed.');
-		suggestionTray.remove(suggestionId);
+		await workspaceSession.synchronize();
 		toast.success('draw.io conversion dismissed');
 	}
 
@@ -693,7 +658,7 @@
 		}
 		note = { ...local };
 		conflictOpen = draft.status === 'conflict';
-		if (draft.status === 'synced') await refreshView();
+		if (draft.status === 'synced') await workspaceSession.synchronize();
 		else if (draft.lastError) toast.error(draft.lastError);
 	}
 
@@ -703,7 +668,7 @@
 		note = { ...remote.value };
 		editorRef?.replaceDocument(remote.value.document);
 		dirty = false;
-		await refreshView();
+		await workspaceSession.synchronize();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
@@ -713,7 +678,7 @@
 		note = { ...local };
 		conflictOpen = draft.status === 'conflict';
 
-		if (draft.status === 'synced') await refreshView();
+		if (draft.status === 'synced') await workspaceSession.synchronize();
 	}
 
 	async function publish(): Promise<void> {
@@ -736,7 +701,7 @@
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
 			toast.success('Published');
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — publish failure is reported and the draft remains available.
 		} catch {
 			toast.error('Could not publish. Try again.');
@@ -797,7 +762,7 @@
 			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Restored that version');
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
 		} catch {
 			toast.error('Could not restore that version. Try again.');
@@ -821,7 +786,7 @@
 			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Reverted to last published version');
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — discard failure is reported and the local draft remains available.
 		} catch {
 			toast.error('Could not discard changes. Try again.');
