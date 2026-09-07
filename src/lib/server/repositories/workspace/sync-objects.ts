@@ -49,7 +49,9 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	skill_usages: Object.keys(resourceDataSchemas.skill_usages.shape),
 	suggestions: Object.keys(resourceDataSchemas.suggestions.options[0].shape),
 	conversations: Object.keys(resourceDataSchemas.conversations.shape),
-	messages: Object.keys(resourceDataSchemas.messages.shape),
+	messages: Object.keys(resourceDataSchemas.messages.options[0].shape).filter(
+		(field) => field !== 'kind' && field !== 'content'
+	),
 	agent_runs: Object.keys(resourceDataSchemas.agent_runs.shape),
 	agent_preferences: Object.keys(resourceDataSchemas.agent_preferences.shape),
 	user_preferences: Object.keys(resourceDataSchemas.user_preferences.shape),
@@ -73,7 +75,7 @@ const columnValue = (field: string): SQL => {
 	return field === 'eventCursor' ? sql`${column}::text` : column;
 };
 
-const publicRecordSql = (type: WorkspaceResourceType): SQL => sql`(
+const publicFieldsSql = (type: WorkspaceResourceType): SQL => sql`(
 	select jsonb_object_agg(field, value) from jsonb_each(jsonb_build_object(
 		${sql.join(
 			fields[type].flatMap((field) => [sql`${field}::text`, columnValue(field)]),
@@ -81,6 +83,13 @@ const publicRecordSql = (type: WorkspaceResourceType): SQL => sql`(
 		)}
 	)) as public_fields(field, value) where value <> 'null'::jsonb
 )`;
+
+const publicRecordSql = (type: WorkspaceResourceType): SQL =>
+	type === 'messages'
+		? sql`${publicFieldsSql(type)} || case when jsonb_typeof(r.content) = 'object'
+		then jsonb_build_object('kind', 'readable', 'content', r.content)
+		else jsonb_build_object('kind', 'unreadable', 'reason', 'The stored message content is not a readable object') end`
+		: publicFieldsSql(type);
 
 export class WorkspaceSyncObjects implements SyncObjectRepository {
 	constructor(private readonly db: Database) {}

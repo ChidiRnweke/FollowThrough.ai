@@ -14,7 +14,6 @@ import type {
 	ConversationId,
 	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
-	StoredMessage,
 	RunAgentInput,
 	ResolvedAgentRun,
 	StagedAgentRunInput,
@@ -50,10 +49,6 @@ interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
-	findLatestByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined>;
 	findActiveByConversation(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -204,18 +199,6 @@ export interface AgentController {
 	 * @throws ValidationError if the conversation has an active run.
 	 */
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
-	/**
-	 * Load a conversation with its full message history and, when one exists, its most
-	 * recent run as a snapshot, so a single call can hydrate a chat view.
-	 */
-	getSession(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<{
-		conversation: Conversation;
-		messages: readonly StoredMessage[];
-		latestRun?: AgentRunSnapshot;
-	}>;
 }
 
 /**
@@ -271,19 +254,6 @@ export class Agent implements AgentController {
 		if (active)
 			throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
 		await this.dependencies.conversationJournal.remove(actor, conversationId);
-	}
-
-	async getSession(actor: ActorContext, conversationId: ConversationId) {
-		const [conversation, messages, latest] = await Promise.all([
-			this.dependencies.conversationJournal.get(actor, conversationId),
-			this.dependencies.conversationJournal.listMessages(actor, conversationId),
-			this.dependencies.runs.findLatestByConversation(actor, conversationId)
-		]);
-		return {
-			conversation,
-			messages,
-			...(latest ? { latestRun: await this.snapshot(actor, latest) } : {})
-		};
 	}
 
 	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {

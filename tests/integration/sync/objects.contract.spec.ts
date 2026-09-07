@@ -89,3 +89,52 @@ describe('conditional normalized object reads', () => {
 		expect(Object.keys(result.snapshot.value.value)).not.toContain('serializedState');
 	});
 });
+
+it('retains unreadable chat messages as explicit records in the workspace cache', async () => {
+	const { owner } = await seedNote('8731');
+	const conversationId = crypto.randomUUID();
+	const messageId = crypto.randomUUID();
+	await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
+	await context.client`insert into messages (id, conversation_id, role, content) values (${messageId}, ${conversationId}, 'assistant', '[]'::jsonb)`;
+	const result = await new WorkspaceSyncObjects(context.db).read(
+		owner,
+		{ type: 'messages', id: [messageId] },
+		null
+	);
+	expect(
+		result.kind === 'found' && result.snapshot.value.type === 'messages'
+			? result.snapshot.value.value
+			: null
+	).toMatchObject({
+		id: messageId,
+		role: 'assistant',
+		kind: 'unreadable',
+		reason: 'The stored message content is not a readable object'
+	});
+});
+
+it('reads message content and its ordering cursor without loss of precision', async () => {
+	const { owner } = await seedNote('8732');
+	const conversationId = crypto.randomUUID();
+	const messageId = crypto.randomUUID();
+	await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
+	const runId = crypto.randomUUID();
+	await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode) values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept')`;
+	await context.client`insert into agent_run_events (cursor, run_id, attempt, event) overriding system value values (9007199254740993, ${runId}, 0, '{"type":"text_delta","text":"Saved answer"}'::jsonb)`;
+	await context.client`insert into messages (id, conversation_id, role, content, event_cursor) values (${messageId}, ${conversationId}, 'assistant', '{"type":"text","text":"Saved answer"}'::jsonb, 9007199254740993)`;
+	const result = await new WorkspaceSyncObjects(context.db).read(
+		owner,
+		{ type: 'messages', id: [messageId] },
+		null
+	);
+	expect(
+		result.kind === 'found' && result.snapshot.value.type === 'messages'
+			? result.snapshot.value.value
+			: null
+	).toMatchObject({
+		id: messageId,
+		kind: 'readable',
+		content: { type: 'text', text: 'Saved answer' },
+		eventCursor: '9007199254740993'
+	});
+});

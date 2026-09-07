@@ -106,6 +106,19 @@ export const diagramRecordSchema = z.discriminatedUnion('kind', [
 	})
 ]);
 
+const messageFields = {
+	id: id<'MessageId'>(),
+	conversationId: id<'ConversationId'>(),
+	runId: id<'AgentRunId'>().optional(),
+	eventCursor: z
+		.string()
+		.regex(/^[0-9]+$/)
+		.optional(),
+	role: z.enum(['user', 'assistant', 'tool']),
+	model: z.string().optional(),
+	createdAt: instant
+};
+
 export const resourceDataSchemas = {
 	users: z.object({
 		id: id<'UserId'>(),
@@ -224,19 +237,10 @@ export const resourceDataSchemas = {
 		executionModeOverride: executionMode.optional(),
 		...timestamps
 	}),
-	messages: z.object({
-		id: id<'MessageId'>(),
-		conversationId: id<'ConversationId'>(),
-		runId: id<'AgentRunId'>().optional(),
-		eventCursor: z
-			.string()
-			.regex(/^[0-9]+$/)
-			.optional(),
-		role: z.enum(['user', 'assistant', 'tool']),
-		content: agentPayloadObjectSchema,
-		model: z.string().optional(),
-		createdAt: instant
-	}),
+	messages: z.discriminatedUnion('kind', [
+		z.object({ ...messageFields, kind: z.literal('readable'), content: agentPayloadObjectSchema }),
+		z.object({ ...messageFields, kind: z.literal('unreadable'), reason: z.string() })
+	]),
 	agent_runs: z.object({
 		id: id<'AgentRunId'>(),
 		...owned,

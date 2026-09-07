@@ -3,6 +3,7 @@
 	import { WorkspacePanes } from '$lib/components/shell';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	let { data } = $props();
+	const conversation = $derived(data.session.resources.views.conversation(data.conversationId));
 </script>
 
 <!--
@@ -19,14 +20,15 @@
 		agentDefaults={data.session.agentDefaults}
 		agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
 	/>
-{:else}
+{:else if conversation}
 	<ChatWorkspace
 		shell={data.session.shell}
 		sessions={data.session.sessions}
-		conversation={data.conversation}
+		{conversation}
 		agentPreferences={data.session.preferences}
 		agentModels={data.session.bootstrap.agentModels}
 		agentDefaults={data.session.agentDefaults}
 		agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
 	/>
+{:else}<p role="status">This chat is no longer available.</p>
 {/if}

@@ -1,6 +1,12 @@
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
-import type { ToolPreference, AgentPreferenceValues } from '$lib/models/agent';
+import type {
+	ToolPreference,
+	AgentPreferenceValues,
+	Conversation,
+	ConversationId,
+	StoredMessage
+} from '$lib/models/agent';
 import type { ArtifactView } from '$lib/models/deliverables';
 import type { Diagram } from '$lib/models/diagrams';
 import type { TrashedNote } from '$lib/models/notes';
@@ -56,6 +62,33 @@ export class WorkspaceViews {
 					a.id.localeCompare(b.id)
 			);
 	}
+	conversations(query = ''): readonly Conversation[] {
+		const search = query.toLowerCase();
+		return this.all('conversations')
+			.filter(
+				(conversation) =>
+					conversation.kind === 'chat' &&
+					(!search || conversation.title?.toLowerCase().includes(search))
+			)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
+	}
+	conversation(id: ConversationId): Conversation | null {
+		return this.get('conversations', id) ?? null;
+	}
+	messages(id: ConversationId): readonly StoredMessage[] {
+		return this.all('messages')
+			.filter((message) => message.conversationId === id)
+			.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+	}
+	latestRun(id: ConversationId): WorkspaceValues['agent_runs'] | null {
+		return (
+			this.all('agent_runs')
+				.filter((run) => run.conversationId === id)
+				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))[0] ??
+			null
+		);
+	}
+
 	skill(noteId: NoteId): WorkspaceSkill | null {
 		const note = this.get('notes', noteId);
 		const metadata = this.get('skills', noteId);

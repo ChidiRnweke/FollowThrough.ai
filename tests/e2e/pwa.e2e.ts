@@ -199,3 +199,19 @@ test('opens collection and settings routes offline without server page data', as
 	}
 	expect(headings).toEqual(['Skills', 'Trash', 'Settings']);
 });
+
+test('opens saved chat history offline and disables execution', async ({ page, context }) => {
+	await page.goto('/chats');
+	await waitForServiceWorker(page);
+	await page.getByRole('button', { name: /^Saved synchronization chat Workspace chat/ }).click();
+	await page.getByRole('button', { name: 'Send message', exact: true }).waitFor();
+	const href = page.url();
+	await context.setOffline(true);
+	await page.goto(href);
+	await page
+		.getByText(
+			'Offline. Saved chat history is available. Reconnect to send messages or answer approvals.'
+		)
+		.waitFor();
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+});

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { Button } from '$lib/components/ui/button';
@@ -61,7 +62,7 @@
 		busy = true;
 		try {
 			await renameSession({ conversationId: selected.id, title });
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Chat renamed.');
 			// audit-allow: silent-catch — rename failure is reported and the existing chat title remains authoritative.
 		} catch {
@@ -87,7 +88,7 @@
 				open.clear();
 				if (location.pathname === `/chats/${selected.id}`) await goto('/chats/new');
 			}
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			deleteOpen = false;
 			toast.success('Chat deleted.');
 			// audit-allow: silent-catch — deletion failure is reported with the recovery action to stop the active run.

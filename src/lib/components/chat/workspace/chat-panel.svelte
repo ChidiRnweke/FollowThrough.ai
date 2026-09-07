@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { z } from 'zod';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
@@ -26,7 +26,7 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { toast } from 'svelte-sonner';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
-	import { invalidateAll } from '$app/navigation';
+
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
 	import {
 		chatRegistry,
@@ -99,6 +99,16 @@
 	 * conversation with a kept diagram counted as "on screen" no matter what the
 	 * agent had since drawn, and the offer was withheld for the rest of it.
 	 */
+	const session = untrack(() => workspaceSession.current);
+	if (!session) throw new Error('Open the workspace before opening a chat');
+	const resources = session.resources;
+	$effect(() => {
+		const online = resources.online;
+		untrack(() => {
+			if (!online || chat.initialized) void chat.revalidate();
+		});
+	});
+
 	const canvas = $derived(canvasFor(chat.sessionKey));
 	const canvasOnScreen = $derived(canvas !== undefined && workbench.openTabs.includes(canvas.tab));
 	/** Pull journal changes after an agent applies a diagram edit. */
@@ -129,10 +139,12 @@
 		// mechanism, and whoever acquired this store owns detaching it.
 		const releaseComposerFocus = registerComposerFocus?.(() => textareaRef?.focus());
 		chat.initialize(agentPreferences.executionMode);
-		if (initialConversationId === null) chat.clear();
-		else if (initialConversationId)
-			void openConversation(chat.switchToConversation(initialConversationId));
-		else void openConversation(chat.hydrate());
+		if (initialConversationId === null) {
+			chat.clear();
+			void chat.hydrate(resources);
+		} else if (initialConversationId)
+			void openConversation(chat.switchToConversation(initialConversationId, resources));
+		else void openConversation(chat.hydrate(resources));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else prompt = sessionStorage.getItem(draftKey()) ?? '';
@@ -588,7 +600,7 @@
 			if (decision === 'accept') await acceptSuggestion({ suggestionId: id });
 			else await rejectSuggestion({ suggestionId: id });
 			chat.resolveSuggestion(id);
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			return true;
 			// audit-allow: silent-catch — false is the typed decision outcome consumed by the tool card, which keeps the decision available.
 		} catch {
@@ -618,10 +630,20 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col">
-	{#if !agentAvailable}
+	{#if !resources.online}
+		<p role="status" class="mb-4 text-sm text-muted-foreground">
+			Offline. Saved chat history is available. Reconnect to send messages or answer approvals.
+		</p>
+	{:else if !agentAvailable}
 		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
 			Agent chat is disabled. Configure <code class="font-mono text-xs">OPENROUTER_API_KEY</code> to enable
 			it.
+		</div>
+	{/if}
+	{#if chat.historyError}
+		<div role="alert" class="mb-4 text-sm text-destructive">
+			{chat.historyError}
+			<Button variant="outline" onclick={() => void chat.hydrate(resources)}>Retry</Button>
 		</div>
 	{/if}
 	{#if chat.persistenceError}
@@ -657,13 +679,14 @@
 			loading={chat.loading}
 			isStreaming={chat.isStreaming}
 			deciding={chat.deciding}
+			executionDisabled={!chat.canExecute}
 			{editingId}
 			bind:editDraft
 			bind:viewport
 			bind:questionRef
 			bind:anchorSpacer
 			{showJumpToLatest}
-			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id))}
+			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, resources))}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}
@@ -708,7 +731,7 @@
 				{mentionCandidates}
 				{highlighted}
 				{selectedImages}
-				{agentAvailable}
+				agentAvailable={agentAvailable && chat.canExecute}
 				isStreaming={chat.isStreaming}
 				connection={chat.connection}
 				executionMode={chat.executionModeOverride}

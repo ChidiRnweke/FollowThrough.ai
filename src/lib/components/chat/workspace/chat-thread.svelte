@@ -42,6 +42,7 @@
 		loading,
 		isStreaming,
 		deciding,
+		executionDisabled = false,
 		editingId,
 		editDraft = $bindable(''),
 		viewport = $bindable<HTMLElement | null>(null),
@@ -74,6 +75,7 @@
 		loading: boolean;
 		isStreaming: boolean;
 		deciding: boolean;
+		executionDisabled?: boolean;
 		editingId?: string;
 		editDraft?: string;
 		viewport?: HTMLElement | null;
@@ -276,7 +278,7 @@
 											tools={group.tools}
 											{shell}
 											{preferences}
-											busy={deciding}
+											busy={deciding || executionDisabled}
 											onapprove={() => onapprove(entry, group.tools)}
 											onreject={() => onrejectapproval(entry, group.tools)}
 										/>
@@ -376,7 +378,7 @@
 													variant="ghost"
 													size="icon-xs"
 													aria-label="Edit and resubmit question"
-													disabled={isStreaming}
+													disabled={isStreaming || executionDisabled}
 													onclick={() => onstartediting(entry)}><Pencil /></Button
 												>
 											{/snippet}
@@ -389,7 +391,7 @@
 													variant="ghost"
 													size="icon-xs"
 													aria-label="Ask again"
-													disabled={isStreaming}
+													disabled={isStreaming || executionDisabled}
 													onclick={() => onaskagain(entry)}><RotateCcw /></Button
 												>
 											{/snippet}

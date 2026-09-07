@@ -20,7 +20,8 @@ import type {
 } from '$lib/client/agent/runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import { refreshStale } from '$lib/client/knowledge-search/resource-queries';
+import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import type { WorkspaceValues } from '$lib/models/workspace-records';
 import {
 	matchToolActivity,
 	mergeToolActivity,
@@ -266,9 +267,14 @@ const restoredTool = (
 		: tool;
 };
 
-/** Where a message sat in its run's event stream. Messages without one keep their order. */
-const cursorOf = (message: StoredMessage): number =>
-	message.eventCursor === undefined ? Number.MAX_SAFE_INTEGER : Number(message.eventCursor);
+/** Messages without a cursor follow journalled parts and retain insertion order. */
+const compareMessageCursors = (left: StoredMessage, right: StoredMessage): number => {
+	if (left.eventCursor === undefined) return right.eventCursor === undefined ? 0 : 1;
+	if (right.eventCursor === undefined) return -1;
+	const a = BigInt(left.eventCursor);
+	const b = BigInt(right.eventCursor);
+	return a < b ? -1 : a > b ? 1 : 0;
+};
 
 const partsOfTurn = (messages: readonly StoredMessage[], awaitingRunId?: string): ChatPart[] => {
 	const parts: ChatPart[] = [];
@@ -276,7 +282,7 @@ const partsOfTurn = (messages: readonly StoredMessage[], awaitingRunId?: string)
 	// tool activity is journalled as each call settles, while the agent's own output is
 	// written when the run completes. Read back by insertion order, every turn looked like
 	// all of the work followed by all of the words.
-	for (const message of [...messages].sort((left, right) => cursorOf(left) - cursorOf(right))) {
+	for (const message of [...messages].sort(compareMessageCursors)) {
 		// A row whose stored content the server could not read. It keeps its place
 		// in the turn — `eventCursor` is an ordinary column and survives — so the
 		// reader sees where the gap is rather than a turn quietly missing a step.
@@ -442,6 +448,22 @@ export class ChatStore {
 	connection = $state<'detached' | 'connected' | 'reconnecting' | 'offline'>('detached');
 	persistenceError = $state<string | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
+	private resources: WorkspaceResources | null = null;
+	private generation = 0;
+	private connectionGeneration = 0;
+	private liveConfirmed = $state(true);
+	historyError = $state<string | null>(null);
+	private refreshing: Promise<void> | null = null;
+	private hydrating: { generation: number; promise: Promise<void> } | null = null;
+	get canExecute(): boolean {
+		return (
+			(!browser || navigator.onLine) &&
+			!this.loading &&
+			(this.resources === null || (this.resources.active && this.resources.online)) &&
+			this.liveConfirmed
+		);
+	}
+
 	/**
 	 * The user's own default, remembered from `initialize`. A conversation that
 	 * chose no mode of its own falls back to it on hydration, which is the same
@@ -487,13 +509,45 @@ export class ChatStore {
 		this.staged = request;
 	}
 
-	async hydrate(): Promise<void> {
-		if (!browser || !this.conversationId || this.hydratedConversationId === this.conversationId)
-			return;
+	hydrate(resources: WorkspaceResources): Promise<void> {
+		if (this.hydrating?.generation === this.generation) return this.hydrating.promise;
+		const operation = { generation: this.generation, promise: this.hydrateHistory(resources) };
+		this.hydrating = operation;
+		return operation.promise.finally(() => {
+			if (this.hydrating === operation) this.hydrating = null;
+		});
+	}
+
+	private async hydrateHistory(resources: WorkspaceResources): Promise<void> {
+		this.resources = resources;
+		if (!browser || !this.conversationId) return;
 		const conversationId = this.conversationId;
+		const generation = this.generation;
+		this.liveConfirmed = false;
+		this.historyError = null;
 		this.loading = true;
 		try {
-			const data = await this.transport.getSession(conversationId);
+			const opened = await resources.open({ type: 'conversations', id: [conversationId] });
+			if (opened.kind !== 'ready')
+				throw new Error(
+					opened.kind === 'failure' ? opened.message : 'This chat is not available on this device'
+				);
+			if (generation !== this.generation || !resources.active) return;
+			if (this.hydratedConversationId === conversationId && this.eventConnection) {
+				this.loading = false;
+				await this.revalidate();
+				return;
+			}
+			await resources.prepare(['messages', 'agent_runs']);
+			if (generation !== this.generation || !resources.active) return;
+			const conversation = resources.views.conversation(conversationId);
+			if (!conversation) throw new Error('This chat is no longer available');
+			const run = resources.views.latestRun(conversationId);
+			const data = {
+				conversation,
+				messages: resources.views.messages(conversationId),
+				latestRun: run ? { run, pendingDecisions: run.pendingDecisions } : null
+			};
 			// The conversation's own settings, not the ones the last chat left behind.
 			// These were read from `sessionStorage` and never reconciled with the row
 			// the server actually resolves the run against, so the composer could read
@@ -510,6 +564,8 @@ export class ChatStore {
 			this.entries = restoreEntries(data.messages, awaiting);
 			if (data.latestRun) {
 				const snapshot = data.latestRun;
+				this.runId = snapshot.run.id;
+				this.runStatus = snapshot.run.status;
 				let reply = this.entries.findLast(
 					(entry) => entry.role === 'assistant' && entry.runId === snapshot.run.id
 				);
@@ -529,22 +585,75 @@ export class ChatStore {
 					this.activeReply = reply;
 					this.reconcileSnapshot(reply, snapshot);
 				}
-				if (activeStatuses.includes(snapshot.run.status) && reply) {
-					const stored = this.storage.load();
-					if (stored.kind === 'corrupt')
-						this.persistenceError = `The saved run resume marker was corrupt. The run is being replayed from its durable server record. ${stored.message}`;
-					const saved = stored.kind === 'valid' ? stored.state : undefined;
-					const resumeCursor = saved?.runId === snapshot.run.id ? saved.cursor : '0';
-					const resumeAttempt = saved?.runId === snapshot.run.id ? saved.attempt : 0;
-					this.attach(reply, snapshot.run.id, resumeCursor, resumeAttempt);
-				}
 			}
 			this.hydratedConversationId = conversationId;
+			this.loading = false;
+			await this.revalidate();
 			// audit-allow: silent-catch — hydration failure moves the store to an explicit reconnecting/offline state rather than an empty chat.
-		} catch {
+		} catch (error) {
+			if (generation !== this.generation) return;
+			this.historyError =
+				error instanceof Error ? error.message : 'Chat history could not be opened';
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 		} finally {
-			this.loading = false;
+			if (generation === this.generation) this.loading = false;
+		}
+	}
+
+	/** Cached history is readable offline; execution resumes only after a live server check. */
+	revalidate(): Promise<void> {
+		if (
+			!navigator.onLine ||
+			(this.resources && (!this.resources.active || !this.resources.online))
+		) {
+			this.detach();
+			this.connection = 'offline';
+			this.liveConfirmed = false;
+			return Promise.resolve();
+		}
+		if (!this.runId) {
+			this.liveConfirmed = true;
+			return Promise.resolve();
+		}
+		if (this.refreshing) return this.refreshing;
+		const operation = this.validateRun().then(() => undefined);
+		this.refreshing = operation;
+		return operation.finally(() => {
+			if (this.refreshing === operation) this.refreshing = null;
+		});
+	}
+	private async validateRun(): Promise<void | { kind: 'failure' }> {
+		const runId = this.runId;
+		const generation = this.generation;
+		if (!runId) return;
+		try {
+			const snapshot = await this.transport.get(runId);
+			if (
+				generation !== this.generation ||
+				this.runId !== runId ||
+				(this.resources && (!this.resources.active || !this.resources.online))
+			)
+				return;
+			this.liveConfirmed = true;
+			this.historyError = null;
+			const reply = this.activeReply;
+			if (reply) this.reconcileSnapshot(reply, snapshot);
+			if (reply && activeStatuses.includes(snapshot.run.status) && !this.eventConnection) {
+				const stored = this.storage.load();
+				if (stored.kind === 'corrupt') this.persistenceError = stored.message;
+				const saved =
+					stored.kind === 'valid' && stored.state.runId === runId
+						? stored.state
+						: { cursor: '0', attempt: 0 };
+				this.attach(reply, runId, saved.cursor, saved.attempt);
+			}
+		} catch (error) {
+			if (generation !== this.generation) return;
+			this.liveConfirmed = false;
+			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
+			this.historyError =
+				error instanceof Error ? error.message : 'The live run could not be checked';
+			return { kind: 'failure' };
 		}
 	}
 
@@ -589,7 +698,8 @@ export class ChatStore {
 	async send(
 		input: Omit<RunAgentInput, 'conversationId'> & { readonly retryUserOrdinal?: number }
 	): Promise<void> {
-		if (this.isStreaming) return;
+		if (!this.canExecute || this.isStreaming) return;
+		const generation = this.generation;
 		const requestId = crypto.randomUUID();
 		const noteChips = this.chips
 			.filter((chip): chip is ResourceChip => chip.kind === 'note')
@@ -663,6 +773,7 @@ export class ChatStore {
 					? { retryUserOrdinal: input.retryUserOrdinal }
 					: {})
 			});
+			if (generation !== this.generation) return;
 			this.conversationId = receipt.conversationId;
 			reply.runId = receipt.runId;
 			this.runStatus = receipt.status;
@@ -678,13 +789,15 @@ export class ChatStore {
 	}
 
 	async stop(): Promise<void> {
-		if (!this.runId) return;
+		if (!this.canExecute || !this.runId) return;
 		const runId = this.runId;
+		const generation = this.generation;
 		const reply = this.activeReply;
 		if (reply) reply.status = 'cancelling';
 		this.runStatus = 'cancelling';
 		try {
 			const snapshot = await this.transport.cancel(runId);
+			if (generation !== this.generation) return;
 			if (reply) this.reconcileSnapshot(reply, snapshot);
 			// audit-allow: silent-catch — an unconfirmed cancel triggers an explicit server reconciliation attempt.
 		} catch {
@@ -692,9 +805,11 @@ export class ChatStore {
 			// `cancelling` gates the composer and must never be a resting state here.
 			try {
 				const snapshot = await this.transport.get(runId);
+				if (generation !== this.generation) return;
 				if (reply) this.reconcileSnapshot(reply, snapshot);
 				// audit-allow: silent-catch — failed reconciliation marks cancellation unconfirmed instead of claiming success.
 			} catch {
+				if (generation !== this.generation) return;
 				if (reply) reply.error = 'Cancellation has not been confirmed yet.';
 				this.runStatus = undefined;
 			}
@@ -733,7 +848,8 @@ export class ChatStore {
 	 * Returns false when the resubmission could not be started at all.
 	 */
 	async resubmit(entry: ChatEntry, input: Omit<RunAgentInput, 'conversationId'>): Promise<boolean> {
-		if (this.isStreaming || entry.role !== 'user' || !input.prompt.trim()) return false;
+		if (!this.canExecute || this.isStreaming || entry.role !== 'user' || !input.prompt.trim())
+			return false;
 		const ordinal = this.userOrdinalOf(entry);
 		const index = this.entries.indexOf(entry);
 		if (ordinal === undefined || index < 0) return false;
@@ -743,8 +859,10 @@ export class ChatStore {
 	}
 
 	async retry(reply: ChatEntry): Promise<void> {
-		if (this.isStreaming || !reply.runId) return;
+		if (!this.canExecute || this.isStreaming || !reply.runId) return;
+		const generation = this.generation;
 		const receipt = await this.transport.retry(reply.runId, crypto.randomUUID());
+		if (generation !== this.generation) return;
 		reply.status = 'queued';
 		reply.error = undefined;
 		reply.retryable = false;
@@ -767,7 +885,7 @@ export class ChatStore {
 		tools: readonly ChatToolActivity[],
 		decision: 'approve' | 'reject'
 	): Promise<void> {
-		if (this.deciding) return;
+		if (!this.canExecute || this.deciding) return;
 		const runId = tools.find((tool) => tool.runId)?.runId;
 		// A call the run could not name is a call the server cannot match a decision
 		// to, so it is not sent. Parked approvals always carry one.
@@ -776,12 +894,14 @@ export class ChatStore {
 			.filter((callId): callId is string => callId !== undefined);
 		if (!runId || callIds.length === 0) return;
 		this.deciding = true;
+		const generation = this.generation;
 		try {
 			const snapshot = await this.transport.decideMany({
 				runId: runId as AgentRunId,
 				callIds,
 				decision
 			});
+			if (generation !== this.generation) return;
 			// Replaced, not edited: an approved call is `running` and a refused one is
 			// `rejected`, and neither is the arm the parked row was in.
 			for (const tool of tools)
@@ -793,6 +913,7 @@ export class ChatStore {
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
 			// audit-allow: silent-catch — every affected tool is marked failed so the decision is never presented as applied.
 		} catch {
+			if (generation !== this.generation) return;
 			for (const tool of tools)
 				applyToolActivity(reply.parts, {
 					...toolIdentity(tool),
@@ -800,17 +921,23 @@ export class ChatStore {
 					status: 'failed'
 				});
 		} finally {
-			this.deciding = false;
+			if (generation === this.generation) this.deciding = false;
 		}
 	}
 
 	detach(): void {
+		this.connectionGeneration++;
 		this.eventConnection?.close();
 		this.eventConnection = undefined;
 		this.connection = 'detached';
 	}
 
 	clear(): void {
+		this.generation++;
+		this.refreshing = null;
+		this.deciding = false;
+		this.historyError = null;
+		this.liveConfirmed = true;
 		this.detach();
 		this.entries = [];
 		this.loading = false;
@@ -830,8 +957,12 @@ export class ChatStore {
 		if (browser) sessionStorage.removeItem(this.storageKey);
 	}
 
-	async switchToConversation(id: ConversationId): Promise<void> {
-		if (this.conversationId === id) return;
+	async switchToConversation(id: ConversationId, resources: WorkspaceResources): Promise<void> {
+		if (this.conversationId === id) return this.hydrate(resources);
+		this.generation++;
+		this.refreshing = null;
+		this.deciding = false;
+		this.historyError = null;
 		this.detach();
 		this.entries = [];
 		this.conversationId = id;
@@ -849,7 +980,7 @@ export class ChatStore {
 		this.runStatus = undefined;
 		this.activeReply = undefined;
 		this.persistConversationChoices();
-		await this.hydrate();
+		await this.hydrate(resources);
 	}
 
 	private attach(reply: ChatEntry, runId: AgentRunId, cursor: string, attempt: number): void {
@@ -860,24 +991,33 @@ export class ChatStore {
 		this.attempt = attempt;
 		this.connection = 'reconnecting';
 		this.storage.save({ runId, cursor, attempt });
+		const generation = this.connectionGeneration;
 		this.eventConnection = this.transport.openEvents({
 			runId,
 			after: cursor,
-			onOpen: () => (this.connection = 'connected'),
+			onOpen: () => {
+				if (generation === this.connectionGeneration) this.connection = 'connected';
+			},
 			onEvent: (record) => {
+				if (generation !== this.connectionGeneration) return;
 				if (BigInt(record.cursor) <= BigInt(this.cursor)) return;
 				this.cursor = record.cursor;
 				this.storage.save({ runId, cursor: this.cursor, attempt: this.attempt });
 				this.apply(reply, record.event, record.attempt);
 			},
-			onError: () => void this.reconcileAfterDisconnect(reply, runId)
+			onError: () => {
+				if (generation === this.connectionGeneration)
+					void this.reconcileAfterDisconnect(reply, runId);
+			}
 		});
 	}
 
 	private async reconcileAfterDisconnect(reply: ChatEntry, runId: AgentRunId): Promise<void> {
+		const generation = this.connectionGeneration;
 		this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 		try {
 			const snapshot = await this.transport.get(runId);
+			if (generation !== this.connectionGeneration) return;
 			this.reconcileSnapshot(reply, snapshot);
 			if (!activeStatuses.includes(snapshot.run.status)) this.detach();
 			// audit-allow: silent-catch — refresh failure moves the connection into its visible reconnecting/offline state.
@@ -886,10 +1026,27 @@ export class ChatStore {
 		}
 	}
 
-	private reconcileSnapshot(reply: ChatEntry, snapshot: AgentRunSnapshot): void {
+	private reconcileSnapshot(
+		reply: ChatEntry,
+		snapshot: {
+			run: Pick<WorkspaceValues['agent_runs'], 'id' | 'status' | 'failure'>;
+			pendingDecisions: AgentRunSnapshot['pendingDecisions'];
+		}
+	): void {
 		this.runId = snapshot.run.id;
 		this.runStatus = snapshot.run.status;
 		reply.runId = snapshot.run.id;
+		for (const tool of entryTools(reply)) {
+			if (
+				tool.status === 'approval_required' &&
+				!snapshot.pendingDecisions.some((pending) => pending.callId === tool.callId)
+			)
+				applyToolActivity(reply.parts, {
+					...toolIdentity(tool),
+					status: 'failed',
+					failure: ABANDONED_APPROVAL
+				});
+		}
 		if (snapshot.run.status === 'queued') reply.status = 'queued';
 		else if (snapshot.run.status === 'running') reply.status = 'streaming';
 		else if (snapshot.run.status === 'awaiting_approval') {
@@ -995,7 +1152,13 @@ export class ChatStore {
 			this.runStatus = 'completed';
 			this.conversationId = event.conversationId;
 			this.detach();
-		} else if (event.type === 'resources_stale') refreshStale(event.resources);
+		} else if (event.type === 'resources_stale') void this.resources?.synchronize();
+		if (
+			event.type === 'completed' ||
+			event.type === 'cancelled' ||
+			(event.type === 'failed' && !event.retryable)
+		)
+			void this.resources?.synchronize();
 		this.storage.save({
 			...(this.runId ? { runId: this.runId } : {}),
 			cursor: this.cursor,
