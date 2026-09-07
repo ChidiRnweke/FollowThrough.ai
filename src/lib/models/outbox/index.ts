@@ -344,3 +344,15 @@ export const authoritativeWriteResource = <T>(
 				: null;
 	return resource?.kind === 'unavailable' ? null : resource;
 };
+
+export type WriteContent<C, T> = Pick<
+	WriteDraft<C, T>,
+	'command' | 'local' | 'coalesce' | 'references'
+>;
+export type DraftStatus = 'loading' | 'synced' | 'saving' | 'pending' | 'conflict' | 'error';
+export interface WriteConflictView<T> {
+	readonly base: T | null;
+	readonly local: T | null;
+	readonly remote:
+		{ readonly kind: 'found'; readonly value: T } | { readonly kind: 'deleted' | 'unavailable' };
+}

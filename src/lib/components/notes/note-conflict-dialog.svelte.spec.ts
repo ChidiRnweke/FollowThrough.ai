@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { type NoteEditConflict } from '$lib/models/notes';
+import type { Note } from '$lib/models/notes';
+import type { WriteConflictView } from '$lib/models/outbox';
 import NoteConflictDialog from './note-conflict-dialog.svelte';
 
-const conflictRecord = (): NoteEditConflict => {
+const conflictRecord = (): WriteConflictView<Note> => {
 	const base = noteBuilder({ plainText: 'Base' });
 	const remote = noteBuilder({ currentRevision: 2, plainText: 'Remote' });
 	return {
 		base,
 		local: { ...base, plainText: 'Local' },
-		remote: { kind: 'found', note: remote }
+		remote: { kind: 'found', value: remote }
 	};
 };
 

@@ -4,7 +4,6 @@
 	import type { ShellContext } from '$lib/models/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
 	import { noteTodosRegistry } from '$lib/stores/notes/registries/note-todos-registry.svelte';
@@ -29,7 +28,9 @@
 	// (the pane is keyed by it in `WorkspacePanes.svelte`).  Reads via
 	// `untrack` silence Svelte 5's "initial-value capture" warning since the
 	// props never change identity mid-life.
-	const noteSync = untrack(() => noteSyncRegistry.for(noteId));
+	const session = untrack(() => workspaceSession.current);
+	if (!session) throw new Error('Open the workspace before mounting an editor');
+	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
 	const suggestionTray = untrack(() => suggestionTrayRegistry.for(noteId));
 	const noteTodos = untrack(() => noteTodosRegistry.for(noteId));
@@ -70,18 +71,15 @@
 
 	onMount(() => {
 		releaseContext = appContext.registerPane(noteId, () => {
-			const note = noteSync.record?.local ?? view?.note;
+			const note = draft.value ?? view?.note;
 			if (!note) return undefined;
-			const dirty =
-				noteSync.record?.state === 'pending' ||
-				noteSync.record?.state === 'syncing' ||
-				noteSync.record?.state === 'conflict';
+			const dirty = ['pending', 'saving', 'conflict', 'error'].includes(draft.status);
 			return {
 				id: note.id,
 				title: note.title,
 				projectId: note.projectId,
 				revision: note.currentRevision,
-				syncStatus: noteSync.status,
+				syncStatus: draft.status,
 				dirty,
 				...(dirty ? { dirtyExcerpt: note.plainText.slice(0, 4000) } : {})
 			};
@@ -91,7 +89,6 @@
 
 	onDestroy(() => {
 		releaseContext?.();
-		noteSyncRegistry.release(noteId);
 		editorSelectionRegistry.release(noteId);
 		suggestionTrayRegistry.release(noteId);
 		noteTodosRegistry.release(noteId);
@@ -114,7 +111,7 @@
 			{view}
 			{shell}
 			{inlineSuggestionsEnabled}
-			{noteSync}
+			{draft}
 			{noteTodos}
 			{suggestionTray}
 			{editorSelection}

@@ -4,7 +4,6 @@ import NoteWorkspaceHeader from './note-workspace-header.svelte';
 import type { Note, NoteSummary } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { ShellContext } from '$lib/models/workspace';
-import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
 
 const noteId = '00000000-0000-4000-8000-000000000001' as Note['id'];
 const projectId = '10000000-0000-4000-8000-000000000001' as ProjectId;
@@ -42,7 +41,7 @@ const shell: ShellContext = {
 	pendingMemoryNotifications: []
 };
 
-const noteSync = { status: 'synced', lastError: undefined } as unknown as NoteSyncStore;
+const draft = { status: 'synced' as const, lastError: undefined };
 
 const folders: readonly NoteSummary[] = [];
 
@@ -50,7 +49,7 @@ const props = {
 	shell,
 	note,
 	projectId,
-	noteSync,
+	draft,
 	dirty: false,
 	saveFailed: false,
 	unsynced: false,

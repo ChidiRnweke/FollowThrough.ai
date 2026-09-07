@@ -4,7 +4,6 @@ import type { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import type { NoteTodosStore } from '$lib/stores/notes/note-todos.svelte';
 import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
 import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
-import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
 
 /**
  * Per-note store instances attached to the TipTap editor so that NodeViews
@@ -16,7 +15,6 @@ export interface PerNoteEditorSlot {
 	readonly todos: NoteTodosStore;
 	readonly suggestions: SuggestionTrayStore;
 	readonly selection: EditorSelectionStore;
-	readonly sync: NoteSyncStore;
 }
 
 declare module '@tiptap/core' {

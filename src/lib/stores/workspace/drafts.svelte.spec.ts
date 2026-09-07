@@ -19,7 +19,6 @@ import { requestValue } from '$lib/client/sync/database';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
-import { NoteSyncStore } from './note-sync.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
 	const oldName = `editor-old-${crypto.randomUUID()}`;
@@ -61,7 +60,7 @@ const setup = async () => {
 		restoreLocalWrites: () => migrateLegacyNotes(note.userId, outbox, oldName)
 	});
 	resources.setOnline(false);
-	const store = new NoteSyncStore(async () => resources);
+	const store = resources.draft({ type: 'notes', id: [note.id] });
 	cleanups.push(async () => {
 		resources.stop();
 		await repository.close();
@@ -76,13 +75,16 @@ afterEach(async () => {
 });
 describe('legacy drafts opened by the shared editor', () => {
 	it('opens an imported offline draft before any authoritative resource has been downloaded', async () => {
-		const { note, local, store } = await setup();
-		const opened = await store.initialize({ note, etag: noteEtag(note) });
-		expect({ opened, status: store.status }).toEqual({ opened: local, status: 'pending' });
+		const { local, store } = await setup();
+		const opened = await store.read();
+		expect({ opened, status: store.status }).toEqual({
+			opened: { kind: 'ready', value: local },
+			status: 'pending'
+		});
 	});
 	it('validates and submits an imported draft without resurrecting it on the next upgrade attempt', async () => {
 		const { note, key, store, resources, transport, outbox, oldName } = await setup();
-		await store.initialize({ note, etag: noteEtag(note) });
+		await store.read();
 		resources.setOnline(true);
 		await store.retry();
 		await migrateLegacyNotes(note.userId, outbox, oldName);

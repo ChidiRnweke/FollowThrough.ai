@@ -3,11 +3,21 @@ import {
 	visibleResources,
 	localResource,
 	type WriteDraft,
+	type WriteContent,
+	type DraftStatus,
+	type WriteConflictView,
 	type WriteBase
 } from '$lib/models/outbox';
-import { workspaceRecordSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
+import {
+	workspaceRecordSchema,
+	isWorkspaceRecord,
+	workspaceEditContentEquals,
+	type WorkspaceValues,
+	type WorkspaceRecord
+} from '$lib/models/workspace-records';
 import {
 	workspaceCommandSchema,
+	mutationResource,
 	resolveImportedNoteBase,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
@@ -17,7 +27,12 @@ import {
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
 import { WorkspaceViews } from '$lib/models/workspace-views';
-import { cachedSnapshot, type CacheAccess, type SyncSnapshot } from '$lib/models/sync';
+import {
+	cachedSnapshot,
+	compareSyncEtags,
+	type CacheAccess,
+	type SyncSnapshot
+} from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
@@ -41,6 +56,9 @@ export interface WorkspaceResourcesDependencies {
 export class WorkspaceResources {
 	private revision = $state(0);
 	private connected = $state(true);
+	get active(): boolean {
+		return !this.stopped;
+	}
 	get online(): boolean {
 		return this.connected;
 	}
@@ -63,6 +81,12 @@ export class WorkspaceResources {
 			})
 		];
 	}
+	draft<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K }
+	): WorkspaceDraft<K> {
+		return new WorkspaceDraft<K>(this, identity);
+	}
+
 	get records(): ReadonlyMap<string, WorkspaceRecord> {
 		void this.revision;
 		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
@@ -241,3 +265,160 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 			browserWriterLock.run(accountId, () => migrateLegacyNotes(accountId, repository))
 	});
 };
+
+type EditContext = ReturnType<WorkspaceResources['editBase']>;
+/** An editor's observed base, not another resource cache. All persistence and delivery use its workspace. */
+export class WorkspaceDraft<K extends WorkspaceResourceType> {
+	private current = $state<EditContext | null>(null);
+	private error = $state<string | null>(null);
+	private readonly key: string;
+	constructor(
+		private readonly resources: WorkspaceResources,
+		readonly identity: WorkspaceResourceIdentity & { type: K }
+	) {
+		this.key = workspaceResourceKey(identity);
+	}
+	private get entries() {
+		return this.resources.pending.filter((entry) => entry.intent.key === this.key);
+	}
+	private valueOf(record: WorkspaceRecord): WorkspaceValues[K] {
+		if (!isWorkspaceRecord(record, this.identity.type))
+			throw new Error('The editor received another resource type');
+		return record.value;
+	}
+	private get observed(): EditContext | null {
+		const context = this.current;
+		if (
+			!context?.basedOn ||
+			this.resources.pending.some((entry) => entry.intent.operationId === context.basedOn)
+		)
+			return context;
+		const snapshot = this.resources.snapshot(this.identity);
+		return snapshot && workspaceEditContentEquals(context.local, snapshot.value)
+			? { base: snapshot, basedOn: null, local: snapshot.value }
+			: context;
+	}
+	get value(): WorkspaceValues[K] | null {
+		if (!this.resources.active) return null;
+		if (!this.entries.length && this.resources.state(this.identity)?.kind === 'deleted')
+			return null;
+		const last = this.entries.at(-1);
+		const record = last ? last.intent.local : this.observed?.local;
+		return record ? this.valueOf(record) : null;
+	}
+	get status(): DraftStatus {
+		if (this.error) return 'error';
+		if (!this.current) return 'loading';
+		if (this.entries.some((entry) => entry.delivery.kind === 'conflict')) return 'conflict';
+		if (
+			this.entries.some(
+				(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
+			)
+		)
+			return 'error';
+		if (this.entries.some((entry) => entry.delivery.kind === 'sending')) return 'saving';
+		return this.entries.length ? 'pending' : 'synced';
+	}
+	get lastError(): string | undefined {
+		if (this.error) return this.error;
+		const failed = this.entries.find(
+			(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
+		);
+		return failed && (failed.delivery.kind === 'rejected' || failed.delivery.kind === 'retry')
+			? failed.delivery.message
+			: undefined;
+	}
+	get conflict(): WriteConflictView<WorkspaceValues[K]> | undefined {
+		const entry = this.entries.find((entry) => entry.delivery.kind === 'conflict');
+		if (!entry || entry.delivery.kind !== 'conflict') return undefined;
+		const remote = entry.delivery.remote;
+		return {
+			base: entry.intent.base ? this.valueOf(entry.intent.base.value) : null,
+			local: this.value,
+			remote:
+				remote.kind === 'found'
+					? { kind: 'found', value: this.valueOf(remote.snapshot.value) }
+					: remote
+		};
+	}
+	async read(): Promise<CacheAccess<WorkspaceValues[K]>> {
+		this.error = null;
+		try {
+			const opened = await this.resources.open(this.identity);
+			if (opened.kind !== 'ready') {
+				this.error =
+					opened.kind === 'failure'
+						? opened.message
+						: 'This resource is not available on this device';
+				return opened;
+			}
+			this.current = this.resources.editBase(this.identity);
+			return { kind: 'ready', value: this.valueOf(this.current.local) };
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Device storage is unavailable';
+			return { kind: 'failure', message: this.error };
+		}
+	}
+	async stage(
+		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
+	): Promise<
+		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
+	> {
+		this.error = null;
+		try {
+			const context = this.observed;
+			if (!context) throw new Error('Open the resource before editing');
+			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
+				throw new Error('The edit belongs to a different resource');
+			if (content.local) this.valueOf(content.local);
+			const operationId = await this.resources.append({
+				...content,
+				operationId: crypto.randomUUID(),
+				key: this.key,
+				base: context.base,
+				basedOn: context.basedOn
+			});
+			this.current = { ...context, basedOn: operationId, local: content.local ?? context.local };
+			return { kind: 'saved', value: this.value };
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'The local edit could not be saved';
+			return { kind: 'failure', message: this.error };
+		}
+	}
+	async retry(): Promise<void> {
+		this.error = null;
+		if (!this.current) await this.read();
+		await this.resources.synchronize();
+	}
+	async keep(): Promise<void> {
+		const conflict = this.entries.find((entry) => entry.delivery.kind === 'conflict');
+		if (!conflict) throw new Error('This resource has no unresolved conflict');
+		await this.resources.keepLocal(conflict.intent.operationId);
+		await this.resources.synchronize();
+	}
+	async discard(): Promise<CacheAccess<WorkspaceValues[K]>> {
+		const reviewed = this.entries;
+		const conflict = reviewed.find((entry) => entry.delivery.kind === 'conflict');
+		if (this.resources.online) await this.resources.synchronize();
+		const state = this.resources.state(this.identity);
+		const snapshot = this.resources.snapshot(this.identity);
+		if (state?.kind !== 'deleted') {
+			if (!snapshot) throw new Error('Download the server copy before discarding the local edit');
+			if (conflict?.delivery.kind === 'conflict' && conflict.delivery.remote.kind === 'found') {
+				const observed = conflict.delivery.remote.snapshot;
+				if (
+					observed.etag !== null
+						? compareSyncEtags(snapshot.etag, observed.etag) < 0
+						: !this.resources.online || this.resources.readStatus.kind !== 'complete'
+				)
+					throw new Error('Reconnect to validate the server copy before discarding the local edit');
+			}
+		}
+		await this.resources.discard(reviewed.map((entry) => entry.intent.operationId));
+		if (state?.kind === 'deleted') {
+			this.current = null;
+			return { kind: 'deleted' };
+		}
+		return this.read();
+	}
+}

@@ -1,13 +1,10 @@
 <script lang="ts">
-	import type { Note, NoteId } from '$lib/models/notes';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import type { Note } from '$lib/models/notes';
 	import type { AgentPreferences } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { getNote } from '$lib/remote/notes/notes.remote';
-	import { getProjectDiagram } from '$lib/remote/diagrams/diagrams.remote';
 	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
-	import { getTodo } from '$lib/remote/todos/todos.remote';
-	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -72,9 +69,13 @@
 		if (!id) return;
 		let cancelled = false;
 		// audit-allow: silent-catch — the approval card labels the missing preview as unavailable without changing the action payload.
-		void getTodo(id)
-			.then((todo) => {
-				if (!cancelled) todoTitle = todo.title;
+		void workspaceSession
+			.start()
+			.then((session) => session.resources.open({ type: 'todos', id: [id] }))
+			.then((opened) => {
+				if (opened.kind !== 'ready' || opened.value.type !== 'todos')
+					throw new Error('Todo unavailable');
+				if (!cancelled) todoTitle = opened.value.value.title;
 			})
 			.catch(() => {
 				if (!cancelled) todoTitle = 'Todo title unavailable';
@@ -87,16 +88,15 @@
 	$effect(() => {
 		const id = noteId;
 		if (!id) return;
-		const mounted = noteSyncRegistry.peek(id as NoteId)?.record?.local;
-		if (mounted) {
-			baseline = mounted;
-			return;
-		}
 		let cancelled = false;
 		// audit-allow: silent-catch — the approval card disables the note preview by setting its visible baseline-error state.
-		void getNote(id)
-			.then((loaded) => {
-				if (!cancelled) baseline = loaded;
+		void workspaceSession
+			.start()
+			.then((session) => session.resources.open({ type: 'notes', id: [id] }))
+			.then((opened) => {
+				if (opened.kind !== 'ready' || opened.value.type !== 'notes')
+					throw new Error('Note unavailable');
+				if (!cancelled) baseline = opened.value.value;
 			})
 			.catch(() => {
 				if (!cancelled) baselineError = true;
@@ -106,22 +106,43 @@
 		};
 	});
 
-	/**
-	 * The diagram an edit is changing, read as a query rather than fetched in an
-	 * effect. `getProjectDiagram` is reactive, so `$derived` tracks it directly and
-	 * there is no cancellation flag to get wrong when the pending call changes.
-	 */
-	const editedDiagram = $derived(editedDiagramId ? getProjectDiagram(editedDiagramId) : undefined);
-
-	const diagramBaseline = $derived.by((): ApprovalBaseline => {
-		const query = editedDiagram;
-		if (!query?.ready || query.error !== undefined) return { kind: 'none' };
-		const read = readDrawioLabels(query.current.source);
-		// An unreadable stored diagram leaves the card describing what the edit will
-		// contain, which is still true, rather than a diff against nothing.
-		return read.kind === 'labels'
-			? { kind: 'diagram', labels: read.labels, title: query.current.title ?? 'Untitled diagram' }
-			: { kind: 'none' };
+	let diagramBaseline = $state<ApprovalBaseline>({ kind: 'none' });
+	let loadingDiagram = $state(false);
+	$effect(() => {
+		const id = editedDiagramId;
+		if (!id) {
+			diagramBaseline = { kind: 'none' };
+			loadingDiagram = false;
+			return;
+		}
+		let cancelled = false;
+		loadingDiagram = true;
+		void workspaceSession
+			.start()
+			.then((session) => session.resources.open({ type: 'diagrams', id: [id] }))
+			.then((opened) => {
+				if (cancelled) return;
+				if (opened.kind !== 'ready' || opened.value.type !== 'diagrams') {
+					diagramBaseline = { kind: 'none' };
+					return;
+				}
+				const diagram = opened.value.value;
+				const read = readDrawioLabels(diagram.source);
+				diagramBaseline =
+					read.kind === 'labels'
+						? { kind: 'diagram', labels: read.labels, title: diagram.title ?? 'Untitled diagram' }
+						: { kind: 'none' };
+			})
+			.catch(() => {
+				if (!cancelled) diagramBaseline = { kind: 'none' };
+				return { kind: 'failure' };
+			})
+			.finally(() => {
+				if (!cancelled) loadingDiagram = false;
+			});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	/**
@@ -140,7 +161,6 @@
 
 	const preview = $derived(approvalPreview(tool.name, tool.arguments, approvalBaseline));
 	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
-	const loadingDiagram = $derived(editedDiagram !== undefined && !editedDiagram.ready);
 	const fields = $derived(approvalFields(tool.arguments, shell));
 	const subject = $derived(
 		preview.kind === 'note'

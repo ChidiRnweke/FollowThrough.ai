@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 import type { DiagramSuggestion } from '$lib/models/diagrams';
-import type { Note, NoteEditConflict } from '$lib/models/notes';
+import type { Note } from '$lib/models/notes';
+import type { WriteConflictView } from '$lib/models/outbox';
 
 const noteId = '00000000-0000-4000-8000-000000000001' as Note['id'];
 const userId = '20000000-0000-4000-8000-000000000001' as Note['userId'];
@@ -24,10 +25,10 @@ const note = (title: string): Note => ({
 	updatedAt: '2026-07-12T08:00:00.000Z' as Note['updatedAt']
 });
 
-const conflictRecord: NoteEditConflict = {
+const conflictRecord: WriteConflictView<Note> = {
 	base: note('Base'),
 	local: note('Local edit'),
-	remote: { kind: 'found', note: note('Remote edit') }
+	remote: { kind: 'found', value: note('Remote edit') }
 };
 
 const base = {

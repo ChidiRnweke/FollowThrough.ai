@@ -119,7 +119,7 @@ export default defineConfig({
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
 						'src/lib/client/sync/legacy-notes.svelte.spec.ts',
 						'src/lib/stores/workspace/resources.svelte.spec.ts',
-						'src/lib/stores/notes/note-sync.svelte.spec.ts',
+						'src/lib/stores/workspace/drafts.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { NoteEditConflict } from '$lib/models/notes';
+	import type { Note } from '$lib/models/notes';
+	import type { WriteConflictView } from '$lib/models/outbox';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Spinner } from '$lib/components/ui/spinner';
@@ -13,7 +14,7 @@
 		onKeepLocal
 	}: {
 		open?: boolean;
-		record: NoteEditConflict;
+		record: WriteConflictView<Note>;
 		onUseRemote: () => Promise<void>;
 		onKeepLocal: () => Promise<void>;
 	} = $props();
@@ -53,24 +54,25 @@
 				<Tabs.Trigger value="remote">Latest saved version</Tabs.Trigger>
 			</Tabs.List>
 			<Tabs.Content value="local" class="min-h-0 flex-1 overflow-hidden">
-				<NoteVersionDiff
-					base={record.base?.document ?? { type: 'doc', content: [] }}
-					candidate={record.local.document}
-					baseLabel="Shared base"
-					candidateLabel="Your changes"
-					baseTitle={record.base?.title ?? 'New local note'}
-					candidateTitle={record.local.title}
-				/>
+				{#if record.local}<NoteVersionDiff
+						base={record.base?.document ?? { type: 'doc', content: [] }}
+						candidate={record.local.document}
+						baseLabel="Shared base"
+						candidateLabel="Your changes"
+						baseTitle={record.base?.title ?? 'New local note'}
+						candidateTitle={record.local.title}
+					/>
+				{:else}<p>Your local edit deletes this note.</p>{/if}
 			</Tabs.Content>
 			<Tabs.Content value="remote" class="min-h-0 flex-1 overflow-hidden">
 				{#if record.remote.kind === 'found'}
 					<NoteVersionDiff
 						base={record.base?.document ?? { type: 'doc', content: [] }}
-						candidate={record.remote.note.document}
+						candidate={record.remote.value.document}
 						baseLabel="Shared base"
 						candidateLabel="Latest saved version"
 						baseTitle={record.base?.title ?? 'New local note'}
-						candidateTitle={record.remote.note.title}
+						candidateTitle={record.remote.value.title}
 					/>
 				{:else}
 					<p>

@@ -225,20 +225,6 @@ export interface SetNoteSectionNumberingOutput {
 	readonly sectionNumbering: SectionNumberingView;
 }
 
-/** Editor presentation of shared resource writes; it does not own cache or delivery state. */
-export interface NoteEditRecord {
-	readonly local: Note;
-	readonly state: 'synced' | 'pending' | 'syncing' | 'conflict';
-}
-export interface NoteEditConflict {
-	readonly base: Note | null;
-	readonly local: Note;
-	readonly remote:
-		{ readonly kind: 'found'; readonly note: Note } | { readonly kind: 'deleted' | 'unavailable' };
-}
-
-export type NoteSyncStatus = 'loading' | 'synced' | 'saving' | 'pending' | 'conflict' | 'error';
-
 export const noteEtag = (note: Pick<Note, 'id' | 'currentRevision'>): NoteEtag =>
 	`note:${note.id}:r${note.currentRevision}` as NoteEtag;
 

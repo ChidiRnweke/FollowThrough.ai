@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { noteEtag, noteSyncContentEquals, type Note } from '$lib/models/notes';
 import type {
+	WriteContent,
 	WriteDraft,
 	WriteObservation,
 	WriteBaseResolution,
@@ -263,3 +264,18 @@ export const resolveImportedNoteBase = (
 		return { kind: 'matched', snapshot: remote.snapshot };
 	return { kind: 'conflict', remote };
 };
+
+/** Document editing contributes a command and local representation, never cache or retry behavior. */
+export const noteWrite = (note: Note): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+	command: {
+		kind: 'saveNote',
+		noteId: note.id,
+		document: note.document,
+		plainText: note.plainText,
+		title: note.title,
+		isPinned: note.isPinned
+	},
+	local: { type: 'notes', value: note },
+	coalesce: 'document',
+	references: []
+});

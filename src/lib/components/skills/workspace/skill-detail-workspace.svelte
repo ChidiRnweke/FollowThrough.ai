@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { noteWrite } from '$lib/models/workspace-mutations';
 	import { Input } from '$lib/components/ui/input';
-	import { onDestroy, onMount, untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -9,7 +10,7 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
-	import { noteSyncRegistry } from '$lib/stores/notes/registries/note-sync-registry.svelte';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import {
 		FtDownload as Download,
 		FtEdit as Pencil,
@@ -35,8 +36,9 @@
 
 	// Same store the notes workspace uses, acquired per note id — the etag and
 	// conflict handling below are exactly the notes save path.
-	const noteSync = untrack(() => noteSyncRegistry.for(noteId));
-	onDestroy(() => noteSyncRegistry.release(noteId));
+	const session = untrack(() => workspaceSession.current);
+	if (!session) throw new Error('Open the workspace before mounting an editor');
+	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
 
 	let describeRef: SkillEditor | undefined = $state();
 	let bodyRef: SkillEditor | undefined = $state();
@@ -60,12 +62,17 @@
 
 	// Any state where the device copy has not reached the server.
 	const unsynced = $derived(
-		noteSync.status === 'pending' || noteSync.status === 'conflict' || noteSync.status === 'error'
+		draft.status === 'pending' || draft.status === 'conflict' || draft.status === 'error'
 	);
 
 	onMount(() => {
 		let cancelled = false;
-		void noteSync.initialize({ note: syncableNote(), etag: data.etag }).then((local) => {
+		void draft.read().then((opened) => {
+			if (opened.kind !== 'ready') {
+				syncReady = true;
+				return;
+			}
+			const local = opened.value;
 			if (cancelled) return;
 			// Server-authoritative fields come from the load; content fields come
 			// from the device copy, which may hold unsynced edits.
@@ -77,12 +84,11 @@
 				currentRevision: local.currentRevision,
 				updatedAt: local.updatedAt
 			};
-			conflictOpen = noteSync.status === 'conflict';
+			conflictOpen = draft.status === 'conflict';
 			syncReady = true;
 		});
 		return () => {
 			cancelled = true;
-			noteSync.reset();
 		};
 	});
 
@@ -134,12 +140,14 @@
 					return;
 				}
 			}
-			const record = await noteSync.save({
-				...note,
-				document: bodyRef.getDocument(),
-				plainText: bodyRef.getMarkdown()
-			});
-			if (!record) {
+			const record = await draft.stage(
+				noteWrite({
+					...note,
+					document: bodyRef.getDocument(),
+					plainText: bodyRef.getMarkdown()
+				})
+			);
+			if (record.kind === 'failure' || !record.value) {
 				saveFailed = true;
 				dirty = true;
 				if (!options.auto) toast.error('Could not save the skill. Try again.');
@@ -148,60 +156,56 @@
 
 			saveFailed = false;
 			if (savingVersion === editVersion) {
-				note = { ...record.local };
+				note = { ...record.value };
 				dirty = false;
 			} else {
 				note = {
 					...note,
-					currentRevision: record.local.currentRevision,
-					updatedAt: record.local.updatedAt
+					currentRevision: record.value.currentRevision,
+					updatedAt: record.value.updatedAt
 				};
 				dirty = true;
 				saveQueued = true;
 			}
-			if (record.state === 'conflict') {
+			if (draft.status === 'conflict') {
 				conflictOpen = true;
 				if (!saveQueued) return;
-			} else if (record.state === 'synced') {
+			} else if (draft.status === 'synced') {
 				await invalidateAll();
 			}
 		}
 	}
 
 	async function retrySync(): Promise<void> {
-		const record = await noteSync.retry();
-		if (!record) {
-			toast.error(
-				noteSync.lastError ?? 'Could not reach the note on this device. Reload the page.'
-			);
+		await draft.retry();
+		const local = draft.value;
+		if (!local) {
+			toast.error(draft.lastError ?? 'This resource is unavailable');
 			return;
 		}
-		note = { ...record.local };
-		conflictOpen = record.state === 'conflict';
-		if (record.state === 'synced') {
-			await invalidateAll();
-			return;
-		}
-		if (record.state === 'pending')
-			toast.error(noteSync.lastError ?? 'Still could not sync. Check your connection.');
+		note = { ...local };
+		conflictOpen = draft.status === 'conflict';
+		if (draft.status === 'synced') await invalidateAll();
+		else if (draft.lastError) toast.error(draft.lastError);
 	}
 
 	async function useRemoteVersion(): Promise<void> {
-		const remote = await noteSync.useRemote();
-		if (!remote) return;
-		note = { ...remote };
-		dirty = false;
+		const remote = await draft.discard();
+		if (remote.kind !== 'ready') throw new Error('The server copy is unavailable');
+		note = { ...remote.value };
 		editorEpoch += 1;
+		dirty = false;
 		await invalidateAll();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
-		const record = await noteSync.keepLocal();
-		if (!record) return;
-		note = { ...record.local };
-		conflictOpen = record.state === 'conflict';
+		await draft.keep();
+		const local = draft.value;
+		if (!local) throw new Error('The local edit is unavailable');
+		note = { ...local };
+		conflictOpen = draft.status === 'conflict';
 		editorEpoch += 1;
-		if (record.state === 'synced') await invalidateAll();
+		if (draft.status === 'synced') await invalidateAll();
 	}
 
 	function commitTitle(title: string): void {
@@ -230,7 +234,7 @@
 
 	async function ensureSynchronized(message: string): Promise<boolean> {
 		if (dirty) await save({ auto: true });
-		if (dirty || noteSync.status !== 'synced') {
+		if (dirty || draft.status !== 'synced') {
 			toast.error(message);
 			return false;
 		}
@@ -268,7 +272,10 @@
 			await invalidateAll();
 			// The import rewrote the note server-side, so rebase the sync store on
 			// the fresh version before the next save, then remount the editors.
-			const local = await noteSync.initialize({ note: syncableNote(), etag: data.etag });
+			await workspaceSession.synchronize();
+			const opened = await draft.read();
+			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
+			const local = opened.value;
 			note = { ...local };
 			savedDescription = data.view.skill.description;
 			dirty = false;
@@ -288,9 +295,9 @@
 {#snippet syncStatus()}
 	<div class="min-w-0 flex-1 sm:flex-none">
 		<NoteSyncStatus
-			status={noteSync.status}
+			status={draft.status}
 			updatedAt={note.updatedAt}
-			reason={noteSync.lastError}
+			reason={draft.lastError}
 			onRetry={() => void retrySync()}
 			onReview={() => (conflictOpen = true)}
 		/>
@@ -333,9 +340,7 @@
 			</div>
 			<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
 				{#if saveFailed}
-					<Tip
-						text={noteSync.lastError ?? 'The skill could not be saved. Your text is still here.'}
-					>
+					<Tip text={draft.lastError ?? 'The skill could not be saved. Your text is still here.'}>
 						{#snippet children({ props })}
 							<span
 								{...props}
@@ -348,7 +353,7 @@
 					</Tip>
 					<!-- A stuck sync outranks the hint below it: it is the skill's one route
 				     back to saved. -->
-				{:else if unsynced || noteSync.status === 'saving'}
+				{:else if unsynced || draft.status === 'saving'}
 					{@render syncStatus()}
 				{:else if dirty}
 					<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"
@@ -462,10 +467,10 @@
 	</div>
 </div>
 
-{#if noteSync.conflict}
+{#if draft.conflict}
 	<NoteConflictDialog
 		bind:open={conflictOpen}
-		record={noteSync.conflict}
+		record={draft.conflict}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
 	/>
