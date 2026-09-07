@@ -2,11 +2,16 @@ import { z } from 'zod';
 import { workspaceBootstrapSchema } from '$lib/models/workspace-bootstrap';
 import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
 import { syncChangesSchema } from '$lib/models/sync';
-import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
-import { workspaceObjectReadSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
+import { workspaceResourceIdentitySchema, workspaceResourceKey } from '$lib/models/workspace-sync';
+import {
+	workspaceObjectReadSchema,
+	workspaceRecordIdentity,
+	type WorkspaceRecord
+} from '$lib/models/workspace-records';
 import { pullWorkspaceChanges, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
 import {
 	workspaceMutationResultSchema,
+	mutationResource,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
 import { pushWorkspaceMutation } from '$lib/remote/workspace/mutations.remote';
@@ -26,7 +31,13 @@ export const workspaceReadTransport = (accountId: string): SyncReadTransport<Wor
 	},
 	async read(key, etag) {
 		const request = readWorkspaceResource({ accountId, identity: identityFromKey(key), etag });
-		return workspaceObjectReadSchema.parse(await request);
+		const result = workspaceObjectReadSchema.parse(await request);
+		if (
+			result.kind === 'found' &&
+			workspaceResourceKey(workspaceRecordIdentity(result.snapshot.value)) !== key
+		)
+			throw new Error('The server returned a different resource');
+		return result;
 	}
 });
 
@@ -34,9 +45,24 @@ export const workspaceWriteTransport = (
 	accountId: string
 ): OutboxTransport<WorkspaceCommand, WorkspaceRecord> => ({
 	async send(input) {
-		return workspaceMutationResultSchema.parse(
+		const result = workspaceMutationResultSchema.parse(
 			await pushWorkspaceMutation({ ...input, accountId })
 		);
+		if (result.kind === 'applied' && result.receipt.operationId !== input.operationId)
+			throw new Error('The server acknowledged a different operation');
+		const resource =
+			result.kind === 'applied'
+				? result.receipt.resource
+				: result.kind === 'conflict'
+					? result.remote
+					: null;
+		if (
+			resource?.kind === 'found' &&
+			workspaceResourceKey(workspaceRecordIdentity(resource.snapshot.value)) !==
+				workspaceResourceKey(mutationResource(input.command))
+		)
+			throw new Error('The server returned a different resource');
+		return result;
 	}
 });
 

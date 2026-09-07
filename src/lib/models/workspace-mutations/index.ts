@@ -19,6 +19,7 @@ import {
 	todoRecordSchema,
 	workspaceObjectReadSchema,
 	workspaceWriteReceiptSchema,
+	workspaceRecordIdentity,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
@@ -394,4 +395,16 @@ export const newNote = (
 		createdAt: timestamp,
 		updatedAt: timestamp
 	};
+};
+
+/** Validate identity once for every feature that appends to the shared outbox. */
+export const assertWorkspaceWriteIdentity = (
+	draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>
+): void => {
+	if (workspaceResourceKey(mutationResource(draft.command)) !== draft.key)
+		throw new Error('The command belongs to a different resource');
+	for (const record of [draft.local, draft.base?.value]) {
+		if (record && workspaceResourceKey(workspaceRecordIdentity(record)) !== draft.key)
+			throw new Error('The edit body belongs to a different resource');
+	}
 };

@@ -18,6 +18,7 @@ import {
 import {
 	workspaceCommandSchema,
 	mutationResource,
+	assertWorkspaceWriteIdentity,
 	resolveImportedNoteBase,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
@@ -194,6 +195,7 @@ export class WorkspaceResources {
 	}
 
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
+		assertWorkspaceWriteIdentity(draft);
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		await this.initialize();
 		const operationId = await this.dependencies.writes.append(plain(draft));

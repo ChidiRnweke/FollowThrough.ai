@@ -1,3 +1,4 @@
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { z } from 'zod';
 import { syncEtagSchema } from '$lib/models/sync';
 import { storedDocumentSchema } from '$lib/models/notes';
@@ -419,3 +420,31 @@ export const isWorkspaceRecord = <K extends WorkspaceRecord['type']>(
 	record: WorkspaceRecord,
 	type: K
 ): record is WorkspaceRecordOf<K> => record.type === type;
+
+/** Record bodies and transport keys must name the same resource, including composite keys. */
+export const workspaceRecordIdentity = (record: WorkspaceRecord): WorkspaceResourceIdentity => {
+	switch (record.type) {
+		case 'skills':
+			return { type: record.type, id: [record.value.noteId] };
+		case 'agent_preferences':
+		case 'user_preferences':
+			return { type: record.type, id: [record.value.userId] };
+		case 'project_skill_pins':
+			return { type: record.type, id: [record.value.projectId, record.value.skillNoteId] };
+		case 'todo_attachments':
+			return { type: record.type, id: [record.value.todoId, record.value.attachmentId] };
+		case 'export_settings':
+			return { type: record.type, id: [record.value.userId, record.value.projectId] };
+		case 'tool_preferences':
+			return { type: record.type, id: [record.value.userId, record.value.toolName] };
+		case 'project_tool_overrides':
+			return {
+				type: record.type,
+				id: [record.value.userId, record.value.projectId, record.value.toolName]
+			};
+		case 'trust_policies':
+			return { type: record.type, id: [record.value.userId, record.value.pipeline] };
+		default:
+			return { type: record.type, id: [record.value.id] };
+	}
+};
