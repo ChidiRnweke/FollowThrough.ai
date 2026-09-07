@@ -734,22 +734,17 @@ type Definition = AgentToolDefinition;
  * than inventing a value.
  *
  * Optional fields the schema preprocesses to `undefined` — the tools' spelling
- * of "blank means omitted" — are dropped rather than carried, because the wire
- * type cannot represent them and the tool bodies read absence as absence. The
- * drop is top-level only, deliberately: every schema keeps its preprocessed
- * optionals flat (`optionalModelField` on the tool's own shape), so a nested
- * object never gains a `undefined` value the JSON check below would have to
- * refuse. A schema that nests one changes that contract and must move the drop
- * down with it.
+ * of "blank means omitted" — are dropped by the reader itself, at every depth,
+ * because that is what `JSON.stringify` does with them. This used to be a
+ * hand-rolled filter here, and it could only reach the top level: a schema that
+ * nested a preprocessed optional would have had its whole call refused, and the
+ * comment could do no more than ask nobody to write one.
  */
 const parseArguments = (schema: z.ZodObject, input: unknown): AgentPayloadObject => {
 	const parsed: unknown = schema.parse(input);
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
 		throw new Error('Tool arguments must parse to an object');
-	const withoutUndefined = Object.fromEntries(
-		Object.entries(parsed).filter(([, value]) => value !== undefined)
-	);
-	const read = readAgentPayloadObject(withoutUndefined);
+	const read = readAgentPayloadObject(parsed);
 	if (read.kind === 'corrupt')
 		throw new Error(`Tool arguments could not be represented as JSON: ${read.message}`);
 	return read.value;
