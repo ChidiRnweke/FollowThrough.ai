@@ -145,6 +145,25 @@ export class WorkspaceResources {
 		const result = await this.dependencies.cache.open(key);
 		return localResource(this.dependencies.writes.pending, key) ?? result;
 	}
+	/** Optional records may use defaults only after the journal proves their absence. */
+	async lookup(
+		identity: WorkspaceResourceIdentity
+	): Promise<CacheAccess<WorkspaceRecord> | { kind: 'absent' }> {
+		await this.initialize();
+		if (this.stopped) return { kind: 'unavailable' };
+		const key = workspaceResourceKey(identity);
+		if (localResource(this.dependencies.writes.pending, key)) return this.open(identity);
+		if (this.dependencies.cache.availability === 'unknown') {
+			const result = await this.dependencies.cache.refresh();
+			if (result.kind === 'failure') return result;
+			if (this.dependencies.cache.availability === 'unknown') return { kind: 'unavailable' };
+		}
+		if (this.stopped) return { kind: 'unavailable' };
+		return localResource(this.dependencies.writes.pending, key) ||
+			this.dependencies.cache.records.has(key)
+			? this.open(identity)
+			: { kind: 'absent' };
+	}
 	async openNote(noteId: NoteId): Promise<CacheAccess<NoteView>> {
 		const opened = await this.open({ type: 'notes', id: [noteId] });
 		if (opened.kind !== 'ready') return opened;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { loadExportSettings } from './load-settings';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import type { ProseMirrorDocument } from '$lib/models/notes';
@@ -20,11 +21,7 @@
 		renderDrawioDiagrams
 	} from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import {
-		generateDocument,
-		getExportSettings,
-		previewDocument
-	} from '$lib/remote/deliverables/deliverables.remote';
+	import { generateDocument, previewDocument } from '$lib/remote/deliverables/deliverables.remote';
 
 	let {
 		open = $bindable(false),
@@ -47,6 +44,7 @@
 	let format = $state<'docx' | 'pdf'>('pdf');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
 	let busy = $state(false);
+	let settingsReady = $state(false);
 	let previewOpen = $state(false);
 	let previewUrl = $state('');
 	let result = $state<{ url: string; artifactId: string } | null>(null);
@@ -66,8 +64,10 @@
 	});
 
 	async function loadSettings(): Promise<void> {
+		settingsReady = false;
 		try {
-			settings = { ...(await getExportSettings(projectId)) };
+			settings = { ...(await loadExportSettings(projectId)) };
+			settingsReady = true;
 			// audit-allow: silent-catch — the dialog renders the settings load error and does not claim defaults loaded.
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
@@ -105,7 +105,7 @@
 
 	async function preview(): Promise<void> {
 		const trimmed = title.trim();
-		if (!trimmed) return;
+		if (!trimmed || !settingsReady) return;
 		busy = true;
 		error = '';
 		try {
@@ -138,7 +138,7 @@
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		const trimmed = title.trim();
-		if (!trimmed) return;
+		if (!trimmed || !settingsReady) return;
 		busy = true;
 		error = '';
 		try {
@@ -217,7 +217,12 @@
 					Advanced layout
 				</Collapsible.Trigger>
 				<Collapsible.Content class="pt-3">
-					<ExportSettingsFields bind:settings {hasDiagrams} {hasSelfStyledDiagrams} />
+					<ExportSettingsFields
+						bind:settings
+						disabled={busy || !settingsReady}
+						{hasDiagrams}
+						{hasSelfStyledDiagrams}
+					/>
 					<p class="pt-2 text-xs text-muted-foreground">
 						Applies to this export. Set project defaults from the project menu.
 					</p>
@@ -250,13 +255,13 @@
 				<Button
 					type="button"
 					variant="outline"
-					disabled={busy || !title.trim()}
+					disabled={busy || !settingsReady || !title.trim()}
 					onclick={() => void preview()}
 				>
 					{busy ? 'Working…' : 'Preview PDF'}
 				</Button>
 				{#if !result}
-					<Button type="submit" disabled={busy || !title.trim()}>
+					<Button type="submit" disabled={busy || !settingsReady || !title.trim()}>
 						{busy ? 'Generating…' : 'Generate'}
 					</Button>
 				{/if}

@@ -3,7 +3,7 @@ import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { syncEtag, initialSyncCursor } from '$lib/models/sync';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
@@ -238,5 +238,64 @@ describe('shared editor context', () => {
 			pending: [],
 			value: saved
 		});
+	});
+});
+
+describe('optional workspace records', () => {
+	it('reports absence after an initial successful journal pull', async () => {
+		const { resources } = setup();
+		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
+	});
+	it('does not invent absence before this device has a journal', async () => {
+		const { resources } = setup();
+		resources.setOnline(false);
+		expect(await resources.lookup(identity)).toEqual({ kind: 'unavailable' });
+	});
+	it('retains a journal failure instead of supplying defaults', async () => {
+		const { resources, transport } = setup();
+		transport.pullFailure = 'Connection interrupted';
+		expect(await resources.lookup(identity)).toEqual({
+			kind: 'failure',
+			message: 'Connection interrupted'
+		});
+	});
+	it('uses known absence offline', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
+		resources.setOnline(false);
+		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
+	});
+	it('keeps a missing body distinct from an absent record', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', {
+			put: [
+				{
+					key,
+					entry: {
+						kind: 'present',
+						cache: {
+							kind: 'updating',
+							previous: null,
+							target: syncEtag(1n),
+							transfer: { kind: 'queued' }
+						}
+					}
+				}
+			],
+			remove: [],
+			cursor: initialSyncCursor
+		});
+		resources.setOnline(false);
+		expect(await resources.lookup(identity)).toEqual({ kind: 'unavailable' });
+	});
+	it('keeps server deletion distinct from absence', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', {
+			put: [{ key, entry: { kind: 'deleted', etag: syncEtag(1n) } }],
+			remove: [],
+			cursor: initialSyncCursor
+		});
+		resources.setOnline(false);
+		expect(await resources.lookup(identity)).toEqual({ kind: 'deleted' });
 	});
 });

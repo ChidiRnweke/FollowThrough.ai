@@ -79,7 +79,7 @@ objects. Offline access to the retained copy is the explicit exception to that b
 Losing connectivity releases an already-waiting reader to its retained copy, or reports that no
 offline copy exists. A transient online failure preserves the previous copy and reports failure;
 it does not falsely transition to cached. A later foreground request or synchronization retries
-the transfer. There is no separate fresh state, and no busy retry loop on failure.
+the transfer. There is no separate fresh state, and no busy retry loop on failure. Optional records use the same read barrier. A completed journal can prove that an override is absent; an unknown inventory or a known record without its body cannot. Features may apply product defaults only for proven absence or deletion, never for a failed download.
 
 The write lifecycle is separate. Ordinary creates, edits, moves, publication, archive/restore,
 and deletions enter a durable local queue before being sent. Dependent operations retain their

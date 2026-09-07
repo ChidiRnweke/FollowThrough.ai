@@ -16,7 +16,6 @@ import type {
 	SearchNoteTextInput,
 	ReplaceNoteTextInput
 } from '$lib/models/notes';
-import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -38,14 +37,6 @@ const textSelection = z
 		text: z.string()
 	})
 	.refine((s) => s.to >= s.from, 'Selection end must follow its start.');
-
-export const listNoteDocuments = query(
-	z.array(z.string().uuid()).min(1).max(MAX_NOTE_DOCUMENTS),
-	async (noteIds) =>
-		AppFactory.controllers()
-			.notes()
-			.listDocuments(requestActor(), { noteIds: noteIds as NoteId[] })
-);
 
 export const discardNoteDraft = command(
 	z.object({
