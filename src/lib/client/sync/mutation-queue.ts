@@ -1,4 +1,11 @@
-import type { OutboxEntry, WriteDraft, WriteReceipt } from '$lib/models/outbox';
+import {
+	unresolvedWrite,
+	nextWrite,
+	type WriteBaseResolution,
+	type OutboxEntry,
+	type WriteDraft,
+	type WriteReceipt
+} from '$lib/models/outbox';
 import type { OutboxRepository, OutboxTransport } from './outbox-contracts';
 
 export interface AccountWriterLock {
@@ -10,6 +17,7 @@ export interface MutationQueueDependencies<C, T> {
 	repository: OutboxRepository<C, T>;
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
+	resolveBase(key: string, value: T, local: T | null): Promise<WriteBaseResolution<T>>;
 	accepted(key: string, receipt: WriteReceipt<T>): Promise<void>;
 }
 
@@ -74,9 +82,29 @@ export class MutationQueue<C, T> {
 					if (!this.online) return { kind: 'offline' };
 					await this.dependencies.repository.recover(this.accountId);
 					while (!this.stopped && this.online) {
+						const unresolved = unresolvedWrite(
+							await this.dependencies.repository.list(this.accountId)
+						);
+						if (unresolved?.intent.base) {
+							const resolution = await this.dependencies.resolveBase(
+								unresolved.intent.key,
+								unresolved.intent.base.value,
+								unresolved.intent.local
+							);
+							await this.dependencies.repository.resolveBase(
+								this.accountId,
+								unresolved.intent.operationId,
+								resolution
+							);
+							await this.reload();
+							continue;
+						}
 						const sent = await this.dependencies.repository.take(this.accountId);
 						await this.reload();
-						if (!sent) return { kind: 'complete' };
+						if (!sent) {
+							if (nextWrite(this.entries) || unresolvedWrite(this.entries)) continue;
+							return { kind: 'complete' };
+						}
 						if (this.stopped) return { kind: 'stopped' };
 						if (!this.online) return { kind: 'offline' };
 						// Once taken, the input remains immutable even if the request's outcome is lost.

@@ -6,6 +6,9 @@ import {
 	nextWrite,
 	outboxEntrySchema,
 	settleWrite,
+	resolveWriteBase,
+	type WriteBaseResolution,
+	type WriteObservation,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteOutcome
@@ -36,27 +39,82 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	}
 
 	append(accountId: string, draft: WriteDraft<C, T>): Promise<string> {
+		return this.edit(accountId, (entries, transaction) =>
+			this.appendEntry(accountId, draft, entries, transaction)
+		);
+	}
+
+	/** The source marker and imported intent commit together; an interrupted upgrade can safely retry. */
+	importOnce(
+		accountId: string,
+		source: string,
+		draft: WriteDraft<C, T>,
+		conflict: WriteObservation<T> | null
+	): Promise<string> {
 		return this.edit(accountId, async (entries, transaction) => {
-			const heads = transaction.objectStore('queue-heads');
-			const stored = await requestValue(heads.get(accountId));
-			if (stored === undefined && entries.length)
-				throw new Error('The local queue has lost its sequence head');
-			const previous =
-				stored === undefined
-					? 0
-					: z
-							.object({ accountId: z.literal(accountId), sequence: z.number().int().nonnegative() })
-							.parse(stored).sequence;
-			if (entries.some((entry) => entry.sequence > previous))
-				throw new Error('The local queue sequence head precedes its writes');
-			const sequence = previous + 1;
-			if (!Number.isSafeInteger(sequence)) throw new Error('The local queue sequence is exhausted');
-			const next = appendWrite(entries, draft, sequence);
-			const appended = next.findLast((entry) => entry.intent.key === draft.key);
-			if (!appended) throw new Error('The queued resource was not appended');
-			heads.put({ accountId, sequence });
-			return { entries: next, result: appended.intent.operationId };
+			const imports = transaction.objectStore('imports');
+			const saved = await requestValue(imports.get([accountId, source]));
+			if (saved !== undefined) {
+				const marker = z
+					.object({
+						accountId: z.literal(accountId),
+						source: z.literal(source),
+						operationId: z.string().uuid()
+					})
+					.parse(saved);
+				return { entries, result: marker.operationId };
+			}
+			const appended = await this.appendEntry(accountId, draft, entries, transaction);
+			imports.put({ accountId, source, operationId: appended.result });
+			return {
+				entries: conflict
+					? appended.entries.map((entry) =>
+							entry.intent.operationId === appended.result
+								? { ...entry, delivery: { kind: 'conflict' as const, remote: conflict } }
+								: entry
+						)
+					: appended.entries,
+				result: appended.result
+			};
 		});
+	}
+
+	private async appendEntry(
+		accountId: string,
+		draft: WriteDraft<C, T>,
+		entries: readonly OutboxEntry<C, T>[],
+		transaction: IDBTransaction
+	): Promise<{ entries: readonly OutboxEntry<C, T>[]; result: string }> {
+		const heads = transaction.objectStore('queue-heads');
+		const stored = await requestValue(heads.get(accountId));
+		if (stored === undefined && entries.length)
+			throw new Error('The local queue has lost its sequence head');
+		const previous =
+			stored === undefined
+				? 0
+				: z
+						.object({ accountId: z.literal(accountId), sequence: z.number().int().nonnegative() })
+						.parse(stored).sequence;
+		if (entries.some((entry) => entry.sequence > previous))
+			throw new Error('The local queue sequence head precedes its writes');
+		const sequence = previous + 1;
+		if (!Number.isSafeInteger(sequence)) throw new Error('The local queue sequence is exhausted');
+		const next = appendWrite(entries, draft, sequence);
+		const appended = next.findLast((entry) => entry.intent.key === draft.key);
+		if (!appended) throw new Error('The queued resource was not appended');
+		heads.put({ accountId, sequence });
+		return { entries: next, result: appended.intent.operationId };
+	}
+
+	resolveBase(
+		accountId: string,
+		operationId: string,
+		resolution: WriteBaseResolution<T>
+	): Promise<void> {
+		return this.edit(accountId, async (entries) => ({
+			entries: resolveWriteBase(entries, operationId, resolution),
+			result: undefined
+		}));
 	}
 
 	take(accountId: string): Promise<OutboxEntry<C, T> | null> {
@@ -124,7 +182,10 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		) => Promise<{ entries: readonly OutboxEntry<C, T>[]; result: R }>
 	): Promise<R> {
 		const database = await this.open();
-		const transaction = database.transaction(['outbox', 'queue-heads', 'records'], 'readwrite');
+		const transaction = database.transaction(
+			['outbox', 'queue-heads', 'records', 'imports'],
+			'readwrite'
+		);
 		const done = completed(transaction);
 		let active = true;
 		transaction.addEventListener('abort', () => {

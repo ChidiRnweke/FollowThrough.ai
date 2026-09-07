@@ -157,3 +157,44 @@ describe('durable local writes', () => {
 		});
 	});
 });
+
+describe('durable draft import', () => {
+	it('does not resurrect an imported draft after its acknowledgement', async () => {
+		const { outbox } = setup();
+		const input = draft();
+		await outbox.importOnce('alice', 'old-note', input, null);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected a submitted import');
+		await outbox.settle('alice', sent, {
+			kind: 'applied',
+			receipt: { operationId: input.operationId, resource: { kind: 'found', snapshot } }
+		});
+		await outbox.importOnce('alice', 'old-note', input, null);
+		expect(await outbox.list('alice')).toEqual([]);
+	});
+	it('retains unversioned base, local, and remote copies across reopening', async () => {
+		const { name, outbox } = setup();
+		const input = { ...draft(), base: { etag: null, value: 'Original' }, local: 'Offline edit' };
+		const remote = { kind: 'found' as const, snapshot: { etag: null, value: 'Other client' } };
+		await outbox.importOnce('alice', 'old-note', input, remote);
+		await outbox.close();
+		const [saved] = await setup(name).outbox.list('alice');
+		expect({
+			base: saved.intent.base,
+			local: saved.intent.local,
+			delivery: saved.delivery
+		}).toEqual({ base: input.base, local: input.local, delivery: { kind: 'conflict', remote } });
+	});
+	it('rolls back the import marker when appending fails', async () => {
+		const { outbox } = setup();
+		const input = draft();
+		await outbox.append('alice', input);
+		await outbox.importOnce('alice', 'old-note', input, null).catch(() => ({ kind: 'failure' }));
+		const replacement = draft('note:2');
+		await outbox.importOnce('alice', 'old-note', replacement, null);
+		expect((await outbox.list('alice')).map((entry) => entry.intent.operationId)).toEqual([
+			input.operationId,
+			replacement.operationId
+		]);
+	});
+});

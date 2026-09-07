@@ -36,6 +36,9 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		repository,
 		writerLock,
 		transport,
+		resolveBase: async () => {
+			throw new Error('This fixture has no imported draft');
+		},
 		accepted: async (_key: string, receipt: WriteReceipt<string>) => {
 			accepted.push(receipt);
 		}
@@ -44,6 +47,25 @@ const setup = (transport: OutboxTransport<string, string>) => {
 };
 
 describe('shared mutation submission', () => {
+	it('durably resolves an imported base before submitting its unchanged operation', async () => {
+		const requests: (string | null)[] = [];
+		const { dependencies } = setup({
+			send: async (input) => {
+				requests.push(input.baseEtag);
+				return applied(input.operationId, input.command);
+			}
+		});
+		const queue = new MutationQueue('alice', {
+			...dependencies,
+			resolveBase: async () => ({
+				kind: 'matched',
+				snapshot: { etag: syncEtag(4n), value: 'Original' }
+			})
+		});
+		await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
+		await queue.flush();
+		expect(requests).toEqual([syncEtag(4n)]);
+	});
 	it('keeps offline writes durable without starting submission', async () => {
 		const { queue, repository } = setup({
 			send: async () => {

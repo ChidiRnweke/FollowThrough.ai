@@ -85,3 +85,10 @@ Further verified checkpoints:
 
 The browser shell integration passes type, scoped lint, and architecture checks, 13 focused
 bootstrap/view tests, and 5 browser resource-store tests. Full app/PWA validation remains pending.
+
+Legacy migration foundation now retains unversioned base/local/remote copies, excludes unresolved
+bases from submission, validates before sending, and imports with atomic durable markers while
+keeping the source database. It is deliberately not invoked until the old writer is replaced.
+Validation: 42 focused node tests, 15 IndexedDB browser tests, 6 PostgreSQL mutation contracts,
+type checking and architecture audits. The contract exposed and fixed numbering persistence in
+guarded imported saves.

@@ -122,6 +122,16 @@ Account changes stop synchronization and remove access to the previous account's
 Unsent changes remain recoverable after that same account authenticates again. Invalid storage,
 failed downloads, and unavailable server actions are explicit failures under ADR 0015.
 
+Legacy note drafts retain their original base, local content, and any observed conflict copy.
+Their old revision validator is not a workspace version: an imported existing base explicitly
+has an unknown sync ETag until an authoritative read validates it. An absent base still means a
+new local object. Unvalidated imports cannot be submitted. Matching the original content and
+revision, or finding that the desired content already reached the server, supplies the real
+validator; divergence retains a conflict. Only metadata actually changed offline is submitted.
+The import marker and queued draft commit atomically, so restarting migration cannot resurrect
+an acknowledged draft. The original database is retained and upgraded to exclude old writers;
+a blocked upgrade explicitly asks the user to close older tabs before retrying.
+
 ## Consequences
 
 - Subsequent synchronization transfers changed identities and content only.

@@ -4,6 +4,8 @@ import {
 	failWrite,
 	nextWrite,
 	settleWrite,
+	resolveWriteBase,
+	type WriteBaseResolution,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteOutcome
@@ -24,6 +26,17 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 		if (!appended) throw new Error('The queued resource was not appended');
 		return appended.intent.operationId;
 	}
+	async resolveBase(
+		accountId: string,
+		operationId: string,
+		resolution: WriteBaseResolution<T>
+	): Promise<void> {
+		this.accounts.set(
+			accountId,
+			resolveWriteBase(await this.list(accountId), operationId, resolution)
+		);
+	}
+
 	async take(accountId: string): Promise<OutboxEntry<C, T> | null> {
 		const entries = await this.list(accountId);
 		const next = nextWrite(entries);

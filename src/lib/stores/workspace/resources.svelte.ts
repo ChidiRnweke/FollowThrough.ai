@@ -1,7 +1,11 @@
-import type { NoteId, NoteView } from '$lib/models/notes';
+import { type NoteId, type NoteView } from '$lib/models/notes';
 import { visibleResources, localResource, type WriteDraft } from '$lib/models/outbox';
 import { workspaceRecordSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceCommandSchema, type WorkspaceCommand } from '$lib/models/workspace-mutations';
+import {
+	workspaceCommandSchema,
+	resolveImportedNoteBase,
+	type WorkspaceCommand
+} from '$lib/models/workspace-mutations';
 import {
 	workspaceResourceKey,
 	type WorkspaceResourceType,
@@ -148,6 +152,12 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		repository: new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema),
 		transport: workspaceWriteTransport(accountId),
 		writerLock: browserWriterLock,
+		resolveBase: async (key, base, local) => {
+			const remote = await workspaceReadTransport(accountId).read(key, null);
+			if (remote.kind === 'unchanged')
+				throw new Error('An imported base requires a complete server representation');
+			return resolveImportedNoteBase(base, local, remote);
+		},
 		accepted: async (key, receipt) => {
 			const resource = receipt.resource;
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);

@@ -6,6 +6,7 @@ import {
 	type CacheAccess,
 	deletionSchema,
 	type SyncSnapshot,
+	type SyncEtag,
 	type SyncObjectRead
 } from '$lib/models/sync';
 
@@ -19,11 +20,20 @@ export type WriteOutcome<T> =
 	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
 	| { readonly kind: 'rejected'; readonly message: string };
 
+/** Imported drafts may retain a real base representation before learning its sync validator. */
+export type WriteBase<T> = { readonly etag: SyncEtag | null; readonly value: T };
+export type WriteObservation<T> =
+	| Exclude<ServerResource<T>, { kind: 'found' }>
+	| { readonly kind: 'found'; readonly snapshot: WriteBase<T> };
+export type WriteBaseResolution<T> =
+	| { readonly kind: 'matched'; readonly snapshot: SyncSnapshot<T> }
+	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> };
+
 export interface WriteDraft<C, T> {
 	readonly operationId: string;
 	readonly key: string;
 	readonly command: C;
-	readonly base: SyncSnapshot<T> | null;
+	readonly base: WriteBase<T> | null;
 	/** The pending local version this edit was made against, separate from queue order. */
 	readonly basedOn: string | null;
 	readonly local: T | null;
@@ -38,7 +48,7 @@ export type Delivery<T> =
 	| { readonly kind: 'queued' }
 	| { readonly kind: 'sending' }
 	| { readonly kind: 'retry'; readonly message: string }
-	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
+	| { readonly kind: 'conflict'; readonly remote: WriteObservation<T> }
 	| { readonly kind: 'rejected'; readonly message: string };
 export interface OutboxEntry<C, T> {
 	readonly sequence: number;
@@ -50,14 +60,14 @@ export const outboxEntrySchema = <C, T>(
 	command: z.ZodType<C>,
 	value: z.ZodType<T>
 ): z.ZodType<OutboxEntry<C, T>> => {
-	const snapshot = z.object({ etag: syncEtagSchema, value });
+	const snapshot = z.object({ etag: syncEtagSchema.nullable(), value });
 	return z.object({
 		sequence: z.number().int().positive(),
 		intent: z.object({
 			operationId: z.string().uuid(),
 			key: z.string().min(1),
 			command,
-			base: snapshot.nullable(),
+			base: z.object({ etag: syncEtagSchema.nullable(), value }).nullable(),
 			basedOn: z.string().uuid().nullable(),
 			local: value.nullable(),
 			coalesce: z.string().nullable(),
@@ -141,13 +151,15 @@ export const nextWrite = <C, T>(entries: readonly OutboxEntry<C, T>[]): OutboxEn
 	entries.find(
 		(entry) =>
 			(entry.delivery.kind === 'queued' || entry.delivery.kind === 'retry') &&
+			(entry.intent.base === null || entry.intent.base.etag !== null) &&
 			entry.intent.dependencies.length === 0
 	) ?? null;
 
 export const beginWrite = <C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> => {
 	if (
 		(entry.delivery.kind !== 'queued' && entry.delivery.kind !== 'retry') ||
-		entry.intent.dependencies.length
+		entry.intent.dependencies.length ||
+		(entry.intent.base !== null && entry.intent.base.etag === null)
 	)
 		throw new Error('Only an unblocked queued write can be sent');
 	return { ...entry, delivery: { kind: 'sending' } };
@@ -269,3 +281,33 @@ export const retryConflictedWrite = <C, T>(
 				}
 	);
 };
+
+export const unresolvedWrite = <C, T>(
+	entries: readonly OutboxEntry<C, T>[]
+): OutboxEntry<C, T> | null =>
+	entries.find(
+		(entry) =>
+			entry.delivery.kind === 'queued' &&
+			entry.intent.dependencies.length === 0 &&
+			entry.intent.base !== null &&
+			entry.intent.base.etag === null
+	) ?? null;
+
+/** The operation id changes whenever unsent input is coalesced, so an obsolete resolution is ignored. */
+export const resolveWriteBase = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	operationId: string,
+	resolution: WriteBaseResolution<T>
+): readonly OutboxEntry<C, T>[] =>
+	entries.map((entry) => {
+		if (
+			entry.intent.operationId !== operationId ||
+			entry.delivery.kind !== 'queued' ||
+			entry.intent.base === null ||
+			entry.intent.base.etag !== null
+		)
+			return entry;
+		return resolution.kind === 'matched'
+			? { ...entry, intent: { ...entry.intent, base: resolution.snapshot } }
+			: { ...entry, delivery: resolution };
+	});

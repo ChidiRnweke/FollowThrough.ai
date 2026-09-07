@@ -40,6 +40,9 @@ const setup = () => {
 				throw new Error('This test only reads local resources');
 			}
 		},
+		resolveBase: async () => {
+			throw new Error('This fixture has no imported draft');
+		},
 		accepted: async (key, receipt) => {
 			const resource = receipt.resource;
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);

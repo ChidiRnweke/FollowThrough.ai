@@ -17,16 +17,20 @@ const setup = async (suffix: string) => {
 		db: database,
 		projects: new ProjectRecords(database)
 	});
+	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			syncMutations: synchronization.mutations,
 			transactionRunner,
 			noteReader: catalog,
 			noteEditor: catalog,
+			noteSectionNumbering: catalog,
 			noteCreator: catalog,
 			notePublisher: catalog,
 			revisionRecorder: catalog,
-			noteIndexer: new InMemoryNoteContent()
+			noteIndexer: content,
+			anchorRepairer: content,
+			noteLinkReconciler: content
 		})
 	);
 	const resource = await synchronization.objects.read(
@@ -94,5 +98,48 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 			{ revision: number }[]
 		>`select published_revision as revision from notes where id = ${note.id}`;
 		expect(rows[0]?.revision).toBe(note.currentRevision);
+	});
+});
+
+describe('imported note metadata', () => {
+	it('applies explicitly edited metadata with the guarded document', async () => {
+		const { owner, note, controller, baseEtag } = await setup('9105');
+		const outcome = await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag,
+			command: {
+				kind: 'saveNote',
+				noteId: note.id,
+				document: note.document,
+				plainText: note.plainText,
+				title: 'Offline title',
+				isPinned: true,
+				sectionNumbering: true
+			}
+		});
+		const rows = await context.client<
+			{ title: string; pinned: boolean; numbering: boolean }[]
+		>`select title, is_pinned as pinned, section_numbering as numbering from notes where id = ${note.id}`;
+		expect({ kind: outcome.kind, note: rows[0] }).toEqual({
+			kind: 'applied',
+			note: { title: 'Offline title', pinned: true, numbering: true }
+		});
+	});
+	it('retains metadata omitted from an imported document edit', async () => {
+		const { owner, note, controller, baseEtag } = await setup('9106');
+		await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag,
+			command: {
+				kind: 'saveNote',
+				noteId: note.id,
+				document: note.document,
+				plainText: note.plainText
+			}
+		});
+		const rows = await context.client<
+			{ title: string; pinned: boolean }[]
+		>`select title, is_pinned as pinned from notes where id = ${note.id}`;
+		expect(rows[0]).toEqual({ title: note.title, pinned: note.isPinned });
 	});
 });

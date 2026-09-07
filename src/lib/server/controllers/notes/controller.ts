@@ -364,9 +364,16 @@ export class Notes implements NotesController {
 						note: {
 							...current.snapshot.value.value,
 							document: command.document,
-							plainText: command.plainText
+							plainText: command.plainText,
+							...(command.title !== undefined ? { title: command.title } : {}),
+							...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {})
 						}
 					});
+					if (command.sectionNumbering !== undefined)
+						await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
+							noteId: command.noteId,
+							enabled: command.sectionNumbering ?? undefined
+						});
 					break;
 				}
 			}
