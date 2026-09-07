@@ -534,7 +534,10 @@ const CONTRAST_PAIRS = [
 	['destructive-muted-foreground', 'muted']
 ] as const;
 
-const WASH_PAIRS = [['brand', 'brand'], ['brand-muted-foreground', 'brand']] as const;
+const WASH_PAIRS = [
+	['brand', 'brand'],
+	['brand-muted-foreground', 'brand']
+] as const;
 
 const AA_NORMAL = 4.5;
 
