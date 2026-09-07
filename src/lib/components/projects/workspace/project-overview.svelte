@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/models/projects';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
@@ -84,9 +85,7 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntryOpen = $state(false);
-	let renameEntryId: NoteId | null = $state(null);
-	let renameEntryTitle = $state('');
+	let renameEntry = $state<{ draft: WorkspaceDraft<'notes'>; title: string } | null>(null);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
@@ -140,15 +139,14 @@
 	}
 
 	function startRename(id: NoteId, title: string): void {
-		renameEntryId = id;
-		renameEntryTitle = title;
-		renameEntryOpen = true;
+		renameEntry = { draft: projectActions.editor('notes', id), title };
 	}
 
-	async function renameEntrySubmit(title: string): Promise<void> {
-		if (!renameEntryId) return;
-		const output = await projectActions.renameNote(renameEntryId, title);
+	async function renameEntrySubmit(title: string): Promise<boolean> {
+		if (!renameEntry) return false;
+		const output = await projectActions.renameNote(renameEntry.draft, title);
 		if (!output) toast.error('Could not rename. Try again.');
+		return Boolean(output);
 	}
 
 	async function archiveEntry(id: NoteId): Promise<void> {
@@ -456,10 +454,15 @@
 {/if}
 
 <NameDialog
-	bind:open={renameEntryOpen}
+	bind:open={
+		() => renameEntry !== null,
+		(open) => {
+			if (!open) renameEntry = null;
+		}
+	}
 	title="Rename"
 	label="Name"
-	initialValue={renameEntryTitle}
+	initialValue={renameEntry?.title ?? ''}
 	busy={projectActions.busy}
 	onsubmit={renameEntrySubmit}
 />

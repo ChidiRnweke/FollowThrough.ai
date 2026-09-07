@@ -146,3 +146,39 @@ test('stores no private page snapshots or page data', async ({ page }) => {
 		generatedShell: true
 	});
 });
+
+test('creates a project and note offline with stable links through reload and reconnect', async ({
+	page,
+	context
+}) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	await context.setOffline(true);
+	const projectName = `Offline project ${crypto.randomUUID()}`;
+	const noteName = `Offline note ${crypto.randomUUID()}`;
+	await page.getByRole('button', { name: 'New project', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('textbox', { name: 'Project name' }).fill(projectName);
+	await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+	await page.getByRole('heading', { name: projectName, exact: true }).waitFor();
+	await page.getByRole('button', { name: 'New note', exact: true }).last().click();
+	await dialog.getByRole('textbox', { name: 'Note title' }).fill(noteName);
+	await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+	await noteTitleCrumb(page).filter({ hasText: noteName }).waitFor();
+	const noteUrl = page.url();
+	await page.reload();
+	await noteTitleCrumb(page).filter({ hasText: noteName }).waitFor();
+	const acknowledgments: string[] = [];
+	page.on('response', async (response) => {
+		if (response.url().endsWith('/pushWorkspaceMutation') && response.ok())
+			acknowledgments.push(await response.text());
+	});
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect
+		.poll(() => ({
+			url: page.url(),
+			acknowledged: acknowledgments.filter((body) => body.includes('applied')).length
+		}))
+		.toEqual({ url: noteUrl, acknowledged: 2 });
+});

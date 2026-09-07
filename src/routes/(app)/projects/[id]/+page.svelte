@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -45,7 +46,7 @@
 	);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
-	let renameOpen = $state(false);
+	let renameDraft = $state<WorkspaceDraft<'projects'> | null>(null);
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
 	let exportOpen = $state(false);
@@ -62,23 +63,27 @@
 		exportOpen = true;
 	}
 
-	async function createNote(title: string): Promise<void> {
+	async function createNote(title: string): Promise<boolean> {
 		const output = await projectActions.createNote(title, data.projectId);
 		if (!output) {
 			toast.error('Could not create the note. Try again.');
-			return;
+			return false;
 		}
 		await goto(`/notes/${output.note.id}`);
+		return true;
 	}
 
-	async function createFolder(name: string): Promise<void> {
+	async function createFolder(name: string): Promise<boolean> {
 		const output = await projectActions.createFolder(data.projectId, name);
 		if (!output) toast.error('Could not create the folder. Try again.');
+		return Boolean(output);
 	}
 
-	async function rename(name: string): Promise<void> {
-		const output = await projectActions.renameProject(data.projectId, name);
+	async function rename(name: string): Promise<boolean> {
+		if (!renameDraft) return false;
+		const output = await projectActions.renameProject(renameDraft, name);
 		if (!output) toast.error('Could not rename the project. Try again.');
+		return Boolean(output);
 	}
 
 	async function archive(): Promise<void> {
@@ -132,7 +137,9 @@
 						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
-						<DropdownMenu.Item onclick={() => (renameOpen = true)}>Rename project</DropdownMenu.Item
+						<DropdownMenu.Item
+							onclick={() => (renameDraft = projectActions.editor('projects', data.projectId))}
+							>Rename project</DropdownMenu.Item
 						>
 						<DropdownMenu.Sub>
 							<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
@@ -199,10 +206,15 @@
 		onsubmit={createFolder}
 	/>
 	<NameDialog
-		bind:open={renameOpen}
+		bind:open={
+			() => renameDraft !== null,
+			(open) => {
+				if (!open) renameDraft = null;
+			}
+		}
 		title="Rename project"
 		label="Project name"
-		initialValue={project.name}
+		initialValue={renameDraft?.value?.name ?? ''}
 		busy={projectActions.busy}
 		onsubmit={rename}
 	/>

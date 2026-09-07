@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
-import { noteEtag, noteSyncContentEquals, type Note } from '$lib/models/notes';
+import type { Project, ProjectId } from '$lib/models/projects';
+import type { UserId } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import { noteEtag, noteSyncContentEquals, type Note, type NoteId } from '$lib/models/notes';
 import type {
 	WriteContent,
 	WriteDraft,
@@ -294,3 +297,56 @@ export const todoWrite = (
 		? [workspaceResourceKey({ type: 'notes', id: [patch.linkedNoteId] })]
 		: []
 });
+
+/** Initial representations use client IDs; server acknowledgment replaces only authoritative fields. */
+export const newProject = (
+	id: ProjectId,
+	userId: UserId,
+	name: string,
+	timestamp: DateTime
+): Project => ({
+	id,
+	userId,
+	name: name.trim(),
+	role: 'workspace',
+	createdAt: timestamp,
+	updatedAt: timestamp
+});
+export const newNote = (
+	id: NoteId,
+	project: Project,
+	title: string,
+	kind: 'note' | 'folder',
+	entries: readonly Note[],
+	timestamp: DateTime,
+	parentId?: NoteId
+): Note => {
+	if (project.archivedAt) throw new Error('An archived project cannot receive new notes');
+	if (parentId) {
+		const parent = entries.find((entry) => entry.id === parentId && entry.projectId === project.id);
+		if (!parent || parent.kind !== 'folder' || parent.archivedAt)
+			throw new Error('An active parent folder is required');
+	}
+	return {
+		id,
+		userId: project.userId,
+		projectId: project.id,
+		parentId,
+		kind,
+		title: title.trim(),
+		// Folder creation counts active tree entries; note creation counts all stored siblings.
+		position: entries.filter(
+			(entry) =>
+				entry.projectId === project.id &&
+				entry.parentId === parentId &&
+				(kind === 'note' || !entry.archivedAt)
+		).length,
+		document: { type: 'doc', content: [] },
+		plainText: '',
+		currentRevision: 1,
+		publishedRevision: 0,
+		isPinned: false,
+		createdAt: timestamp,
+		updatedAt: timestamp
+	};
+};
