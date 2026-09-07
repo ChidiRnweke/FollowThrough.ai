@@ -39,8 +39,20 @@ export type PassEvidence =
 	| { readonly kind: 'fields'; readonly changed: readonly FieldChange[] }
 	/** Prose the agent wrote or proposed. */
 	| { readonly kind: 'prose'; readonly text: string }
-	/** The run's own message, kept as evidence. The reader-facing sentence is stated above. */
-	| { readonly kind: 'failure'; readonly raw: string };
+	/**
+	 * Why the pass did not land, in the reader's terms, and the run's own words under it.
+	 *
+	 * Both, because they answer different questions and only one of them is in English. The
+	 * cause is resolved here rather than in a view: the fold already asks `explainToolFailure`
+	 * what a raw message means, and a component that asked again would be a second answer to
+	 * the same question, free to drift.
+	 *
+	 * `raw` is absent exactly when it would repeat the cause. `explainToolFailure` returns the
+	 * message unchanged for anything it does not recognise, so carrying both unconditionally
+	 * printed one sentence twice, ten pixels apart — which is the duplication this surface just
+	 * removed one level up. Absent means "the cause is already the run's own words".
+	 */
+	| { readonly kind: 'failure'; readonly cause: string; readonly raw?: string };
 
 export interface SubjectPass {
 	/** What the agent asked for, in the reader's words: `Searched for`, `Read lines 188–221`. */
@@ -69,21 +81,6 @@ export interface SubjectActivity {
 	readonly passes: readonly SubjectPass[];
 }
 
-/**
- * One thing that went wrong, and everything it went wrong to.
- *
- * A cause and its subjects rather than a list of failed calls: three changes abandoned by the
- * same stopped run are one piece of news about three subjects, not three pieces of news.
- */
-export interface FailureGroup {
-	/** The reason, in the reader's terms, stated once. */
-	readonly cause: string;
-	/** What it befell. Never empty. */
-	readonly subjects: readonly EntityRef[];
-	/** The raw message, for the evidence line. */
-	readonly raw: string;
-}
-
 export interface TurnContext {
 	/** Things the turn changed. These lead, because they are what the reader now owns. */
 	readonly changed: readonly SubjectActivity[];
@@ -93,8 +90,6 @@ export interface TurnContext {
 	readonly barren: readonly SubjectPass[];
 	/** The agent finding its footing: named, reachable, never prominent. */
 	readonly setup: readonly string[];
-	/** What failed and nothing later put right. */
-	readonly failures: readonly FailureGroup[];
 }
 
 /**
@@ -411,10 +406,19 @@ function callEntries(
 	});
 
 	if (disclosure.kind === 'failure') {
-		const raw = toolFailure(tool);
-		const entity = toolEntity(tool, shell);
-		if (!entity.named && !entity.id) return [];
-		return [entry(entity, raw ? { kind: 'failure', raw } : { kind: 'none' })];
+		const raw = toolFailure(tool) ?? 'The step did not complete.';
+		const named = toolEntity(tool, shell);
+		// A call that named nothing still failed, and the reader is owed a row for it. Named by
+		// the tool, which is the only identity it has — printed as `[]` this was the one kind of
+		// failure the surface could lose entirely.
+		const entity: EntityRef =
+			named.named || named.id
+				? named
+				: { kind: 'plain', title: friendlyToolLabel(tool.name), named: true };
+		// Always evidence, never `none`: the cause lives behind this row's chevron now, and a
+		// row with nothing behind it does not grow one.
+		const cause = explainToolFailure(raw);
+		return [entry(entity, { kind: 'failure', cause, ...(cause === raw ? {} : { raw }) })];
 	}
 
 	switch (disclosure.kind) {
@@ -536,55 +540,29 @@ export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellCon
 		}
 	}
 
-	const all = order.map((key) => subjects.get(key) as SubjectActivity);
+	const all = order
+		.map((key) => subjects.get(key) as SubjectActivity)
+		.filter((subject) => !recovered(subject, tools));
 	const changed = all.filter((subject) => !readVerbs.has(subject.verb));
 	const read = all.filter((subject) => readVerbs.has(subject.verb));
 
-	return { changed, read, barren, setup, failures: failuresOf(tools, shell, subjects) };
+	return { changed, read, barren, setup };
 }
 
 /**
- * What failed and nothing later put right.
+ * A failure a later call put right is a retry, not news.
  *
- * Judged over the whole turn rather than call by call: the agent typically corrects itself
- * mid-turn, and a save that eventually worked did not fail to save the note. A subject whose row
- * ends in any outcome but `failed` was put right, which is the same question the fold has
- * already answered — so this reads the folded rows rather than re-deriving recovery.
+ * For a named subject the fold has already answered this: the last call on it decides its
+ * outcome, so a save that eventually worked leaves a row that did not fail. A subject named
+ * only by its tool cannot be matched that way — the successful retry named a real entity and
+ * folded somewhere else entirely — so the tool is the identity, and a later success under the
+ * same name means the turn recovered.
  */
-function failuresOf(
-	tools: readonly ChatToolActivity[],
-	shell: ShellContext | undefined,
-	bySubject: ReadonlyMap<string, SubjectActivity>
-): readonly FailureGroup[] {
-	const byCause = new Map<string, { raw: string; subjects: EntityRef[] }>();
-	for (const tool of tools) {
-		const raw = toolFailure(tool);
-		if (raw === undefined || mechanismTools.has(tool.name)) continue;
-		const entries = callEntries(tool, shell, verbOf(tool.name) ?? 'read');
-		const unresolved = entries.filter(
-			(found) => bySubject.get(identityOf(found.entity))?.outcome === 'failed'
-		);
-		// A call that named nothing cannot be matched against a retry by identity, so it is
-		// reported unless a later call of the same tool succeeded.
-		const subjects = entries.length
-			? unresolved.map((found) => found.entity)
-			: tools.some((other) => other.name === tool.name && other.status === 'succeeded')
-				? []
-				: [{ kind: 'plain' as const, title: friendlyToolLabel(tool.name), named: true }];
-		if (subjects.length === 0) continue;
-		const cause = explainToolFailure(raw);
-		const group = byCause.get(cause) ?? { raw, subjects: [] };
-		for (const subject of subjects) {
-			if (!group.subjects.some((existing) => identityOf(existing) === identityOf(subject)))
-				group.subjects.push(subject);
-		}
-		byCause.set(cause, group);
-	}
-	return [...byCause.entries()].map(([cause, group]) => ({
-		cause,
-		raw: group.raw,
-		subjects: group.subjects
-	}));
+function recovered(subject: SubjectActivity, tools: readonly ChatToolActivity[]): boolean {
+	if (subject.outcome !== 'failed' || subject.entity.kind !== 'plain') return false;
+	return tools.some(
+		(tool) => tool.status === 'succeeded' && friendlyToolLabel(tool.name) === subject.entity.title
+	);
 }
 
 /**

@@ -92,13 +92,24 @@
 				</div>
 			{:else if pass.evidence.kind === 'failure'}
 				<!--
-					The run's own words, not the reader-facing sentence. `TurnFailure` has already
-					said what went wrong in the reader's terms, above; repeating it here printed the
-					same line twice, ten pixels apart. This is the evidence.
+					Why it did not land, then the run's own words underneath.
 
-					Not `role="alert"`: the alert was announced once when the failure was stated.
+					The reader-facing sentence used to be printed in a banner above the whole
+					block, which stated the failure a second time — once there, naming the
+					subjects, and again on each subject's own row in red. The row is the better
+					of the two places, because it is the one already carrying the name, so the
+					sentence moved here and the banner went.
+
+					The ladder does the separating: the cause is a request-rung line titling the
+					evidence-rung line beneath it, which is the same shape every other pass has.
+					Not `role="alert"` — the row announced it when it rendered.
 				-->
-				<p class="{CHAT_TEXT_EVIDENCE} break-words text-destructive">{pass.evidence.raw}</p>
+				<p class="{CHAT_TEXT_REQUEST} text-destructive">{pass.evidence.cause}</p>
+				{#if pass.evidence.raw}
+					<p class="{CHAT_TEXT_EVIDENCE} break-words text-muted-foreground">
+						{pass.evidence.raw}
+					</p>
+				{/if}
 			{/if}
 		</div>
 	{/each}

@@ -13,8 +13,7 @@
 		type SubjectActivity
 	} from '$lib/components/agent';
 	import SubjectRow from './subject-row.svelte';
-	import SubjectPasses from './subject-passes.svelte';
-	import TurnFailure from './turn-failure.svelte';
+	import BarrenRow from './barren-row.svelte';
 	import {
 		CHAT_GAP_SUBJECT,
 		CHAT_ROW,
@@ -29,9 +28,7 @@
 		tools,
 		turnTools,
 		shell,
-		summarise = false,
-		retryable = false,
-		onretry
+		summarise = false
 	}: {
 		tools: readonly ChatToolActivity[];
 		/** Every call of the turn, which is what the summary is folded over. */
@@ -43,9 +40,6 @@
 		 * touched in — the duplication this surface exists to avoid, one level up.
 		 */
 		summarise?: boolean;
-		/** Whether the run this group belongs to can be run again. */
-		retryable?: boolean;
-		onretry?: () => void;
 	} = $props();
 
 	const everything = $derived(turnTools ?? tools);
@@ -75,13 +69,8 @@
 	 */
 	const todoTitles = new SvelteMap<string, string>();
 	$effect(() => {
-		const rows = [
-			...context.changed,
-			...context.read,
-			...context.failures.flatMap((failure) => failure.subjects)
-		];
-		const unnamed = rows
-			.map((row) => ('entity' in row ? row.entity : row))
+		const unnamed = [...context.changed, ...context.read]
+			.map((row) => row.entity)
 			.filter((entity) => entity.kind === 'todo' && entity.id && !entity.named)
 			.map((entity) => entity.id as string)
 			.filter((id) => !todoTitles.has(id));
@@ -139,14 +128,19 @@
 			{/each}
 		</ul>
 	{/if}
-{:else if summarise && (context.changed.length > 0 || behindTheDoor > 0 || context.failures.length > 0)}
+{:else if summarise && (context.changed.length > 0 || behindTheDoor > 0)}
 	<div class="flex flex-col {CHAT_GAP_SUBJECT}">
-		<!-- What went wrong leads: it is the one entry here that might need something from the
-		     reader. The record of what did work, and the door to the evidence, follow. -->
-		{#each context.failures as failed, index (`${failed.cause}-${index}`)}
-			<TurnFailure failure={failed} {retryable} {onretry} />
-		{/each}
+		<!--
+			A change that did not land says so on its own row, in red, and opens onto why.
 
+			There used to be a banner above this list as well, naming those same subjects and
+			their cause. It stated the failure twice: once at the top with the names, and again
+			on each of those names below it. The row is the better of the two, because it is
+			the one already carrying the identity and the way in — so the banner went, and the
+			cause moved behind the row's own chevron. A run that failed outright is covered by
+			the turn's error line, which `chat-thread.svelte` renders under the whole turn with
+			its Retry; the banner's button was a second copy of that one.
+		-->
 		{#each context.changed as subject (`${subject.entity.kind}-${subject.entity.id ?? subject.entity.title}`)}
 			<SubjectRow {subject} title={titleOf(subject)} />
 		{/each}
@@ -179,20 +173,16 @@
 							<SubjectRow {subject} title={titleOf(subject)} />
 						{/each}
 
-						{#if context.barren.length > 0}
-							<!-- A look that came back with nothing is the one result worth stating in
-							     words: there is no passage to show, and its absence is often the whole
-							     explanation for a thin answer. -->
-							<div class="px-2">
-								<SubjectPasses passes={context.barren} />
-								<p class="{CHAT_TEXT_REQUEST} pt-1 text-muted-foreground">Nothing came back.</p>
-							</div>
-						{/if}
+						{#each context.barren as pass, index (index)}
+							<BarrenRow {pass} />
+						{/each}
 
 						{#if context.setup.length > 0}
 							<!-- The agent finding its footing. Named, so nothing is hidden; last and
-							     quiet, because none of it is the reader's work. -->
-							<p class="{CHAT_TEXT_REQUEST} flex items-start gap-2 px-2 text-muted-foreground">
+							     quiet, because none of it is the reader's work. Not a control, so not a
+							     Button — but `CHAT_ROW`'s padding, so it sits on the same optical column
+							     as the rows above it rather than at its own indent. -->
+							<p class="{CHAT_ROW} {CHAT_TEXT_REQUEST} items-start text-muted-foreground">
 								<FtReading class="{CHAT_ROW_ICON} mt-0.5" />
 								<span class="min-w-0">{context.setup.join(' · ')}</span>
 							</p>

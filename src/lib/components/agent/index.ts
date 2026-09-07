@@ -26,7 +26,6 @@ export {
 	readDoorLabel,
 	runningSteps,
 	turnContext,
-	type FailureGroup,
 	type PassEvidence,
 	type PassOutcome,
 	type RunningStep,

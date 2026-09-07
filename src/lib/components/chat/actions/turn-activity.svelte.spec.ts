@@ -231,14 +231,64 @@ describe('A failure is news only when nothing put it right', () => {
 			call({ name: 'save_note', status: 'failed', failure: 'Not callable directly.' }),
 			call({ name: 'save_note' })
 		]);
-		expect(await screen.getByText('One change was not applied').all()).toHaveLength(0);
+		expect(await screen.getByText(/not applied/).all()).toHaveLength(0);
 	});
 
-	it('states one that stood', async () => {
+	it('states one that stood, on the subject it befell', async () => {
 		const screen = await renderTurn([
 			call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })
 		]);
-		await expect.element(screen.getByText('One change was not applied')).toBeVisible();
+		await expect.element(screen.getByText(/not applied/)).toBeVisible();
+	});
+
+	// The banner that used to head this block named the same subjects the rows below it named,
+	// so the failure was stated twice. The row keeps the name, the colour and the way in.
+	it('states it once, not in a banner above the rows as well', async () => {
+		const screen = await renderTurn([
+			call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })
+		]);
+		expect(await screen.getByText(/changes? (was|were) not applied/).all()).toHaveLength(0);
+	});
+});
+
+describe('Looks that found nothing are a row like everything else behind the door', () => {
+	const fruitless = () =>
+		call({
+			name: 'grep',
+			arguments: { pattern: 'southwind', path: '/' },
+			output: { kind: 'no_matches' }
+		});
+
+	const openDoor = async (tools: ChatToolActivity[]) => {
+		const screen = await renderTurn(tools);
+		await screen.getByText('What it looked at').click();
+		return screen;
+	};
+
+	// Named by what it did, because that is the only identity it has. A count named a quantity
+	// where every neighbouring row names a thing.
+	it('titles the row with the request, not with how many looks there were', async () => {
+		const screen = await openDoor([fruitless()]);
+		await expect.element(screen.getByText(/Searched for/)).toBeVisible();
+	});
+
+	it('gives each look its own row', async () => {
+		const screen = await openDoor([fruitless(), fruitless()]);
+		expect(await screen.getByText(/Searched for/).all()).toHaveLength(2);
+	});
+
+	// `toBeVisible` rather than a count of matches, for the reason this file already records
+	// above: the collapsible keeps its content mounted, so presence in the document says nothing
+	// about what is on screen.
+	it('keeps the emptiness behind that row chevron', async () => {
+		const screen = await openDoor([fruitless()]);
+		await expect.element(screen.getByText('Nothing came back.')).not.toBeVisible();
+	});
+
+	it('states it on the evidence surface once the chevron is opened', async () => {
+		const screen = await openDoor([fruitless()]);
+		await screen.getByText(/Searched for/).click();
+		await expect.element(screen.getByText('Nothing came back.')).toBeVisible();
 	});
 });
 

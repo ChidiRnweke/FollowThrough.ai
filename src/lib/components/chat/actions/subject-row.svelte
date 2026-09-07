@@ -50,6 +50,9 @@
 	 * `chat-reasoning.svelte` documents.
 	 */
 	let expanded = $state(false);
+
+	/** Announced only when something did not land; every other row is a record, not news. */
+	const alert = $derived(subject.outcome === 'failed' ? 'alert' : undefined);
 </script>
 
 {#snippet statement()}
@@ -69,13 +72,22 @@
 				: chatActionEmphasis(isWriteVerb(subject.verb))}"
 	>
 		<!--
-			A refusal reports itself here and nowhere else: it is not a failure, so no
-			`TurnFailure` sentence explains it, and it is not what the verb says happened — the
-			note was not edited, the reader declined to let it be. Muted rather than destructive,
-			because nothing went wrong; they did this on purpose. Muted rather than emphasised for
-			the same reason: nothing was written, so nothing here is news.
+			Neither a refusal nor a failure is what the verb says happened, so neither prints it.
+
+			`proposed` in red was the old reading of a failure, and it claimed the opposite of the
+			truth: nothing was proposed, the attempt to propose it did not land. `not applied`
+			says the one thing the reader needs, and the colour is then the emphasis rather than
+			the whole message.
+
+			A refusal is muted, not destructive, because nothing went wrong; the reader declined
+			on purpose. Muted rather than emphasised for the same reason: nothing was written, so
+			nothing here is news.
 		-->
-		· {subject.outcome === 'rejected' ? 'declined' : subject.verb}
+		· {subject.outcome === 'failed'
+			? 'not applied'
+			: subject.outcome === 'rejected'
+				? 'declined'
+				: subject.verb}
 	</span>
 {/snippet}
 
@@ -104,8 +116,12 @@
 {#if opens}
 	<Collapsible.Root>
 		<!-- The disclosure and the subject it names are two different actions, so the subject is not
-		     inside the trigger: clicking a title to open it must not also toggle a panel. -->
-		<div class="flex min-w-0 items-center gap-1">
+		     inside the trigger: clicking a title to open it must not also toggle a panel.
+
+		     A failed row is the turn's alert. The banner above the block used to carry that, and
+		     the banner is gone; a change that was not applied has to announce itself once, and
+		     this is the only place that still names which change it was. -->
+		<div class="flex min-w-0 items-center gap-1" role={alert}>
 			<!--
 				`min-w-0 flex-1 shrink` belongs on the Button, not on the Trigger, and both halves
 				of that are load-bearing.
@@ -147,7 +163,7 @@
 {:else}
 	<!-- Nothing behind it, so no chevron. The row keeps the chevron's width as blank space so a
 	     mixed column still reads as one column rather than as two ragged ones. -->
-	<div class="flex min-w-0 items-center gap-1">
+	<div class="flex min-w-0 items-center gap-1" role={alert}>
 		<div class="{CHAT_ROW_STATEMENT} min-w-0 flex-1">
 			<span class={CHAT_ROW_ICON} aria-hidden="true"></span>
 			{@render statement()}
