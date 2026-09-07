@@ -23,7 +23,7 @@ revisions remain on demand. Actions that need server execution remain online ope
 We chose one account-scoped local store of normalized records. Lists and detail views are
 projections of these records, with pending local edits applied over the last server copy.
 The private app renders through a browser shell so route navigation does not wait for a server
-loader. The service worker stores the shell and assets, not private page-data snapshots.
+loader. The service worker stores a generated, data-free SPA fallback and public assets. It never stores private HTML or page-data responses; activation deletes the superseded page caches. Synchronization RPCs use uncached remote commands so the shared resource cache is the sole owner of refresh and request coalescing.
 
 The server keeps a compact synchronization journal: one latest change per account and resource
 identity, containing a cursor, an upsert or delete operation, and the resource version. This is
@@ -166,7 +166,6 @@ the existing repositories, services, controllers, and factories. No architectura
   migration. The old note coordinator, repositories, transport, and sync inventory API are removed.
 - The note route now opens through `stores/workspace/resources.svelte.ts`; its former server loader
   required a live view before local drafts could load.
-- `src/service-worker.ts` currently uses network-first private page snapshots. This violates the
-  target design until the browser shell and object synchronization replace that path.
+- `src/service-worker.ts` serves the generated SPA fallback during offline workspace navigation and removes the old private page snapshots. Remaining server page loaders must be replaced before their routes support offline navigation.
 - `incremental-sync-plan.md` tracks implementation and verification; acceptance of this decision
   does not claim that the existing application already implements it.

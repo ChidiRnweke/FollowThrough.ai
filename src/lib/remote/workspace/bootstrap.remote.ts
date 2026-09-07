@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 
-export const readWorkspaceBootstrap = query(z.object({}), async () => {
+export const readWorkspaceBootstrap = command(z.object({}), async () => {
 	const actor = requestActor();
 	const settings = AppFactory.controllers().agentSettings();
 	const [agentDefaults, models, agentPreferences] = await Promise.all([

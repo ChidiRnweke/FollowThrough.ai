@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { query } from '$app/server';
+import { command } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { syncCursorSchema, syncEtagSchema } from '$lib/models/sync';
 import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 
-export const pullWorkspaceChanges = query(
+export const pullWorkspaceChanges = command(
 	z.object({
 		accountId: z.string().uuid(),
 		since: syncCursorSchema
@@ -18,7 +18,7 @@ export const pullWorkspaceChanges = query(
 	}
 );
 
-export const readWorkspaceResource = query(
+export const readWorkspaceResource = command(
 	z.object({
 		accountId: z.string().uuid(),
 		identity: workspaceResourceIdentitySchema,

@@ -24,7 +24,7 @@ or online. There are no guessed read windows, silent fallbacks, or automatic con
 - [x] Add atomic guarded mutation replay and durable idempotency receipts for the initial command set.
 - [ ] Build shared normalized projections and migrate app routes to browser-shell loading.
 - [ ] Wire offline mutations across supported domains and preserve legacy note/skill drafts.
-- [ ] Replace private page snapshots with a data-free service-worker app shell.
+- [x] Replace private page snapshots with a data-free service-worker app shell.
 - [ ] Test database contracts, offline warming/reload/replay, and incremental payload transfer.
 - [ ] Pass lint, check, architecture, unit, contracts, docs, and targeted PWA checks.
 - [ ] Push final changes, open the PR, and resolve required checks.
@@ -117,3 +117,10 @@ Replacement cleanup checkpoints:
 Task integration now removes the per-note todo cache, manual cross-pane fan-out, right-panel resource copy, chat title cache, task server page loader, and direct task read/write remotes. Shared projections supply lists, embedded tasks, and detail panels. Creates use stable IDs and the provisioned inbox; edits and deletes use the durable outbox. Rendered text fields retain their observed base and dirty input across background refreshes. Creation forms retain input until persistence succeeds. Verification includes 72 business tests, 14 draft/base tests (overlapping draft coverage), two PostgreSQL contracts, and nine task browser tests.
 
 Still outstanding: remaining resource route loaders, project/note action mutations, other ordinary mutation domains, cross-tab refresh notifications, generic conflict review beyond documents, service-worker replacement, full app/PWA validation, full required gates, and PR checks. This remains an implementation checkpoint.
+
+- `2bcbba0`: task details and mutations use shared resources; superseded task caches and direct read/write remotes are deleted.
+- `621e6bb`: memory and attachment collections use normalized projections; private collection state, query refresh paths, and their server page loaders are deleted. Twelve projection tests, type checking, lint, and architecture audits passed.
+
+The service worker now precaches a generated data-free SPA entry and public assets, deletes old page caches, and never caches private HTML, page data, or synchronization RPCs. The node adapter generates the fallback in the client output before copying it, so preview and production serve the same file. Install metadata lives in the HTML template and is available before client initialization. Synchronization RPCs use uncached commands; the shared resource cache owns coalescing and refresh.
+
+Production validation against an isolated temporary PostgreSQL database passes all eight PWA tests: install metadata, service-worker registration, visited and unvisited cached note navigation offline, unknown-route fallback, offline task creation retained through reload and acknowledged on reconnect, and absence of private page/API snapshots. Type checking, formatting, scoped lint, and architecture audits also pass. This verifies the integrated note/task read and task write paths; remaining route and mutation integration is still outstanding.

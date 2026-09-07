@@ -18,16 +18,14 @@ const identityFromKey = (key: string) => {
 	return workspaceResourceIdentitySchema.parse({ type, id });
 };
 
-/** Remote-query memoization never substitutes for this protocol's authoritative network read. */
+/** Uncached RPCs leave availability, refresh, and request coalescing to the shared resource cache. */
 export const workspaceReadTransport = (accountId: string): SyncReadTransport<WorkspaceRecord> => ({
 	async pull(since) {
 		const request = pullWorkspaceChanges({ accountId, since });
-		await request.refresh();
 		return syncChangesSchema.parse(await request);
 	},
 	async read(key, etag) {
 		const request = readWorkspaceResource({ accountId, identity: identityFromKey(key), etag });
-		await request.refresh();
 		return workspaceObjectReadSchema.parse(await request);
 	}
 });
@@ -44,6 +42,5 @@ export const workspaceWriteTransport = (
 
 export const fetchWorkspaceBootstrap = async () => {
 	const request = readWorkspaceBootstrap({});
-	await request.refresh();
 	return workspaceBootstrapSchema.parse(await request);
 };

@@ -83,3 +83,66 @@ test('keeps remote functions and API responses out of Cache Storage', async ({ p
 		false
 	);
 });
+
+test('opens an unvisited cached note URL after going offline', async ({ page, context }) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	const link = page.locator('a[href^="/notes/"]').first();
+	const href = await link.getAttribute('href');
+	const title = (await link.textContent())?.trim();
+	if (!href || !title) throw new Error('A synchronized note is required');
+	await context.setOffline(true);
+	await page.goto(href);
+	await expect(noteTitleCrumb(page)).toHaveText(title);
+});
+
+test('retains an offline task through reload and submits it on reconnect', async ({
+	page,
+	context
+}) => {
+	await page.goto('/todos?view=board&quickTodo');
+	await waitForServiceWorker(page);
+	const title = `Offline task ${crypto.randomUUID()}`;
+	await context.setOffline(true);
+	await page.locator('#quick-todo-input').fill(title);
+	await page.locator('#quick-todo-input').press('Enter');
+	await page.getByText(title, { exact: true }).first().waitFor();
+	await page.reload();
+	await page.getByText(title, { exact: true }).first().waitFor();
+	const pushed = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'POST' &&
+			response.url().endsWith('/pushWorkspaceMutation') &&
+			response.ok()
+	);
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	expect(await (await pushed).text()).toContain('applied');
+});
+
+test('stores no private page snapshots or page data', async ({ page }) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	const privateCaches = await page.evaluate(async () => {
+		const names = await caches.keys();
+		const urls = (
+			await Promise.all(
+				names.map(async (name) =>
+					(await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname)
+				)
+			)
+		).flat();
+		return {
+			oldPageCache: names.some((name) => name.startsWith('followthrough-pages-')),
+			privatePage: urls.some((path) => /^\/(today|notes|todos|projects)(?:\/|$)/.test(path)),
+			pageData: urls.some((path) => path.includes('__data.json')),
+			generatedShell: urls.includes('/offline-shell.html')
+		};
+	});
+	expect(privateCaches).toEqual({
+		oldPageCache: false,
+		privatePage: false,
+		pageData: false,
+		generatedShell: true
+	});
+});
