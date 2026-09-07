@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
+import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
@@ -28,18 +29,20 @@ const identity: WorkspaceResourceIdentity = {
 	id: ['a0000000-0000-4000-8000-000000000001']
 };
 const key = workspaceResourceKey(identity);
-const setup = () => {
+const setup = (
+	writeTransport: OutboxTransport<WorkspaceCommand, typeof project> = {
+		send: async () => {
+			throw new Error('This test only reads local resources');
+		}
+	}
+) => {
 	const repository = new InMemorySyncCache<typeof project>();
 	const transport = new InMemorySyncTransport<typeof project>();
 	const cache = new ResourceCache('alice', { repository, transport });
 	const writes = new MutationQueue<WorkspaceCommand, typeof project>('alice', {
 		repository: new InMemoryOutbox(),
 		writerLock: new InMemoryAccountWriterLock(),
-		transport: {
-			send: async () => {
-				throw new Error('This test only reads local resources');
-			}
-		},
+		transport: writeTransport,
 		resolveBase: async () => {
 			throw new Error('This fixture has no imported draft');
 		},
@@ -169,5 +172,67 @@ describe('shared workspace reads', () => {
 		await resources.initialize();
 		resources.stop();
 		expect([...resources.records]).toEqual([]);
+	});
+});
+
+describe('shared editor context', () => {
+	it('captures the original version before background refresh changes the cache', async () => {
+		const { resources, cache } = setup();
+		const original = { etag: syncEtag(1n), value: project };
+		await cache.accept(key, original);
+		const context = resources.editBase(identity);
+		await cache.accept(key, { etag: syncEtag(2n), value: project });
+		expect(context).toEqual({ base: original, basedOn: null, local: project });
+	});
+	it('captures pending local ancestry separately from the server base', async () => {
+		const { resources } = setup();
+		resources.setOnline(false);
+		if (project.type !== 'projects') throw new Error('Expected project');
+		const id = await resources.append({
+			operationId: crypto.randomUUID(),
+			key,
+			command: { kind: 'createProject', id: project.value.id, name: project.value.name },
+			base: null,
+			basedOn: null,
+			local: project,
+			coalesce: null,
+			references: []
+		});
+		expect(resources.editBase(identity)).toEqual({ base: null, basedOn: id, local: project });
+	});
+	it('submits edits appended after the write phase while background warming is still running', async () => {
+		if (project.type !== 'projects') throw new Error('Expected project');
+		const saved = { ...project, value: { ...project.value, name: 'Edited' } };
+		const { resources, cache, transport } = setup({
+			send: async (input) => {
+				const snapshot = { etag: syncEtag(3n), value: saved };
+				transport.records.set(key, snapshot);
+				return {
+					kind: 'applied',
+					receipt: { operationId: input.operationId, resource: { kind: 'found', snapshot } }
+				};
+			}
+		});
+		await cache.accept(key, { etag: syncEtag(1n), value: project });
+		transport.records.set(key, { etag: syncEtag(2n), value: project });
+		const paused = transport.pause(key);
+		const syncing = resources.synchronize();
+		await paused.started;
+		await resources.append({
+			operationId: crypto.randomUUID(),
+			key,
+			command: { kind: 'renameProject', projectId: project.value.id, name: 'Edited' },
+			base: { etag: syncEtag(1n), value: project },
+			basedOn: null,
+			local: saved,
+			coalesce: null,
+			references: []
+		});
+		paused.release();
+		await syncing;
+		expect({ pending: resources.pending, value: resources.records.get(key) }).toEqual({
+			pending: [],
+			value: saved
+		});
 	});
 });
