@@ -94,6 +94,69 @@ describe('Untrusted draw.io XML invariants', () => {
 		).toThrow('unsafe URL');
 	});
 
+	it('names the cell an unsafe URL sits on, so the author can go and find it', () => {
+		expect(() =>
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace('id="2"', 'id="2" href="javascript:alert(1)"')
+			)
+		).toThrow('cell "2"');
+	});
+
+	it('accepts the raster image draw.io writes into a style when a picture is pasted', () => {
+		expect(
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="p" parent="1" style="shape=image;image=data:image/png,iVBORw0KGgo="/></root>'
+				)
+			)
+		).toContain('data:image/png');
+	});
+
+	it('accepts a raster image spelled with the base64 marker the style separator splits on', () => {
+		expect(
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="b" parent="1" style="image=data:image/png;base64,iVBORw0KGgo="/></root>'
+				)
+			)
+		).toContain('base64');
+	});
+
+	it('accepts a label that merely reads like a scheme', () => {
+		expect(
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="d" parent="1" value="Data: user records"/></root>'
+				)
+			)
+		).toContain('Data: user records');
+	});
+
+	it('rejects a document scheme smuggled into a style', () => {
+		expect(() =>
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="h" parent="1" style="image=data:text/html,PGltZyBzcmM9eD4="/></root>'
+				)
+			)
+		).toThrow('unsafe URL');
+	});
+
+	it('refuses a pasted SVG by name, because an SVG can carry script', () => {
+		expect(() =>
+			new DrawioXmlValidator().validate(
+				VALID_DRAWIO_XML.replace(
+					'</root>',
+					'<mxCell id="s" parent="1" style="shape=image;image=data:image/svg+xml,PHN2Zy8+"/></root>'
+				)
+			)
+		).toThrow('Insert it as a shape');
+	});
+
 	it('rejects missing cell references', () => {
 		expect(() =>
 			new DrawioXmlValidator().validate(VALID_DRAWIO_XML.replace('target="2"', 'target="99"'))

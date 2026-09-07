@@ -115,12 +115,12 @@ export class DiagramSaveCoordinator {
 			generation: this.generation
 		};
 		// Only replace a waiting autosave, never the request whose acknowledgement is pending.
+		// A save that failed is not pending, and it must be replaceable: a source the server
+		// rejects stays at the head of the queue forever otherwise, so every later autosave
+		// queues behind a write that can only fail again. The mutation carries the whole
+		// document, so replacing one loses nothing.
 		const last = this.queue.at(-1);
-		if (
-			last?.kind === 'save' &&
-			(!this.active || this.queue.length > 1) &&
-			this.status.kind !== 'failure'
-		)
+		if (last?.kind === 'save' && (!this.active || this.queue.length > 1))
 			this.queue[this.queue.length - 1] = mutation;
 		else this.queue.push(mutation);
 		return this.flush();
@@ -134,6 +134,11 @@ export class DiagramSaveCoordinator {
 
 	publish(source: string, renderedSvg: string): Promise<DiagramSaveResult> {
 		this.local = { ...this.local, source };
+		// A publish writes the source and marks it published, so a draft save still waiting
+		// for the same document is work with no effect left in it. Dropping it also keeps a
+		// rejected save from standing between the user and the publish they just asked for —
+		// the queue would have sent the failing write first and never reached this one.
+		if (!this.active) this.queue = this.queue.filter((mutation) => mutation.kind !== 'save');
 		this.queue.push({
 			kind: 'publish',
 			source,
@@ -147,12 +152,15 @@ export class DiagramSaveCoordinator {
 	restore(revisionId: DiagramRevisionId): Promise<DiagramSaveResult> {
 		if (!this.active) this.queue = this.queue.filter((mutation) => mutation.kind !== 'restore');
 		this.queue.push({ kind: 'restore', revisionId });
-		if (this.status.kind === 'failure') return this.retry();
 		return this.flush();
 	}
 
+	/**
+	 * The explicit gesture. It is `flush` and nothing more, because clearing a stored failure
+	 * is now what any new gesture does; this stays a named method so the header has something
+	 * to call that says what the user meant by pressing it.
+	 */
 	retry(): Promise<DiagramSaveResult> {
-		if (this.status.kind === 'failure') this.status = { kind: 'idle' };
 		return this.flush();
 	}
 
@@ -163,7 +171,6 @@ export class DiagramSaveCoordinator {
 	}
 
 	keepLocal(): Promise<DiagramSaveResult> {
-		if (this.status.kind === 'failure') return this.retry();
 		if (this.status.kind !== 'conflict') return this.flush();
 		const local = this.local;
 		this.diagram = this.status.remote;
@@ -196,8 +203,15 @@ export class DiagramSaveCoordinator {
 	private flush(): Promise<DiagramSaveResult> {
 		this.report();
 		if (this.active) return this.active;
+		// A conflict stays latched: the remote document has moved, and nothing should be sent
+		// until the user has said which version wins.
 		if (this.status.kind === 'conflict') return Promise.resolve({ kind: 'conflict' });
-		if (this.status.kind === 'failure') return Promise.resolve(this.status);
+		// A failure does not. Answering a new save or publish from a stored message meant one
+		// rejected write locked the pane for the rest of the session — every later gesture
+		// came back with the first failure without reaching the server at all, so the editor
+		// looked broken in a way no amount of retrying could clear. A new gesture is a new
+		// intent, and it is entitled to be attempted.
+		if (this.status.kind === 'failure') this.status = { kind: 'idle' };
 		this.active = this.drain().finally(() => {
 			this.active = undefined;
 		});

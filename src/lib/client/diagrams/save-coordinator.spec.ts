@@ -145,6 +145,32 @@ describe('Diagram save coordination (ADR 0010)', () => {
 		expect(transport.diagram.source).toBe(xml('newer'));
 	});
 
+	it('attempts a new save after a failure without waiting to be retried', async () => {
+		const { transport, coordinator } = setup();
+		transport.failure = new Error('Offline');
+		await coordinator.save(xml('rejected'));
+		transport.failure = undefined;
+		await coordinator.save(xml('later'));
+		expect(transport.diagram.source).toBe(xml('later'));
+	});
+
+	it('publishes after a rejected save rather than queueing behind it', async () => {
+		const { transport, coordinator } = setup();
+		transport.failure = new Error('draw.io XML contains an unsafe URL.');
+		await coordinator.save(xml('rejected'));
+		transport.failure = undefined;
+		await coordinator.publish(xml('fixed'), '<svg/>');
+		expect(transport.diagram.publishedRevision).toBe(transport.diagram.currentRevision);
+	});
+
+	it('still sends nothing while a conflict is waiting on the reader', async () => {
+		const { transport, coordinator } = setup();
+		transport.diagram = { ...transport.diagram, currentRevision: 9 };
+		await coordinator.save(xml('mine'));
+		await coordinator.save(xml('also mine'));
+		expect(transport.diagram.source).toBe(xml('base'));
+	});
+
 	it('does not silently rebase dirty canvas content on a query refresh', async () => {
 		const { diagram, transport, coordinator } = setup();
 		coordinator.modified();
