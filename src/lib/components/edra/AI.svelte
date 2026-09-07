@@ -509,7 +509,8 @@
 	}}
 >
 	{#if aiState === AIState.Idle}
-		<div class="shadow-2xl w-xl border backdrop-blur-2xl rounded-xl flex flex-col overflow-hidden">
+		<!-- audit-allow: no-ad-hoc-shadow — The AI panel floats over the document; shadow-md matches the sanctioned overlay elevation of the ui popovers. -->
+		<div class="shadow-md w-xl border backdrop-blur-2xl rounded-xl flex flex-col overflow-hidden">
 			<!-- Input Area -->
 			<form class="px-3 py-3 flex items-start">
 				<textarea
@@ -559,9 +560,10 @@
 			</div>
 		{:else}
 			<!-- Action bar — AI has finished streaming into editor -->
+			<!-- audit-allow: no-ad-hoc-shadow — The AI action bar floats over the document; overlay elevation matching the ui popovers. -->
 			<div
 				transition:fade
-				class="flex items-center gap-2 border shadow-2xl justify-between p-2 rounded-lg"
+				class="flex items-center gap-2 border shadow-md justify-between p-2 rounded-lg"
 			>
 				<Button size="sm" onclick={replaceSelection}>
 					<Check />
@@ -600,6 +602,7 @@
 		}
 	}
 	.animated-gradient-border {
+		/* audit-allow: no-hex-rgb-color — Vendored edra AI-affordance gradient; the rainbow conic gradient is this component's identity, not a theme color. */
 		background: conic-gradient(from var(--angle), #e50909, #c8b207, #e608e6, #6eec07);
 		animation: rotate 3s linear infinite;
 		border-radius: 12px !important;

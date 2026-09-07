@@ -92,7 +92,7 @@
 					Review this conversion beside its source Mermaid diagram before accepting it.
 				</p>
 			{:else}
-				<pre class="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{suggestion.payload
+				<pre class="overflow-x-auto rounded-md bg-muted p-2 text-xs">{suggestion.payload
 						.source}</pre>
 			{/if}
 		{:else if suggestion.kind === 'memory'}

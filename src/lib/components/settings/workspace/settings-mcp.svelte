@@ -93,6 +93,7 @@
 				<Field.Description>Point your MCP client at this URL.</Field.Description>
 			</Field.Content>
 			<div class="flex items-center gap-2">
+				<!-- audit-allow: no-raw-font-family — The MCP endpoint is a copy-paste machine literal. -->
 				<Input readonly value={endpoint} class="font-mono text-sm" aria-label="MCP endpoint" />
 				<Button variant="outline" onclick={() => void copy(endpoint)}>Copy</Button>
 			</div>
@@ -137,6 +138,7 @@
 				It is stored hashed and cannot be shown again. If you lose it, revoke it and create another.
 			</p>
 			<div class="flex items-center gap-2">
+				<!-- audit-allow: no-raw-font-family — The one-time token is a copy-paste machine literal. -->
 				<Input readonly value={plaintext} class="font-mono text-sm" />
 				<Button variant="outline" onclick={() => void copy(plaintext!)}>Copy</Button>
 				<Button variant="ghost" onclick={() => (plaintext = null)}>Done</Button>

@@ -553,6 +553,7 @@
 					<div
 						class={cn('flex-1 min-h-0 min-w-0 basis-0 relative', mode === 'both' ? 'border-r' : '')}
 					>
+						<!-- audit-allow: no-raw-font-family — A Mermaid source editor; mono is the code face. -->
 						<textarea
 							bind:value={editCode}
 							onkeydown={handleEditorKeydown}
@@ -600,6 +601,7 @@
 										<TriangleAlert class="text-destructive size-4" />
 									</div>
 									<p class="text-destructive text-xs font-medium">Syntax Error</p>
+									<!-- audit-allow: no-raw-font-family — Parser error output is machine text. -->
 									<p
 										class="text-muted-foreground font-mono text-[10px] leading-relaxed max-h-24 overflow-auto"
 									>

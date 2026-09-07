@@ -15,7 +15,7 @@
 	The focus state belongs to the group, which owns the pill's radius and border: the control
 	drops its own border and fill, which would otherwise paint a square patch inside the
 	rounded field. That includes the focus-visible wash — the group already paints
-	`bg-brand/12` across the whole pill, so a control that kept its own would double the
+	`bg-brand/10` across the whole pill, so a control that kept its own would double the
 	wash over the text area and leave the addon strip a lighter teal.
 
 	`data-slot` comes last on purpose. The group paints itself through

@@ -9,6 +9,7 @@
 	}: DialogPrimitive.OverlayProps = $props();
 </script>
 
+<!-- audit-allow: no-pure-black — Overlay scrim: dimming the page is mode-independent black; the token set has no scrim token. -->
 <DialogPrimitive.Overlay
 	bind:ref
 	data-slot="dialog-overlay"

@@ -219,6 +219,7 @@
      sits over it and has to repaint it; `overflow-hidden` here and on the scroller
      clips anything reaching below the box, so the usual -mb-px seam tricks are out,
      and an inset shadow needs no geometry outside the 40px. -->
+<!-- audit-allow: no-ad-hoc-shadow — A bottom-only hairline under the strip; ring-inset rings all four sides and a border would cost the strip geometry it doesn't have. -->
 <div
 	class="sticky top-0 z-30 shrink-0 overflow-hidden bg-brand/10 shadow-[inset_0_-1px_0_var(--color-border)] transition-[height] duration-(--duration-panel) ease-(--ease-standard) dark:bg-brand/15 {hidden
 		? 'h-6'
@@ -418,6 +419,7 @@
 						     `font-medium`, so neither state states a weight and both inherit the same
 						     one; `text-foreground` against `text-brand-muted-foreground` is the entire
 						     difference. Do not bold the active tab. -->
+											<!-- audit-allow: no-ad-hoc-shadow — The painted tab's bottom-only hairline; ring-inset rings all four sides. -->
 											<Button
 												variant="ghost"
 												{...props}

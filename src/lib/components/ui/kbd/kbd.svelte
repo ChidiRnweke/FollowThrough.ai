@@ -10,6 +10,7 @@
 	}: WithElementRef<HTMLAttributes<HTMLElement>> = $props();
 </script>
 
+<!-- audit-allow: no-raw-font-family — kbd inherits mono from the base layer's code/kbd selector; key caps are chrome, not code. -->
 <kbd
 	bind:this={ref}
 	data-slot="kbd"

@@ -48,6 +48,7 @@
 			? 'max-h-56 overflow-y-auto overscroll-contain'
 			: ''}"
 	>
+		<!-- audit-allow: no-raw-font-family — File lines are code output; mono is the code face. -->
 		<ul class="flex flex-col gap-0.5 font-mono {panel ? CHAT_TEXT_EVIDENCE : 'text-sm'}">
 			{#each lines as line, index (index)}
 				<li class="flex gap-2">

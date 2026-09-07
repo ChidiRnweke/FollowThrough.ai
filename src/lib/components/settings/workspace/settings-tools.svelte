@@ -268,6 +268,7 @@
 												!preference.enabled && 'opacity-60'
 											]}
 										>
+											<!-- audit-allow: no-raw-font-family — Tool names are machine identifiers. -->
 											<span class="shrink-0 font-mono text-sm">{preference.name}</span>
 											<span
 												class="truncate text-sm text-muted-foreground"

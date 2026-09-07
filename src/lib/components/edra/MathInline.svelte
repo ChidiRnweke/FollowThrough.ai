@@ -19,6 +19,7 @@
 	}
 </script>
 
+<!-- audit-allow: no-ad-hoc-shadow — The math bubble menu floats over the document; overlay elevation matching the ui popovers, from a primitive that is not one. -->
 <BubbleMenu
 	{editor}
 	pluginKey="math-inline-bubble-menu"
@@ -36,7 +37,7 @@
 		strategy: 'absolute',
 		scrollTarget: editor.view.dom.parentElement ?? window
 	}}
-	class="bg-popover flex h-fit w-fit items-center gap-1 rounded-lg border shadow-lg"
+	class="bg-popover flex h-fit w-fit items-center gap-1 rounded-lg border shadow-md"
 >
 	<Input
 		bind:value={latex}

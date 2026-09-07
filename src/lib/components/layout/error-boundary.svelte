@@ -62,6 +62,7 @@
 					</span>
 				</div>
 				{#if source !== undefined}
+					<!-- audit-allow: no-raw-font-family — Raw source display is machine text; mono is the code face. -->
 					<pre
 						class="max-h-80 overflow-auto rounded-sm bg-muted/50 p-2 font-mono leading-relaxed whitespace-pre-wrap text-destructive-muted-foreground">{source}</pre>
 				{/if}
