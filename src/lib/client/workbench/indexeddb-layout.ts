@@ -1,19 +1,7 @@
 import type { TabId } from '$lib/stores/workbench/tab-ref';
 
-/**
- * Persisted workbench state.
- *
- * The URL is the canonical source of open tabs during a session (so Back /
- * Forward and deep links keep working), but a small companion record in the
- * same IndexedDB database that backs `NoteSyncRecord` is updated whenever the
- * user opens, closes, or reorders tabs.  On the next session the layout reads
- * this record to restore the working set.
- *
- * The repository is intentionally shape-compatible with the existing
- * `IndexedDbNoteSyncRepository` so that the testing conventions and lifecycle
- * match.
- */
-export interface WorkspaceRecord {
+/** Persists tab layout only. Resource bodies and writes live in the shared synchronization database. */
+export interface WorkbenchLayoutRecord {
 	readonly id: 'current';
 	/**
 	 * Tab ids, which a note tab spells as its bare uuid and a chat tab prefixes
@@ -45,7 +33,7 @@ const RECORD_KEY = 'current';
  * Svelte `$state`, whose proxies are not cloneable; copying the three arrays is
  * the complete protocol adaptation because every member is a primitive tab id.
  */
-const storedRecord = (record: WorkspaceRecord): WorkspaceRecord => ({
+const storedRecord = (record: WorkbenchLayoutRecord): WorkbenchLayoutRecord => ({
 	...record,
 	openTabs: [...record.openTabs],
 	pinnedTabs: [...record.pinnedTabs],
@@ -67,22 +55,22 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-export class IndexedDbWorkspaceRepository {
+export class IndexedDbWorkbenchLayout {
 	private database?: Promise<IDBDatabase>;
 
 	constructor(private readonly databaseName = 'followthrough-note-sync') {}
 
-	async get(): Promise<WorkspaceRecord | undefined> {
+	async get(): Promise<WorkbenchLayoutRecord | undefined> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readonly');
-		const stored = await requestResult<WorkspaceRecord | undefined>(
+		const stored = await requestResult<WorkbenchLayoutRecord | undefined>(
 			transaction.objectStore(STORE_NAME).get(RECORD_KEY)
 		);
 		await transactionDone(transaction);
 		return stored;
 	}
 
-	async put(record: WorkspaceRecord): Promise<void> {
+	async put(record: WorkbenchLayoutRecord): Promise<void> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readwrite');
 		transaction.objectStore(STORE_NAME).put(storedRecord(record));

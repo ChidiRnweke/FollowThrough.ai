@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { noteEtag, type NoteSyncRecord } from '$lib/models/notes';
+import { noteEtag } from '$lib/models/notes';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
-import { workspaceCommandSchema, resolveImportedNoteBase } from '$lib/models/workspace-mutations';
+import {
+	workspaceCommandSchema,
+	resolveImportedNoteBase,
+	type LegacyNoteSyncRecord
+} from '$lib/models/workspace-mutations';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
-import { IndexedDbNoteSyncRepository } from '$lib/client/notes/sync/indexeddb-note-sync-repository';
+import { seedLegacyNoteStorage } from '$lib/testing/sync/fixtures/legacy-note-storage';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
 import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
 import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
@@ -22,8 +26,7 @@ const setup = async () => {
 	const newName = `editor-new-${crypto.randomUUID()}`;
 	const note = noteBuilder({ plainText: 'Original' });
 	const local = { ...note, plainText: 'Offline draft' };
-	const old = new IndexedDbNoteSyncRepository(oldName);
-	const record: NoteSyncRecord = {
+	const record: LegacyNoteSyncRecord = {
 		userId: note.userId,
 		noteId: note.id,
 		base: { note, etag: noteEtag(note) },
@@ -33,8 +36,7 @@ const setup = async () => {
 		state: 'pending',
 		updatedAt: note.updatedAt
 	};
-	await old.put(record);
-	old.close();
+	await seedLegacyNoteStorage(oldName, [record]);
 	const repository = new IndexedDbSyncCache(workspaceRecordSchema, newName);
 	const outbox = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, newName);
 	const transport = new InMemoryNoteWrites();

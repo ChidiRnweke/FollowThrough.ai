@@ -3,9 +3,9 @@ import { page } from '$app/state';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import {
-	IndexedDbWorkspaceRepository,
-	type WorkspaceRecord
-} from '$lib/client/notes/sync/indexeddb-workspace-repository';
+	IndexedDbWorkbenchLayout,
+	type WorkbenchLayoutRecord
+} from '$lib/client/workbench/indexeddb-layout';
 import {
 	addTabInBackgroundInState,
 	closeTabInState,
@@ -35,10 +35,10 @@ export type WorkbenchRouter = {
 	currentUrl: () => URL;
 };
 
-/** The slice of {@link IndexedDbWorkspaceRepository} this store depends on. */
+/** The slice of {@link IndexedDbWorkbenchLayout} this store depends on. */
 export type WorkspaceRepository = {
-	get: () => Promise<WorkspaceRecord | undefined>;
-	put: (record: WorkspaceRecord) => Promise<void>;
+	get: () => Promise<WorkbenchLayoutRecord | undefined>;
+	put: (record: WorkbenchLayoutRecord) => Promise<void>;
 };
 
 const sveltekitRouter: WorkbenchRouter = {
@@ -109,7 +109,7 @@ export class WorkbenchStore {
 	 * Whether the user has collapsed the global tab strip.  Display
 	 * preference only — does not affect open-tab state.  Persists in
 	 * localStorage (fast first-paint read) and in the IndexedDB
-	 * `WorkspaceRecord` (cross-device source of truth).
+	 * `WorkbenchLayoutRecord` (cross-device source of truth).
 	 */
 	stripHidden = $state(false);
 
@@ -125,7 +125,7 @@ export class WorkbenchStore {
 	/**
 	 * Width of the secondary pane as a fraction of 1 (clamped 0.25–0.75).
 	 * Display preference — like `stripHidden`, persists to localStorage
-	 * for instant first-paint and to the IndexedDB `WorkspaceRecord` for
+	 * for instant first-paint and to the IndexedDB `WorkbenchLayoutRecord` for
 	 * cross-device synchronisation.  The URL never encodes the ratio.
 	 */
 	splitRatio = $state(0.5);
@@ -143,7 +143,7 @@ export class WorkbenchStore {
 
 	constructor(
 		private readonly router: WorkbenchRouter = sveltekitRouter,
-		private readonly repository: WorkspaceRepository = new IndexedDbWorkspaceRepository()
+		private readonly repository: WorkspaceRepository = new IndexedDbWorkbenchLayout()
 	) {}
 
 	private hydrated = $state(false);
@@ -680,7 +680,7 @@ export class WorkbenchStore {
 	 * from a half-torn-down state if the navigation is slow.
 	 */
 	private async clearToOverview(
-		persistPatch: Pick<WorkspaceRecord, 'pinnedTabs' | 'recentlyUsed'>
+		persistPatch: Pick<WorkbenchLayoutRecord, 'pinnedTabs' | 'recentlyUsed'>
 	): Promise<void> {
 		this.applyingFromUrl = true;
 		this.openTabs = [];
@@ -707,9 +707,9 @@ export class WorkbenchStore {
 		if (options.invalidate) await this.router.invalidateAll();
 	}
 
-	private async persist(override?: Partial<WorkspaceRecord>): Promise<void> {
+	private async persist(override?: Partial<WorkbenchLayoutRecord>): Promise<void> {
 		if (this.restoring) return;
-		const record: WorkspaceRecord = {
+		const record: WorkbenchLayoutRecord = {
 			id: 'current',
 			openTabs: override?.openTabs ?? this.openTabs,
 			focusedNoteId: override?.focusedNoteId ?? this.focusedTabId ?? null,

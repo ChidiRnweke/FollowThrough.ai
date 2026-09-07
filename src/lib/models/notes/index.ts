@@ -215,36 +215,6 @@ export interface VersionedNote {
 	readonly etag: NoteEtag;
 }
 
-export interface SyncNoteInput {
-	readonly note: Note;
-	readonly baseEtag: NoteEtag;
-	readonly operationId: string;
-}
-
-/** `conflict` only fires on genuine divergence: a stale ETag whose remote content matches the submission resolves to `saved` instead, so a retried save never reports a false conflict. */
-export type SyncNoteOutput =
-	| {
-			readonly outcome: 'saved';
-			readonly version: VersionedNote;
-			readonly repairedAnchorIds: readonly SourceAnchorId[];
-	  }
-	| {
-			readonly outcome: 'conflict';
-			readonly baseEtag: NoteEtag;
-			readonly remote: VersionedNote;
-	  };
-
-export interface NoteSyncInventoryEntry {
-	readonly noteId: NoteId;
-	readonly projectId: ProjectId;
-	readonly etag: NoteEtag;
-	readonly updatedAt: DateTime;
-}
-
-export interface ListNoteSyncInventoryInput {
-	readonly projectId?: ProjectId;
-}
-
 export interface SetNoteSectionNumberingInput {
 	readonly noteId: NoteId;
 	/** `undefined` clears the note's override so it inherits the project default again. */
@@ -253,10 +223,6 @@ export interface SetNoteSectionNumberingInput {
 
 export interface SetNoteSectionNumberingOutput {
 	readonly sectionNumbering: SectionNumberingView;
-}
-
-export interface ListNoteSyncInventoryOutput {
-	readonly entries: readonly NoteSyncInventoryEntry[];
 }
 
 /** Editor presentation of shared resource writes; it does not own cache or delivery state. */
@@ -269,21 +235,6 @@ export interface NoteEditConflict {
 	readonly local: Note;
 	readonly remote:
 		{ readonly kind: 'found'; readonly note: Note } | { readonly kind: 'deleted' | 'unavailable' };
-}
-
-export type NoteSyncRecordState = 'synced' | 'pending' | 'syncing' | 'conflict';
-
-/** The offline client's three-way state for one note: the last agreed version, the device copy, and an optional diverged remote copy. */
-export interface NoteSyncRecord {
-	readonly userId: UserId;
-	readonly noteId: NoteId;
-	readonly base: VersionedNote;
-	readonly local: Note;
-	readonly remote?: VersionedNote;
-	readonly operationId: string;
-	readonly editVersion: number;
-	readonly state: NoteSyncRecordState;
-	readonly updatedAt: DateTime;
 }
 
 export type NoteSyncStatus = 'loading' | 'synced' | 'saving' | 'pending' | 'conflict' | 'error';

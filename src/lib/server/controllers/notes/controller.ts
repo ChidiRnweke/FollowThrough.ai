@@ -31,7 +31,6 @@ import type {
 	NoteRevision,
 	NoteSearchOptions,
 	NoteView,
-	NoteSyncInventoryEntry,
 	PublishNoteInput,
 	PublishNoteOutput,
 	RenameNoteInput,
@@ -46,11 +45,7 @@ import type {
 	SetNoteSectionNumberingInput,
 	SetNoteSectionNumberingOutput,
 	ReplaceNoteTextInput,
-	ReplaceNoteTextOutput,
-	SyncNoteInput,
-	SyncNoteOutput,
-	ListNoteSyncInventoryInput,
-	ListNoteSyncInventoryOutput
+	ReplaceNoteTextOutput
 } from '$lib/models/notes';
 import {
 	MAX_NOTE_DOCUMENTS,
@@ -59,7 +54,6 @@ import {
 	diffNoteRevisionTexts,
 	noteEtag,
 	noteMatchesEtag,
-	noteSyncContentEquals,
 	replaceInNoteDocument,
 	searchNoteTargets,
 	sectionNumberingView
@@ -162,7 +156,7 @@ export interface NotesController {
 	 *
 	 * @throws ValidationError if the base ETag does not describe the submitted revision.
 	 */
-	sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput>;
+
 	/**
 	 * Publish the current state of a note, recording a revision so `discardDraft` can
 	 * restore it later. Guards on the ETag so a concurrent edit cannot be silently
@@ -178,14 +172,6 @@ export interface NotesController {
 	 * fall back to.
 	 */
 	discardDraft(actor: ActorContext, input: DiscardNoteDraftInput): Promise<DiscardNoteDraftOutput>;
-	/**
-	 * List every note in a project with the ETag each was last written under, so an
-	 * offline client can diff its local state against the server on the next sync.
-	 */
-	listSyncInventory(
-		actor: ActorContext,
-		input: ListNoteSyncInventoryInput
-	): Promise<ListNoteSyncInventoryOutput>;
 	/**
 	 * Exact or regex search across the title and plain text of every active note,
 	 * optionally scoped to one project. Title matches are reported for display but are
@@ -469,32 +455,6 @@ export class Notes implements NotesController {
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
 	}
-	async sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput> {
-		if (!noteMatchesEtag(input.note, input.baseEtag))
-			throw new ValidationError('The base ETag does not describe the submitted note revision');
-		try {
-			const saved = await this.save(actor, { note: input.note });
-			return {
-				outcome: 'saved',
-				version: { note: saved.note, etag: saved.etag },
-				repairedAnchorIds: saved.repairedAnchorIds
-			};
-		} catch (error) {
-			if (!(error instanceof StaleRevisionError)) throw error;
-			const remote = await this.dependencies.noteReader.get(actor, input.note.id);
-			if (noteSyncContentEquals(remote, input.note))
-				return {
-					outcome: 'saved',
-					version: { note: remote, etag: noteEtag(remote) },
-					repairedAnchorIds: []
-				};
-			return {
-				outcome: 'conflict',
-				baseEtag: input.baseEtag,
-				remote: { note: remote, etag: noteEtag(remote) }
-			};
-		}
-	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteReader.get(actor, input.noteId);
@@ -524,21 +484,6 @@ export class Notes implements NotesController {
 			});
 			return { note: restored, etag: noteEtag(restored) };
 		});
-	}
-	async listSyncInventory(
-		actor: ActorContext,
-		input: ListNoteSyncInventoryInput
-	): Promise<ListNoteSyncInventoryOutput> {
-		const notes = await this.dependencies.noteTreeReader.list(actor, input.projectId);
-		const entries: NoteSyncInventoryEntry[] = notes
-			.filter((note) => note.kind === 'note')
-			.map((note) => ({
-				noteId: note.id,
-				projectId: note.projectId,
-				etag: noteEtag(note),
-				updatedAt: note.updatedAt
-			}));
-		return { entries };
 	}
 	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };

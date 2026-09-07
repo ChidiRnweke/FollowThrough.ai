@@ -201,13 +201,10 @@ export const agentToolCoverage = {
 		},
 		create: { kind: 'mutation', tools: ['create_note'] },
 		save: { kind: 'mutation', tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill'] },
-		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
+
 		publish: { kind: 'mutation', tools: ['publish_note'] },
 		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
-		listSyncInventory: {
-			kind: 'excluded',
-			reason: 'Sync inventory is reserved for browser reconciliation.'
-		},
+
 		searchText: {
 			kind: 'excluded',
 			reason: 'Global text search is a UI surface; the agent finds notes with search_knowledge.'

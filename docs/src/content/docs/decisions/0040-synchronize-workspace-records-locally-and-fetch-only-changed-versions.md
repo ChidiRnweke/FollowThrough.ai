@@ -162,8 +162,8 @@ the existing repositories, services, controllers, and factories. No architectura
 
 - ADR 0007 governs controller orchestration; ADR 0009 governs project archive visibility.
 - ADR 0010 defines document conflict and retry behavior; ADR 0037 governs parsed storage boundaries.
-- The retired `src/lib/client/notes/sync/coordinator.ts` establishes the legacy base/local/server format;
-  `client/sync/legacy-notes.ts` preserves those copies during migration to the shared outbox.
+- `client/sync/legacy-notes.ts` preserves the historical base/local/server format during the one-time
+  migration. The old note coordinator, repositories, transport, and sync inventory API are removed.
 - The note route now opens through `stores/workspace/resources.svelte.ts`; its former server loader
   required a live view before local drafts could load.
 - `src/service-worker.ts` currently uses network-first private page snapshots. This violates the

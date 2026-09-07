@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { readLegacyNoteImports } from '$lib/client/sync/legacy-notes';
 import type { NoteId } from '$lib/models/notes';
-import {
-	IndexedDbWorkspaceRepository,
-	type WorkspaceRecord
-} from './indexeddb-workspace-repository';
+import { IndexedDbWorkbenchLayout, type WorkbenchLayoutRecord } from './indexeddb-layout';
 
 const databases: string[] = [];
 
@@ -19,13 +16,13 @@ const deleteDatabase = (name: string): Promise<void> =>
 const setup = () => {
 	const databaseName = `followthrough-workspace-test-${crypto.randomUUID()}`;
 	databases.push(databaseName);
-	return { databaseName, repository: new IndexedDbWorkspaceRepository(databaseName) };
+	return { databaseName, repository: new IndexedDbWorkbenchLayout(databaseName) };
 };
 
 const id = (n: number): NoteId =>
 	`00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as NoteId;
 
-const record = (overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord => ({
+const record = (overrides: Partial<WorkbenchLayoutRecord> = {}): WorkbenchLayoutRecord => ({
 	id: 'current',
 	openTabs: [id(1), id(2)],
 	focusedNoteId: id(2),
@@ -81,7 +78,7 @@ describe('IndexedDB workspace storage', () => {
 		const original = record();
 		await first.put(original);
 		first.close();
-		const second = new IndexedDbWorkspaceRepository(databaseName);
+		const second = new IndexedDbWorkbenchLayout(databaseName);
 		const stored = await second.get();
 		second.close();
 		expect(stored).toEqual(original);

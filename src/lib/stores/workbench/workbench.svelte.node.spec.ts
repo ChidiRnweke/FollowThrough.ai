@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
-import type { WorkspaceRecord } from '$lib/client/notes/sync/indexeddb-workspace-repository';
+import type { WorkbenchLayoutRecord } from '$lib/client/workbench/indexeddb-layout';
 import { WorkbenchStore, type WorkbenchRouter, type WorkspaceRepository } from './workbench.svelte';
 
 const NOTE_A = '11111111-1111-4111-8111-111111111111' as NoteId;
@@ -8,13 +8,13 @@ const NOTE_B = '22222222-2222-4222-8222-222222222222' as NoteId;
 
 /** Records what was written so persistence can be asserted without IndexedDB. */
 class InMemoryWorkspaceRepository implements WorkspaceRepository {
-	record?: WorkspaceRecord;
+	record?: WorkbenchLayoutRecord;
 
-	async get(): Promise<WorkspaceRecord | undefined> {
+	async get(): Promise<WorkbenchLayoutRecord | undefined> {
 		return this.record;
 	}
 
-	async put(record: WorkspaceRecord): Promise<void> {
+	async put(record: WorkbenchLayoutRecord): Promise<void> {
 		this.record = record;
 	}
 }

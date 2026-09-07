@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { noteEtag } from '$lib/models/notes';
 import type { LegacyNoteSyncRecord } from '$lib/models/workspace-mutations';
 import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { seedLegacyNoteStorage } from '$lib/testing/sync/fixtures/legacy-note-storage';
 import { completed, requestValue } from './database';
 import { readLegacyNoteImports } from './legacy-notes';
 const databases = new Set<string>();
@@ -21,18 +22,7 @@ const pending = (account = 1): LegacyNoteSyncRecord => {
 const seed = async (records: readonly LegacyNoteSyncRecord[]) => {
 	const name = `legacy-import-test-${crypto.randomUUID()}`;
 	databases.add(name);
-	const request = indexedDB.open(name, 2);
-	request.onupgradeneeded = () =>
-		request.result.createObjectStore('note-sync-records', { keyPath: 'key' });
-	const database = await requestValue(request);
-	const transaction = database.transaction('note-sync-records', 'readwrite');
-	const done = completed(transaction);
-	for (const record of records)
-		transaction
-			.objectStore('note-sync-records')
-			.put({ key: `${record.userId}:${record.noteId}`, record });
-	await done;
-	database.close();
+	await seedLegacyNoteStorage(name, records);
 	return name;
 };
 afterEach(async () => {

@@ -11,14 +11,12 @@ import type {
 } from '$lib/models/diagrams';
 import type {
 	GetNoteRevisionInput,
-	ListNoteSyncInventoryInput,
 	PublishNoteInput,
 	DiscardNoteDraftInput,
 	RestoreNoteRevisionInput,
 	SearchNoteTextInput,
 	ReplaceNoteTextInput,
-	SetNoteSectionNumberingInput,
-	SyncNoteInput
+	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
 import { MAX_NOTE_DOCUMENTS, proseMirrorDocumentSchema } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
@@ -101,19 +99,6 @@ export const getNoteView = query(z.string().uuid(), async (noteId) => {
 		.get(requestActor(), { noteId: noteId as NoteId });
 });
 
-export const syncNote = command(
-	z.object({
-		note: noteSchema,
-		baseEtag: noteEtag,
-		operationId: z.string().uuid()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.sync(requestActor(), input as SyncNoteInput);
-	}
-);
-
 export const publishNote = command(
 	z.object({
 		noteId: z.string().uuid(),
@@ -171,15 +156,6 @@ export const restoreNoteRevision = command(
 		return AppFactory.controllers()
 			.notes()
 			.restoreRevision(requestActor(), input as RestoreNoteRevisionInput);
-	}
-);
-
-export const listNoteSyncInventory = query(
-	z.object({ projectId: z.string().uuid().optional() }),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.listSyncInventory(requestActor(), input as ListNoteSyncInventoryInput);
 	}
 );
 
