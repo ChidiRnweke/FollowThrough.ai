@@ -1138,12 +1138,12 @@
 		role="alert"
 	>
 		<p class="font-medium text-destructive">The editor stopped rendering this note.</p>
-		<p class="text-muted-foreground">
+		<p class="text-destructive-muted-foreground">
 			Your saved note is untouched — nothing was written while it was down. Try again, or reload the
 			page if it keeps failing.
 		</p>
 		<!-- audit-allow: no-raw-font-family — A raw diagnostic message is machine text. -->
-		<p class="font-mono text-xs text-muted-foreground">{error.message}</p>
+		<p class="font-mono text-xs text-destructive-muted-foreground">{error.message}</p>
 		<div class="flex items-center gap-2">
 			<Button variant="outline" size="sm" onclick={reset}>Try again</Button>
 			<Button variant="ghost" size="sm" onclick={() => location.reload()}>Reload the page</Button>

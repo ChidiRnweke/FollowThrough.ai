@@ -425,6 +425,7 @@ export interface DeleteNoteForeverInput {
  */
 export interface DeleteNoteForeverOutput {
 	readonly deletedNoteIds: readonly NoteId[];
+	readonly deletedNotes: readonly Pick<Note, 'id' | 'title'>[];
 }
 
 export interface EmptyNoteTrashInput {
@@ -433,6 +434,7 @@ export interface EmptyNoteTrashInput {
 
 export interface EmptyNoteTrashOutput {
 	readonly deletedNoteIds: readonly NoteId[];
+	readonly deletedNotes: readonly Pick<Note, 'id' | 'title'>[];
 }
 
 export interface ListNoteTrashInput {

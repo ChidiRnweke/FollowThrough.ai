@@ -1,6 +1,6 @@
 <script lang="ts">
 	// FollowThrough product mark: flat teal tile with a continuous F-to-check
-	// path (see DESIGN_SYSTEM.md "Product mark"). Inline so it follows the
+	// path (see docs/design/design-system.md "Product mark"). Inline so it follows the
 	// semantic tokens in both color modes. Decorative by default — pair it
 	// with visible text or pass an explicit label.
 	let { class: className, label }: { class?: string; label?: string } = $props();

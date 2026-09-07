@@ -551,14 +551,16 @@ export class Notes implements NotesController {
 	): Promise<DeleteNoteForeverOutput> {
 		// Transactional because a folder is several deletes: a half-purged folder would
 		// leave its contents at the project root with no way back to where they were.
-		return this.dependencies.transactionRunner.run(async () => ({
-			deletedNoteIds: await this.dependencies.notePurger.deleteForever(actor, input.noteId)
-		}));
+		return this.dependencies.transactionRunner.run(async () => {
+			const deletedNotes = await this.dependencies.notePurger.deleteForever(actor, input.noteId);
+			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
+		});
 	}
 	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
-		return this.dependencies.transactionRunner.run(async () => ({
-			deletedNoteIds: await this.dependencies.notePurger.emptyTrash(actor, input.projectId)
-		}));
+		return this.dependencies.transactionRunner.run(async () => {
+			const deletedNotes = await this.dependencies.notePurger.emptyTrash(actor, input.projectId);
+			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
+		});
 	}
 	async listRevisions(
 		actor: ActorContext,

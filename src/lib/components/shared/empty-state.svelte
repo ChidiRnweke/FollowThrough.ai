@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Shared empty-state treatment (see DESIGN_SYSTEM.md "Empty states"):
+	// Shared empty-state treatment (see docs/design/design-system.md "Empty states"):
 	// a quiet icon, one voice line, an optional hint, an optional single action.
 	// Empty regions are invitations to act, never dead blank space.
 	//

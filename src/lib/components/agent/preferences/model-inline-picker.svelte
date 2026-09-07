@@ -204,7 +204,7 @@
 						variant="ghost"
 						size="xs"
 						{disabled}
-						class="min-w-0 shrink text-muted-foreground"
+						class="min-w-0 shrink text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground"
 						aria-label="Model for this chat: {effective.label}"
 					>
 						<span class="min-w-0 truncate text-foreground">{effective.label}</span>

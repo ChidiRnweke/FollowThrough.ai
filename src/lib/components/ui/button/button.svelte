@@ -4,7 +4,7 @@
 	import { type VariantProps, tv } from 'tailwind-variants';
 
 	export const buttonVariants = tv({
-		// The 1px hover lift is the app-wide tactile cue — see DESIGN_SYSTEM.md
+		// The 1px hover lift is the app-wide tactile cue — see docs/design/design-system.md
 		// "Interaction states". Motion, not elevation: no hover shadow. The
 		// resting position is unchanged, so :active settling back to 0 reads as
 		// a press. `cursor: pointer` comes from the [data-slot='button'] rule in

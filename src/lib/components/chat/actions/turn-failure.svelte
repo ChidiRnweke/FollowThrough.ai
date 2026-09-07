@@ -1,20 +1,17 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal, FtWarning } from '$lib/components/icons';
-	import type { FailureGroup, TurnRow } from '$lib/components/agent';
-	import { CHAT_ROW, CHAT_ROW_ICON } from './chat-row';
-	import { openEntity, rowIcon } from './open-entity';
+	import type { FailureGroup } from '$lib/components/agent';
+	import { CHAT_ROW, CHAT_ROW_ICON, CHAT_TEXT_REQUEST } from './chat-row';
+	import { canOpenEntity, entityActionLabel, entityIcon, openEntity } from './open-entity';
 
 	let {
 		failure,
-		titleFor,
 		retryable = false,
 		onretry
 	}: {
 		/** One cause and everything it befell. A bare message cannot say what it failed on. */
 		failure: FailureGroup;
-		/** Resolves a row's display title, so a fetched todo name reaches this block too. */
-		titleFor: (row: TurnRow) => string;
 		retryable?: boolean;
 		onretry?: () => void;
 	} = $props();
@@ -40,7 +37,7 @@
 	whole signal, and a box around it would be the fourth edge in a panel that has none. The
 	subject rows stay muted so the colour states the failure once.
 -->
-<div class="flex gap-2 text-xs" role="alert">
+<div class="{CHAT_TEXT_REQUEST} flex gap-2" role="alert">
 	<FtWarning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
 	<div class="flex min-w-0 flex-1 flex-col gap-1">
 		<p class="text-destructive">{headline}</p>
@@ -49,19 +46,20 @@
 		{/if}
 
 		<ul class="mt-0.5 flex flex-col">
-			{#each failure.subjects as row, index (`${row.kind}-${index}`)}
-				{@const Icon = rowIcon(row)}
+			{#each failure.subjects as subject, index (`${subject.kind}-${subject.id ?? subject.title}-${index}`)}
+				{@const Icon = entityIcon[subject.kind]}
 				<li>
-					{#if row.kind !== 'action' && row.id}
+					{#if canOpenEntity(subject)}
 						<Button
 							variant="ghost"
 							size="sm"
 							class="group/failed {CHAT_ROW}"
-							onclick={() => openEntity(row)}
+							aria-label={entityActionLabel(subject)}
+							onclick={() => openEntity(subject)}
 						>
 							<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
-							<span class="min-w-0 truncate">{titleFor(row)}</span>
-							<span class="shrink-0 text-muted-foreground">· {row.kind}</span>
+							<span class="min-w-0 truncate">{subject.title}</span>
+							<span class="shrink-0 text-muted-foreground">· {subject.kind}</span>
 							<FtExternal
 								class="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--duration-micro) group-hover/failed:opacity-100"
 							/>
@@ -70,9 +68,7 @@
 						<!-- Nothing to open, so nothing that looks like it opens. -->
 						<div class="{CHAT_ROW} text-muted-foreground">
 							<Icon class={CHAT_ROW_ICON} />
-							<span class="min-w-0 truncate">
-								{row.kind === 'action' ? row.label : titleFor(row)}
-							</span>
+							<span class="min-w-0 truncate">{subject.title}</span>
 						</div>
 					{/if}
 				</li>

@@ -62,7 +62,7 @@ record guards, casts to inline object types, casts on `JSON.parse` results, and 
 schema calls. These checks are staged: each rule lands only when its current-worktree baseline
 reaches zero. The `audit-allow` comment with a reason remains the escape hatch for
 framework-forced cases. Rules that need judgment stay in `AGENTS.md` and the pattern catalog in
-`TYPE_NARROWING.md`.
+`docs/architecture/type-narrowing.md`.
 
 This decision does not govern genuine key-to-value maps with concrete value types, `instanceof`
 checks on error or DOM classes outside models, or optional fields in request-shaped types where
@@ -104,10 +104,10 @@ allowance rather than weakening the rule.
   after a schema written from hand-made fixtures rejected 13 of 33 stored notes and took `/today`
   down.
 - `scripts/audit-source-rules.ts` enforces the mechanical subset with zero-baseline rules.
-  `TYPE_NARROWING.md` holds the pattern catalog and the execution board for the staged rules.
+  `docs/architecture/type-narrowing.md` holds the pattern catalog and the execution board for the staged rules.
 - Known violation: `src/lib/server/db/mappers.ts` still casts whole rows through
   `const domain = <T>(v: unknown): T => v as T`. It and the remaining findings are inventoried in
-  `artifacts/type-narrowing-audit.md` and staged under the execution board in `TYPE_NARROWING.md`.
+  `artifacts/type-narrowing-audit.md` and staged under the execution board in `docs/architecture/type-narrowing.md`.
 - ADR 0001 requires deterministic enforcement. ADR 0007 governs model and boundary placement.
   ADR 0015 governs how parse failures surface. ADR 0034 governs distinct types per execution
   state.

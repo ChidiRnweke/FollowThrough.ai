@@ -516,8 +516,9 @@ export const compositeLuminance = (fg: Oklch, bg: Oklch, alpha: number): number 
 };
 
 // Every pair is normal-size text on its documented surface → WCAG AA 4.5:1.
-// The wash pair is the DS badge recipe: text-brand on bg-brand/10 (light) and
-// bg-brand/15 (dark), composited over --background.
+// The wash pairs are the DS recipes composited over --background: text-brand on
+// bg-brand/10 (light) and bg-brand/15 (dark), and the same wash behind
+// brand-muted-foreground (file-output gutter, input focus placeholder).
 const CONTRAST_PAIRS = [
 	['foreground', 'background'],
 	['foreground', 'card'],
@@ -527,8 +528,13 @@ const CONTRAST_PAIRS = [
 	['primary-foreground', 'primary'],
 	['destructive-foreground', 'destructive'],
 	['sidebar-foreground', 'sidebar'],
-	['brand', 'background']
+	['brand', 'background'],
+	['brand-muted-foreground', 'background'],
+	['destructive-muted-foreground', 'background'],
+	['destructive-muted-foreground', 'muted']
 ] as const;
+
+const WASH_PAIRS = [['brand', 'brand'], ['brand-muted-foreground', 'brand']] as const;
 
 const AA_NORMAL = 4.5;
 
@@ -595,18 +601,20 @@ export const analyzeContrast = (cssText: string): ContrastViolation[] => {
 					message: `${fg}/${bg} is ${ratio.toFixed(2)}:1 in ${mode.name} mode, below AA ${AA_NORMAL}:1`
 				});
 		}
-		const brand = mode.tokens.get('brand');
-		const background = mode.tokens.get('background');
-		if (brand && background) {
+		for (const [fg, washToken] of WASH_PAIRS) {
+			const front = mode.tokens.get(fg);
+			const washColor = mode.tokens.get(washToken);
+			const background = mode.tokens.get('background');
+			if (!front || !washColor || !background) continue;
 			const ratio = contrastRatio(
-				relativeLuminance(brand),
-				compositeLuminance(brand, background, mode.wash)
+				relativeLuminance(front),
+				compositeLuminance(washColor, background, mode.wash)
 			);
 			if (ratio < AA_NORMAL)
 				violations.push({
 					rule: 'token-contrast-aa',
-					index: brand.index,
-					message: `brand on the brand/${mode.wash * 100} wash is ${ratio.toFixed(2)}:1 in ${mode.name} mode, below AA ${AA_NORMAL}:1`
+					index: front.index,
+					message: `${fg} on the ${washToken}/${mode.wash * 100} wash is ${ratio.toFixed(2)}:1 in ${mode.name} mode, below AA ${AA_NORMAL}:1`
 				});
 		}
 	}

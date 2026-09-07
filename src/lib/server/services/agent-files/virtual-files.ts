@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { getEncoding } from 'js-tiktoken';
 import { z } from 'zod';
 import {
 	RE2JS,
@@ -8,6 +7,7 @@ import {
 	RE2JSGroupException,
 	RE2JSSyntaxException
 } from 're2js';
+import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { DiagramId } from '$lib/models/diagrams';
@@ -39,7 +39,6 @@ export interface AgentVirtualFilesDependencies {
 	readonly noteMarkdown: (document: Parameters<NoteRepository['update']>[1]['document']) => string;
 }
 
-const encoding = getEncoding('cl100k_base');
 const uuid = z.uuid();
 
 const validIds = (...values: readonly (string | undefined)[]): boolean =>
@@ -66,7 +65,7 @@ export const agentFileOf = (path: string, mediaType: string, content: string): A
 		path,
 		mediaType,
 		byteSize: Buffer.byteLength(content, 'utf8'),
-		tokenCount: encoding.encode(content).length,
+		tokenCount: tokenEncoding().encode(content).length,
 		lineCount: lineCount(content),
 		checksumSha256: createHash('sha256').update(content).digest('hex')
 	},

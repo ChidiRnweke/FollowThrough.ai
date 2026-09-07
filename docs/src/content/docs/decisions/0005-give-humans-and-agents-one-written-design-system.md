@@ -37,7 +37,7 @@ their own content and task needs.
 
 ## Evidence
 
-- `DESIGN_SYSTEM.md` records product-wide visual and interaction rules.
+- `docs/design/design-system.md` records product-wide visual and interaction rules.
 - `src/routes/layout.css` owns the shared tokens and app-level component rules.
 - `src/lib/components/ui/` contains the app-owned UI primitives.
 - `scripts/audit-topology.ts` checks design-system boundaries.

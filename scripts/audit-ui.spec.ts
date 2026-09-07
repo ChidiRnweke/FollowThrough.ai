@@ -179,6 +179,8 @@ const PALETTE = (mutedForeground: string, extraDark = '') => `:root {
 	--sidebar: oklch(0.978 0.005 106.5);
 	--sidebar-foreground: oklch(0.153 0.006 107.1);
 	--brand: oklch(0.511 0.096 186.391);
+	--brand-muted-foreground: oklch(0.43 0.055 186.391);
+	--destructive-muted-foreground: oklch(0.48 0.075 27.325);
 }
 .dark {
 	--background: oklch(0.153 0.006 107.1);
@@ -192,6 +194,8 @@ const PALETTE = (mutedForeground: string, extraDark = '') => `:root {
 	--destructive-foreground: oklch(0.153 0.006 107.1);
 	--sidebar: oklch(0.228 0.013 107.4);
 	--sidebar-foreground: oklch(0.988 0.003 106.5);
+	--brand-muted-foreground: oklch(0.88 0.065 182.503);
+	--destructive-muted-foreground: oklch(0.8 0.065 22.216);
 	${extraDark}
 }`;
 

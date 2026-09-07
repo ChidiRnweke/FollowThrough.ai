@@ -62,15 +62,16 @@
 					</span>
 				</div>
 				{#if source !== undefined}
+					<!-- audit-allow: no-raw-font-family — Raw source display is machine text; mono is the code face. -->
 					<pre
-						class="max-h-80 overflow-auto rounded-sm bg-muted/50 p-2 leading-relaxed whitespace-pre-wrap text-muted-foreground">{source}</pre>
+						class="max-h-80 overflow-auto rounded-sm bg-muted/50 p-2 font-mono leading-relaxed whitespace-pre-wrap text-destructive-muted-foreground">{source}</pre>
 				{/if}
 				<div class="flex items-center gap-2">
 					<Button variant="ghost" size="xs" onclick={reset}>
 						<Retry data-icon="inline-start" />
 						Try again
 					</Button>
-					<span class="truncate text-muted-foreground">{failure.message}</span>
+					<span class="truncate text-destructive-muted-foreground">{failure.message}</span>
 				</div>
 			</div>
 		{/if}

@@ -134,7 +134,7 @@
 	{#if plaintext}
 		<div class="space-y-2 rounded-md border border-brand/40 bg-brand/10 p-4 dark:bg-brand/15">
 			<p class="text-sm font-medium">Copy this token now</p>
-			<p class="text-sm text-muted-foreground">
+			<p class="text-sm text-brand-muted-foreground">
 				It is stored hashed and cannot be shown again. If you lose it, revoke it and create another.
 			</p>
 			<div class="flex items-center gap-2">

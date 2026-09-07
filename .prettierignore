@@ -16,3 +16,11 @@ bun.lockb
 static/
 artifacts/ui-audit/
 project-filesystem-backend-plan.md
+
+# release-please regenerates this in its own style on every release.
+CHANGELOG.md
+
+# Captured verbatim from real providers and databases; content fidelity is
+# the point, formatting is not.
+tests/corpus/*.json
+src/evals/fixtures/*.json

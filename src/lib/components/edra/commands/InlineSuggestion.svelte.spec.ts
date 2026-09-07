@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -34,16 +34,17 @@ const typeAtCaret = async (editor: Editor) => {
 	await userEvent.keyboard(' ');
 };
 
-const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const waitForOffer = async (editor: Editor) => {
 	for (let attempt = 0; attempt < 25; attempt++) {
 		if (inlineSuggestionKey.getState(editor.state)) return;
-		await settle(20);
+		await vi.advanceTimersByTimeAsync(20);
 	}
 };
 
 describe('InlineSuggestion extension', () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
 	it('requests a suggestion after real contenteditable typing', async () => {
 		let calls = 0;
 		const { editor } = mountEditor(async () => {
@@ -52,7 +53,7 @@ describe('InlineSuggestion extension', () => {
 		});
 		moveCaret(editor);
 		await userEvent.keyboard(' ');
-		await settle(100);
+		await vi.advanceTimersByTimeAsync(100);
 		editor.destroy();
 		expect(calls).toBe(1);
 	});
@@ -64,7 +65,7 @@ describe('InlineSuggestion extension', () => {
 			return { text: ' to avoid data loss.' };
 		});
 		moveCaret(editor);
-		await settle(100);
+		await vi.advanceTimersByTimeAsync(100);
 		editor.destroy();
 		expect(calls).toBe(0);
 	});
@@ -146,7 +147,7 @@ describe('InlineSuggestion extension', () => {
 		editor.view.dom.dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
 		);
-		await settle(100);
+		await vi.advanceTimersByTimeAsync(100);
 		editor.destroy();
 		expect(calls).toBe(1);
 	});
@@ -154,7 +155,7 @@ describe('InlineSuggestion extension', () => {
 	it('offers nothing when the model returns an empty string', async () => {
 		const { editor, element } = mountEditor(async () => ({ text: '' }));
 		await typeAtCaret(editor);
-		await settle(100);
+		await vi.advanceTimersByTimeAsync(100);
 		const ghost = element.querySelector('.inline-suggestion');
 		editor.destroy();
 		expect(ghost).toBeNull();

@@ -98,7 +98,8 @@ describe('API token listing', () => {
 
 	it('does not revoke a token belonging to another user', async () => {
 		const { subject, minted } = await mint();
-		await subject.revoke(testActor(2), minted.token.id);
-		expect(await subject.list(testActor())).toHaveLength(1);
+		await expect(subject.revoke(testActor(2), minted.token.id)).rejects.toThrow(
+			'Access token not found'
+		);
 	});
 });

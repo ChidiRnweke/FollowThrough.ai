@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import { createHash } from 'node:crypto';
 import type {
 	ActorContext,
@@ -32,7 +33,7 @@ export interface IAccessTokens {
 	/** Takes the raw `Authorization` header; returns null for anything unusable. */
 	verify(authorizationHeader: string | null): Promise<VerifiedApiToken | null>;
 	list(actor: ActorContext): Promise<readonly ApiToken[]>;
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<void>;
+	revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>>;
 }
 
 const generatePlaintext = (): string => {
@@ -102,7 +103,9 @@ export class AccessTokens implements IAccessTokens {
 		return this.tokens.listForUser(actor);
 	}
 
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<void> {
-		return this.tokens.revoke(actor, id);
+	async revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
+		const token = await this.tokens.revoke(actor, id);
+		if (!token) throw new NotFoundError('Access token not found');
+		return { id: token.id, name: token.name };
 	}
 }

@@ -44,7 +44,7 @@
 			{#if header}
 				{@render header()}
 			{:else}
-				<!-- Spacing ladder, per DESIGN_SYSTEM.md "Grouping is spacing and similarity":
+				<!-- Spacing ladder, per docs/design/design-system.md "Grouping is spacing and similarity":
 				     navigation sits a step away from identity, and title+description read as one unit. -->
 				<div class="flex flex-col">
 					{#if breadcrumb}

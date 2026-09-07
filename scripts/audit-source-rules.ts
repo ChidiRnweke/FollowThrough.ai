@@ -98,7 +98,7 @@ const declaredTarget = (node: ts.Node): ts.TypeNode | undefined => {
  * `as unknown`, `: unknown`, and a bare result handed straight to a schema are
  * the honest forms and stay legal. That exemption is load-bearing:
  * `models/agent/tool-failure.ts` and `services/agent/conversations/replay-virtualizer.ts`
- * are the two sites TYPE_NARROWING.md §5 holds up as correct.
+ * are the two sites docs/architecture/type-narrowing.md §5 holds up as correct.
  *
  * Reported at the `JSON.parse` call, never at whatever named its result. That is
  * not cosmetic: an `audit-allow` has to sit on the line above the one reported,

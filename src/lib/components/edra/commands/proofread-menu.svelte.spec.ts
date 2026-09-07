@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -31,8 +31,6 @@ const check = async (text: string): Promise<readonly ProofreadIssueReport[]> => 
 		}
 	];
 };
-
-const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const mountEditor = () => {
 	const element = document.createElement('div');
@@ -90,7 +88,7 @@ const waitForUnderline = async (element: HTMLElement): Promise<HTMLElement> => {
 	for (let attempt = 0; attempt < 40; attempt += 1) {
 		const underline = element.querySelector<HTMLElement>('.proofread-issue');
 		if (underline) return underline;
-		await settle(20);
+		await vi.advanceTimersByTimeAsync(20);
 	}
 	throw new Error('no underline appeared');
 };
@@ -98,11 +96,13 @@ const waitForUnderline = async (element: HTMLElement): Promise<HTMLElement> => {
 const waitForMenu = async (menu: HTMLElement): Promise<void> => {
 	for (let attempt = 0; attempt < 40; attempt += 1) {
 		if (menu.style.visibility === 'visible') return;
-		await settle(20);
+		await vi.advanceTimersByTimeAsync(20);
 	}
 };
 
 describe('the proofreading menu', () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
 	it('renders the underline as a class a stylesheet can target', async () => {
 		const { editor, element } = mountEditor();
 		const underline = await waitForUnderline(element);
@@ -142,7 +142,7 @@ describe('the proofreading menu', () => {
 	it('leaves the menu closed until something is actually clicked', async () => {
 		const { editor, element, menu } = mountEditor();
 		await waitForUnderline(element);
-		await settle(50);
+		await vi.advanceTimersByTimeAsync(50);
 		editor.destroy();
 		expect(menu.style.visibility).toBe('hidden');
 	});
@@ -151,7 +151,7 @@ describe('the proofreading menu', () => {
 		const { editor, element } = mountEditor();
 		await waitForUnderline(element);
 		await userEvent.click(element.querySelector('p')!);
-		await settle(80);
+		await vi.advanceTimersByTimeAsync(80);
 		editor.destroy();
 		expect(proofreadKey.getState(editor.state)?.selected).toBeUndefined();
 	});
@@ -174,7 +174,7 @@ describe('the proofreading menu', () => {
 		await waitForMenu(menu);
 		const selection = proofreadSelection(editor.state)!;
 		editor.commands.applyProofreadSuggestion(selection.from, selection.to, 'the');
-		await settle(80);
+		await vi.advanceTimersByTimeAsync(80);
 		editor.destroy();
 		expect(menu.style.visibility).toBe('hidden');
 	});
@@ -185,7 +185,7 @@ describe('the proofreading menu', () => {
 		await userEvent.click(underline);
 		const selection = proofreadSelection(editor.state)!;
 		editor.commands.applyProofreadSuggestion(selection.from, selection.to, 'the');
-		await settle(120);
+		await vi.advanceTimersByTimeAsync(120);
 		const remaining = element.querySelectorAll('.proofread-issue').length;
 		editor.destroy();
 		expect(remaining).toBe(0);

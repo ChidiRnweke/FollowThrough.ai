@@ -841,7 +841,11 @@ interface AgentToolOutputMap {
 		readonly pinned: boolean;
 	};
 	readonly list_api_tokens: ControllerResult<ApiTokensController['list']>;
-	readonly revoke_api_token: { readonly tokenId: ApiTokenId; readonly revoked: true };
+	readonly revoke_api_token: {
+		readonly tokenId: ApiTokenId;
+		readonly name: string;
+		readonly revoked: true;
+	};
 	readonly list_attachments: ControllerResult<AttachmentsController['list']>;
 	readonly list_project_memory: { readonly entries: readonly MemoryProjection[] };
 	readonly list_user_memory: { readonly entries: readonly MemoryProjection[] };
@@ -864,12 +868,24 @@ interface AgentToolOutputMap {
 	readonly update_export_settings: ControllerResult<DeliverablesController['updateExportSettings']>;
 	readonly get_artifact: NonNullable<ControllerResult<DeliverablesController['getArtifact']>>;
 	readonly download_artifact: ControllerResult<DeliverablesController['downloadArtifact']>;
-	readonly delete_artifact: { readonly artifactId: ArtifactId; readonly deleted: true };
+	readonly delete_artifact: {
+		readonly artifactId: ArtifactId;
+		readonly title: string;
+		readonly deleted: true;
+	};
 	readonly regenerate_artifact: ControllerResult<DeliverablesController['regenerateArtifact']>;
-	readonly extract_promises: ControllerResult<TodosController['extractPromises']>;
-	readonly relate_selection: ControllerResult<RelationshipsController['suggestFromSelection']>;
-	readonly find_references: ControllerResult<ReferencesController['suggestFromSelection']>;
-	readonly create_skill_from_selection: ControllerResult<SkillsController['createFromSelection']>;
+	readonly extract_promises: ControllerResult<TodosController['extractPromises']> & {
+		readonly sourceNoteId: NoteId;
+	};
+	readonly relate_selection: ControllerResult<RelationshipsController['suggestFromSelection']> & {
+		readonly sourceNoteId: NoteId;
+	};
+	readonly find_references: ControllerResult<ReferencesController['suggestFromSelection']> & {
+		readonly sourceNoteId: NoteId;
+	};
+	readonly create_skill_from_selection: ControllerResult<
+		SkillsController['createFromSelection']
+	> & { readonly sourceNoteId: NoteId };
 	readonly load_skill: SkillViewProjection;
 	readonly create_diagram: ControllerResult<DiagramStudioController['createDiagram']>;
 	readonly edit_diagram: ControllerResult<DiagramStudioController['editDiagram']>;
@@ -1899,8 +1915,8 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'mutation',
 			z.object({ tokenId: apiTokenId }),
 			async (input) => {
-				await factory.apiTokens().revoke(actor, input.tokenId);
-				return { tokenId: input.tokenId, revoked: true as const };
+				const token = await factory.apiTokens().revoke(actor, input.tokenId);
+				return { tokenId: token.id, name: token.name, revoked: true as const };
 			}
 		),
 		list_attachments: define(
@@ -2142,8 +2158,8 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'mutation',
 			z.object({ artifactId: artifactId }),
 			async (input) => {
-				await factory.deliverables().deleteArtifact(actor, input.artifactId);
-				return { artifactId: input.artifactId, deleted: true as const };
+				const deleted = await factory.deliverables().deleteArtifact(actor, input.artifactId);
+				return { artifactId: deleted.id, title: deleted.title, deleted: true as const };
 			}
 		),
 		regenerate_artifact: define(
@@ -2196,25 +2212,33 @@ const selectionToolDefinitions = (
 					'Use mine for commitments made by the user (I/my), waiting_on for commitments made by someone else, or omit only when the user asked for every actor.'
 				)
 		}),
-		(fields) =>
-			factory.todos().extractPromises(actor, {
+		async (fields) => ({
+			...(await factory.todos().extractPromises(actor, {
 				selection,
 				...(fields.responsibility ? { responsibility: fields.responsibility } : {})
-			})
+			})),
+			sourceNoteId: selection.noteId
+		})
 	),
 	relate_selection: defineTool(
 		'relate_selection',
 		toolDescription('relate_selection'),
 		'proposal',
 		z.object({}),
-		() => factory.relationships().suggestFromSelection(actor, { selection })
+		async () => ({
+			...(await factory.relationships().suggestFromSelection(actor, { selection })),
+			sourceNoteId: selection.noteId
+		})
 	),
 	find_references: defineTool(
 		'find_references',
 		toolDescription('find_references'),
 		'proposal',
 		z.object({}),
-		() => factory.references().suggestFromSelection(actor, { selection }, { model })
+		async () => ({
+			...(await factory.references().suggestFromSelection(actor, { selection }, { model })),
+			sourceNoteId: selection.noteId
+		})
 	),
 	create_skill_from_selection: defineTool(
 		'create_skill_from_selection',
@@ -2225,7 +2249,10 @@ const selectionToolDefinitions = (
 			description: z.string(),
 			triggerHints: z.array(z.string())
 		}),
-		(fields) => factory.skills().createFromSelection(actor, { ...fields, selection })
+		async (fields) => ({
+			...(await factory.skills().createFromSelection(actor, { ...fields, selection })),
+			sourceNoteId: selection.noteId
+		})
 	)
 });
 

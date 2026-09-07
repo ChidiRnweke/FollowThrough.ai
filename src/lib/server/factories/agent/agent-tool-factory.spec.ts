@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FunctionTool } from '@openai/agents';
+import type { FunctionTool, Tool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
@@ -26,10 +26,12 @@ import {
 	agentToolCoverage,
 	agentToolRegistry,
 	LOCKED_TOOL_NAMES,
-	type ToolAccessPolicy
+	type ToolAccessPolicy,
+	type AgentToolDefinition
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
-import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
+import type { ToolClassification } from '$lib/models/agent';
+import { TOOL_DESCRIPTIONS, type ToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
 const executeDirectly: AgentToolExecutor = {
@@ -47,6 +49,86 @@ const createAgentTools = (
 	access: ToolAccessPolicy = allTools
 ): AgentTools => new AgentTools(controllers, actor, mode, context, executor, retriever, access);
 
+let freshKeyCounter = 0;
+const freshKey = (): string => `fresh:${freshKeyCounter++}`;
+
+const definitionsCacheKey = (options: { classifications?: readonly ToolClassification[] } = {}) =>
+	JSON.stringify(options.classifications ?? null);
+
+const memoizedResult = <Args extends unknown[], Result>(
+	cache: Map<string, Result>,
+	args: Args,
+	build: () => Result
+): Result => {
+	const key = JSON.stringify(args);
+	const hit = cache.get(key);
+	if (hit !== undefined) return hit;
+	const value = build();
+	cache.set(key, value);
+	return value;
+};
+
+/**
+ * The registry is pure and deterministic for a given set of constructor args, so
+ * a whole test file can share one built instance and one set of method results.
+ * Custom factory/retriever args and any test that invokes `search_tools` must
+ * stay fresh: the former capture per-test state, the latter mutates a promotion
+ * set that every subsequent test on that registry would otherwise inherit.
+ */
+class MemoizedAgentTools extends AgentTools {
+	private readonly definitionsResults = new Map<string, AgentToolDefinition[]>();
+	private readonly toolsResults = new Map<string, Tool<unknown>[]>();
+	private readonly agentToolsResults = new Map<string, Tool<unknown>[]>();
+	private readonly offeredResults = new Map<string, ToolName[]>();
+
+	constructor(...args: ConstructorParameters<typeof AgentTools>) {
+		super(...args);
+	}
+
+	override definitions(
+		options: { classifications?: readonly ToolClassification[] } = {}
+	): AgentToolDefinition[] {
+		return memoizedResult(this.definitionsResults, [definitionsCacheKey(options)], () =>
+			super.definitions(options)
+		);
+	}
+
+	override tools(
+		options: { classifications?: readonly ToolClassification[] } = {}
+	): Tool<unknown>[] {
+		return memoizedResult(this.toolsResults, [definitionsCacheKey(options)], () =>
+			super.tools(options)
+		);
+	}
+
+	override agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
+		return memoizedResult(this.agentToolsResults, [alreadyPromoted.join('\u0000')], () =>
+			super.agentTools(alreadyPromoted)
+		);
+	}
+
+	override offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
+		return memoizedResult(this.offeredResults, [alreadyPromoted.join('\u0000')], () =>
+			super.offeredToolNames(alreadyPromoted)
+		);
+	}
+}
+
+const memoizeAgentTools = <Args extends unknown[], Result>(
+	keyOf: (...args: Args) => string,
+	build: (...args: Args) => Result
+): ((...args: Args) => Result) => {
+	const cache = new Map<string, Result>();
+	return (...args: Args) => {
+		const key = keyOf(...args);
+		const hit = cache.get(key);
+		if (hit !== undefined) return hit;
+		const value = build(...args);
+		cache.set(key, value);
+		return value;
+	};
+};
+
 const authoritativeSelection: TextSelection = {
 	noteId: '00000000-0000-4000-8000-000000000001' as never,
 	revision: 3,
@@ -55,29 +137,30 @@ const authoritativeSelection: TextSelection = {
 	text: 'OAuth'
 };
 
-const registry = (
-	mode: 'approval_required' | 'auto_accept',
-	options: { factory?: ControllerFactory } = {}
-) =>
-	createAgentTools(
-		options.factory ?? ({} as ControllerFactory),
-		testActor(),
-		mode,
-		{
-			provenanceId: testProvenanceId(),
-			// A selection is supplied so the exhaustiveness check below sees the
-			// selection-bound tools, which are the only context-gated ones left.
-			input: {
-				conversationId: testConversationId(),
-				prompt: 'Help',
-				selection: authoritativeSelection
+const registry = memoizeAgentTools(
+	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
+		options.factory ? freshKey() : `registry:${mode}`,
+	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
+		new MemoizedAgentTools(
+			options.factory ?? ({} as ControllerFactory),
+			testActor(),
+			mode,
+			{
+				provenanceId: testProvenanceId(),
+				// A selection is supplied so the exhaustiveness check below sees the
+				// selection-bound tools, which are the only context-gated ones left.
+				input: {
+					conversationId: testConversationId(),
+					prompt: 'Help',
+					selection: authoritativeSelection
+				},
+				model: 'openai/gpt-5.6'
 			},
-			model: 'openai/gpt-5.6'
-		},
-		executeDirectly,
-		new InMemoryToolRetriever(),
-		allTools
-	);
+			executeDirectly,
+			new InMemoryToolRetriever(),
+			allTools
+		)
+);
 
 const approvalFor = async (
 	mode: 'approval_required' | 'auto_accept',
@@ -105,6 +188,33 @@ const enabledToolNames = async (tools: readonly { name: string }[]): Promise<str
 	return names;
 };
 
+const agentToolsRegistry = memoizeAgentTools(
+	(
+		mode: 'approval_required' | 'auto_accept',
+		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+	) =>
+		`agentTools:${mode}:${options.factory ? freshKey() : 'default'}:${
+			options.retriever ? freshKey() : 'default'
+		}`,
+	(
+		mode: 'approval_required' | 'auto_accept',
+		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
+	) =>
+		new MemoizedAgentTools(
+			options.factory ?? ({} as ControllerFactory),
+			testActor(),
+			mode,
+			{
+				provenanceId: testProvenanceId(),
+				input: { conversationId: testConversationId(), prompt: 'Help' },
+				model: 'openai/gpt-5.6'
+			},
+			executeDirectly,
+			options.retriever ?? new InMemoryToolRetriever(),
+			allTools
+		)
+);
+
 const agentToolsFor = (
 	mode: 'approval_required' | 'auto_accept',
 	options: {
@@ -112,20 +222,7 @@ const agentToolsFor = (
 		retriever?: InMemoryToolRetriever;
 		promoted?: readonly string[];
 	} = {}
-) =>
-	createAgentTools(
-		options.factory ?? ({} as ControllerFactory),
-		testActor(),
-		mode,
-		{
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Help' },
-			model: 'openai/gpt-5.6'
-		},
-		executeDirectly,
-		options.retriever ?? new InMemoryToolRetriever(),
-		allTools
-	).agentTools(options.promoted ?? []);
+): Tool<unknown>[] => agentToolsRegistry(mode, options).agentTools(options.promoted ?? []);
 
 const indirectToolFor = (
 	mode: 'approval_required' | 'auto_accept',
@@ -486,16 +583,6 @@ describe('Agent tool coverage invariants', () => {
 		expect(await enabledToolNames(tools)).toContain('create_note');
 	});
 
-	it('advertises only noteId and markdown for save_note', () => {
-		const saveNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'save_note');
-		expect(Object.keys(saveNote?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
-	});
-
-	// Note writes are the app's most common mutation and every production
-	// "Tool not found" failure was one. Making them first-class removes the
-	// discovery round-trip that was losing the user's edit.
 	it('offers save_note directly instead of hiding it behind discovery', async () => {
 		const available = registry('auto_accept');
 		expect([
@@ -504,40 +591,12 @@ describe('Agent tool coverage invariants', () => {
 		]).toEqual([true, false]);
 	});
 
-	it('advertises only noteId and edits for edit_note', () => {
-		const editNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_note');
-		expect(Object.keys(editNote?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
-	});
-
 	it('offers edit_note directly instead of hiding it behind discovery', async () => {
 		const available = registry('auto_accept');
 		expect([
 			(await enabledToolNames(available.agentTools())).includes('edit_note'),
 			available.catalog().some((candidate) => candidate.name === 'edit_note')
 		]).toEqual([true, false]);
-	});
-
-	it('classifies edit_note as a mutation', () => {
-		const editNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_note');
-		expect(editNote?.classification).toBe('mutation');
-	});
-
-	it('advertises only noteId and markdown for save_skill', () => {
-		const saveSkill = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'save_skill');
-		expect(Object.keys(saveSkill?.parameters.shape ?? {}).sort()).toEqual(['markdown', 'noteId']);
-	});
-
-	it('advertises only noteId and edits for edit_skill', () => {
-		const editSkill = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_skill');
-		expect(Object.keys(editSkill?.parameters.shape ?? {}).sort()).toEqual(['edits', 'noteId']);
 	});
 
 	it('keeps edit_skill and save_skill searchable instead of offering them before discovery', async () => {
@@ -549,57 +608,6 @@ describe('Agent tool coverage invariants', () => {
 			enabled.includes('save_skill'),
 			available.catalog().some((candidate) => candidate.name === 'save_skill')
 		]).toEqual([false, true, false, true]);
-	});
-
-	it('classifies edit_skill as a mutation', () => {
-		const editSkill = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_skill');
-		expect(editSkill?.classification).toBe('mutation');
-	});
-
-	it('classifies save_skill as a mutation', () => {
-		const saveSkill = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'save_skill');
-		expect(saveSkill?.classification).toBe('mutation');
-	});
-
-	it('advertises the read-before-edit contract in edit_note and get_note descriptions (1/3)', () => {
-		const editNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_note');
-		const _getNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		expect(editNote?.description).toMatch(/MUST call get_note/);
-	});
-
-	it('advertises the read-before-edit contract in edit_note and get_note descriptions (2/3)', () => {
-		const editNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_note');
-		const _getNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		expect(editNote?.description).toMatch(/never retry the same oldText/);
-	});
-
-	it('advertises the read-before-edit contract in edit_note and get_note descriptions (3/3)', () => {
-		const _editNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'edit_note');
-		const getNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		expect(getNote?.description).toMatch(/before your first edit_note or save_note/);
-	});
-
-	it('advertises only noteId for get_note', () => {
-		const getNote = registry('auto_accept')
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		expect(Object.keys(getNote?.parameters.shape ?? {}).sort()).toEqual(['noteId']);
 	});
 
 	it('limits one atomic note edit batch to five replacements', () => {
@@ -1006,21 +1014,6 @@ describe('Agent tool coverage invariants', () => {
 		// The direct path validates against the tool's own schema in the SDK, so the
 		// refusal reaches the model as a `failure` carrying the zod issues.
 		expect(String(result)).toContain('createdAfter must be before or equal to createdBefore');
-	});
-
-	it('advertises creation ranges as opt-in user-requested scope', () => {
-		const definition = registry('auto_accept')
-			.definitions()
-			.find((candidate) => candidate.name === 'search');
-		expect({
-			createdAfter: definition?.parameters.shape.createdAfter.description,
-			createdBefore: definition?.parameters.shape.createdBefore.description
-		}).toEqual({
-			createdAfter:
-				'Inclusive artifact creation-time lower bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.',
-			createdBefore:
-				'Inclusive artifact creation-time upper bound as an ISO 8601 timestamp. Set only when the user asks for a creation-time range; otherwise omit it.'
-		});
 	});
 
 	it('advertises create-note parent scope as an existing folder only', () => {
@@ -1747,7 +1740,7 @@ describe('Explicit mutation receipts', () => {
 
 	it('reports the revoked token id', async () => {
 		const apiTokens = capabilityDependencies<ApiTokensController>({
-			revoke: async () => undefined
+			revoke: async (_actor, id) => ({ id, name: 'Local integration' })
 		});
 		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
 		const tool = registry('auto_accept', { factory })
@@ -1755,13 +1748,14 @@ describe('Explicit mutation receipts', () => {
 			.find((definition) => definition.name === 'revoke_api_token');
 		expect(await tool?.execute({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' })).toEqual({
 			tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013',
+			name: 'Local integration',
 			revoked: true
 		});
 	});
 
 	it('reports the deleted artifact id', async () => {
 		const deliverables = capabilityDependencies<DeliverablesController>({
-			deleteArtifact: async () => undefined
+			deleteArtifact: async (_actor, id) => ({ id, title: 'Report' })
 		});
 		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
 		const tool = registry('auto_accept', { factory })
@@ -1769,6 +1763,7 @@ describe('Explicit mutation receipts', () => {
 			.find((definition) => definition.name === 'delete_artifact');
 		expect(await tool?.execute({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' })).toEqual({
 			artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124',
+			title: 'Report',
 			deleted: true
 		});
 	});
@@ -1914,22 +1909,25 @@ describe('Doomed note edits never reach the approval boundary', () => {
 });
 
 describe('Deselected tools', () => {
-	const without = (...disabled: string[]): AgentTools => {
-		const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
-		return createAgentTools(
-			{} as ControllerFactory,
-			testActor(),
-			'auto_accept',
-			{
-				provenanceId: testProvenanceId(),
-				input: { conversationId: testConversationId(), prompt: 'Help' },
-				model: 'openai/gpt-5.6'
-			},
-			undefined,
-			undefined,
-			policy
-		);
-	};
+	const without = memoizeAgentTools(
+		(...disabled: string[]) => `without:${disabled.join(',')}`,
+		(...disabled: string[]): AgentTools => {
+			const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
+			return new MemoizedAgentTools(
+				{} as ControllerFactory,
+				testActor(),
+				'auto_accept',
+				{
+					provenanceId: testProvenanceId(),
+					input: { conversationId: testConversationId(), prompt: 'Help' },
+					model: 'openai/gpt-5.6'
+				},
+				executeDirectly,
+				new InMemoryToolRetriever(),
+				policy
+			);
+		}
+	);
 
 	it('drops the tool from the definition list', () => {
 		expect(

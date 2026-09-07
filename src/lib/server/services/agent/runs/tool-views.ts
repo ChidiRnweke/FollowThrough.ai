@@ -195,6 +195,7 @@ export const projectUser = (user: User): UserProjection => ({
 });
 
 export interface SuggestionProjection {
+	readonly noteId?: string;
 	readonly id: string;
 	readonly kind: string;
 	readonly status: string;
@@ -209,6 +210,7 @@ export interface SuggestionProjection {
 }
 
 export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection => ({
+	...(suggestion.noteId ? { noteId: suggestion.noteId } : {}),
 	id: suggestion.id,
 	kind: suggestion.kind,
 	status: suggestion.status,

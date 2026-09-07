@@ -28,7 +28,7 @@ decision record.
 - **Reason:** Humans and agents need the same explicit rules. The product must not change by
   author or session.
 - **Cost:** The rules need maintenance. Some visual decisions still need human judgment.
-- **Evidence:** `DESIGN_SYSTEM.md`, `src/routes/layout.css`, `src/lib/components/ui/`.
+- **Evidence:** `docs/design/design-system.md`, `src/routes/layout.css`, `src/lib/components/ui/`.
 - **Readiness:** Ready. Drafted as ADR 0005.
 
 ### C004 — Group code by product capability so features can change independently

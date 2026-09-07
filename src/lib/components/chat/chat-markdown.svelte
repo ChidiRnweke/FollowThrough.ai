@@ -5,7 +5,8 @@
 	import ChatMermaid from './chat-mermaid.svelte';
 	import { chatMarkdownSegments, renderMarkdown } from '$lib/models/markdown';
 
-	let { content }: { content: string } = $props();
+	let { content, surface = 'neutral' }: { content: string; surface?: 'neutral' | 'brand' } =
+		$props();
 	let mounted = $state(false);
 
 	onMount(() => {
@@ -23,7 +24,11 @@
 	already set apart by position, and italics cost legibility at this size.
 -->
 <div
-	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-blockquote:border-l-2 prose-blockquote:border-border prose-blockquote:pl-2 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic [&_blockquote_p:first-of-type::before]:content-none [&_blockquote_p:last-of-type::after]:content-none"
+	data-surface={surface}
+	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-blockquote:border-l-2 prose-blockquote:border-border prose-blockquote:pl-2 prose-blockquote:font-normal {surface ===
+	'brand'
+		? 'prose-blockquote:text-brand-muted-foreground'
+		: 'prose-blockquote:text-muted-foreground'} prose-blockquote:not-italic [&_blockquote_p:first-of-type::before]:content-none [&_blockquote_p:last-of-type::after]:content-none"
 >
 	{#each segments as segment, index (index)}
 		<!--

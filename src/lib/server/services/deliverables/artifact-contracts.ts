@@ -37,7 +37,7 @@ export interface ArtifactReader {
 }
 
 export interface ArtifactDeleter {
-	delete(actor: ActorContext, artifactId: ArtifactId): Promise<void>;
+	delete(actor: ActorContext, artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>>;
 }
 
 export interface ArtifactRegenerator {

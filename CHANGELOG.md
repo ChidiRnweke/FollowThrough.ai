@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.3.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.5...v0.3.6) (2026-09-06)
+
+
+### Bug Fixes
+
+* **chat:** give a turn's activity a type pyramid, a teal evidence surface, and its open link back ([#27](https://github.com/ChidiRnweke/FollowThrough.ai/issues/27)) ([4c05107](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4c051073382f5e5e255ef3c4cdf14ca00806e682))
+
+## [0.3.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.4...v0.3.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* **chat:** space and colour a turn's activity so its groups and its actions read ([#24](https://github.com/ChidiRnweke/FollowThrough.ai/issues/24)) ([f156670](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f1566709d4a39053dd881830e82ff1eb87b62d38))
+
+## [0.3.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.3...v0.3.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ci:** call the image publish from the release run so deploys happen ([#21](https://github.com/ChidiRnweke/FollowThrough.ai/issues/21)) ([b6daaa8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b6daaa83dc8d1495c168c628be2047b573a43b35))
+
+## [0.3.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.2...v0.3.3) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ui:** improve secondary text on colored surfaces ([#19](https://github.com/ChidiRnweke/FollowThrough.ai/issues/19)) ([f358294](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f35829472337edb2fa9b770d3addb8cd1ff9034b))
+
+## [0.3.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.1...v0.3.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **release:** release on every change that can reach production ([#17](https://github.com/ChidiRnweke/FollowThrough.ai/issues/17)) ([8a93631](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8a93631235d4de47585007725d589ff9da1112db))
+
+
+### Code Refactoring
+
+* **chat:** fold a turn's activity into the things it touched ([#16](https://github.com/ChidiRnweke/FollowThrough.ai/issues/16)) ([9dcfd10](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9dcfd1093cf847969cfd403de9c697be3f8f722e))
+
+## [0.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.0...v0.3.1) (2026-09-06)
+
+
+### Performance Improvements
+
+* **tests:** cut suite memory ~25% and wall time ~35% ([#14](https://github.com/ChidiRnweke/FollowThrough.ai/issues/14)) ([87f5637](https://github.com/ChidiRnweke/FollowThrough.ai/commit/87f563791341b406f78c701a7bc06474101f8a0b))
+
+## [0.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.2.0...v0.3.0) (2026-09-06)
+
+
+### Features
+
+* **agent:** make tool activity directly navigable ([#10](https://github.com/ChidiRnweke/FollowThrough.ai/issues/10)) ([70611d3](https://github.com/ChidiRnweke/FollowThrough.ai/commit/70611d3ac8243f23592944c95171c1b3e3243239))
+
 ## [0.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.1.0...v0.2.0) (2026-09-06)
 
 

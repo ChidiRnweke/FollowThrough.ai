@@ -48,6 +48,7 @@ describe('Tool presentation invariants', () => {
 describe('A read names the note it read', () => {
 	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 	const shell = {
+		projects: [],
 		noteTree: [{ id: noteId, title: 'Runtime notes' }]
 	} as unknown as ShellContext;
 	const read = <Status extends 'succeeded' | 'rejected' | 'running'>(status: Status) => ({
@@ -85,10 +86,10 @@ describe('A read names the note it read', () => {
 		expect(toolStatusParts(read('succeeded'), shell).noteId).toBe(noteId);
 	});
 
-	it('withholds the note id when the note is not in the tree', () => {
+	it('keeps navigation when the note is outside the current tree', () => {
 		expect(
 			toolStatusParts(read('succeeded'), { noteTree: [] } as unknown as ShellContext).noteId
-		).toBeUndefined();
+		).toBe(noteId);
 	});
 });
 
@@ -97,9 +98,9 @@ describe('Every call in the log is named in the reader language', () => {
 		expect(
 			toolStatusLabel({
 				...tool('grep', 'succeeded'),
-				arguments: { pattern: 'element61', path: '/' }
+				arguments: { pattern: 'northwind', path: '/' }
 			})
-		).toBe('Searched notes and files · element61');
+		).toBe('Searched notes and files · northwind');
 	});
 
 	it('names a mechanism call rather than un-snake-casing it', () => {
@@ -114,6 +115,7 @@ describe('Every call in the log is named in the reader language', () => {
 describe('A file path subject resolves to the note it points at', () => {
 	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 	const shell = {
+		projects: [],
 		noteTree: [{ id: noteId, title: 'Runtime notes' }]
 	} as unknown as ShellContext;
 	const excerpt = () => ({
@@ -129,13 +131,13 @@ describe('A file path subject resolves to the note it points at', () => {
 		expect(toolStatusParts(excerpt(), shell).noteId).toBe(noteId);
 	});
 
-	it('stays subject-less for a path that names no note', () => {
+	it('identifies an attachment source as an attachment', () => {
 		expect(
 			toolStatusParts(
 				{ ...tool('sed', 'succeeded'), arguments: { path: '/projects/proj-1/attachments/a.txt' } },
 				shell
 			).subject
-		).toBeUndefined();
+		).toBe('An attachment');
 	});
 });
 

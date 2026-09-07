@@ -352,7 +352,7 @@
 							aria-pressed={executionMode === 'auto_accept'}
 							class={executionMode === 'auto_accept'
 								? 'bg-brand/10 text-brand dark:bg-brand/15'
-								: 'text-muted-foreground'}
+								: 'text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground'}
 							onclick={ontoggleexecutionmode}
 						>
 							{#if executionMode === 'auto_accept'}
@@ -382,7 +382,10 @@
 						that reads as motion.
 					-->
 					{#if isStreaming && connection === 'connected'}
-						<Loader class="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+						<Loader
+							class="size-4 animate-spin text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground"
+							aria-hidden="true"
+						/>
 					{/if}
 					<ModelInlinePicker
 						{models}

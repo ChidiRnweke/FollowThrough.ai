@@ -1,7 +1,7 @@
 {
 	"name": "followthrough.ai",
 	"private": true,
-	"version": "0.2.0",
+	"version": "0.3.6",
 	"license": "MIT",
 	"packageManager": "pnpm@10.30.1",
 	"type": "module",
@@ -23,6 +23,9 @@
 		"check:watch": "NODE_OPTIONS='--max-old-space-size=1024' svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
+		"audit:surface-text": "node --experimental-strip-types scripts/audit-surface-text.ts",
+		"test:surface-text": "playwright test --config=playwright.surface-text.config.ts",
+		"test:surface-text:app": "playwright test tests/e2e/surface-text.e2e.ts --project=app",
 		"test:unit": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project node-fast --project browser-focused",
 		"test:browser:full": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project browser-full",
 		"test:workflow": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --project node-fast src/lib/server/controllers",

@@ -164,28 +164,36 @@ export class NoteCatalog {
 			}));
 	}
 
-	async deleteForever(actor: ActorContext, noteId: NoteId): Promise<readonly NoteId[]> {
+	async deleteForever(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
 		const note = await this.get(actor, noteId);
 		if (!note.archivedAt)
 			throw new ValidationError('Only notes in the trash can be deleted permanently');
 		if (note.kind === 'skill')
 			throw new ValidationError('Skill notes are not deleted from the trash');
 		const trashed = await this.notes.listTrashed(actor, note.projectId);
-		return this.purge(actor, this.descendants(trashed, [noteId]));
+		const deleted = await this.purge(actor, this.descendants(trashed, [noteId]));
+		return this.inDeletionOrder(trashed, deleted);
 	}
 
-	async emptyTrash(actor: ActorContext, projectId?: Note['projectId']): Promise<readonly NoteId[]> {
+	async emptyTrash(
+		actor: ActorContext,
+		projectId?: Note['projectId']
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
 		const trashed = await this.notes.listTrashed(actor, projectId);
 		// Skills are filtered out of the trash listing, so they are not something the user
 		// can see they are about to destroy. Emptying the trash empties what is on screen.
 		const visible = trashed.filter((note) => note.kind !== 'skill');
-		return this.purge(
+		const deleted = await this.purge(
 			actor,
 			this.descendants(
 				trashed,
 				visible.map((note) => note.id)
 			)
 		);
+		return this.inDeletionOrder(trashed, deleted);
 	}
 
 	/**
@@ -212,6 +220,21 @@ export class NoteCatalog {
 		// is never removed while something still points at it.
 		for (const id of ids) await this.notes.delete(actor, id);
 		return ids;
+	}
+
+	/**
+	 * Report the deleted rows in the order they were purged — children before the folder
+	 * that holds them — not in trash-listing order.
+	 */
+	private inDeletionOrder(
+		trashed: readonly Note[],
+		deleted: readonly NoteId[]
+	): readonly Pick<Note, 'id' | 'title'>[] {
+		const byId = new Map(trashed.map((row) => [row.id, row]));
+		return deleted.flatMap((id) => {
+			const row = byId.get(id);
+			return row === undefined ? [] : [{ id, title: row.title }];
+		});
 	}
 
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {
