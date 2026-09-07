@@ -55,7 +55,7 @@
 			</Button>
 		</div>
 	</div>
-	<pre class="overflow-x-auto p-3 text-xs font-mono leading-relaxed max-h-80 overflow-y-auto"><code>
+	<pre class="overflow-x-auto p-3 text-xs leading-relaxed max-h-80 overflow-y-auto"><code>
 			{#each lines as line, index (index)}
 				{@const cls =
 					line.type === 'add'

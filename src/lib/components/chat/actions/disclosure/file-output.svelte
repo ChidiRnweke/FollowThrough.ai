@@ -21,6 +21,7 @@
 	<p>{headline}</p>
 	{#if lines.length > 0}
 		<div class="max-h-56 overflow-y-auto overscroll-contain rounded-md bg-muted/40 px-2 py-1.5">
+			<!-- audit-allow: no-raw-font-family — File lines are code output; mono is the code face. -->
 			<ul class="flex flex-col gap-0.5 font-mono text-xs">
 				{#each lines as line, index (index)}
 					<li class="flex gap-2">

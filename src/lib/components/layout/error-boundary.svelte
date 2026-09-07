@@ -63,7 +63,7 @@
 				</div>
 				{#if source !== undefined}
 					<pre
-						class="max-h-80 overflow-auto rounded-sm bg-muted/50 p-2 font-mono leading-relaxed whitespace-pre-wrap text-muted-foreground">{source}</pre>
+						class="max-h-80 overflow-auto rounded-sm bg-muted/50 p-2 leading-relaxed whitespace-pre-wrap text-muted-foreground">{source}</pre>
 				{/if}
 				<div class="flex items-center gap-2">
 					<Button variant="ghost" size="xs" onclick={reset}>

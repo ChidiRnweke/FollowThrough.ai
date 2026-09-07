@@ -45,6 +45,15 @@
 
 - Colors use the semantic OKLCH tokens in `src/routes/layout.css`; do not introduce raw Tailwind
   palette colors.
+- **Shade ladders are picked up front, never derived at render time.** Every shade a component
+  uses is a token chosen by eye in `layout.css`; `color-mix()`, relative color syntax, and
+  `lighten()`/`darken()` at call sites are banned. The documented alpha steps
+  (`bg-brand/10`–`/30`, `dark:/15`) are the only sanctioned derivation. Within a ladder, chroma
+  holds — and rises — at the lightness extremes so the ends don't wash out, and the greys keep
+  the single olive temperature at every step.
+- **Color never carries meaning alone.** Wherever color signals state — status badges, diff
+  markings, deltas — it is paired with an icon, a sign, or a label. The proofreading marks are
+  the model: hue plus underline style.
 - **Faces:** Inter is the body, chrome, and metadata face. Newsreader is the display face and
   reaches the page only through the `page-title` utility — never `font-serif` by hand, never on
   chrome, controls, or metadata. JetBrains Mono stays reserved for code; monospace metadata was
@@ -62,6 +71,31 @@
   16px/24.8px at 400/600; H1 32px/38px at 800; H2 24px/32px at 700; H3 20px/28px at 600; H4
   18px/26px at 600. Full-size read-only note diffs inherit it; compact diff previews embedded in
   chat deliberately keep their smaller local scale so they stay subordinate to the conversation.
+- **Hierarchy spends weight and color before size.** De-emphasize secondary text with
+  `text-muted-foreground` or a weight step before touching the ladder; primary content never
+  exceeds its rung just to stand out, and secondary content never drops below `sm` just to sit
+  back.
+- **Three text-contrast tiers per surface, no more:** `foreground` for primary,
+  `muted-foreground` for secondary, one lighter tier for tertiary — plus `--brand` only where
+  Accent discipline sanctions it. A component mixing more is a wall-of-content smell.
+- **Labels are a last resort.** Omit the label when the value's format (date, email, count) or
+  position already identifies it; fold a necessary qualifier into natural phrasing
+  ("3 bedrooms"). A genuinely needed label sits one tier below its value — the value leads.
+- **One primary action per view.** A page or dialog carries at most one solid default `Button`;
+  secondary actions take `outline`, tertiary take `ghost`/`link`. Destructive styling follows
+  importance, not severity — the full `destructive` variant belongs only inside the confirmation
+  step, where the destructive act is the primary action.
+- **Mixed sizes on one line align by baseline,** not center — `items-baseline` on a flex row
+  pairing a title with smaller text; `items-center` is for icons and controls.
+- **Line-height runs inverse to font size.** Display sizes take tight leading, body text
+  taller — the note ladder models it (H1 ≈1.19 against body ≈1.55). Loose leading on `text-xl`
+  or larger is a violation, and widening a measure re-derives the leading with it.
+- **Long-form text is never centered.** `text-center` is for headlines and self-contained
+  blocks of two or three lines — the `empty-state.svelte` hero is the canonical case.
+- **Numeric table columns right-align,** header and cells, so magnitudes compare down the
+  column.
+- **Links in chrome emphasize by weight and foreground,** not color; the tinted-underline link
+  treatment is reserved for prose. Breadcrumb and project links keep their sanctioned `--brand`.
 - **Spacing is the hierarchy.** Gaps step rather than repeat: 4px binds a label to its value (one
   unit); 8px separates items inside a group; 24px separates groups; a further step, or a change
   of row density, introduces a different kind of content. `PageShell` encodes the header end of
@@ -70,6 +104,14 @@
   every gap is equal has no hierarchy no matter how well its content is grouped, and the fix is
   never a divider. Spacing follows the Tailwind scale; corners use the shadcn radii family;
   elevation stays flat.
+- **Ambiguous spacing is a violation.** Wherever spacing is the only thing grouping elements,
+  within-group gaps are strictly smaller than between-group gaps; equal gaps at nested levels
+  flatten the grouping, and the fix is a spacing step, never a divider.
+- **Chrome takes a fixed width; content flexes.** The sidebar, the 24rem right panel, and
+  drawers are sized for their contents — never as viewport fractions or grid-column shares.
+- **Centered single-purpose surfaces use `max-w-*` or a measure token,** so they shrink only
+  below their optimum — never fluid column spans that render wider on medium screens than on
+  large ones.
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
   stable variants, but a wrapper that fights a shadcn base class is the wrong tool — where a
   control needs to escape its base scale, write the bare element.
@@ -141,7 +183,10 @@ icon, one voice line, an optional hint, and at most one action. The default slot
 icon, all-muted copy) fills inline gaps; `size="large"` is the hero treatment for a region that
 carries a page or a whole section — a brand-wash icon tile (`size-16 rounded-lg bg-brand/10
 text-brand dark:bg-brand/15`), a statement in foreground, one supporting line, then the action.
-Kanban columns keep their drop zone and center the voice line inside it.
+Kanban columns keep their drop zone and center the voice line inside it. The icon stays near its
+drawn size at every scale — the `size="large"` tile is how an icon gets presence, never a
+scaled-up glyph. Controls that only operate on content (tabs, filters, sort, bulk toolbars) hide
+while the region is empty; the empty state and its one action are the whole surface.
 
 ## Surface pattern rules
 
@@ -267,6 +312,17 @@ Kanban columns keep their drop zone and center the voice line inside it.
   never had. Set `gap-0`, give each band the same `p-1`, and let the divider carry the
   separation — one inset for everything: a row's text, a group heading, tab labels, and a
   footer link all land on the same line.
+- **User-uploaded images render in fixed, center-cropped containers** — `object-cover` inside
+  an `overflow-hidden` frame, separated from the surface by an inset hairline rather than an
+  outward border that can clash with the photo. Lightbox and zoom views are the declared
+  `object-contain` exception.
+- **Screenshots are captured to fit their slot** — at a smaller viewport or cropped to a
+  partial view — never shrunk into place until the UI inside them is illegible.
+- **Heterogeneous menus use structure, not flat link lists.** A dropdown mixing destinations,
+  actions, and destructive operations gets groups, supporting text, or icons, inside the
+  popover band-padding contract above.
+- **A primary choice between few options renders as selectable cards** — title, supporting
+  description, the selected card marked by the brand accent — not a bare vertical radio stack.
 
 ## Anti-patterns
 

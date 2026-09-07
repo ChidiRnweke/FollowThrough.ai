@@ -107,6 +107,7 @@
 	}
 </script>
 
+<!-- audit-allow: no-ad-hoc-shadow — The slash-command menu floats at the caret; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse. -->
 <div
 	bind:this={scrollContainer}
 	class="bg-popover text-popover-foreground max-h-72 w-56 overflow-y-auto rounded-lg border border-border p-1 shadow-md"

@@ -188,7 +188,7 @@
 				<span
 					class={[
 						'font-semibold tabular-nums',
-						status === 'done' ? 'text-success' : 'text-black dark:text-white'
+						status === 'done' ? 'text-success' : 'text-foreground'
 					]}>{items.length}</span
 				>
 			</h3>
@@ -253,7 +253,7 @@
 						{#if isExpanded}
 							Show less
 						{:else}
-							Show <span class="font-semibold text-black tabular-nums dark:text-white"
+							Show <span class="font-semibold text-foreground tabular-nums"
 								>{items.length - VISIBLE_LIMIT}</span
 							> more
 						{/if}

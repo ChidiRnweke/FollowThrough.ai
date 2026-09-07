@@ -1142,6 +1142,7 @@
 			Your saved note is untouched — nothing was written while it was down. Try again, or reload the
 			page if it keeps failing.
 		</p>
+		<!-- audit-allow: no-raw-font-family — A raw diagnostic message is machine text. -->
 		<p class="font-mono text-xs text-muted-foreground">{error.message}</p>
 		<div class="flex items-center gap-2">
 			<Button variant="outline" size="sm" onclick={reset}>Try again</Button>
@@ -1326,6 +1327,7 @@
 						onurlchange={(url) => (activeLinkUrl = url)}
 						onclose={scheduleActiveLinkClose}
 					/>
+					<!-- audit-allow: no-raw-font-family — The link-destination pill shows a URL literal. -->
 					<div
 						class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
 						role="status"

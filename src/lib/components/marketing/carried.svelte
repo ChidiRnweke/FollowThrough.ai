@@ -11,7 +11,7 @@
 <mark
 	class="rounded-xs px-1 py-0.5 text-foreground {derived
 		? 'bg-brand/10 underline decoration-brand decoration-dotted decoration-2 underline-offset-4 dark:bg-brand/15'
-		: 'bg-brand/12 dark:bg-brand/20'}"
+		: 'bg-brand/10 dark:bg-brand/20'}"
 >
 	{@render children()}
 </mark>
