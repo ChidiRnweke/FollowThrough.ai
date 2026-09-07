@@ -241,3 +241,34 @@ test('reviews and discards an offline project without losing unreviewed work', a
 	await page.getByRole('button', { name: 'Discard local change', exact: true }).click();
 	await expect(page.getByText('No changes are waiting to send.')).toBeVisible();
 });
+
+test('retains an offline note edit and publishes it after reconnecting', async ({
+	page,
+	context
+}) => {
+	await page.goto('/today');
+	await waitForServiceWorker(page);
+	await page.locator('a[href^="/notes/"]:visible').first().click();
+	const body = page.getByLabel('Note body', { exact: true });
+	await body.waitFor();
+	await context.setOffline(true);
+	await body.fill('An offline edit retained through publication.');
+	await page.getByRole('button', { name: 'Publish note (Ctrl+S, S)', exact: true }).click();
+	await page.getByText('Publication saved on this device', { exact: true }).waitFor();
+	await page.reload();
+	await body.waitFor();
+	const retained = await body.textContent();
+	const acknowledgments: string[] = [];
+	page.on('response', async (response) => {
+		if (response.url().endsWith('/pushWorkspaceMutation') && response.ok())
+			acknowledgments.push(await response.text());
+	});
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect
+		.poll(() => ({
+			retained,
+			applied: acknowledgments.filter((text) => text.includes('applied')).length
+		}))
+		.toEqual({ retained: 'An offline edit retained through publication.', applied: 2 });
+});

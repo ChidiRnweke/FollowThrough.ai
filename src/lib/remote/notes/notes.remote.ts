@@ -11,12 +11,10 @@ import type {
 } from '$lib/models/diagrams';
 import type {
 	GetNoteRevisionInput,
-	PublishNoteInput,
 	DiscardNoteDraftInput,
 	RestoreNoteRevisionInput,
 	SearchNoteTextInput,
-	ReplaceNoteTextInput,
-	SetNoteSectionNumberingInput
+	ReplaceNoteTextInput
 } from '$lib/models/notes';
 import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
@@ -41,26 +39,12 @@ const textSelection = z
 	})
 	.refine((s) => s.to >= s.from, 'Selection end must follow its start.');
 
-const noteEtag = z.string().regex(/^note:[0-9a-f-]+:r[1-9][0-9]*$/i);
-
 export const listNoteDocuments = query(
 	z.array(z.string().uuid()).min(1).max(MAX_NOTE_DOCUMENTS),
 	async (noteIds) =>
 		AppFactory.controllers()
 			.notes()
 			.listDocuments(requestActor(), { noteIds: noteIds as NoteId[] })
-);
-
-export const publishNote = command(
-	z.object({
-		noteId: z.string().uuid(),
-		baseEtag: noteEtag
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.publish(requestActor(), input as PublishNoteInput);
-	}
 );
 
 export const discardNoteDraft = command(
@@ -71,19 +55,6 @@ export const discardNoteDraft = command(
 		return AppFactory.controllers()
 			.notes()
 			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
-	}
-);
-
-export const setNoteSectionNumbering = command(
-	z.object({
-		noteId: z.string().uuid(),
-		// Omitted (not false) clears the override so the note inherits again.
-		enabled: z.boolean().optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.setSectionNumbering(requestActor(), input as SetNoteSectionNumberingInput);
 	}
 );
 

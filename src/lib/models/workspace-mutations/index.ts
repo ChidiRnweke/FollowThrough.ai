@@ -408,3 +408,17 @@ export const assertWorkspaceWriteIdentity = (
 			throw new Error('The edit body belongs to a different resource');
 	}
 };
+
+/** Pending publication commands determine the local view until authoritative revisions arrive. */
+export const noteHasUnpublishedChanges = (
+	note: Note,
+	commands: readonly WorkspaceCommand[]
+): boolean => {
+	let unpublished = note.currentRevision > note.publishedRevision;
+	for (const command of commands) {
+		if (!('noteId' in command) || command.noteId !== note.id) continue;
+		if (command.kind === 'saveNote' || command.kind === 'renameNote') unpublished = true;
+		if (command.kind === 'publishNote' || command.kind === 'discardNoteDraft') unpublished = false;
+	}
+	return unpublished;
+};

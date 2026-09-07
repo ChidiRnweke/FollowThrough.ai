@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { noteWrite } from '$lib/models/workspace-mutations';
+	import { noteWrite, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -22,9 +22,9 @@
 		SectionNumberingLevel,
 		TextSelection
 	} from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { ShellContext, DateTime } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { noteEtag, sectionNumberingOverrideFor } from '$lib/models/notes';
+	import { sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from 'svelte-sonner';
@@ -50,12 +50,10 @@
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import {
-		publishNote,
 		discardNoteDraft,
 		listNoteRevisions,
 		getNoteRevision,
-		restoreNoteRevision,
-		setNoteSectionNumbering
+		restoreNoteRevision
 	} from '$lib/remote/notes/notes.remote';
 
 	let {
@@ -117,24 +115,18 @@
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
-	// The numbering cascade arrives resolved from the server. A writable derived so a
-	// toggle applies instantly; the server value takes over again on the next view
-	// refresh, which is also how external changes (another device, or a project/app
-	// default edit) arrive.
-	let sectionNumbering = $derived(view.sectionNumbering);
+	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		try {
-			const output = await setNoteSectionNumbering({
-				noteId: note.id,
-				enabled: sectionNumberingOverrideFor(level)
-			});
-			sectionNumbering = output.sectionNumbering;
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — numbering failure is reported and refreshed server state remains authoritative.
-		} catch {
-			toast.error('Could not update section numbering. Try again.');
-		}
+		const enabled = sectionNumberingOverrideFor(level);
+		const result = await draft.stage({
+			command: { kind: 'noteNumbering', noteId: note.id, enabled },
+			local: { type: 'notes', value: { ...note, sectionNumbering: enabled } },
+			coalesce: null,
+			references: []
+		});
+		if (result.kind === 'failure') toast.error(result.message);
+		else note = { ...note, sectionNumbering: enabled };
 	}
 
 	/**
@@ -154,7 +146,12 @@
 			.map((entry) => ({ id: entry.id, title: entry.title }))
 	);
 
-	const hasUnpublishedChanges = $derived(note.currentRevision > note.publishedRevision);
+	const hasUnpublishedChanges = $derived(
+		noteHasUnpublishedChanges(
+			note,
+			workspaceSession.current?.resources.pending.map((entry) => entry.intent.command) ?? []
+		)
+	);
 	// Any state where the device copy has not reached the server.  These must win
 	// over the "unpublished changes" hint in the header, otherwise the retry and
 	// "Review conflict" controls stay hidden for exactly the notes that need them.
@@ -684,27 +681,33 @@
 	async function publish(): Promise<void> {
 		if (publishing) return;
 		if (dirty) await save();
-		if (dirty || draft.status !== 'synced') {
-			toast.error('Save the note before publishing.');
+		if (dirty || draft.status === 'error' || draft.status === 'conflict') {
+			toast.error('Save or resolve the note before publishing.');
 			return;
 		}
 		publishing = true;
 		try {
-			await publishNote({
-				noteId: note.id,
-				baseEtag: noteEtag(note)
+			const publishedAt = new Date().toISOString() as DateTime;
+			const result = await draft.stage({
+				command: { kind: 'publishNote', noteId: note.id },
+				local: {
+					type: 'notes',
+					value: { ...note, publishedRevision: note.currentRevision, publishedAt }
+				},
+				coalesce: null,
+				references: []
 			});
-			await workspaceSession.synchronize();
-			const opened = await draft.read();
-			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
-			const local = opened.value;
-			note = { ...local };
-			editorRef?.replaceDocument(local.document);
-			toast.success('Published');
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — publish failure is reported and the draft remains available.
-		} catch {
-			toast.error('Could not publish. Try again.');
+			if (result.kind === 'failure') {
+				toast.error(result.message);
+				return;
+			}
+			if (result.value)
+				note = {
+					...note,
+					publishedRevision: result.value.publishedRevision,
+					publishedAt: result.value.publishedAt
+				};
+			toast.success('Publication saved on this device');
 		} finally {
 			publishing = false;
 		}
