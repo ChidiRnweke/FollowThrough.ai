@@ -18,7 +18,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { toast } from 'svelte-sonner';
-	import { invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import {
 		FtMemory as Brain,
 		FtChevronRight as ChevronRight,
@@ -167,7 +167,7 @@
 	async function restoreEntry(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
 			await restoreProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Restored');
 			return;
 		}
@@ -180,7 +180,7 @@
 	async function deleteEntryForever(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
 			await deleteProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Deleted permanently');
 			return;
 		}

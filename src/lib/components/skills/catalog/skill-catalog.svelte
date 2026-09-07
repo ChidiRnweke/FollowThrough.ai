@@ -12,7 +12,8 @@
 		FtPlus as Plus,
 		FtChevronRight as ChevronRight
 	} from '$lib/components/icons';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import type { ProjectId } from '$lib/models/projects';
@@ -67,7 +68,7 @@
 		togglingIds.add(noteId);
 		try {
 			await toggleSkill({ noteId, enabled });
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — update failure is reported and the catalog refresh remains authoritative.
 		} catch {
 			toast.error('Could not update the skill. Try again.');

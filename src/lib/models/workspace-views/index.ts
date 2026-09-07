@@ -1,3 +1,6 @@
+import type { ArtifactView } from '$lib/models/deliverables';
+import type { Diagram } from '$lib/models/diagrams';
+import type { TrashedNote } from '$lib/models/notes';
 import type { AttachmentView } from '$lib/models/attachments';
 import type { MemoryEntry, MemorySuggestionView } from '$lib/models/memory';
 import {
@@ -151,6 +154,71 @@ export class WorkspaceViews {
 					: [];
 			})
 			.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path));
+	}
+
+	trashedNotes(projectId?: ProjectId): readonly TrashedNote[] {
+		const projects = new Map(this.projects.map((project) => [project.id, project]));
+		return this.all('notes')
+			.flatMap((note) => {
+				const project = projects.get(note.projectId);
+				if (
+					!project ||
+					!note.archivedAt ||
+					note.kind === 'skill' ||
+					(projectId && note.projectId !== projectId)
+				)
+					return [];
+				return [{ ...note, archivedAt: note.archivedAt, projectName: project.name }];
+			})
+			.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt) || a.id.localeCompare(b.id));
+	}
+	trashedDiagrams(projectId?: ProjectId): readonly Diagram[] {
+		return this.all('diagrams')
+			.filter((diagram) => diagram.archivedAt && (!projectId || diagram.projectId === projectId))
+			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
+	}
+	diagrams(projectId: ProjectId, query = ''): readonly Diagram[] {
+		const search = query.toLowerCase();
+		return this.all('diagrams')
+			.filter(
+				(diagram) =>
+					diagram.projectId === projectId &&
+					diagram.kind === 'drawio' &&
+					!diagram.archivedAt &&
+					(!search ||
+						diagram.title?.toLowerCase().includes(search) ||
+						diagram.searchableText?.toLowerCase().includes(search))
+			)
+			.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+	}
+	artifacts(projectId: ProjectId, query = ''): readonly ArtifactView[] {
+		const project = this.get('projects', projectId);
+		if (!project) return [];
+		const search = query.toLowerCase();
+		return this.all('artifacts')
+			.filter((artifact) => artifact.projectId === projectId)
+			.map((artifact) => {
+				const template = artifact.templateId
+					? this.get('project_templates', artifact.templateId)
+					: undefined;
+				return {
+					...artifact,
+					projectName: project.name,
+					...(template ? { templateName: template.name } : {}),
+					stale: artifact.sourceNoteIds.some((id) => {
+						const note = this.get('notes', id);
+						return note !== undefined && note.updatedAt > artifact.createdAt;
+					})
+				};
+			})
+			.filter(
+				(artifact) =>
+					!search ||
+					artifact.title.toLowerCase().includes(search) ||
+					artifact.format.includes(search) ||
+					artifact.templateName?.toLowerCase().includes(search)
+			)
+			.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 	}
 
 	project(projectId: ProjectId): ProjectView | null {

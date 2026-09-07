@@ -330,7 +330,7 @@ export const resourceDataSchemas = {
 		sourceNoteIds: z.array(id<'NoteId'>()),
 		templateId: id<'TemplateId'>().optional(),
 		provenanceId: id<'ProvenanceId'>().optional(),
-		runId: z.string().optional(),
+		runId: id<'AgentRunId'>().optional(),
 		createdAt: instant
 	})
 };

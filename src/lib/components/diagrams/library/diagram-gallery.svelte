@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import type { Diagram, DiagramId } from '$lib/models/diagrams';
@@ -43,7 +44,7 @@
 
 	let { data }: { data: DiagramGalleryData } = $props();
 
-	let diagrams = $derived<Diagram[]>([...data.diagrams]);
+	const diagrams = $derived<readonly Diagram[]>(data.diagrams);
 	let searchValue = $derived(data.query);
 	let removeTarget = $state<Diagram | undefined>(undefined);
 	let removeOpen = $state(false);
@@ -126,7 +127,7 @@
 	 * The dialog closes before the delete runs, not after.
 	 *
 	 * `AlertDialog.Action` does not dismiss on its own — every confirmation in the
-	 * app closes itself — and the row disappears optimistically anyway, so leaving
+	 * app closes itself — and leaving
 	 * the confirmation up while the request is in flight only reads as a click that
 	 * did not land.
 	 */
@@ -145,15 +146,11 @@
 	 * is where it goes, and where it comes back from.
 	 */
 	async function remove(id: DiagramId): Promise<void> {
-		const previous = diagrams;
-		diagrams = diagrams.filter((item) => item.id !== id);
 		try {
 			await archiveProjectDiagram({ diagramId: id });
-			if (previous.length === 1 && data.page > 1) await navigate(data.page - 1);
-			else await invalidateAll();
-			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported to the user.
+			await workspaceSession.synchronize();
+			// audit-allow: silent-catch — the toast reports the failed deletion; the shared record remains available.
 		} catch {
-			diagrams = previous;
 			toast.error('Could not move the diagram to the trash.');
 		}
 	}

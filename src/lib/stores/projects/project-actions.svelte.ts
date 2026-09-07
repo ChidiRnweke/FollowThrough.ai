@@ -1,4 +1,4 @@
-import { invalidateAll } from '$app/navigation';
+import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import { isHttpError } from '@sveltejs/kit';
 import type {
 	ArchiveNoteOutput,
@@ -39,12 +39,12 @@ class ProjectActionsStore {
 	/** Message from the last failed action, when the server explained itself. */
 	lastError = $state<string | undefined>(undefined);
 
-	private async withInvalidation<T>(fn: () => Promise<T>): Promise<T | undefined> {
+	private async withSynchronization<T>(fn: () => Promise<T>): Promise<T | undefined> {
 		this.busy = true;
 		this.lastError = undefined;
 		try {
 			const result = await fn();
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			return result;
 			// audit-allow: silent-catch — undefined is the typed action failure outcome and lastError preserves any domain message for the caller.
 		} catch (error) {
@@ -58,40 +58,40 @@ class ProjectActionsStore {
 	}
 
 	createProject = (name: string) =>
-		this.withInvalidation<CreateProjectOutput>(() => createProject({ name }));
+		this.withSynchronization<CreateProjectOutput>(() => createProject({ name }));
 	renameProject = (projectId: ProjectId, name: string) =>
-		this.withInvalidation<RenameProjectOutput>(() => renameProject({ projectId, name }));
+		this.withSynchronization<RenameProjectOutput>(() => renameProject({ projectId, name }));
 	archiveProject = (projectId: ProjectId) =>
-		this.withInvalidation(() => archiveProject({ projectId }));
+		this.withSynchronization(() => archiveProject({ projectId }));
 	setSectionNumberingDefault = (projectId: ProjectId, enabled?: boolean) =>
-		this.withInvalidation<SetProjectSectionNumberingOutput>(() =>
+		this.withSynchronization<SetProjectSectionNumberingOutput>(() =>
 			setProjectSectionNumberingDefault({ projectId, enabled })
 		);
 	createFolder = (projectId: ProjectId, name: string, parentId?: NoteId) =>
-		this.withInvalidation<CreateFolderOutput>(() => createFolder({ projectId, name, parentId }));
+		this.withSynchronization<CreateFolderOutput>(() => createFolder({ projectId, name, parentId }));
 	moveEntry = (
 		projectId: ProjectId,
 		entryId: NoteId,
 		parentId: NoteId | undefined,
 		position: number
 	) =>
-		this.withInvalidation<MoveProjectEntryOutput>(() =>
+		this.withSynchronization<MoveProjectEntryOutput>(() =>
 			moveEntry({ projectId, entryId, parentId, position })
 		);
 	createNote = (title: string, projectId: ProjectId, parentId?: NoteId) =>
-		this.withInvalidation<CreateNoteOutput>(() => createNote({ title, projectId, parentId }));
+		this.withSynchronization<CreateNoteOutput>(() => createNote({ title, projectId, parentId }));
 	createSkill = (name: string, projectId: ProjectId, parentId?: NoteId) =>
-		this.withInvalidation<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
+		this.withSynchronization<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
 	renameNote = (noteId: NoteId, title: string) =>
-		this.withInvalidation<RenameNoteOutput>(() => renameNote({ noteId, title }));
+		this.withSynchronization<RenameNoteOutput>(() => renameNote({ noteId, title }));
 	archiveNote = (noteId: NoteId) =>
-		this.withInvalidation<ArchiveNoteOutput>(() => archiveNote({ noteId }));
+		this.withSynchronization<ArchiveNoteOutput>(() => archiveNote({ noteId }));
 	restoreNote = (noteId: NoteId) =>
-		this.withInvalidation<RestoreNoteOutput>(() => restoreNote({ noteId }));
+		this.withSynchronization<RestoreNoteOutput>(() => restoreNote({ noteId }));
 	deleteNoteForever = (noteId: NoteId) =>
-		this.withInvalidation<DeleteNoteForeverOutput>(() => deleteNoteForever({ noteId }));
+		this.withSynchronization<DeleteNoteForeverOutput>(() => deleteNoteForever({ noteId }));
 	emptyNoteTrash = (projectId?: ProjectId) =>
-		this.withInvalidation<EmptyNoteTrashOutput>(() => emptyNoteTrash({ projectId }));
+		this.withSynchronization<EmptyNoteTrashOutput>(() => emptyNoteTrash({ projectId }));
 }
 
 export const projectActions = new ProjectActionsStore();
