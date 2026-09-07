@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.0...v0.4.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **agent:** read a property holding undefined as the absence JSON makes of it ([#32](https://github.com/ChidiRnweke/FollowThrough.ai/issues/32)) ([fea50a9](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fea50a9ce63f63f05fd0a0fd5f3c99830c40e7b7))
+* **diagrams:** stop refusing ordinary diagrams, and stop latching the pane when one is refused ([#33](https://github.com/ChidiRnweke/FollowThrough.ai/issues/33)) ([bb68d28](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bb68d28cf332962b9e4c4c6f8dcb87c7df749a4c))
+
 ## [0.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.3.6...v0.4.0) (2026-09-07)
 
 
