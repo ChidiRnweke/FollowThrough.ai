@@ -270,6 +270,19 @@ export class WorkspaceViews {
 			.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 	}
 
+	capabilityCounts(
+		projectId?: ProjectId
+	): Record<'memory' | 'notes' | 'todos' | 'attachments', number> {
+		return {
+			memory: this.memories(projectId).filter((entry) => entry.shareWithAgents).length,
+			notes: projectId
+				? this.notes.filter((note) => note.projectId === projectId && note.kind === 'note').length
+				: 0,
+			todos: projectId ? this.todos({ projectId, status: 'open' }).length : 0,
+			attachments: projectId ? this.attachments({ kind: 'project', id: projectId }).length : 0
+		};
+	}
+
 	agentPreferences(userId: UserId): AgentPreferenceValues {
 		return (
 			this.get('agent_preferences', userId) ?? {

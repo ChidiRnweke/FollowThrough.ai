@@ -15,7 +15,7 @@
 	} from '$lib/components/icons';
 	import { agentCapabilityCopy, type AgentCapability } from '$lib/components/shared/labels';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
-	import { getCapabilityCounts } from '$lib/remote/agent/agent-context.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 
 	// The note is taken as a boolean, never as a title: the open note already
 	// appears by name once, as the dismissible context chip above the composer.
@@ -41,25 +41,17 @@
 
 	const reduced = new PrefersReducedMotion();
 
-	// Notes are already in the client, so they never cost a round trip.
-	const noteCount = $derived(
-		shell?.noteTree.filter(
-			(note) => note.projectId === activeProjectId && note.kind !== 'folder' && !note.archivedAt
-		).length ?? 0
-	);
 	const project = $derived(shell?.projects.find((entry) => entry.id === activeProjectId));
-
-	const EMPTY = { memory: 0, attachments: 0, todos: 0 } as const;
-
-	// The non-await form on purpose: a failed count must not throw into the
-	// nearest boundary and take the panel down. The sentence is still true
-	// without it, and an unresolved count reads the same as "nothing yet".
-	const query = $derived(getCapabilityCounts({ projectId: activeProjectId }));
-	const counts = $derived(query.current ?? EMPTY);
+	const counts = $derived.by(() => {
+		const resources = workspaceSession.current?.resources;
+		return resources?.availability === 'complete'
+			? resources.views.capabilityCounts(activeProjectId)
+			: null;
+	});
 
 	interface Capability {
 		readonly key: AgentCapability;
-		readonly count: number;
+		readonly count: number | null;
 		readonly href: string;
 		readonly icon: typeof Memory;
 	}
@@ -69,25 +61,25 @@
 		return [
 			{
 				key: 'memory',
-				count: counts.memory,
+				count: counts?.memory ?? null,
 				href: scope ? `/projects/${scope}/memory` : '/profile',
 				icon: Memory
 			},
 			{
 				key: 'notes',
-				count: noteCount,
+				count: counts?.notes ?? null,
 				href: scope ? `/projects/${scope}` : '/today',
 				icon: Document
 			},
 			{
 				key: 'todos',
-				count: counts.todos,
+				count: counts?.todos ?? null,
 				href: scope ? `/projects/${scope}/todos` : '/todos',
 				icon: Todos
 			},
 			{
 				key: 'attachments',
-				count: counts.attachments,
+				count: counts?.attachments ?? null,
 				href: scope ? `/projects/${scope}/attachments` : '/today',
 				icon: Attachments
 			}
@@ -188,7 +180,7 @@
 								<a
 									{...props}
 									href={capability.href}
-									aria-label="{copy.label}: {capability.count}"
+									aria-label="{copy.label}: {capability.count ?? 'Count unavailable'}"
 									class="group/stat flex min-w-0 gap-0.5 rounded-md text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring {compact
 										? 'flex-row items-center'
 										: 'flex-col'}"
@@ -201,12 +193,12 @@
 									<span
 										class="flex items-center gap-1.5 tabular-nums {compact
 											? 'text-xs'
-											: 'text-sm'} {capability.count > 0
+											: 'text-sm'} {capability.count !== null && capability.count > 0
 											? 'text-foreground'
 											: 'text-muted-foreground'} group-hover/stat:text-brand"
 									>
 										<Icon class="shrink-0 {compact ? 'size-3' : 'size-3.5'}" />
-										{capability.count}
+										{capability.count ?? '—'}
 									</span>
 									<!-- The label collapses by width rather than unmounting, so the row
 									     narrows into the icons instead of the words blinking out. -->
