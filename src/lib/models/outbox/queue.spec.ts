@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import {
 	appendWrite,
+	settleWrite,
 	beginWrite,
 	failWrite,
 	acknowledgeWrite,
@@ -154,4 +155,36 @@ describe('durable mutation queue rules', () => {
 			acknowledgeWrite([], { operationId: firstId, resource: { kind: 'found', snapshot: base } })
 		).toEqual([]);
 	});
+});
+
+it('sends a corrected document after a definitive rejection with a new operation identity', () => {
+	const rejected = settleWrite(sending(), firstId, {
+		kind: 'rejected',
+		message: 'Invalid document'
+	});
+	const corrected = appendWrite(rejected, draft(secondId, 'Corrected document', firstId), 2);
+	expect(nextWrite(corrected)?.intent).toEqual({
+		operationId: secondId,
+		key: 'notes:1',
+		command: 'Corrected document',
+		base,
+		basedOn: null,
+		local: 'Corrected document',
+		coalesce: 'document',
+		dependencies: []
+	});
+});
+
+it('retains a rejected document when another queued edit still depends on it', () => {
+	const rejected = settleWrite(sending(), firstId, {
+		kind: 'rejected',
+		message: 'Invalid document'
+	});
+	const dependent = appendWrite(
+		rejected,
+		{ ...draft(secondId, 'Reference'), key: 'notes:2', references: ['notes:1'] },
+		2
+	);
+	const corrected = appendWrite(dependent, draft(thirdId, 'Corrected document', firstId), 3);
+	expect(corrected.map((entry) => entry.intent.operationId)).toEqual([firstId, secondId, thirdId]);
 });

@@ -345,3 +345,29 @@ describe('durable acknowledgement ancestry', () => {
 		expect((await outbox.list('alice'))[0].intent.base).toBeNull();
 	});
 });
+
+it('retains a corrected rejected document as sendable after reopening storage', async () => {
+	const { name, outbox } = setup();
+	const original = { ...draft('note:1', 'Invalid document'), base: snapshot, coalesce: 'document' };
+	await outbox.append('alice', original);
+	const attempted = await outbox.take('alice');
+	if (!attempted) throw new Error('Expected a sendable document');
+	await outbox.settle('alice', attempted, {
+		kind: 'rejected',
+		message: 'Invalid document'
+	});
+	const correction = {
+		...draft('note:1', 'Corrected document'),
+		base: snapshot,
+		basedOn: original.operationId,
+		coalesce: 'document'
+	};
+	await outbox.append('alice', correction);
+	await outbox.close();
+	const sent = await setup(name).outbox.take('alice');
+	expect({
+		id: sent?.intent.operationId,
+		command: sent?.intent.command,
+		base: sent?.intent.base
+	}).toEqual({ id: correction.operationId, command: 'Corrected document', base: snapshot });
+});

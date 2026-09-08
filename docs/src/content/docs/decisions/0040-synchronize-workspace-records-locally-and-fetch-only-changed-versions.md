@@ -5,7 +5,7 @@ description: Make navigation and offline editing use one local copy of workspace
 
 ## Status
 
-Accepted design. Implementation in progress.
+Accepted.
 
 ## Context
 
@@ -92,13 +92,15 @@ These facts belong to pending mutations, independently of the cache lifecycle an
 tombstones. A server deletion must not discard a conflicting local draft.
 
 Queue entries preserve their command, base, local representation, and preceding operation IDs.
-Only unsent document edits can coalesce; once submission starts, its operation identity and input
+Unsent document edits can coalesce. A definitively rejected document may also be replaced by a
+new operation from the same observed edit, provided no other queued edit depends on it. This lets
+corrected content be submitted without retrying invalid input. Once submission starts, its operation identity and input
 remain immutable, including after a transport failure. Publication and other distinct operations
 preserve their positions between edits. Queue order and edit ancestry are distinct: a draft names
 its pending local base with `basedOn`. Successful acknowledgement supplies a new server base only
 for edits made against that local version. Competing tabs retain their original server bases and
 therefore conflict instead of silently rebasing over each other. Coalescing requires that exact
-local predecessor and no dependent entries; it replaces the unsent operation identity so a stale
+local predecessor and no dependent entries; it replaces the superseded operation identity so a stale
 tab cannot mistake changed local content for the version it edited. Acknowledgement, cached body, and queue settlement commit atomically. The device retains one exact
 applied receipt per account/resource, independently of subsequent cache refreshes. Appending a late
 descendant checks that receipt inside the same storage transaction: only its exact operation ID can
@@ -117,6 +119,12 @@ reviewed server version; creation conflicts and server-deleted items require exp
 Mounted editors require an exact durable receipt before treating a removed queued operation as
 acknowledged. A discard in another tab therefore retains the editor buffer with an error until
 reopened. A superseded receipt also requires reopening; queue absence never proves success.
+
+The guarded outbox operates on one independently versioned resource per command. A parent ETag
+cannot protect changes to its children. Compound operations such as skill import, recursive removal,
+and note moves therefore remain online operations; their resulting changes use the same journal.
+Binary transfers, historical revision retrieval, generation, and credentials also remain on demand.
+This scope does not introduce a second cache or an alternate offline mutation path.
 
 The server checks the base version, applies the domain mutation, and stores an operation receipt
 in one transaction. Retrying the same operation returns its receipt. An operation identifier
@@ -181,6 +189,6 @@ the existing repositories, services, controllers, and factories. No architectura
   migration. The old note coordinator, repositories, transport, and sync inventory API are removed.
 - The note route now opens through `stores/workspace/resources.svelte.ts`; its former server loader
   required a live view before local drafts could load.
-- `src/service-worker.ts` serves the generated SPA fallback during offline workspace navigation and removes the old private page snapshots. Remaining server page loaders must be replaced before their routes support offline navigation.
+- `src/service-worker.ts` serves the generated SPA fallback during offline workspace navigation and removes the old private page snapshots. All private page loaders now open from the shared workspace records.
 - `docs/plans/incremental-sync-plan.md` tracks implementation and verification; acceptance of this decision
-  does not claim that the existing application already implements it.
+  separates implementation coverage from final validation results.

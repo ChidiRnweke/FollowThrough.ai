@@ -141,7 +141,7 @@ export const appendWrite = <C, T>(
 	const { references, ...intent } = draft;
 	void references;
 	if (
-		previous?.delivery.kind === 'queued' &&
+		(previous?.delivery.kind === 'queued' || previous?.delivery.kind === 'rejected') &&
 		draft.basedOn === previous.intent.operationId &&
 		draft.coalesce !== null &&
 		previous.intent.coalesce === draft.coalesce &&
@@ -152,6 +152,7 @@ export const appendWrite = <C, T>(
 				? entry
 				: {
 						...entry,
+						delivery: { kind: 'queued' },
 						intent: {
 							...entry.intent,
 							operationId: draft.operationId,
