@@ -6,6 +6,7 @@ import type {
 } from '$lib/models/memory';
 import { z } from 'zod';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
+import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -42,7 +43,41 @@ const diagramId = z
 	.transform((value) => value as DiagramId);
 
 const memoryEntryId = resourceDataSchemas.memory_entries.shape.id;
+const agentPreferencePatchSchema = resourceDataSchemas.agent_preferences
+	.pick({
+		defaultModel: true,
+		defaultVisionModel: true,
+		inlineModel: true,
+		attachmentVisionModel: true,
+		webSearchEngine: true,
+		webSearchMaxResults: true,
+		webSearchMaxTotalResults: true,
+		agentMaxTurns: true,
+		executionMode: true,
+		inlineSuggestionsEnabled: true
+	})
+	.partial()
+	.extend({
+		defaultModel: z.string().nullable().optional(),
+		defaultVisionModel: z.string().nullable().optional(),
+		inlineModel: z.string().nullable().optional(),
+		attachmentVisionModel: z.string().nullable().optional(),
+		webSearchEngine: resourceDataSchemas.agent_preferences.shape.webSearchEngine.nullable(),
+		webSearchMaxResults: z.number().nullable().optional(),
+		webSearchMaxTotalResults: z.number().nullable().optional(),
+		agentMaxTurns: z.number().nullable().optional()
+	});
 export const workspaceCommandSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('updateUserPreferences'),
+		userId: resourceDataSchemas.user_preferences.shape.userId,
+		sectionNumberingDefault: z.boolean()
+	}),
+	z.object({
+		kind: z.literal('updateAgentPreferences'),
+		userId: resourceDataSchemas.agent_preferences.shape.userId,
+		patch: agentPreferencePatchSchema
+	}),
 	z.object({
 		kind: z.literal('updateExportSettings'),
 		userId: resourceDataSchemas.export_settings.shape.userId,
@@ -205,6 +240,8 @@ export type ProjectMutationRequest = MutationFor<
 	| 'moveNote'
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
+export type UserPreferenceMutationRequest = MutationFor<'updateUserPreferences'>;
+export type AgentPreferenceMutationRequest = MutationFor<'updateAgentPreferences'>;
 export type DeliverableMutationRequest = MutationFor<'updateExportSettings'>;
 export type MemoryMutationRequest = MutationFor<'createMemory' | 'updateMemory' | 'deleteMemory'>;
 export type SkillMutationRequest = MutationFor<'createSkill' | 'updateSkill'>;
@@ -235,6 +272,10 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'updateUserPreferences':
+			return { type: 'user_preferences', id: [command.userId] };
+		case 'updateAgentPreferences':
+			return { type: 'agent_preferences', id: [command.userId] };
 		case 'updateExportSettings':
 			return { type: 'export_settings', id: [command.userId, command.projectId] };
 		case 'updateSkill':
@@ -573,6 +614,16 @@ export const skillMetadataWrite = (
 			isEnabled: patch.isEnabled ?? entry.isEnabled
 		}
 	},
+	coalesce: null,
+	references: []
+});
+
+export const agentPreferenceWrite = (
+	entry: WorkspaceValues['agent_preferences'],
+	patch: UpdateAgentPreferencesInput
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+	command: { kind: 'updateAgentPreferences', userId: entry.userId, patch },
+	local: { type: 'agent_preferences', value: applyAgentPreferenceUpdate(entry, patch) },
 	coalesce: null,
 	references: []
 });

@@ -499,3 +499,66 @@ test('creates export defaults offline and retains them through reload and acknow
 	await page.evaluate(() => window.dispatchEvent(new Event('online')));
 	expect(await (await pushed).text()).toContain('applied');
 });
+
+test('retains offline document preferences through reload and acknowledgement', async ({
+	page,
+	context
+}) => {
+	await page.goto('/settings?tab=documents');
+	await waitForServiceWorker(page);
+	const toggle = page.getByRole('switch', { name: 'Section numbering', exact: true });
+	await toggle.waitFor();
+	await context.setOffline(true);
+	await toggle.click();
+	const selected = await toggle.getAttribute('aria-checked');
+	await page.getByRole('button', { name: 'Save document defaults', exact: true }).click();
+	await page.getByText('Document defaults saved on this device', { exact: true }).waitFor();
+	await page.reload();
+	await toggle.waitFor();
+	const retained = await toggle.getAttribute('aria-checked');
+	const pushed = page.waitForResponse(
+		(response) => response.url().endsWith('/pushWorkspaceMutation') && response.ok()
+	);
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	expect({ retained, applied: (await (await pushed).text()).includes('applied') }).toEqual({
+		retained: selected,
+		applied: true
+	});
+});
+
+test('keeps model and agent settings queued across offline tab navigation', async ({
+	page,
+	context
+}) => {
+	await page.goto('/settings?tab=models');
+	await waitForServiceWorker(page);
+	const suggestions = page.getByRole('switch', { name: 'Inline writing suggestions', exact: true });
+	await suggestions.waitFor();
+	await context.setOffline(true);
+	await suggestions.click();
+	const selected = await suggestions.getAttribute('aria-checked');
+	await page.getByRole('button', { name: 'Save model defaults', exact: true }).click();
+	await page.getByText('Model defaults saved on this device', { exact: true }).waitFor();
+	await page.goto('/settings?tab=agents');
+	await page.getByLabel('Web search engine', { exact: true }).click();
+	await page.getByRole('option', { name: 'auto', exact: true }).click();
+	await page.getByRole('button', { name: 'Save agent defaults', exact: true }).click();
+	await page.getByText('Agent defaults saved on this device', { exact: true }).waitFor();
+	await page.goto('/settings?tab=models');
+	await suggestions.waitFor();
+	const retained = await suggestions.getAttribute('aria-checked');
+	const acknowledgments: string[] = [];
+	page.on('response', async (response) => {
+		if (response.url().endsWith('/pushWorkspaceMutation') && response.ok())
+			acknowledgments.push(await response.text());
+	});
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect
+		.poll(() => ({
+			retained,
+			applied: acknowledgments.filter((body) => body.includes('applied')).length
+		}))
+		.toEqual({ retained: selected, applied: 2 });
+});

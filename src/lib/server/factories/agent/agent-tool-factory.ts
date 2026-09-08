@@ -500,6 +500,7 @@ export const agentToolCoverage = {
 		}
 	},
 	agentSettings: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		deploymentDefaults: {
 			kind: 'excluded',
 			reason:

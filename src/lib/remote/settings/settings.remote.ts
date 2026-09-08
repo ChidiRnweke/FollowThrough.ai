@@ -1,75 +1,10 @@
 import { z } from 'zod';
-import { command, form, query } from '$app/server';
+import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ApiTokenId } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
-import type { UpdateTrustPolicyInput, WebSearchEngine } from '$lib/models/agent';
-
-/**
- * The settings switches are custom controls backed by hidden inputs, so their
- * booleans arrive as the strings they were rendered with rather than as
- * checkbox presence.
- */
-const booleanText = z.enum(['true', 'false']).transform((value) => value === 'true');
-
-/**
- * Numeric settings arrive as strings for the same reason the booleans do, and an
- * empty field means "clear it" rather than zero. The ranges are the controller's
- * to enforce — repeating them here would only decide which error the user sees
- * first.
- */
-const numberText = z
-	.string()
-	.transform((value) => (value.trim() === '' ? null : Number(value)))
-	.refine((value) => value === null || Number.isFinite(value), 'Enter a number');
-
-// The Models and Agents settings tabs save through separate forms, each sending
-// only its own fields; the controller merges partial updates, so neither form has
-// to know about the other's settings.
-export const saveModelPreferences = form(
-	z.object({
-		defaultModel: z.string(),
-		defaultVisionModel: z.string(),
-		inlineModel: z.string(),
-		attachmentVisionModel: z.string(),
-		inlineSuggestionsEnabled: booleanText
-	}),
-	async (input) => {
-		await AppFactory.controllers()
-			.agentSettings()
-			.updatePreferences(requestActor(), {
-				defaultModel: input.defaultModel.trim() || null,
-				defaultVisionModel: input.defaultVisionModel.trim() || null,
-				inlineModel: input.inlineModel.trim() || null,
-				attachmentVisionModel: input.attachmentVisionModel.trim() || null,
-				inlineSuggestionsEnabled: input.inlineSuggestionsEnabled
-			});
-		return { saved: true };
-	}
-);
-
-export const saveAgentPreferences = form(
-	z.object({
-		webSearchEngine: z.string(),
-		webSearchMaxResults: numberText,
-		webSearchMaxTotalResults: numberText,
-		agentMaxTurns: numberText,
-		executionMode: z.enum(['approval_required', 'auto_accept'])
-	}),
-	async (input) => {
-		await AppFactory.controllers()
-			.agentSettings()
-			.updatePreferences(requestActor(), {
-				webSearchEngine: (input.webSearchEngine.trim() || null) as WebSearchEngine | null,
-				webSearchMaxResults: input.webSearchMaxResults,
-				webSearchMaxTotalResults: input.webSearchMaxTotalResults,
-				agentMaxTurns: input.agentMaxTurns,
-				executionMode: input.executionMode
-			});
-		return { saved: true };
-	}
-);
+import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 
 /**
  * A command rather than a form: the control is a `<Select>` that mutates on change,
@@ -140,16 +75,5 @@ export const resetToolOverride = command(
 				toolName: input.toolName,
 				projectId: input.projectId as ProjectId
 			});
-	}
-);
-
-/** The app-level document defaults, edited on the Documents settings tab. */
-export const saveDocumentPreferences = form(
-	z.object({ sectionNumberingDefault: booleanText }),
-	async (input) => {
-		await AppFactory.controllers().userSettings().updatePreferences(requestActor(), {
-			sectionNumberingDefault: input.sectionNumberingDefault
-		});
-		return { saved: true };
 	}
 );

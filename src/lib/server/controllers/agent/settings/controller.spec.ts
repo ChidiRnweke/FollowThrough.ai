@@ -6,7 +6,8 @@ import type {
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentSettings } from './controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { AgentSettings, type AgentSettingsDependencies } from './controller';
 
 class FakeAgentPreferencesStore implements AgentPreferencesStore {
 	preferences: AgentPreferences = {
@@ -75,12 +76,14 @@ const setup = () => {
 	return {
 		preferences,
 		models,
-		controller: new AgentSettings({
-			preferences,
-			models,
-			defaultModel: DEPLOYMENT_CHAT_MODEL,
-			defaultVisionModel: DEPLOYMENT_VISION_MODEL
-		})
+		controller: new AgentSettings(
+			capabilityDependencies<AgentSettingsDependencies>({
+				preferences,
+				models,
+				defaultModel: DEPLOYMENT_CHAT_MODEL,
+				defaultVisionModel: DEPLOYMENT_VISION_MODEL
+			})
+		)
 	};
 };
 

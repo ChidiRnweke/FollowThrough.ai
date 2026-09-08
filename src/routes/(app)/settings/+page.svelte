@@ -57,28 +57,17 @@
 		     from firing while you are on another tab. -->
 		<Tabs.Content value="models" class="pt-6">
 			{#if data.tab === 'models'}
-				<SettingsModels
-					preferences={data.session.preferences}
-					models={data.session.bootstrap.agentModels}
-				/>
+				<SettingsModels models={data.session.bootstrap.agentModels} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="agents" class="pt-6">
 			{#if data.tab === 'agents'}
-				<SettingsAgents
-					preferences={data.session.preferences}
-					defaults={data.session.bootstrap.numericDefaults}
-				/>
+				<SettingsAgents defaults={data.session.bootstrap.numericDefaults} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="documents" class="pt-6">
 			{#if data.tab === 'documents'}
-				<SettingsDocuments
-					preferences={data.session.resources.views.get(
-						'user_preferences',
-						data.session.bootstrap.accountId
-					) ?? {}}
-				/>
+				<SettingsDocuments />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="tools" class="pt-6">

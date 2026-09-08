@@ -14,6 +14,10 @@ export const pushWorkspaceMutation = command(
 		const controllers = AppFactory.controllers();
 		const command = mutation.command;
 		switch (command.kind) {
+			case 'updateAgentPreferences':
+				return controllers.agentSettings().synchronize(actor, { ...mutation, command });
+			case 'updateUserPreferences':
+				return controllers.userSettings().synchronize(actor, { ...mutation, command });
 			case 'updateExportSettings':
 				return controllers.deliverables().synchronize(actor, { ...mutation, command });
 			case 'createMemory':

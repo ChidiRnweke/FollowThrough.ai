@@ -417,12 +417,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			executor
 		},
 		agentSettings: {
+			syncMutations: synchronization.mutations,
 			preferences,
 			models: modelCatalog,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel
 		},
-		userSettings: { preferences: identity.userPreferences },
+		userSettings: {
+			preferences: identity.userPreferences,
+			syncMutations: synchronization.mutations
+		},
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences },
 		attachments: { attachments, transactionRunner },

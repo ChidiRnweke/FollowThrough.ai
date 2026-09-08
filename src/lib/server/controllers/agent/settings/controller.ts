@@ -1,3 +1,8 @@
+import type {
+	AgentPreferenceMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { webSearchEngines } from '$lib/models/agent';
@@ -31,6 +36,10 @@ const assertRange = (
  * and listing the models they can choose from.
  */
 export interface AgentSettingsController {
+	synchronize(
+		actor: ActorContext,
+		input: AgentPreferenceMutationRequest
+	): Promise<WorkspaceMutationResult>;
 	/** Read the user's current agent preferences. */
 	getPreferences(actor: ActorContext): Promise<AgentPreferences>;
 	/**
@@ -62,6 +71,7 @@ export interface AgentSettingsController {
 }
 
 export interface AgentSettingsDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	preferences: AgentPreferencesStore;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */
@@ -71,6 +81,16 @@ export interface AgentSettingsDependencies {
 }
 
 export class AgentSettings implements AgentSettingsController {
+	synchronize(
+		actor: ActorContext,
+		input: AgentPreferenceMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			if (input.command.userId !== actor.userId)
+				throw new ValidationError('The preferences belong to another account');
+			await this.updatePreferences(actor, input.command.patch);
+		});
+	}
 	constructor(private readonly dependencies: AgentSettingsDependencies) {}
 
 	getPreferences(actor: ActorContext): Promise<AgentPreferences> {
