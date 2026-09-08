@@ -31,6 +31,14 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		private readonly databaseName = 'followthrough-workspace-sync'
 	) {}
 
+	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
+		const database = await this.open();
+		const transaction = database.transaction('write-receipts', 'readonly');
+		const done = completed(transaction);
+		const [receipt] = await Promise.all([this.appliedReceipt(accountId, key, transaction), done]);
+		return receipt;
+	}
+
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		const database = await this.open();
 		const transaction = database.transaction('outbox', 'readonly');

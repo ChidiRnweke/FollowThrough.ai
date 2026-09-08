@@ -2,11 +2,13 @@ import type {
 	OutboxEntry,
 	WriteDraft,
 	WriteBaseResolution,
-	WriteOutcome
+	WriteOutcome,
+	WriteReceipt
 } from '$lib/models/outbox';
 import type { SyncEtag } from '$lib/models/sync';
 
 export interface OutboxRepository<C, T> {
+	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;
 	list(accountId: string): Promise<readonly OutboxEntry<C, T>[]>;
 	append(accountId: string, draft: WriteDraft<C, T>): Promise<string>;
 	resolveBase(

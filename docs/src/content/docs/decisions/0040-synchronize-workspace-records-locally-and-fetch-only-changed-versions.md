@@ -114,8 +114,9 @@ copies. Review captures the exact operation identities, including all dependent 
 unknown send outcomes and any newly added, unreviewed descendants. A download preserves the reviewed
 records before an explicit discard. Keeping a conflict replays its original command against the
 reviewed server version; creation conflicts and server-deleted items require explicit recreation.
-Editors whose saved operation is discarded elsewhere in the same app retain their buffer with an
-error until reopened, rather than presenting that buffer as synchronized.
+Mounted editors require an exact durable receipt before treating a removed queued operation as
+acknowledged. A discard in another tab therefore retains the editor buffer with an error until
+reopened. A superseded receipt also requires reopening; queue absence never proves success.
 
 The server checks the base version, applies the domain mutation, and stores an operation receipt
 in one transaction. Retrying the same operation returns its receipt. An operation identifier

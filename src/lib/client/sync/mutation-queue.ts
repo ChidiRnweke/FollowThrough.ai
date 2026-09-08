@@ -26,6 +26,7 @@ export interface MutationQueueDependencies<C, T> {
 export class MutationQueue<C, T> {
 	private entries: readonly OutboxEntry<C, T>[] = [];
 	private reloadGeneration = 0;
+	private readonly receipts = new Map<string, WriteReceipt<T>>();
 	private readonly listeners = new Set<() => void>();
 	private flushing: Promise<SubmissionResult> | null = null;
 	private online = true;
@@ -37,6 +38,9 @@ export class MutationQueue<C, T> {
 	) {}
 	get pending(): readonly OutboxEntry<C, T>[] {
 		return this.entries;
+	}
+	acknowledged(key: string, operationId: string): boolean {
+		return this.receipts.get(key)?.operationId === operationId;
 	}
 	get status(): SubmissionResult {
 		return this.result;
@@ -52,6 +56,7 @@ export class MutationQueue<C, T> {
 	stop(): void {
 		this.stopped = true;
 		this.entries = [];
+		this.receipts.clear();
 		this.result = { kind: 'stopped' };
 		this.notify();
 	}
@@ -59,6 +64,23 @@ export class MutationQueue<C, T> {
 		const generation = ++this.reloadGeneration;
 		const entries = await this.dependencies.repository.list(this.accountId);
 		if (this.stopped || generation !== this.reloadGeneration) return;
+		const present = new Set(entries.map((entry) => entry.intent.operationId));
+		const removedKeys = new Set(
+			this.entries
+				.filter((entry) => !present.has(entry.intent.operationId))
+				.map((entry) => entry.intent.key)
+		);
+		const receipts = await Promise.all(
+			[...removedKeys].map(async (key) => ({
+				key,
+				receipt: await this.dependencies.repository.receipt(this.accountId, key)
+			}))
+		);
+		if (this.stopped || generation !== this.reloadGeneration) return;
+		for (const { key, receipt } of receipts) {
+			if (receipt) this.receipts.set(key, receipt);
+			else this.receipts.delete(key);
+		}
 		this.entries = entries;
 		this.notify();
 	}

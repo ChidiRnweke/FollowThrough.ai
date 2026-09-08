@@ -22,6 +22,9 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 	private sequence = 0;
 	private readonly receipts = new Map<string, WriteReceipt<T>>();
 	appendFailure: string | null = null;
+	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
+		return this.receipts.get(JSON.stringify([accountId, key])) ?? null;
+	}
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		return this.accounts.get(accountId) ?? [];
 	}

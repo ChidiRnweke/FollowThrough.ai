@@ -562,3 +562,28 @@ test('keeps model and agent settings queued across offline tab navigation', asyn
 		}))
 		.toEqual({ retained: selected, applied: 2 });
 });
+
+test('keeps an open editor’s text visibly unsynchronized after another tab discards its queued write', async ({
+	page,
+	context
+}) => {
+	await page.goto('/notes/00000000-0000-4000-8000-000000000003');
+	await waitForServiceWorker(page);
+	const body = page.getByLabel('Note body', { exact: true });
+	await body.waitFor();
+	await context.setOffline(true);
+	const text = 'Retain this buffer after another tab discards its queue entry';
+	await body.fill(text);
+	await body.press('Control+s');
+	await page.getByRole('button', { name: 'Saved on device · retry sync', exact: true }).waitFor();
+	const other = await context.newPage();
+	await other.goto('/today');
+	await other.getByRole('button', { name: 'Review changes', exact: true }).click();
+	await other.getByRole('button', { name: 'Review', exact: true }).click();
+	await other.getByRole('button', { name: 'Discard local change', exact: true }).click();
+	await other.getByText('No changes are waiting to send.').waitFor();
+	await page.bringToFront();
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await page.getByRole('button', { name: 'Couldn’t save · retry', exact: true }).waitFor();
+	await expect(body).toContainText(text);
+});

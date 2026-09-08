@@ -244,3 +244,29 @@ describe('shared offline queue reload', () => {
 		expect(queue.pending).toEqual([]);
 	});
 });
+
+it('recognizes an exact acknowledgement committed by another writer', async () => {
+	const { queue, repository } = setup({
+		send: async () => {
+			throw new Error('Another writer submits this operation');
+		}
+	});
+	await queue.append(draft(firstId));
+	const sent = await repository.take('alice');
+	if (!sent) throw new Error('The queued edit must exist');
+	await repository.settle('alice', sent, applied(firstId, 'Edited'));
+	await queue.reload();
+	expect(queue.acknowledged('note:1', firstId)).toBe(true);
+});
+
+it('does not treat disappearance from another writer’s discard as acknowledgement', async () => {
+	const { queue, repository } = setup({
+		send: async () => {
+			throw new Error('This edit is discarded before submission');
+		}
+	});
+	await queue.append(draft(firstId));
+	await repository.discard('alice', [firstId]);
+	await queue.reload();
+	expect(queue.acknowledged('note:1', firstId)).toBe(false);
+});

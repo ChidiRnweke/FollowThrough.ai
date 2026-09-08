@@ -1,4 +1,3 @@
-import { SvelteSet } from 'svelte/reactivity';
 import { type NoteId, type NoteView } from '$lib/models/notes';
 import {
 	visibleResources,
@@ -58,7 +57,6 @@ export interface WorkspaceResourcesDependencies {
 export class WorkspaceResources {
 	private revision = $state(0);
 	private connected = $state(true);
-	private readonly discarded = new SvelteSet<string>();
 	get active(): boolean {
 		return !this.stopped;
 	}
@@ -206,12 +204,16 @@ export class WorkspaceResources {
 	async keepLocal(operationId: string): Promise<string> {
 		return this.dependencies.writes.keepLocal(operationId);
 	}
-	wasDiscarded(operationId: string | null): boolean {
-		return operationId !== null && this.discarded.has(operationId);
+	uncertainWrite(key: string, operationId: string | null): boolean {
+		void this.revision;
+		return (
+			operationId !== null &&
+			!this.pending.some((entry) => entry.intent.operationId === operationId) &&
+			!this.dependencies.writes.acknowledged(key, operationId)
+		);
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
 		await this.dependencies.writes.discard(operationIds);
-		for (const operationId of operationIds) this.discarded.add(operationId);
 	}
 
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
@@ -328,7 +330,8 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		return record ? this.valueOf(record) : null;
 	}
 	get status(): DraftStatus {
-		if (this.error || this.resources.wasDiscarded(this.current?.basedOn ?? null)) return 'error';
+		if (this.error || this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
+			return 'error';
 		if (!this.current) return 'loading';
 		if (this.savingLocal) return 'saving';
 		if (this.entries.some((entry) => entry.delivery.kind === 'conflict')) return 'conflict';
@@ -342,8 +345,8 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		return this.entries.length ? 'pending' : 'synced';
 	}
 	get lastError(): string | undefined {
-		if (this.resources.wasDiscarded(this.current?.basedOn ?? null))
-			return 'This local change was discarded. Reopen the item before making more changes.';
+		if (this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
+			return 'The acknowledgement of this edit cannot be verified. Reopen the item before making more changes.';
 		if (this.error) return this.error;
 		const failed = this.entries.find(
 			(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
@@ -434,9 +437,9 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		try {
 			const context = this.current;
 			if (!context) throw new Error('Open the resource before editing');
-			if (this.resources.wasDiscarded(context.basedOn))
+			if (this.resources.uncertainWrite(this.key, context.basedOn))
 				throw new Error(
-					'This local change was discarded. Reopen the item before making more changes.'
+					'The acknowledgement of this edit cannot be verified. Reopen the item before making more changes.'
 				);
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');

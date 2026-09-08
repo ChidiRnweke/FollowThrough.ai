@@ -107,3 +107,40 @@ it('does not label an editor buffer synced after its saved edit is discarded els
 		retained: local.plainText
 	});
 });
+
+it('retains the editor buffer with an error after a discard committed outside this app instance', async () => {
+	const { store, resources, local, outbox, note } = await setup();
+	await store.read();
+	await outbox.discard(
+		note.userId,
+		(await outbox.list(note.userId)).map((entry) => entry.intent.operationId)
+	);
+	await resources.synchronize();
+	expect({ status: store.status, retained: store.value?.plainText }).toEqual({
+		status: 'error',
+		retained: local.plainText
+	});
+});
+
+it('recognizes a durable acknowledgement from another writer while this tab remains offline', async () => {
+	const { store, resources, outbox, note, transport, key } = await setup();
+	await store.read();
+	const remote = await transport.read(key, null);
+	if (remote.kind !== 'found') throw new Error('The original server copy must exist');
+	const pending = (await outbox.list(note.userId))[0];
+	if (!pending) throw new Error('The imported edit must be queued');
+	await outbox.resolveBase(note.userId, pending.intent.operationId, {
+		kind: 'matched',
+		snapshot: remote.snapshot
+	});
+	const sent = await outbox.take(note.userId);
+	if (!sent || !sent.intent.base?.etag) throw new Error('The imported base must be validated');
+	const result = await transport.send({
+		operationId: sent.intent.operationId,
+		baseEtag: sent.intent.base.etag,
+		command: sent.intent.command
+	});
+	await outbox.settle(note.userId, sent, result);
+	await resources.synchronize();
+	expect(store.status).toBe('synced');
+});
