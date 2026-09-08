@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { noteWrite } from '$lib/models/workspace-mutations';
+	import { noteWrite, skillMetadataWrite } from '$lib/models/workspace-mutations';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -17,11 +17,8 @@
 		FtLoader as LoaderCircle
 	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import {
-		importSkillMarkdown,
-		renameSkill,
-		saveSkillDescription
-	} from '$lib/remote/skills/skills.remote';
+	import { importSkillMarkdown } from '$lib/remote/skills/skills.remote';
+	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
 	import { serializeSkillManifest } from '$lib/models/skills';
 	import type { WorkspaceSkill } from '$lib/models/workspace-views';
 	import { parseProseMirrorDocument, type Note } from '$lib/models/notes';
@@ -39,11 +36,14 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before mounting an editor');
 	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
+	const metadata = untrack(() => session.resources.draft({ type: 'skills', id: [noteId] }));
+	let metadataReview = $state(false);
 
 	let describeRef: SkillEditor | undefined = $state();
 	let bodyRef: SkillEditor | undefined = $state();
 	let editorEpoch = $state(0);
 	let syncReady = $state(false);
+	let loadFailure = $state<string | null>(null);
 	let dirty = $state(false);
 	let saveFailed = $state(false);
 	let conflictOpen = $state(false);
@@ -53,6 +53,7 @@
 	let fileInput: HTMLInputElement | undefined = $state();
 	let editVersion = 0;
 	let saveQueued = false;
+	let saving = $state(false);
 	let activeSave: Promise<void> | undefined;
 	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -61,19 +62,24 @@
 	let savedDescription = $state(untrack(() => skill.description));
 
 	// Any state where the device copy has not reached the server.
-	const unsynced = $derived(
-		draft.status === 'pending' || draft.status === 'conflict' || draft.status === 'error'
+	const unsynced = $derived([draft.status, metadata.status].some((status) => status !== 'synced'));
+	const statusDraft = $derived(
+		[draft, metadata].find((item) => item.status === 'conflict') ??
+			[draft, metadata].find((item) => item.status === 'error') ??
+			[draft, metadata].find((item) => item.status !== 'synced') ??
+			draft
 	);
 
 	onMount(() => {
 		let cancelled = false;
-		void draft.read().then((opened) => {
-			if (opened.kind !== 'ready') {
-				syncReady = true;
+		void Promise.all([draft.read(), metadata.read()]).then(([opened, details]) => {
+			if (cancelled) return;
+			if (opened.kind !== 'ready' || details.kind !== 'ready') {
+				loadFailure = 'The skill could not be opened. Reconnect and reopen it to try again.';
 				return;
 			}
+			savedDescription = details.value.description;
 			const local = opened.value;
-			if (cancelled) return;
 			// Server-authoritative fields come from the load; content fields come
 			// from the device copy, which may hold unsynced edits.
 			note = {
@@ -114,9 +120,13 @@
 		}
 		clearTimeout(autosaveTimer);
 		saveQueued = true;
-		activeSave ??= flushSaves(options).finally(() => {
-			activeSave = undefined;
-		});
+		if (!activeSave) {
+			saving = true;
+			activeSave = flushSaves(options).finally(() => {
+				activeSave = undefined;
+				saving = false;
+			});
+		}
 		return activeSave;
 	}
 
@@ -128,17 +138,22 @@
 			// the note revision, so it cannot disturb the sync store's base etag.
 			// Trimmed: the markdown serializer's trailing newline is not an edit.
 			const description = describeRef.getMarkdown().trim();
-			if (description !== savedDescription) {
-				try {
-					await saveSkillDescription({ noteId: note.id, description });
-					savedDescription = description;
-					// audit-allow: silent-catch — the editor retains dirty content, marks save failure, and reports manual saves.
-				} catch {
+			const details = metadata.value;
+			if (!details) {
+				saveFailed = true;
+				if (!options.auto) toast.error('The skill details are unavailable. Reopen the skill.');
+				return;
+			}
+			if (description !== savedDescription || note.title !== details.name) {
+				const result = await metadata.stage(
+					skillMetadataWrite(details, { description, displayName: note.title })
+				);
+				if (result.kind === 'failure') {
 					saveFailed = true;
-					dirty = true;
-					if (!options.auto) toast.error('Could not save the description. Try again.');
+					if (!options.auto) toast.error(result.message);
 					return;
 				}
+				savedDescription = description.trim() || details.description;
 			}
 			const record = await draft.stage(
 				noteWrite({
@@ -175,13 +190,14 @@
 	}
 
 	async function retrySync(): Promise<void> {
-		await draft.retry();
+		const version = editVersion;
+		await Promise.all([draft.retry(), metadata.retry()]);
 		const local = draft.value;
 		if (!local) {
 			toast.error(draft.lastError ?? 'This resource is unavailable');
 			return;
 		}
-		note = { ...local };
+		if (version === editVersion && !dirty) note = { ...local };
 		conflictOpen = draft.status === 'conflict';
 		if (draft.lastError) toast.error(draft.lastError);
 	}
@@ -207,13 +223,7 @@
 		editingTitle = false;
 		if (!title || title === note.title) return;
 		note = { ...note, title };
-		// The note sync carries the title to the notes table; the skills row gets
-		// its own rename so the two never wait on each other.
 		markDirty();
-		// audit-allow: silent-catch — inline rename failure is reported while the editor keeps the entered title for retry.
-		renameSkill({ noteId: note.id, name: title }).catch(() =>
-			toast.error('Could not rename the skill. Try again.')
-		);
 	}
 
 	function onkeydown(event: KeyboardEvent): void {
@@ -229,7 +239,7 @@
 
 	async function ensureSynchronized(message: string): Promise<boolean> {
 		if (dirty) await save({ auto: true });
-		if (dirty || draft.status !== 'synced') {
+		if (dirty || unsynced) {
 			toast.error(message);
 			return false;
 		}
@@ -273,7 +283,9 @@
 			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
 			const local = opened.value;
 			note = { ...local };
-			savedDescription = skill.description;
+			const details = await metadata.read();
+			if (details.kind !== 'ready') throw new Error('The skill details could not be reopened');
+			savedDescription = details.value.description;
 			dirty = false;
 			editorEpoch += 1;
 			toast.success('Skill imported');
@@ -291,15 +303,19 @@
 {#snippet syncStatus()}
 	<div class="min-w-0 flex-1 sm:flex-none">
 		<NoteSyncStatus
-			status={draft.status}
+			status={saving ? 'saving' : statusDraft.status}
 			updatedAt={note.updatedAt}
-			reason={draft.lastError}
+			reason={statusDraft.lastError}
 			onRetry={() => void retrySync()}
-			onReview={() => (conflictOpen = true)}
+			onReview={() => {
+				if (statusDraft === metadata) metadataReview = true;
+				else conflictOpen = true;
+			}}
 		/>
 	</div>
 {/snippet}
 
+<WorkspaceWriteReview resources={session.resources} bind:open={metadataReview} />
 <div class="flex w-full min-w-0 flex-1 flex-col px-4 pt-6 pb-6 md:px-8">
 	<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
 		<div
@@ -413,7 +429,9 @@
 			</div>
 		</div>
 
-		{#if syncReady}
+		{#if loadFailure}
+			<p role="alert" class="text-sm text-destructive">{loadFailure}</p>
+		{:else if syncReady}
 			{#key `${noteId}:${editorEpoch}`}
 				<div class="flex flex-1 flex-col">
 					<section class="flex flex-col p-4 md:p-6">

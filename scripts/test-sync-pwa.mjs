@@ -23,6 +23,10 @@ try {
 	await sql`insert into messages (id, conversation_id, role, content) values ('00000000-0000-4000-8000-000000000005', ${conversationId}, 'user', '{"type":"text","text":"Retained chat question"}'::jsonb)`;
 	const diagramId = '00000000-0000-4000-8000-000000000006';
 	await sql`insert into diagrams (id, user_id, project_id, kind, title, source, rendered_svg) values (${diagramId}, ${userId}, ${projectId}, 'drawio', 'Saved synchronization diagram', '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100"><rect x="20" y="20" width="200" height="60" fill="#eef2ff" stroke="#4f46e5"/><text x="120" y="55" text-anchor="middle" fill="#111827">Saved diagram</text></svg>')`;
+	const skillId = '00000000-0000-4000-8000-000000000007';
+	await sql`insert into notes (id, user_id, project_id, kind, title, document, plain_text) values (${skillId}, ${userId}, ${projectId}, 'skill', 'Saved synchronization skill', '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Write clearly"}]}]}'::jsonb, 'Write clearly')`;
+	await sql`insert into skills (note_id, name, slug, description) values (${skillId}, 'Saved synchronization skill', 'saved-sync-skill', 'Use clear language')`;
+
 	const child = spawn(
 		'pnpm',
 		['exec', 'playwright', 'test', '-c', 'playwright.pwa.config.ts', '--max-failures=1'],

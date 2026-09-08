@@ -37,6 +37,7 @@ export const pushWorkspaceMutation = command(
 			case 'updateTodo':
 			case 'deleteTodo':
 				return controllers.todos().synchronize(actor, { ...mutation, command });
+			case 'updateSkill':
 			case 'createSkill':
 				return controllers.skills().synchronize(actor, { ...mutation, command });
 			default:

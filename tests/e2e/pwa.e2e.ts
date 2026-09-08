@@ -400,3 +400,41 @@ test('creates, edits, and deletes profile memory offline through reload', async 
 	await page.getByRole('button', { name: 'Add memory', exact: true }).waitFor();
 	await expect(page.getByRole('listitem').filter({ hasText: content })).toHaveCount(0);
 });
+
+test('retains skill description and instruction edits offline and synchronizes them on reconnect', async ({
+	page,
+	context
+}) => {
+	const href = '/skills/00000000-0000-4000-8000-000000000007';
+	await page.goto(href);
+	await waitForServiceWorker(page);
+	await page.getByLabel('Skill description', { exact: true }).waitFor();
+	await context.setOffline(true);
+	const description = `Offline description ${crypto.randomUUID()}`;
+	await page.getByLabel('Skill description', { exact: true }).fill(description);
+	await page.getByLabel('Skill instructions', { exact: true }).fill('Retained instructions');
+	await page.getByLabel('Skill instructions', { exact: true }).press('Control+s');
+	await page.getByRole('button', { name: 'Saved on device · retry sync', exact: true }).waitFor();
+	await page.reload();
+	await page
+		.getByLabel('Skill description', { exact: true })
+		.filter({ hasText: description })
+		.waitFor();
+	await page
+		.getByLabel('Skill instructions', { exact: true })
+		.filter({ hasText: 'Retained instructions' })
+		.waitFor();
+	const acknowledgments: string[] = [];
+	page.on('response', async (response) => {
+		if (response.url().endsWith('/pushWorkspaceMutation') && response.ok())
+			acknowledgments.push(await response.text());
+	});
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect
+		.poll(async () => ({
+			description: await page.getByLabel('Skill description', { exact: true }).textContent(),
+			applied: acknowledgments.filter((body) => body.includes('applied')).length
+		}))
+		.toEqual({ description, applied: 2 });
+});

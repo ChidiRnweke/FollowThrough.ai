@@ -6,16 +6,6 @@ import type { NoteId } from '$lib/models/notes';
 
 const noteId = z.string().uuid();
 
-export const toggleSkill = command(z.object({ noteId, enabled: z.boolean() }), async (input) => {
-	await AppFactory.controllers()
-		.skills()
-		.update(requestActor(), {
-			noteId: input.noteId as NoteId,
-			isEnabled: input.enabled
-		});
-	return { enabled: input.enabled };
-});
-
 /** Mirrors the portable-name fallback in SkillLibrary. */
 const fallbackSlug = (value: string): string =>
 	value
@@ -45,23 +35,6 @@ export const saveSkillDraft = command(
 		return { saved: true };
 	}
 );
-
-export const saveSkillDescription = command(
-	z.object({ noteId, description: z.string() }),
-	async (input) => {
-		await AppFactory.controllers()
-			.skills()
-			.update(requestActor(), { noteId: input.noteId as NoteId, description: input.description });
-		return { saved: true };
-	}
-);
-
-export const renameSkill = command(z.object({ noteId, name: z.string().min(1) }), async (input) => {
-	await AppFactory.controllers()
-		.skills()
-		.update(requestActor(), { noteId: input.noteId as NoteId, displayName: input.name });
-	return { saved: true };
-});
 
 export const importSkillMarkdown = command(z.object({ noteId, raw: z.string() }), async (input) => {
 	await AppFactory.controllers()

@@ -96,6 +96,9 @@ export class Skills implements SkillsController {
 			const command = input.command;
 			void current;
 			switch (command.kind) {
+				case 'updateSkill':
+					await this.update(actor, command);
+					break;
 				case 'createSkill':
 					await this.create(actor, command);
 					break;

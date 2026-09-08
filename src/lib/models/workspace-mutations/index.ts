@@ -27,7 +27,8 @@ import {
 	workspaceObjectReadSchema,
 	workspaceWriteReceiptSchema,
 	workspaceRecordIdentity,
-	type WorkspaceRecord
+	type WorkspaceRecord,
+	type WorkspaceValues
 } from '$lib/models/workspace-records';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 
@@ -82,6 +83,13 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		parentId: noteId.optional(),
 		name: z.string().trim().min(1),
 		description: z.string().optional()
+	}),
+	z.object({
+		kind: z.literal('updateSkill'),
+		noteId,
+		displayName: z.string().trim().min(1).optional(),
+		description: z.string().optional(),
+		isEnabled: z.boolean().optional()
 	}),
 	z.object({ kind: z.literal('renameNote'), noteId, title: z.string().trim().min(1) }),
 	z.object({
@@ -185,7 +193,7 @@ export type ProjectMutationRequest = MutationFor<
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
 export type MemoryMutationRequest = MutationFor<'createMemory' | 'updateMemory' | 'deleteMemory'>;
-export type SkillMutationRequest = MutationFor<'createSkill'>;
+export type SkillMutationRequest = MutationFor<'createSkill' | 'updateSkill'>;
 export type DiagramMutationRequest = MutationFor<
 	| 'saveDiagram'
 	| 'renameDiagram'
@@ -213,6 +221,8 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'updateSkill':
+			return { type: 'skills', id: [command.noteId] };
 		case 'createMemory':
 			return { type: 'memory_entries', id: [command.id] };
 		case 'updateMemory':
@@ -527,6 +537,24 @@ export const memoryWrite = (
 			content: patch.content?.trim() ?? entry.content,
 			shareWithAgents: patch.shareWithAgents ?? entry.shareWithAgents,
 			type: patch.type === null ? undefined : (patch.type ?? entry.type)
+		}
+	},
+	coalesce: null,
+	references: []
+});
+
+export const skillMetadataWrite = (
+	entry: WorkspaceValues['skills'],
+	patch: Omit<Extract<WorkspaceCommand, { kind: 'updateSkill' }>, 'kind' | 'noteId'>
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+	command: { kind: 'updateSkill', noteId: entry.noteId, ...patch },
+	local: {
+		type: 'skills',
+		value: {
+			...entry,
+			name: patch.displayName?.trim() || entry.name,
+			description: patch.description?.trim() || entry.description,
+			isEnabled: patch.isEnabled ?? entry.isEnabled
 		}
 	},
 	coalesce: null,

@@ -18,7 +18,8 @@
 	import { toast } from 'svelte-sonner';
 	import type { ProjectId } from '$lib/models/projects';
 	import { createSkill } from '$lib/remote/projects/projects.remote';
-	import { saveSkillDraft, toggleSkill } from '$lib/remote/skills/skills.remote';
+	import { skillMetadataWrite } from '$lib/models/workspace-mutations';
+	import { saveSkillDraft } from '$lib/remote/skills/skills.remote';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ListSkillsOutput } from '$lib/models/skills';
@@ -67,8 +68,14 @@
 	async function toggle(noteId: NoteId, enabled: boolean): Promise<void> {
 		togglingIds.add(noteId);
 		try {
-			await toggleSkill({ noteId, enabled });
-			await workspaceSession.synchronize();
+			const resources = workspaceSession.current?.resources;
+			if (!resources) throw new Error('Open the workspace before editing a skill');
+			const draft = resources.draft({ type: 'skills', id: [noteId] });
+			draft.capture();
+			const entry = draft.value;
+			if (!entry) throw new Error('The skill is unavailable');
+			const result = await draft.stage(skillMetadataWrite(entry, { isEnabled: enabled }));
+			if (result.kind === 'failure') throw new Error(result.message);
 			// audit-allow: silent-catch — update failure is reported and the catalog refresh remains authoritative.
 		} catch {
 			toast.error('Could not update the skill. Try again.');
