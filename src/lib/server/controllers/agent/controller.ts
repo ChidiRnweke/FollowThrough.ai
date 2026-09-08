@@ -1,3 +1,8 @@
+import type {
+	ConversationMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
@@ -14,7 +19,6 @@ import type {
 	ConversationId,
 	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
-	StoredMessage,
 	RunAgentInput,
 	ResolvedAgentRun,
 	StagedAgentRunInput,
@@ -50,10 +54,6 @@ interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
-	findLatestByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined>;
 	findActiveByConversation(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -107,6 +107,10 @@ class DuplicateSubmission extends Error {}
  * transports; this one deals in run receipts, snapshots, and event cursors.
  */
 export interface AgentController {
+	synchronize(
+		actor: ActorContext,
+		input: ConversationMutationRequest
+	): Promise<WorkspaceMutationResult>;
 	/**
 	 * Queue an agent run for the given prompt and return a receipt for the queued run.
 	 *
@@ -204,18 +208,6 @@ export interface AgentController {
 	 * @throws ValidationError if the conversation has an active run.
 	 */
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
-	/**
-	 * Load a conversation with its full message history and, when one exists, its most
-	 * recent run as a snapshot, so a single call can hydrate a chat view.
-	 */
-	getSession(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<{
-		conversation: Conversation;
-		messages: readonly StoredMessage[];
-		latestRun?: AgentRunSnapshot;
-	}>;
 }
 
 /**
@@ -223,6 +215,7 @@ export interface AgentController {
  * controller can be built and tested without touching real stores or the executor.
  */
 export interface AgentDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	/** Persists conversations and their message history. */
 	conversationJournal: ConversationJournal;
 	/** Per-user agent preferences used to settle defaults when a run is frozen. */
@@ -249,6 +242,14 @@ export interface AgentDependencies {
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
 export class Agent implements AgentController {
+	synchronize(
+		actor: ActorContext,
+		input: ConversationMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			await this.renameSession(actor, input.command.conversationId, input.command.title);
+		});
+	}
 	constructor(private readonly dependencies: AgentDependencies) {}
 
 	listSessions(
@@ -271,19 +272,6 @@ export class Agent implements AgentController {
 		if (active)
 			throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
 		await this.dependencies.conversationJournal.remove(actor, conversationId);
-	}
-
-	async getSession(actor: ActorContext, conversationId: ConversationId) {
-		const [conversation, messages, latest] = await Promise.all([
-			this.dependencies.conversationJournal.get(actor, conversationId),
-			this.dependencies.conversationJournal.listMessages(actor, conversationId),
-			this.dependencies.runs.findLatestByConversation(actor, conversationId)
-		]);
-		return {
-			conversation,
-			messages,
-			...(latest ? { latestRun: await this.snapshot(actor, latest) } : {})
-		};
 	}
 
 	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {

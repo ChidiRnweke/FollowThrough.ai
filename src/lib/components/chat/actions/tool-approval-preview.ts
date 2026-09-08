@@ -1,5 +1,5 @@
 import type { Note, NoteEdit, NoteId } from '$lib/models/notes';
-import type { AgentPreferences } from '$lib/models/agent';
+import type { AgentPreferenceValues } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { FieldChange } from '$lib/components/agent';
 import { previewNoteEdits, previewNoteMarkdown } from '$lib/client/notes/note-patch-preview';
@@ -25,7 +25,7 @@ const PREFERENCES_TOOL = 'update_agent_preferences';
 /**
  * What the card was given to compare the proposal against.
  *
- * One value rather than a `Note` beside an `AgentPreferences`, because those two
+ * One value rather than a `Note` beside an `AgentPreferenceValues`, because those two
  * were never both meaningful: a note baseline says nothing about a settings
  * change, and the pair made `{ note, preferences }` sayable for a tool that
  * touches neither. The arm names which tool is being approved, so a diagram edit
@@ -36,7 +36,7 @@ export type ApprovalBaseline =
 	| { readonly kind: 'none' }
 	| { readonly kind: 'note'; readonly note: Note }
 	| { readonly kind: 'diagram'; readonly labels: readonly string[]; readonly title: string }
-	| { readonly kind: 'preferences'; readonly preferences: AgentPreferences };
+	| { readonly kind: 'preferences'; readonly preferences: AgentPreferenceValues };
 
 /**
  * What a diagram approval shows.
@@ -109,18 +109,18 @@ const settingsHref = (keys: readonly string[]): string =>
  */
 const settingsChange = (
 	args: AgentPayloadObject,
-	baseline: AgentPreferences | undefined
+	baseline: AgentPreferenceValues | undefined
 ): SettingsChange => {
 	const proposed = Object.entries(args).filter(
 		([, value]) => value !== undefined && value !== null
 	);
 	const changes = proposed
 		.filter(([key, value]) => {
-			const current = baseline?.[key as keyof AgentPreferences];
+			const current = baseline?.[key as keyof AgentPreferenceValues];
 			return current === undefined || String(current) !== String(value);
 		})
 		.map(([key, value]) => {
-			const current = baseline?.[key as keyof AgentPreferences];
+			const current = baseline?.[key as keyof AgentPreferenceValues];
 			return {
 				label: argumentLabel(key),
 				...(current === undefined ? {} : { from: String(current) }),

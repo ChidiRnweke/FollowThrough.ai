@@ -11,14 +11,12 @@
 		SettingsPolicies,
 		SettingsTools
 	} from '$lib/components/settings';
-	import type { ProjectId } from '$lib/models/projects';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import * as Tabs from '$lib/components/ui/tabs';
 
 	let { data } = $props();
 
-	// The tab lives in the URL so it survives reload and the `invalidateAll()`
-	// that follows a trust-policy change.
+	// Keep navigation state in the URL; resource updates come from the shared workspace.
 	function selectTab(tab: string): void {
 		const params = new SvelteURLSearchParams(page.url.searchParams);
 		params.set('tab', tab);
@@ -27,9 +25,7 @@
 
 	// Settings has no ambient project, so the scope the tool list is edited in
 	// lives in the URL alongside the tab.
-	const toolProjectId = $derived(
-		(page.url.searchParams.get('project') ?? undefined) as ProjectId | undefined
-	);
+	const toolProjectId = $derived(data.projectId);
 
 	function selectToolScope(projectId: string): void {
 		const params = new SvelteURLSearchParams(page.url.searchParams);
@@ -61,23 +57,23 @@
 		     from firing while you are on another tab. -->
 		<Tabs.Content value="models" class="pt-6">
 			{#if data.tab === 'models'}
-				<SettingsModels preferences={data.preferences} models={data.models} />
+				<SettingsModels models={data.session.bootstrap.agentModels} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="agents" class="pt-6">
 			{#if data.tab === 'agents'}
-				<SettingsAgents preferences={data.preferences} defaults={data.defaults} />
+				<SettingsAgents defaults={data.session.bootstrap.numericDefaults} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="documents" class="pt-6">
 			{#if data.tab === 'documents'}
-				<SettingsDocuments preferences={data.userPreferences} />
+				<SettingsDocuments />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="tools" class="pt-6">
 			{#if data.tab === 'tools'}
 				<SettingsTools
-					projects={data.projects}
+					projects={data.session.resources.views.projects}
 					projectId={toolProjectId}
 					onscopechange={selectToolScope}
 				/>
@@ -90,7 +86,7 @@
 		</Tabs.Content>
 		<Tabs.Content value="policies" class="pt-6">
 			{#if data.tab === 'policies'}
-				<SettingsPolicies policies={data.policies} />
+				<SettingsPolicies />
 			{/if}
 		</Tabs.Content>
 	</Tabs.Root>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
@@ -34,7 +34,7 @@
 	}: {
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
@@ -171,7 +171,7 @@
 						     loses its border to the track. -->
 						<ScrollArea class="h-full">
 							<div class="pr-3">
-								<TodoDetailPanel view={rightPanel.todoView} notes={shell?.noteTree} />
+								<TodoDetailPanel todoId={rightPanel.todoId} notes={shell?.noteTree} />
 							</div>
 						</ScrollArea>
 					{:else if renderedMode === 'project-memory'}

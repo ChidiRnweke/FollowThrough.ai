@@ -7,7 +7,7 @@
 	} from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ShellContext } from '$lib/models/workspace';
-	import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -35,7 +35,7 @@
 		shell,
 		note,
 		projectId,
-		noteSync,
+		draft,
 		dirty,
 		saveFailed,
 		unsynced,
@@ -65,7 +65,7 @@
 		shell: ShellContext;
 		note: Note;
 		projectId: ProjectId;
-		noteSync: NoteSyncStore;
+		draft: Pick<WorkspaceDraft<'notes'>, 'status' | 'lastError'>;
 		dirty: boolean;
 		saveFailed: boolean;
 		unsynced: boolean;
@@ -98,9 +98,9 @@
 {#snippet syncStatus()}
 	<div class="min-w-0 flex-1 sm:flex-none">
 		<NoteSyncStatus
-			status={noteSync.status}
+			status={draft.status}
 			updatedAt={note.updatedAt}
-			reason={noteSync.lastError}
+			reason={draft.lastError}
 			onRetry={onretry}
 			onReview={onreviewconflict}
 		/>
@@ -141,7 +141,7 @@
 				>Add a title to save</span
 			>
 		{:else if saveFailed}
-			<Tip text={noteSync.lastError ?? 'The note could not be saved. Your text is still here.'}>
+			<Tip text={draft.lastError ?? 'The note could not be saved. Your text is still here.'}>
 				{#snippet children({ props })}
 					<span
 						{...props}
@@ -150,7 +150,7 @@
 					>
 				{/snippet}
 			</Tip>
-		{:else if unsynced || noteSync.status === 'saving'}
+		{:else if unsynced || draft.status === 'saving'}
 			{@render syncStatus()}
 		{:else if dirty}
 			<span class="min-w-0 flex-1 text-xs text-muted-foreground sm:flex-none" aria-live="polite"

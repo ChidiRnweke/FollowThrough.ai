@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
@@ -16,13 +17,51 @@
 	import { agentActions } from '../../agent/agent-actions';
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary } from '$lib/models/notes';
-	import type { TodoId, TodoView } from '$lib/models/todos';
+	import type { TodoId } from '$lib/models/todos';
 
 	let {
-		view,
+		todoId,
 		notes = [],
 		ondeleted
-	}: { view?: TodoView; notes?: readonly NoteSummary[]; ondeleted?: () => void } = $props();
+	}: { todoId?: TodoId; notes?: readonly NoteSummary[]; ondeleted?: () => void } = $props();
+
+	let openedId = $state<TodoId | null>(null);
+	let loadError = $state<string | null>(null);
+	const resources = $derived(workspaceSession.current?.resources);
+	const todo = $derived(
+		todoId && openedId === todoId ? resources?.views.get('todos', todoId) : undefined
+	);
+	const view = $derived(todo && !todo.deletedAt ? resources?.views.todo(todo) : undefined);
+	$effect(() => {
+		const id = todoId;
+		if (!id) return;
+		let active = true;
+		openedId = null;
+		loadError = null;
+		void workspaceSession
+			.start()
+			.then(async (session) => {
+				const result = await session.resources.open({ type: 'todos', id: [id] });
+				if (!active) return;
+				if (result.kind === 'ready') openedId = id;
+				else
+					loadError =
+						result.kind === 'failure'
+							? result.message
+							: result.kind === 'deleted'
+								? 'This todo was deleted.'
+								: 'This todo is not available on this device. Reconnect to download it.';
+				await session.resources.prepare(['source_anchors', 'provenance']);
+			})
+			.catch((error) => {
+				const message = error instanceof Error ? error.message : 'Could not open this todo';
+				if (active) loadError = message;
+				return { kind: 'failure', message };
+			});
+		return () => {
+			active = false;
+		};
+	});
 
 	async function remove(todoId: TodoId) {
 		const ok = await todoUpdates.remove(todoId);
@@ -42,12 +81,16 @@
 	);
 </script>
 
-{#if view}
+{#if loadError}<p role="alert">{loadError}</p>{:else if todoId && openedId !== todoId}<p
+		role="status"
+	>
+		Loading todo…
+	</p>{:else if view}
 	<div class="flex flex-col gap-5 pb-6">
 		<Field.FieldGroup>
 			<Field.Field>
 				<Field.FieldLabel for="todo-title">Title</Field.FieldLabel>
-				{#key `${view.todo.id}-title-${view.todo.updatedAt}`}<TodoTextField
+				{#key `${view.todo.id}-title`}<TodoTextField
 						id="todo-title"
 						todoId={view.todo.id}
 						value={view.todo.title}
@@ -61,7 +104,7 @@
 				<!-- No `for`: outside edit mode the description is rendered markdown, not
 				     a form control, so there is nothing for a label to point at. -->
 				<Field.FieldLabel>Description</Field.FieldLabel>
-				{#key `${view.todo.id}-description-${view.todo.updatedAt}`}<TodoDescriptionField
+				{#key `${view.todo.id}-description`}<TodoDescriptionField
 						id="todo-description"
 						todoId={view.todo.id}
 						projectId={view.todo.projectId}
@@ -92,7 +135,7 @@
 			{#if view.todo.responsibility === 'waiting_on'}
 				<dt class="text-muted-foreground">Counterparty</dt>
 				<dd>
-					{#key `${view.todo.id}-waiting-${view.todo.updatedAt}`}<TodoTextField
+					{#key `${view.todo.id}-waiting`}<TodoTextField
 							todoId={view.todo.id}
 							value={view.todo.waitingOn}
 							field="waitingOn"

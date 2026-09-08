@@ -1,3 +1,8 @@
+import type {
+	SkillMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateSkillFromSelectionInput,
@@ -32,6 +37,7 @@ import type {
  * note subsystem; `get` is a pure read, while the agent-facing load also records usage.
  */
 export interface SkillsController {
+	synchronize(actor: ActorContext, input: SkillMutationRequest): Promise<WorkspaceMutationResult>;
 	/** List the user's skills, optionally scoped to a project. */
 	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
 	/** Load a skill and its usage counts for the editor view. Read-only. */
@@ -72,6 +78,7 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
 	skillUsageRecorder: SkillUsageRecorder;
@@ -84,6 +91,21 @@ export interface SkillsDependencies {
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
+	synchronize(actor: ActorContext, input: SkillMutationRequest): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async (current) => {
+			const command = input.command;
+			void current;
+			switch (command.kind) {
+				case 'updateSkill':
+					await this.update(actor, command);
+					break;
+				case 'createSkill':
+					await this.create(actor, command);
+					break;
+			}
+		});
+	}
+
 	constructor(private readonly dependencies: SkillsDependencies) {}
 	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
 		return { skills: await this.dependencies.skillFinder.listAll(actor, input?.projectId) };
@@ -110,6 +132,7 @@ export class Skills implements SkillsController {
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteCreator.create(actor, {
+				id: input.id,
 				title: input.name,
 				projectId: input.projectId,
 				parentId: input.parentId

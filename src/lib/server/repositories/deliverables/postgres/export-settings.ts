@@ -1,3 +1,5 @@
+import { NotFoundError } from '$lib/errors';
+import { projects } from '$lib/server/db/schema/notes';
 import { and, eq } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { ExportSettings } from '$lib/models/deliverables';
@@ -33,6 +35,11 @@ export class ExportSettingsRecords implements ExportSettingsRepository {
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings> {
+		const [project] = await this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(and(eq(projects.id, projectId), eq(projects.userId, actor.userId)));
+		if (!project) throw new NotFoundError('Project was not found');
 		const [row] = await this.database
 			.insert(schema.exportSettings)
 			.values({ userId: actor.userId, projectId, settings: { ...settings } })

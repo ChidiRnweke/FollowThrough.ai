@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { NoteSyncRecord } from '$lib/models/notes';
+	import type { Note } from '$lib/models/notes';
+	import type { WriteConflictView } from '$lib/models/outbox';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Spinner } from '$lib/components/ui/spinner';
@@ -13,24 +14,26 @@
 		onKeepLocal
 	}: {
 		open?: boolean;
-		record: NoteSyncRecord;
+		record: WriteConflictView<Note>;
 		onUseRemote: () => Promise<void>;
 		onKeepLocal: () => Promise<void>;
 	} = $props();
 
 	let resolving = $state<'remote' | 'local' | undefined>(undefined);
+	let failure = $state<string | null>(null);
 
-	async function resolve(choice: 'remote' | 'local'): Promise<void> {
+	async function resolve(choice: 'remote' | 'local'): Promise<void | { kind: 'failure' }> {
 		resolving = choice;
+		failure = null;
 		try {
 			if (choice === 'remote') await onUseRemote();
 			else await onKeepLocal();
-		} finally {
-			// The choice is applied to the device copy before anything that can
-			// fail; leaving the dialog open with both buttons disabled would strand
-			// the note behind a decision that has already been made.
-			resolving = undefined;
 			open = false;
+		} catch (error) {
+			failure = error instanceof Error ? error.message : 'The conflict could not be resolved';
+			return { kind: 'failure' };
+		} finally {
+			resolving = undefined;
 		}
 	}
 </script>
@@ -51,38 +54,51 @@
 				<Tabs.Trigger value="remote">Latest saved version</Tabs.Trigger>
 			</Tabs.List>
 			<Tabs.Content value="local" class="min-h-0 flex-1 overflow-hidden">
-				<NoteVersionDiff
-					base={record.base.note.document}
-					candidate={record.local.document}
-					baseLabel="Shared base"
-					candidateLabel="Your changes"
-					baseTitle={record.base.note.title}
-					candidateTitle={record.local.title}
-				/>
+				{#if record.local}<NoteVersionDiff
+						base={record.base?.document ?? { type: 'doc', content: [] }}
+						candidate={record.local.document}
+						baseLabel="Shared base"
+						candidateLabel="Your changes"
+						baseTitle={record.base?.title ?? 'New local note'}
+						candidateTitle={record.local.title}
+					/>
+				{:else}<p>Your local edit deletes this note.</p>{/if}
 			</Tabs.Content>
 			<Tabs.Content value="remote" class="min-h-0 flex-1 overflow-hidden">
-				<NoteVersionDiff
-					base={record.base.note.document}
-					candidate={record.remote?.note.document ?? record.base.note.document}
-					baseLabel="Shared base"
-					candidateLabel="Latest saved version"
-					baseTitle={record.base.note.title}
-					candidateTitle={record.remote?.note.title ?? record.base.note.title}
-				/>
+				{#if record.remote.kind === 'found'}
+					<NoteVersionDiff
+						base={record.base?.document ?? { type: 'doc', content: [] }}
+						candidate={record.remote.value.document}
+						baseLabel="Shared base"
+						candidateLabel="Latest saved version"
+						baseTitle={record.base?.title ?? 'New local note'}
+						candidateTitle={record.remote.value.title}
+					/>
+				{:else}
+					<p>
+						{record.remote.kind === 'deleted'
+							? 'This note was deleted on the server. Your local changes are still retained.'
+							: 'The server copy is unavailable. Your local changes are still retained.'}
+					</p>
+				{/if}
 			</Tabs.Content>
 		</Tabs.Root>
 
+		{#if failure}<p role="alert">{failure}</p>{/if}
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>Review later</Button>
 			<Button
 				variant="secondary"
-				disabled={resolving !== undefined}
+				disabled={resolving !== undefined || record.remote.kind !== 'found'}
 				onclick={() => void resolve('remote')}
 			>
 				{#if resolving === 'remote'}<Spinner data-icon="inline-start" />{/if}
 				Use latest
 			</Button>
-			<Button disabled={resolving !== undefined} onclick={() => void resolve('local')}>
+			<Button
+				disabled={resolving !== undefined || record.remote.kind !== 'found'}
+				onclick={() => void resolve('local')}
+			>
 				{#if resolving === 'local'}<Spinner data-icon="inline-start" />{/if}
 				Keep mine
 			</Button>

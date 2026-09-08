@@ -2,7 +2,7 @@
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/models/notes/note-diff';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { PerNoteEditorSlot } from './editor-context';
 	import { cn } from '$lib/utils';
 	import NoteDiffEditor from './note-diff-editor.svelte';
 

@@ -82,10 +82,11 @@
 	async function addListTodo(): Promise<void> {
 		const title = listTitle.trim();
 		if (!title) return;
-		listTitle = '';
-		addingListTodo = false;
 		const ok = await todoUpdates.create(title, projectId, 'open');
-		if (!ok) toast.error('Could not add the todo. Try again.');
+		if (ok) {
+			listTitle = '';
+			addingListTodo = false;
+		} else toast.error(todoUpdates.lastError ?? 'Could not add the todo. Try again.');
 	}
 </script>
 

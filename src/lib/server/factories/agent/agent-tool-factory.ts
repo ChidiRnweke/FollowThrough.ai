@@ -1,6 +1,7 @@
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
+import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
@@ -104,15 +105,9 @@ export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
  * `agentTools()` and in the MCP surface rather than being definitions, so no
  * preference can reach them.
  */
-export const LOCKED_TOOL_NAMES = [
-	'get_workspace_context',
-	'load_skill',
-	'list_tool_preferences',
-	'set_tool_enabled'
-] as const satisfies readonly ToolName[];
 
 /** Membership for callers holding a {@link ToolName}; see {@link FIRST_CLASS_TOOL_SET}. */
-export const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
+const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
 
 /**
  * The user's resolved tool selection, already collapsed from the stored user
@@ -161,10 +156,22 @@ export const agentToolCoverage = {
 		sed: { kind: 'read', tools: ['sed'] }
 	},
 	workspace: {
+		pullChanges: {
+			kind: 'excluded',
+			reason: 'Browser synchronization uses the account change journal.'
+		},
+		readResource: {
+			kind: 'excluded',
+			reason: 'Conditional resource reads are a browser persistence protocol.'
+		},
 		getShellContext: { kind: 'read', tools: ['get_workspace_context'] },
 		getTodayView: { kind: 'read', tools: ['get_today_view'] }
 	},
 	projects: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_projects'] },
 		get: { kind: 'read', tools: ['get_project'] },
 		create: { kind: 'mutation', tools: ['create_project'] },
@@ -178,6 +185,10 @@ export const agentToolCoverage = {
 		}
 	},
 	notes: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		get: { kind: 'read', tools: ['get_note'] },
 		listDocuments: {
 			kind: 'excluded',
@@ -185,13 +196,10 @@ export const agentToolCoverage = {
 		},
 		create: { kind: 'mutation', tools: ['create_note'] },
 		save: { kind: 'mutation', tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill'] },
-		sync: { kind: 'excluded', reason: 'ETag synchronization is a browser persistence protocol.' },
+
 		publish: { kind: 'mutation', tools: ['publish_note'] },
 		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
-		listSyncInventory: {
-			kind: 'excluded',
-			reason: 'Sync inventory is reserved for browser reconciliation.'
-		},
+
 		searchText: {
 			kind: 'excluded',
 			reason: 'Global text search is a UI surface; the agent finds notes with search_knowledge.'
@@ -223,6 +231,10 @@ export const agentToolCoverage = {
 		}
 	},
 	todos: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_todos'] },
 		get: {
 			kind: 'excluded',
@@ -307,6 +319,10 @@ export const agentToolCoverage = {
 		}
 	},
 	diagramStudio: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Deliver version-guarded device mutations through the shared outbox.'
+		},
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
@@ -377,6 +393,10 @@ export const agentToolCoverage = {
 		revert: { kind: 'mutation', tools: ['revert_suggestion'] }
 	},
 	skills: {
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Offline replay uses guarded browser mutation receipts.'
+		},
 		list: { kind: 'read', tools: ['list_skills'] },
 		get: {
 			kind: 'excluded',
@@ -420,6 +440,7 @@ export const agentToolCoverage = {
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	deliverables: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		initiateTemplateUpload: {
 			kind: 'excluded',
 			reason: 'The agent cannot upload local user files.'
@@ -449,10 +470,12 @@ export const agentToolCoverage = {
 		regenerateArtifact: { kind: 'mutation', tools: ['regenerate_artifact'] }
 	},
 	trustPolicies: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		list: { kind: 'read', tools: ['list_trust_policies'] },
 		update: { kind: 'mutation', tools: ['update_trust_policy'] }
 	},
 	toolPreferences: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		list: { kind: 'read', tools: ['list_tool_preferences'] },
 		setEnabled: { kind: 'mutation', tools: ['set_tool_enabled'] },
 		clearOverride: {
@@ -462,6 +485,7 @@ export const agentToolCoverage = {
 		}
 	},
 	memory: {
+		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
 		list: { kind: 'read', tools: ['list_project_memory', 'list_user_memory'] },
 		propose: { kind: 'proposal', tools: ['propose_memory_change'] },
 		create: {
@@ -478,6 +502,12 @@ export const agentToolCoverage = {
 		}
 	},
 	agentSettings: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
+		deploymentDefaults: {
+			kind: 'excluded',
+			reason:
+				'Deployment metadata for the offline app bootstrap; user overrides are synchronized separately.'
+		},
 		getPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
 		updatePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
 		listModels: { kind: 'read', tools: ['list_agent_models'] },

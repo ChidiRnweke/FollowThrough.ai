@@ -347,6 +347,9 @@ export interface AgentPreferences {
 	readonly updatedAt: DateTime;
 }
 
+/** Resolved settings have no database timestamps when the account uses defaults. */
+export type AgentPreferenceValues = Omit<AgentPreferences, 'createdAt' | 'updatedAt'>;
+
 /**
  * One agent tool as the settings surface sees it: its identity from the code,
  * its resolved on/off state, and which layer decided that state.
@@ -923,7 +926,7 @@ const toolNameSchema = z.enum(TOOL_NAME_VALUES);
  */
 export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
 
-const pendingAgentDecisionSchema = z
+export const pendingAgentDecisionSchema = z
 	.object({
 		callId: z.string().min(1),
 		toolName: toolNameSchema,
@@ -1933,3 +1936,33 @@ export type AgentExecutionUpdate =
 
 export * from './agent-runs';
 export * from './session-item';
+
+const preferenceEdit = <K extends string, V>(
+	key: K,
+	value: V | null | undefined
+): Partial<Record<K, V | undefined>> => {
+	if (value === undefined) return {};
+	const result: Partial<Record<K, V | undefined>> = {};
+	result[key] = value === null ? undefined : value;
+	return result;
+};
+
+/** Apply omitted, cleared, and explicit preferences identically on the device and server. */
+export const applyAgentPreferenceUpdate = (
+	current: AgentPreferences,
+	input: UpdateAgentPreferencesInput
+): AgentPreferences => ({
+	...current,
+	...preferenceEdit('defaultModel', input.defaultModel),
+	...preferenceEdit('defaultVisionModel', input.defaultVisionModel),
+	...preferenceEdit('inlineModel', input.inlineModel),
+	...preferenceEdit('attachmentVisionModel', input.attachmentVisionModel),
+	...preferenceEdit('webSearchEngine', input.webSearchEngine),
+	...preferenceEdit('webSearchMaxResults', input.webSearchMaxResults),
+	...preferenceEdit('webSearchMaxTotalResults', input.webSearchMaxTotalResults),
+	...preferenceEdit('agentMaxTurns', input.agentMaxTurns),
+	...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
+	...(input.inlineSuggestionsEnabled !== undefined
+		? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
+		: {})
+});

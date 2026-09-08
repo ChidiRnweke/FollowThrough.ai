@@ -1,10 +1,12 @@
 <script lang="ts">
+	import type { NoteId } from '$lib/models/notes';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import type { NoteId } from '$lib/models/notes';
+	import { parseTabId, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
@@ -21,10 +23,30 @@
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
+	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
+	let reviewWrites = $state(false);
 	import { MemoryNotificationMenu } from '$lib/components/memory';
 
 	let { data, children } = $props();
+	const shell = $derived(
+		workspaceSession.current === data.session
+			? data.session.resources.views.shell(data.session.bootstrap.accountId)
+			: null
+	);
 
+	const readStatus = $derived(data.session.resources.readStatus);
+	const writeStatus = $derived(data.session.resources.writeStatus);
+	const syncError = $derived(
+		data.session.startupError ??
+			(readStatus.kind === 'failure' ? readStatus.message : null) ??
+			(writeStatus.kind === 'failure' ? writeStatus.message : null)
+	);
+	const pendingChanges = $derived(data.session.resources.pending.length);
+	const conflicts = $derived(
+		data.session.resources.pending.filter(
+			(entry) => entry.delivery.kind === 'conflict' || entry.delivery.kind === 'rejected'
+		).length
+	);
 	const isNavigating = $derived(navigating.to !== null);
 	// Suppress the thin progress bar during workbench-internal navigations
 	// (tab focus / open / close / reorder) — those are local state changes,
@@ -50,11 +72,11 @@
 		if (page.url.pathname.startsWith('/search')) return 'Search';
 		if (page.url.pathname.startsWith('/notes/')) {
 			const noteId = page.url.pathname.split('/')[2];
-			return data.shell.noteTree.find((note) => note.id === noteId)?.title ?? 'Note';
+			return shell?.noteTree.find((note) => note.id === noteId)?.title ?? 'Note';
 		}
 		if (page.url.pathname.startsWith('/projects/')) {
 			const projectId = page.url.pathname.split('/')[2];
-			return data.shell.projects.find((project) => project.id === projectId)?.name ?? 'Project';
+			return shell?.projects.find((project) => project.id === projectId)?.name ?? 'Project';
 		}
 		return page.url.pathname.split('/')[1]?.replaceAll('-', ' ') || 'FollowThrough';
 	});
@@ -62,28 +84,32 @@
 	let insetRef = $state<HTMLElement | null>(null);
 
 	afterNavigate(() => {
+		void workspaceSession.synchronize();
 		if (insetRef) insetRef.scrollTop = 0;
 	});
 
 	// Pre-compute the noteId → projectId map once per shell reload so the
 	// workbench can resolve the focused tab's project without re-scanning.
-	const shellProjectOf = $derived.by(
-		() => (noteId: NoteId) =>
-			data.shell.noteTree.find((entry) => entry.id === noteId)?.projectId as ProjectId | undefined
-	);
+	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
+		const ref = parseTabId(tabId);
+		if (ref?.kind === 'diagram')
+			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
+		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
+	});
 
 	onMount(() => {
 		// Injected rather than imported by the store: the agent stores reach back
 		// into the workbench through the app context, so importing them there would
 		// close an initialisation loop.
 		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
-		void workbench.hydrate(shellProjectOf);
+		void workbench.hydrate(projectOfTab);
 		// Read here rather than in the note editor so the answer is already known
 		// when a note pane mounts; a pane that started before it would spend its
 		// first seconds underlining words the reader had already dismissed. This
 		// only reads preferences — the checker itself is fetched by the first note
 		// that opens, never on the way to Today or a todo board.
 		proofreading.hydrate();
+		return () => workspaceSession.stop();
 	});
 
 	// The URL is canonical for the workbench.  Synchronise store ↔ URL after
@@ -91,9 +117,10 @@
 	// Forward and so the active-project derivation recomputes cleanly.
 	$effect(() => {
 		void page.url;
-		appContext.configure(data.shell, page.url);
+		if (!shell) return;
+		appContext.configure(shell, page.url);
 		workbench.syncFromUrl();
-		workbench.refreshActiveProjectId(shellProjectOf);
+		workbench.refreshActiveProjectId(projectOfTab);
 		void pruneClosedTabs();
 	});
 
@@ -102,8 +129,9 @@
 	// a folder would otherwise never be prunable-and-done, so each pass would
 	// prune it again and fire another navigation.
 	async function pruneClosedTabs(): Promise<void> {
+		if (!shell || data.session.resources.availability !== 'complete') return;
 		const known = new Set<NoteId>(
-			data.shell.noteTree.filter((entry) => !entry.archivedAt).map((entry) => entry.id)
+			shell.noteTree.filter((entry) => !entry.archivedAt).map((entry) => entry.id)
 		);
 		await workbench.pruneClosedNotes(known);
 	}
@@ -126,8 +154,7 @@
 				return page.url.pathname.split('/')[2] as ProjectId | undefined;
 			return undefined;
 		}
-		return data.shell.noteTree.find((entry) => entry.id === noteId)?.projectId as
-			ProjectId | undefined;
+		return shell?.noteTree.find((entry) => entry.id === noteId)?.projectId as ProjectId | undefined;
 	}
 
 	// The sidebar's width is the user's preference minus whatever else needs the row.
@@ -157,9 +184,7 @@
 	 * quick-capture field advertises. Note creation used to answer a missing project
 	 * itself, filing the note wherever the sort order happened to land.
 	 */
-	const inboxProjectId = $derived(
-		data.shell.projects.find((project) => project.role === 'inbox')?.id
-	);
+	const inboxProjectId = $derived(shell?.projects.find((project) => project.role === 'inbox')?.id);
 
 	async function createNoteFromStrip(): Promise<void> {
 		const projectId = inboxProjectId;
@@ -174,80 +199,115 @@
 
 <svelte:window {onkeydown} bind:innerWidth />
 
-<Sidebar.Provider
-	open={data.sidebarOpen}
-	width={sidebarWidth}
-	onWidthChange={(width) => (preferredSidebarWidth = width)}
-	class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
->
-	<AppSidebar
-		shell={data.shell}
-		activePath={page.url.pathname}
-		activeNoteId={highlightedNoteId}
-		loading={isNavigating}
-		squeezed={sidebarWidth < preferredSidebarWidth}
-	/>
-	<Sidebar.Inset
-		bind:ref={insetRef}
-		class={cn(
-			'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
-			hostsWorkbenchPanes ? 'overflow-hidden' : 'overflow-y-auto'
-		)}
-		data-note-workbench={isNoteWorkbench ? '' : undefined}
+{#if shell}
+	<Sidebar.Provider
+		open={data.sidebarOpen}
+		width={sidebarWidth}
+		onWidthChange={(width) => (preferredSidebarWidth = width)}
+		class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
 	>
-		<header
-			class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden dark:bg-card"
-		>
-			<Sidebar.Trigger class="size-11" />
-			<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="size-11"
-				aria-label="Search notes, todos and commands"
-				onclick={() => palette.open()}
-			>
-				<Search />
-			</Button>
-			<MemoryNotificationMenu notifications={data.shell.pendingMemoryNotifications} />
-			<Button
-				variant="ghost"
-				size="icon"
-				class="size-11"
-				aria-label="Open chat"
-				onclick={(event) => openChatSurface(event.currentTarget)}
-			>
-				<MessageSquare />
-			</Button>
-		</header>
-		{#if showProgressBar}
-			<div
-				data-navigation-progress
-				aria-hidden="true"
-				class="navigation-progress absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden"
-			>
-				<div class="motion-safe:animate-pulse bg-primary h-full w-full origin-left"></div>
-			</div>
-		{/if}
-		<WorkspaceTabs
-			shell={data.shell}
-			sessions={data.sessions}
-			hidden={workbench.stripHidden}
-			oncreateNote={() => void createNoteFromStrip()}
-			ontoggleHidden={() => workbench.toggleStripHidden()}
+		<AppSidebar
+			{shell}
+			activePath={page.url.pathname}
+			activeNoteId={highlightedNoteId}
+			loading={isNavigating}
+			squeezed={sidebarWidth < preferredSidebarWidth}
 		/>
-		{@render children()}
-	</Sidebar.Inset>
-	<RightPanel
-		shell={data.shell}
-		sessions={data.sessions}
-		agentPreferences={data.agentPreferences}
-		agentModels={data.agentModels}
-		agentDefaults={data.agentDefaults}
-		agentAvailable={data.agentAvailable}
-		{activeNoteId}
-		{activeProjectId}
-	/>
-</Sidebar.Provider>
+		<Sidebar.Inset
+			bind:ref={insetRef}
+			class={cn(
+				'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
+				hostsWorkbenchPanes ? 'overflow-hidden' : 'overflow-y-auto'
+			)}
+			data-note-workbench={isNoteWorkbench ? '' : undefined}
+		>
+			<header
+				class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden dark:bg-card"
+			>
+				<Sidebar.Trigger class="size-11" />
+				<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="size-11"
+					aria-label="Search notes, todos and commands"
+					onclick={() => palette.open()}
+				>
+					<Search />
+				</Button>
+				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
+				<Button
+					variant="ghost"
+					size="icon"
+					class="size-11"
+					aria-label="Open chat"
+					onclick={(event) => openChatSurface(event.currentTarget)}
+				>
+					<MessageSquare />
+				</Button>
+			</header>
+			{#if !data.session.resources.online || data.session.resources.availability !== 'complete' || pendingChanges || syncError}
+				<div
+					role="status"
+					class="flex min-h-8 shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs text-muted-foreground"
+				>
+					<span class="min-w-0 flex-1"
+						>{!data.session.resources.online
+							? 'Offline · using saved content'
+							: (syncError ??
+								(data.session.resources.availability !== 'complete'
+									? 'Downloading workspace for offline use…'
+									: 'Changes saved on this device'))}{pendingChanges
+							? ` · ${pendingChanges} pending`
+							: ''}{conflicts ? ` · ${conflicts} need review` : ''}</span
+					>
+					{#if pendingChanges}<Button
+							variant="ghost"
+							size="sm"
+							onclick={() => (reviewWrites = true)}>Review changes</Button
+						>{/if}
+					{#if syncError && data.session.resources.online}<Button
+							variant="ghost"
+							size="sm"
+							onclick={() => void workspaceSession.synchronize()}>Retry</Button
+						>{/if}
+				</div>
+			{/if}
+			{#if showProgressBar}
+				<div
+					data-navigation-progress
+					aria-hidden="true"
+					class="navigation-progress absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden"
+				>
+					<div class="motion-safe:animate-pulse bg-primary h-full w-full origin-left"></div>
+				</div>
+			{/if}
+			<WorkspaceTabs
+				{shell}
+				sessions={data.session.sessions}
+				hidden={workbench.stripHidden}
+				oncreateNote={() => void createNoteFromStrip()}
+				ontoggleHidden={() => workbench.toggleStripHidden()}
+			/>
+			{@render children()}
+		</Sidebar.Inset>
+		<RightPanel
+			{shell}
+			sessions={data.session.sessions}
+			agentPreferences={data.session.preferences}
+			agentModels={data.session.bootstrap.agentModels}
+			agentDefaults={data.session.agentDefaults}
+			agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
+			{activeNoteId}
+			{activeProjectId}
+		/>
+	</Sidebar.Provider>
 
-<CommandPalette shell={data.shell} />
+	<CommandPalette {shell} />
+{:else}
+	<div class="grid min-h-dvh place-items-center p-8 text-sm text-muted-foreground">
+		This workspace is not available on this device. Reconnect to sign in.
+	</div>
+{/if}
+
+<WorkspaceWriteReview resources={data.session.resources} bind:open={reviewWrites} />

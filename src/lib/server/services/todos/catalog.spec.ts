@@ -37,6 +37,17 @@ const setup = () => {
 };
 
 describe('Todo management invariants', () => {
+	it('preserves the final identity assigned to a task before it was synchronized', async () => {
+		const { service } = setup();
+		const id = testTodoId(501);
+		const todo = await service.create(testActor(), {
+			id,
+			projectId: testProjectId(),
+			title: 'Offline task',
+			responsibility: 'mine'
+		});
+		expect(todo.id).toBe(id);
+	});
 	it('trims a todo title at creation', async () => {
 		const { service } = setup();
 		const todo = await service.create(testActor(), {

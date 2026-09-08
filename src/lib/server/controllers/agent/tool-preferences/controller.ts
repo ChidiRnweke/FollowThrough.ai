@@ -1,3 +1,9 @@
+import type {
+	ToolPreferenceMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import { ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { ToolPreference } from '$lib/models/agent';
@@ -24,6 +30,10 @@ export interface ClearToolOverrideInput {
  * keeps that from becoming a way for the agent to strand itself.
  */
 export interface ToolPreferencesController {
+	synchronize(
+		actor: ActorContext,
+		input: ToolPreferenceMutationRequest
+	): Promise<WorkspaceMutationResult>;
 	/** List tool enablement, resolved for the workspace default or a specific project. */
 	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<readonly ToolPreference[]>;
 	/**
@@ -40,10 +50,23 @@ export interface ToolPreferencesController {
 }
 
 export interface ToolPreferencesDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	preferences: ToolPreferenceStore;
 }
 
 export class ToolPreferences implements ToolPreferencesController {
+	synchronize(
+		actor: ActorContext,
+		input: ToolPreferenceMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			if (input.command.userId !== actor.userId)
+				throw new ValidationError('The preferences belong to another account');
+			const command = input.command;
+			if (command.kind === 'resetProjectToolOverride') await this.clearOverride(actor, command);
+			else await this.setEnabled(actor, command);
+		});
+	}
 	constructor(private readonly dependencies: ToolPreferencesDependencies) {}
 
 	list(

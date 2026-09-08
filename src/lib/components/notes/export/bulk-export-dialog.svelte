@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { loadExportSettings } from './load-settings';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
@@ -15,12 +16,8 @@
 	import { diagramKeepsOwnColours } from '$lib/components/edra/mermaid-rendering';
 	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import {
-		generateBundle,
-		generateDocument,
-		getExportSettings
-	} from '$lib/remote/deliverables/deliverables.remote';
-	import { listNoteDocuments } from '$lib/remote/notes/notes.remote';
+	import { generateBundle, generateDocument } from '$lib/remote/deliverables/deliverables.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 
 	let {
 		open = $bindable(false),
@@ -40,16 +37,17 @@
 	let bundle = $state<'zip' | 'merged'>('zip');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
 	let busy = $state(false);
+	let settingsReady = $state(false);
 	let error = $state('');
 	let result = $state<{ url: string; fileCount: number } | null>(null);
 
 	const selected = new SvelteSet<string>();
 
-	// The bodies are needed twice — to know whether the diagram controls are worth
-	// showing, and to rasterize those diagrams on submit — so they are fetched once
-	// when the dialog opens and awaited later rather than fetched twice.
-	let documents = $state<readonly NoteDocument[]>([]);
-	let documentsLoad = $state<Promise<unknown> | null>(null);
+	const documents = $derived(
+		workspaceSession.current?.resources.views
+			.all('notes')
+			.filter((note) => entries.some((entry) => entry.id === note.id)) ?? []
+	);
 
 	// A whole project can hold more notes than one export takes, so the offer starts at the
 	// cap rather than selecting everything and failing on Generate.
@@ -64,28 +62,42 @@
 		error = '';
 		selected.clear();
 		for (const entry of offered) selected.add(entry.id);
-		void loadSettings();
-		documents = [];
-		documentsLoad = offered.length > 0 ? loadDocuments() : null;
+		let current = true;
+		void loadSettings(() => current);
+		return () => {
+			current = false;
+		};
 	});
 
-	async function loadSettings(): Promise<void> {
+	async function loadSettings(current: () => boolean): Promise<void> {
+		settingsReady = false;
 		try {
-			settings = { ...(await getExportSettings(projectId)) };
+			const loaded = await loadExportSettings(projectId);
+			if (!current()) return;
+			settings = { ...loaded };
+			settingsReady = true;
 			// audit-allow: silent-catch — the dialog renders the settings load error and does not pretend defaults were loaded.
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
+			if (current())
+				error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
 	}
 
-	async function loadDocuments(): Promise<void> {
-		try {
-			documents = await listNoteDocuments(offered.map((entry) => entry.id));
-			// audit-allow: silent-catch — the dialog renders the document load error and blocks export.
-		} catch (cause) {
-			documents = [];
-			error = cause instanceof Error ? cause.message : 'Note contents could not be loaded.';
-		}
+	async function loadDocuments(): Promise<readonly NoteDocument[]> {
+		const session = await workspaceSession.start();
+		return Promise.all(
+			selectedEntries.map(async (entry) => {
+				const result = await session.resources.open({ type: 'notes', id: [entry.id] });
+				if (result.kind !== 'ready')
+					throw new Error(
+						result.kind === 'failure'
+							? result.message
+							: 'A selected note is not available on this device.'
+					);
+				if (result.value.type !== 'notes') throw new Error('The selected resource is not a note');
+				return result.value.value;
+			})
+		);
 	}
 
 	const selectedEntries = $derived(entries.filter((entry) => selected.has(entry.id)));
@@ -119,16 +131,16 @@
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		const trimmed = title.trim();
-		if (!trimmed || selectedEntries.length === 0) return;
+		if (!trimmed || !settingsReady || selectedEntries.length === 0) return;
 		busy = true;
 		error = '';
 		try {
-			await documentsLoad;
+			const selectedDocuments = await loadDocuments();
 			const {
 				svgs: diagramSvgs,
 				pngs: diagramPngs,
 				sizes: diagramSizes
-			} = await renderDiagrams(mermaidSources, settings);
+			} = await renderDiagrams(mermaidSourcesIn(selectedDocuments), settings);
 			if (bundle === 'zip') {
 				const output = await generateBundle({
 					projectId,
@@ -299,7 +311,12 @@
 					Advanced layout
 				</Collapsible.Trigger>
 				<Collapsible.Content class="pt-3">
-					<ExportSettingsFields bind:settings {hasDiagrams} {hasSelfStyledDiagrams} />
+					<ExportSettingsFields
+						bind:settings
+						disabled={busy || !settingsReady}
+						{hasDiagrams}
+						{hasSelfStyledDiagrams}
+					/>
 					<p class="pt-2 text-xs text-muted-foreground">
 						Applies to this export. Set project defaults from the project menu.
 					</p>
@@ -338,7 +355,10 @@
 					{result ? 'Close' : 'Cancel'}
 				</Button>
 				{#if !result}
-					<Button type="submit" disabled={busy || !title.trim() || selectedEntries.length === 0}>
+					<Button
+						type="submit"
+						disabled={busy || !settingsReady || !title.trim() || selectedEntries.length === 0}
+					>
 						{busy ? 'Generating…' : 'Generate'}
 					</Button>
 				{/if}

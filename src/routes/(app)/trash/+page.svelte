@@ -7,11 +7,8 @@
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
-	import {
-		deleteProjectDiagram,
-		restoreProjectDiagram
-	} from '$lib/remote/diagrams/diagrams.remote';
-	import { invalidateAll } from '$app/navigation';
+	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -20,15 +17,17 @@
 	// kind it was. Sorting per kind would bury a diagram under older notes.
 	const entries = $derived(
 		[
-			...data.trashedNotes.map(noteTrashEntry),
-			...data.trashedDiagrams.map((row) => diagramTrashEntry(row.diagram, row.projectName))
+			...data.session.resources.views.trashedNotes().map(noteTrashEntry),
+			...data.session.resources.views.trashedDiagrams().flatMap((diagram) => {
+				const project = data.session.resources.views.get('projects', diagram.projectId);
+				return project ? [diagramTrashEntry(diagram, project.name)] : [];
+			})
 		].sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
 	);
 
 	async function restore(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await restoreProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
 			return;
 		}
@@ -39,8 +38,7 @@
 
 	async function remove(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await deleteProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
 			return;
 		}
@@ -58,10 +56,10 @@
 	 */
 	async function empty(): Promise<void> {
 		for (const entry of entries) {
-			if (entry.kind === 'diagram') await deleteProjectDiagram({ diagramId: entry.id });
+			if (entry.kind === 'diagram') await changeDiagramTrash(entry.id, 'delete');
 		}
 		const output = await projectActions.emptyNoteTrash();
-		await invalidateAll();
+		await workspaceSession.synchronize();
 		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
 		else toast.success('Trash emptied');
 	}

@@ -5,6 +5,7 @@
 build/
 node_modules/
 docs/dist/
+docs/.astro/
 docs/src/content/docs/reference/*-generated/
 drizzle/
 skills-lock.json

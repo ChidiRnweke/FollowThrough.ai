@@ -11,8 +11,8 @@
 		type TabId
 	} from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
-	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteView } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
@@ -38,7 +38,7 @@
 	}: {
 		shell: ShellContext;
 		sessions: readonly Conversation[];
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
@@ -73,7 +73,9 @@
 		if (isSearchTab(tabId)) return 'Search';
 		const diagramId = diagramIdOf(tabId);
 		if (diagramId !== undefined)
-			return diagramRegistry.peek(diagramId)?.description?.title ?? 'Untitled diagram';
+			return (
+				workspaceSession.current?.resources.views.diagram(diagramId)?.title ?? 'Untitled diagram'
+			);
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;

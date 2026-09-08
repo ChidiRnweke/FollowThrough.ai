@@ -1,3 +1,4 @@
+import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import {
 	readAgentRunEventRecord,
 	type AgentRunEventRecord,
@@ -97,8 +98,11 @@ class BrowserTransport implements NoteActionRunTransport {
 			// record the store would then have to guess at.
 			const frame: unknown = JSON.parse(event.data);
 			const record = readAgentRunEventRecord(frame);
-			if (record.kind === 'readable') onEvent(record);
-			else console.warn(`[agent] dropped an unreadable event frame: ${record.reason}`);
+			if (record.kind === 'readable') {
+				onEvent(record);
+				if (record.event.type === 'workflow_result' || record.event.type === 'resources_stale')
+					void workspaceSession.synchronize();
+			} else console.warn(`[agent] dropped an unreadable event frame: ${record.reason}`);
 		});
 		source.onerror = onError;
 		return { close: () => source.close() };

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { UserSettings } from './controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { UserSettings, type UserSettingsDependencies } from './controller';
 import { InMemoryUserPreferencesRepository } from '$lib/testing/identity/fakes/in-memory-user-preferences';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
 	const preferences = new InMemoryUserPreferencesRepository();
-	const controller = new UserSettings({ preferences });
+	const controller = new UserSettings(
+		capabilityDependencies<UserSettingsDependencies>({ preferences })
+	);
 	return { preferences, controller };
 };
 

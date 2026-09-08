@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { z } from 'zod';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
 		AgentModel,
-		AgentPreferences,
+		AgentPreferenceValues,
 		ConversationImageInput,
 		Conversation,
 		RunAgentInput
@@ -22,18 +22,17 @@
 	} from '$lib/stores/agent/chat.svelte';
 	import { liveSelectionChipOf, selectionChipOf } from '$lib/stores/agent/selection-chip';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
-	import { suggestionTrayRegistry } from '$lib/stores/notes/registries/suggestion-tray-registry.svelte';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { toast } from 'svelte-sonner';
-	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
-	import { invalidateAll } from '$app/navigation';
+
 	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
 	import {
 		chatRegistry,
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
-	import { getProjectDiagram } from '$lib/remote/diagrams/diagrams.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
@@ -77,7 +76,7 @@
 		activeProjectId?: ProjectId;
 		initialConversationId?: Conversation['id'] | null;
 		showHistory?: boolean;
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		/** What a conversation with no model of its own runs on, resolved server-side. */
 		agentDefaults: AgentModelDefaults;
@@ -99,25 +98,25 @@
 	 * conversation with a kept diagram counted as "on screen" no matter what the
 	 * agent had since drawn, and the offer was withheld for the rest of it.
 	 */
+	const session = untrack(() => workspaceSession.current);
+	if (!session) throw new Error('Open the workspace before opening a chat');
+	const resources = session.resources;
+	$effect(() => {
+		const online = resources.online;
+		untrack(() => {
+			if (!online || chat.initialized) void chat.revalidate();
+		});
+	});
+
 	const canvas = $derived(canvasFor(chat.sessionKey));
 	const canvasOnScreen = $derived(canvas !== undefined && workbench.openTabs.includes(canvas.tab));
-	/**
-	 * Pull a diagram the agent revised back into the pane showing it.
-	 *
-	 * A diagram pane renders `getProjectDiagram`, and every client write refreshes
-	 * that cache by pairing itself with `.updates(...)`. The agent's revision is
-	 * written inside a tool, so nothing invalidates it — the row changed and the
-	 * canvas went on showing the version before it.
-	 *
-	 * Keyed on the call rather than the diagram: two revisions of one diagram share
-	 * an id, so comparing ids would refresh the first and ignore every one after.
-	 */
+	/** Pull journal changes after an agent applies a diagram edit. */
 	let refreshedRevisionCallId = $state<string | undefined>(undefined);
 	$effect(() => {
 		const applied = latestDiagramWrite(chat.sessionKey);
 		if (!applied || applied.callId === refreshedRevisionCallId) return;
 		refreshedRevisionCallId = applied.callId;
-		void getProjectDiagram(applied.diagramId).refresh();
+		void workspaceSession.synchronize();
 	});
 	/**
 	 * The diagram this conversation produced, when this chat has nowhere to show it.
@@ -139,10 +138,12 @@
 		// mechanism, and whoever acquired this store owns detaching it.
 		const releaseComposerFocus = registerComposerFocus?.(() => textareaRef?.focus());
 		chat.initialize(agentPreferences.executionMode);
-		if (initialConversationId === null) chat.clear();
-		else if (initialConversationId)
-			void openConversation(chat.switchToConversation(initialConversationId));
-		else void openConversation(chat.hydrate());
+		if (initialConversationId === null) {
+			chat.clear();
+			void chat.hydrate(resources);
+		} else if (initialConversationId)
+			void openConversation(chat.switchToConversation(initialConversationId, resources));
+		else void openConversation(chat.hydrate(resources));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else prompt = sessionStorage.getItem(draftKey()) ?? '';
@@ -580,30 +581,9 @@
 			.uuid()
 			.transform((value) => value as SuggestionId)
 			.parse(id);
-		const tray = workbench.focusedNoteId
-			? suggestionTrayRegistry.peek(workbench.focusedNoteId)
-			: undefined;
-		// The tray only exists while a note pane is mounted. In the right panel there
-		// often is none, and routing through it there rejected every decision — so
-		// fall back to the controller, which is what the tray calls anyway.
-		const ok = tray
-			? await tray.decide(suggestionId, decision)
-			: await decideDirectly(suggestionId, decision);
+		const ok = await suggestionActions.decide(suggestionId, decision);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
-	}
-
-	async function decideDirectly(id: string, decision: 'accept' | 'reject'): Promise<boolean> {
-		try {
-			if (decision === 'accept') await acceptSuggestion({ suggestionId: id });
-			else await rejectSuggestion({ suggestionId: id });
-			chat.resolveSuggestion(id);
-			await invalidateAll();
-			return true;
-			// audit-allow: silent-catch — false is the typed decision outcome consumed by the tool card, which keeps the decision available.
-		} catch {
-			return false;
-		}
 	}
 
 	async function requestRetry(entry: ChatEntry): Promise<void> {
@@ -628,9 +608,19 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col">
-	{#if !agentAvailable}
+	{#if !resources.online}
+		<p role="status" class="mb-4 text-sm text-muted-foreground">
+			Offline. Saved chat history is available. Reconnect to send messages or answer approvals.
+		</p>
+	{:else if !agentAvailable}
 		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
 			Agent chat is disabled. Configure <code class="text-xs">OPENROUTER_API_KEY</code> to enable it.
+		</div>
+	{/if}
+	{#if chat.historyError}
+		<div role="alert" class="mb-4 text-sm text-destructive">
+			{chat.historyError}
+			<Button variant="outline" onclick={() => void chat.hydrate(resources)}>Retry</Button>
 		</div>
 	{/if}
 	{#if chat.persistenceError}
@@ -666,13 +656,14 @@
 			loading={chat.loading}
 			isStreaming={chat.isStreaming}
 			deciding={chat.deciding}
+			executionDisabled={!chat.canExecute}
 			{editingId}
 			bind:editDraft
 			bind:viewport
 			bind:questionRef
 			bind:anchorSpacer
 			{showJumpToLatest}
-			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id))}
+			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, resources))}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}
@@ -684,10 +675,7 @@
 			onstartediting={startEditing}
 			onaskagain={askAgain}
 			onsuggestion={(id, decision) => void decide(id, decision)}
-			onsuggestionbusy={(id) =>
-				(workbench.focusedNoteId &&
-					suggestionTrayRegistry.peek(workbench.focusedNoteId)?.busyIds.includes(id)) ??
-				false}
+			onsuggestionbusy={(id) => suggestionActions.busyIds.includes(id)}
 			onjumptolatest={jumpToLatest}
 		/>
 		{#if studioOffer}
@@ -717,7 +705,7 @@
 				{mentionCandidates}
 				{highlighted}
 				{selectedImages}
-				{agentAvailable}
+				agentAvailable={agentAvailable && chat.canExecute}
 				isStreaming={chat.isStreaming}
 				connection={chat.connection}
 				executionMode={chat.executionModeOverride}

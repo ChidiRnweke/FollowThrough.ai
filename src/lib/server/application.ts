@@ -18,6 +18,7 @@ import type { AgentEventBus } from './services/agent/runs/events';
 import type { ScheduledTask } from './services/scheduler';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
+import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
 import { createNotesCapability } from './factories/capabilities/notes-capability-factory';
 import { createReferencesCapability } from './factories/capabilities/references-capability-factory';
 import { createRelationshipsCapability } from './factories/capabilities/relationships-capability-factory';
@@ -116,6 +117,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
+	const synchronization = createSyncCapability({ db, transactionRunner });
 	const projectCapability = createProjectsCapability({ db });
 	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
 	const todoCapability = createTodosCapability({
@@ -310,6 +312,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
+			syncMutations: synchronization.mutations,
 			todoLister: todos,
 			todoViewAssembler: todos,
 			todoReader: todos,
@@ -368,6 +371,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			workflowRunner: agentCapability.workflowRunner
 		},
 		diagramStudio: {
+			syncMutations: synchronization.mutations,
 			transactionRunner,
 			diagramFinder: diagrams,
 			diagramLister: diagrams,
@@ -400,6 +404,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions
 		},
 		agent: {
+			syncMutations: synchronization.mutations,
 			conversationJournal,
 			preferences,
 			models: modelCatalog,
@@ -413,16 +418,21 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			executor
 		},
 		agentSettings: {
+			syncMutations: synchronization.mutations,
 			preferences,
 			models: modelCatalog,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel
 		},
-		userSettings: { preferences: identity.userPreferences },
+		userSettings: {
+			preferences: identity.userPreferences,
+			syncMutations: synchronization.mutations
+		},
 		apiTokens: { tokens: identity.apiTokens },
-		toolPreferences: { preferences: toolPreferences },
+		toolPreferences: { preferences: toolPreferences, syncMutations: synchronization.mutations },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
+			syncMutations: synchronization.mutations,
 			templateUploader: templates,
 			templateLister: templates,
 			templateDeleter: templates,
@@ -438,6 +448,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			syncMutations: synchronization.mutations,
 			skillFinder: provisionedSkills,
 			skillUsageLister: skills,
 			skillUsageRecorder: skills,
@@ -450,6 +461,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
+			syncChanges: synchronization.changes,
+			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
 			projectLister: projects,
 			noteTreeReader: notes,
@@ -460,6 +473,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoViewAssembler: todos
 		},
 		notes: {
+			syncMutations: synchronization.mutations,
 			noteReader: notes,
 			noteTreeReader: notes,
 			noteTextSearcher: notes,
@@ -489,8 +503,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteIndexer,
 			transactionRunner
 		},
-		trustPolicies: { trustPolicyStore: trust },
+		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
 		memory: {
+			syncMutations: synchronization.mutations,
 			memoryLister: memory,
 			memoryCreator: memory,
 			memoryEditor: memory,
@@ -503,6 +518,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		projects: {
+			syncMutations: synchronization.mutations,
 			projectCreator: projects,
 			projectReader: projects,
 			projectLister: projects,

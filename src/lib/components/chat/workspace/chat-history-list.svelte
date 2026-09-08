@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import { Button } from '$lib/components/ui/button';
@@ -13,7 +15,7 @@
 		FtEdit as Pencil
 	} from '$lib/components/icons';
 	import { NameDialog } from '$lib/components/projects';
-	import { deleteSession, renameSession } from '$lib/remote/agent/chat.remote';
+	import { deleteSession } from '$lib/remote/agent/chat.remote';
 	import { toast } from 'svelte-sonner';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
@@ -41,6 +43,7 @@
 	} = $props();
 
 	let selected = $state<Conversation | undefined>();
+	let renameDraft = $state<WorkspaceDraft<'conversations'> | null>(null);
 	let renameOpen = $state(false);
 	let deleteOpen = $state(false);
 	let busy = $state(false);
@@ -56,16 +59,24 @@
 		return 'Workspace chat';
 	};
 
-	async function rename(title: string): Promise<void> {
-		if (!selected) return;
+	async function rename(title: string): Promise<boolean> {
+		if (!renameDraft?.value) return false;
 		busy = true;
 		try {
-			await renameSession({ conversationId: selected.id, title });
-			await invalidateAll();
-			toast.success('Chat renamed.');
+			const value = renameDraft.value;
+			const result = await renameDraft.stage({
+				command: { kind: 'renameConversation', conversationId: value.id, title },
+				local: { type: 'conversations', value: { ...value, title } },
+				coalesce: null,
+				references: []
+			});
+			if (result.kind === 'failure') throw new Error(result.message);
+			toast.success('Chat name saved on this device.');
+			return true;
 			// audit-allow: silent-catch — rename failure is reported and the existing chat title remains authoritative.
 		} catch {
 			toast.error('Chat could not be renamed.');
+			return false;
 		} finally {
 			busy = false;
 		}
@@ -87,7 +98,7 @@
 				open.clear();
 				if (location.pathname === `/chats/${selected.id}`) await goto('/chats/new');
 			}
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			deleteOpen = false;
 			toast.success('Chat deleted.');
 			// audit-allow: silent-catch — deletion failure is reported with the recovery action to stop the active run.
@@ -122,6 +133,14 @@
 				</DropdownMenu.Item>
 				<DropdownMenu.Item
 					onclick={() => {
+						const resources = workspaceSession.current?.resources;
+						if (!resources) {
+							toast.error('Open the workspace before renaming a chat.');
+							return;
+						}
+						const draft = resources.draft({ type: 'conversations', id: [session.id] });
+						draft.capture();
+						renameDraft = draft;
 						selected = session;
 						renameOpen = true;
 					}}

@@ -285,6 +285,68 @@ const suggestionPayloadSchemas = {
 	readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']>;
 };
 
+const suggestionFields = {
+	id: persistedId<SuggestionId>(),
+	userId: persistedId<UserId>(),
+	noteId: persistedId<NoteId>().optional(),
+	status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']),
+	confidence: z
+		.number()
+		.transform((value) => value as Confidence)
+		.optional(),
+	provenanceId: persistedId<ProvenanceId>(),
+	sourceAnchorId: persistedId<SourceAnchorId>().optional(),
+	decidedAt: z
+		.string()
+		.datetime({ offset: true })
+		.transform((value) => value as DateTime)
+		.optional(),
+	expiresAt: z
+		.string()
+		.datetime({ offset: true })
+		.transform((value) => value as DateTime)
+		.optional(),
+	appliedArtifactId: z.string().optional(),
+	isAutoAccepted: z.boolean(),
+	createdAt: z
+		.string()
+		.datetime({ offset: true })
+		.transform((value) => value as DateTime),
+	updatedAt: z
+		.string()
+		.datetime({ offset: true })
+		.transform((value) => value as DateTime)
+};
+
+/** The cached representation uses the same payload contract as the existing database reader. */
+export const suggestionSchema = z.discriminatedUnion('kind', [
+	z.object({
+		...suggestionFields,
+		kind: z.literal('todo'),
+		payload: suggestionPayloadSchemas.todo
+	}),
+	z.object({
+		...suggestionFields,
+		kind: z.literal('backlink'),
+		payload: suggestionPayloadSchemas.backlink
+	}),
+	z.object({
+		...suggestionFields,
+		kind: z.literal('reference'),
+		payload: suggestionPayloadSchemas.reference
+	}),
+	z.object({
+		...suggestionFields,
+		kind: z.literal('diagram'),
+		payload: suggestionPayloadSchemas.diagram
+	}),
+	z.object({
+		...suggestionFields,
+		kind: z.literal('memory'),
+		payload: suggestionPayloadSchemas.memory
+	})
+]) satisfies z.ZodType<Suggestion>;
+
 /**
  * A stored suggestion, which may have a payload that no longer matches its kind.
  *

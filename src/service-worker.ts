@@ -8,10 +8,10 @@ import { base, build, files, prerendered, version } from '$service-worker';
 const worker: ServiceWorkerGlobalScope = self;
 const CACHE_PREFIX = 'followthrough-';
 const ASSET_CACHE = `${CACHE_PREFIX}assets-${version}`;
-const PAGE_CACHE = `${CACHE_PREFIX}pages-${version}`;
 const APP_ROOT = `${base}/`;
 const OFFLINE_ROUTE = `${base}/offline`;
-const BUILD_PATHS = [...build, ...files, ...prerendered];
+const OFFLINE_SHELL = `${base}/offline-shell.html`;
+const BUILD_PATHS = [...build, ...files, ...prerendered, OFFLINE_SHELL];
 /**
  * Harper's proofreading engine is a ~16 MB WebAssembly binary, and proofreading
  * is off until a user asks for it. Installing it with the app would make every
@@ -24,12 +24,8 @@ const isOnDemandAsset = (path: string): boolean => path.endsWith('.wasm');
 const PRECACHED_PATHS = BUILD_PATHS.filter((path) => !isOnDemandAsset(path));
 const PRECACHED_PATH_SET = new Set(BUILD_PATHS);
 
-const canStore = (response: Response, allowPrivatePageData = false): boolean =>
-	response.ok &&
-	(allowPrivatePageData || !response.headers.get('cache-control')?.includes('no-store'));
-
-const isPageDataRequest = (url: URL): boolean =>
-	url.pathname.endsWith('/__data.json') || url.pathname.endsWith('.html__data.json');
+const canStore = (response: Response): boolean =>
+	response.ok && !response.headers.get('cache-control')?.includes('no-store');
 
 // Storing is best-effort: a quota or an uncacheable response must not fail a
 // request whose fetch already succeeded.
@@ -42,23 +38,8 @@ const store = async (cache: Cache, key: Request | string, response: Response): P
 	}
 };
 
-const cacheRootShell = async (): Promise<void> => {
-	try {
-		const response = await fetch(APP_ROOT);
-		if (canStore(response)) await store(await caches.open(PAGE_CACHE), APP_ROOT, response);
-		// audit-allow: silent-catch — dynamic shell precaching is optional and install still precaches immutable assets
-	} catch {
-		// The generated app remains installable even if the dynamic shell is briefly unavailable.
-	}
-};
-
 worker.addEventListener('install', (event) => {
-	event.waitUntil(
-		Promise.all([
-			caches.open(ASSET_CACHE).then((cache) => cache.addAll(PRECACHED_PATHS)),
-			cacheRootShell()
-		])
-	);
+	event.waitUntil(caches.open(ASSET_CACHE).then((cache) => cache.addAll(PRECACHED_PATHS)));
 });
 
 worker.addEventListener('activate', (event) => {
@@ -69,9 +50,7 @@ worker.addEventListener('activate', (event) => {
 				.then((keys) =>
 					Promise.all(
 						keys
-							.filter(
-								(key) => key.startsWith(CACHE_PREFIX) && key !== ASSET_CACHE && key !== PAGE_CACHE
-							)
+							.filter((key) => key.startsWith(CACHE_PREFIX) && key !== ASSET_CACHE)
 							.map((key) => caches.delete(key))
 					)
 				),
@@ -107,24 +86,30 @@ const cacheFirst = async (request: Request, pathname: string): Promise<Response>
 	}
 };
 
-const networkFirst = async (
-	request: Request,
-	cacheKey: Request | string,
-	fallback?: string,
-	allowPrivatePageData = false
-): Promise<Response> => {
-	const cache = await caches.open(PAGE_CACHE);
+const isWorkspaceNavigation = (pathname: string): boolean =>
+	/^\/(today|notes|todos|projects|skills|chats|diagrams|artifacts|trash|profile|settings)(?:\/|$)/.test(
+		pathname.slice(base.length)
+	);
+
+const navigation = async (request: Request, pathname: string): Promise<Response> => {
 	try {
 		const response = await fetch(request);
-		if (canStore(response, allowPrivatePageData)) await store(cache, cacheKey, response);
 		if (response.status < 500) return response;
-		return (await cache.match(cacheKey)) ?? response;
-		// audit-allow: silent-catch — the offline path returns cached content only when present, otherwise an explicit redirect or 503.
+		// A cached shell can still open local resources while the app server is unavailable.
+		// audit-allow: silent-catch — an unavailable navigation resolves to the data-free shell or the explicit offline page.
 	} catch {
-		const cached = await cache.match(cacheKey);
-		if (cached) return cached;
-		return fallback ? Response.redirect(fallback, 302) : unavailable();
+		return fallbackNavigation(pathname);
 	}
+	return fallbackNavigation(pathname);
+};
+const fallbackNavigation = async (pathname: string): Promise<Response> => {
+	if (pathname === APP_ROOT)
+		return Response.redirect(`${worker.location.origin}${base}/today`, 302);
+	if (isWorkspaceNavigation(pathname)) {
+		const shell = await (await caches.open(ASSET_CACHE)).match(OFFLINE_SHELL);
+		return shell ?? unavailable();
+	}
+	return Response.redirect(`${worker.location.origin}${OFFLINE_ROUTE}`, 302);
 };
 
 worker.addEventListener('fetch', (event) => {
@@ -140,13 +125,7 @@ worker.addEventListener('fetch', (event) => {
 	}
 
 	if (request.mode === 'navigate') {
-		event.respondWith(networkFirst(request, request, OFFLINE_ROUTE));
+		event.respondWith(navigation(request, url.pathname));
 		return;
-	}
-
-	if (isPageDataRequest(url)) {
-		// SvelteKit marks page-data responses private/no-store. This app-owned cache is the narrow
-		// exception that allows an already-visited private workspace route to reopen offline.
-		event.respondWith(networkFirst(request, request, undefined, true));
 	}
 });

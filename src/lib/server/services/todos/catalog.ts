@@ -38,7 +38,7 @@ export class TodoCatalog {
 			throw new NotFoundError('Todo provenance was not found');
 		const timestamp = now();
 		return this.todos.insert(actor, {
-			id: crypto.randomUUID() as TodoId,
+			id: input.id ?? (crypto.randomUUID() as TodoId),
 			userId: actor.userId,
 			projectId: input.projectId,
 			title,

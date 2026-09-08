@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import {
@@ -21,7 +21,7 @@ export const submitAgentRun = command(submitAgentRunSchema, async (input) =>
 	AppFactory.controllers().agent().submit(requestActor(), input)
 );
 
-export const getAgentRun = query(runIdInput, async ({ runId }) =>
+export const getAgentRun = command(runIdInput, async ({ runId }) =>
 	AppFactory.controllers().agent().getRun(requestActor(), runId)
 );
 
@@ -53,17 +53,6 @@ export const retryAgentRun = command(
 	z.object({ runId: agentRunId, requestId: z.string().uuid() }),
 	async ({ runId, requestId }) =>
 		AppFactory.controllers().agent().retry(requestActor(), runId, requestId)
-);
-
-export const getSession = query(conversationId, async (conversationId) => {
-	const factory = AppFactory.controllers();
-	return factory.agent().getSession(requestActor(), conversationId);
-});
-
-export const renameSession = command(
-	z.object({ conversationId, title: z.string().trim().min(1).max(80) }),
-	async ({ conversationId, title }) =>
-		AppFactory.controllers().agent().renameSession(requestActor(), conversationId, title)
 );
 
 export const deleteSession = command(z.object({ conversationId }), async ({ conversationId }) => {

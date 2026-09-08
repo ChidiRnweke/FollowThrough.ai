@@ -215,36 +215,6 @@ export interface VersionedNote {
 	readonly etag: NoteEtag;
 }
 
-export interface SyncNoteInput {
-	readonly note: Note;
-	readonly baseEtag: NoteEtag;
-	readonly operationId: string;
-}
-
-/** `conflict` only fires on genuine divergence: a stale ETag whose remote content matches the submission resolves to `saved` instead, so a retried save never reports a false conflict. */
-export type SyncNoteOutput =
-	| {
-			readonly outcome: 'saved';
-			readonly version: VersionedNote;
-			readonly repairedAnchorIds: readonly SourceAnchorId[];
-	  }
-	| {
-			readonly outcome: 'conflict';
-			readonly baseEtag: NoteEtag;
-			readonly remote: VersionedNote;
-	  };
-
-export interface NoteSyncInventoryEntry {
-	readonly noteId: NoteId;
-	readonly projectId: ProjectId;
-	readonly etag: NoteEtag;
-	readonly updatedAt: DateTime;
-}
-
-export interface ListNoteSyncInventoryInput {
-	readonly projectId?: ProjectId;
-}
-
 export interface SetNoteSectionNumberingInput {
 	readonly noteId: NoteId;
 	/** `undefined` clears the note's override so it inherits the project default again. */
@@ -254,27 +224,6 @@ export interface SetNoteSectionNumberingInput {
 export interface SetNoteSectionNumberingOutput {
 	readonly sectionNumbering: SectionNumberingView;
 }
-
-export interface ListNoteSyncInventoryOutput {
-	readonly entries: readonly NoteSyncInventoryEntry[];
-}
-
-export type NoteSyncRecordState = 'synced' | 'pending' | 'syncing' | 'conflict';
-
-/** The offline client's three-way state for one note: the last agreed version, the device copy, and an optional diverged remote copy. */
-export interface NoteSyncRecord {
-	readonly userId: UserId;
-	readonly noteId: NoteId;
-	readonly base: VersionedNote;
-	readonly local: Note;
-	readonly remote?: VersionedNote;
-	readonly operationId: string;
-	readonly editVersion: number;
-	readonly state: NoteSyncRecordState;
-	readonly updatedAt: DateTime;
-}
-
-export type NoteSyncStatus = 'loading' | 'synced' | 'saving' | 'pending' | 'conflict' | 'error';
 
 export const noteEtag = (note: Pick<Note, 'id' | 'currentRevision'>): NoteEtag =>
 	`note:${note.id}:r${note.currentRevision}` as NoteEtag;
@@ -375,6 +324,8 @@ export interface ListNoteDocumentsInput {
 export const MAX_NOTE_DOCUMENTS = 50;
 
 export interface CreateNoteInput {
+	/** Offline creation supplies the final identity before this note reaches the server. */
+	readonly id?: NoteId;
 	/**
 	 * Required, because there is no honest way to fill it in. It was optional, and
 	 * a note created without one landed in whichever project sorted first — or in a
@@ -1194,10 +1145,18 @@ export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
  * gives what the arm is for: a document with one unreadable block instead of a
  * list read that throws.
  */
-const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
+export const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	.object({
 		type: z.literal('doc'),
-		content: z.array(z.union([proseMirrorNodeSchema, unknownNodeSchema])).optional()
+		content: z
+			.array(
+				z.union([
+					proseMirrorNodeSchema,
+					z.object({ type: z.literal('unknown'), raw: attrValueSchema, reason: z.string() }),
+					unknownNodeSchema
+				])
+			)
+			.optional()
 	})
 	.strict();
 
@@ -1319,3 +1278,22 @@ export * from './section-numbering';
 export * from './outline';
 
 export * from './revision-diff';
+
+function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
+	if (node.type === 'drawio') {
+		const id = node.attrs?.diagramId;
+		if (id && !ids.includes(id)) ids.push(id);
+		return;
+	}
+	for (const child of 'content' in node ? (node.content ?? []) : []) collectDrawioIds(child, ids);
+}
+
+/** Every draw.io diagram referenced by a set of documents, in document order. */
+export function drawioReferencesIn(
+	documents: readonly { document: ProseMirrorDocument }[]
+): string[] {
+	const ids: string[] = [];
+	for (const entry of documents)
+		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
+	return ids;
+}

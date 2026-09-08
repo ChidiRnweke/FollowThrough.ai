@@ -478,8 +478,27 @@ export const setSessionCookie = (
 	secure: boolean
 ): void => cookies.set('session', sessionId, cookieOptions(secure, 60 * 60 * 24 * 30));
 
-export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
+// Public cookie protocol, also named by the browser's bootstrap model.
+// Configuration must remain independent of application imports.
+const workspaceAccountCookieName = 'workspace_account';
+
+export const setWorkspaceAccountCookie = (
+	cookies: Pick<CookieJar, 'set'>,
+	accountId: string,
+	secure: boolean
+): void =>
+	cookies.set(workspaceAccountCookieName, accountId, {
+		...cookieOptions(secure, 60 * 60 * 24 * 30),
+		httpOnly: false
+	});
+
+export const clearWorkspaceAccountCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
+	cookies.delete(workspaceAccountCookieName, { path: '/' });
+
+export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void => {
 	cookies.delete('session', { path: '/' });
+	clearWorkspaceAccountCookie(cookies);
+};
 
 const pkceCookieSchema = z
 	.object({ codeVerifier: z.string().min(1), state: z.string().min(1) })

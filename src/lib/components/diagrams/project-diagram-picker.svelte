@@ -5,7 +5,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { FtWorkflow as Workflow } from '$lib/components/icons';
-	import { listProjectDiagrams } from '$lib/remote/diagrams/diagrams.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { untrack } from 'svelte';
 	import DiagramPreview from './diagram-preview.svelte';
 
 	let {
@@ -20,8 +21,25 @@
 
 	// Same-project only: a note cannot render a diagram from a project it does not
 	// belong to, and the server rejects it anyway.
-	const query = $derived(open ? listProjectDiagrams(projectId) : undefined);
-	const diagrams = $derived(query?.current?.diagrams ?? []);
+	const session = untrack(() => workspaceSession.current);
+	if (!session) throw new Error('Open the workspace before choosing a diagram');
+	const resources = session.resources;
+	const diagrams = $derived(resources.views.diagrams(projectId));
+	let ready = $state(false);
+	let failure = $state<string | null>(null);
+	async function prepare(): Promise<void | { kind: 'failure' }> {
+		try {
+			await resources.prepare(['diagrams']);
+			ready = true;
+			failure = null;
+		} catch (error) {
+			failure = error instanceof Error ? error.message : 'Diagrams could not be loaded';
+			return { kind: 'failure' };
+		}
+	}
+	$effect(() => {
+		if (open) void prepare();
+	});
 
 	function pick(diagramId: DiagramId): void {
 		open = false;
@@ -38,7 +56,9 @@
 				updates every note that renders it.
 			</Dialog.Description>
 		</Dialog.Header>
-		{#if diagrams.length === 0}
+		{#if failure}<p role="alert">{failure}</p>{:else if !ready}<p role="status">
+				Loading diagrams.
+			</p>{:else if diagrams.length === 0}
 			<EmptyState
 				icon={Workflow}
 				title="No diagrams to insert yet."

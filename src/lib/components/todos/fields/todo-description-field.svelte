@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
 	import { renderMarkdown } from '$lib/models/markdown';
@@ -22,6 +23,12 @@
 		id
 	}: { todoId: TodoId; projectId: ProjectId; value?: string; id?: string } = $props();
 
+	const resourceDraft = untrack(() => {
+		const editor = todoUpdates.editor(todoId);
+		editor.capture();
+		return editor;
+	});
+
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());
 	let draft = $state(initialValue());
@@ -38,13 +45,22 @@
 		if (editing) textarea?.focus();
 	});
 
+	$effect(() => {
+		const next = value;
+		if (untrack(() => draft === saved)) {
+			untrack(() => resourceDraft.capture());
+			saved = next;
+			draft = next;
+		}
+	});
+
 	async function commit(): Promise<void> {
 		editing = false;
 		if (draft === saved) return;
-		if (await todoUpdates.updateTodo(todoId, { description: draft.trim() || null })) saved = draft;
+		if (await todoUpdates.save(resourceDraft, { description: draft.trim() || null })) saved = draft;
 		else {
-			draft = saved;
-			toast.error('Could not update the description.');
+			editing = true;
+			toast.error(todoUpdates.lastError ?? 'Could not update the description.');
 		}
 	}
 

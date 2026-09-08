@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
-	import { invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type {
 		MemoryEntry,
 		MemoryEntryId,
@@ -25,13 +25,10 @@
 		FtPlus as Plus
 	} from '$lib/components/icons';
 	import EmptyState from '../shared/empty-state.svelte';
-	import {
-		getEntries,
-		getPendingSuggestions,
-		createEntry,
-		updateEntry,
-		deleteEntry
-	} from '$lib/remote/memory/memory.remote';
+	import { newMemory, memoryWrite } from '$lib/models/workspace-mutations';
+	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { DateTime } from '$lib/models/workspace';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
@@ -59,28 +56,43 @@
 		heroEmpty?: boolean;
 	} = $props();
 
-	let entries = $state<MemoryEntry[]>([]);
-	let pending = $state<MemorySuggestionView[]>([]);
+	const resources = $derived(workspaceSession.current?.resources);
+	const entries = $derived(resources?.views.memories(projectId) ?? []);
+	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
+	let loadError = $state<string | null>(null);
 	let loading = $state(false);
 	let busyIds = $state<SuggestionId[]>([]);
 	let draft = $state('');
 	let draftType = $state<MemoryEntryType | 'none'>('none');
 	const entryTypes: MemoryEntryType[] = ['fact', 'decision', 'constraint', 'preference'];
-	let editingId = $state<MemoryEntryId | undefined>(undefined);
-	let editingContent = $state('');
-	let deleteTarget = $state<MemoryEntry | undefined>(undefined);
-	let deleteOpen = $state(false);
+	let editing = $state<{ resource: WorkspaceDraft<'memory_entries'>; content: string } | null>(
+		null
+	);
+	let deletion = $state<WorkspaceDraft<'memory_entries'> | null>(null);
 	let addOpen = $state(false);
+	let adding = $state(false);
 
-	function askDelete(entry: MemoryEntry): void {
-		deleteTarget = entry;
-		deleteOpen = true;
+	function editorFor(entry: MemoryEntry): WorkspaceDraft<'memory_entries'> {
+		if (!resources) throw new Error('Open the workspace before editing memory');
+		const resource = resources.draft({ type: 'memory_entries', id: [entry.id] });
+		resource.capture();
+		return resource;
 	}
-
+	function askDelete(entry: MemoryEntry): void {
+		deletion = editorFor(entry);
+	}
 	async function confirmDelete(): Promise<void> {
-		if (deleteTarget) await remove(deleteTarget);
-		deleteOpen = false;
-		deleteTarget = undefined;
+		const resource = deletion;
+		const entry = resource?.value;
+		if (!resource || !entry) return;
+		const result = await resource.stage({
+			command: { kind: 'deleteMemory', memoryEntryId: entry.id },
+			local: null,
+			coalesce: null,
+			references: []
+		});
+		if (result.kind === 'failure') toast.error(result.message);
+		else if (deletion === resource) deletion = null;
 	}
 	// Proposals and kept entries are different in kind — one asks for a decision,
 	// the other is the record — so each gets its own section instead of the two
@@ -92,22 +104,18 @@
 	const isEmpty = $derived(pendingItems.length === 0 && savedItems.length === 0);
 
 	$effect(() => {
-		void load(projectId);
-	});
-
-	async function load(id: ProjectId | undefined): Promise<void> {
+		if (!resources) return;
 		loading = true;
-		try {
-			const [saved, proposed] = await Promise.all([getEntries(id), getPendingSuggestions(id)]);
-			entries = [...saved.entries];
-			pending = [...proposed.suggestions];
-			// audit-allow: silent-catch — load failure is reported instead of presenting an empty list as success.
-		} catch {
-			toast.error('Could not load memory.');
-		} finally {
-			loading = false;
-		}
-	}
+		void resources
+			.prepare(['memory_entries', 'suggestions', 'source_anchors', 'provenance'])
+			.catch((error) => {
+				loadError = error instanceof Error ? error.message : 'Could not load memory';
+				return { kind: 'failure', message: loadError };
+			})
+			.finally(() => {
+				loading = false;
+			});
+	});
 
 	function proposalContent(view: MemorySuggestionView): string {
 		const suggestion = view.suggestion;
@@ -122,14 +130,8 @@
 		try {
 			const output = await acceptSuggestion({ suggestionId: id });
 			if (output.suggestion.kind !== 'memory') throw new Error('Expected a memory suggestion');
-			pending = pending.filter((item) => item.suggestion.id !== id);
-			const targetId = output.suggestion.payload.memoryEntryId;
-			const remaining = targetId ? entries.filter((entry) => entry.id !== targetId) : entries;
-			entries =
-				output.suggestion.payload.operation === 'remove'
-					? remaining
-					: [output.artifact as MemoryEntry, ...remaining];
-			await invalidateAll();
+
+			await workspaceSession.synchronize();
 			toast.success('Memory accepted.');
 			// audit-allow: silent-catch — acceptance failure is reported and the suggestion remains pending.
 		} catch {
@@ -144,8 +146,7 @@
 		busyIds = [...busyIds, id];
 		try {
 			await rejectSuggestion({ suggestionId: id });
-			pending = pending.filter((item) => item.suggestion.id !== id);
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			toast.success('Memory suggestion dismissed.');
 			// audit-allow: silent-catch — dismissal failure is reported and the suggestion remains pending.
 		} catch {
@@ -157,14 +158,38 @@
 
 	async function add(): Promise<boolean> {
 		const content = draft.trim();
-		if (!content) return false;
+		if (!content || adding) return false;
+		adding = true;
 		try {
-			const { entry } = await createEntry({
-				projectId,
-				content,
-				...(draftType !== 'none' ? { type: draftType } : {})
+			const session = workspaceSession.current;
+			if (!session) throw new Error('Open the workspace before adding memory');
+			const entry = newMemory(
+				crypto.randomUUID() as MemoryEntryId,
+				session.shell.user.id,
+				{
+					projectId,
+					content,
+					...(draftType !== 'none' ? { type: draftType } : {})
+				},
+				new Date().toISOString() as DateTime
+			);
+			await session.resources.append({
+				operationId: crypto.randomUUID(),
+				key: workspaceResourceKey({ type: 'memory_entries', id: [entry.id] }),
+				command: {
+					kind: 'createMemory',
+					id: entry.id,
+					projectId,
+					content: entry.content,
+					type: entry.type,
+					shareWithAgents: entry.shareWithAgents
+				},
+				base: null,
+				basedOn: null,
+				local: { type: 'memory_entries', value: entry },
+				coalesce: null,
+				references: projectId ? [workspaceResourceKey({ type: 'projects', id: [projectId] })] : []
 			});
-			entries = [entry, ...entries];
 			draft = '';
 			draftType = 'none';
 			return true;
@@ -172,6 +197,8 @@
 		} catch {
 			toast.error('Could not save the memory entry.');
 			return false;
+		} finally {
+			adding = false;
 		}
 	}
 
@@ -181,43 +208,21 @@
 		if (await add()) addOpen = false;
 	}
 
-	async function saveEdit(entry: MemoryEntry): Promise<void> {
-		const content = editingContent.trim();
+	async function saveEdit(): Promise<void> {
+		const edit = editing;
+		const entry = edit?.resource.value;
+		if (!edit || !entry) return;
+		const content = edit.content.trim();
 		if (!content) return;
-		const previous = entries;
-		entries = entries.map((item) => (item.id === entry.id ? { ...item, content } : item));
-		editingId = undefined;
-		try {
-			await updateEntry({ memoryEntryId: entry.id, content });
-			// audit-allow: silent-catch — the optimistic content update is rolled back and reported.
-		} catch {
-			entries = previous;
-			toast.error('Could not update the memory entry.');
-		}
+		const result = await edit.resource.stage(memoryWrite(entry, { content }));
+		if (result.kind === 'failure') toast.error(result.message);
+		else if (editing === edit && edit.content.trim() === content) editing = null;
 	}
 
 	async function toggleShare(entry: MemoryEntry, shareWithAgents: boolean): Promise<void> {
-		const previous = entries;
-		entries = entries.map((item) => (item.id === entry.id ? { ...item, shareWithAgents } : item));
-		try {
-			await updateEntry({ memoryEntryId: entry.id, shareWithAgents });
-			// audit-allow: silent-catch — the optimistic sharing update is rolled back and reported.
-		} catch {
-			entries = previous;
-			toast.error('Could not update the memory entry.');
-		}
-	}
-
-	async function remove(entry: MemoryEntry): Promise<void> {
-		const previous = entries;
-		entries = entries.filter((item) => item.id !== entry.id);
-		try {
-			await deleteEntry({ memoryEntryId: entry.id });
-			// audit-allow: silent-catch — the optimistic deletion is rolled back and reported.
-		} catch {
-			entries = previous;
-			toast.error('Could not delete the memory entry.');
-		}
+		const resource = editorFor(entry);
+		const result = await resource.stage(memoryWrite(entry, { shareWithAgents }));
+		if (result.kind === 'failure') toast.error(result.message);
 	}
 </script>
 
@@ -225,9 +230,11 @@
      always-on composer competing with what is already remembered. The spacing ladder:
      a 24px step between the action row and the sections, 8px inside each section. -->
 <div class="flex h-full min-h-0 flex-col gap-6">
-	{#if loading && isEmpty}
+	{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
 		<p class="text-sm text-muted-foreground">Loading memory…</p>
-	{:else if isEmpty}
+	{:else if isEmpty && resources?.availability !== 'complete'}<p role="status">
+			Memory data is not fully available on this device yet.
+		</p>{:else if isEmpty}
 		<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
 		     EmptyState; the side panel keeps the slot size. -->
 		<EmptyState
@@ -320,12 +327,12 @@
 
 {#snippet savedRow(entry: MemoryEntry)}
 	<li class="row-interactive px-3 py-2.5">
-		{#if editingId === entry.id}
+		{#if editing && editing.resource.identity.id[0] === entry.id}
 			<div class="flex flex-col gap-2">
-				<Textarea bind:value={editingContent} rows={3} aria-label="Edit memory entry" />
+				<Textarea bind:value={editing.content} rows={3} aria-label="Edit memory entry" />
 				<div class="flex justify-end gap-2">
-					<Button size="sm" variant="ghost" onclick={() => (editingId = undefined)}>Cancel</Button>
-					<Button size="sm" disabled={!editingContent.trim()} onclick={() => saveEdit(entry)}>
+					<Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
+					<Button size="sm" disabled={!editing.content.trim()} onclick={() => saveEdit()}>
 						Save
 					</Button>
 				</div>
@@ -355,8 +362,7 @@
 						<DropdownMenu.Content align="end">
 							<DropdownMenu.Item
 								onSelect={() => {
-									editingId = entry.id;
-									editingContent = entry.content;
+									editing = { resource: editorFor(entry), content: entry.content };
 								}}
 							>
 								Edit
@@ -382,7 +388,12 @@
 	</li>
 {/snippet}
 
-<AlertDialog.Root bind:open={deleteOpen}>
+<AlertDialog.Root
+	open={deletion !== null}
+	onOpenChange={(open) => {
+		if (!open) deletion = null;
+	}}
+>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete this memory?</AlertDialog.Title>
@@ -392,9 +403,13 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={() => void confirmDelete()}>
+			<Button
+				variant="destructive"
+				disabled={deletion?.status === 'saving'}
+				onclick={() => void confirmDelete()}
+			>
 				Delete
-			</AlertDialog.Action>
+			</Button>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
@@ -408,10 +423,18 @@
 			{/if}
 		</Dialog.Header>
 		<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
-			<Textarea bind:value={draft} {placeholder} rows={3} aria-label="New memory entry" autofocus />
+			<Textarea
+				bind:value={draft}
+				disabled={adding}
+				{placeholder}
+				rows={3}
+				aria-label="New memory entry"
+				autofocus
+			/>
 			<div class="flex items-center justify-between gap-2">
 				<Select.Root
 					type="single"
+					disabled={adding}
 					value={draftType}
 					onValueChange={(next) => (draftType = next as MemoryEntryType | 'none')}
 				>
@@ -429,7 +452,7 @@
 				</Select.Root>
 				<div class="flex items-center gap-2">
 					<Button type="button" variant="ghost" onclick={() => (addOpen = false)}>Cancel</Button>
-					<Button type="submit" disabled={!draft.trim()}>Add memory</Button>
+					<Button type="submit" disabled={adding || !draft.trim()}>Add memory</Button>
 				</div>
 			</div>
 		</Form>

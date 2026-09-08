@@ -1,11 +1,11 @@
-import { goto, invalidateAll } from '$app/navigation';
+import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import {
-	IndexedDbWorkspaceRepository,
-	type WorkspaceRecord
-} from '$lib/client/notes/sync/indexeddb-workspace-repository';
+	IndexedDbWorkbenchLayout,
+	type WorkbenchLayoutRecord
+} from '$lib/client/workbench/indexeddb-layout';
 import {
 	addTabInBackgroundInState,
 	closeTabInState,
@@ -19,8 +19,7 @@ import {
 	setSplitInState,
 	type WorkbenchUrlState
 } from './workbench-url';
-import { diagramIdOf, noteIdOf, type TabId } from './tab-ref';
-import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
+import { noteIdOf, type TabId } from './tab-ref';
 import { toast } from 'svelte-sonner';
 
 /**
@@ -31,19 +30,17 @@ import { toast } from 'svelte-sonner';
  */
 export type WorkbenchRouter = {
 	goto: (url: string, options?: { replaceState?: boolean; noScroll?: boolean }) => Promise<void>;
-	invalidateAll: () => Promise<void>;
 	currentUrl: () => URL;
 };
 
-/** The slice of {@link IndexedDbWorkspaceRepository} this store depends on. */
+/** The slice of {@link IndexedDbWorkbenchLayout} this store depends on. */
 export type WorkspaceRepository = {
-	get: () => Promise<WorkspaceRecord | undefined>;
-	put: (record: WorkspaceRecord) => Promise<void>;
+	get: () => Promise<WorkbenchLayoutRecord | undefined>;
+	put: (record: WorkbenchLayoutRecord) => Promise<void>;
 };
 
 const sveltekitRouter: WorkbenchRouter = {
 	goto: (url, options) => goto(url, options),
-	invalidateAll: () => invalidateAll(),
 	currentUrl: () => page.url
 };
 
@@ -109,7 +106,7 @@ export class WorkbenchStore {
 	 * Whether the user has collapsed the global tab strip.  Display
 	 * preference only — does not affect open-tab state.  Persists in
 	 * localStorage (fast first-paint read) and in the IndexedDB
-	 * `WorkspaceRecord` (cross-device source of truth).
+	 * `WorkbenchLayoutRecord` (cross-device source of truth).
 	 */
 	stripHidden = $state(false);
 
@@ -125,7 +122,7 @@ export class WorkbenchStore {
 	/**
 	 * Width of the secondary pane as a fraction of 1 (clamped 0.25–0.75).
 	 * Display preference — like `stripHidden`, persists to localStorage
-	 * for instant first-paint and to the IndexedDB `WorkspaceRecord` for
+	 * for instant first-paint and to the IndexedDB `WorkbenchLayoutRecord` for
 	 * cross-device synchronisation.  The URL never encodes the ratio.
 	 */
 	splitRatio = $state(0.5);
@@ -143,7 +140,7 @@ export class WorkbenchStore {
 
 	constructor(
 		private readonly router: WorkbenchRouter = sveltekitRouter,
-		private readonly repository: WorkspaceRepository = new IndexedDbWorkspaceRepository()
+		private readonly repository: WorkspaceRepository = new IndexedDbWorkbenchLayout()
 	) {}
 
 	private hydrated = $state(false);
@@ -259,7 +256,7 @@ export class WorkbenchStore {
 	 * the layout's `onMount` (browser-only); a no-op when running on the
 	 * server.
 	 */
-	async hydrate(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): Promise<void> {
+	async hydrate(projectOfTab: (tabId: TabId) => ProjectId | undefined): Promise<void> {
 		if (this.hydrated) return;
 		this.hydrated = true;
 		// Display preference: read synchronously from localStorage so the
@@ -293,7 +290,7 @@ export class WorkbenchStore {
 					error instanceof Error ? error.message : 'Workspace state could not be restored'
 				);
 			}
-			void this.refreshActiveProjectId(shellProjectOf);
+			void this.refreshActiveProjectId(projectOfTab);
 			return;
 		}
 		// Deep link to `/notes/<id>`.  If a previous working set exists in
@@ -335,7 +332,7 @@ export class WorkbenchStore {
 					}
 				);
 				this.restoring = false;
-				void this.refreshActiveProjectId(shellProjectOf);
+				void this.refreshActiveProjectId(projectOfTab);
 				return;
 			}
 			// audit-allow: silent-catch — tab restoration failure is reported before URL state is applied as recovery.
@@ -343,7 +340,7 @@ export class WorkbenchStore {
 			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
 		}
 		this.applyUrlState(urlState);
-		void this.refreshActiveProjectId(shellProjectOf);
+		void this.refreshActiveProjectId(projectOfTab);
 	}
 
 	/**
@@ -396,17 +393,9 @@ export class WorkbenchStore {
 	 * tree.  Called by the layout whenever the shell reloads or the focused
 	 * tab changes.
 	 */
-	refreshActiveProjectId(shellProjectOf: (noteId: NoteId) => ProjectId | undefined): void {
-		if (this.focusedNoteId) {
-			this._activeProjectId = shellProjectOf(this.focusedNoteId);
-			return;
-		}
-		// A diagram is project-owned, so a focused diagram tab still tells the
-		// sidebar and the agent which project the user is working in. The note tree
-		// cannot answer for it, so the diagram's own pane does, through the registry.
-		const diagramId = diagramIdOf(this.focusedTabId);
-		this._activeProjectId =
-			diagramId === undefined ? undefined : diagramRegistry.peek(diagramId)?.description?.projectId;
+	refreshActiveProjectId(projectOfTab: (tabId: TabId) => ProjectId | undefined): void {
+		const tabId = this.focusedTabId;
+		this._activeProjectId = tabId ? projectOfTab(tabId) : undefined;
 	}
 
 	/** Returns the user's working set in URL-state form. */
@@ -425,7 +414,7 @@ export class WorkbenchStore {
 	 */
 	async openTab(noteId: TabId): Promise<void> {
 		const next = openTabInState(this.toUrlState(), noteId);
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -440,7 +429,7 @@ export class WorkbenchStore {
 	async openSplit(tabId: TabId, splitTabId: TabId): Promise<void> {
 		const opened = openTabInState(this.toUrlState(), tabId);
 		const next = setSplitInState(opened, splitTabId);
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Focus an already-open tab.  Pushes a new history entry. */
@@ -456,7 +445,7 @@ export class WorkbenchStore {
 		// into the workbench rather than the no-op it is on `/notes/*`.  Without this
 		// the tab you arrived from is the one tab in the strip that does nothing.
 		if (next === current && this.isWorkbenchPath) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Close an open tab.  Pushes a new history entry; if the last tab is closed, redirects away from `/notes/*`. */
@@ -476,7 +465,7 @@ export class WorkbenchStore {
 			});
 			return;
 		}
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -503,7 +492,7 @@ export class WorkbenchStore {
 			});
 			return;
 		}
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Reorder a tab relative to another.  Replaces the current URL so Back doesn't walk reorderings. */
@@ -512,7 +501,7 @@ export class WorkbenchStore {
 		if (!current) return;
 		const next = moveTabInState(current, from, to);
 		if (next === current) return;
-		await this.navigate(next, { replace: true, invalidate: false });
+		await this.navigate(next, { replace: true });
 	}
 
 	/** Add a tab without changing focus, split context, ordering, or strip visibility. */
@@ -520,7 +509,7 @@ export class WorkbenchStore {
 		const current = this.toUrlState();
 		const next = addTabInBackgroundInState(current, noteId);
 		if (next === current) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -535,7 +524,7 @@ export class WorkbenchStore {
 		if (!current) return;
 		const next = setSplitInState(current, noteId);
 		if (next === current) return;
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/**
@@ -550,7 +539,7 @@ export class WorkbenchStore {
 		const next = replaceTabInState(current, from, to);
 		if (next === current) return;
 		this.pinnedTabs = this.pinnedTabs.map((id) => (id === from ? to : id));
-		await this.navigate(next, { replace: false, invalidate: false });
+		await this.navigate(next, { replace: false });
 	}
 
 	/** Pin or unpin a tab.  Persists the change without touching the URL. */
@@ -625,7 +614,7 @@ export class WorkbenchStore {
 					openTabs: remaining,
 					...(split ? { splitNoteId: split } : {})
 				},
-				{ replace: true, invalidate: true }
+				{ replace: true }
 			);
 		} finally {
 			this.pruning = false;
@@ -680,7 +669,7 @@ export class WorkbenchStore {
 	 * from a half-torn-down state if the navigation is slow.
 	 */
 	private async clearToOverview(
-		persistPatch: Pick<WorkspaceRecord, 'pinnedTabs' | 'recentlyUsed'>
+		persistPatch: Pick<WorkbenchLayoutRecord, 'pinnedTabs' | 'recentlyUsed'>
 	): Promise<void> {
 		this.applyingFromUrl = true;
 		this.openTabs = [];
@@ -694,22 +683,18 @@ export class WorkbenchStore {
 		}
 	}
 
-	private async navigate(
-		next: WorkbenchUrlState,
-		options: { replace: boolean; invalidate: boolean }
-	): Promise<void> {
+	private async navigate(next: WorkbenchUrlState, options: { replace: boolean }): Promise<void> {
 		const url = serializeWorkbenchUrl(next, { conversationOf: this.conversationOf });
 		await this.router.goto(url, { replaceState: options.replace, noScroll: true });
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
 		// disagrees with the URL (e.g. a reload mid-navigation).
 		await this.persist();
-		if (options.invalidate) await this.router.invalidateAll();
 	}
 
-	private async persist(override?: Partial<WorkspaceRecord>): Promise<void> {
+	private async persist(override?: Partial<WorkbenchLayoutRecord>): Promise<void> {
 		if (this.restoring) return;
-		const record: WorkspaceRecord = {
+		const record: WorkbenchLayoutRecord = {
 			id: 'current',
 			openTabs: override?.openTabs ?? this.openTabs,
 			focusedNoteId: override?.focusedNoteId ?? this.focusedTabId ?? null,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Projects } from './controller';
+import { Projects, type ProjectsDependencies } from './controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
@@ -10,16 +11,18 @@ import {
 
 const setup = () => {
 	const projects = new InMemoryProjects();
-	const controller = new Projects({
-		projectCreator: projects,
-		projectReader: projects,
-		projectLister: projects,
-		projectEditor: projects,
-		projectTreeReader: projects,
-		folderCreator: projects,
-		entryMover: projects,
-		transactionRunner: new InMemoryTransactionRunner([])
-	});
+	const controller = new Projects(
+		capabilityDependencies<ProjectsDependencies>({
+			projectCreator: projects,
+			projectReader: projects,
+			projectLister: projects,
+			projectEditor: projects,
+			projectTreeReader: projects,
+			folderCreator: projects,
+			entryMover: projects,
+			transactionRunner: new InMemoryTransactionRunner([])
+		})
+	);
 	return { projects, controller };
 };
 

@@ -1,0 +1,248 @@
+import { z } from 'zod';
+
+export type SyncEtag = string & { readonly __brand: 'SyncEtag' };
+export const syncCursorSchema = z
+	.string()
+	.regex(/^(0|[1-9][0-9]*)$/)
+	.transform((value) => value as string & { readonly __brand: 'SyncCursor' });
+export type SyncCursor = z.infer<typeof syncCursorSchema>;
+export const initialSyncCursor = '0' as SyncCursor;
+export const syncEtagSchema = z
+	.string()
+	.regex(/^sync-v1-[1-9][0-9]*$/)
+	.transform((value) => value as SyncEtag);
+
+/** Database sequence values are transported without JavaScript number rounding. */
+export const syncEtag = (version: bigint): SyncEtag => {
+	if (version <= 0n) throw new Error('A synchronization version must be positive');
+	return `sync-v1-${version}` as SyncEtag;
+};
+
+export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
+	const a = BigInt(left.slice(8));
+	const b = BigInt(right.slice(8));
+	return a < b ? -1 : a > b ? 1 : 0;
+};
+
+export const resourceChangeSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('upsert'), key: z.string().min(1), etag: syncEtagSchema }),
+	z.object({ kind: z.literal('delete'), key: z.string().min(1), etag: syncEtagSchema })
+]);
+export type ResourceChange = z.infer<typeof resourceChangeSchema>;
+export const syncChangesSchema = z
+	.object({
+		cursor: syncCursorSchema,
+		changes: z.array(resourceChangeSchema)
+	})
+	.refine(
+		(batch) => new Set(batch.changes.map((change) => change.key)).size === batch.changes.length,
+		'A change batch must contain each resource only once'
+	);
+export type SyncChanges = z.infer<typeof syncChangesSchema>;
+
+export interface SyncSnapshot<T> {
+	readonly etag: SyncEtag;
+	readonly value: T;
+}
+
+export const deletionSchema = z.object({ kind: z.literal('deleted'), etag: syncEtagSchema });
+export type ResourceDeletion = z.infer<typeof deletionSchema>;
+
+export type SyncObjectRead<T> =
+	| { readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> }
+	| { readonly kind: 'unchanged'; readonly etag: SyncEtag }
+	| ResourceDeletion
+	| { readonly kind: 'unavailable' };
+
+export type TransferState =
+	| { readonly kind: 'queued' }
+	| { readonly kind: 'fetching' }
+	| { readonly kind: 'failed'; readonly message: string };
+
+export type CacheEntry<T> =
+	| { readonly kind: 'uncached' }
+	| { readonly kind: 'cached'; readonly snapshot: SyncSnapshot<T> }
+	| {
+			readonly kind: 'updating';
+			readonly previous: SyncSnapshot<T> | null;
+			readonly target: SyncEtag | null;
+			readonly transfer: TransferState;
+	  };
+
+/** Server existence is independent of cache freshness and of a pending local draft. */
+export type ResourceState<T> =
+	{ readonly kind: 'present'; readonly cache: CacheEntry<T> } | ResourceDeletion;
+
+export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceState<T>> =>
+	z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('present'), cache: cacheEntrySchema(value) }),
+		deletionSchema
+	]);
+
+export const resourceVersion = <T>(state: ResourceState<T>): SyncEtag | null =>
+	state.kind === 'deleted'
+		? state.etag
+		: state.cache.kind === 'updating'
+			? (state.cache.target ?? state.cache.previous?.etag ?? null)
+			: state.cache.kind === 'cached'
+				? state.cache.snapshot.etag
+				: null;
+
+export const receiveResource = <T>(
+	state: ResourceState<T>,
+	received: SyncSnapshot<T> | ResourceDeletion
+): ResourceState<T> => {
+	const known = resourceVersion(state);
+	if ('kind' in received)
+		return known && compareSyncEtags(received.etag, known) < 0 ? state : received;
+	if (state.kind === 'deleted' && compareSyncEtags(received.etag, state.etag) <= 0) return state;
+	return {
+		kind: 'present',
+		cache: transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
+			kind: 'receive',
+			snapshot: received
+		})
+	};
+};
+
+/** Storage merges knowledge from independent tabs before publishing a proposed cache write. */
+export const mergeResourceStates = <T>(
+	current: ResourceState<T>,
+	incoming: ResourceState<T>
+): ResourceState<T> => {
+	if (incoming.kind === 'deleted') return receiveResource(current, incoming);
+	if (incoming.cache.kind === 'cached') return receiveResource(current, incoming.cache.snapshot);
+	if (incoming.cache.kind === 'uncached') return current;
+	const state = incoming.cache.previous
+		? receiveResource(current, incoming.cache.previous)
+		: current;
+	if (incoming.cache.target === null) {
+		if (state.kind === 'present' && state.cache.kind === 'uncached') return incoming;
+		return state;
+	}
+	if (state.kind === 'deleted' && compareSyncEtags(incoming.cache.target, state.etag) <= 0)
+		return state;
+	const observed = transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
+		kind: 'observe',
+		etag: incoming.cache.target
+	});
+	return {
+		kind: 'present',
+		cache:
+			observed.kind === 'updating' && observed.target === incoming.cache.target
+				? { ...observed, transfer: incoming.cache.transfer }
+				: observed
+	};
+};
+
+/** A compact journal batch changes only the named resources, never infers deletion from absence. */
+export const applyResourceChanges = <T>(
+	current: ReadonlyMap<string, ResourceState<T>>,
+	changes: readonly ResourceChange[]
+): ReadonlyMap<string, ResourceState<T>> => {
+	const next = new Map(current);
+	for (const change of changes) {
+		const previous = current.get(change.key);
+		if (previous) {
+			const known = resourceVersion(previous);
+			if (known && compareSyncEtags(change.etag, known) < 0) continue;
+			if (previous.kind === 'deleted' && change.kind === 'upsert' && change.etag === previous.etag)
+				continue;
+		}
+		next.set(
+			change.key,
+			change.kind === 'delete'
+				? { kind: 'deleted', etag: change.etag }
+				: {
+						kind: 'present',
+						cache: transitionCache(
+							previous?.kind === 'present' ? previous.cache : { kind: 'uncached' },
+							{ kind: 'observe', etag: change.etag }
+						)
+					}
+		);
+	}
+	return next;
+};
+
+export type CacheEvent<T> =
+	| { readonly kind: 'observe'; readonly etag: SyncEtag }
+	| { readonly kind: 'request' }
+	| { readonly kind: 'receive'; readonly snapshot: SyncSnapshot<T> }
+	| { readonly kind: 'failure'; readonly message: string };
+
+export const cacheEntrySchema = <T>(value: z.ZodType<T>): z.ZodType<CacheEntry<T>> => {
+	const snapshot = z.object({ etag: syncEtagSchema, value });
+	return z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('uncached') }),
+		z.object({ kind: z.literal('cached'), snapshot }),
+		z.object({
+			kind: z.literal('updating'),
+			previous: snapshot.nullable(),
+			target: syncEtagSchema.nullable(),
+			transfer: z.discriminatedUnion('kind', [
+				z.object({ kind: z.literal('queued') }),
+				z.object({ kind: z.literal('fetching') }),
+				z.object({ kind: z.literal('failed'), message: z.string() })
+			])
+		})
+	]);
+};
+
+export const cachedSnapshot = <T>(entry: CacheEntry<T>): SyncSnapshot<T> | null =>
+	entry.kind === 'cached' ? entry.snapshot : entry.kind === 'updating' ? entry.previous : null;
+
+/** No I/O: all readers, including offline readers, share these freshness rules. */
+export const transitionCache = <T>(entry: CacheEntry<T>, event: CacheEvent<T>): CacheEntry<T> => {
+	const previous = cachedSnapshot(entry);
+	switch (event.kind) {
+		case 'observe': {
+			const known = entry.kind === 'updating' ? entry.target : previous?.etag;
+			if (known && compareSyncEtags(event.etag, known) <= 0) return entry;
+			return {
+				kind: 'updating',
+				previous,
+				target: event.etag,
+				transfer: entry.kind === 'updating' ? entry.transfer : { kind: 'queued' }
+			};
+		}
+		case 'request':
+			return {
+				kind: 'updating',
+				previous,
+				target: entry.kind === 'updating' ? entry.target : (previous?.etag ?? null),
+				transfer: { kind: 'fetching' }
+			};
+		case 'receive': {
+			if (previous && compareSyncEtags(event.snapshot.etag, previous.etag) < 0) return entry;
+			if (
+				entry.kind === 'updating' &&
+				entry.target &&
+				compareSyncEtags(event.snapshot.etag, entry.target) < 0
+			)
+				return { ...entry, previous: event.snapshot, transfer: { kind: 'queued' } };
+			return { kind: 'cached', snapshot: event.snapshot };
+		}
+		case 'failure':
+			return entry.kind === 'updating'
+				? { ...entry, transfer: { kind: 'failed', message: event.message } }
+				: entry;
+	}
+};
+
+export type CacheAccess<T> =
+	| { readonly kind: 'ready'; readonly value: T }
+	| { readonly kind: 'wait' }
+	| { readonly kind: 'unavailable' }
+	| { readonly kind: 'deleted' }
+	| { readonly kind: 'failure'; readonly message: string };
+
+export const accessCache = <T>(entry: CacheEntry<T>, online: boolean): CacheAccess<T> => {
+	const snapshot = cachedSnapshot(entry);
+	if (entry.kind === 'cached' || (!online && snapshot))
+		return snapshot ? { kind: 'ready', value: snapshot.value } : { kind: 'unavailable' };
+	if (!online) return { kind: 'unavailable' };
+	if (entry.kind === 'updating' && entry.transfer.kind === 'failed')
+		return { kind: 'failure', message: entry.transfer.message };
+	return { kind: 'wait' };
+};

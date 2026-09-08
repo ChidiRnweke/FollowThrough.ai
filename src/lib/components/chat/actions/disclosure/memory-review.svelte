@@ -1,6 +1,5 @@
 <script lang="ts">
-	import type { MemoryEntry } from '$lib/models/memory';
-	import { getEntries } from '$lib/remote/memory/memory.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { FtMemory, FtPlus } from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
 
@@ -24,23 +23,20 @@
 	 * Fetched on first expand. Degrades to the proposal alone: a list that would not load is a
 	 * reason to show less, never a reason to hide what was proposed.
 	 */
-	let existing = $state<readonly MemoryEntry[] | undefined>(undefined);
-	let unavailable = $state(false);
 
+	const resources = $derived(workspaceSession.current?.resources);
+	const existing = $derived(
+		resources?.views
+			.all('memory_entries')
+			.filter((entry) => !entry.deletedAt && entry.projectId === projectId)
+	);
+	let unavailable = $state(false);
 	$effect(() => {
-		if (existing || unavailable) return;
-		let cancelled = false;
-		// audit-allow: silent-catch — the disclosure renders its unavailable state instead of presenting an empty memory list.
-		void getEntries(projectId)
-			.then((result) => {
-				if (!cancelled) existing = result.entries;
-			})
-			.catch(() => {
-				if (!cancelled) unavailable = true;
-			});
-		return () => {
-			cancelled = true;
-		};
+		if (!resources) return;
+		void resources.prepare(['memory_entries']).catch(() => {
+			unavailable = true;
+			return { kind: 'failure', message: 'Memory is unavailable' };
+		});
 	});
 
 	const scope = $derived(projectId ? 'this project' : 'you');
@@ -62,7 +58,7 @@
 		</div>
 	{/if}
 
-	{#if unavailable}
+	{#if unavailable || (existing?.length === 0 && resources?.availability !== 'complete')}
 		<p class="text-xs text-muted-foreground">
 			What is already remembered could not be loaded, so this stands on its own.
 		</p>

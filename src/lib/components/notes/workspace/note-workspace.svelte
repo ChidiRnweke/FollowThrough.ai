@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { noteWrite, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import type {
 		ConvertInlineMermaidOutput,
 		DiagramSuggestion,
@@ -18,12 +20,11 @@
 		NoteRevisionSummary,
 		NoteView,
 		SectionNumberingLevel,
-		TextSelection,
-		VersionedNote
+		TextSelection
 	} from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { ShellContext, DateTime } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { noteEtag, sectionNumberingOverrideFor } from '$lib/models/notes';
+	import { sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from 'svelte-sonner';
@@ -37,11 +38,9 @@
 	} from '$lib/stores/notes/note-action-runs.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
-	import { suggestionToView } from '$lib/stores/suggestions/suggestion-view';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
-	import type { NoteSyncStore } from '$lib/stores/notes/note-sync.svelte';
-	import type { NoteTodosStore } from '$lib/stores/notes/note-todos.svelte';
-	import type { SuggestionTrayStore } from '$lib/stores/suggestions/suggestion-tray.svelte';
+	import type { PerNoteEditorSlot } from '../editor-context';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
@@ -51,44 +50,34 @@
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import {
-		publishNote,
 		discardNoteDraft,
 		listNoteRevisions,
 		getNoteRevision,
-		restoreNoteRevision,
-		setNoteSectionNumbering
+		restoreNoteRevision
 	} from '$lib/remote/notes/notes.remote';
 
 	let {
 		view,
 		shell,
-		noteSync,
-		noteTodos,
-		suggestionTray,
+		draft,
 		editorSelection,
 		inlineSuggestionsEnabled = true,
 		onCloseSplit
 	}: {
 		view: NoteView;
 		shell: ShellContext;
-		noteSync: NoteSyncStore;
-		noteTodos: NoteTodosStore;
-		suggestionTray: SuggestionTrayStore;
+		draft: WorkspaceDraft<'notes'>;
 		editorSelection: EditorSelectionStore;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
 
-	// `perNote` is built once from the registry-backed store props supplied by
-	// the owning `WorkspacePane`.  Each registry returns a stable instance for
-	// a given `noteId`, so this capture is intentional and does not need to
-	// track prop identity changes that will never happen.
-	const perNote: PerNoteEditorSlot = untrack(() => ({
-		todos: noteTodos,
-		suggestions: suggestionTray,
-		selection: editorSelection,
-		sync: noteSync
-	}));
+	const perNote: PerNoteEditorSlot = {
+		get suggestions() {
+			return view.pendingSuggestions;
+		},
+		selection: untrack(() => editorSelection)
+	};
 
 	let exportOpen = $state(false);
 	let conflictOpen = $state(false);
@@ -126,24 +115,18 @@
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
-	// The numbering cascade arrives resolved from the server. A writable derived so a
-	// toggle applies instantly; the server value takes over again on the next view
-	// refresh, which is also how external changes (another device, or a project/app
-	// default edit) arrive.
-	let sectionNumbering = $derived(view.sectionNumbering);
+	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		try {
-			const output = await setNoteSectionNumbering({
-				noteId: note.id,
-				enabled: sectionNumberingOverrideFor(level)
-			});
-			sectionNumbering = output.sectionNumbering;
-			await refreshView();
-			// audit-allow: silent-catch — numbering failure is reported and refreshed server state remains authoritative.
-		} catch {
-			toast.error('Could not update section numbering. Try again.');
-		}
+		const enabled = sectionNumberingOverrideFor(level);
+		const result = await draft.stage({
+			command: { kind: 'noteNumbering', noteId: note.id, enabled },
+			local: { type: 'notes', value: { ...note, sectionNumbering: enabled } },
+			coalesce: null,
+			references: []
+		});
+		if (result.kind === 'failure') toast.error(result.message);
+		else note = { ...note, sectionNumbering: enabled };
 	}
 
 	/**
@@ -163,12 +146,17 @@
 			.map((entry) => ({ id: entry.id, title: entry.title }))
 	);
 
-	const hasUnpublishedChanges = $derived(note.currentRevision > note.publishedRevision);
+	const hasUnpublishedChanges = $derived(
+		noteHasUnpublishedChanges(
+			note,
+			workspaceSession.current?.resources.pending.map((entry) => entry.intent.command) ?? []
+		)
+	);
 	// Any state where the device copy has not reached the server.  These must win
 	// over the "unpublished changes" hint in the header, otherwise the retry and
 	// "Review conflict" controls stay hidden for exactly the notes that need them.
 	const unsynced = $derived(
-		noteSync.status === 'pending' || noteSync.status === 'conflict' || noteSync.status === 'error'
+		draft.status === 'pending' || draft.status === 'conflict' || draft.status === 'error'
 	);
 
 	onMount(() => {
@@ -177,41 +165,24 @@
 		// delivers its result the moment the stream reattaches.
 		registerActionHandlers();
 		actionRuns.hydrate();
-		const stopListening = noteSync.listenForReconnect();
-		void noteSync.initialize({ note: view.note, etag: view.etag }).then((local) => {
+		void draft.read().then((opened) => {
+			if (opened.kind !== 'ready') {
+				syncReady = true;
+				return;
+			}
+			const local = opened.value;
 			if (cancelled) return;
-			// Use view.note as the base for all server-authoritative fields
-			// (parentId, position, publishedRevision, publishedAt, etc.) and
-			// only take content fields from the local sync record.  The
-			// coordinator's IndexedDB record may carry stale metadata when
-			// operations like move or publish changed the note without bumping
-			// currentRevision.
-			note = {
-				...view.note,
-				title: local.title,
-				document: local.document,
-				plainText: local.plainText,
-				isPinned: local.isPinned,
-				currentRevision: local.currentRevision,
-				updatedAt: local.updatedAt
-			};
-			conflictOpen = noteSync.status === 'conflict';
+			note = { ...local };
+			conflictOpen = draft.status === 'conflict';
 			syncReady = true;
 		});
 		return () => {
 			cancelled = true;
-			stopListening();
 			actionRuns.detach();
-			noteSync.reset();
 		};
 	});
 
-	const noteRef = $derived({ id: note.id, title: note.title });
-	const pendingCount = $derived(
-		suggestionTray.items.filter(
-			(item) => item.suggestion.noteId === note.id && item.suggestion.status === 'proposed'
-		).length
-	);
+	const pendingCount = $derived(view.pendingSuggestions.length);
 
 	const folders = $derived(
 		shell.noteTree.filter(
@@ -227,15 +198,22 @@
 			!syncReady ||
 			dirty ||
 			reconciling ||
-			noteSync.status !== 'synced' ||
+			draft.status !== 'synced' ||
 			view.note.currentRevision < note.currentRevision ||
 			(view.note.currentRevision === note.currentRevision && view.note.updatedAt <= note.updatedAt)
 		)
 			return;
 		reconciling = true;
-		void noteSync
-			.initialize({ note: view.note, etag: view.etag })
-			.then((local) => {
+		const version = editVersion;
+		void draft
+			.read(() => version === editVersion && !dirty)
+			.then((opened) => {
+				if (opened.kind === 'superseded') return;
+				if (opened.kind !== 'ready') {
+					syncReady = true;
+					return;
+				}
+				const local = opened.value;
 				// The document being replaced, so the editor can shimmer exactly the
 				// blocks the external (agent) revision changed and leave the rest still.
 				const previous = note.document;
@@ -259,20 +237,19 @@
 	});
 
 	$effect(() => {
-		noteTodos.replace(view.todos);
-		suggestionTray.replace(view.pendingSuggestions);
 		return () => {
-			noteTodos.clear();
 			editorSelection.clear();
 		};
 	});
 
 	$effect(() => {
-		const requested = suggestionTray.reviewRequested;
-		if (requested) {
+		const requested = view.pendingSuggestions.find(
+			(item) => item.suggestion.id === suggestionActions.reviewRequested
+		)?.suggestion;
+		if (requested?.kind === 'diagram') {
 			reviewingSuggestion = requested;
 			reviewDialogOpen = true;
-			suggestionTray.clearReview();
+			suggestionActions.clearReview();
 		}
 	});
 
@@ -316,32 +293,19 @@
 		return activeSave;
 	}
 
-	/**
-	 * Pulls the server's view of the note back in after a write. The write itself
-	 * has already succeeded by the time this runs, so a failed refresh is stale
-	 * data rather than lost work: report it and let the caller finish, instead of
-	 * throwing out of a user action and taking the page down with it.
-	 */
-	async function refreshView(): Promise<void> {
-		try {
-			await invalidateAll();
-			// audit-allow: silent-catch — the save succeeded; refresh failure is explicitly reported with reload as recovery.
-		} catch {
-			toast.error('Saved, but this note’s view could not be refreshed. Reload to catch up.');
-		}
-	}
-
 	async function flushSaves(options: { auto?: boolean }): Promise<void> {
 		while (saveQueued && editorRef) {
 			saveQueued = false;
 			const savingVersion = editVersion;
-			const record = await noteSync.save({
-				...note,
-				title: note.title.trim(),
-				document: editorRef.getDocument(),
-				plainText: editorRef.getPlainText()
-			});
-			if (!record) {
+			const record = await draft.stage(
+				noteWrite({
+					...note,
+					title: note.title.trim(),
+					document: editorRef.getDocument(),
+					plainText: editorRef.getPlainText()
+				})
+			);
+			if (record.kind === 'failure' || !record.value) {
 				saveFailed = true;
 				dirty = true;
 				if (!options.auto) toast.error('Could not save the note. Try again.');
@@ -350,29 +314,29 @@
 
 			saveFailed = false;
 			if (savingVersion === editVersion) {
-				note = { ...record.local };
+				note = { ...record.value };
 				dirty = false;
 			} else {
 				note = {
 					...note,
-					currentRevision: record.local.currentRevision,
-					updatedAt: record.local.updatedAt
+					currentRevision: record.value.currentRevision,
+					updatedAt: record.value.updatedAt
 				};
 				dirty = true;
 				saveQueued = true;
 			}
-			if (record.state === 'conflict') {
+			if (draft.status === 'conflict') {
 				conflictOpen = true;
 				if (!saveQueued) return;
-			} else if (record.state === 'synced') {
-				await refreshView();
+			} else if (draft.status === 'synced') {
+				await workspaceSession.synchronize();
 			}
 		}
 	}
 
 	async function ensureSynchronized(message: string): Promise<boolean> {
 		if (dirty) await save({ auto: true });
-		if (dirty || noteSync.status !== 'synced') {
+		if (dirty || draft.status !== 'synced') {
 			toast.error(message);
 			return false;
 		}
@@ -386,17 +350,19 @@
 			if (dirty) return;
 		}
 		const toggled = { ...note, isPinned: !note.isPinned };
-		const record = await noteSync.save({
-			...toggled,
-			document: editorRef.getDocument(),
-			plainText: editorRef.getPlainText()
-		});
-		if (record) {
-			note = { ...record.local };
+		const record = await draft.stage(
+			noteWrite({
+				...toggled,
+				document: editorRef.getDocument(),
+				plainText: editorRef.getPlainText()
+			})
+		);
+		if (record.kind === 'saved' && record.value) {
+			note = { ...record.value };
 			dirty = false;
-			conflictOpen = record.state === 'conflict';
+			conflictOpen = draft.status === 'conflict';
 			toast.success(note.isPinned ? 'Pinned' : 'Unpinned');
-			if (record.state === 'synced') await refreshView();
+			if (draft.status === 'synced') await workspaceSession.synchronize();
 		} else {
 			toast.error('Could not update pin. Try again.');
 		}
@@ -422,7 +388,11 @@
 	}
 
 	async function archive(): Promise<void> {
-		if (!(await ensureSynchronized('Sync the note before deleting it.'))) return;
+		if (dirty) await save({ auto: true });
+		if (dirty || draft.status === 'error' || draft.status === 'conflict') {
+			toast.error('Save or resolve the note before moving it to trash.');
+			return;
+		}
 		const output = await projectActions.archiveNote(note.id);
 		if (!output) {
 			toast.error('Could not delete the note. Try again.');
@@ -482,18 +452,14 @@
 	function registerActionHandlers(): void {
 		actionRuns.on('promises', async (result) => {
 			const output = result as ExtractPromisesOutput;
-			suggestionTray.add(
-				output.suggestions.map((s) => suggestionToView(s, 'extract_promises', noteRef))
-			);
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
-				await refreshView();
+				await workspaceSession.synchronize();
 			}
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('relate', (result) => {
 			const output = result as RelateSelectionOutput;
-			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'relate', noteRef)));
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('reference', async (result) => {
@@ -502,8 +468,7 @@
 				toast.info('Nothing sufficiently relevant found.');
 				return;
 			}
-			suggestionTray.add(output.suggestions.map((s) => suggestionToView(s, 'reference', noteRef)));
-			await refreshView();
+			await workspaceSession.synchronize();
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('diagram', async (result, context, runId) => {
@@ -521,20 +486,16 @@
 				toast.error(
 					'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
 				);
-				suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 				return;
 			}
 			markDirty();
-			const view = suggestionToView(output.suggestion, 'agent', noteRef);
-			suggestionTray.add([view]);
-			await suggestionTray.decide(view.suggestion.id, 'accept');
+			await suggestionActions.decide(output.suggestion.id, 'accept');
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {
 			const output = result as ConvertInlineMermaidOutput;
 			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
-			suggestionTray.add([suggestionToView(output.suggestion, 'agent', noteRef)]);
 			toast.success('draw.io conversion ready to review');
 		});
 		actionRuns.on('revise', (result, context) => {
@@ -606,8 +567,7 @@
 			throw new Error('Sync the note before accepting its diagram.');
 		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
 		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
-		suggestionTray.remove(suggestionId);
-		await refreshView();
+		await workspaceSession.synchronize();
 		toast.success('draw.io diagram accepted');
 		return diagram;
 	}
@@ -616,7 +576,7 @@
 		const rejected = await noteActions.rejectDrawio(suggestionId);
 		if (!rejected)
 			throw new Error(noteActions.lastError ?? 'The conversion could not be dismissed.');
-		suggestionTray.remove(suggestionId);
+		await workspaceSession.synchronize();
 		toast.success('draw.io conversion dismissed');
 	}
 
@@ -679,62 +639,67 @@
 	}
 
 	async function retrySync(): Promise<void> {
-		const record = await noteSync.retry();
-		if (!record) {
-			toast.error(
-				noteSync.lastError ?? 'Could not reach the note on this device. Reload the page.'
-			);
+		await draft.retry();
+		const local = draft.value;
+		if (!local) {
+			toast.error(draft.lastError ?? 'This resource is unavailable');
 			return;
 		}
-		note = { ...record.local };
-		conflictOpen = record.state === 'conflict';
-		if (record.state === 'synced') {
-			await refreshView();
-			return;
-		}
-		if (record.state === 'pending')
-			toast.error(noteSync.lastError ?? 'Still could not sync. Check your connection.');
+		note = { ...local };
+		conflictOpen = draft.status === 'conflict';
+		if (draft.status === 'synced') await workspaceSession.synchronize();
+		else if (draft.lastError) toast.error(draft.lastError);
 	}
 
 	async function useRemoteVersion(): Promise<void> {
-		const remote = await noteSync.useRemote();
-		if (!remote) return;
-		note = { ...remote };
-		editorRef?.replaceDocument(remote.document);
+		const remote = await draft.discard();
+		if (remote.kind !== 'ready') throw new Error('The server copy is unavailable');
+		note = { ...remote.value };
+		editorRef?.replaceDocument(remote.value.document);
 		dirty = false;
-		await refreshView();
+		await workspaceSession.synchronize();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
-		const record = await noteSync.keepLocal();
-		if (!record) return;
-		note = { ...record.local };
-		conflictOpen = record.state === 'conflict';
-		if (record.state === 'synced') await refreshView();
+		await draft.keep();
+		const local = draft.value;
+		if (!local) throw new Error('The local edit is unavailable');
+		note = { ...local };
+		conflictOpen = draft.status === 'conflict';
+
+		if (draft.status === 'synced') await workspaceSession.synchronize();
 	}
 
 	async function publish(): Promise<void> {
 		if (publishing) return;
 		if (dirty) await save();
-		if (dirty || noteSync.status !== 'synced') {
-			toast.error('Save the note before publishing.');
+		if (dirty || draft.status === 'error' || draft.status === 'conflict') {
+			toast.error('Save or resolve the note before publishing.');
 			return;
 		}
 		publishing = true;
 		try {
-			const result = await publishNote({
-				noteId: note.id,
-				baseEtag: noteEtag(note)
+			const publishedAt = new Date().toISOString() as DateTime;
+			const result = await draft.stage({
+				command: { kind: 'publishNote', noteId: note.id },
+				local: {
+					type: 'notes',
+					value: { ...note, publishedRevision: note.currentRevision, publishedAt }
+				},
+				coalesce: null,
+				references: []
 			});
-			const output = result as VersionedNote;
-			const local = await noteSync.initialize(output);
-			note = { ...local };
-			editorRef?.replaceDocument(local.document);
-			toast.success('Published');
-			await refreshView();
-			// audit-allow: silent-catch — publish failure is reported and the draft remains available.
-		} catch {
-			toast.error('Could not publish. Try again.');
+			if (result.kind === 'failure') {
+				toast.error(result.message);
+				return;
+			}
+			if (result.value)
+				note = {
+					...note,
+					publishedRevision: result.value.publishedRevision,
+					publishedAt: result.value.publishedAt
+				};
+			toast.success('Publication saved on this device');
 		} finally {
 			publishing = false;
 		}
@@ -780,16 +745,24 @@
 	async function restoreRevision(revisionId: NoteRevisionId): Promise<void> {
 		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return;
 		try {
-			const output = (await restoreNoteRevision({
+			const version = editVersion;
+			await restoreNoteRevision({
 				noteId: note.id,
 				revisionId
-			})) as VersionedNote;
-			const local = await noteSync.initialize(output);
+			});
+			await workspaceSession.synchronize();
+			const opened = await draft.read(() => version === editVersion);
+			if (opened.kind === 'superseded') {
+				toast.info('The server version changed. Your later edits are retained for review.');
+				return;
+			}
+			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
+			const local = opened.value;
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Restored that version');
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
 		} catch {
 			toast.error('Could not restore that version. Try again.');
@@ -799,19 +772,26 @@
 	async function discardDraft(): Promise<void> {
 		if (note.publishedRevision === 0) return;
 		if (dirty) await save();
-		if (dirty || noteSync.status !== 'synced') {
+		if (dirty || draft.status !== 'synced') {
 			toast.error('Save the note before discarding changes.');
 			return;
 		}
 		try {
-			const result = await discardNoteDraft({ noteId: note.id });
-			const output = result as VersionedNote;
-			const local = await noteSync.initialize(output);
+			const version = editVersion;
+			await discardNoteDraft({ noteId: note.id });
+			await workspaceSession.synchronize();
+			const opened = await draft.read(() => version === editVersion);
+			if (opened.kind === 'superseded') {
+				toast.info('The server version changed. Your later edits are retained for review.');
+				return;
+			}
+			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
+			const local = opened.value;
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
 			dirty = false;
 			toast.success('Reverted to last published version');
-			await refreshView();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — discard failure is reported and the local draft remains available.
 		} catch {
 			toast.error('Could not discard changes. Try again.');
@@ -835,7 +815,7 @@
 		{shell}
 		{note}
 		projectId={view.note.projectId}
-		{noteSync}
+		{draft}
 		{dirty}
 		{saveFailed}
 		{unsynced}
@@ -950,7 +930,7 @@
 		{historySelected}
 		{historyLoading}
 		{note}
-		conflictRecord={noteSync.record}
+		conflictRecord={draft.conflict}
 		{reviewingSuggestion}
 		{perNote}
 		diagrams={view.diagrams}

@@ -42,25 +42,6 @@ function collectMermaidSources(node: ProseMirrorNode, sources: string[]): void {
 	for (const child of nodeContent(node)) collectMermaidSources(child, sources);
 }
 
-function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
-	if (node.type === 'drawio') {
-		const id = node.attrs?.diagramId;
-		if (id && !ids.includes(id)) ids.push(id);
-		return;
-	}
-	for (const child of nodeContent(node)) collectDrawioIds(child, ids);
-}
-
-/** Every draw.io diagram referenced by a set of documents, in document order. */
-export function drawioReferencesIn(
-	documents: readonly { document: ProseMirrorDocument }[]
-): string[] {
-	const ids: string[] = [];
-	for (const entry of documents)
-		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
-	return ids;
-}
-
 /**
  * Rasterize the draw.io diagrams an export carries, keyed by diagram id.
  *

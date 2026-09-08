@@ -1,3 +1,5 @@
+import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveNoteInput,
@@ -29,7 +31,6 @@ import type {
 	NoteRevision,
 	NoteSearchOptions,
 	NoteView,
-	NoteSyncInventoryEntry,
 	PublishNoteInput,
 	PublishNoteOutput,
 	RenameNoteInput,
@@ -44,11 +45,7 @@ import type {
 	SetNoteSectionNumberingInput,
 	SetNoteSectionNumberingOutput,
 	ReplaceNoteTextInput,
-	ReplaceNoteTextOutput,
-	SyncNoteInput,
-	SyncNoteOutput,
-	ListNoteSyncInventoryInput,
-	ListNoteSyncInventoryOutput
+	ReplaceNoteTextOutput
 } from '$lib/models/notes';
 import {
 	MAX_NOTE_DOCUMENTS,
@@ -57,7 +54,6 @@ import {
 	diffNoteRevisionTexts,
 	noteEtag,
 	noteMatchesEtag,
-	noteSyncContentEquals,
 	replaceInNoteDocument,
 	searchNoteTargets,
 	sectionNumberingView
@@ -109,6 +105,7 @@ import type {
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
+	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * Load the full read model for one note: the document, its ETag, backlinks,
 	 * references, diagrams, todos, and pending suggestions.
@@ -159,7 +156,7 @@ export interface NotesController {
 	 *
 	 * @throws ValidationError if the base ETag does not describe the submitted revision.
 	 */
-	sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput>;
+
 	/**
 	 * Publish the current state of a note, recording a revision so `discardDraft` can
 	 * restore it later. Guards on the ETag so a concurrent edit cannot be silently
@@ -175,14 +172,6 @@ export interface NotesController {
 	 * fall back to.
 	 */
 	discardDraft(actor: ActorContext, input: DiscardNoteDraftInput): Promise<DiscardNoteDraftOutput>;
-	/**
-	 * List every note in a project with the ETag each was last written under, so an
-	 * offline client can diff its local state against the server on the next sync.
-	 */
-	listSyncInventory(
-		actor: ActorContext,
-		input: ListNoteSyncInventoryInput
-	): Promise<ListNoteSyncInventoryOutput>;
 	/**
 	 * Exact or regex search across the title and plain text of every active note,
 	 * optionally scoped to one project. Title matches are reported for display but are
@@ -279,6 +268,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
@@ -320,6 +310,62 @@ const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
 };
 
 export class Notes implements NotesController {
+	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async (current) => {
+			const command = input.command;
+			switch (command.kind) {
+				case 'createNote':
+					await this.create(actor, command);
+					break;
+				case 'renameNote':
+					await this.rename(actor, command);
+					break;
+				case 'archiveNote':
+					await this.archive(actor, command);
+					break;
+				case 'restoreNote':
+					await this.restore(actor, command);
+					break;
+				case 'publishNote':
+					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+						throw new ValidationError('The note no longer exists');
+					await this.publish(actor, {
+						noteId: command.noteId,
+						baseEtag: noteEtag(current.snapshot.value.value)
+					});
+					break;
+				case 'discardNoteDraft':
+					await this.discardDraft(actor, command);
+					break;
+				case 'deleteNote':
+					await this.deleteForever(actor, command);
+					break;
+				case 'noteNumbering':
+					await this.setSectionNumbering(actor, command);
+					break;
+				case 'saveNote': {
+					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+						throw new ValidationError('The note no longer exists');
+					await this.save(actor, {
+						note: {
+							...current.snapshot.value.value,
+							document: command.document,
+							plainText: command.plainText,
+							...(command.title !== undefined ? { title: command.title } : {}),
+							...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {})
+						}
+					});
+					if (command.sectionNumbering !== undefined)
+						await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
+							noteId: command.noteId,
+							enabled: command.sectionNumbering ?? undefined
+						});
+					break;
+				}
+			}
+		});
+	}
+
 	constructor(private readonly dependencies: NotesDependencies) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView> {
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
@@ -409,32 +455,6 @@ export class Notes implements NotesController {
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
 	}
-	async sync(actor: ActorContext, input: SyncNoteInput): Promise<SyncNoteOutput> {
-		if (!noteMatchesEtag(input.note, input.baseEtag))
-			throw new ValidationError('The base ETag does not describe the submitted note revision');
-		try {
-			const saved = await this.save(actor, { note: input.note });
-			return {
-				outcome: 'saved',
-				version: { note: saved.note, etag: saved.etag },
-				repairedAnchorIds: saved.repairedAnchorIds
-			};
-		} catch (error) {
-			if (!(error instanceof StaleRevisionError)) throw error;
-			const remote = await this.dependencies.noteReader.get(actor, input.note.id);
-			if (noteSyncContentEquals(remote, input.note))
-				return {
-					outcome: 'saved',
-					version: { note: remote, etag: noteEtag(remote) },
-					repairedAnchorIds: []
-				};
-			return {
-				outcome: 'conflict',
-				baseEtag: input.baseEtag,
-				remote: { note: remote, etag: noteEtag(remote) }
-			};
-		}
-	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteReader.get(actor, input.noteId);
@@ -464,21 +484,6 @@ export class Notes implements NotesController {
 			});
 			return { note: restored, etag: noteEtag(restored) };
 		});
-	}
-	async listSyncInventory(
-		actor: ActorContext,
-		input: ListNoteSyncInventoryInput
-	): Promise<ListNoteSyncInventoryOutput> {
-		const notes = await this.dependencies.noteTreeReader.list(actor, input.projectId);
-		const entries: NoteSyncInventoryEntry[] = notes
-			.filter((note) => note.kind === 'note')
-			.map((note) => ({
-				noteId: note.id,
-				projectId: note.projectId,
-				etag: noteEtag(note),
-				updatedAt: note.updatedAt
-			}));
-		return { entries };
 	}
 	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };

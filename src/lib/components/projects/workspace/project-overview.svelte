@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/models/projects';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
@@ -10,15 +11,11 @@
 		noteTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import {
-		deleteProjectDiagram,
-		restoreProjectDiagram
-	} from '$lib/remote/diagrams/diagrams.remote';
+	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { toast } from 'svelte-sonner';
-	import { invalidateAll } from '$app/navigation';
 	import {
 		FtMemory as Brain,
 		FtChevronRight as ChevronRight,
@@ -84,9 +81,7 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntryOpen = $state(false);
-	let renameEntryId: NoteId | null = $state(null);
-	let renameEntryTitle = $state('');
+	let renameEntry = $state<{ draft: WorkspaceDraft<'notes'>; title: string } | null>(null);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
@@ -140,15 +135,14 @@
 	}
 
 	function startRename(id: NoteId, title: string): void {
-		renameEntryId = id;
-		renameEntryTitle = title;
-		renameEntryOpen = true;
+		renameEntry = { draft: projectActions.editor('notes', id), title };
 	}
 
-	async function renameEntrySubmit(title: string): Promise<void> {
-		if (!renameEntryId) return;
-		const output = await projectActions.renameNote(renameEntryId, title);
+	async function renameEntrySubmit(title: string): Promise<boolean> {
+		if (!renameEntry) return false;
+		const output = await projectActions.renameNote(renameEntry.draft, title);
 		if (!output) toast.error('Could not rename. Try again.');
+		return Boolean(output);
 	}
 
 	async function archiveEntry(id: NoteId): Promise<void> {
@@ -166,8 +160,7 @@
 
 	async function restoreEntry(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await restoreProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
 			return;
 		}
@@ -179,8 +172,7 @@
 
 	async function deleteEntryForever(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await deleteProjectDiagram({ diagramId: entry.id });
-			await invalidateAll();
+			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
 			return;
 		}
@@ -193,6 +185,7 @@
 	async function emptyTrash(): Promise<void> {
 		// Scoped to this project: the panel only ever showed this project's trash, so
 		// emptying from here must not reach into another one.
+		for (const diagram of trashedDiagrams) await changeDiagramTrash(diagram.id, 'delete');
 		const output = await projectActions.emptyNoteTrash(project.id);
 		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
 		else toast.success('Trash emptied');
@@ -456,10 +449,15 @@
 {/if}
 
 <NameDialog
-	bind:open={renameEntryOpen}
+	bind:open={
+		() => renameEntry !== null,
+		(open) => {
+			if (!open) renameEntry = null;
+		}
+	}
 	title="Rename"
 	label="Name"
-	initialValue={renameEntryTitle}
+	initialValue={renameEntry?.title ?? ''}
 	busy={projectActions.busy}
 	onsubmit={renameEntrySubmit}
 />

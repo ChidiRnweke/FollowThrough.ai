@@ -9,6 +9,7 @@ import {
 	integer,
 	jsonb,
 	pgEnum,
+	pgSequence,
 	pgTable,
 	primaryKey,
 	text,
@@ -25,8 +26,74 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
+
+export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
+
+/** Sync metadata stays out of existing domain records and their serialization. */
+export const workspaceSyncVersions = pgTable(
+	'workspace_sync_versions',
+	{
+		resourceType: text('resource_type').notNull(),
+		accountId: uuid('account_id').notNull(),
+		resourceId: jsonb('resource_id').$type<readonly string[]>().notNull(),
+		version: bigint('version', { mode: 'bigint' })
+			.notNull()
+			.default(sql`nextval('workspace_sync_version_sequence')`)
+	},
+	(table) => [
+		primaryKey({ columns: [table.resourceType, table.resourceId] }),
+		check(
+			'workspace_sync_versions_resource_id_check',
+			sql`jsonb_typeof(${table.resourceId}) = 'array'`
+		),
+		check('workspace_sync_versions_version_check', sql`${table.version} > 0`)
+	]
+);
+
+export const workspaceSyncHeads = pgTable(
+	'workspace_sync_heads',
+	{
+		accountId: uuid('account_id').primaryKey(),
+		cursor: bigint('cursor', { mode: 'bigint' }).notNull()
+	},
+	(table) => [check('workspace_sync_heads_cursor_check', sql`${table.cursor} > 0`)]
+);
+
+export const workspaceSyncChanges = pgTable(
+	'workspace_sync_changes',
+	{
+		accountId: uuid('account_id').notNull(),
+		resourceType: text('resource_type').notNull(),
+		resourceId: jsonb('resource_id').$type<readonly string[]>().notNull(),
+		cursor: bigint('cursor', { mode: 'bigint' }).notNull(),
+		operation: text('operation').$type<'upsert' | 'delete'>().notNull(),
+		version: bigint('version', { mode: 'bigint' }).notNull()
+	},
+	(table) => [
+		primaryKey({ columns: [table.accountId, table.resourceType, table.resourceId] }),
+		index('workspace_sync_changes_cursor').on(table.accountId, table.cursor),
+		check('workspace_sync_changes_cursor_check', sql`${table.cursor} > 0`),
+		check('workspace_sync_changes_version_check', sql`${table.version} > 0`),
+		check('workspace_sync_changes_operation_check', sql`${table.operation} in ('upsert', 'delete')`)
+	]
+);
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
+
+export const workspaceSyncReceipts = pgTable(
+	'workspace_sync_receipts',
+	{
+		accountId: uuid('account_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		operationId: uuid('operation_id').notNull(),
+		requestHash: text('request_hash').notNull(),
+		result: jsonb('result').$type<WorkspaceWriteReceipt>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.accountId, table.operationId] })]
+);
 /**
  * What a project is for, so the inbox stops being a project that happens to be
  * called "General".

@@ -1,3 +1,8 @@
+import type {
+	ProjectMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveProjectInput,
@@ -33,6 +38,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
  * cross-entry bookkeeping, so it alone runs through the transaction runner.
  */
 export interface ProjectsController {
+	synchronize(actor: ActorContext, input: ProjectMutationRequest): Promise<WorkspaceMutationResult>;
 	/** List the user's projects. */
 	list(actor: ActorContext): Promise<ListProjectsOutput>;
 	/** Load a project together with its full entry tree, fetched in parallel. */
@@ -55,6 +61,7 @@ export interface ProjectsController {
 }
 
 export interface ProjectsDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	projectCreator: ProjectCreator;
 	projectReader: ProjectReader;
 	projectLister: ProjectLister;
@@ -66,6 +73,36 @@ export interface ProjectsDependencies {
 }
 
 export class Projects implements ProjectsController {
+	synchronize(
+		actor: ActorContext,
+		input: ProjectMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async (current) => {
+			const command = input.command;
+			void current;
+			switch (command.kind) {
+				case 'createProject':
+					await this.create(actor, command);
+					break;
+				case 'renameProject':
+					await this.rename(actor, command);
+					break;
+				case 'archiveProject':
+					await this.archive(actor, command);
+					break;
+				case 'projectNumbering':
+					await this.setSectionNumberingDefault(actor, command);
+					break;
+				case 'createFolder':
+					await this.createFolder(actor, command);
+					break;
+				case 'moveNote':
+					await this.move(actor, command);
+					break;
+			}
+		});
+	}
+
 	constructor(private readonly dependencies: ProjectsDependencies) {}
 
 	async list(actor: ActorContext): Promise<ListProjectsOutput> {

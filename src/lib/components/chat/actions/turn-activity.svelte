@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { SvelteMap } from 'svelte/reactivity';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { getTodo } from '$lib/remote/todos/todos.remote';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { FtChevronRight, FtLoader, FtReading } from '$lib/components/icons';
@@ -62,37 +61,22 @@
 	 */
 	let doorOpen = $state(false);
 
-	/**
-	 * `update_todo` names its subject by id alone, so a resolved title is the difference between
-	 * a row a reader recognises and one they have to open to identify. Fetch, degrade visibly,
-	 * never block the row on it.
-	 */
-	const todoTitles = new SvelteMap<string, string>();
+	let titleError = $state<string | null>(null);
+	const resources = $derived(workspaceSession.current?.resources);
 	$effect(() => {
-		const unnamed = [...context.changed, ...context.read]
-			.map((row) => row.entity)
-			.filter((entity) => entity.kind === 'todo' && entity.id && !entity.named)
-			.map((entity) => entity.id as string)
-			.filter((id) => !todoTitles.has(id));
-		let cancelled = false;
-		for (const id of unnamed) {
-			// audit-allow: silent-catch — the row states the unavailable title in place of the name.
-			void getTodo(id)
-				.then((todo) => {
-					if (!cancelled) todoTitles.set(id, todo.title);
-				})
-				.catch(() => {
-					if (!cancelled) todoTitles.set(id, 'Todo title unavailable');
-					console.warn('Todo title unavailable', id);
-				});
-		}
-		return () => {
-			cancelled = true;
-		};
+		if (!resources) return;
+		void resources.prepare(['todos']).catch((error) => {
+			titleError = error instanceof Error ? error.message : 'Todo titles unavailable';
+			return { kind: 'failure', message: titleError };
+		});
 	});
-
 	const titleOf = (subject: SubjectActivity): string =>
-		(subject.entity.id ? todoTitles.get(subject.entity.id) : undefined) ?? subject.entity.title;
+		(subject.entity.kind === 'todo' && subject.entity.id
+			? resources?.views.get('todos', subject.entity.id)?.title
+			: undefined) ??
+		(subject.entity.kind === 'todo' && titleError
+			? 'Todo title unavailable'
+			: subject.entity.title);
 </script>
 
 <!--

@@ -1,13 +1,8 @@
 <script lang="ts">
+	import type { WriteConflictView } from '$lib/models/outbox';
 	import type { Diagram, DiagramSuggestion } from '$lib/models/diagrams';
-	import type {
-		Note,
-		NoteRevision,
-		NoteRevisionId,
-		NoteRevisionSummary,
-		NoteSyncRecord
-	} from '$lib/models/notes';
-	import type { PerNoteEditorSlot } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { Note, NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
+	import type { PerNoteEditorSlot } from '../editor-context';
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
@@ -42,7 +37,7 @@
 		historySelected?: NoteRevision;
 		historyLoading?: boolean;
 		note: Note;
-		conflictRecord?: NoteSyncRecord;
+		conflictRecord?: WriteConflictView<Note>;
 		reviewingSuggestion: DiagramSuggestion | null;
 		perNote?: PerNoteEditorSlot;
 		/** Passed through so the history panes render draw.io blocks as they look in the note. */
@@ -69,7 +64,7 @@
 	onrestore={onRestoreRevision}
 />
 
-{#if conflictRecord?.state === 'conflict'}
+{#if conflictRecord}
 	<NoteConflictDialog
 		bind:open={conflictOpen}
 		record={conflictRecord}
