@@ -1,3 +1,8 @@
+import type {
+	MemoryMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -34,6 +39,7 @@ import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-
  * auto-accepted only when the trust policy says the change is safe.
  */
 export interface MemoryController {
+	synchronize(actor: ActorContext, input: MemoryMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * List memory entries, optionally restricted to those shared with agents. Entries the
 	 * user keeps private are visible here but never to the agent.
@@ -60,6 +66,7 @@ export interface MemoryController {
 }
 
 export interface MemoryDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;
 	memoryEditor: MemoryEntryEditor;
@@ -73,6 +80,22 @@ export interface MemoryDependencies {
 }
 
 export class Memory implements MemoryController {
+	synchronize(actor: ActorContext, input: MemoryMutationRequest): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			const command = input.command;
+			switch (command.kind) {
+				case 'createMemory':
+					await this.create(actor, command);
+					break;
+				case 'updateMemory':
+					await this.update(actor, command);
+					break;
+				case 'deleteMemory':
+					await this.remove(actor, command);
+					break;
+			}
+		});
+	}
 	constructor(private readonly dependencies: MemoryDependencies) {}
 
 	async list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput> {

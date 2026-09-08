@@ -47,7 +47,7 @@ export class MemoryLibrary {
 		if (input.projectId) await this.requireProject(actor, input.projectId);
 		const timestamp = now();
 		const entry = await this.entries.insert(actor, {
-			id: crypto.randomUUID() as MemoryEntryId,
+			id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
 			userId: actor.userId,
 			...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
 			content,

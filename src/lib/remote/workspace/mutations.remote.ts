@@ -14,6 +14,10 @@ export const pushWorkspaceMutation = command(
 		const controllers = AppFactory.controllers();
 		const command = mutation.command;
 		switch (command.kind) {
+			case 'createMemory':
+			case 'updateMemory':
+			case 'deleteMemory':
+				return controllers.memory().synchronize(actor, { ...mutation, command });
 			case 'saveDiagram':
 			case 'renameDiagram':
 			case 'publishDiagram':

@@ -365,3 +365,38 @@ test('archives, restores, and deletes a saved diagram offline', async ({
 	await page.getByRole('heading', { name: 'Trash', exact: true }).waitFor();
 	await expect(page.getByRole('listitem').filter({ hasText: title })).toHaveCount(0);
 });
+
+test('creates, edits, and deletes profile memory offline through reload', async ({
+	page,
+	context
+}) => {
+	await page.goto('/profile');
+	await waitForServiceWorker(page);
+	await page.getByRole('button', { name: 'Add memory', exact: true }).waitFor();
+	await context.setOffline(true);
+	const content = `Offline memory ${crypto.randomUUID()}`;
+	await page.getByRole('button', { name: 'Add memory', exact: true }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('New memory entry').fill(content);
+	await dialog.getByRole('button', { name: 'Add memory', exact: true }).click();
+	await dialog.waitFor({ state: 'hidden' });
+	await page.reload();
+	const row = page.getByRole('listitem').filter({ hasText: content });
+	await row.getByRole('button', { name: 'Memory actions' }).click();
+	await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+	await page.getByLabel('Edit memory entry').fill(`${content} edited`);
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await page.getByLabel('Edit memory entry').waitFor({ state: 'hidden' });
+	await page.reload();
+	await page
+		.getByRole('listitem')
+		.filter({ hasText: `${content} edited` })
+		.getByRole('button', { name: 'Memory actions' })
+		.click();
+	await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
+	await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
+	await page.reload();
+	await page.getByRole('button', { name: 'Add memory', exact: true }).waitFor();
+	await expect(page.getByRole('listitem').filter({ hasText: content })).toHaveCount(0);
+});

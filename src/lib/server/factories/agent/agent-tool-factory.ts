@@ -482,6 +482,7 @@ export const agentToolCoverage = {
 		}
 	},
 	memory: {
+		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
 		list: { kind: 'read', tools: ['list_project_memory', 'list_user_memory'] },
 		propose: { kind: 'proposal', tools: ['propose_memory_change'] },
 		create: {

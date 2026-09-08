@@ -1,3 +1,9 @@
+import type {
+	MemoryEntry,
+	MemoryEntryId,
+	CreateMemoryEntryInput,
+	UpdateMemoryEntryInput
+} from '$lib/models/memory';
 import { z } from 'zod';
 import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
@@ -14,6 +20,7 @@ import type {
 } from '$lib/models/outbox';
 import { syncEtagSchema } from '$lib/models/sync';
 import {
+	resourceDataSchemas,
 	noteRecordSchema,
 	projectRecordSchema,
 	todoRecordSchema,
@@ -32,7 +39,24 @@ const diagramId = z
 	.uuid()
 	.transform((value) => value as DiagramId);
 
+const memoryEntryId = resourceDataSchemas.memory_entries.shape.id;
 export const workspaceCommandSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('createMemory'),
+		id: memoryEntryId,
+		projectId: projectId.optional(),
+		content: z.string().trim().min(1),
+		type: resourceDataSchemas.memory_entries.shape.type,
+		shareWithAgents: z.boolean()
+	}),
+	z.object({
+		kind: z.literal('updateMemory'),
+		memoryEntryId,
+		content: z.string().trim().min(1).optional(),
+		type: resourceDataSchemas.memory_entries.shape.type.nullable(),
+		shareWithAgents: z.boolean().optional()
+	}),
+	z.object({ kind: z.literal('deleteMemory'), memoryEntryId }),
 	z.object({ kind: z.literal('createProject'), id: projectId, name: z.string().trim().min(1) }),
 	z.object({ kind: z.literal('renameProject'), projectId, name: z.string().trim().min(1) }),
 	z.object({ kind: z.literal('archiveProject'), projectId }),
@@ -160,6 +184,7 @@ export type ProjectMutationRequest = MutationFor<
 	| 'moveNote'
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
+export type MemoryMutationRequest = MutationFor<'createMemory' | 'updateMemory' | 'deleteMemory'>;
 export type SkillMutationRequest = MutationFor<'createSkill'>;
 export type DiagramMutationRequest = MutationFor<
 	| 'saveDiagram'
@@ -188,6 +213,11 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'createMemory':
+			return { type: 'memory_entries', id: [command.id] };
+		case 'updateMemory':
+		case 'deleteMemory':
+			return { type: 'memory_entries', id: [command.memoryEntryId] };
 		case 'saveDiagram':
 		case 'renameDiagram':
 		case 'publishDiagram':
@@ -468,3 +498,37 @@ export const noteTrashWrite = (
 			: []
 	};
 };
+
+export const newMemory = (
+	id: MemoryEntryId,
+	userId: UserId,
+	input: CreateMemoryEntryInput,
+	timestamp: DateTime
+): MemoryEntry => ({
+	id,
+	userId,
+	projectId: input.projectId,
+	content: input.content.trim(),
+	type: input.type,
+	shareWithAgents: input.shareWithAgents ?? true,
+	createdAt: timestamp,
+	updatedAt: timestamp
+});
+export const memoryWrite = (
+	entry: MemoryEntry,
+	patch: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+	command: { kind: 'updateMemory', memoryEntryId: entry.id, ...patch },
+	local: {
+		type: 'memory_entries',
+		value: {
+			...entry,
+			...patch,
+			content: patch.content?.trim() ?? entry.content,
+			shareWithAgents: patch.shareWithAgents ?? entry.shareWithAgents,
+			type: patch.type === null ? undefined : (patch.type ?? entry.type)
+		}
+	},
+	coalesce: null,
+	references: []
+});

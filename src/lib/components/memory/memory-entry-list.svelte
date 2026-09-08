@@ -25,7 +25,10 @@
 		FtPlus as Plus
 	} from '$lib/components/icons';
 	import EmptyState from '../shared/empty-state.svelte';
-	import { createEntry, updateEntry, deleteEntry } from '$lib/remote/memory/memory.remote';
+	import { newMemory, memoryWrite } from '$lib/models/workspace-mutations';
+	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { DateTime } from '$lib/models/workspace';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
@@ -62,21 +65,34 @@
 	let draft = $state('');
 	let draftType = $state<MemoryEntryType | 'none'>('none');
 	const entryTypes: MemoryEntryType[] = ['fact', 'decision', 'constraint', 'preference'];
-	let editingId = $state<MemoryEntryId | undefined>(undefined);
-	let editingContent = $state('');
-	let deleteTarget = $state<MemoryEntry | undefined>(undefined);
-	let deleteOpen = $state(false);
+	let editing = $state<{ resource: WorkspaceDraft<'memory_entries'>; content: string } | null>(
+		null
+	);
+	let deletion = $state<WorkspaceDraft<'memory_entries'> | null>(null);
 	let addOpen = $state(false);
+	let adding = $state(false);
 
-	function askDelete(entry: MemoryEntry): void {
-		deleteTarget = entry;
-		deleteOpen = true;
+	function editorFor(entry: MemoryEntry): WorkspaceDraft<'memory_entries'> {
+		if (!resources) throw new Error('Open the workspace before editing memory');
+		const resource = resources.draft({ type: 'memory_entries', id: [entry.id] });
+		resource.capture();
+		return resource;
 	}
-
+	function askDelete(entry: MemoryEntry): void {
+		deletion = editorFor(entry);
+	}
 	async function confirmDelete(): Promise<void> {
-		if (deleteTarget) await remove(deleteTarget);
-		deleteOpen = false;
-		deleteTarget = undefined;
+		const resource = deletion;
+		const entry = resource?.value;
+		if (!resource || !entry) return;
+		const result = await resource.stage({
+			command: { kind: 'deleteMemory', memoryEntryId: entry.id },
+			local: null,
+			coalesce: null,
+			references: []
+		});
+		if (result.kind === 'failure') toast.error(result.message);
+		else if (deletion === resource) deletion = null;
 	}
 	// Proposals and kept entries are different in kind — one asks for a decision,
 	// the other is the record — so each gets its own section instead of the two
@@ -142,14 +158,38 @@
 
 	async function add(): Promise<boolean> {
 		const content = draft.trim();
-		if (!content) return false;
+		if (!content || adding) return false;
+		adding = true;
 		try {
-			await createEntry({
-				projectId,
-				content,
-				...(draftType !== 'none' ? { type: draftType } : {})
+			const session = workspaceSession.current;
+			if (!session) throw new Error('Open the workspace before adding memory');
+			const entry = newMemory(
+				crypto.randomUUID() as MemoryEntryId,
+				session.shell.user.id,
+				{
+					projectId,
+					content,
+					...(draftType !== 'none' ? { type: draftType } : {})
+				},
+				new Date().toISOString() as DateTime
+			);
+			await session.resources.append({
+				operationId: crypto.randomUUID(),
+				key: workspaceResourceKey({ type: 'memory_entries', id: [entry.id] }),
+				command: {
+					kind: 'createMemory',
+					id: entry.id,
+					projectId,
+					content: entry.content,
+					type: entry.type,
+					shareWithAgents: entry.shareWithAgents
+				},
+				base: null,
+				basedOn: null,
+				local: { type: 'memory_entries', value: entry },
+				coalesce: null,
+				references: projectId ? [workspaceResourceKey({ type: 'projects', id: [projectId] })] : []
 			});
-			await workspaceSession.synchronize();
 			draft = '';
 			draftType = 'none';
 			return true;
@@ -157,6 +197,8 @@
 		} catch {
 			toast.error('Could not save the memory entry.');
 			return false;
+		} finally {
+			adding = false;
 		}
 	}
 
@@ -166,37 +208,21 @@
 		if (await add()) addOpen = false;
 	}
 
-	async function saveEdit(entry: MemoryEntry): Promise<void> {
-		const content = editingContent.trim();
+	async function saveEdit(): Promise<void> {
+		const edit = editing;
+		const entry = edit?.resource.value;
+		if (!edit || !entry) return;
+		const content = edit.content.trim();
 		if (!content) return;
-		try {
-			await updateEntry({ memoryEntryId: entry.id, content });
-			editingId = undefined;
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the saved content remains visible and the edit failure is reported.
-		} catch {
-			toast.error('Could not update the memory entry.');
-		}
+		const result = await edit.resource.stage(memoryWrite(entry, { content }));
+		if (result.kind === 'failure') toast.error(result.message);
+		else if (editing === edit && edit.content.trim() === content) editing = null;
 	}
 
 	async function toggleShare(entry: MemoryEntry, shareWithAgents: boolean): Promise<void> {
-		try {
-			await updateEntry({ memoryEntryId: entry.id, shareWithAgents });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the saved sharing value remains visible and the edit failure is reported.
-		} catch {
-			toast.error('Could not update the memory entry.');
-		}
-	}
-
-	async function remove(entry: MemoryEntry): Promise<void> {
-		try {
-			await deleteEntry({ memoryEntryId: entry.id });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the entry remains visible and the deletion failure is reported.
-		} catch {
-			toast.error('Could not delete the memory entry.');
-		}
+		const resource = editorFor(entry);
+		const result = await resource.stage(memoryWrite(entry, { shareWithAgents }));
+		if (result.kind === 'failure') toast.error(result.message);
 	}
 </script>
 
@@ -301,12 +327,12 @@
 
 {#snippet savedRow(entry: MemoryEntry)}
 	<li class="row-interactive px-3 py-2.5">
-		{#if editingId === entry.id}
+		{#if editing && editing.resource.identity.id[0] === entry.id}
 			<div class="flex flex-col gap-2">
-				<Textarea bind:value={editingContent} rows={3} aria-label="Edit memory entry" />
+				<Textarea bind:value={editing.content} rows={3} aria-label="Edit memory entry" />
 				<div class="flex justify-end gap-2">
-					<Button size="sm" variant="ghost" onclick={() => (editingId = undefined)}>Cancel</Button>
-					<Button size="sm" disabled={!editingContent.trim()} onclick={() => saveEdit(entry)}>
+					<Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
+					<Button size="sm" disabled={!editing.content.trim()} onclick={() => saveEdit()}>
 						Save
 					</Button>
 				</div>
@@ -336,8 +362,7 @@
 						<DropdownMenu.Content align="end">
 							<DropdownMenu.Item
 								onSelect={() => {
-									editingId = entry.id;
-									editingContent = entry.content;
+									editing = { resource: editorFor(entry), content: entry.content };
 								}}
 							>
 								Edit
@@ -363,7 +388,12 @@
 	</li>
 {/snippet}
 
-<AlertDialog.Root bind:open={deleteOpen}>
+<AlertDialog.Root
+	open={deletion !== null}
+	onOpenChange={(open) => {
+		if (!open) deletion = null;
+	}}
+>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete this memory?</AlertDialog.Title>
@@ -373,9 +403,13 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={() => void confirmDelete()}>
+			<Button
+				variant="destructive"
+				disabled={deletion?.status === 'saving'}
+				onclick={() => void confirmDelete()}
+			>
 				Delete
-			</AlertDialog.Action>
+			</Button>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
@@ -389,10 +423,18 @@
 			{/if}
 		</Dialog.Header>
 		<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
-			<Textarea bind:value={draft} {placeholder} rows={3} aria-label="New memory entry" autofocus />
+			<Textarea
+				bind:value={draft}
+				disabled={adding}
+				{placeholder}
+				rows={3}
+				aria-label="New memory entry"
+				autofocus
+			/>
 			<div class="flex items-center justify-between gap-2">
 				<Select.Root
 					type="single"
+					disabled={adding}
 					value={draftType}
 					onValueChange={(next) => (draftType = next as MemoryEntryType | 'none')}
 				>
@@ -410,7 +452,7 @@
 				</Select.Root>
 				<div class="flex items-center gap-2">
 					<Button type="button" variant="ghost" onclick={() => (addOpen = false)}>Cancel</Button>
-					<Button type="submit" disabled={!draft.trim()}>Add memory</Button>
+					<Button type="submit" disabled={adding || !draft.trim()}>Add memory</Button>
 				</div>
 			</div>
 		</Form>

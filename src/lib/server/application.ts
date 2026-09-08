@@ -499,6 +499,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		trustPolicies: { trustPolicyStore: trust },
 		memory: {
+			syncMutations: synchronization.mutations,
 			memoryLister: memory,
 			memoryCreator: memory,
 			memoryEditor: memory,
