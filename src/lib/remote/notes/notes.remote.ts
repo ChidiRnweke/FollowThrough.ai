@@ -12,9 +12,7 @@ import type {
 import type {
 	GetNoteRevisionInput,
 	DiscardNoteDraftInput,
-	RestoreNoteRevisionInput,
-	SearchNoteTextInput,
-	ReplaceNoteTextInput
+	RestoreNoteRevisionInput
 } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
@@ -70,31 +68,6 @@ export const restoreNoteRevision = command(
 		return AppFactory.controllers()
 			.notes()
 			.restoreRevision(requestActor(), input as RestoreNoteRevisionInput);
-	}
-);
-
-const noteSearchSchema = z.object({
-	query: z.string().min(1).max(500),
-	regex: z.boolean(),
-	caseSensitive: z.boolean(),
-	projectId: z.string().uuid().optional()
-});
-
-export const searchNotes = query(noteSearchSchema, async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.searchText(requestActor(), input as SearchNoteTextInput);
-});
-
-export const replaceInNotes = command(
-	noteSearchSchema.extend({
-		replacement: z.string().max(2000),
-		noteIds: z.array(z.string().uuid()).min(1).max(200).optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.replaceText(requestActor(), input as ReplaceNoteTextInput);
 	}
 );
 

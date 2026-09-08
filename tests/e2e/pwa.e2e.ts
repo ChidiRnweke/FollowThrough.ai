@@ -438,3 +438,33 @@ test('retains skill description and instruction edits offline and synchronizes t
 		}))
 		.toEqual({ description, applied: 2 });
 });
+
+test('searches pending local text and retains an offline replacement through reload', async ({
+	page,
+	context
+}) => {
+	const href = '/notes/00000000-0000-4000-8000-000000000003';
+	await page.goto(href);
+	await waitForServiceWorker(page);
+	const body = page.getByLabel('Note body', { exact: true });
+	await body.waitFor();
+	await context.setOffline(true);
+	const phrase = `Searchable ${crypto.randomUUID()}`;
+	await body.fill(phrase);
+	await body.press('Control+s');
+	await page.getByRole('button', { name: 'Saved on device · retry sync', exact: true }).waitFor();
+	await page.keyboard.press('Control+Shift+f');
+	await page.getByLabel('Search all notes', { exact: true }).fill(phrase);
+	await page.getByLabel('Search all notes', { exact: true }).press('Enter');
+	await page.getByLabel('Replace with', { exact: true }).fill('Replacement saved offline');
+	await page.getByRole('button', { name: 'Replace all', exact: true }).click();
+	await page
+		.getByRole('alertdialog')
+		.getByRole('button', { name: 'Replace all', exact: true })
+		.click();
+	await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
+	await page.reload();
+	await expect(page.getByLabel('Note body', { exact: true })).toContainText(
+		'Replacement saved offline'
+	);
+});

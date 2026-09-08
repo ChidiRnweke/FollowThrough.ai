@@ -60,7 +60,7 @@
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
 	const projectFilter = $derived(globalSearch.projectId ?? 'all');
-	const replacing = $derived(globalSearch.hits.length > 0);
+	const replacing = $derived(globalSearch.hits.length > 0 && !globalSearch.searching);
 	const replaceTitle = $derived(
 		`Replace ${globalSearch.totalMatches} ${globalSearch.totalMatches === 1 ? 'match' : 'matches'} across ${globalSearch.hits.length} ${globalSearch.hits.length === 1 ? 'note' : 'notes'}?`
 	);
@@ -203,6 +203,11 @@
 				{/snippet}
 			</ConfirmDelete>
 		</div>
+		{#if globalSearch.partial}
+			<p class="text-xs text-muted-foreground" role="status">
+				Search includes only notes saved on this device. Some workspace content is unavailable.
+			</p>
+		{/if}
 		{#if globalSearch.searchError}
 			<p class="text-xs text-destructive" role="alert">{globalSearch.searchError}</p>
 		{:else if globalSearch.lastReplace}
@@ -230,7 +235,7 @@
 			<div class="flex items-center gap-2 text-xs text-muted-foreground">
 				<Spinner class="size-3.5" /> Searching…
 			</div>
-		{:else if globalSearch.hits.length === 0}
+		{:else if globalSearch.hits.length === 0 && !globalSearch.searchError}
 			<EmptyState
 				icon={Search}
 				title="No results for “{globalSearch.query}”."
