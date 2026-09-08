@@ -1,10 +1,11 @@
 # Offline write review
 
 These are starting-state and result captures of the new review flow, at 1280 × 720 in the light theme.
-They are not before/after captures of the old implementation.
+They are not before/after captures of the old implementation. These images were refreshed from the
+final production PWA run after reconciling current `master`; all 25 scenarios passed.
 
 Setup: `pnpm test:sync:pwa` creates an isolated temporary PostgreSQL container, runs all migrations,
-and seeds a synthetic account, inbox, note, and saved conversation. Playwright mints a session for
+and seeds a synthetic account, inbox, note, saved conversation, diagram, and skill. Playwright mints a session for
 that account. The scenario creates a project while offline, returns to Today, and opens its pending
 change for review. No model calls or private user data are involved. The container is removed when
 the test command exits normally.
