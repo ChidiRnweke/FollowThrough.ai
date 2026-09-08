@@ -11,15 +11,11 @@
 		noteTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import {
-		deleteProjectDiagram,
-		restoreProjectDiagram
-	} from '$lib/remote/diagrams/diagrams.remote';
+	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { toast } from 'svelte-sonner';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import {
 		FtMemory as Brain,
 		FtChevronRight as ChevronRight,
@@ -164,8 +160,7 @@
 
 	async function restoreEntry(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await restoreProjectDiagram({ diagramId: entry.id });
-			await workspaceSession.synchronize();
+			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
 			return;
 		}
@@ -177,8 +172,7 @@
 
 	async function deleteEntryForever(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await deleteProjectDiagram({ diagramId: entry.id });
-			await workspaceSession.synchronize();
+			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
 			return;
 		}
@@ -191,6 +185,7 @@
 	async function emptyTrash(): Promise<void> {
 		// Scoped to this project: the panel only ever showed this project's trash, so
 		// emptying from here must not reach into another one.
+		for (const diagram of trashedDiagrams) await changeDiagramTrash(diagram.id, 'delete');
 		const output = await projectActions.emptyNoteTrash(project.id);
 		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
 		else toast.success('Trash emptied');

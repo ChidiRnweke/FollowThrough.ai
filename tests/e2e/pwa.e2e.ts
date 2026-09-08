@@ -317,3 +317,51 @@ test('moves a note to trash and restores it offline through reload', async ({ pa
 	await page.goto(href);
 	await expect(page.getByLabel('Note body', { exact: true })).toBeVisible();
 });
+
+test('archives, restores, and deletes a saved diagram offline', async ({
+	page,
+	context
+}, testInfo) => {
+	const title = 'Saved synchronization diagram';
+	const gallery = '/diagrams?projectId=00000000-0000-4000-8000-000000000002';
+	await page.goto(gallery);
+	await waitForServiceWorker(page);
+	await page.getByRole('link', { name: title, exact: true }).last().waitFor();
+	await context.setOffline(true);
+	await page.screenshot({ path: testInfo.outputPath('diagram-saved-offline.png'), fullPage: true });
+	const archive = async () => {
+		await page.getByRole('link', { name: title, exact: true }).last().hover();
+		await page.getByRole('button', { name: `Actions for ${title}`, exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Move to trash', exact: true }).click();
+		await page
+			.getByRole('alertdialog')
+			.getByRole('button', { name: 'Move to trash', exact: true })
+			.click();
+		await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
+		await page.goto('/trash');
+		await page.getByRole('listitem').filter({ hasText: title }).waitFor();
+	};
+	await archive();
+	await page.screenshot({
+		path: testInfo.outputPath('diagram-trashed-offline.png'),
+		fullPage: true
+	});
+	await page.reload();
+	await page
+		.getByRole('listitem')
+		.filter({ hasText: title })
+		.getByRole('button', { name: 'Restore', exact: true })
+		.click();
+	await page.getByText('Restored', { exact: true }).waitFor();
+	await page.goto(gallery);
+	await archive();
+	await page.getByRole('button', { name: `Delete ${title} forever`, exact: true }).click();
+	await page
+		.getByRole('alertdialog')
+		.getByRole('button', { name: 'Delete forever', exact: true })
+		.click();
+	await page.getByText('Deleted permanently', { exact: true }).waitFor();
+	await page.reload();
+	await page.getByRole('heading', { name: 'Trash', exact: true }).waitFor();
+	await expect(page.getByRole('listitem').filter({ hasText: title })).toHaveCount(0);
+});

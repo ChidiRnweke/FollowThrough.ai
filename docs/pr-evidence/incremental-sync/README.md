@@ -17,3 +17,15 @@ Starting state: the project is saved on the device and the shared status offers 
 
 Result: the review shows the retained local project and its absent server base. The user can download
 its full record or explicitly discard it. The same test verifies that discard removes the pending write.
+
+## Offline diagram trash actions
+
+The same isolated fixture now includes a saved draw.io document and its rendered SVG. These captures show the new offline action flow at the same viewport and theme. No external editor or model call is needed.
+
+![Saved diagram in the gallery while the device is offline](diagram-saved-offline.png)
+
+Starting state: the shared cache supplies the saved diagram and its preview offline.
+
+![Diagram retained in trash with one pending local change](diagram-trashed-offline.png)
+
+Result: the confirmation waits for device persistence before closing. Trash shows the retained diagram and the shared pending-write status. The test also restores, archives, and deletes it through offline reloads.

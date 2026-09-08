@@ -7,10 +7,7 @@
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
-	import {
-		deleteProjectDiagram,
-		restoreProjectDiagram
-	} from '$lib/remote/diagrams/diagrams.remote';
+	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -30,8 +27,7 @@
 
 	async function restore(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await restoreProjectDiagram({ diagramId: entry.id });
-			await workspaceSession.synchronize();
+			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
 			return;
 		}
@@ -42,8 +38,7 @@
 
 	async function remove(entry: TrashEntry): Promise<void> {
 		if (entry.kind === 'diagram') {
-			await deleteProjectDiagram({ diagramId: entry.id });
-			await workspaceSession.synchronize();
+			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
 			return;
 		}
@@ -61,7 +56,7 @@
 	 */
 	async function empty(): Promise<void> {
 		for (const entry of entries) {
-			if (entry.kind === 'diagram') await deleteProjectDiagram({ diagramId: entry.id });
+			if (entry.kind === 'diagram') await changeDiagramTrash(entry.id, 'delete');
 		}
 		const output = await projectActions.emptyNoteTrash();
 		await workspaceSession.synchronize();

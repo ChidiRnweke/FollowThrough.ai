@@ -1,4 +1,4 @@
-import { command, query } from '$app/server';
+import { query } from '$app/server';
 import { z } from 'zod';
 import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
 import { AppFactory } from '$lib/server/factories/app-factory';
@@ -14,28 +14,4 @@ export const getDiagramRevision = query(
 	z.object({ diagramId: diagramIdSchema, revisionId: revisionIdSchema }),
 	async (input) =>
 		AppFactory.controllers().diagramStudio().getDiagramRevision(requestActor(), input)
-);
-
-/** Move a diagram to the trash. Reversible, unlike `deleteProjectDiagram` below. */
-export const archiveProjectDiagram = command(
-	z.object({ diagramId: diagramIdSchema }),
-	async (input) =>
-		AppFactory.controllers().diagramStudio().archiveProjectDiagram(requestActor(), input)
-);
-
-export const restoreProjectDiagram = command(
-	z.object({ diagramId: diagramIdSchema }),
-	async (input) =>
-		AppFactory.controllers().diagramStudio().restoreProjectDiagram(requestActor(), input)
-);
-
-export const deleteProjectDiagram = command(
-	z.object({ diagramId: diagramIdSchema }),
-	async (input) =>
-		AppFactory.controllers().diagramStudio().deleteProjectDiagram(requestActor(), input)
-);
-
-/** How many notes render this diagram, so its delete confirmation can say so. */
-export const countDiagramReferences = query(diagramIdSchema, async (diagramId) =>
-	AppFactory.controllers().diagramStudio().countDiagramReferences(requestActor(), { diagramId })
 );

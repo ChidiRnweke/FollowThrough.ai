@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { toast } from 'svelte-sonner';
-	import type { Diagram, DiagramId } from '$lib/models/diagrams';
+	import type { Diagram } from '$lib/models/diagrams';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -23,10 +22,8 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import {
-		countDiagramReferences,
-		archiveProjectDiagram
-	} from '$lib/remote/diagrams/diagrams.remote';
+	import { drawioReferencesIn } from '$lib/models/notes';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
@@ -48,10 +45,16 @@
 	let searchValue = $derived(data.query);
 	let removeTarget = $state<Diagram | undefined>(undefined);
 	let removeOpen = $state(false);
+	let removing = $state(false);
 
-	// Only fetched once a delete is actually being confirmed: the count reads note
-	// documents, so it is not something to run for every row in the grid.
-	const references = $derived(removeTarget ? countDiagramReferences(removeTarget.id) : undefined);
+	const references = $derived.by(() => {
+		if (!removeTarget) return null;
+		const resources = workspaceSession.current?.resources;
+		if (!resources || resources.availability !== 'complete') return null;
+		const id = removeTarget.id;
+		return resources.views.all('notes').filter((note) => drawioReferencesIn([note]).includes(id))
+			.length;
+	});
 
 	// Mirrors the loader's canonical URL exactly. A mismatch would make every
 	// navigation take an extra redirect hop.
@@ -123,35 +126,19 @@
 		removeOpen = true;
 	}
 
-	/**
-	 * The dialog closes before the delete runs, not after.
-	 *
-	 * `AlertDialog.Action` does not dismiss on its own — every confirmation in the
-	 * app closes itself — and leaving
-	 * the confirmation up while the request is in flight only reads as a click that
-	 * did not land.
-	 */
-	function confirmRemove(): void {
+	async function confirmRemove(): Promise<void | { kind: 'failure' }> {
 		const target = removeTarget;
-		removeOpen = false;
-		removeTarget = undefined;
-		if (target) void remove(target.id);
-	}
-
-	/**
-	 * Moves the diagram to the trash rather than destroying it.
-	 *
-	 * The row disappears either way, which is why the wording matters: a diagram
-	 * used to be gone for good from here, with nothing to undo it. The trash page
-	 * is where it goes, and where it comes back from.
-	 */
-	async function remove(id: DiagramId): Promise<void> {
+		if (!target || removing) return;
+		removing = true;
 		try {
-			await archiveProjectDiagram({ diagramId: id });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the toast reports the failed deletion; the shared record remains available.
+			await changeDiagramTrash(target.id, 'archive');
+			removeOpen = false;
+			removeTarget = undefined;
 		} catch {
-			toast.error('Could not move the diagram to the trash.');
+			// The shared action reports the storage error; keep this confirmation open.
+			return { kind: 'failure' };
+		} finally {
+			removing = false;
 		}
 	}
 </script>
@@ -350,8 +337,7 @@
 	open={removeOpen}
 	onOpenChange={(open) => {
 		removeOpen = open;
-		// Dropping the target with the dialog keeps the next one from opening on the
-		// previous diagram's reference count while its own query is still in flight.
+		// The closed dialog retains no resource selection.
 		if (!open) removeTarget = undefined;
 	}}
 >
@@ -359,18 +345,23 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>Move this diagram to the trash?</AlertDialog.Title>
 			<AlertDialog.Description>
-				{#if references?.current}
-					{references.current === 1
+				{#if references === null}
+					The reference count is unavailable. Notes that use this diagram will show it as
+					unavailable until you restore it.
+				{:else if references > 0}
+					{references === 1
 						? 'One note renders this diagram and will show it as unavailable until you restore it.'
-						: `${references.current} notes render this diagram and will show it as unavailable until you restore it.`}
+						: `${references} notes render this diagram and will show it as unavailable until you restore it.`}
 				{:else}
 					No note renders this diagram. You can restore it from the trash.
 				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={confirmRemove}>Move to trash</AlertDialog.Action>
+			<AlertDialog.Cancel disabled={removing}>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action disabled={removing} onclick={() => void confirmRemove()}
+				>{removing ? 'Moving…' : 'Move to trash'}</AlertDialog.Action
+			>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
