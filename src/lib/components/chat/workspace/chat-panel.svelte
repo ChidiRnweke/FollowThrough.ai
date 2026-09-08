@@ -614,8 +614,7 @@
 		</p>
 	{:else if !agentAvailable}
 		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
-			Agent chat is disabled. Configure <code class="font-mono text-xs">OPENROUTER_API_KEY</code> to enable
-			it.
+			Agent chat is disabled. Configure <code class="text-xs">OPENROUTER_API_KEY</code> to enable it.
 		</div>
 	{/if}
 	{#if chat.historyError}

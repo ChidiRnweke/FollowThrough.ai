@@ -97,7 +97,7 @@ describe('A completed write names its target without fetching history', () => {
 			call({
 				name: 'edit_note',
 				arguments: { noteId: '00000000-0000-4000-8000-0000000000bb' },
-				output: { noteId: '00000000-0000-4000-8000-0000000000bb', title: 'Rossel' }
+				output: { noteId: '00000000-0000-4000-8000-0000000000bb', title: 'Atlas' }
 			}),
 			shell
 		);
@@ -106,7 +106,7 @@ describe('A completed write names its target without fetching history', () => {
 			entity: {
 				kind: 'note',
 				id: '00000000-0000-4000-8000-0000000000bb',
-				title: 'Rossel',
+				title: 'Atlas',
 				named: true
 			}
 		});
@@ -122,31 +122,31 @@ describe('A look inside the virtual files shows what came back', () => {
 		const disclosure = toolDisclosure(
 			call({
 				name: 'grep',
-				arguments: { pattern: 'element61', path: '/' },
+				arguments: { pattern: 'northwind', path: '/' },
 				output: {
 					kind: 'matches',
 					exitCode: 0,
-					pattern: 'element61',
+					pattern: 'northwind',
 					path: '/',
 					matches: [
 						{
 							path: `/projects/proj-1/notes/${NOTE_ID}.md`,
 							lineNumber: 12,
-							line: 'element61 should own the rollout'
+							line: 'northwind should own the rollout'
 						}
 					]
 				}
 			}),
 			shell
 		);
+		// No count of what came back. The lines are the count, and the turn files each one
+		// under the note it was found in, which is where the reader reads it.
 		expect(disclosure).toEqual({
 			kind: 'file-output',
-			headline: '1 match',
 			sources: [{ kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }],
 			lines: [
 				{
-					text: 'element61 should own the rollout',
-					context: 'Infrastructure:12',
+					text: 'northwind should own the rollout',
 					lineNumber: 12,
 					source: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
 				}
@@ -170,12 +170,7 @@ describe('A look inside the virtual files shows what came back', () => {
 			}),
 			shell
 		);
-		expect(disclosure).toEqual({
-			kind: 'file-output',
-			headline: 'No matches',
-			lines: [],
-			sources: []
-		});
+		expect(disclosure).toEqual({ kind: 'file-output', lines: [], sources: [] });
 	});
 
 	it('numbers the lines of an excerpt', () => {
@@ -197,11 +192,10 @@ describe('A look inside the virtual files shows what came back', () => {
 		);
 		expect(disclosure).toEqual({
 			kind: 'file-output',
-			headline: 'Lines 3–4',
 			sources: [{ kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }],
 			lines: [
-				{ text: 'alpha', context: '3' },
-				{ text: 'beta', context: '4' }
+				{ text: 'alpha', lineNumber: 3 },
+				{ text: 'beta', lineNumber: 4 }
 			]
 		});
 	});
@@ -223,9 +217,9 @@ describe('A look inside the virtual files shows what came back', () => {
 		);
 		expect(disclosure).toEqual({
 			kind: 'file-output',
-			headline: 'No file or directory exists at /nowhere.',
 			lines: [],
-			sources: []
+			sources: [],
+			problem: 'No file or directory exists at /nowhere.'
 		});
 	});
 

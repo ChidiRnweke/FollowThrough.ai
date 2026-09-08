@@ -321,11 +321,7 @@
 			>
 			<Button
 				size="sm"
-				disabled={busy ||
-					autosaving ||
-					!!conflict ||
-					draft.status === 'error' ||
-					(!hasUnpublishedChanges && !editor.modified)}
+				disabled={busy || autosaving || !!conflict || (!hasUnpublishedChanges && !editor.modified)}
 				onclick={() => control?.commit()}>Publish</Button
 			>
 		{/if}

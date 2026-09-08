@@ -248,6 +248,7 @@
 			{:else}
 				<div in:fade={{ duration: 300, delay: 120 }} out:fade={{ duration: 200 }}>
 					<div class="entered flex flex-col gap-5 px-5 py-5">
+						<!-- audit-allow: no-raw-font-family — Marketing figure display heading sets Newsreader directly; page-title is app chrome capped at text-3xl. -->
 						<h3 class="font-serif text-2xl font-medium tracking-tight">Client brief standup</h3>
 						<div class="flex flex-col gap-2">
 							<p class="eyebrow">Decisions</p>

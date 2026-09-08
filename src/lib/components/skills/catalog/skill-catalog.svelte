@@ -123,6 +123,7 @@
 						</div>
 						<div class="hidden shrink-0 items-center gap-1 lg:flex">
 							{#each skill.triggerHints.slice(0, 3) as hint (hint)}
+								<!-- audit-allow: no-raw-font-family — Trigger hints are invocation commands the user types. -->
 								<Badge variant="ghost" class="font-mono text-xs text-muted-foreground">{hint}</Badge
 								>
 							{/each}
@@ -188,6 +189,7 @@
 					void submitCreate();
 				}}
 			>
+				<!-- audit-allow: no-raw-font-family — Skill instructions are markdown source, edited as code. -->
 				<Textarea
 					bind:value={draftInstructions}
 					class="min-h-40 rounded-md border bg-background p-3 font-mono text-xs"

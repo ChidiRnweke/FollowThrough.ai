@@ -118,6 +118,7 @@
 				}}
 			/>
 			<div class="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-0.5">
+				<!-- audit-allow: no-raw-font-family — The toggle label is the literal search symbol Aa. -->
 				<Toggle
 					size="sm"
 					class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"
@@ -130,6 +131,7 @@
 				>
 					Aa
 				</Toggle>
+				<!-- audit-allow: no-raw-font-family — The toggle label is the literal regex symbol .*. -->
 				<Toggle
 					size="sm"
 					class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"

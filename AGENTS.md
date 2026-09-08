@@ -4,7 +4,7 @@
 - **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, drizzle, mcp, experimental
 
-UI design decisions (tokens, styles, components, UX patterns) are in @DESIGN_SYSTEM.md. The
+UI design decisions (tokens, styles, components, UX patterns) are in @docs/design/design-system.md. The
 published docs live at <https://chidirnweke.github.io/FollowThrough.ai/> with source in `docs/`.
 
 Before architecture work, read any ADR in `docs/src/content/docs/decisions` whose title may
@@ -33,13 +33,17 @@ already on the branch can be reworded with a rebase.
 never on the main checkout or directly on `master`.
 
 ```bash
-git worktree add ../<task-slug> -b <type>/<task-slug> origin/master
-cd ../<task-slug> && pnpm install
+git worktree add artifacts/worktrees/<task-slug> -b <type>/<task-slug> origin/master
+cd artifacts/worktrees/<task-slug> && pnpm install
 ```
+
+Worktrees live under `artifacts/worktrees/`, which is ignored, so they stay inside the repository
+and out of its parent directory. A worktree starts without `.env`; copy or link one before
+running anything that loads SvelteKit environment variables.
 
 - One PR per coherent task. Finish the work, commit conventionally (see Commit messages), push
   the branch, and open the PR with `gh pr create --head <branch> --title "<type(scope): subject>"`
-  and a body saying what changed and why.
+  and a body following the PR context standard below.
 - A PR is done when its required checks pass: `commitlint`, `pr-title`, `quality` (lint, check,
   architecture, docs check), `unit` (node and browser), and `contracts`. Run the cheap gates
   locally first (`pnpm lint`, `pnpm check`, `pnpm test:architecture`, `pnpm test:unit`) instead
@@ -52,12 +56,50 @@ cd ../<task-slug> && pnpm install
 - Remove your worktree (`git worktree remove`) and delete the branch once the PR is merged or
   the task is abandoned.
 
+## PR context and evidence
+
+Use the `drafting-prs` skill to prepare or revise a PR. It is installed identically under
+`.agents/skills/`, `.claude/skills/`, and `.opencode/skills/`; keep all three copies in sync.
+Write in Simplified Technical English: short sentences, active voice, common words, and
+consistent terms. Use the template's four sections: **Why**, **What changed**, **Evidence**,
+and **Validation**.
+
+Preserve the original problem and intended outcome. Explain previous and resulting behavior
+so a future reader can understand the PR without the diff or conversation. Omit work diaries,
+file inventories, filler, and irrelevant details. Include only observed validation results.
+
+For UI issues, attempt reproduction before editing. Use the authenticated Playwright setup
+below. You may seed valid, representative data in the local development/test database; record
+the setup and clean up only your scenario's data. Avoid live LLM calls when seeded data can
+expose the UI state. If an intricate LLM-dependent issue cannot reasonably be reproduced,
+explain the limitation and distinguish seeded verification from end-to-end evidence.
+
+Visible frontend changes need actual before/after screenshots, or starting-state/result images
+for new UI. Match the viewport, theme, data, and interaction state where possible. Give each
+image descriptive alt text and a visible caption explaining the state and result. Never invent
+a missing before capture. Commit selected images under `docs/pr-evidence/<task>/` and embed
+commit-pinned raw URLs in the PR; see the skill for the URL format. Keep temporary captures in
+ignored `artifacts/` and exclude credentials and private content.
+
+Use relevant merged PR history as a source of truth for original intent and observed behavior
+at the time. Search it when code or docs leave the reason unclear. Check it against current code
+and accepted ADRs; later decisions can supersede it, and unmerged proposals do not establish
+current behavior.
+
+## Documentation placement
+
+Keep root documents for project entry points and contribution instructions. Put architecture
+references in `docs/architecture/`, design guidance in `docs/design/`, and plans in
+`docs/plans/`. The design digest is derived; `docs/design/design-system.md` is authoritative.
+Published site content stays under `docs/src/content/docs/`. Update links and audit paths when
+moving maintained documents. Delete obsolete handoffs after their work lands.
+
 ## Seeing the running app
 
 Auth stays enabled in dev, so an unauthenticated request to any `(app)` route `303`s to
 `/auth/login`. You do not need Authentik to look at the UI: `tests/auth.setup.ts` mints a session
-row straight into Postgres and caches the token in `tests/.auth/state.json` (`pnpm test:e2e` and
-`pnpm dev:e2e` run it). Reuse the token directly:
+row straight into Postgres and caches the token in `tests/.auth/state.json`. `pnpm test:e2e`
+runs this setup; `pnpm dev:e2e` only starts the server. Reuse the token directly:
 
 ```bash
 TOK=$(python3 -c "import json;print(json.load(open('tests/.auth/state.json'))['cookies'][0]['value'])")
@@ -104,9 +146,17 @@ primitive appends its caller's `class` last, so a caller can always override.
 The trap is the reverse case — a `<Button>` passed into another primitive's `child` snippet: the
 receiving primitive's classes arrive as Button's `className` and therefore win, but only for
 utilities that actually conflict. `buttonVariants` **base** has no counterpart for
-`justify-center`, `font-medium`, `inline-flex`, and `whitespace-nowrap`, so those survive. When
-slotting a Button into a sidebar/menu primitive, neutralise them explicitly on the _outer_
-primitive's `class`.
+`justify-center`, `font-medium`, `inline-flex`, `whitespace-nowrap`, and `shrink-0`, so those
+survive. When slotting a Button into a sidebar/menu primitive, neutralise them explicitly on the
+_outer_ primitive's `class`. `flex-1` does not cancel `shrink-0` — they are different merge
+groups, so both are emitted and stylesheet order decides; write `shrink` when you need the
+element to give way.
+
+A second trap sits on top of it: a class set on the wrapping primitive reaches the Button through
+`props`, so `<Button {...props} class="…">` **replaces** it — Svelte applies the later attribute.
+Anything the layout depends on belongs in the Button's own `class`, not on the trigger. Both
+faults together once pushed a row's trailing button past the panel edge, where `overflow-hidden`
+hid it and a `toBeInTheDocument()` assertion still passed.
 
 ## Adding a controller capability
 
@@ -158,7 +208,7 @@ diff where a human can audit it. An allowance is not a migration mechanism.
 ## Type narrowing (ADR 0037)
 
 Parse external data into narrow types at the boundary; inward of the boundary, resolved types are
-total. The pattern catalog with remedies lives in @TYPE_NARROWING.md; the decision and its limits
+total. The pattern catalog with remedies lives in @docs/architecture/type-narrowing.md; the decision and its limits
 are in ADR 0037.
 
 - Parsing happens only in the parse zones: `remote/`, the DB mappers and repository read paths,

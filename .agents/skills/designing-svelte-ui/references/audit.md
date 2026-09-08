@@ -26,11 +26,11 @@ Before suggesting any changes, read the following files:
 1. `src/app.css` — does a token system exist in `:root`? Is there an `@theme inline` block wiring tokens to Tailwind utilities?
 2. A representative page component (e.g. `src/routes/+page.svelte`)
 3. 2–3 shared components from `src/lib/components/`
-4. `DESIGN_SYSTEM.md` if it exists
+4. `docs/design/design-system.md` if it exists
 
 Form a picture of the current state before saying anything. Don't start listing fixes yet.
 
-If `DESIGN_SYSTEM.md` doesn't exist, you will gather information to create it, map out the tokens and primitives you find, and propose a structure for it in the diagnosis report. You can also suggest running the `designing-svelte-ui` skill to create one based on the audit findings.
+If `docs/design/design-system.md` doesn't exist, you will gather information to create it, map out the tokens and primitives you find, and propose a structure for it in the diagnosis report. You can also suggest running the `designing-svelte-ui` skill to create one based on the audit findings.
 
 
 ---
@@ -123,7 +123,7 @@ After changes, check:
 
 - [ ] Does the updated component visually match the rest of the app?
 - [ ] Are all new class values referencing tokens, not Tailwind defaults?
-- [ ] Does `DESIGN_SYSTEM.md` need updating to reflect any new decisions made during the audit?
+- [ ] Does `docs/design/design-system.md` need updating to reflect any new decisions made during the audit?
 - [ ] Are there other files with the same anti-pattern that should be fixed in this session?
 
 ---

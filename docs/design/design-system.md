@@ -23,7 +23,8 @@
   per-context, or repeated inside content surfaces.
 - **Accent discipline:** Teal marks the live thing; olive-neutral is everything at rest. Active
   sidebar navigation, the selected segment of tabs/toggle groups, and provenance chips carry
-  `--brand`. Data values, metadata, and resting chrome stay gray. `--brand` equals `--primary`
+  `--brand`. Data values, metadata, and resting chrome use neutral ink on neutral surfaces.
+  On colored surfaces, secondary ink follows the surface hue (see below). `--brand` equals `--primary`
   in light mode and lifts to the sidebar teal in dark mode for AA contrast on washes.
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
@@ -41,10 +42,36 @@
   (`dark:bg-brand/15`) wash; `bg-muted` is the fill of disabled notices and hover rows. The text
   stays `foreground` — a wash marks the turn, tinted prose would be reading it aloud in colour.
 
+## Text on colored surfaces
+
+- Secondary labels, metadata, placeholders, and control icons on brand washes use opaque
+  `text-brand-muted-foreground`; error-wash explanations use `text-destructive-muted-foreground`.
+  The tokens have separate light/dark values. Neutral surfaces retain `text-muted-foreground`.
+- Never reduce text opacity to create hierarchy on a colored surface. Primary prose keeps
+  `text-foreground`; solid buttons retain their paired foreground token. Disabled controls and
+  reveal/hide transitions are distinct states, not recipes for secondary text.
+- Check actual composited backgrounds, including nested tab fills, hover, focus, and selected
+  states: normal text needs 4.5:1 contrast, essential control icons 3:1. A hue match alone does
+  not establish legibility. Scope corrections to the surface owner; neutral nested controls and
+  portalled popovers must retain their own palette.
+
+- Find candidates without a browser using `pnpm audit:surface-text` (`--json` for structured
+  output). See [the audit guide](../src/content/docs/guides/audit-surface-text.md) for review
+  rules, the quick ripgrep searches, and optional rendered contrast checks.
+
 ## Tokens and composition
 
 - Colors use the semantic OKLCH tokens in `src/routes/layout.css`; do not introduce raw Tailwind
   palette colors.
+- **Shade ladders are picked up front, never derived at render time.** Every shade a component
+  uses is a token chosen by eye in `layout.css`; `color-mix()`, relative color syntax, and
+  `lighten()`/`darken()` at call sites are banned. The documented alpha steps
+  (`bg-brand/10`–`/30`, `dark:/15`) are the only sanctioned derivation. Within a ladder, chroma
+  holds — and rises — at the lightness extremes so the ends don't wash out, and the greys keep
+  the single olive temperature at every step.
+- **Color never carries meaning alone.** Wherever color signals state — status badges, diff
+  markings, deltas — it is paired with an icon, a sign, or a label. The proofreading marks are
+  the model: hue plus underline style.
 - **Faces:** Inter is the body, chrome, and metadata face. Newsreader is the display face and
   reaches the page only through the `page-title` utility — never `font-serif` by hand, never on
   chrome, controls, or metadata. JetBrains Mono stays reserved for code; monospace metadata was
@@ -56,12 +83,45 @@
 - **Type scale:** app code uses the named utilities in `layout.css` — `page-title` (one per
   page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group),
   `provenance-caption` (per-item metadata). The ladder is
-  eyebrow/caption → body → section-title → page-title. Form labels are small and muted so values
-  lead; `Field.Title` stays at body size above its muted description.
+  2xs → eyebrow/caption → label → body → section-title → page-title. Form labels are small and
+  muted so values lead; `Field.Title` stays at body size above its muted description.
+- **Two rungs below caption, for nested chrome only.** `text-label` (13px) is a line that titles
+  the block under it; `text-2xs` (11px) is quoted machine output — an excerpt, a field list, a
+  matched line. They exist because one surface stacks four levels inside a 384px column, and two
+  rungs could not carry that. `caption` remains the floor for anything a reader reads as text: a
+  label, a control, prose, a value. `2xs` is only ever skimmed, and the surface that uses it must
+  offer a full-size way to actually read the content — the chat turn's "Read all of it" dialog is
+  the reference. One pixel is not a level: a 1px step may narrow a boundary that colour, weight
+  or indentation is already carrying, never carry one alone.
 - **Authored note scale:** rich note and skill-editor content has its own document ladder: body
   16px/24.8px at 400/600; H1 32px/38px at 800; H2 24px/32px at 700; H3 20px/28px at 600; H4
   18px/26px at 600. Full-size read-only note diffs inherit it; compact diff previews embedded in
   chat deliberately keep their smaller local scale so they stay subordinate to the conversation.
+- **Hierarchy spends weight and color before size.** De-emphasize secondary text with
+  `text-muted-foreground` or a weight step before touching the ladder; primary content never
+  exceeds its rung just to stand out, and secondary content never drops below `sm` just to sit
+  back.
+- **Three text-contrast tiers per surface, no more:** `foreground` for primary,
+  `muted-foreground` for secondary, one lighter tier for tertiary — plus `--brand` only where
+  Accent discipline sanctions it. A component mixing more is a wall-of-content smell.
+- **Labels are a last resort.** Omit the label when the value's format (date, email, count) or
+  position already identifies it; fold a necessary qualifier into natural phrasing
+  ("3 bedrooms"). A genuinely needed label sits one tier below its value — the value leads.
+- **One primary action per view.** A page or dialog carries at most one solid default `Button`;
+  secondary actions take `outline`, tertiary take `ghost`/`link`. Destructive styling follows
+  importance, not severity — the full `destructive` variant belongs only inside the confirmation
+  step, where the destructive act is the primary action.
+- **Mixed sizes on one line align by baseline,** not center — `items-baseline` on a flex row
+  pairing a title with smaller text; `items-center` is for icons and controls.
+- **Line-height runs inverse to font size.** Display sizes take tight leading, body text
+  taller — the note ladder models it (H1 ≈1.19 against body ≈1.55). Loose leading on `text-xl`
+  or larger is a violation, and widening a measure re-derives the leading with it.
+- **Long-form text is never centered.** `text-center` is for headlines and self-contained
+  blocks of two or three lines — the `empty-state.svelte` hero is the canonical case.
+- **Numeric table columns right-align,** header and cells, so magnitudes compare down the
+  column.
+- **Links in chrome emphasize by weight and foreground,** not color; the tinted-underline link
+  treatment is reserved for prose. Breadcrumb and project links keep their sanctioned `--brand`.
 - **Spacing is the hierarchy.** Gaps step rather than repeat: 4px binds a label to its value (one
   unit); 8px separates items inside a group; 24px separates groups; a further step, or a change
   of row density, introduces a different kind of content. `PageShell` encodes the header end of
@@ -70,6 +130,14 @@
   every gap is equal has no hierarchy no matter how well its content is grouped, and the fix is
   never a divider. Spacing follows the Tailwind scale; corners use the shadcn radii family;
   elevation stays flat.
+- **Ambiguous spacing is a violation.** Wherever spacing is the only thing grouping elements,
+  within-group gaps are strictly smaller than between-group gaps; equal gaps at nested levels
+  flatten the grouping, and the fix is a spacing step, never a divider.
+- **Chrome takes a fixed width; content flexes.** The sidebar, the 24rem right panel, and
+  drawers are sized for their contents — never as viewport fractions or grid-column shares.
+- **Centered single-purpose surfaces use `max-w-*` or a measure token,** so they shrink only
+  below their optimum — never fluid column spans that render wider on medium screens than on
+  large ones.
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
   stable variants, but a wrapper that fights a shadcn base class is the wrong tool — where a
   control needs to escape its base scale, write the bare element.
@@ -141,7 +209,10 @@ icon, one voice line, an optional hint, and at most one action. The default slot
 icon, all-muted copy) fills inline gaps; `size="large"` is the hero treatment for a region that
 carries a page or a whole section — a brand-wash icon tile (`size-16 rounded-lg bg-brand/10
 text-brand dark:bg-brand/15`), a statement in foreground, one supporting line, then the action.
-Kanban columns keep their drop zone and center the voice line inside it.
+Kanban columns keep their drop zone and center the voice line inside it. The icon stays near its
+drawn size at every scale — the `size="large"` tile is how an icon gets presence, never a
+scaled-up glyph. Controls that only operate on content (tabs, filters, sort, bulk toolbars) hide
+while the region is empty; the empty state and its one action are the whole surface.
 
 ## Surface pattern rules
 
@@ -223,15 +294,91 @@ Kanban columns keep their drop zone and center the voice line inside it.
   accessibly. User messages expose copy and edit-in-composer; assistant messages copy and retry
   when eligible — retrying never duplicates the visible user turn. Conversation origin is fixed
   on its first turn and distinct from context chips added later.
-- **A turn reports the things it touched, not the calls it made.** Running, its steps arrive in
-  order; settled, they fold into one entry per note, todo, or project, carrying the strongest
-  verb that befell it. The entry opens where that kind of thing opens — and never by taking over
-  the panel it was clicked in; something the agent just created is openable too, its id arriving
-  in the result rather than the arguments. Mechanism (tool searches, wrapper envelopes,
-  workspace context, preference reads) never earns an entry; a failure a later call put right is
-  a retry, not news. The full call log is **one door per turn** — the last row of the same list,
-  stating its count — never one per call. Results are stated in the reader's terms or not at
-  all: an etag, a revision, or an internal tool name is faithful and useless.
+- **A turn reports the subjects it touched, not the calls it made.** Running, its steps arrive in
+  order, because the point is watching it work. Settled, every call folds into the subject it was
+  about — one entry per note, todo, project, skill or diagram, carrying the strongest verb that
+  befell it. Six calls over one note are one row. The fold is the deduplication: keyed by call,
+  a list can only state the same name once per call that mentioned it, and no amount of
+  filtering afterwards fixes that.
+
+  Seven rules follow from it, and they hold everywhere on this surface:
+
+  1. **Navigation follows naming.** A row carries a way in only when it names one subject. A
+     search is not a row, so no arrow ever stands for however many results came back and opens
+     none of them in particular. The entry opens where that kind of subject opens — never by
+     taking over the panel it was clicked in — and something the agent just created is openable
+     too, its id arriving in the result rather than the arguments.
+  2. **A subject is one line.** What the agent asked it, what came back, what it changed, and the
+     passages it read are all behind its own disclosure. **A failure is stated on the subject it
+     befell, and nowhere else** — its row reads `· not applied` in destructive and opens onto why,
+     in the reader's terms, with the run's own words under that. A banner above the list stated
+     the same failure a second time, once by name at the top and again on each of those names
+     below it; the row is the better of the two places, because it is the one already carrying
+     the identity and the way in. A run that failed outright is the turn's own error line, which
+     sits under the whole turn with its Retry — never a second copy inside the block.
+     **Everything behind the door is a row too**, including the looks that found nothing. Such a
+     look has no subject to be titled by, so its row is titled by what it did — "Read project
+     memory" — and the emptiness goes behind its chevron, on the same evidence wash a result
+     would have used. An empty result is still a result, and it belongs where a result goes.
+     Counting them instead ("3 looks came back with nothing") named a quantity where every
+     neighbouring row names a thing; writing them flat put a request rung where a subject's name
+     belongs and left one closing sentence speaking for every look at once.
+  3. **Show the subjects; count only what you hide; word only what is absent.** `1 match` above
+     one match and `1 edit` above one edit state the same fact twice. `…and 4 more` stays,
+     because it counts what is not on screen; `nothing found` stays, because an absence has
+     nothing to show. Results are otherwise stated in the reader's terms or not at all — an
+     etag, a revision, or an internal tool name is faithful and useless.
+  4. **Input and result are told apart by structure.** Inside a subject, each pass is a request
+     line with what came back indented beneath it. Dot-joining the two into one string put the
+     question and the answer at one size, separated by the same character that separated their
+     own parts.
+  5. **Three depths, one door.** The thread carries what changed. **One door per turn** carries
+     what was only read, and it is labelled by what it holds — "Read 4 notes and your project
+     memory" — rather than by how many calls it took to get there. A dialog, offered per subject,
+     carries the passages at full width — the panel is 384px and file content is mono, so more
+     than a few lines of it there is a column of fragments. That dialog is an escalation for
+     raw passages only; the depths above it stay in place, and the reader never loses the
+     conversation to read what was said about it.
+  6. **One vertical ladder, declared once.** 4px binds a request to the evidence it introduces
+     and to that evidence's own footer link; 12px separates one pass from the next; 20px
+     separates one subject from another and from the read door. Each step is at least 1.6× the
+     one below it, because a 4px difference at 12px type is below the size the eye reads as a
+     grouping — which is exactly what an opened row was before: two gaps, 4 and 8, so the
+     excerpt sat as far from its own request as the next request sat from it. 20px and not 24
+     is deliberate: the turn stack spends 24px, and a gap inside a turn must stay under the gap
+     between turns. The values live in `CHAT_GAP_*` in `chat-row.ts` and are never chosen at a
+     call site, because two components each picking "about a `gap-2`" is how the flatness got
+     there.
+  7. **Teal is what the agent did, and nothing else here.** Every action the agent took takes
+     the brand teal — "Read note", "Searched for", "Read lines 130–159", "Edited note", and a
+     subject's verb on its statement line. Nothing else on the surface does: the search string is
+     the reader's own words, the excerpt is the note's own content, the subject's name is the
+     subject, and "Read all of it" is a control the reader operates, so it gave up the `link`
+     variant's `text-primary` for muted. Weight then separates the actions from each other — a
+     write is medium, a look is regular — so the column answers "what did it do" and "which of
+     those changed my work" in one glance. Colour carries no size of its own: size says how deep
+     a line sits, this says who acted. A refusal reads as a look, because nothing was written.
+     The fold carries the fact (`SubjectPass.mutating`, `isWriteVerb`); no view reads a label
+     back as English to recover it.
+
+  Mechanism (tool searches, wrapper envelopes, workspace context, preference reads) never earns
+  an entry; it is named once, last, behind the door. A failure a later call put right is a
+  retry, not news — its record stays inside the subject, where a reader who opens it can see the
+  agent correcting itself.
+
+  The type hierarchy, one rung per level, declared in `chat-row.ts` and never chosen at a call
+  site: a subject's statement line at `sm` (14px), level with the answer beside it rather than
+  under it; a request at `text-label` (13px); what came back at `text-2xs` (11px). Nothing
+  inside the block is ever larger than the answer. A search query renders italic and
+  uncoloured, because it is the reader's words handed to a tool rather than our copy. Going
+  deeper is smaller or equal, never larger — a request that titles an excerpt must never be set
+  smaller than the excerpt.
+
+  Evidence sits on the shared `bg-brand/10` (`dark:bg-brand/15`) wash wherever it appears —
+  excerpt, field list, quoted prose — so quoted output is a surface rather than more page. Its
+  ink follows the wash and not taste: the gutter takes `text-brand-muted-foreground`, the content
+  takes full `text-foreground`, and neither grey nor an opacity is available here.
+
 - **An approval is a flat block, never a card** — three same-weight rectangles nested inside a
   384px column. Marked by a pair of teal hairlines and 8px of air outside them: a pending
   approval is the live thing on screen. It leads with the action and its subject, then the
@@ -267,6 +414,17 @@ Kanban columns keep their drop zone and center the voice line inside it.
   never had. Set `gap-0`, give each band the same `p-1`, and let the divider carry the
   separation — one inset for everything: a row's text, a group heading, tab labels, and a
   footer link all land on the same line.
+- **User-uploaded images render in fixed, center-cropped containers** — `object-cover` inside
+  an `overflow-hidden` frame, separated from the surface by an inset hairline rather than an
+  outward border that can clash with the photo. Lightbox and zoom views are the declared
+  `object-contain` exception.
+- **Screenshots are captured to fit their slot** — at a smaller viewport or cropped to a
+  partial view — never shrunk into place until the UI inside them is illegible.
+- **Heterogeneous menus use structure, not flat link lists.** A dropdown mixing destinations,
+  actions, and destructive operations gets groups, supporting text, or icons, inside the
+  popover band-padding contract above.
+- **A primary choice between few options renders as selectable cards** — title, supporting
+  description, the selected card marked by the brand accent — not a bare vertical radio stack.
 
 ## Anti-patterns
 
@@ -296,11 +454,10 @@ Kanban columns keep their drop zone and center the voice line inside it.
   current editor slice.
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token,
   duplicate a prompt during retry, or hide chat entirely on mobile.
-- Keep settled calls inside the turn's collapsed tool log. Inside that log, show friendly actions,
-  meaningful scope, outcomes, and directly openable targets inline. Completed edits open the
-  current note; version history owns diffs. Only longer excerpts expand, with linked source
-  headings and line numbers. Collection previews must offer access to every returned item.
-  Do not echo raw payloads or version-retention housekeeping copy.
+- Do not give a tool call a row, a name, or a disclosure of its own. The row is the subject it
+  touched; the call is a pass inside it. Do not label a door by how many calls it opens onto, and
+  do not print a count above the items it counts. Do not echo raw payloads or version-retention
+  housekeeping copy.
 - Do not wrap an approval, or the change preview inside it, in a card; do not repeat the change
   awaiting approval in the turn's touched list — it is already on screen in full.
 

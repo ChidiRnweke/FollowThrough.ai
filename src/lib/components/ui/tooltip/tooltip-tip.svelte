@@ -49,6 +49,7 @@
 			<Content {side} {align} {sideOffset}>
 				<span>{text}</span>
 				{#if shortcut}
+					<!-- audit-allow: no-raw-font-family — kbd inherits mono from the base layer's code/kbd selector; key caps are chrome, not code. -->
 					<kbd data-slot="kbd" class="px-1 py-0.5 font-sans text-[0.6875rem]">{shortcut}</kbd>
 				{/if}
 			</Content>

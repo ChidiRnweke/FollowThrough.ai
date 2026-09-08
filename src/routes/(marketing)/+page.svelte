@@ -12,6 +12,7 @@
 		class="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-6 pt-20 pb-4 text-center sm:pt-28"
 	>
 		<Reveal class="flex flex-col items-center gap-6">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h1
 				class="font-serif text-4xl leading-tight font-medium tracking-tight text-balance sm:text-6xl"
 			>
@@ -40,6 +41,7 @@
 <section class="border-y border-border bg-muted/30">
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="flex flex-col gap-3">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
 				Your agent lives inside your notes and <Crayon>understands</Crayon> your work.
 			</h2>
@@ -58,6 +60,7 @@
 <section class="border-b border-border">
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pt-16 pb-16 sm:pt-20 sm:pb-20">
 		<Reveal class="flex flex-col gap-3">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
 				Your agent <Crayon>remembers</Crayon>.
 			</h2>
@@ -81,6 +84,7 @@
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="grid gap-8 lg:grid-cols-2">
 			<div class="flex min-w-0 flex-col gap-3">
+				<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 				<h3 class="font-serif text-2xl font-medium tracking-tight">
 					Select a paragraph. Get the <Crayon>diagram</Crayon>.
 				</h3>
@@ -97,6 +101,7 @@
 				</div>
 			</div>
 			<div class="flex min-w-0 flex-col gap-3">
+				<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 				<h3 class="font-serif text-2xl font-medium tracking-tight">
 					<Crayon>First-class</Crayon> support for diagrams.
 				</h3>
@@ -120,6 +125,7 @@
 <section class="border-b border-border">
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="flex flex-col gap-3">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
 				<Crayon>You</Crayon> didn't build this board. Your agent did.
 			</h2>
@@ -141,6 +147,7 @@
 <section class="border-b border-border bg-muted/30">
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="flex flex-col gap-3">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h2 class="max-w-2xl font-serif text-3xl font-medium tracking-tight sm:text-4xl">
 				Your agent <Crayon>lives</Crayon> inside FollowThrough and can do anything you can.
 			</h2>
@@ -164,6 +171,7 @@
 	<div class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:py-20">
 		<Reveal class="grid gap-8 lg:grid-cols-2">
 			<div class="flex min-w-0 flex-col gap-3">
+				<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 				<h3 class="font-serif text-2xl font-medium tracking-tight">
 					Teach your agent your workflow <Crayon>once</Crayon>. It runs it on cue.
 				</h3>
@@ -180,6 +188,7 @@
 				</div>
 			</div>
 			<div class="flex min-w-0 flex-col gap-3">
+				<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 				<h3 class="font-serif text-2xl font-medium tracking-tight">
 					Your editor, your model, your <Crayon>choice</Crayon>.
 				</h3>
@@ -205,6 +214,7 @@
 		class="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 px-6 py-20 text-center sm:py-28"
 	>
 		<Reveal class="flex flex-col items-center gap-6">
+			<!-- audit-allow: no-raw-font-family — Marketing display headings set Newsreader directly; page-title is one-per-page app chrome capped at text-3xl. -->
 			<h2 class="font-serif text-3xl font-medium tracking-tight text-balance sm:text-4xl">
 				Ready to work fully agentic?
 			</h2>

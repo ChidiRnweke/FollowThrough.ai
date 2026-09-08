@@ -11,7 +11,7 @@ Plan features so an agent can build them unsupervised.
 
 ## What this skill produces
 
-A `<feature>-plan.md` file in the project root. This file is the complete instruction set for an
+A `docs/plans/<feature>-plan.md` file. This file is the complete instruction set for an
 executor agent. It contains everything the agent needs to understand the current state of the
 codebase, what needs to change, and how to verify each step is done correctly.
 
@@ -105,7 +105,7 @@ When the user engages with this phase:
 
 ## Phase 4: Write the Blueprint
 
-Produce a `<feature>-plan.md` with the following structure:
+Produce a `docs/plans/<feature>-plan.md` with the following structure:
 
 ```markdown
 # Blueprint: [Feature Name]
@@ -212,7 +212,7 @@ This is how you prevent the agent from inventing its own patterns. It copies wha
 
 ## Phase 5: Executor Instructions
 
-Add a section at the top of `BLUEPRINT.md` that the executor agent reads every loop:
+Add a section at the top of `docs/plans/<feature>-plan.md` that the executor agent reads every loop:
 
 ```markdown
 ## Executor Instructions
@@ -226,7 +226,8 @@ You are executing this blueprint. Follow these rules:
 4. **Do the next unchecked step.** Find the first `- [ ]` item. Do that. Only that.
 5. **Verify before checking off.** Run the verification described in the step.
    If it passes, change `- [ ]` to `- [x]` and commit.
-6. **Commit after each step.** `git add -A && git commit -m "blueprint: [step title]"`
+6. **Commit verified work.** Stage only task changes and use Conventional Commits.
+   Follow `AGENTS.md`: work in a linked worktree on a task branch and land through a PR.
 7. **Don't skip ahead.** Steps are ordered by dependency.
 8. **Follow existing patterns.** When the step references an existing file as an example,
    match its structure. Don't invent new patterns.
@@ -269,7 +270,7 @@ the step is too vague or too abstract. Make it concrete.
 
 For frontend/UI work, TDD doesn't apply naturally. Instead:
 
-- Reference the design system (`DESIGN_SYSTEM.md`) for visual decisions
+- Reference the design system (`docs/design/design-system.md`) for visual decisions
 - Point to existing components as structural examples
 - Describe the user-visible behaviour, not the implementation
 - Verification is "the page renders with the correct data and matches the design system"
@@ -285,7 +286,7 @@ produced it, not the git history, the blueprint.
 
 ## Self-Validation Loop
 
-Before showing the final `<feature>-plan.md` to the user, you must validate your own work:
+Before showing the final `docs/plans/<feature>-plan.md` to the user, you must validate your own work:
 1. **Check step granularity:** Are the steps too broad? Do they specify exact file paths, class names, and method signatures?
 2. **Check verifiability:** Does every step have a clear, objective verification command or action?
 3. **Check pattern adherence:** Do steps that create new code explicitly point to existing files as structural examples?

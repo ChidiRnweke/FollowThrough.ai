@@ -221,6 +221,7 @@
 
 	<div class="relative flex flex-col gap-1">
 		{#if mentionCandidates.length > 0}
+			<!-- audit-allow: no-ad-hoc-shadow — The mention listbox floats above the composer; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse here. -->
 			<div
 				class="absolute bottom-full left-0 z-50 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-md"
 				role="listbox"
@@ -351,7 +352,7 @@
 							aria-pressed={executionMode === 'auto_accept'}
 							class={executionMode === 'auto_accept'
 								? 'bg-brand/10 text-brand dark:bg-brand/15'
-								: 'text-muted-foreground'}
+								: 'text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground'}
 							onclick={ontoggleexecutionmode}
 						>
 							{#if executionMode === 'auto_accept'}
@@ -381,7 +382,10 @@
 						that reads as motion.
 					-->
 					{#if isStreaming && connection === 'connected'}
-						<Loader class="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+						<Loader
+							class="size-4 animate-spin text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground"
+							aria-hidden="true"
+						/>
 					{/if}
 					<ModelInlinePicker
 						{models}

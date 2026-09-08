@@ -64,7 +64,7 @@
 	the chat panel's own starters use, so clicking one here and landing on those
 	there reads as one pattern rather than two features. That is also why there is
 	no new colour and no new surface — `bg-brand/10`, `row-interactive` and `ghost`
-	already exist, and per DESIGN_SYSTEM.md the agent gets no hue of its own.
+	already exist, and per docs/design/design-system.md the agent gets no hue of its own.
 
 	Weight is deliberately low. `inline` is a ghost button with a muted label, so
 	it sits under the primary button it shares a cluster with; the tile is 20px,

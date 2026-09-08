@@ -107,9 +107,14 @@
 			ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
 			ondrop={handleDrop}
 		>
-			<Archive class="size-5 text-muted-foreground/60" />
+			<Archive
+				class="size-5 {dragging ? 'text-brand-muted-foreground' : 'text-muted-foreground'}"
+			/>
 			<span class="text-sm">{label}</span>
-			{#if hint}<span class="text-xs text-muted-foreground">{hint}</span>{/if}
+			{#if hint}<span
+					class="text-xs {dragging ? 'text-brand-muted-foreground' : 'text-muted-foreground'}"
+					>{hint}</span
+				>{/if}
 			<Input
 				bind:ref={input}
 				type="file"

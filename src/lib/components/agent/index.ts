@@ -22,13 +22,15 @@ export {
 	type ToolDisclosure
 } from './actions/tool-disclosure';
 export {
-	turnActivity,
-	turnSteps,
-	type FailureGroup,
-	type StepOutcome,
-	type TouchedThing,
-	type TurnAction,
-	type TurnRow
-} from './actions/turn-activity';
-
-export { toolRowContext, toolRowTargets, toolRowHeadline } from './actions/tool-row-content';
+	isWriteVerb,
+	readDoorLabel,
+	runningSteps,
+	turnContext,
+	type PassEvidence,
+	type PassOutcome,
+	type RunningStep,
+	type SubjectActivity,
+	type SubjectPass,
+	type TurnContext,
+	type Verb
+} from './actions/turn-context';

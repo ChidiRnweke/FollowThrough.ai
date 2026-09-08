@@ -246,8 +246,12 @@
 							its speaker for one.
 						-->
 							<span class="sr-only">{isUser ? 'You said' : 'The agent replied'}</span>
+							<!-- gap-3 rather than gap-2: the activity block below now spaces the things it
+							     touched 20px apart, and 8px from the prose above it would make the join
+							     to the answer the tightest gap on screen. Same step as one pass to the
+							     next inside that block. -->
 							<div
-								class="flex flex-col gap-2 {isUser
+								class="flex flex-col gap-3 {isUser
 									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-brand/10 px-3 py-2 dark:bg-brand/15'
 									: ''}"
 							>
@@ -266,7 +270,7 @@
 												>Resubmit</Button
 											>
 											<Button variant="ghost" size="xs" onclick={oncanceledit}>Cancel</Button>
-											<span class="text-xs text-muted-foreground"
+											<span class="text-xs text-brand-muted-foreground"
 												>Replaces everything below this question.</span
 											>
 										</div>
@@ -283,21 +287,20 @@
 											onreject={() => onrejectapproval(entry, group.tools)}
 										/>
 									{:else if group.kind === 'activity'}
-										<!-- The log is the turn's, so it hangs off the last group and opens onto
-									     every call, not just that group's. -->
+										<!-- The summary is the turn's, folded over every call it made, so it
+									     hangs off the last group rather than repeating per group. -->
 										<TurnActivity
 											tools={group.tools}
 											turnTools={entryTools(entry)}
-											showLog={index === lastActivityIndex(entry)}
+											summarise={index === lastActivityIndex(entry)}
 											{shell}
-											retryable={entry.status === 'failed' && entry.retryable && !!entry.runId}
-											onretry={() => onretry(entry)}
 										/>
 									{:else}
 										{@const part = group.part}
 										{#if part.kind === 'text'}
 											{#if part.text && editingId !== entry.id}<ChatMarkdown
 													content={part.text}
+													surface={isUser ? 'brand' : 'neutral'}
 												/>{/if}
 										{:else if part.kind === 'image'}
 											<ImageLightbox
@@ -315,9 +318,13 @@
 										     rather than dropped, because the work was attempted and hiding the row
 										     reports a turn that did less than it did. Muted rather than an alert:
 										     nothing failed for the user, the record of it is what is damaged. -->
-											<div class="flex items-start gap-2 text-xs">
-												<Warning class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-												<span class="text-muted-foreground">{part.reason}</span>
+											<div
+												class="flex items-start gap-2 text-xs {isUser
+													? 'text-brand-muted-foreground'
+													: 'text-muted-foreground'}"
+											>
+												<Warning class="mt-0.5 size-3.5 shrink-0" />
+												<span>{part.reason}</span>
 											</div>
 										{/if}
 									{/if}

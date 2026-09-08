@@ -21,6 +21,13 @@ describe('Reading a tool payload off the wire', () => {
 		});
 	});
 
+	it('reads a property holding undefined as the absence JSON.stringify makes of it', () => {
+		expect(readAgentPayload({ suggestion: { id: 'sug_1', noteId: undefined } })).toEqual({
+			kind: 'valid',
+			value: { suggestion: { id: 'sug_1' } }
+		});
+	});
+
 	it('reports the path of a value JSON cannot carry', () => {
 		const read = readAgentPayload({ note: { revision: Number.NaN } });
 		expect(read.kind === 'corrupt' && read.message).toContain('root.note.revision');
@@ -37,6 +44,11 @@ describe('Reading a tool payload off the wire', () => {
 	it('names the offending element of an array', () => {
 		const read = readAgentPayload(['ok', undefined]);
 		expect(read.kind === 'corrupt' && read.message).toContain('root[1]');
+	});
+
+	it('says what an unreadable element is without inventing an article for it', () => {
+		const read = readAgentPayload(['ok', undefined]);
+		expect(read.kind === 'corrupt' && read.message).toBe('root[1] is undefined');
 	});
 });
 

@@ -45,7 +45,7 @@ export const todoStatusLabels: Record<TodoStatus, string> = {
 	cancelled: 'Cancelled'
 };
 
-/** One dry voice line per empty kanban column — see DESIGN_SYSTEM.md "Voice & tone". */
+/** One dry voice line per empty kanban column — see docs/design/design-system.md "Voice & tone". */
 export const todoStatusEmptyCopy: Record<TodoStatus, string> = {
 	backlog: 'Nothing waiting in the wings.',
 	open: 'Nothing open. Pull something in.',
@@ -59,7 +59,7 @@ export const todoStatusEmptyCopy: Record<TodoStatus, string> = {
  * line explaining what the capability is and a way to start using it. Every one
  * explains itself on hover, at any count: a zero is the only moment the user has
  * a reason to learn the capability exists, and a non-zero one still has to say
- * what those items do for an answer. See DESIGN_SYSTEM.md "Agent context bar".
+ * what those items do for an answer. See docs/design/design-system.md "Agent context bar".
  *
  * Artifacts are deliberately absent: they are what the agent has written, not
  * something it reads, and they are not indexed for retrieval. They belong to the

@@ -9,7 +9,7 @@
 @plugin '@tailwindcss/typography';
 
 /* ============================================================
-   DESIGN SYSTEM TOKENS — see DESIGN_SYSTEM.md for rationale
+   DESIGN SYSTEM TOKENS — see docs/design/design-system.md for rationale
    ============================================================ */
 
 :root {
@@ -26,9 +26,10 @@
 	--secondary: oklch(0.955 0.006 106.5);
 	--secondary-foreground: oklch(0.228 0.013 107.4);
 	--muted: oklch(0.966 0.005 106.5);
-	/* Darkened just enough to clear AA (4.5:1) against the paper background —
-	   metadata still recedes, but provenance captions are no longer sub-AA. */
-	--muted-foreground: oklch(0.556 0.031 107.3);
+	/* Darkened just enough to clear AA (4.5:1) against both the paper background
+	   and the muted hover/disabled wash — metadata still recedes, but provenance
+	   captions are no longer sub-AA. */
+	--muted-foreground: oklch(0.54 0.031 107.3);
 	--accent: oklch(0.966 0.005 106.5);
 	--accent-foreground: oklch(0.228 0.013 107.4);
 	--destructive: oklch(0.577 0.245 27.325);
@@ -62,6 +63,10 @@
 	   Same teal as --primary in light mode; dark mode lifts it for AA contrast
 	   on washes, mirroring --sidebar-primary. */
 	--brand: oklch(0.511 0.096 186.391);
+	/* Opaque secondary ink for teal and error washes. Hue follows the surface;
+	   lightness clears AA even on the stacked workspace tab fills. */
+	--brand-muted-foreground: oklch(0.43 0.055 186.391);
+	--destructive-muted-foreground: oklch(0.48 0.075 27.325);
 	/* The system I-beam is a 1px line with no contrast guarantee: over the paper
 	   surface it antialiases into the background (and on some Windows/Chrome
 	   setups renders outright white), so the pointer goes missing exactly where
@@ -184,7 +189,11 @@
 	border-radius: 4px;
 	/* The ink reveal: mask starts off to the right (hidden) and settles fully
 	   opaque at the end, so the changed text appears with the ripple and stays. */
+	/* audit-allow: no-hex-rgb-color — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* audit-allow: no-pure-black — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
 	-webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
+	/* audit-allow: no-hex-rgb-color — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* audit-allow: no-pure-black — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
 	mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
 	-webkit-mask-size: 300% 100%;
 	mask-size: 300% 100%;
@@ -254,7 +263,9 @@
 	--accent: oklch(0.35 0.016 107.4);
 	--accent-foreground: oklch(0.988 0.003 106.5);
 	--destructive: oklch(0.704 0.191 22.216);
-	--destructive-foreground: oklch(0.985 0 0);
+	/* Dark mode's destructive is a light red, so it takes dark text — the same
+	   pairing success and warning use below. White on it measured 2.75:1. */
+	--destructive-foreground: oklch(0.153 0.006 107.1);
 	--success: oklch(0.68 0.11 155);
 	--success-foreground: oklch(0.153 0.006 107.1);
 	--warning: oklch(0.74 0.12 75);
@@ -275,7 +286,10 @@
 	--sidebar-accent-foreground: oklch(0.988 0.003 106.5);
 	--sidebar-border: oklch(1 0 0 / 14%);
 	--sidebar-ring: oklch(0.58 0.031 107.3);
+	/* audit-allow: token-contrast-aa — text-brand on the brand/15 wash measures 3.9:1; clearing 4.5:1 needs L≈0.83, which reads near-white against the rail. Deferred: the badge recipe needs a design decision, not a silent token lift. */
 	--brand: oklch(0.704 0.14 182.503);
+	--brand-muted-foreground: oklch(0.82 0.065 182.503);
+	--destructive-muted-foreground: oklch(0.8 0.065 22.216);
 	--cursor-ibeam: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%23fbfbf9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 6v12'/%3E%3Cpath d='M8 6h8'/%3E%3Cpath d='M8 18h8'/%3E%3C/g%3E%3C/svg%3E")
 		12 12;
 }
@@ -285,6 +299,20 @@
 	--font-mono: 'JetBrains Mono Variable', monospace;
 	/* Display face — page and note titles only. Never chrome, body, or metadata. */
 	--font-serif: 'Newsreader Variable', Georgia, serif;
+
+	/* Two rungs below body, for nested chrome that has to show its own depth — today the
+	   agent's turn log, which stacks four levels inside a 384px column. See the type ladder
+	   below and docs/design/design-system.md "Type scale".
+
+	   `label` is a line that titles the block under it. `2xs` is quoted machine output: an
+	   excerpt, a field list, a matched line. It sits below the 12px floor that holds for UI
+	   text, and only ever carries mono content the reader skims rather than reads — the
+	   full-width dialog behind "Read all of it" is where it is read. Do not reach for `2xs`
+	   for a label, a control, or prose. */
+	--text-label: 0.8125rem; /* 13px */
+	--text-label--line-height: 1.4;
+	--text-2xs: 0.6875rem; /* 11px */
+	--text-2xs--line-height: 1.45;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -322,6 +350,8 @@
 	--color-foreground: var(--foreground);
 	--color-background: var(--background);
 	--color-brand: var(--brand);
+	--color-brand-muted-foreground: var(--brand-muted-foreground);
+	--color-destructive-muted-foreground: var(--destructive-muted-foreground);
 	--radius-sm: calc(var(--radius) * 0.6);
 	--radius-md: calc(var(--radius) * 0.8);
 	--radius-lg: var(--radius);
@@ -451,7 +481,7 @@
 		font-variant-ligatures: none;
 	}
 
-	/* Interaction contract — see DESIGN_SYSTEM.md "Interaction states".
+	/* Interaction contract — see docs/design/design-system.md "Interaction states".
 	   Tailwind v4's preflight dropped the `cursor: pointer` that browsers and
 	   every previous version gave clickable things, which left the whole app —
 	   shadcn controls, the vendored editor's toolbars, bare buttons — reading as
@@ -720,9 +750,11 @@
 	height: var(--dialog-fill-height);
 }
 
-/* Named type scale — see DESIGN_SYSTEM.md "Type scale". App code uses these
-   instead of raw heading size classes. Ladder: eyebrow/provenance-caption (xs)
-   → body (sm) → section-title (base) → page-title (2xl). */
+/* Named type scale — see docs/design/design-system.md "Type scale". App code uses these
+   instead of raw heading size classes. Ladder: 2xs → eyebrow/provenance-caption (xs)
+   → label → body (sm) → section-title (base) → page-title (2xl).
+   The two rungs below `xs` are declared in `@theme inline` above, with the rule for when
+   they may be used. */
 @utility page-title {
 	@apply font-serif text-3xl font-medium tracking-tight;
 }
@@ -1138,6 +1170,15 @@
 		line-height: 1.55;
 	}
 
+	.prose[data-surface='brand'] {
+		--tw-prose-lead: var(--brand-muted-foreground);
+		--tw-prose-counters: var(--brand-muted-foreground);
+		--tw-prose-captions: var(--brand-muted-foreground);
+		--tw-prose-invert-lead: var(--brand-muted-foreground);
+		--tw-prose-invert-counters: var(--brand-muted-foreground);
+		--tw-prose-invert-captions: var(--brand-muted-foreground);
+	}
+
 	.prose :where(code):not(:where(pre *)) {
 		@apply rounded-md bg-muted px-1.5 py-0.5 font-mono font-normal;
 	}
@@ -1153,6 +1194,7 @@
 
 	/* Inline highlights for pending AI suggestions anchored to note text. */
 	.suggestion-anchor {
+		/* audit-allow: no-accent-bars — Dotted bottom border standing in for a text-decoration underline; the word-marking convention, not an edge accent. */
 		border-bottom: 2px dotted var(--color-primary);
 		background-color: color-mix(in oklab, var(--color-primary) 9%, transparent);
 		transition: background-color var(--duration-micro) var(--ease-standard);
@@ -1237,6 +1279,7 @@
 	}
 	.suggestion-inline-widget {
 		margin: 0.25rem 0 0.5rem;
+		/* audit-allow: no-accent-bars — The accept/dismiss widget is styled as a diff insertion; the success edge is the diff marker, not decoration. */
 		border-left: 3px solid var(--color-success);
 		border-radius: 0 0.375rem 0.375rem 0;
 		background-color: color-mix(in oklab, var(--color-success) 8%, transparent);

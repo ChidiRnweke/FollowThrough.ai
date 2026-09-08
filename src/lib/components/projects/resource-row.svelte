@@ -1,7 +1,7 @@
 <script lang="ts">
 	// One project space (Todos, Memory, Artifacts, Attachments) as a row in a
 	// divided list — never a card. These four are homogeneous and scannable, which
-	// is exactly the case the list-before-card rule in DESIGN_SYSTEM.md covers.
+	// is exactly the case the list-before-card rule in docs/design/design-system.md covers.
 	//
 	// A populated space shows its `state` ("15 ready to export"); an empty one
 	// shows a `tip` saying what the space is for, because a zero is a dead stat
