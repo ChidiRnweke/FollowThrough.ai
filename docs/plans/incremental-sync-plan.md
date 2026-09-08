@@ -41,11 +41,21 @@ avoids claiming that a parent version protects unseen changes to its children.
 
 ## Final verification
 
-After reconciling current `master`, type and architecture checks passed, including the UI audit.
-The unit suite passed 3,322 tests. The preceding production build passed 25 PWA scenarios; these cover
-cached navigation, offline edits and creation, reload, replay, deletion, cross-tab discard, and settings.
-Final broad browser, database contract, lint, docs, and production PWA runs remain to be recorded.
+The branch includes current `master`. Local validation passed:
 
-- [ ] Finish final local gates.
-- [ ] Push the final checkpoint and open the PR with durable evidence.
-- [ ] Resolve required PR checks.
+- `pnpm lint`
+- `pnpm check` — zero errors and warnings
+- `pnpm test:architecture` — topology, source, test quality, Chisel, and UI audits
+- `pnpm test:unit` — 3,325 tests
+- `pnpm test:browser:full` — 487 tests
+- `pnpm test:contracts` — 181 tests
+- `pnpm docs:check` — zero errors and warnings, one Astro hint
+- `pnpm test:sync:pwa` — 25 production scenarios
+- Conventional Commit validation for the task branch
+
+The final unit and full browser suites passed serially. PWA evidence was refreshed from the final
+production run and committed under `docs/pr-evidence/incremental-sync/`. Its four commit-pinned
+image URLs returned HTTP 200. No live model calls or remote storage operations were used.
+
+[PR #37](https://github.com/ChidiRnweke/FollowThrough.ai/pull/37) contains the final scope, evidence,
+and required CI status. The worktree remains available for review; this task does not merge the PR.
