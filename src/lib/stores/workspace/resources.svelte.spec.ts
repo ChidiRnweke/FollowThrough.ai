@@ -361,3 +361,109 @@ it('does not replace a failed known resource read with writable initial values',
 		message: 'Download failed'
 	});
 });
+
+it('refuses to capture an optional default before the inventory is known', () => {
+	const { resources } = setup();
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	expect(() => draft.captureOrCreate(project)).toThrow('not available');
+});
+
+it('captures a known absent optional resource without starting a server read', async () => {
+	const { resources, repository } = setup();
+	await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
+	await resources.initialize();
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	draft.captureOrCreate(project);
+	expect(draft.value).toEqual(project.value);
+});
+
+it('keeps the displayed base when capturing an optional resource already refreshing', async () => {
+	const { resources, repository } = setup();
+	await repository.commit('alice', {
+		put: [
+			{
+				key,
+				entry: {
+					kind: 'present',
+					cache: {
+						kind: 'updating',
+						previous: { etag: syncEtag(1n), value: project },
+						target: syncEtag(2n),
+						transfer: { kind: 'queued' }
+					}
+				}
+			}
+		],
+		remove: [],
+		cursor: initialSyncCursor
+	});
+	await resources.initialize();
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	draft.captureOrCreate(project);
+	if (project.type !== 'projects') throw new Error('Expected project');
+	const saved = await draft.stage({
+		command: { kind: 'renameProject', projectId: project.value.id, name: 'Changed' },
+		local: project,
+		coalesce: null,
+		references: []
+	});
+	if (saved.kind !== 'saved') throw new Error(saved.message);
+	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
+});
+
+it('refuses an optional default when a known resource has no downloaded body', async () => {
+	const { resources, repository } = setup();
+	await repository.commit('alice', {
+		put: [
+			{
+				key,
+				entry: {
+					kind: 'present',
+					cache: {
+						kind: 'updating',
+						previous: null,
+						target: syncEtag(1n),
+						transfer: { kind: 'queued' }
+					}
+				}
+			}
+		],
+		remove: [],
+		cursor: initialSyncCursor
+	});
+	await resources.initialize();
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	expect(() => draft.captureOrCreate(project)).toThrow('Open the resource');
+});
+
+it('does not adopt a new conflict base when an editor read has been superseded', async () => {
+	const { resources, repository, transport } = setup();
+	await repository.commit('alice', {
+		put: [
+			{
+				key,
+				entry: {
+					kind: 'present',
+					cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+				}
+			}
+		],
+		remove: [],
+		cursor: initialSyncCursor
+	});
+	await resources.initialize();
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	draft.capture();
+	transport.records.set(key, { etag: syncEtag(2n), value: project });
+	await resources.synchronize();
+	await draft.read(() => false);
+	if (project.type !== 'projects') throw new Error('Expected project');
+	const saved = await draft.stage({
+		command: { kind: 'renameProject', projectId: project.value.id, name: 'Later typing' },
+		local: project,
+		coalesce: null,
+		references: []
+	});
+	if (saved.kind !== 'saved') throw new Error(saved.message);
+	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
+});

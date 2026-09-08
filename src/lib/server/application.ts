@@ -404,6 +404,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions
 		},
 		agent: {
+			syncMutations: synchronization.mutations,
 			conversationJournal,
 			preferences,
 			models: modelCatalog,
@@ -428,7 +429,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncMutations: synchronization.mutations
 		},
 		apiTokens: { tokens: identity.apiTokens },
-		toolPreferences: { preferences: toolPreferences },
+		toolPreferences: { preferences: toolPreferences, syncMutations: synchronization.mutations },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
 			syncMutations: synchronization.mutations,
@@ -502,7 +503,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteIndexer,
 			transactionRunner
 		},
-		trustPolicies: { trustPolicyStore: trust },
+		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
 		memory: {
 			syncMutations: synchronization.mutations,
 			memoryLister: memory,

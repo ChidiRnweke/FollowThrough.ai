@@ -69,6 +69,38 @@ const agentPreferencePatchSchema = resourceDataSchemas.agent_preferences
 	});
 export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 	z.object({
+		kind: z.literal('renameConversation'),
+		conversationId: resourceDataSchemas.conversations.shape.id,
+		title: z.string().trim().min(1).max(80)
+	}),
+	z.object({
+		kind: z.literal('setToolPreference'),
+		userId: resourceDataSchemas.user_preferences.shape.userId,
+		toolName: z.string().min(1),
+		enabled: z.boolean()
+	}),
+	z.object({
+		kind: z.literal('setProjectToolOverride'),
+		userId: resourceDataSchemas.user_preferences.shape.userId,
+		projectId,
+		toolName: z.string().min(1),
+		enabled: z.boolean()
+	}),
+	z.object({
+		kind: z.literal('resetProjectToolOverride'),
+		userId: resourceDataSchemas.user_preferences.shape.userId,
+		projectId,
+		toolName: z.string().min(1)
+	}),
+	z.object({
+		kind: z.literal('updateTrustPolicy'),
+		userId: resourceDataSchemas.user_preferences.shape.userId,
+		pipeline: resourceDataSchemas.trust_policies.shape.pipeline,
+		autoAcceptEnabled: z.boolean(),
+		minimumConfidence: resourceDataSchemas.trust_policies.shape.minimumConfidence
+	}),
+
+	z.object({
 		kind: z.literal('updateUserPreferences'),
 		userId: resourceDataSchemas.user_preferences.shape.userId,
 		sectionNumberingDefault: z.boolean()
@@ -240,6 +272,11 @@ export type ProjectMutationRequest = MutationFor<
 	| 'moveNote'
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
+export type ConversationMutationRequest = MutationFor<'renameConversation'>;
+export type ToolPreferenceMutationRequest = MutationFor<
+	'setToolPreference' | 'setProjectToolOverride' | 'resetProjectToolOverride'
+>;
+export type TrustPolicyMutationRequest = MutationFor<'updateTrustPolicy'>;
 export type UserPreferenceMutationRequest = MutationFor<'updateUserPreferences'>;
 export type AgentPreferenceMutationRequest = MutationFor<'updateAgentPreferences'>;
 export type DeliverableMutationRequest = MutationFor<'updateExportSettings'>;
@@ -272,6 +309,19 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'renameConversation':
+			return { type: 'conversations', id: [command.conversationId] };
+		case 'setToolPreference':
+			return { type: 'tool_preferences', id: [command.userId, command.toolName] };
+		case 'setProjectToolOverride':
+		case 'resetProjectToolOverride':
+			return {
+				type: 'project_tool_overrides',
+				id: [command.userId, command.projectId, command.toolName]
+			};
+		case 'updateTrustPolicy':
+			return { type: 'trust_policies', id: [command.userId, command.pipeline] };
+
 		case 'updateUserPreferences':
 			return { type: 'user_preferences', id: [command.userId] };
 		case 'updateAgentPreferences':

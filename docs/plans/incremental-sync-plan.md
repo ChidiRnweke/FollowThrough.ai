@@ -171,3 +171,11 @@ Cross-tab acknowledgement checkpoint: mounted editors now verify the exact durab
 when a queue entry disappears. The same rule handles local and foreign-tab discards without a separate
 discard tracker. Validation: 14 queue tests, 43 browser persistence/draft tests, type and architecture
 checks, and 23 production PWA scenarios passed, including foreign-tab discard with retained text.
+
+Settings and chat-name integration checkpoint: tool preferences, project overrides (including reset),
+trust policies, and chat renames now submit through the shared guarded outbox. Superseded direct
+endpoints are removed. Optional controls capture their displayed base synchronously and refuse
+unknown records. Policy thresholds retain the server's whole-percent representation. Project
+ownership is checked before creating an override. Validation: seven PostgreSQL contracts, 24 shared
+draft browser tests, 25 production PWA scenarios, type and architecture checks. The full unit suite
+passed 3,294 tests before the final chat/read-guard additions; final broad gates follow.

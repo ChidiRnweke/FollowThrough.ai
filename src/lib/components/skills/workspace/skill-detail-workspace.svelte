@@ -35,6 +35,7 @@
 	// conflict handling below are exactly the notes save path.
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before mounting an editor');
+	const resources = session.resources;
 	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
 	const metadata = untrack(() => session.resources.draft({ type: 'skills', id: [noteId] }));
 	let metadataReview = $state(false);
@@ -274,18 +275,34 @@
 	async function importSkill(file: File): Promise<void> {
 		importing = true;
 		try {
+			if (!(await ensureSynchronized('Save and synchronize the skill before importing.'))) return;
+			const version = editVersion;
 			const raw = await file.text();
+			if (version !== editVersion) {
+				toast.error('Save the latest edits before importing.');
+				return;
+			}
 			await importSkillMarkdown({ noteId: note.id, raw });
-			// The import rewrote the note server-side, so rebase the sync store on
-			// the fresh version before the next save, then remount the editors.
 			await workspaceSession.synchronize();
-			const opened = await draft.read();
-			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
-			const local = opened.value;
-			note = { ...local };
-			const details = await metadata.read();
-			if (details.kind !== 'ready') throw new Error('The skill details could not be reopened');
-			savedDescription = details.value.description;
+			const [opened, details] = await Promise.all([
+				resources.open({ type: 'notes', id: [note.id] }),
+				resources.open({ type: 'skills', id: [note.id] })
+			]);
+			if (version !== editVersion) {
+				toast.info('The import completed. Your later edits are retained for review.');
+				return;
+			}
+			if (
+				opened.kind !== 'ready' ||
+				opened.value.type !== 'notes' ||
+				details.kind !== 'ready' ||
+				details.value.type !== 'skills'
+			)
+				throw new Error('The imported skill could not be reopened');
+			draft.capture();
+			metadata.capture();
+			note = { ...opened.value.value };
+			savedDescription = details.value.value.description;
 			dirty = false;
 			editorEpoch += 1;
 			toast.success('Skill imported');

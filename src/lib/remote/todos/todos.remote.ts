@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ProjectId } from '$lib/models/projects';
@@ -10,7 +10,7 @@ const projectId = z
 	.transform((value) => value as ProjectId);
 /** The board's shareable URL filters; the title search stays client-only, so the PDF
     reflects the server-side filters rather than the search box. */
-export const exportBoardPdf = query(
+export const exportBoardPdf = command(
 	z.object({
 		projectId: projectId.optional(),
 		responsibility: z.enum(['mine', 'waiting_on']).optional(),

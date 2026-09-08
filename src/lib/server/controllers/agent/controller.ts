@@ -1,3 +1,8 @@
+import type {
+	ConversationMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
@@ -102,6 +107,10 @@ class DuplicateSubmission extends Error {}
  * transports; this one deals in run receipts, snapshots, and event cursors.
  */
 export interface AgentController {
+	synchronize(
+		actor: ActorContext,
+		input: ConversationMutationRequest
+	): Promise<WorkspaceMutationResult>;
 	/**
 	 * Queue an agent run for the given prompt and return a receipt for the queued run.
 	 *
@@ -206,6 +215,7 @@ export interface AgentController {
  * controller can be built and tested without touching real stores or the executor.
  */
 export interface AgentDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	/** Persists conversations and their message history. */
 	conversationJournal: ConversationJournal;
 	/** Per-user agent preferences used to settle defaults when a run is frozen. */
@@ -232,6 +242,14 @@ export interface AgentDependencies {
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
 export class Agent implements AgentController {
+	synchronize(
+		actor: ActorContext,
+		input: ConversationMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			await this.renameSession(actor, input.command.conversationId, input.command.title);
+		});
+	}
 	constructor(private readonly dependencies: AgentDependencies) {}
 
 	listSessions(

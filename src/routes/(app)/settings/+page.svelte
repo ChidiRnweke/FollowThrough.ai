@@ -86,7 +86,7 @@
 		</Tabs.Content>
 		<Tabs.Content value="policies" class="pt-6">
 			{#if data.tab === 'policies'}
-				<SettingsPolicies policies={data.session.resources.views.all('trust_policies')} />
+				<SettingsPolicies />
 			{/if}
 		</Tabs.Content>
 	</Tabs.Root>

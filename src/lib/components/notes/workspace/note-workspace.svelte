@@ -172,21 +172,7 @@
 			}
 			const local = opened.value;
 			if (cancelled) return;
-			// Use view.note as the base for all server-authoritative fields
-			// (parentId, position, publishedRevision, publishedAt, etc.) and
-			// only take content fields from the local sync record.  The
-			// coordinator's IndexedDB record may carry stale metadata when
-			// operations like move or publish changed the note without bumping
-			// currentRevision.
-			note = {
-				...view.note,
-				title: local.title,
-				document: local.document,
-				plainText: local.plainText,
-				isPinned: local.isPinned,
-				currentRevision: local.currentRevision,
-				updatedAt: local.updatedAt
-			};
+			note = { ...local };
 			conflictOpen = draft.status === 'conflict';
 			syncReady = true;
 		});
@@ -218,9 +204,11 @@
 		)
 			return;
 		reconciling = true;
+		const version = editVersion;
 		void draft
-			.read()
+			.read(() => version === editVersion && !dirty)
 			.then((opened) => {
+				if (opened.kind === 'superseded') return;
 				if (opened.kind !== 'ready') {
 					syncReady = true;
 					return;
@@ -757,12 +745,17 @@
 	async function restoreRevision(revisionId: NoteRevisionId): Promise<void> {
 		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return;
 		try {
+			const version = editVersion;
 			await restoreNoteRevision({
 				noteId: note.id,
 				revisionId
 			});
 			await workspaceSession.synchronize();
-			const opened = await draft.read();
+			const opened = await draft.read(() => version === editVersion);
+			if (opened.kind === 'superseded') {
+				toast.info('The server version changed. Your later edits are retained for review.');
+				return;
+			}
 			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
 			const local = opened.value;
 			note = { ...local };
@@ -784,9 +777,14 @@
 			return;
 		}
 		try {
+			const version = editVersion;
 			await discardNoteDraft({ noteId: note.id });
 			await workspaceSession.synchronize();
-			const opened = await draft.read();
+			const opened = await draft.read(() => version === editVersion);
+			if (opened.kind === 'superseded') {
+				toast.info('The server version changed. Your later edits are retained for review.');
+				return;
+			}
 			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
 			const local = opened.value;
 			note = { ...local };

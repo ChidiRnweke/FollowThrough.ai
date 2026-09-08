@@ -55,12 +55,6 @@ export const retryAgentRun = command(
 		AppFactory.controllers().agent().retry(requestActor(), runId, requestId)
 );
 
-export const renameSession = command(
-	z.object({ conversationId, title: z.string().trim().min(1).max(80) }),
-	async ({ conversationId, title }) =>
-		AppFactory.controllers().agent().renameSession(requestActor(), conversationId, title)
-);
-
 export const deleteSession = command(z.object({ conversationId }), async ({ conversationId }) => {
 	await AppFactory.controllers().agent().deleteSession(requestActor(), conversationId);
 });

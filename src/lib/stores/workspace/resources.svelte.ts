@@ -373,10 +373,27 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		this.current = this.resources.editBase(this.identity);
 	}
 
-	async read(): Promise<CacheAccess<WorkspaceValues[K]>> {
+	/** Capture a rendered optional value without awaiting a newer, unseen server version. */
+	captureOrCreate(initial: WorkspaceRecord): void {
+		if (workspaceResourceKey(workspaceRecordIdentity(initial)) !== this.key)
+			throw new Error('The initial value belongs to a different resource');
+		const state = this.resources.state(this.identity);
+		const pending = this.resources.pending.some((entry) => entry.intent.key === this.key);
+		if (pending || state?.kind === 'present') this.capture();
+		else if (state?.kind === 'deleted' || this.resources.availability !== 'unknown')
+			this.current = { base: null, basedOn: null, local: initial };
+		else throw new Error('This resource is not available on this device');
+	}
+
+	read(): Promise<CacheAccess<WorkspaceValues[K]>>;
+	read(isCurrent: () => boolean): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }>;
+	async read(
+		isCurrent: () => boolean = () => true
+	): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }> {
 		this.error = null;
 		try {
 			const opened = await this.resources.open(this.identity);
+			if (!isCurrent()) return { kind: 'superseded' };
 			if (opened.kind !== 'ready') {
 				this.error =
 					opened.kind === 'failure'
@@ -387,6 +404,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			this.current = this.resources.editBase(this.identity);
 			return { kind: 'ready', value: this.valueOf(this.current.local) };
 		} catch (error) {
+			if (!isCurrent()) return { kind: 'superseded' };
 			this.error = error instanceof Error ? error.message : 'Device storage is unavailable';
 			return { kind: 'failure', message: this.error };
 		}

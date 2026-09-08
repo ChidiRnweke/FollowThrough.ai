@@ -296,8 +296,9 @@ export const resourceDataSchemas = {
 		autoAcceptEnabled: z.boolean(),
 		minimumConfidence: z
 			.number()
+			.int()
 			.min(0)
-			.max(1)
+			.max(100)
 			.transform((value) => value as Confidence)
 			.optional(),
 		...timestamps

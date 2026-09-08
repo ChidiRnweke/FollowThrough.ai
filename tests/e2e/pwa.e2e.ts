@@ -587,3 +587,63 @@ test('keeps an open editor’s text visibly unsynchronized after another tab dis
 	await page.getByRole('button', { name: 'Couldn’t save · retry', exact: true }).waitFor();
 	await expect(body).toContainText(text);
 });
+
+test('keeps tool and trust-policy changes in the shared offline outbox', async ({
+	page,
+	context
+}) => {
+	await page.goto('/settings?tab=tools');
+	await waitForServiceWorker(page);
+	await page.getByLabel('Find a tool', { exact: true }).fill('archive_project');
+	const tool = page.getByRole('switch', { name: 'archive project', exact: true });
+	await tool.waitFor();
+	await context.setOffline(true);
+	await tool.click();
+	await page.getByText('Saved on device', { exact: true }).waitFor();
+	const selected = await tool.getAttribute('aria-checked');
+	await page.goto('/settings?tab=policies');
+	const policy = page.getByRole('group', { name: 'Trust policy for Agent', exact: true });
+	await policy.getByRole('radio', { name: 'Auto-accept', exact: true }).click();
+	await page.getByText('Saved on device', { exact: true }).waitFor();
+	await page.goto('/settings?tab=tools');
+	await page.getByLabel('Find a tool', { exact: true }).fill('archive_project');
+	const retained = await tool.getAttribute('aria-checked');
+	const acknowledgments: string[] = [];
+	page.on('response', async (response) => {
+		if (response.url().endsWith('/pushWorkspaceMutation') && response.ok())
+			acknowledgments.push(await response.text());
+	});
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	await expect
+		.poll(() => ({
+			retained,
+			applied: acknowledgments.filter((body) => body.includes('applied')).length
+		}))
+		.toEqual({ retained: selected, applied: 2 });
+});
+
+test('retains a renamed chat through offline reload and acknowledgement', async ({
+	page,
+	context
+}) => {
+	await page.goto('/chats');
+	await waitForServiceWorker(page);
+	await page
+		.getByRole('button', { name: 'Actions for Saved synchronization chat', exact: true })
+		.click();
+	await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+	await context.setOffline(true);
+	const dialog = page.getByRole('dialog');
+	await dialog.getByRole('textbox').fill('Offline chat name');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await page.getByText('Chat name saved on this device.', { exact: true }).waitFor();
+	await page.reload();
+	await page.getByRole('button', { name: 'Actions for Offline chat name', exact: true }).waitFor();
+	const pushed = page.waitForResponse(
+		(response) => response.url().endsWith('/pushWorkspaceMutation') && response.ok()
+	);
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	expect(await (await pushed).text()).toContain('applied');
+});

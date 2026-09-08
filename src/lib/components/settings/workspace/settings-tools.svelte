@@ -3,7 +3,9 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
-	import { resetToolOverride, setToolEnabled } from '$lib/remote/settings/settings.remote';
+	import type { DateTime } from '$lib/models/workspace';
+	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+	import type { WorkspaceRecord } from '$lib/models/workspace-records';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -34,15 +36,15 @@
 	let page = $state(1);
 	let busy = $state<string | null>(null);
 
-	const session = workspaceSession.current;
-	if (!session) throw new Error('Open the workspace before editing settings');
+	const current = workspaceSession.current;
+	if (!current) throw new Error('Open the workspace before editing settings');
+	const session = current;
 	const preferences = $derived(
 		session.resources.views.toolPreferences(session.bootstrap.accountId, projectId)
 	);
 	const filtered = $derived(matching(preferences, search.trim().toLowerCase()));
 	const start = $derived((page - 1) * PAGE_SIZE);
 	const visible = $derived(filtered.slice(start, start + PAGE_SIZE));
-	const scope = $derived(projectId ? { projectId } : {});
 	const scopeName = $derived(projects.find((project) => project.id === projectId)?.name);
 
 	/**
@@ -133,8 +135,40 @@
 	async function toggle(preference: ToolPreference, enabled: boolean): Promise<void> {
 		busy = preference.name;
 		try {
-			await setToolEnabled({ ...scope, toolName: preference.name, enabled });
-			await workspaceSession.synchronize();
+			const userId = session.shell.user.id;
+			const timestamp = new Date().toISOString() as DateTime;
+			const common = {
+				userId,
+				toolName: preference.name,
+				enabled,
+				createdAt: timestamp,
+				updatedAt: timestamp
+			};
+			const local: WorkspaceRecord = projectId
+				? { type: 'project_tool_overrides', value: { ...common, projectId } }
+				: { type: 'tool_preferences', value: common };
+			const draft = session.resources.draft(
+				projectId
+					? { type: 'project_tool_overrides', id: [userId, projectId, preference.name] }
+					: { type: 'tool_preferences', id: [userId, preference.name] }
+			);
+			draft.captureOrCreate(local);
+			const result = await draft.stage({
+				command: projectId
+					? {
+							kind: 'setProjectToolOverride',
+							userId,
+							projectId,
+							toolName: preference.name,
+							enabled
+						}
+					: { kind: 'setToolPreference', userId, toolName: preference.name, enabled },
+				local,
+				coalesce: null,
+				references: projectId ? [workspaceResourceKey({ type: 'projects', id: [projectId] })] : []
+			});
+			if (result.kind === 'failure') throw new Error(result.message);
+			toast.success('Saved on device');
 			// audit-allow: silent-catch — the failed authority change is reported and refreshed state remains authoritative.
 		} catch {
 			toast.error(`Could not change ${readable(preference.name)}. Try again.`);
@@ -147,8 +181,19 @@
 		if (!projectId) return;
 		busy = preference.name;
 		try {
-			await resetToolOverride({ toolName: preference.name, projectId });
-			await workspaceSession.synchronize();
+			const userId = session.shell.user.id;
+			const draft = session.resources.draft({
+				type: 'project_tool_overrides',
+				id: [userId, projectId, preference.name]
+			});
+			draft.capture();
+			const result = await draft.stage({
+				command: { kind: 'resetProjectToolOverride', userId, projectId, toolName: preference.name },
+				local: null,
+				coalesce: null,
+				references: []
+			});
+			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success(`${readable(preference.name)} follows your default again`);
 			// audit-allow: silent-catch — the failed authority reset is reported and the existing override remains visible.
 		} catch {
@@ -165,6 +210,12 @@
      the grouping is legible without drawing a card. Density comes from the 62
      rows, never from the four controls, which keep their default height. -->
 <section class="flex max-w-3xl flex-col gap-6">
+	{#if session.resources.availability !== 'complete'}
+		<p role="status" class="text-sm text-muted-foreground">
+			Some settings are unavailable on this device. Connect to finish downloading them before making
+			changes.
+		</p>
+	{/if}
 	<!-- A preamble for the whole panel, not a caption on the scope control below
 	     it — so it sits a step further out than the gap between the groups. -->
 	<p class="pb-2 text-sm text-muted-foreground">
@@ -277,7 +328,7 @@
 											variant="ghost"
 											size="sm"
 											class="shrink-0"
-											disabled={busy !== null}
+											disabled={busy !== null || session.resources.availability !== 'complete'}
 											onclick={() => void reset(preference)}
 										>
 											Reset
@@ -287,7 +338,9 @@
 										class="shrink-0"
 										aria-label={readable(preference.name)}
 										checked={preference.enabled}
-										disabled={preference.locked || busy !== null}
+										disabled={preference.locked ||
+											busy !== null ||
+											session.resources.availability !== 'complete'}
 										onCheckedChange={(enabled) => void toggle(preference, enabled)}
 									/>
 								</li>

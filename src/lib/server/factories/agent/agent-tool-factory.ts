@@ -470,10 +470,12 @@ export const agentToolCoverage = {
 		regenerateArtifact: { kind: 'mutation', tools: ['regenerate_artifact'] }
 	},
 	trustPolicies: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		list: { kind: 'read', tools: ['list_trust_policies'] },
 		update: { kind: 'mutation', tools: ['update_trust_policy'] }
 	},
 	toolPreferences: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		list: { kind: 'read', tools: ['list_tool_preferences'] },
 		setEnabled: { kind: 'mutation', tools: ['set_tool_enabled'] },
 		clearOverride: {

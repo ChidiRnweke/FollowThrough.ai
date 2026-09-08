@@ -14,6 +14,14 @@ export const pushWorkspaceMutation = command(
 		const controllers = AppFactory.controllers();
 		const command = mutation.command;
 		switch (command.kind) {
+			case 'renameConversation':
+				return controllers.agent().synchronize(actor, { ...mutation, command });
+			case 'setToolPreference':
+			case 'setProjectToolOverride':
+			case 'resetProjectToolOverride':
+				return controllers.toolPreferences().synchronize(actor, { ...mutation, command });
+			case 'updateTrustPolicy':
+				return controllers.trustPolicies().synchronize(actor, { ...mutation, command });
 			case 'updateAgentPreferences':
 				return controllers.agentSettings().synchronize(actor, { ...mutation, command });
 			case 'updateUserPreferences':
