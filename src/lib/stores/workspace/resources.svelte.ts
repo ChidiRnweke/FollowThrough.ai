@@ -11,6 +11,7 @@ import {
 } from '$lib/models/outbox';
 import {
 	workspaceRecordSchema,
+	workspaceRecordIdentity,
 	isWorkspaceRecord,
 	type WorkspaceValues,
 	type WorkspaceRecord
@@ -315,7 +316,12 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	}
 	get value(): WorkspaceValues[K] | null {
 		if (!this.resources.active) return null;
-		if (!this.entries.length && this.resources.state(this.identity)?.kind === 'deleted')
+		const creation = this.current?.base === null && this.current.basedOn === null;
+		if (
+			!creation &&
+			!this.entries.length &&
+			this.resources.state(this.identity)?.kind === 'deleted'
+		)
 			return null;
 		const last = this.entries.at(-1);
 		const record = last ? last.intent.local : this.current?.local;
@@ -382,6 +388,31 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			return { kind: 'failure', message: this.error };
 		}
 	}
+	/** An optional form may start a new resource only after absence is established. */
+	async readOrCreate(initial: WorkspaceRecord): Promise<CacheAccess<WorkspaceValues[K]>> {
+		this.error = null;
+		try {
+			if (workspaceResourceKey(workspaceRecordIdentity(initial)) !== this.key)
+				throw new Error('The initial value belongs to a different resource');
+			const opened = await this.resources.lookup(this.identity);
+			if (opened.kind === 'ready') {
+				this.current = this.resources.editBase(this.identity);
+			} else if (opened.kind === 'absent' || opened.kind === 'deleted') {
+				this.current = { base: null, basedOn: null, local: initial };
+			} else {
+				this.error =
+					opened.kind === 'failure'
+						? opened.message
+						: 'This resource is not available on this device';
+				return opened;
+			}
+			return { kind: 'ready', value: this.valueOf(this.current.local) };
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Device storage is unavailable';
+			return { kind: 'failure', message: this.error };
+		}
+	}
+
 	stage(
 		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
 	): ReturnType<WorkspaceDraft<K>['save']> {

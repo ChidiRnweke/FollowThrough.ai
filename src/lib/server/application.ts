@@ -427,6 +427,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		toolPreferences: { preferences: toolPreferences },
 		attachments: { attachments, transactionRunner },
 		deliverables: {
+			syncMutations: synchronization.mutations,
 			templateUploader: templates,
 			templateLister: templates,
 			templateDeleter: templates,

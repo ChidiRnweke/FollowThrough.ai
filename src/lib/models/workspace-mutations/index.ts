@@ -5,6 +5,7 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import { z } from 'zod';
+import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -42,6 +43,18 @@ const diagramId = z
 
 const memoryEntryId = resourceDataSchemas.memory_entries.shape.id;
 export const workspaceCommandSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('updateExportSettings'),
+		userId: resourceDataSchemas.export_settings.shape.userId,
+		projectId,
+		settings: exportSettingsOverlaySchema
+			.required({ fontFamily: true, fontSize: true, lineHeight: true, margin: true })
+			.extend({
+				fontSize: z.number().min(8).max(18),
+				lineHeight: z.number().min(1).max(2.2),
+				margin: z.number().min(18).max(144)
+			})
+	}),
 	z.object({
 		kind: z.literal('createMemory'),
 		id: memoryEntryId,
@@ -192,6 +205,7 @@ export type ProjectMutationRequest = MutationFor<
 	| 'moveNote'
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
+export type DeliverableMutationRequest = MutationFor<'updateExportSettings'>;
 export type MemoryMutationRequest = MutationFor<'createMemory' | 'updateMemory' | 'deleteMemory'>;
 export type SkillMutationRequest = MutationFor<'createSkill' | 'updateSkill'>;
 export type DiagramMutationRequest = MutationFor<
@@ -221,6 +235,8 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
+		case 'updateExportSettings':
+			return { type: 'export_settings', id: [command.userId, command.projectId] };
 		case 'updateSkill':
 			return { type: 'skills', id: [command.noteId] };
 		case 'createMemory':

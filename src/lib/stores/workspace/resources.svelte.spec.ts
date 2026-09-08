@@ -299,3 +299,65 @@ describe('optional workspace records', () => {
 		expect(await resources.lookup(identity)).toEqual({ kind: 'deleted' });
 	});
 });
+
+describe('drafting optional resources', () => {
+	it('uses initial values only after a completed journal proves absence', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
+		resources.setOnline(false);
+		const draft = resources.draft({ type: 'projects', id: identity.id });
+		expect(await draft.readOrCreate(project)).toEqual({ kind: 'ready', value: project.value });
+	});
+	it('does not turn an unknown offline inventory into a writable default', async () => {
+		const { resources } = setup();
+		resources.setOnline(false);
+		const draft = resources.draft({ type: 'projects', id: identity.id });
+		expect(await draft.readOrCreate(project)).toEqual({ kind: 'unavailable' });
+	});
+	it('retains the existing body instead of replacing it with initial values', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', {
+			put: [
+				{
+					key,
+					entry: {
+						kind: 'present',
+						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+					}
+				}
+			],
+			remove: [],
+			cursor: initialSyncCursor
+		});
+		resources.setOnline(false);
+		if (project.type !== 'projects') throw new Error('Expected the project fixture');
+		const draft = resources.draft({ type: 'projects', id: identity.id });
+		expect(
+			await draft.readOrCreate({ type: 'projects', value: { ...project.value, name: 'Default' } })
+		).toEqual({ kind: 'ready', value: project.value });
+	});
+});
+
+it('can explicitly draft a new override after its server tombstone', async () => {
+	const { resources, repository } = setup();
+	await repository.commit('alice', {
+		put: [{ key, entry: { kind: 'deleted', etag: syncEtag(1n) } }],
+		remove: [],
+		cursor: initialSyncCursor
+	});
+	resources.setOnline(false);
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	await draft.readOrCreate(project);
+	expect(draft.value).toEqual(project.value);
+});
+
+it('does not replace a failed known resource read with writable initial values', async () => {
+	const { resources, transport } = setup();
+	transport.records.set(key, { etag: syncEtag(1n), value: project });
+	transport.readFailure = 'Download failed';
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	expect(await draft.readOrCreate(project)).toEqual({
+		kind: 'failure',
+		message: 'Download failed'
+	});
+});

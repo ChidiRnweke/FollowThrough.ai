@@ -99,14 +99,6 @@ export const previewDocument = command(
 			.previewDocument(requestActor(), input as PreviewDocumentInput)
 );
 
-export const updateExportSettings = command(
-	z.object({ projectId: projectIdSchema, settings: exportSettingsSchema }),
-	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.updateExportSettings(requestActor(), input.projectId, input.settings)
-);
-
 export const downloadArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>
 	AppFactory.controllers().deliverables().downloadArtifact(requestActor(), input.artifactId)
 );

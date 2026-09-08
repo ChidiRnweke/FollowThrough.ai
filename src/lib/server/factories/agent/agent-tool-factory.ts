@@ -440,6 +440,7 @@ export const agentToolCoverage = {
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	deliverables: {
+		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		initiateTemplateUpload: {
 			kind: 'excluded',
 			reason: 'The agent cannot upload local user files.'

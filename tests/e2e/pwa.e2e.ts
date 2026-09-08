@@ -468,3 +468,34 @@ test('searches pending local text and retains an offline replacement through rel
 		'Replacement saved offline'
 	);
 });
+
+test('creates export defaults offline and retains them through reload and acknowledgement', async ({
+	page,
+	context
+}) => {
+	await page.goto('/projects/00000000-0000-4000-8000-000000000002');
+	await waitForServiceWorker(page);
+	const openDefaults = async () => {
+		await page.getByRole('button', { name: 'Project actions', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Export defaults…', exact: true }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Save defaults', exact: true })
+			.waitFor();
+	};
+	await context.setOffline(true);
+	await openDefaults();
+	await page.getByLabel('Font family', { exact: true }).click();
+	await page.getByRole('option', { name: 'Courier', exact: true }).click();
+	await page.getByRole('button', { name: 'Save defaults', exact: true }).click();
+	await page.getByRole('dialog').waitFor({ state: 'hidden' });
+	await page.reload();
+	await openDefaults();
+	await page.getByLabel('Font family', { exact: true }).filter({ hasText: 'Courier' }).waitFor();
+	const pushed = page.waitForResponse(
+		(response) => response.url().endsWith('/pushWorkspaceMutation') && response.ok()
+	);
+	await context.setOffline(false);
+	await page.evaluate(() => window.dispatchEvent(new Event('online')));
+	expect(await (await pushed).text()).toContain('applied');
+});

@@ -62,17 +62,24 @@
 		error = '';
 		selected.clear();
 		for (const entry of offered) selected.add(entry.id);
-		void loadSettings();
+		let current = true;
+		void loadSettings(() => current);
+		return () => {
+			current = false;
+		};
 	});
 
-	async function loadSettings(): Promise<void> {
+	async function loadSettings(current: () => boolean): Promise<void> {
 		settingsReady = false;
 		try {
-			settings = { ...(await loadExportSettings(projectId)) };
+			const loaded = await loadExportSettings(projectId);
+			if (!current()) return;
+			settings = { ...loaded };
 			settingsReady = true;
 			// audit-allow: silent-catch — the dialog renders the settings load error and does not pretend defaults were loaded.
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
+			if (current())
+				error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
 		}
 	}
 
