@@ -250,14 +250,18 @@ export class WorkspaceViews {
 				const template = artifact.templateId
 					? this.get('project_templates', artifact.templateId)
 					: undefined;
+				const sources = artifact.sourceNoteIds.map((id) => this.get('notes', id));
+				const changed = sources.some((note) => note && note.updatedAt > artifact.createdAt);
+				const stale = changed
+					? true
+					: sources.every((note) => note !== undefined)
+						? false
+						: undefined;
 				return {
 					...artifact,
 					projectName: project.name,
 					...(template ? { templateName: template.name } : {}),
-					stale: artifact.sourceNoteIds.some((id) => {
-						const note = this.get('notes', id);
-						return note !== undefined && note.updatedAt > artifact.createdAt;
-					})
+					stale
 				};
 			})
 			.filter(

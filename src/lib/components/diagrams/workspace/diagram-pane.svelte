@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import type { Diagram, DiagramId, DiagramRevisionId, DrawioDiagram } from '$lib/models/diagrams';
+	import type {
+		Diagram,
+		DiagramId,
+		DiagramRevisionId,
+		DiagramRevisionSummary,
+		DrawioDiagram
+	} from '$lib/models/diagrams';
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
 	import { workspaceResourceKey } from '$lib/models/workspace-sync';
 	import type { DateTime } from '$lib/models/workspace';
@@ -39,9 +45,11 @@
 	const current = $derived(opened ? (resources.views.diagram(diagramId) ?? draft.value) : null);
 	const local = $derived(draft.value);
 	const title = $derived(current?.title ?? 'Untitled diagram');
-	const history = $derived(
-		historyOpen && resources.online ? listDiagramRevisions(diagramId) : undefined
-	);
+	let history = $state<
+		| { kind: 'loading' }
+		| { kind: 'ready'; revisions: readonly DiagramRevisionSummary[] }
+		| { kind: 'failure'; message: string }
+	>({ kind: 'loading' });
 	const selectedRevision = $derived(
 		selectedRevisionId && resources.online
 			? getDiagramRevision({ diagramId, revisionId: selectedRevisionId })
@@ -113,15 +121,33 @@
 		});
 	});
 
-	let historyVersion = $state<string | null>(null);
+	const historyVersion = $derived(resources.snapshot({ type: 'diagrams', id: [diagramId] })?.etag);
 	$effect(() => {
-		const version = resources.snapshot({ type: 'diagrams', id: [diagramId] })?.etag;
-		if (!history || !version || historyVersion === version) return;
-		historyVersion = version;
-		void history.refresh().catch((error) => {
-			toast.error(userFacingMessage(error, 'Version history could not be refreshed'));
-			return { kind: 'failure' };
-		});
+		// Historical bodies are on demand; the mutable index is a fresh request on each opening/version.
+		const version = historyVersion;
+		if (!historyOpen) return;
+		if (!resources.online) {
+			history = { kind: 'failure', message: 'Connect to load version history.' };
+			return;
+		}
+		void version;
+		let cancelled = false;
+		history = { kind: 'loading' };
+		void listDiagramRevisions(diagramId)
+			.then(({ revisions }) => {
+				if (!cancelled) history = { kind: 'ready', revisions };
+			})
+			.catch((error) => {
+				const failure = {
+					kind: 'failure' as const,
+					message: userFacingMessage(error, 'Version history could not be loaded.')
+				};
+				if (!cancelled) history = failure;
+				return { kind: 'failure', message: failure.message };
+			});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	function editable(): DrawioDiagram {
@@ -381,11 +407,9 @@
 		diagram={local?.kind === 'drawio'
 			? { ...local, source: reviewSource ?? local.source }
 			: current}
-		revisions={history?.current?.revisions ?? []}
-		loading={!history?.current && !history?.error}
-		loadFailure={history?.error
-			? userFacingMessage(history?.error, 'Version history could not be loaded.')
-			: undefined}
+		revisions={history.kind === 'ready' ? history.revisions : []}
+		loading={history.kind === 'loading'}
+		loadFailure={history.kind === 'failure' ? history.message : undefined}
 		selectedFailure={selectedRevision?.error
 			? userFacingMessage(selectedRevision.error, 'This version could not be loaded.')
 			: undefined}

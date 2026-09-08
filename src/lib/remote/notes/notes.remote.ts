@@ -49,7 +49,7 @@ export const discardNoteDraft = command(
 	}
 );
 
-export const listNoteRevisions = query(z.string().uuid(), async (noteId) => {
+export const listNoteRevisions = command(z.string().uuid(), async (noteId) => {
 	return AppFactory.controllers()
 		.notes()
 		.listRevisions(requestActor(), { noteId: noteId as NoteId });

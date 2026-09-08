@@ -182,3 +182,23 @@ describe('shared project collections', () => {
 		]);
 	});
 });
+
+it('does not report an artifact as current when a source note is unavailable', () => {
+	const artifact = resourceDataSchemas.artifacts.parse({
+		id: '00000000-0000-4000-8000-000000000603',
+		userId: testActor().userId,
+		projectId: testProjectId(),
+		title: 'Report',
+		format: 'pdf',
+		objectKey: 'report.pdf',
+		byteSize: 5,
+		sourceNoteIds: [testNoteId()],
+		createdAt: testNow
+	});
+	expect(
+		views(
+			{ type: 'projects', value: projectBuilder() },
+			{ type: 'artifacts', value: artifact }
+		).artifacts(testProjectId())[0]?.stale
+	).toBeUndefined();
+});
