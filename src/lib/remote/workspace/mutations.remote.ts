@@ -1,9 +1,35 @@
 import { z } from 'zod';
 import { command } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
+import {
+	workspaceMutationRequestSchema,
+	workspaceWriteCancellationSchema
+} from '$lib/models/workspace-mutations';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
+
+export const cancelWorkspaceMutation = command(
+	workspaceWriteCancellationSchema.extend({ accountId: z.string().uuid() }),
+	async ({ accountId, ...input }) => {
+		const actor = requestActor();
+		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
+		return AppFactory.controllers().workspace().cancelMutation(actor, input);
+	}
+);
+
+export const acknowledgeWorkspaceMutation = command(
+	z.object({
+		accountId: z.string().uuid(),
+		operationId: z.string().uuid(),
+		protocol: z.literal(2)
+	}),
+	async ({ accountId, operationId }) => {
+		const actor = requestActor();
+		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
+		await AppFactory.controllers().workspace().acknowledgeMutation(actor, operationId);
+		return { kind: 'acknowledged' as const };
+	}
+);
 
 export const pushWorkspaceMutation = command(
 	workspaceMutationRequestSchema.extend({ accountId: z.string().uuid() }),
@@ -54,8 +80,18 @@ export const pushWorkspaceMutation = command(
 			case 'updateSkill':
 			case 'createSkill':
 				return controllers.skills().synchronize(actor, { ...mutation, command });
-			default:
+			case 'createNote':
+			case 'renameNote':
+			case 'saveNote':
+			case 'archiveNote':
+			case 'restoreNote':
+			case 'publishNote':
+			case 'discardNoteDraft':
+			case 'deleteNote':
+			case 'noteNumbering':
 				return controllers.notes().synchronize(actor, { ...mutation, command });
+			default:
+				throw new Error(`Unhandled workspace command: ${command satisfies never}`);
 		}
 	}
 );

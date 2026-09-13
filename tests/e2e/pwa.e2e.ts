@@ -229,17 +229,18 @@ test('reviews and discards an offline project without losing unreviewed work', a
 	await creation.getByRole('button', { name: 'Create', exact: true }).click();
 	await page.getByRole('heading', { name: 'Offline review project', exact: true }).waitFor();
 	await page.goto('/today');
-	await page.getByRole('button', { name: 'Review changes', exact: true }).waitFor();
+	await page.getByRole('button', { name: /^Sync status:/ }).waitFor();
 	await page.screenshot({ path: testInfo.outputPath('saved-offline-project.png'), fullPage: true });
-	await page.getByRole('button', { name: 'Review changes', exact: true }).click();
-	await page.getByRole('button', { name: 'Review', exact: true }).click();
+	await page.getByRole('button', { name: /^Sync status:/ }).click();
+	await page.getByRole('menuitem', { name: 'Review changes', exact: true }).click();
+	await page.getByRole('button', { name: /^Review / }).click();
 	await page.getByRole('heading', { name: 'Your change', exact: true }).waitFor();
 	await page.screenshot({
 		path: testInfo.outputPath('review-offline-project.png'),
 		fullPage: true
 	});
-	await page.getByRole('button', { name: 'Discard local change', exact: true }).click();
-	await expect(page.getByText('No changes are waiting to send.')).toBeVisible();
+	await page.getByRole('button', { name: 'Discard change', exact: true }).click();
+	await expect(page.getByText('Everything is saved')).toBeVisible();
 });
 
 test('retains an offline note edit and publishes it after reconnecting', async ({
@@ -578,10 +579,11 @@ test('keeps an open editor’s text visibly unsynchronized after another tab dis
 	await page.getByRole('button', { name: 'Saved on device · retry sync', exact: true }).waitFor();
 	const other = await context.newPage();
 	await other.goto('/today');
-	await other.getByRole('button', { name: 'Review changes', exact: true }).click();
-	await other.getByRole('button', { name: 'Review', exact: true }).click();
-	await other.getByRole('button', { name: 'Discard local change', exact: true }).click();
-	await other.getByText('No changes are waiting to send.').waitFor();
+	await other.getByRole('button', { name: /^Sync status:/ }).click();
+	await other.getByRole('menuitem', { name: 'Review changes', exact: true }).click();
+	await other.getByRole('button', { name: /^Review / }).click();
+	await other.getByRole('button', { name: 'Discard change', exact: true }).click();
+	await other.getByText('Everything is saved').waitFor();
 	await page.bringToFront();
 	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 	await page.getByRole('button', { name: 'Couldn’t save · retry', exact: true }).waitFor();

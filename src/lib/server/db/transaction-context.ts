@@ -1,4 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { setTimeout as delay } from 'node:timers/promises';
+import { ValidationError } from '$lib/errors';
+import { isRetryableTransactionError, isPermanentWriteConstraint } from './postgres-errors';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 interface TransactionalDatabase {
@@ -19,9 +22,35 @@ export function createTransactionContext<TDatabase extends TransactionalDatabase
 	return {
 		database: contextualDatabase,
 		transactionRunner: {
-			run<T>(work: () => Promise<T>): Promise<T> {
+			async run<T>(
+				work: () => Promise<T>,
+				options: { readonly retry: 'database-only' | 'never' } = { retry: 'never' }
+			): Promise<T> {
 				if (context.getStore()) return work();
-				return database.transaction((transaction) => context.run(transaction as TDatabase, work));
+				for (let attempt = 0; ; attempt++) {
+					try {
+						return await database.transaction((transaction) =>
+							context.run(transaction as TDatabase, work)
+						);
+					} catch (error) {
+						if (
+							options.retry === 'database-only' &&
+							isRetryableTransactionError(error) &&
+							attempt < 3
+						) {
+							await delay(50 * 2 ** attempt);
+							continue;
+						}
+						if (isPermanentWriteConstraint(error)) {
+							const rejected = new ValidationError(
+								'This change no longer matches the workspace records. Review or discard the change.'
+							);
+							rejected.cause = error;
+							throw rejected;
+						}
+						throw error;
+					}
+				}
 			}
 		}
 	};

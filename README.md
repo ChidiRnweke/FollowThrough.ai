@@ -99,6 +99,7 @@ to reach the public landing page while working on it.
 
 ```sh
 pnpm db:push        # dev — apply the schema directly
+pnpm db:sync:setup  # dev — install sync SQL functions/triggers and seed missing inventory
 pnpm db:generate    # generate a migration for production
 pnpm db:studio      # browse the data
 ```
@@ -106,6 +107,18 @@ pnpm db:studio      # browse the data
 `pnpm db:migrate` is not usable against the dev database — its journal is out of sync. After
 `db:generate`, apply new columns to dev with `psql` (or `db:push`) rather than running the migrate
 task locally.
+
+**Workspace synchronization.**
+
+Run `pnpm db:sync:setup` after `pnpm db:push`, with `DATABASE_URL` set to the same development
+database. Schema push does not install PostgreSQL functions or triggers. The setup command
+uses the checked-in synchronization SQL, installs the triggers, and seeds only missing
+inventory entries. Repeating it preserves existing versions, deletion evidence, and cursors.
+It does not modify the migration journal. Production continues to use the full migrations.
+
+The workspace is rendered in the browser (`ssr = false`). Authenticated `curl` requests can
+check redirects and cookies, but cannot verify workspace content. Use Playwright with
+`tests/.auth/state.json` and wait for the workspace download before inspecting the UI.
 
 **Checks and tests.**
 
@@ -125,17 +138,17 @@ a repository can be checked against a real schema without booting the app.
 
 ## Architecture
 
-| Where                                       | What                                                                                               |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `src/routes/(app)/`                         | Every authenticated page. Guarded in `src/hooks.server.ts` and again in `(app)/+layout.server.ts`. |
-| `src/routes/(marketing)/`                   | The public landing page at `/`. The only unauthenticated route besides `/auth/*`.                  |
-| `src/lib/remote/<capability>/`              | SvelteKit remote functions — the client-to-server surface.                                         |
-| `src/lib/server/application.ts`             | Dependency-ordered capability-factory composition and the production controller facade.            |
-| `src/lib/server/db/schema/`                 | Capability-owned Drizzle schemas; `index.ts` is the registry for ~40 tables.                       |
-| `tests/integration/<capability>/`           | Non-parallel repository contracts sharing the PostgreSQL database harness.                         |
-| `src/lib/server/services/knowledge-search/` | Indexing, semantic search, and reranking over `search_chunks` (`halfvec(3072)`, pgvector).         |
-| `src/lib/components/edra/`                  | The vendored TipTap 3 editor.                                                                      |
-| `src/lib/components/ui/`                    | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                             |
+| Where                                       | What                                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `src/routes/(app)/`                         | Authenticated browser pages. `(app)/+layout.ts` starts the workspace; remote functions authenticate each server request. |
+| `src/routes/(marketing)/`                   | The public landing page at `/`. The only unauthenticated route besides `/auth/*`.                                        |
+| `src/lib/remote/<capability>/`              | SvelteKit remote functions — the client-to-server surface.                                                               |
+| `src/lib/server/application.ts`             | Dependency-ordered capability-factory composition and the production controller facade.                                  |
+| `src/lib/server/db/schema/`                 | Capability-owned Drizzle schemas; `index.ts` is the registry for ~40 tables.                                             |
+| `tests/integration/<capability>/`           | Non-parallel repository contracts sharing the PostgreSQL database harness.                                               |
+| `src/lib/server/services/knowledge-search/` | Indexing, semantic search, and reranking over `search_chunks` (`halfvec(3072)`, pgvector).                               |
+| `src/lib/components/edra/`                  | The vendored TipTap 3 editor.                                                                                            |
+| `src/lib/components/ui/`                    | shadcn-svelte primitives. Custom icons in `src/lib/components/icons/`.                                                   |
 
 UI conventions — tokens, type scale, the interaction contract — are in
 [`docs/design/design-system.md`](docs/design/design-system.md). Read it before adding a component.

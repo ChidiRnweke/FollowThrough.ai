@@ -21,6 +21,13 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
 	private readonly receipts = new Map<string, WriteReceipt<T>>();
+	private readonly acknowledgements = new Map<string, Set<string>>();
+	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
+		return [...(this.acknowledgements.get(accountId) ?? [])];
+	}
+	async acknowledged(accountId: string, operationId: string): Promise<void> {
+		this.acknowledgements.get(accountId)?.delete(operationId);
+	}
 	appendFailure: string | null = null;
 	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
 		return this.receipts.get(JSON.stringify([accountId, key])) ?? null;
@@ -62,9 +69,12 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 		this.accounts.set(accountId, discardWrites(await this.list(accountId), operationIds));
 	}
 
-	async take(accountId: string): Promise<OutboxEntry<C, T> | null> {
+	async take(
+		accountId: string,
+		excluded: ReadonlySet<string> = new Set()
+	): Promise<OutboxEntry<C, T> | null> {
 		const entries = await this.list(accountId);
-		const next = nextWrite(entries);
+		const next = nextWrite(entries, excluded);
 		if (!next) return null;
 		const sent = beginWrite(next);
 		this.accounts.set(
@@ -99,6 +109,9 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 			settleWrite(await this.list(accountId), sent.intent.operationId, outcome)
 		);
 		if (outcome.kind === 'applied') {
+			const pending = this.acknowledgements.get(accountId) ?? new Set<string>();
+			pending.add(sent.intent.operationId);
+			this.acknowledgements.set(accountId, pending);
 			const key = JSON.stringify([accountId, sent.intent.key]);
 			this.receipts.set(key, retainWriteReceipt(this.receipts.get(key) ?? null, outcome.receipt));
 		}

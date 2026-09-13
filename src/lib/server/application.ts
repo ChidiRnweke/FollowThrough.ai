@@ -117,7 +117,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
-	const synchronization = createSyncCapability({ db, transactionRunner });
+	const synchronization = createSyncCapability({ db, transactionRunner, deferEmbedding });
 	const projectCapability = createProjectsCapability({ db });
 	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
 	const todoCapability = createTodosCapability({
@@ -462,6 +462,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		workspace: {
 			syncChanges: synchronization.changes,
+			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
 			projectLister: projects,

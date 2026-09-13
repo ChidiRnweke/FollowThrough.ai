@@ -1,4 +1,5 @@
 <script lang="ts">
+	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { FtRetry as Retry } from '$lib/components/icons';
 
@@ -33,5 +34,6 @@
 			</Button>
 			<Button href="/today" variant="ghost" class="min-h-11">Go to today</Button>
 		</div>
+		<WorkspaceRecoveryDownload />
 	</section>
 </main>

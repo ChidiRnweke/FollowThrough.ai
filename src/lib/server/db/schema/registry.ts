@@ -89,10 +89,23 @@ export const workspaceSyncReceipts = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		operationId: uuid('operation_id').notNull(),
 		requestHash: text('request_hash').notNull(),
-		result: jsonb('result').$type<WorkspaceWriteReceipt>().notNull(),
+		disposition: text('disposition').notNull().default('applied'),
+		result: jsonb('result').$type<
+			WorkspaceWriteReceipt | import('$lib/models/outbox').CompactWriteProof
+		>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [primaryKey({ columns: [table.accountId, table.operationId] })]
+	(table) => [
+		primaryKey({ columns: [table.accountId, table.operationId] }),
+		check(
+			'workspace_sync_receipt_disposition',
+			sql`${table.disposition} in ('applied', 'cancelled', 'compacted')`
+		),
+		check(
+			'workspace_sync_receipt_payload',
+			sql`(${table.disposition} = 'cancelled' and ${table.result} is null) or (${table.disposition} in ('applied', 'compacted') and ${table.result} is not null)`
+		)
+	]
 );
 /**
  * What a project is for, so the inbox stops being a project that happens to be

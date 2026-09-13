@@ -119,22 +119,66 @@ describe('compact account synchronization journal', () => {
 		}
 	});
 
-	it('prevents a second writer from overtaking an uncommitted same-account cursor', async () => {
+	it('assigns cursors at publication so a later transaction can commit first without hiding changes', async () => {
 		const { owner, note } = await seedNote('8809');
 		const { note: other } = await seedNote('8810', owner);
+		const journal = new WorkspaceSyncChanges(context.db);
+		const initial = await journal.pull(owner, initialSyncCursor);
 		const writer = connectPostgresTestDatabase(context.url);
 		try {
 			await writer.client`begin`;
 			await writer.client`update notes set title = 'First transaction' where id = ${note.id}`;
-			await expect(
-				context.client.begin(async (transaction) => {
-					await transaction`set local lock_timeout = '100ms'`;
-					await transaction`update notes set title = 'Second transaction' where id = ${other.id}`;
-				})
-			).rejects.toMatchObject({ code: '55P03' });
+			await context.client`update notes set title = 'Second transaction' where id = ${other.id}`;
+			const firstCommit = await journal.pull(owner, initial.cursor);
+			await writer.client`commit`;
+			const lastCommit = await journal.pull(owner, firstCommit.cursor);
+			expect({
+				first: firstCommit.changes.map((change) => change.key),
+				last: lastCommit.changes.map((change) => change.key)
+			}).toEqual({
+				first: [workspaceResourceKey({ type: 'notes', id: [other.id] })],
+				last: [workspaceResourceKey({ type: 'notes', id: [note.id] })]
+			});
 		} finally {
 			await writer.client`rollback`;
 			await writer.close();
 		}
 	});
+});
+
+it('retains every journal record across page checkpoints', async () => {
+	const { owner, project } = await seedNote('8820');
+	await context.client`insert into notes (user_id, project_id, kind, title) select ${owner.userId}::uuid, ${project.id}::uuid, 'note', 'Page note ' || n from generate_series(1, 600) n`;
+	const journal = new WorkspaceSyncChanges(context.db);
+	const complete = await journal.pull(owner, initialSyncCursor);
+	const keys = new Set<string>();
+	let cursor = initialSyncCursor;
+	let more: boolean;
+	do {
+		const page = await journal.pullPage(owner, cursor);
+		for (const change of page.changes) keys.add(change.key);
+		cursor = page.cursor;
+		more = page.hasMore;
+	} while (more);
+	expect({ keys: [...keys].sort(), cursor }).toEqual({
+		keys: complete.changes.map((change) => change.key).sort(),
+		cursor: complete.cursor
+	});
+});
+it('includes a resource moved beyond the current page checkpoint by a concurrent edit', async () => {
+	const { owner, project, note } = await seedNote('8821');
+	await context.client`insert into notes (user_id, project_id, kind, title) select ${owner.userId}::uuid, ${project.id}::uuid, 'note', 'Page note ' || n from generate_series(1, 300) n`;
+	const journal = new WorkspaceSyncChanges(context.db);
+	const first = await journal.pullPage(owner, initialSyncCursor);
+	await context.client`update notes set title = 'Changed between pages' where id = ${note.id}`;
+	const keys: string[] = [];
+	let cursor = first.cursor;
+	let more: boolean;
+	do {
+		const page = await journal.pullPage(owner, cursor);
+		keys.push(...page.changes.map((change) => change.key));
+		cursor = page.cursor;
+		more = page.hasMore;
+	} while (more);
+	expect(keys).toContain(workspaceResourceKey({ type: 'notes', id: [note.id] }));
 });

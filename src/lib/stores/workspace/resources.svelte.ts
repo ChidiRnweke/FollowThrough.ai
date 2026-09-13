@@ -39,6 +39,8 @@ import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
 import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
 import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
+import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
+import type { StorageRecoveryItem } from '$lib/models/sync';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
@@ -56,6 +58,30 @@ export interface WorkspaceResourcesDependencies {
 /** Features share resource identity, local overlays, and the same explicit-open read barrier. */
 export class WorkspaceResources {
 	private revision = $state(0);
+	private readonly projected = $derived.by(() => {
+		void this.revision;
+		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
+	});
+	private readonly projections = $derived(new WorkspaceViews(this.projected));
+	private recovery = $state<readonly StorageRecoveryItem[]>([]);
+	get recoveryItems(): readonly StorageRecoveryItem[] {
+		return this.recovery;
+	}
+	async loadRecovery(): Promise<void> {
+		const items = await new IndexedDbStorageRecovery().list(this.accountId);
+		if (!this.stopped) this.recovery = items;
+	}
+	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
+		return new IndexedDbStorageRecovery().download(this.accountId, item.source, item.key);
+	}
+	get downloadProgress() {
+		void this.revision;
+		return this.dependencies.cache.downloadProgress;
+	}
+	get failedDownloads(): number {
+		void this.revision;
+		return this.dependencies.cache.failedDownloads;
+	}
 	private connected = $state(true);
 	get active(): boolean {
 		return !this.stopped;
@@ -89,11 +115,10 @@ export class WorkspaceResources {
 	}
 
 	get records(): ReadonlyMap<string, WorkspaceRecord> {
-		void this.revision;
-		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
+		return this.projected;
 	}
 	get views(): WorkspaceViews {
-		return new WorkspaceViews(this.records);
+		return this.projections;
 	}
 	get pending() {
 		void this.revision;
@@ -201,6 +226,9 @@ export class WorkspaceResources {
 		const entry = this.dependencies.cache.records.get(workspaceResourceKey(identity));
 		return entry?.kind === 'present' ? cachedSnapshot(entry.cache) : null;
 	}
+	refreshConflict(operationId: string): Promise<void> {
+		return this.dependencies.writes.refreshConflict(operationId);
+	}
 	async keepLocal(operationId: string): Promise<string> {
 		return this.dependencies.writes.keepLocal(operationId);
 	}
@@ -229,7 +257,8 @@ export class WorkspaceResources {
 		this.dependencies.cache.setOnline(online);
 		this.dependencies.writes.setOnline(online);
 	}
-	synchronize(): Promise<void> {
+	synchronize(force = false): Promise<void> {
+		if (force) this.dependencies.writes.retryNow();
 		this.requested = true;
 		this.syncing ??= this.synchronizeResources()
 			.catch((error) => {
@@ -346,7 +375,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	}
 	get lastError(): string | undefined {
 		if (this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
-			return 'The acknowledgement of this edit cannot be verified. Reopen the item before making more changes.';
+			return 'This item changed elsewhere. Save your edits to review the versions.';
 		if (this.error) return this.error;
 		const failed = this.entries.find(
 			(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
@@ -455,10 +484,6 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		try {
 			const context = this.current;
 			if (!context) throw new Error('Open the resource before editing');
-			if (this.resources.uncertainWrite(this.key, context.basedOn))
-				throw new Error(
-					'The acknowledgement of this edit cannot be verified. Reopen the item before making more changes.'
-				);
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);
@@ -479,7 +504,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	async retry(): Promise<void> {
 		this.error = null;
 		if (!this.current) await this.read();
-		await this.resources.synchronize();
+		await this.resources.synchronize(true);
 	}
 	async keep(): Promise<void> {
 		const conflict = this.entries.find((entry) => entry.delivery.kind === 'conflict');

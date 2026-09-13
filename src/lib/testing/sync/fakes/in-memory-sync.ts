@@ -17,10 +17,13 @@ import type {
 export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
 	private readonly cursors = new Map<string, SyncCursor>();
+	private readonly inventories = new Map<string, boolean>();
 	writeFailure: string | null = null;
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		return {
+			generation: 0,
+			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
 			cursor: this.cursors.get(accountId) ?? null
 		};
@@ -54,6 +57,8 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 			(cursor === undefined || BigInt(changes.cursor) > BigInt(cursor))
 		)
 			this.cursors.set(accountId, changes.cursor);
+		if (changes.inventoryComplete !== undefined)
+			this.inventories.set(accountId, changes.inventoryComplete);
 		return { ...changes, put, remove };
 	}
 }
@@ -64,6 +69,7 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	readonly deliveredBodies: string[] = [];
 	pullFailure: string | null = null;
 	readFailure: string | null = null;
+	pageSize: number | null = null;
 	private readonly paused = new Map<string, { start: () => void; ready: Promise<void> }>();
 
 	pause(key: string): { started: Promise<void>; release: () => void } {
@@ -99,6 +105,18 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 				.map((item) => item.change)
 		};
 		await this.wait('changes');
+		if (this.pageSize !== null) {
+			const changes = [...this.changes.values()]
+				.filter((item) => item.cursor > BigInt(since))
+				.sort((a, b) => (a.cursor < b.cursor ? -1 : 1));
+			const selected = changes.slice(0, this.pageSize);
+			const hasMore = changes.length > selected.length;
+			return {
+				cursor: (hasMore ? String(selected.at(-1)!.cursor) : batch.cursor) as SyncCursor,
+				changes: selected.map((item) => item.change),
+				hasMore
+			};
+		}
 		return batch;
 	}
 
@@ -118,5 +136,25 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 		this.paused.delete(key);
 		paused.start();
 		await paused.ready;
+	}
+}
+
+/** A batch connection can fail one body while delivering the other requested records. */
+export class InMemoryBatchSyncTransport<T> extends InMemorySyncTransport<T> {
+	readonly failures = new Map<string, string>();
+	readonly batches: string[][] = [];
+	async readMany(requests: readonly { key: string; etag: SyncSnapshot<T>['etag'] | null }[]) {
+		this.batches.push(requests.map((request) => request.key));
+		return Promise.all(
+			requests.map(async ({ key, etag }) => {
+				const failure = this.failures.get(key);
+				return {
+					key,
+					result: failure
+						? { kind: 'failure' as const, message: failure }
+						: await this.read(key, etag)
+				};
+			})
+		);
 	}
 }

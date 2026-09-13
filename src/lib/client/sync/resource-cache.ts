@@ -10,6 +10,7 @@ import {
 	type SyncCursor,
 	type ResourceState,
 	transitionCache,
+	syncBodyBatchSize,
 	type CacheAccess,
 	type CacheEntry,
 	type SyncSnapshot
@@ -38,6 +39,8 @@ export class ResourceCache<T> {
 	private stopped = false;
 	private online = true;
 	private cursor: SyncCursor | null = null;
+	private generation = 0;
+	private inventoryComplete = false;
 	private result: SynchronizationResult = { kind: 'idle' };
 
 	constructor(
@@ -53,12 +56,30 @@ export class ResourceCache<T> {
 	get status(): SynchronizationResult {
 		return this.result;
 	}
+	get downloadProgress(): { completed: number; total: number; inventoryComplete: boolean } {
+		const present = [...this.entries.values()].filter((entry) => entry.kind === 'present');
+		return {
+			completed: present.filter(
+				(entry) => entry.kind === 'present' && entry.cache.kind === 'cached'
+			).length,
+			total: present.length,
+			inventoryComplete: this.inventoryComplete
+		};
+	}
+	get failedDownloads(): number {
+		return [...this.entries.values()].filter(
+			(entry) =>
+				entry.kind === 'present' &&
+				entry.cache.kind === 'updating' &&
+				entry.cache.transfer.kind === 'failed'
+		).length;
+	}
 	get records(): ReadonlyMap<string, ResourceState<T>> {
 		return this.entries;
 	}
 
 	get availability(): 'unknown' | 'partial' | 'complete' {
-		if (this.cursor === null || this.stopped) return 'unknown';
+		if (this.cursor === null || !this.inventoryComplete || this.stopped) return 'unknown';
 		return [...this.entries.values()].every(
 			(entry) => entry.kind === 'deleted' || cachedSnapshot(entry.cache) !== null
 		)
@@ -159,10 +180,19 @@ export class ResourceCache<T> {
 	}
 
 	private async restore(): Promise<void> {
-		const { records, cursor } = await this.dependencies.repository.load(this.accountId);
+		const { records, cursor, generation, inventoryComplete } =
+			await this.dependencies.repository.load(this.accountId);
 		if (this.stopped) return;
+		if (generation !== this.generation) {
+			this.generation = generation;
+			this.cursor = null;
+			this.inventoryComplete = false;
+			this.entries.clear();
+			this.queue.clear();
+		}
 		if (cursor !== null && (this.cursor === null || BigInt(cursor) > BigInt(this.cursor)))
 			this.cursor = cursor;
+		this.inventoryComplete ||= inventoryComplete;
 		for (const { key, entry } of records) {
 			const restored: ResourceState<T> =
 				entry.kind === 'present' && entry.cache.kind === 'updating'
@@ -179,7 +209,10 @@ export class ResourceCache<T> {
 
 	private async commit(compute: () => CacheCommit<T>): Promise<void> {
 		if (this.stopped) return;
-		const changes = await this.dependencies.repository.commit(this.accountId, compute());
+		const changes = await this.dependencies.repository.commit(this.accountId, {
+			...compute(),
+			generation: this.generation
+		});
 		if (this.stopped) return;
 		for (const record of changes.put) {
 			const current = this.entries.get(record.key);
@@ -196,6 +229,7 @@ export class ResourceCache<T> {
 			}
 		}
 		if (changes.cursor !== undefined) this.cursor = changes.cursor;
+		if (changes.inventoryComplete !== undefined) this.inventoryComplete = changes.inventoryComplete;
 		this.notify();
 	}
 
@@ -204,19 +238,28 @@ export class ResourceCache<T> {
 			await this.reload();
 			if (this.stopped) return { kind: 'stopped' };
 			if (!this.online) return { kind: 'offline' };
-			const batch = await this.dependencies.transport.pull(this.cursor ?? initialSyncCursor);
-			await this.commit(() => {
-				if (BigInt(batch.cursor) < BigInt(this.cursor ?? initialSyncCursor))
-					throw new Error('The server change cursor moved backwards');
-				const next = applyResourceChanges(this.entries, batch.changes);
-				return {
-					put: [...next]
-						.filter(([key, entry]) => entry !== this.entries.get(key))
-						.map(([key, entry]) => ({ key, entry })),
-					remove: [],
-					cursor: batch.cursor
-				};
-			});
+			let more: boolean;
+			do {
+				const before = this.cursor ?? initialSyncCursor;
+				const batch = await this.dependencies.transport.pull(before);
+				more = 'hasMore' in batch && batch.hasMore;
+				if (more && BigInt(batch.cursor) <= BigInt(before))
+					throw new Error('The server page did not advance its checkpoint');
+				await this.commit(() => {
+					if (BigInt(batch.cursor) < BigInt(this.cursor ?? initialSyncCursor))
+						throw new Error('The server change cursor moved backwards');
+					const next = applyResourceChanges(this.entries, batch.changes);
+					return {
+						put: [...next]
+							.filter(([key, entry]) => entry !== this.entries.get(key))
+							.map(([key, entry]) => ({ key, entry })),
+						remove: [],
+						cursor: batch.cursor,
+						inventoryComplete: this.inventoryComplete || !more
+					};
+				});
+				if (!this.online) return { kind: 'offline' };
+			} while (more && !this.stopped);
 			if (this.stopped) return { kind: 'stopped' };
 			for (const [key, entry] of this.entries) {
 				if (entry.kind === 'present' && entry.cache.kind === 'updating') this.queue.add(key);
@@ -257,7 +300,12 @@ export class ResourceCache<T> {
 		}
 	}
 
-	private async download(key: string): Promise<SynchronizationResult> {
+	private async download(
+		key: string,
+		read: SyncReadTransport<T>['read'] = this.dependencies.transport.read.bind(
+			this.dependencies.transport
+		)
+	): Promise<SynchronizationResult> {
 		if (this.stopped) return { kind: 'stopped' };
 		if (!this.online) return { kind: 'offline' };
 		try {
@@ -284,7 +332,7 @@ export class ResourceCache<T> {
 			const expected = resourceVersion(
 				this.entries.get(key) ?? { kind: 'present', cache: { kind: 'uncached' } }
 			);
-			const response = await this.dependencies.transport.read(key, snapshot?.etag ?? null);
+			const response = await read(key, snapshot?.etag ?? null);
 			if (this.stopped) return { kind: 'stopped' };
 			if (response.kind === 'deleted') {
 				await this.commit(() => ({
@@ -324,19 +372,145 @@ export class ResourceCache<T> {
 					kind: 'present',
 					cache: transitionCache(this.entry(key), { kind: 'failure', message })
 				});
-			this.result = { kind: 'failure', message };
 			this.notify();
 			return { kind: 'failure', message };
 		}
 	}
 
+	private async downloadBatch(keys: readonly string[]): Promise<void> {
+		if (!keys.length) return;
+		const readMany = this.dependencies.transport.readMany;
+		if (!readMany) {
+			await Promise.all(keys.map((key) => this.fetch(key)));
+			return;
+		}
+		const batch = Promise.resolve().then(() => this.performBatch(keys, readMany));
+		await Promise.all(
+			keys.map((key) => {
+				const pending = batch
+					.then(({ results }) => results.get(key) ?? { kind: 'stopped' as const })
+					.finally(() => this.fetching.delete(key));
+				this.fetching.set(key, pending);
+				return pending;
+			})
+		);
+	}
+
+	private async performBatch(
+		keys: readonly string[],
+		readMany: NonNullable<SyncReadTransport<T>['readMany']>
+	): Promise<{
+		kind: 'complete' | 'failure';
+		results: ReadonlyMap<string, SynchronizationResult>;
+	}> {
+		const results = new Map<string, SynchronizationResult>();
+		try {
+			await this.commit(() => ({
+				put: keys
+					.filter((key) => this.entries.get(key)?.kind !== 'deleted')
+					.map((key) => ({
+						key,
+						entry: { kind: 'present', cache: transitionCache(this.entry(key), { kind: 'request' }) }
+					})),
+				remove: []
+			}));
+			if (this.stopped || !this.online)
+				return {
+					kind: 'complete',
+					results: new Map(keys.map((key) => [key, { kind: this.stopped ? 'stopped' : 'offline' }]))
+				};
+			const snapshots = new Map(keys.map((key) => [key, cachedSnapshot(this.entry(key))]));
+			const versions = new Map(
+				keys.map((key) => [
+					key,
+					this.entries.has(key) ? resourceVersion(this.entries.get(key)!) : null
+				])
+			);
+			const rows = await readMany.call(
+				this.dependencies.transport,
+				keys.map((key) => ({ key, etag: snapshots.get(key)?.etag ?? null }))
+			);
+			if (this.stopped) return { kind: 'complete', results };
+			await this.commit(() => {
+				const put: CacheCommit<T>['put'][number][] = [];
+				const remove: CacheCommit<T>['remove'][number][] = [];
+				for (const key of keys) {
+					const matches = rows.filter((row) => row.key === key);
+					const response =
+						matches.length === 1
+							? matches[0].result
+							: {
+									kind: 'failure' as const,
+									message: 'The batch did not return exactly one result for this item'
+								};
+					const snapshot = snapshots.get(key);
+					const failure =
+						response.kind === 'failure'
+							? response.message
+							: response.kind === 'unchanged' && (!snapshot || snapshot.etag !== response.etag)
+								? 'The server confirmed a version this device does not have'
+								: null;
+					if (failure) {
+						if (this.entries.get(key)?.kind !== 'deleted')
+							put.push({
+								key,
+								entry: {
+									kind: 'present',
+									cache: transitionCache(this.entry(key), { kind: 'failure', message: failure })
+								}
+							});
+						results.set(key, { kind: 'failure', message: failure });
+					} else if (response.kind === 'unavailable') {
+						remove.push({ key, etag: versions.get(key) ?? null });
+						results.set(key, { kind: 'unavailable' });
+					} else {
+						const received =
+							response.kind === 'found'
+								? response.snapshot
+								: response.kind === 'deleted'
+									? response
+									: snapshot;
+						if (!received) throw new Error('The batch contained no usable body');
+						put.push({ key, entry: this.receive(key, received) });
+						results.set(key, { kind: 'complete' });
+					}
+				}
+				return { put, remove };
+			});
+			for (const key of keys)
+				if (results.get(key)?.kind === 'complete' && this.entry(key).kind === 'updating')
+					this.queue.add(key);
+			return { kind: 'complete', results };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Object batch download failed';
+			for (const key of keys) {
+				if (!this.stopped && this.entries.get(key)?.kind !== 'deleted')
+					this.entries.set(key, {
+						kind: 'present',
+						cache: transitionCache(this.entry(key), { kind: 'failure', message })
+					});
+				results.set(key, this.stopped ? { kind: 'stopped' } : { kind: 'failure', message });
+			}
+			this.notify();
+			// The public per-resource result is consumed by foreground readers and the indicator.
+			return { kind: 'failure', results };
+		}
+	}
+
 	private async drain(): Promise<SynchronizationResult> {
 		while (this.queue.size && this.online && !this.stopped) {
-			const key = this.queue.values().next().value;
-			if (!key) break;
-			this.queue.delete(key);
-			if (this.entries.get(key)?.kind === 'deleted' || this.entry(key).kind === 'cached') continue;
-			await this.fetch(key);
+			const keys: string[] = [];
+			for (const key of this.queue) {
+				this.queue.delete(key);
+				if (
+					!this.fetching.has(key) &&
+					this.entries.get(key)?.kind !== 'deleted' &&
+					this.entry(key).kind !== 'cached'
+				)
+					keys.push(key);
+				if (keys.length === syncBodyBatchSize) break;
+			}
+			await this.downloadBatch(keys);
 		}
 		return this.stopped ? { kind: 'stopped' } : !this.online ? { kind: 'offline' } : this.result;
 	}

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { compactWriteProofSchema, type CompactWriteProof } from '$lib/models/outbox';
 import type { ActorContext } from '$lib/models/identity';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import {
@@ -12,9 +13,14 @@ import { syncIdentitySql, syncRegistrations } from './sync-catalog';
 export type ReceiptLookup =
 	| { readonly kind: 'missing' }
 	| { readonly kind: 'reused' }
+	| { readonly kind: 'cancelled' }
+	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof }
 	| { readonly kind: 'receipt'; readonly receipt: WorkspaceWriteReceipt };
 
 export interface SyncReceiptRepository {
+	lockOperation(actor: ActorContext, operationId: string): Promise<void>;
+	cancel(actor: ActorContext, operationId: string, request: string): Promise<void>;
+	compact(actor: ActorContext, operationId: string): Promise<void>;
 	lock(
 		actor: ActorContext,
 		operationId: string,
@@ -32,15 +38,30 @@ const requestHash = (request: string) =>
 /** All methods participate in the caller's existing domain transaction. */
 export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 	constructor(private readonly db: Database) {}
+	async lockOperation(actor: ActorContext, operationId: string): Promise<void> {
+		await this.db.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'operation:' + operationId}))`
+		);
+	}
+	async cancel(actor: ActorContext, operationId: string, request: string): Promise<void> {
+		await this.db
+			.execute(sql`insert into workspace_sync_receipts (account_id, operation_id, request_hash, disposition, result)
+			values (${actor.userId}, ${operationId}, ${requestHash(request)}, 'cancelled', null)`);
+	}
+	async compact(actor: ActorContext, operationId: string): Promise<void> {
+		await this.db
+			.execute(sql`update workspace_sync_receipts set disposition = 'compacted', result = jsonb_build_object(
+			'operationId', operation_id, 'resourceKind', result->'resource'->>'kind',
+			'etag', coalesce(result->'resource'->'snapshot'->>'etag', result->'resource'->>'etag'))
+			where account_id = ${actor.userId} and operation_id = ${operationId} and disposition = 'applied'`);
+	}
 
 	async lock(
 		actor: ActorContext,
 		operationId: string,
 		identity: WorkspaceResourceIdentity
 	): Promise<void> {
-		await this.db.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'operation:' + operationId}))`
-		);
+		await this.lockOperation(actor, operationId);
 		await this.db.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'resource:' + workspaceResourceKey(identity)}))`
 		);
@@ -55,11 +76,19 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 
 	async find(actor: ActorContext, operationId: string, request: string): Promise<ReceiptLookup> {
 		const result = await this.db
-			.execute(sql`select request_hash = ${requestHash(request)} as matches, result
+			.execute(sql`select request_hash = ${requestHash(request)} as matches, disposition, result
 			from workspace_sync_receipts where account_id = ${actor.userId} and operation_id = ${operationId}`);
 		const rows = z.array(
-			z.discriminatedUnion('matches', [
-				z.object({ matches: z.literal(true), result: workspaceWriteReceiptSchema }),
+			z.union([
+				z
+					.object({ matches: z.literal(true) })
+					.and(
+						z.discriminatedUnion('disposition', [
+							z.object({ disposition: z.literal('applied'), result: workspaceWriteReceiptSchema }),
+							z.object({ disposition: z.literal('cancelled'), result: z.null() }),
+							z.object({ disposition: z.literal('compacted'), result: compactWriteProofSchema })
+						])
+					),
 				z.object({ matches: z.literal(false) })
 			])
 		);
@@ -71,7 +100,11 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 			? { kind: 'missing' }
 			: !row.matches
 				? { kind: 'reused' }
-				: { kind: 'receipt', receipt: row.result };
+				: row.disposition === 'cancelled'
+					? { kind: 'cancelled' }
+					: row.disposition === 'compacted'
+						? { kind: 'compacted', proof: row.result }
+						: { kind: 'receipt', receipt: row.result };
 	}
 
 	async save(actor: ActorContext, request: string, receipt: WorkspaceWriteReceipt): Promise<void> {

@@ -39,8 +39,21 @@ export const retainWriteReceipt = <T>(
 
 export type WriteOutcome<T> =
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
+	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof }
 	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
 	| { readonly kind: 'rejected'; readonly message: string };
+
+/** Original application proof after the client has acknowledged durable settlement. */
+export const compactWriteProofSchema = z.object({
+	operationId: z.string().uuid(),
+	etag: syncEtagSchema,
+	resourceKind: z.enum(['found', 'deleted'])
+});
+export type CompactWriteProof = z.infer<typeof compactWriteProofSchema>;
+export type WriteRecovery<T> =
+	| { readonly kind: 'cancelled' }
+	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
+	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof };
 
 /** Imported drafts may retain a real base representation before learning its sync validator. */
 export type WriteBase<T> = { readonly etag: SyncEtag | null; readonly value: T };
@@ -117,7 +130,8 @@ export const appendWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	draft: WriteDraft<C, T>,
 	sequence: number,
-	receipt: WriteReceipt<T> | null = null
+	receipt: WriteReceipt<T> | null = null,
+	observed: ServerResource<T> = { kind: 'unavailable' }
 ): readonly OutboxEntry<C, T>[] => {
 	if (entries.some((entry) => entry.intent.operationId === draft.operationId))
 		throw new Error('A local operation identity must be unique');
@@ -126,6 +140,7 @@ export const appendWrite = <C, T>(
 	if (parent && parent.intent.key !== draft.key)
 		throw new Error('A local base must belong to the edited resource');
 	const applied = !parent && receipt?.operationId === draft.basedOn ? receipt : null;
+	const missingAncestry = draft.basedOn !== null && !parent && !applied;
 	if (applied?.resource.kind === 'found')
 		draft = { ...draft, base: applied.resource.snapshot, basedOn: null };
 	const latest = new Map(entries.map((entry) => [entry.intent.key, entry]));
@@ -173,17 +188,25 @@ export const appendWrite = <C, T>(
 		{
 			sequence,
 			intent: { ...intent, dependencies },
-			delivery:
-				applied?.resource.kind === 'deleted'
+			delivery: missingAncestry
+				? {
+						kind: 'conflict',
+						remote: observed.kind === 'unavailable' && receipt ? receipt.resource : observed
+					}
+				: applied?.resource.kind === 'deleted'
 					? { kind: 'conflict', remote: applied.resource }
 					: { kind: 'queued' }
 		}
 	];
 };
 
-export const nextWrite = <C, T>(entries: readonly OutboxEntry<C, T>[]): OutboxEntry<C, T> | null =>
+export const nextWrite = <C, T>(
+	entries: readonly OutboxEntry<C, T>[],
+	excluded: ReadonlySet<string> = new Set()
+): OutboxEntry<C, T> | null =>
 	entries.find(
 		(entry) =>
+			!excluded.has(entry.intent.operationId) &&
 			(entry.delivery.kind === 'queued' || entry.delivery.kind === 'retry') &&
 			(entry.intent.base === null || entry.intent.base.etag !== null) &&
 			entry.intent.dependencies.length === 0
@@ -241,6 +264,26 @@ export const settleWrite = <C, T>(
 	operationId: string,
 	outcome: WriteOutcome<T>
 ): readonly OutboxEntry<C, T>[] => {
+	if (outcome.kind === 'compacted') {
+		if (outcome.proof.operationId !== operationId)
+			throw new Error('The proof identifies another operation');
+		return entries
+			.filter((entry) => entry.intent.operationId !== operationId)
+			.map((entry) => {
+				if (!entry.intent.dependencies.includes(operationId)) return entry;
+				return {
+					...entry,
+					delivery:
+						entry.intent.basedOn === operationId
+							? { kind: 'conflict' as const, remote: { kind: 'unavailable' as const } }
+							: entry.delivery,
+					intent: {
+						...entry.intent,
+						dependencies: entry.intent.dependencies.filter((id) => id !== operationId)
+					}
+				};
+			});
+	}
 	if (outcome.kind === 'applied') {
 		if (outcome.receipt.operationId !== operationId)
 			throw new Error('The receipt identifies another operation');
@@ -323,10 +366,12 @@ export const retryConflictedWrite = <C, T>(
 };
 
 export const unresolvedWrite = <C, T>(
-	entries: readonly OutboxEntry<C, T>[]
+	entries: readonly OutboxEntry<C, T>[],
+	excluded: ReadonlySet<string> = new Set()
 ): OutboxEntry<C, T> | null =>
 	entries.find(
 		(entry) =>
+			!excluded.has(entry.intent.operationId) &&
 			entry.delivery.kind === 'queued' &&
 			entry.intent.dependencies.length === 0 &&
 			entry.intent.base !== null &&
@@ -340,6 +385,12 @@ export const resolveWriteBase = <C, T>(
 	resolution: WriteBaseResolution<T>
 ): readonly OutboxEntry<C, T>[] =>
 	entries.map((entry) => {
+		if (
+			entry.intent.operationId === operationId &&
+			entry.delivery.kind === 'conflict' &&
+			resolution.kind === 'conflict'
+		)
+			return { ...entry, delivery: resolution };
 		if (
 			entry.intent.operationId !== operationId ||
 			entry.delivery.kind !== 'queued' ||

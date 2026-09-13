@@ -32,10 +32,24 @@ export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) 
 /** Cache and outbox share a database so acknowledgement and the resulting body commit together. */
 export const openSyncDatabase = (name: string, onVersionChange: () => void): Promise<IDBDatabase> =>
 	new Promise((resolve, reject) => {
-		const request = indexedDB.open(name, 5);
+		const request = indexedDB.open(name, 6);
 		let blocked = false;
 		request.onupgradeneeded = () => {
 			const database = request.result;
+			if (!database.objectStoreNames.contains('recovery-heads'))
+				database.createObjectStore('recovery-heads', { keyPath: 'accountId' });
+			if (!database.objectStoreNames.contains('acknowledgements')) {
+				const acknowledgements = database.createObjectStore('acknowledgements', {
+					keyPath: ['accountId', 'operationId']
+				});
+				acknowledgements.createIndex('accountId', 'accountId');
+			}
+			if (!database.objectStoreNames.contains('quarantine')) {
+				const quarantine = database.createObjectStore('quarantine', {
+					keyPath: ['accountId', 'source', 'key']
+				});
+				quarantine.createIndex('accountId', 'accountId');
+			}
 			if (!database.objectStoreNames.contains('records')) {
 				const records = database.createObjectStore('records', { keyPath: ['accountId', 'key'] });
 				records.createIndex('accountId', 'accountId');

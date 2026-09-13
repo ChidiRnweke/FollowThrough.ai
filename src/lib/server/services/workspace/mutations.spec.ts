@@ -46,10 +46,45 @@ const setup = () => {
 				throw new Error('Test operation must rename a note');
 			await notes.rename(testActor(), request.command);
 		});
-	return { content, mutationReceipts, apply };
+	return { content, mutationReceipts, apply, transactions };
 };
 
 describe('guarded workspace mutation replay', () => {
+	it('does not execute an operation cancelled before submission', async () => {
+		const { transactions, apply, content } = setup();
+		await transactions.cancel(testActor(), {
+			operationId: input.operationId,
+			request: JSON.stringify(input)
+		});
+		await apply(input);
+		expect(content.notes[0]?.title).toBe(noteBuilder().title);
+	});
+	it('recovers the applied receipt instead of undoing an edit when cancellation arrives later', async () => {
+		const { transactions, apply } = setup();
+		const applied = await apply(input);
+		expect(
+			await transactions.cancel(testActor(), {
+				operationId: input.operationId,
+				request: JSON.stringify(input)
+			})
+		).toEqual(applied);
+	});
+	it('retains original version proof after compaction and a later edit', async () => {
+		const { transactions, apply, content } = setup();
+		const saved = await apply(input);
+		if (saved.kind !== 'applied' || saved.receipt.resource.kind !== 'found')
+			throw new Error('The rename must apply');
+		await transactions.acknowledge(testActor(), input.operationId);
+		content.notes = [noteBuilder({ title: 'Later edit', currentRevision: 10 })];
+		expect(await apply(input)).toEqual({
+			kind: 'compacted',
+			proof: {
+				operationId: input.operationId,
+				resourceKind: 'found',
+				etag: saved.receipt.resource.snapshot.etag
+			}
+		});
+	});
 	it('uses the ordinary domain operation after its base version matches', async () => {
 		const { content, apply } = setup();
 		await apply(input);

@@ -73,13 +73,20 @@ describe('durable workspace cache', () => {
 		});
 		await repository.close();
 		expect(await setup(name).repository.load('user-a')).toEqual({
+			generation: 0,
+			inventoryComplete: true,
 			records: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			cursor: initialSyncCursor
 		});
 	});
 	it('distinguishes an unknown cursor from a confirmed empty workspace', async () => {
 		const { repository } = setup();
-		expect(await repository.load('user-a')).toEqual({ records: [], cursor: null });
+		expect(await repository.load('user-a')).toEqual({
+			records: [],
+			cursor: null,
+			generation: 0,
+			inventoryComplete: false
+		});
 	});
 
 	it('persists the complete cursor together with its cache entries', async () => {
@@ -87,6 +94,8 @@ describe('durable workspace cache', () => {
 		const cursor = initialSyncCursor;
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [], cursor });
 		expect(await repository.load('user-a')).toEqual({
+			generation: 0,
+			inventoryComplete: true,
 			records: [{ key: 'note:1', entry }],
 			cursor
 		});
@@ -107,7 +116,12 @@ describe('durable workspace cache', () => {
 			remove: [],
 			cursor: initialSyncCursor
 		});
-		expect(await repository.load('user-b')).toEqual({ records: [], cursor: null });
+		expect(await repository.load('user-b')).toEqual({
+			records: [],
+			cursor: null,
+			generation: 0,
+			inventoryComplete: false
+		});
 	});
 
 	it('deletes only the requested account’s record', async () => {
@@ -118,13 +132,31 @@ describe('durable workspace cache', () => {
 		expect((await repository.load('user-b')).records).toEqual([{ key: 'note:1', entry }]);
 	});
 
-	it('reports incompatible persisted payloads instead of treating them as cache misses', async () => {
+	it('recovers incompatible cached payloads as explicit queued downloads', async () => {
 		const { name, repository } = setup();
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
 		await repository.close();
 		const incompatible = new IndexedDbSyncCache(z.number(), name);
 		try {
-			await expect(incompatible.load('user-a')).rejects.toThrow();
+			expect(await incompatible.load('user-a')).toEqual({
+				generation: 1,
+				inventoryComplete: false,
+				cursor: null,
+				records: [
+					{
+						key: 'note:1',
+						entry: {
+							kind: 'present',
+							cache: {
+								kind: 'updating',
+								previous: null,
+								target: null,
+								transfer: { kind: 'queued' }
+							}
+						}
+					}
+				]
+			});
 		} finally {
 			await incompatible.close();
 		}

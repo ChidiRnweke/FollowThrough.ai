@@ -106,9 +106,11 @@ TOK=$(python3 -c "import json;print(json.load(open('tests/.auth/state.json'))['c
 curl -s -H "Cookie: session=$TOK" http://127.0.0.1:5173/today
 ```
 
-Delete `tests/.auth/state.json` to force a fresh token. This is the fastest way to check
-server-rendered output — cookie-driven shell state, redirects, `+page.server.ts` exports — without
-a browser. Add cookies to the same header to exercise persisted UI preferences (`sidebar_state`,
+Delete `tests/.auth/state.json` to force a fresh token. This checks authentication, redirects,
+and response cookies. Workspace routes use
+`ssr = false`; inspect their content in Playwright with this storage state, after the workspace
+has downloaded. A successful curl response does not verify workspace rendering. Add cookies to
+the same header to exercise persisted UI preferences (`sidebar_state`,
 `sidebar_width`).
 
 ## Where things live

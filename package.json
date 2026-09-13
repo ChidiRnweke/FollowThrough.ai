@@ -58,7 +58,8 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:seed:tools": "pnpm build:worker && node build-worker/seed-tool-embeddings.js",
 		"db:studio": "drizzle-kit studio",
-		"test:sync:pwa": "node scripts/test-sync-pwa.mjs"
+		"test:sync:pwa": "node scripts/test-sync-pwa.mjs",
+		"db:sync:setup": "node --experimental-strip-types --env-file-if-exists=.env scripts/setup-workspace-sync.ts"
 	},
 	"devDependencies": {
 		"@arizeai/phoenix-client": "^6.14.0",

@@ -4,6 +4,15 @@
 
 const UNIQUE_VIOLATION = '23505';
 
+export const isRetryableTransactionError = (error: unknown): boolean =>
+	causes(error).some((link) => 'code' in link && (link.code === '40P01' || link.code === '40001'));
+
+export const isPermanentWriteConstraint = (error: unknown): boolean =>
+	causes(error).some(
+		(link) =>
+			'code' in link && (link.code === '23503' || link.code === '23514' || link.code === '23502')
+	);
+
 // Every read below is `in` narrowing rather than a cast: on an `object` it
 // resolves the field to `unknown`, and the `typeof` test does the rest, all of
 // it checked by the compiler. A zod schema was the other candidate and is the

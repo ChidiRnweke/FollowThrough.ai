@@ -219,6 +219,51 @@ describe('a rendered form base', () => {
 });
 
 describe('a mounted editor after acknowledgement', () => {
+	it('preserves later typing as a normal conflict when another surface supersedes its receipt', async () => {
+		const { note, store, resources } = await setup();
+		await store.read();
+		await store.stage(noteWrite({ ...note, plainText: 'First edit' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		const other = resources.draft({ type: 'notes', id: [note.id] });
+		await other.read();
+		const current = other.value;
+		if (!current) throw new Error('The saved note must exist');
+		await other.stage(noteWrite({ ...current, plainText: 'Other surface' }));
+		await resources.synchronize();
+		await store.stage(noteWrite({ ...note, plainText: 'My later typing' }));
+		await resources.synchronize();
+		expect({
+			status: store.status,
+			local: store.conflict?.local?.plainText,
+			remote: store.conflict?.remote
+		}).toEqual({
+			status: 'conflict',
+			local: 'My later typing',
+			remote: {
+				kind: 'found',
+				value: { ...current, plainText: 'Other surface', currentRevision: 3 }
+			}
+		});
+	});
+	it('never automatically resurrects an edit discarded by another surface', async () => {
+		const { note, store, resources, transport, key } = await setup();
+		await store.read();
+		await store.stage(noteWrite({ ...note, plainText: 'Discarded edit' }));
+		await resources.discard(resources.pending.map((entry) => entry.intent.operationId));
+		await store.stage(noteWrite({ ...note, plainText: 'Keep my buffer' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		expect({
+			status: store.status,
+			local: store.value?.plainText,
+			server: transport.records.get(key)?.value
+		}).toEqual({
+			status: 'conflict',
+			local: 'Keep my buffer',
+			server: { type: 'notes', value: note }
+		});
+	});
 	it('conflicts with a later server revision even when that revision has identical editor content', async () => {
 		const { note, key, store, transport, resources, cache } = await setup();
 		await store.read();

@@ -23,8 +23,7 @@
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
-	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
-	let reviewWrites = $state(false);
+	import { SyncStatusMenu } from '$lib/components/shell';
 	import { MemoryNotificationMenu } from '$lib/components/memory';
 
 	let { data, children } = $props();
@@ -34,19 +33,6 @@
 			: null
 	);
 
-	const readStatus = $derived(data.session.resources.readStatus);
-	const writeStatus = $derived(data.session.resources.writeStatus);
-	const syncError = $derived(
-		data.session.startupError ??
-			(readStatus.kind === 'failure' ? readStatus.message : null) ??
-			(writeStatus.kind === 'failure' ? writeStatus.message : null)
-	);
-	const pendingChanges = $derived(data.session.resources.pending.length);
-	const conflicts = $derived(
-		data.session.resources.pending.filter(
-			(entry) => entry.delivery.kind === 'conflict' || entry.delivery.kind === 'rejected'
-		).length
-	);
 	const isNavigating = $derived(navigating.to !== null);
 	// Suppress the thin progress bar during workbench-internal navigations
 	// (tab focus / open / close / reorder) — those are local state changes,
@@ -236,6 +222,10 @@
 					<Search />
 				</Button>
 				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
+				<SyncStatusMenu
+					resources={data.session.resources}
+					startupFailure={data.session.startupError}
+				/>
 				<Button
 					variant="ghost"
 					size="icon"
@@ -246,33 +236,7 @@
 					<MessageSquare />
 				</Button>
 			</header>
-			{#if !data.session.resources.online || data.session.resources.availability !== 'complete' || pendingChanges || syncError}
-				<div
-					role="status"
-					class="flex min-h-8 shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs text-muted-foreground"
-				>
-					<span class="min-w-0 flex-1"
-						>{!data.session.resources.online
-							? 'Offline · using saved content'
-							: (syncError ??
-								(data.session.resources.availability !== 'complete'
-									? 'Downloading workspace for offline use…'
-									: 'Changes saved on this device'))}{pendingChanges
-							? ` · ${pendingChanges} pending`
-							: ''}{conflicts ? ` · ${conflicts} need review` : ''}</span
-					>
-					{#if pendingChanges}<Button
-							variant="ghost"
-							size="sm"
-							onclick={() => (reviewWrites = true)}>Review changes</Button
-						>{/if}
-					{#if syncError && data.session.resources.online}<Button
-							variant="ghost"
-							size="sm"
-							onclick={() => void workspaceSession.synchronize()}>Retry</Button
-						>{/if}
-				</div>
-			{/if}
+
 			{#if showProgressBar}
 				<div
 					data-navigation-progress
@@ -309,5 +273,3 @@
 		This workspace is not available on this device. Reconnect to sign in.
 	</div>
 {/if}
-
-<WorkspaceWriteReview resources={data.session.resources} bind:open={reviewWrites} />

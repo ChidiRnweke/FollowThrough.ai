@@ -161,16 +161,55 @@ Discarding removes exactly the reviewed set: an attempted write first needs rece
 and every dependent edit must be included explicitly. This prevents an apparently local discard
 from silently destroying or unblocking work the user did not review.
 
+Journal publication runs in a deferred constraint trigger at commit. Resource versions still
+advance immediately, so receipts can read their exact version inside a transaction. The account
+head is acquired after domain work, avoiding the extra head/resource deadlock cycle. A transaction
+that starts later may commit first; its cursor is assigned first, so incremental readers cannot
+skip the earlier transaction when that transaction eventually commits. PostgreSQL defers these
+[constraint triggers until transaction end](https://www.postgresql.org/docs/17/sql-createtrigger.html).
+Database-only callbacks also have bounded whole-transaction retry for ordinary transient failures.
+Callbacks with external effects do not opt into replay.
+
+Journal reads use durable page checkpoints and an explicit initial-inventory completion flag.
+A partial first inventory never implies complete offline availability. Body reads use bounded
+batches with per-resource failure results, and persist successful bodies together. Page and batch
+sizes are based on the recorded client benchmark in `docs/pr-evidence/incremental-sync/performance.md`.
+No total resource cap or record-type exclusion is applied.
+
+An uncertain write does not block unrelated edits. Its input remains immutable, dependencies stay
+blocked, and retries use per-session exponential backoff with an explicit retry action. Acquiring
+the account writer lock still serializes tabs. Cancelling an uncertain write acquires the same
+server operation lock as submission and stores a durable cancellation marker. If submission won
+the race, cancellation returns the original receipt instead.
+
+After queue settlement and the received body commit atomically, a durable client acknowledgement
+allows the server to replace a receipt body with its original operation/version proof. The operation
+identity and request hash remain indefinitely. Old clients can still use the original endpoints;
+a replay of an already compacted operation returns proof and cannot reapply the write. A client
+that cannot read that response must upgrade. Missing local predecessor proof stages a conflict,
+retaining the original base and local content. A current server copy never substitutes for the
+original receipt, and refreshing conflict evidence never accepts a version on the user's behalf.
+
+Storage readers quarantine malformed rows individually and preserve their original content for
+export. Damaged cache data resets the inventory generation; a stale tab cannot commit its old
+checkpoint across that recovery. Unknown write identities block submission rather than guessing
+at dependencies. Damaged import markers remain in place and prevent duplicate imports. The legacy
+database and version fence remain. Online startup replaces a corrupt bootstrap from the server.
+The public account hint renews halfway through its 30-day lifetime instead of on every request.
+
 ## Consequences
 
 - Subsequent synchronization transfers changed identities and content only.
 - Normalized records prevent a task change from requiring another download of an unchanged note.
 - The first download and browser storage use grow with the current workspace.
 - First-ever startup needs JavaScript and a network connection before workspace data can appear.
+- Receipt bodies compact after acknowledgement, but small operation proof rows grow with the number
+  of accepted or cancelled operations. There is no retention expiry that could allow duplicate writes.
 - Pending writes require durable receipts and visible conflict resolution across editable objects.
-- Writes in one account serialize when advancing its cursor. Long transactions delay that
-  account's later writers; normal database deadlock/serialization failures must retry the whole
-  unacknowledged operation. Other accounts do not share this head lock.
+- Writes in one account serialize their journal publication at commit. Domain work does not
+  hold the head lock while waiting for another resource row. Explicitly declared database-only transactions retry deadlock or
+  serialization failures after rollback, at most three times. Sync uses that mode when embedding
+  work is deferred. Upload promotion and inline embedding callbacks are not replayed automatically. Other accounts do not share this head lock.
 - Offline availability is limited by completed downloads and the browser's available storage.
 - AI runs, generated exports, uploads, credentials, and security changes remain server operations.
 - The first pull includes the compact journal's retained tombstones as well as live identities.

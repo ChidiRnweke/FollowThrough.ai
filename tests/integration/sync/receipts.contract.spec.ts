@@ -83,3 +83,40 @@ describe('durable synchronization operation receipts', () => {
 		});
 	});
 });
+
+it('retains the original proof after compacting an acknowledged receipt twice', async () => {
+	const { owner, request, receipt, note } = await savedReceipt('8910');
+	const receipts = new WorkspaceSyncReceipts(context.db);
+	await receipts.compact(owner, receipt.operationId);
+	await context.client`update notes set title = 'Later edit' where id = ${note.id}`;
+	await receipts.compact(owner, receipt.operationId);
+	const resource = receipt.resource;
+	expect(await receipts.find(owner, receipt.operationId, request)).toEqual({
+		kind: 'compacted',
+		proof: {
+			operationId: receipt.operationId,
+			resourceKind: resource.kind,
+			etag: resource.kind === 'found' ? resource.snapshot.etag : resource.etag
+		}
+	});
+});
+it('retains a durable cancellation proof for an operation that never applied', async () => {
+	const { owner } = await seedNote('8911');
+	const operationId = crypto.randomUUID();
+	await context.db.transaction(async (transaction) => {
+		const receipts = new WorkspaceSyncReceipts(transaction);
+		await receipts.lockOperation(owner, operationId);
+		await receipts.cancel(owner, operationId, '{"command":"cancelled"}');
+	});
+	expect(
+		await new WorkspaceSyncReceipts(context.db).find(owner, operationId, '{"command":"cancelled"}')
+	).toEqual({ kind: 'cancelled' });
+});
+it('still rejects different input after the receipt payload is compacted', async () => {
+	const { owner, receipt } = await savedReceipt('8912');
+	const receipts = new WorkspaceSyncReceipts(context.db);
+	await receipts.compact(owner, receipt.operationId);
+	expect(await receipts.find(owner, receipt.operationId, '{"different":true}')).toEqual({
+		kind: 'reused'
+	});
+});

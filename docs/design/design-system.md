@@ -271,9 +271,15 @@ while the region is empty; the empty state and its one action are the whole surf
   single status line in the same box and the selected text holds a brand wash until the result
   settles (revealing after `--duration-micro`); the header spinner is only the fallback for a
   selection scrolled out of view.
-- Note synchronization stays in the quiet utility row: pending saves and conflicts are explicit;
-  three-way comparison belongs in a focused dialog; resolution always preserves a complete rich
-  document version.
+- Workspace synchronization stays in the sidebar utility row, with the same compact control in
+  the mobile header. Its icon and badge summarize offline access, pending saves, downloads, and
+  decisions. Routine autosave does not add a strip or move the workspace geometry.
+- The sync menu opens a grouped review: decisions, waiting changes, and sending changes. A detail
+  view explains the action, shows product fields, and places the original version in a disclosure.
+  Conflicts compare local and server versions against the same original document. The primary
+  action keeps the reviewed version; discard is outlined and recovery download is quiet. Show
+  dependent changes before discarding their base. Saved edits and recovery copies remain available
+  while offline; uncertain sends require server confirmation before discard.
 - **Diagram editing is a canvas, not a preview:** the Mermaid preview half is a fixed box that
   scrolls in both axes with its own zoom — a floating −/percentage/+ cluster, ctrl/⌘+wheel and
   trackpad pinch, the percentage as a reset. The zoom is transient and never touches the block's

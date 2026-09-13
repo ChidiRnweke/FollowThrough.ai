@@ -1,3 +1,4 @@
+import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import type { ShellContext } from '$lib/models/workspace';
 import {
 	normalizeLanguageModelId,
@@ -41,7 +42,7 @@ const stillBound = (): boolean =>
 	current !== null && workspaceAccountHint(document.cookie) === current.bootstrap.accountId;
 type SessionSynchronization =
 	{ kind: 'complete' | 'stopped' } | { kind: 'failure'; message: string };
-const synchronize = async (): Promise<SessionSynchronization> => {
+const synchronize = async (force = false): Promise<SessionSynchronization> => {
 	const session = current;
 	if (!session) return { kind: 'stopped' };
 	if (!stillBound()) {
@@ -52,7 +53,7 @@ const synchronize = async (): Promise<SessionSynchronization> => {
 	session.resources.setOnline(navigator.onLine);
 	try {
 		if (session.startupError && navigator.onLine) await refreshBootstrap();
-		await session.resources.synchronize();
+		await session.resources.synchronize(force);
 		if (current === session && !stillBound()) {
 			stop();
 			window.location.reload();
@@ -97,7 +98,10 @@ const begin = async (): Promise<WorkspaceSession> => {
 		localStorage.getItem(workspaceBootstrapKey),
 		workspaceAccountHint(document.cookie)
 	);
-	if (stored.kind === 'corrupt') throw new Error(stored.message);
+	if (stored.kind === 'corrupt' && !navigator.onLine)
+		throw new Error(
+			'Saved startup settings could not be read. Reconnect to restore them; saved edits remain on this device.'
+		);
 	const bootstrap = stored.kind === 'stored' ? stored.value : await fetchWorkspaceBootstrap();
 	if (
 		generation !== openingGeneration ||
@@ -144,6 +148,7 @@ const begin = async (): Promise<WorkspaceSession> => {
 	};
 	const session = current;
 	await resources.initialize();
+	await resources.loadRecovery();
 	await resources.prepare([
 		'users',
 		'projects',
@@ -199,6 +204,12 @@ export const workspaceSession = {
 			starting = pending;
 		}
 		return starting;
+	},
+	async downloadLocalWrites(): Promise<Blob> {
+		const accountId = workspaceAccountHint(document.cookie);
+		if (!accountId)
+			throw new Error('Sign in to identify the account whose saved edits you want to download');
+		return new IndexedDbStorageRecovery().downloadAccount(accountId);
 	},
 	synchronize,
 	stop,

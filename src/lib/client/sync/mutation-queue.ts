@@ -1,13 +1,16 @@
 import {
 	authoritativeWriteResource,
+	dependentWrites,
 	unresolvedWrite,
 	nextWrite,
 	type WriteBaseResolution,
 	type OutboxEntry,
 	type WriteDraft,
-	type WriteReceipt
+	type WriteReceipt,
+	type WriteOutcome
 } from '$lib/models/outbox';
 import type { OutboxRepository, OutboxTransport } from './outbox-contracts';
+import { OutboxAccountChangedError } from './outbox-contracts';
 
 export interface AccountWriterLock {
 	run<T>(accountId: string, work: () => Promise<T>): Promise<T>;
@@ -32,6 +35,7 @@ export class MutationQueue<C, T> {
 	private online = true;
 	private stopped = false;
 	private result: SubmissionResult = { kind: 'idle' };
+	private readonly retryAfter = new Map<string, { attempts: number; at: number }>();
 	constructor(
 		readonly accountId: string,
 		private readonly dependencies: MutationQueueDependencies<C, T>
@@ -90,6 +94,23 @@ export class MutationQueue<C, T> {
 		await this.reload();
 		return id;
 	}
+	async refreshConflict(operationId: string): Promise<void> {
+		if (this.stopped || !this.online)
+			throw new Error('Reconnect to read the current server version');
+		const recovery = this.dependencies.transport.recovery;
+		if (!recovery) throw new Error('Conflict recovery is unavailable');
+		await this.reload();
+		const entry = this.entries.find((entry) => entry.intent.operationId === operationId);
+		if (!entry || entry.delivery.kind !== 'conflict')
+			throw new Error('This change no longer needs conflict review');
+		const remote = await recovery.observe(entry.intent.key);
+		await this.dependencies.repository.resolveBase(this.accountId, operationId, {
+			kind: 'conflict',
+			remote
+		});
+		await this.reload();
+	}
+
 	async keepLocal(operationId: string): Promise<string> {
 		if (this.stopped) throw new Error('This account is no longer active');
 		const replacementId = crypto.randomUUID();
@@ -99,15 +120,77 @@ export class MutationQueue<C, T> {
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
 		if (this.stopped) throw new Error('This account is no longer active');
-		await this.dependencies.repository.discard(this.accountId, operationIds);
+		await this.dependencies.writerLock.run(this.accountId, async () => {
+			await this.dependencies.repository.recover(this.accountId);
+			const all = await this.dependencies.repository.list(this.accountId);
+			const selected = all.filter((entry) => operationIds.includes(entry.intent.operationId));
+			if (
+				selected.some((entry) =>
+					dependentWrites(all, entry.intent.operationId).some(
+						(child) => !operationIds.includes(child.intent.operationId)
+					)
+				)
+			)
+				throw new Error('Review dependent edits before discarding their base');
+			if (selected.length !== operationIds.length)
+				throw new Error('The selected local edits changed; review them again');
+			for (const entry of selected) {
+				if (entry.delivery.kind !== 'retry') continue;
+				const recovery = this.dependencies.transport.recovery;
+				if (!this.online || !recovery)
+					throw new Error('Reconnect to confirm the last send before discarding');
+				const outcome = await recovery.cancel({
+					operationId: entry.intent.operationId,
+					baseEtag: entry.intent.base?.etag ?? null,
+					command: entry.intent.command
+				});
+				await this.dependencies.repository.settle(
+					this.accountId,
+					entry,
+					outcome.kind === 'cancelled'
+						? { kind: 'rejected', message: 'Cancelled before application' }
+						: outcome
+				);
+				const resource = outcome.kind === 'applied' ? outcome.receipt.resource : null;
+				if (resource && !this.stopped) await this.dependencies.received(entry.intent.key, resource);
+			}
+			const remaining = await this.dependencies.repository.list(this.accountId);
+			await this.dependencies.repository.discard(
+				this.accountId,
+				operationIds.filter((id) => remaining.some((entry) => entry.intent.operationId === id))
+			);
+		});
 		await this.reload();
 	}
+	private async acknowledgePending(): Promise<SubmissionResult> {
+		const recovery = this.dependencies.transport.recovery;
+		if (!recovery) return { kind: 'complete' };
+		try {
+			for (const operationId of await this.dependencies.repository.pendingAcknowledgements(
+				this.accountId
+			)) {
+				if (this.stopped || !this.online) return { kind: 'stopped' };
+				await recovery.acknowledge(operationId);
+				await this.dependencies.repository.acknowledged(this.accountId, operationId);
+			}
+			return { kind: 'complete' };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'Receipt acknowledgement failed'
+			};
+		}
+	}
 
-	flush(): Promise<SubmissionResult> {
+	flush(force = false): Promise<SubmissionResult> {
+		if (force) this.retryNow();
 		this.flushing ??= this.submit().finally(() => {
 			this.flushing = null;
 		});
 		return this.flushing;
+	}
+	retryNow(): void {
+		for (const retry of this.retryAfter.values()) retry.at = 0;
 	}
 	private async submit(): Promise<SubmissionResult> {
 		try {
@@ -121,16 +204,27 @@ export class MutationQueue<C, T> {
 					if (this.stopped) return { kind: 'stopped' };
 					if (!this.online) return { kind: 'offline' };
 					await this.dependencies.repository.recover(this.accountId);
+					const excluded = new Set(
+						[...this.retryAfter].filter(([, retry]) => retry.at > Date.now()).map(([id]) => id)
+					);
+					let failure: SubmissionResult = await this.acknowledgePending();
 					while (!this.stopped && this.online) {
 						const unresolved = unresolvedWrite(
-							await this.dependencies.repository.list(this.accountId)
+							await this.dependencies.repository.list(this.accountId),
+							excluded
 						);
 						if (unresolved?.intent.base) {
-							const resolution = await this.dependencies.resolveBase(
+							const resolution = await this.resolveImportedBase(
 								unresolved.intent.key,
 								unresolved.intent.base.value,
 								unresolved.intent.local
 							);
+							if (resolution.kind === 'failure') {
+								excluded.add(unresolved.intent.operationId);
+								this.deferRetry(unresolved.intent.operationId);
+								failure = resolution;
+								continue;
+							}
 							await this.dependencies.repository.resolveBase(
 								this.accountId,
 								unresolved.intent.operationId,
@@ -145,36 +239,45 @@ export class MutationQueue<C, T> {
 							await this.reload();
 							continue;
 						}
-						const sent = await this.dependencies.repository.take(this.accountId);
+						const sent = await this.dependencies.repository.take(this.accountId, excluded);
 						await this.reload();
 						if (!sent) {
-							if (nextWrite(this.entries) || unresolvedWrite(this.entries)) continue;
-							return { kind: 'complete' };
+							if (nextWrite(this.entries, excluded) || unresolvedWrite(this.entries, excluded))
+								continue;
+							const deferred = this.entries.find((entry) => entry.delivery.kind === 'retry');
+							return deferred?.delivery.kind === 'retry'
+								? { kind: 'failure', message: deferred.delivery.message }
+								: failure;
 						}
 						if (this.stopped) return { kind: 'stopped' };
 						if (!this.online) return { kind: 'offline' };
 						// Once taken, the input remains immutable even if the request's outcome is lost.
-						try {
-							const outcome = await this.dependencies.transport.send({
-								operationId: sent.intent.operationId,
-								baseEtag: sent.intent.base?.etag ?? null,
-								command: sent.intent.command
-							});
-							await this.dependencies.repository.settle(this.accountId, sent, outcome);
-							const resource = authoritativeWriteResource(outcome);
-							if (resource && !this.stopped)
-								await this.dependencies.received(sent.intent.key, resource);
-						} catch (error) {
-							const message = error instanceof Error ? error.message : 'Submission failed';
+						const response = await this.send(sent);
+						if (response.kind === 'failure') {
 							await this.dependencies.repository.retry(
 								this.accountId,
 								sent.intent.operationId,
-								message
+								response.message
 							);
 							await this.reload();
-							return { kind: 'failure', message };
+							this.deferRetry(sent.intent.operationId);
+							excluded.add(sent.intent.operationId);
+							failure = { kind: 'failure', message: response.message };
+							if (response.accountChanged) {
+								this.online = false;
+								return failure;
+							}
+							continue;
 						}
+						const outcome = response.outcome;
+						await this.dependencies.repository.settle(this.accountId, sent, outcome);
+						this.retryAfter.delete(sent.intent.operationId);
+						const resource = authoritativeWriteResource(outcome);
+						if (resource && !this.stopped)
+							await this.dependencies.received(sent.intent.key, resource);
 						await this.reload();
+						const acknowledged = await this.acknowledgePending();
+						if (acknowledged.kind === 'failure') failure = acknowledged;
 					}
 					return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
 				}
@@ -193,6 +296,53 @@ export class MutationQueue<C, T> {
 			return { kind: 'failure', message };
 		}
 	}
+	private deferRetry(operationId: string): void {
+		const attempts = (this.retryAfter.get(operationId)?.attempts ?? 0) + 1;
+		this.retryAfter.set(operationId, {
+			attempts,
+			at: Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(attempts - 1, 6))
+		});
+	}
+	private async resolveImportedBase(
+		key: string,
+		base: T,
+		local: T | null
+	): Promise<WriteBaseResolution<T> | { kind: 'failure'; message: string }> {
+		try {
+			return await this.dependencies.resolveBase(key, base, local);
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message:
+					error instanceof Error
+						? error.message
+						: 'The original server version could not be checked'
+			};
+		}
+	}
+
+	private async send(
+		sent: OutboxEntry<C, T>
+	): Promise<
+		| { kind: 'response'; outcome: WriteOutcome<T> }
+		| { kind: 'failure'; message: string; accountChanged: boolean }
+	> {
+		try {
+			const outcome = await this.dependencies.transport.send({
+				operationId: sent.intent.operationId,
+				baseEtag: sent.intent.base?.etag ?? null,
+				command: sent.intent.command
+			});
+			return { kind: 'response', outcome };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'Submission failed',
+				accountChanged: error instanceof OutboxAccountChangedError
+			};
+		}
+	}
+
 	private notify(): void {
 		for (const listener of this.listeners) listener();
 	}

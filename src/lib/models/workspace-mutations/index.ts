@@ -5,6 +5,7 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import { z } from 'zod';
+import { compactWriteProofSchema } from '$lib/models/outbox';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
@@ -293,6 +294,7 @@ export type DiagramMutationRequest = MutationFor<
 >;
 
 export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('compacted'), proof: compactWriteProofSchema }),
 	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),
 	z.object({
 		kind: z.literal('conflict'),
@@ -305,6 +307,13 @@ export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('rejected'), message: z.string() })
 ]);
 export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSchema>;
+
+export const workspaceWriteRecoverySchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('cancelled') }),
+	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),
+	z.object({ kind: z.literal('compacted'), proof: compactWriteProofSchema })
+]);
+export type WorkspaceWriteRecovery = z.infer<typeof workspaceWriteRecoverySchema>;
 
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
 export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
@@ -677,3 +686,10 @@ export const agentPreferenceWrite = (
 	coalesce: null,
 	references: []
 });
+
+/** Cancellation fences an operation without requiring its historical command schema. */
+export const workspaceWriteCancellationSchema = z.object({
+	operationId: z.string().uuid(),
+	request: z.string().min(2)
+});
+export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellationSchema>;

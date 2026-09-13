@@ -6,8 +6,13 @@ import type {
 	WriteReceipt
 } from '$lib/models/outbox';
 import type { SyncEtag } from '$lib/models/sync';
+import type { WriteRecovery } from '$lib/models/outbox';
+
+export class OutboxAccountChangedError extends Error {}
 
 export interface OutboxRepository<C, T> {
+	pendingAcknowledgements(accountId: string): Promise<readonly string[]>;
+	acknowledged(accountId: string, operationId: string): Promise<void>;
 	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;
 	list(accountId: string): Promise<readonly OutboxEntry<C, T>[]>;
 	append(accountId: string, draft: WriteDraft<C, T>): Promise<string>;
@@ -18,7 +23,7 @@ export interface OutboxRepository<C, T> {
 	): Promise<void>;
 	keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void>;
 	discard(accountId: string, operationIds: readonly string[]): Promise<void>;
-	take(accountId: string): Promise<OutboxEntry<C, T> | null>;
+	take(accountId: string, excluded?: ReadonlySet<string>): Promise<OutboxEntry<C, T> | null>;
 	retry(accountId: string, operationId: string, message: string): Promise<void>;
 	/** Call only after acquiring the account's exclusive writer lock. */
 	recover(accountId: string): Promise<void>;
@@ -27,6 +32,15 @@ export interface OutboxRepository<C, T> {
 }
 
 export interface OutboxTransport<C, T> {
+	readonly recovery?: {
+		observe(key: string): Promise<import('$lib/models/outbox').ServerResource<T>>;
+		cancel(input: {
+			operationId: string;
+			baseEtag: SyncEtag | null;
+			command: C;
+		}): Promise<WriteRecovery<T>>;
+		acknowledge(operationId: string): Promise<void>;
+	};
 	send(input: {
 		readonly operationId: string;
 		readonly baseEtag: SyncEtag | null;

@@ -47,6 +47,57 @@ const setup = (transport: OutboxTransport<string, string>) => {
 };
 
 describe('shared mutation submission', () => {
+	it('discards an uncertain edit only after durable server cancellation', async () => {
+		const { queue } = setup({
+			send: async () => {
+				throw new Error('Response lost');
+			},
+			recovery: {
+				observe: async () => ({ kind: 'unavailable' }),
+				cancel: async () => ({ kind: 'cancelled' }),
+				acknowledge: async () => undefined
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		await queue.discard([firstId]);
+		expect(queue.pending).toEqual([]);
+	});
+	it('keeps an acknowledgement pending when its server response is lost', async () => {
+		const { queue, repository } = setup({
+			send: async (input) => applied(input.operationId, input.command),
+			recovery: {
+				observe: async () => ({ kind: 'unavailable' }),
+				cancel: async () => ({ kind: 'cancelled' }),
+				acknowledge: async () => {
+					throw new Error('Response lost');
+				}
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		expect({
+			writes: queue.pending,
+			acknowledgements: await repository.pendingAcknowledgements('alice')
+		}).toEqual({ writes: [], acknowledgements: [firstId] });
+	});
+	it('sends independent work after a transport failure while preserving its descendants', async () => {
+		const { queue } = setup({
+			send: async (input) => {
+				if (input.operationId === firstId) throw new Error('Connection lost');
+				return applied(input.operationId, input.command);
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.append({ ...draft(secondId), basedOn: firstId });
+		await queue.append({ ...draft(thirdId), key: 'note:2' });
+		await queue.flush();
+		await queue.flush();
+		expect(queue.pending.map((entry) => [entry.intent.operationId, entry.delivery.kind])).toEqual([
+			[firstId, 'retry'],
+			[secondId, 'queued']
+		]);
+	});
 	it('durably resolves an imported base before submitting its unchanged operation', async () => {
 		const requests: (string | null)[] = [];
 		const { dependencies } = setup({
@@ -99,7 +150,7 @@ describe('shared mutation submission', () => {
 		await queue.append(draft(firstId));
 		await queue.flush();
 		await queue.append(draft(secondId, 'Later typing'));
-		await queue.flush();
+		await queue.flush(true);
 		expect(requests).toEqual([
 			{ operationId: firstId, command: 'Edited' },
 			{ operationId: firstId, command: 'Edited' },
@@ -269,4 +320,17 @@ it('does not treat disappearance from another writer’s discard as acknowledgem
 	await repository.discard('alice', [firstId]);
 	await queue.reload();
 	expect(queue.acknowledged('note:1', firstId)).toBe(false);
+});
+
+it('sends independent edits when an imported base cannot be checked', async () => {
+	const { queue, accepted } = setup({
+		send: async (input) => applied(input.operationId, input.command)
+	});
+	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Legacy original' } });
+	await queue.append({ ...draft(secondId), key: 'note:2' });
+	await queue.flush();
+	expect({
+		pending: queue.pending.map((entry) => entry.intent.operationId),
+		saved: accepted.length
+	}).toEqual({ pending: [firstId], saved: 1 });
 });

@@ -1,4 +1,8 @@
+import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
 import type { ActorContext } from '$lib/models/identity';
+import type { SyncChangePage } from '$lib/models/sync';
+import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
+import type { SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
 import type { SyncChanges, SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
@@ -24,6 +28,16 @@ import type { UserReader } from '$lib/server/services/identity/users';
  * parallel because none depends on another's result.
  */
 export interface WorkspaceController {
+	pullChangePage(actor: ActorContext, since: SyncCursor): Promise<SyncChangePage>;
+	readResources(
+		actor: ActorContext,
+		requests: readonly { identity: WorkspaceResourceIdentity; etag: SyncEtag | null }[]
+	): ReturnType<SyncObjectReader['readMany']>;
+	cancelMutation(
+		actor: ActorContext,
+		input: WorkspaceWriteCancellation
+	): Promise<WorkspaceWriteRecovery>;
+	acknowledgeMutation(actor: ActorContext, operationId: string): Promise<void>;
 	pullChanges(actor: ActorContext, since: SyncCursor): Promise<SyncChanges>;
 	readResource(
 		actor: ActorContext,
@@ -36,6 +50,7 @@ export interface WorkspaceController {
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
+	writeRecovery: SyncWriteRecovery;
 	syncChanges: SyncChangeReader;
 	syncObjects: SyncObjectReader;
 	userReader: UserReader;
@@ -85,6 +100,21 @@ export const toPendingMemoryNotifications = (
 
 export class Workspace implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
+	pullChangePage(actor: ActorContext, since: SyncCursor) {
+		return this.dependencies.syncChanges.pullPage(actor, since);
+	}
+	readResources(
+		actor: ActorContext,
+		requests: readonly { identity: WorkspaceResourceIdentity; etag: SyncEtag | null }[]
+	) {
+		return this.dependencies.syncObjects.readMany(actor, requests);
+	}
+	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
+		return this.dependencies.writeRecovery.cancel(actor, input);
+	}
+	acknowledgeMutation(actor: ActorContext, operationId: string) {
+		return this.dependencies.writeRecovery.acknowledge(actor, operationId);
+	}
 	pullChanges(actor: ActorContext, since: SyncCursor) {
 		return this.dependencies.syncChanges.pull(actor, since);
 	}

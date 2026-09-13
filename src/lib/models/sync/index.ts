@@ -1,5 +1,76 @@
 import { z } from 'zod';
 
+export const storageRecoveryItemSchema = z.object({
+	accountId: z.string(),
+	source: z.string(),
+	key: z.string(),
+	message: z.string(),
+	impact: z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('cache') }),
+		z.object({ kind: z.literal('write'), operationId: z.string().uuid().nullable() })
+	])
+});
+export type StorageRecoveryItem = z.infer<typeof storageRecoveryItemSchema>;
+
+export interface SyncIndicatorInput {
+	readonly online: boolean;
+	readonly pending: number;
+	readonly sending: boolean;
+	readonly review: number;
+	readonly failedDownloads: number;
+	readonly downloading: boolean;
+	readonly failure: string | null;
+}
+export const syncIndicator = (
+	input: SyncIndicatorInput
+): {
+	kind: 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';
+	headline: string;
+	description: string;
+	badge: number;
+} => {
+	if (input.review || input.failedDownloads || input.failure)
+		return {
+			kind: 'attention',
+			headline: input.review ? `${input.review} changes need review` : 'Sync needs attention',
+			description:
+				input.failure ??
+				(input.failedDownloads
+					? `${input.failedDownloads} saved copies could not be downloaded. Retry to complete your workspace.`
+					: 'Review the versions and choose which changes to keep.'),
+			badge: input.review
+		};
+	if (!input.online)
+		return {
+			kind: 'offline',
+			headline: "You're offline",
+			description: input.pending
+				? 'Your changes are saved on this device and will send when you reconnect.'
+				: 'Downloaded content remains available on this device.',
+			badge: input.pending
+		};
+	if (input.pending || input.sending)
+		return {
+			kind: 'saving',
+			headline: 'Saving your changes',
+			description: 'Your changes are saved on this device while they reach the server.',
+			badge: 0
+		};
+	if (input.downloading)
+		return {
+			kind: 'downloading',
+			headline: 'Downloading your workspace',
+			description: 'Saved copies are becoming available for offline use.',
+			badge: 0
+		};
+	return {
+		kind: 'synced',
+		headline: 'Everything is saved',
+		description: 'Your workspace is up to date on this device.',
+		badge: 0
+	};
+};
+
 export type SyncEtag = string & { readonly __brand: 'SyncEtag' };
 export const syncCursorSchema = z
 	.string()
@@ -39,6 +110,13 @@ export const syncChangesSchema = z
 		'A change batch must contain each resource only once'
 	);
 export type SyncChanges = z.infer<typeof syncChangesSchema>;
+export const syncChangePageSchema = syncChangesSchema.safeExtend({ hasMore: z.boolean() });
+export type SyncChangePage = z.infer<typeof syncChangePageSchema>;
+
+// The 7,000-record browser benchmark is recorded in docs/pr-evidence/incremental-sync/performance.md.
+// These are transfer groups, never limits on the workspace inventory.
+export const syncChangePageSize = 256;
+export const syncBodyBatchSize = 32;
 
 export interface SyncSnapshot<T> {
 	readonly etag: SyncEtag;
