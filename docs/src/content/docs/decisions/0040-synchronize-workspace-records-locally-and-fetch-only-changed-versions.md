@@ -117,8 +117,9 @@ unknown send outcomes and any newly added, unreviewed descendants. A download pr
 records before an explicit discard. Keeping a conflict replays its original command against the
 reviewed server version; creation conflicts and server-deleted items require explicit recreation.
 Mounted editors require an exact durable receipt before treating a removed queued operation as
-acknowledged. A discard in another tab therefore retains the editor buffer with an error until
-reopened. A superseded receipt also requires reopening; queue absence never proves success.
+acknowledged. If another tab discards or supersedes that ancestry, the next saved edit enters
+ordinary conflict review with its original base and local content. It does not silently rebase
+or require reopening the editor; queue absence never proves success.
 
 The guarded outbox operates on one independently versioned resource per command. A parent ETag
 cannot protect changes to its children. Compound operations such as skill import, recursive removal,
