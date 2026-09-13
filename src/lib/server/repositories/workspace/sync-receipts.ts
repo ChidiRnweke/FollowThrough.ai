@@ -18,6 +18,7 @@ export type ReceiptLookup =
 	| { readonly kind: 'receipt'; readonly receipt: WorkspaceWriteReceipt };
 
 export interface SyncReceiptRepository {
+	publishChanges(): Promise<void>;
 	lockOperation(actor: ActorContext, operationId: string): Promise<void>;
 	cancel(actor: ActorContext, operationId: string, request: string): Promise<void>;
 	compact(actor: ActorContext, operationId: string): Promise<void>;
@@ -38,6 +39,12 @@ const requestHash = (request: string) =>
 /** All methods participate in the caller's existing domain transaction. */
 export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 	constructor(private readonly db: Database) {}
+	async publishChanges(): Promise<void> {
+		// Domain writes are finished. Publish now so deletion receipts can read their
+		// authoritative tombstone, while retaining the domain-row-before-head lock order.
+		await this.db.execute(sql`SET CONSTRAINTS workspace_sync_journal IMMEDIATE`);
+		await this.db.execute(sql`SET CONSTRAINTS workspace_sync_journal DEFERRED`);
+	}
 	async lockOperation(actor: ActorContext, operationId: string): Promise<void> {
 		await this.db.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'operation:' + operationId}))`

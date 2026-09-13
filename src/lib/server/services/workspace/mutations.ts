@@ -84,6 +84,7 @@ export class SyncMutationTransactions {
 							: current.kind === 'found' && current.snapshot.etag === input.baseEtag;
 					if (!matches) return { kind: 'conflict', remote: current };
 					await execute(current);
+					await this.dependencies.mutationReceipts.publishChanges();
 					const resource = await this.dependencies.syncObjects.read(actor, identity, null);
 					if (resource.kind !== 'found' && resource.kind !== 'deleted')
 						throw new Error('The mutation produced no authoritative resource');

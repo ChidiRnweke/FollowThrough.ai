@@ -1,3 +1,4 @@
+import { initialCacheGeneration } from '$lib/models/sync';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { syncCursorSchema, syncEtag } from '$lib/models/sync';
@@ -74,7 +75,12 @@ describe('damaged workspace storage recovery', () => {
 			complete: loaded.inventoryComplete,
 			keys: loaded.records.map((row) => row.key),
 			generation: loaded.generation
-		}).toEqual({ cursor: null, complete: false, keys: ['note:1', 'note:2'], generation: 1 });
+		}).toEqual({
+			cursor: null,
+			complete: false,
+			keys: ['note:1', 'note:2'],
+			generation: expect.any(String)
+		});
 	});
 	it('rejects an old tab checkpoint after another tab repairs storage', async () => {
 		const { name, cache } = setup();
@@ -89,7 +95,7 @@ describe('damaged workspace storage recovery', () => {
 			cache.commit('account', {
 				put: [],
 				remove: [],
-				generation: 0,
+				generation: initialCacheGeneration,
 				cursor: syncCursorSchema.parse('99')
 			})
 		).rejects.toThrow('recovered in another tab');
@@ -146,4 +152,38 @@ it('exports only the selected account edits without needing bootstrap metadata',
 		own: content.includes(own.operationId),
 		other: content.includes(other.operationId)
 	}).toEqual({ own: true, other: false });
+});
+
+it('repairs damaged recovery metadata without hiding healthy recovery entries', async () => {
+	const { name, recovery } = setup();
+	await recovery.save(
+		{
+			accountId: 'account',
+			source: 'records',
+			key: 'healthy',
+			message: 'Saved recovery',
+			impact: { kind: 'cache' }
+		},
+		'preserved'
+	);
+	await damage(name, 'quarantine', {
+		accountId: 'account',
+		source: 'records',
+		key: 'broken',
+		impact: 'unreadable',
+		raw: 'damaged metadata'
+	});
+	const items = await recovery.list('account');
+	expect(items.map((item) => item.source).sort()).toEqual(['records', 'recovery-metadata']);
+});
+it('rebuilds inventory under a fresh token when its recovery marker is damaged', async () => {
+	const { name, cache } = setup();
+	await cache.commit('account', { put: [], remove: [], cursor: syncCursorSchema.parse('42') });
+	await damage(name, 'recovery-heads', { accountId: 'account', generation: 'broken' });
+	const loaded = await cache.load('account');
+	expect({
+		cursor: loaded.cursor,
+		complete: loaded.inventoryComplete,
+		changed: loaded.generation !== initialCacheGeneration
+	}).toEqual({ cursor: null, complete: false, changed: true });
 });

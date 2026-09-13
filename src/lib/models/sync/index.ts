@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const initialCacheGeneration = '00000000-0000-0000-0000-000000000000';
+
 export const storageRecoveryItemSchema = z.object({
 	accountId: z.string(),
 	source: z.string(),

@@ -31,6 +31,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			requestValue(transaction.objectStore('records').index('accountId').getAllKeys(accountId))
 		]);
 		try {
+			await recoveryGeneration(transaction, accountId);
 			const records: StoredCache<T>['records'][number][] = [];
 			for (const [index, row] of rows.entries()) {
 				const identity = z.tuple([z.literal(accountId), z.string().min(1)]).safeParse(keys[index]);

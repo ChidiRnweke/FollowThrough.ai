@@ -1,5 +1,6 @@
 import {
 	mergeResourceStates,
+	initialCacheGeneration,
 	resourceVersion,
 	type SyncSnapshot,
 	type SyncCursor,
@@ -22,7 +23,7 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		return {
-			generation: 0,
+			generation: initialCacheGeneration,
 			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
 			cursor: this.cursors.get(accountId) ?? null

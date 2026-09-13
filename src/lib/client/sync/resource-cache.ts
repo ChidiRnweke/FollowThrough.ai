@@ -1,5 +1,6 @@
 import {
 	accessCache,
+	initialCacheGeneration,
 	cachedSnapshot,
 	receiveResource,
 	mergeResourceStates,
@@ -39,7 +40,7 @@ export class ResourceCache<T> {
 	private stopped = false;
 	private online = true;
 	private cursor: SyncCursor | null = null;
-	private generation = 0;
+	private generation: string = initialCacheGeneration;
 	private inventoryComplete = false;
 	private result: SynchronizationResult = { kind: 'idle' };
 

@@ -1,3 +1,4 @@
+import { initialCacheGeneration } from '$lib/models/sync';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
@@ -73,7 +74,7 @@ describe('durable workspace cache', () => {
 		});
 		await repository.close();
 		expect(await setup(name).repository.load('user-a')).toEqual({
-			generation: 0,
+			generation: initialCacheGeneration,
 			inventoryComplete: true,
 			records: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			cursor: initialSyncCursor
@@ -84,7 +85,7 @@ describe('durable workspace cache', () => {
 		expect(await repository.load('user-a')).toEqual({
 			records: [],
 			cursor: null,
-			generation: 0,
+			generation: initialCacheGeneration,
 			inventoryComplete: false
 		});
 	});
@@ -94,7 +95,7 @@ describe('durable workspace cache', () => {
 		const cursor = initialSyncCursor;
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [], cursor });
 		expect(await repository.load('user-a')).toEqual({
-			generation: 0,
+			generation: initialCacheGeneration,
 			inventoryComplete: true,
 			records: [{ key: 'note:1', entry }],
 			cursor
@@ -119,7 +120,7 @@ describe('durable workspace cache', () => {
 		expect(await repository.load('user-b')).toEqual({
 			records: [],
 			cursor: null,
-			generation: 0,
+			generation: initialCacheGeneration,
 			inventoryComplete: false
 		});
 	});
@@ -139,7 +140,7 @@ describe('durable workspace cache', () => {
 		const incompatible = new IndexedDbSyncCache(z.number(), name);
 		try {
 			expect(await incompatible.load('user-a')).toEqual({
-				generation: 1,
+				generation: expect.any(String),
 				inventoryComplete: false,
 				cursor: null,
 				records: [

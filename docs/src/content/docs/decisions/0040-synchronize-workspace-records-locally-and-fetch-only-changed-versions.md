@@ -161,8 +161,9 @@ Discarding removes exactly the reviewed set: an attempted write first needs rece
 and every dependent edit must be included explicitly. This prevents an apparently local discard
 from silently destroying or unblocking work the user did not review.
 
-Journal publication runs in a deferred constraint trigger at commit. Resource versions still
-advance immediately, so receipts can read their exact version inside a transaction. The account
+Journal publication runs in a deferred constraint trigger at commit. Guarded mutations flush
+that trigger after all domain writes, before reading the authoritative receipt. This makes deletion
+tombstones visible inside the transaction. Resource versions advance immediately. The account
 head is acquired after domain work, avoiding the extra head/resource deadlock cycle. A transaction
 that starts later may commit first; its cursor is assigned first, so incremental readers cannot
 skip the earlier transaction when that transaction eventually commits. PostgreSQL defers these

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
 	storageRecoveryItemSchema,
+	initialCacheGeneration,
 	type StorageRecoveryItem,
 	type ResourceState
 } from '$lib/models/sync';
@@ -9,21 +10,37 @@ import { completed, openSyncDatabase, requestValue, storedResourceSchema } from 
 export const recoveryGeneration = async (
 	transaction: IDBTransaction,
 	accountId: string
-): Promise<number> => {
-	const raw = await requestValue(transaction.objectStore('recovery-heads').get(accountId));
-	return raw === undefined
-		? 0
-		: z
-				.object({ accountId: z.literal(accountId), generation: z.number().int().nonnegative() })
-				.parse(raw).generation;
+): Promise<string> => {
+	const store = transaction.objectStore('recovery-heads');
+	const raw = await requestValue(store.get(accountId));
+	if (raw === undefined) return initialCacheGeneration;
+	const parsed = z
+		.object({ accountId: z.literal(accountId), generation: z.string().uuid() })
+		.safeParse(raw);
+	if (parsed.success) return parsed.data.generation;
+	quarantineRow(
+		transaction,
+		{
+			accountId,
+			source: 'recovery-heads',
+			key: accountId,
+			message: 'The cache recovery marker was damaged. The workspace inventory will be rebuilt.',
+			impact: { kind: 'cache' }
+		},
+		raw
+	);
+	const generation = crypto.randomUUID();
+	store.put({ accountId, generation });
+	transaction.objectStore('cursors').delete(accountId);
+	return generation;
 };
 
 export const invalidateInventory = async (
 	transaction: IDBTransaction,
 	accountId: string
 ): Promise<void> => {
-	const generation = await recoveryGeneration(transaction, accountId);
-	transaction.objectStore('recovery-heads').put({ accountId, generation: generation + 1 });
+	await recoveryGeneration(transaction, accountId);
+	transaction.objectStore('recovery-heads').put({ accountId, generation: crypto.randomUUID() });
 	transaction.objectStore('cursors').delete(accountId);
 };
 
@@ -70,10 +87,28 @@ export const recoveryItems = async (
 	transaction: IDBTransaction,
 	accountId: string
 ): Promise<readonly StorageRecoveryItem[]> => {
-	const rows = await requestValue(
-		transaction.objectStore('quarantine').index('accountId').getAll(accountId)
-	);
-	return z.array(storageRecoveryItemSchema).parse(rows);
+	const store = transaction.objectStore('quarantine');
+	const [rows, keys] = await Promise.all([
+		requestValue(store.index('accountId').getAll(accountId)),
+		requestValue(store.index('accountId').getAllKeys(accountId))
+	]);
+	return rows.map((row, index) => {
+		const parsed = storageRecoveryItemSchema
+			.extend({ accountId: z.literal(accountId) })
+			.safeParse(row);
+		if (parsed.success) return parsed.data;
+		const item: StorageRecoveryItem = {
+			accountId,
+			source: 'recovery-metadata',
+			key: JSON.stringify(keys[index]),
+			message:
+				'A recovery entry had damaged metadata. Its original content is preserved for download.',
+			impact: { kind: 'write', operationId: null }
+		};
+		store.delete(keys[index]);
+		quarantineRow(transaction, item, row);
+		return item;
+	});
 };
 
 const legacyRecoveryText = async (accountId: string): Promise<string> => {
@@ -144,7 +179,7 @@ export class IndexedDbStorageRecovery {
 	async list(accountId: string): Promise<readonly StorageRecoveryItem[]> {
 		const database = await openSyncDatabase(this.databaseName, () => undefined);
 		try {
-			const transaction = database.transaction('quarantine', 'readonly');
+			const transaction = database.transaction('quarantine', 'readwrite');
 			const done = completed(transaction);
 			const items = await recoveryItems(transaction, accountId);
 			await done;

@@ -13,7 +13,7 @@ export interface CachedRecord<T> {
 }
 
 export interface CacheCommit<T> {
-	readonly generation?: number;
+	readonly generation?: string;
 	readonly put: readonly CachedRecord<T>[];
 	readonly remove: readonly { readonly key: string; readonly etag: SyncEtag | null }[];
 	readonly cursor?: SyncCursor;
@@ -21,7 +21,7 @@ export interface CacheCommit<T> {
 }
 
 export interface StoredCache<T> {
-	readonly generation: number;
+	readonly generation: string;
 	readonly inventoryComplete: boolean;
 	readonly records: readonly CachedRecord<T>[];
 	readonly cursor: SyncCursor | null;

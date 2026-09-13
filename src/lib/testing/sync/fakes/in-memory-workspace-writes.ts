@@ -7,6 +7,7 @@ import type { ReceiptLookup } from '$lib/server/repositories/workspace/sync-rece
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 
 export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
+	async publishChanges(): Promise<void> {}
 	private receipts = new Map<
 		string,
 		{ request: string; outcome: Exclude<ReceiptLookup, { kind: 'missing' | 'reused' }> }

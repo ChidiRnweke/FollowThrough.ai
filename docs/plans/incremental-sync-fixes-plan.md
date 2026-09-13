@@ -62,10 +62,10 @@ Selected screenshots belong under `docs/pr-evidence/incremental-sync/`; use synt
 
 ## Observed validation
 
-- `pnpm test:unit`: 296 files, 3,354 tests passed. The added account-only recovery export test
-  also passed in the focused six-test storage recovery suite.
+- `pnpm test:unit`: 296 files, 3,357 tests passed, including account-only recovery export
+  and damaged recovery metadata/reset token coverage.
 - `pnpm check`: zero errors and warnings, including the tooltip accessibility fix.
-- `pnpm lint`: passed; focused lint covers the later tooltip/test edits.
+- `pnpm lint`: passed after the final recovery and receipt fixes.
 - `pnpm test:architecture`: all audits pass at zero violations.
 - `pnpm docs:check`: zero errors, zero warnings, one existing Astro hint.
 - `pnpm test:browser:full`: 59 files, 494 tests passed, including all six review tests.
