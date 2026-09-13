@@ -59,3 +59,6 @@ export const isUniqueViolation = (error: unknown, constraint?: string): boolean 
 			matchesConstraint(link, constraint)
 		);
 	});
+
+export const isForeignKeyViolation = (error: unknown): boolean =>
+	causes(error).some((link) => 'code' in link && link.code === '23503');

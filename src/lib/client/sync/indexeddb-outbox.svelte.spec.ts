@@ -1,3 +1,7 @@
+import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
+import { workspaceRecordSchema } from '$lib/models/workspace-records';
+import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { outboxRepositoryContract } from '$lib/testing/sync/contracts/outbox-contract';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { syncEtag } from '$lib/models/sync';
@@ -370,4 +374,32 @@ it('retains a corrected rejected document as sendable after reopening storage', 
 		command: sent?.intent.command,
 		base: sent?.intent.base
 	}).toEqual({ id: correction.operationId, command: 'Corrected document', base: snapshot });
+});
+
+outboxRepositoryContract(() => setup().outbox);
+
+it('retains identical normalized input for submission and uncertain cancellation', async () => {
+	const { name } = setup();
+	const outbox = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, name);
+	repositories.push(outbox);
+	const project = projectBuilder({ name: 'Plan' });
+	const operationId = crypto.randomUUID();
+	await outbox.append(project.userId, {
+		operationId,
+		key: JSON.stringify(['projects', project.id]),
+		command: { kind: 'createProject', id: project.id, name: 'Plan ' },
+		local: { type: 'projects', value: project },
+		base: null,
+		basedOn: null,
+		coalesce: null,
+		references: []
+	});
+	const sent = await outbox.take(project.userId);
+	await outbox.retry(project.userId, operationId, 'Response lost');
+	await outbox.close();
+	const [retained] = await outbox.list(project.userId);
+	expect({ submitted: sent?.intent.command, cancelled: retained.intent.command }).toEqual({
+		submitted: { kind: 'createProject', id: project.id, name: 'Plan' },
+		cancelled: { kind: 'createProject', id: project.id, name: 'Plan' }
+	});
 });

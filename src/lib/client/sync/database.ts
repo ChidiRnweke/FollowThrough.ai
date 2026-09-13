@@ -16,6 +16,25 @@ export const completed = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
+/** Capture cleanup while the transaction is active, before any request can settle it. */
+export const transactionLifetime = (
+	transaction: IDBTransaction
+): { done: Promise<void>; abort: () => void } => {
+	let active = true;
+	transaction.addEventListener('abort', () => {
+		active = false;
+	});
+	transaction.addEventListener('complete', () => {
+		active = false;
+	});
+	return {
+		done: completed(transaction),
+		abort: () => {
+			if (active) transaction.abort();
+		}
+	};
+};
+
 export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) => {
 	const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
 	return z.union([

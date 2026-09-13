@@ -27,7 +27,7 @@
 						entry.delivery.kind === 'conflict' ||
 						entry.delivery.kind === 'rejected' ||
 						entry.delivery.kind === 'retry'
-				).length + resources.recoveryItems.filter((item) => item.impact.kind === 'write').length,
+				).length + resources.recoveryItems.filter((item) => item.impact.kind !== 'cache').length,
 			failedDownloads: resources.failedDownloads,
 			downloading:
 				!resources.downloadProgress.inventoryComplete ||
@@ -78,8 +78,10 @@
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="w-72">
-		<DropdownMenu.Label>{indicator.headline}</DropdownMenu.Label>
-		<p class="px-2 pb-3 text-sm text-muted-foreground" role="status">{indicator.description}</p>
+		<DropdownMenu.Label class="pb-1 text-sm font-medium text-foreground"
+			>{indicator.headline}</DropdownMenu.Label
+		>
+		<p class="px-2 pb-3 text-label text-muted-foreground" role="status">{indicator.description}</p>
 		{#if indicator.kind === 'downloading'}<p class="px-2 pb-3 text-sm text-muted-foreground">
 				{resources.downloadProgress.completed} of {resources.downloadProgress.total} known items downloaded{resources
 					.downloadProgress.inventoryComplete

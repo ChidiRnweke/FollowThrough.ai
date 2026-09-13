@@ -210,7 +210,7 @@
      the grouping is legible without drawing a card. Density comes from the 62
      rows, never from the four controls, which keep their default height. -->
 <section class="flex max-w-3xl flex-col gap-6">
-	{#if session.resources.availability !== 'complete'}
+	{#if session.resources.collectionReadiness( ['tool_preferences', 'project_tool_overrides'] ) !== 'ready'}
 		<p role="status" class="text-sm text-muted-foreground">
 			Some settings are unavailable on this device. Connect to finish downloading them before making
 			changes.
@@ -329,7 +329,11 @@
 											variant="ghost"
 											size="sm"
 											class="shrink-0"
-											disabled={busy !== null || session.resources.availability !== 'complete'}
+											disabled={busy !== null ||
+												session.resources.collectionReadiness([
+													'tool_preferences',
+													'project_tool_overrides'
+												]) !== 'ready'}
 											onclick={() => void reset(preference)}
 										>
 											Reset
@@ -341,7 +345,10 @@
 										checked={preference.enabled}
 										disabled={preference.locked ||
 											busy !== null ||
-											session.resources.availability !== 'complete'}
+											session.resources.collectionReadiness([
+												'tool_preferences',
+												'project_tool_overrides'
+											]) !== 'ready'}
 										onCheckedChange={(enabled) => void toggle(preference, enabled)}
 									/>
 								</li>

@@ -1,3 +1,5 @@
+import { WorkspaceChangeChannel } from '$lib/client/sync/change-channel';
+import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import { type NoteId, type NoteView } from '$lib/models/notes';
 import {
 	visibleResources,
@@ -30,6 +32,7 @@ import {
 import { WorkspaceViews } from '$lib/models/workspace-views';
 import {
 	cachedSnapshot,
+	collectionReadiness,
 	compareSyncEtags,
 	type CacheAccess,
 	type SyncSnapshot
@@ -41,7 +44,10 @@ import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
 import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import type { StorageRecoveryItem } from '$lib/models/sync';
-import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
+import {
+	browserWriterLock,
+	withWorkspaceMigrationLock
+} from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
 	workspaceWriteTransport
@@ -50,6 +56,8 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
+	dispose?(): void;
+	recoveryCommitted?(): void;
 	restoreLocalWrites(): Promise<void>;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
@@ -71,6 +79,22 @@ export class WorkspaceResources {
 		const items = await new IndexedDbStorageRecovery().list(this.accountId);
 		if (!this.stopped) this.recovery = items;
 	}
+	async observeChanges(): Promise<void> {
+		if (this.stopped) return;
+		await this.initialize();
+		if (this.stopped) return;
+		await Promise.all([this.dependencies.cache.reload(), this.dependencies.writes.reload()]);
+		await this.loadRecovery();
+	}
+
+	async removeRecovery(item: StorageRecoveryItem): Promise<void> {
+		if (!this.active) throw new Error('This account is no longer active');
+		await new IndexedDbStorageRecovery().remove(this.accountId, item.source, item.key);
+		await this.loadRecovery();
+		this.dependencies.recoveryCommitted?.();
+		await this.synchronize();
+	}
+
 	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
 		return new IndexedDbStorageRecovery().download(this.accountId, item.source, item.key);
 	}
@@ -159,7 +183,24 @@ export class WorkspaceResources {
 				cachedSnapshot(entry.cache) === null &&
 				types.some((type) => key.startsWith(`["${type}",`))
 		);
-		await Promise.all(missing.map(([key]) => this.dependencies.cache.open(key)));
+		await this.dependencies.cache.prepare(missing.map(([key]) => key));
+	}
+	collectionReadiness(types: readonly WorkspaceResourceType[]): 'unknown' | 'incomplete' | 'ready' {
+		void this.revision;
+		return collectionReadiness(
+			this.active && this.dependencies.cache.downloadProgress.inventoryComplete,
+			[...this.dependencies.cache.records]
+				.filter(([key]) => types.some((type) => key.startsWith(`["${type}",`)))
+				.map(([, entry]) => entry)
+		);
+	}
+
+	async requireCollections(types: readonly WorkspaceResourceType[]): Promise<void> {
+		await this.prepare(types);
+		if (this.collectionReadiness(types) !== 'ready')
+			throw new Error(
+				'Required workspace data is not available on this device. Reconnect and retry.'
+			);
 	}
 	async open(identity: WorkspaceResourceIdentity): Promise<CacheAccess<WorkspaceRecord>> {
 		await this.initialize();
@@ -281,6 +322,7 @@ export class WorkspaceResources {
 		this.dependencies.cache.stop();
 		this.dependencies.writes.stop();
 		for (const unsubscribe of this.unsubscribe) unsubscribe();
+		this.dependencies.dispose?.();
 	}
 	private async synchronizeResources(): Promise<void> {
 		do {
@@ -288,22 +330,33 @@ export class WorkspaceResources {
 			await this.initialize();
 			if (this.stopped) return;
 			this.failure = null;
-			await this.dependencies.writes.flush();
-			await this.dependencies.cache.refresh();
-			await this.dependencies.cache.warm();
+			await Promise.all([
+				this.dependencies.writes.flush(),
+				this.dependencies.cache.refresh().then(() => this.dependencies.cache.warm())
+			]);
 		} while (this.requested && !this.stopped);
 	}
 }
 
 export const createWorkspaceResources = (accountId: string): WorkspaceResources => {
+	const channel = new WorkspaceChangeChannel(accountId);
+	const cached = new IndexedDbSyncCache(workspaceRecordSchema, undefined, () =>
+		channel.publish('cache')
+	);
 	const cache = new ResourceCache(accountId, {
-		repository: new IndexedDbSyncCache(workspaceRecordSchema),
+		repository: cached,
 		transport: workspaceReadTransport(accountId)
 	});
-	const repository = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema);
+	const repository = new IndexedDbOutbox(
+		workspaceCommandSchema,
+		workspaceRecordSchema,
+		undefined,
+		() => channel.publish('writes')
+	);
 	const writes = new MutationQueue(accountId, {
 		repository,
 		transport: workspaceWriteTransport(accountId),
+		scheduler: browserSyncScheduler,
 		writerLock: browserWriterLock,
 		resolveBase: async (key, base, local) => {
 			const remote = await workspaceReadTransport(accountId).read(key, null);
@@ -315,12 +368,36 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
 		}
 	});
-	return new WorkspaceResources(accountId, {
+	const resources = new WorkspaceResources(accountId, {
+		recoveryCommitted: () => channel.publish('writes'),
+		dispose: () => {
+			channel.close();
+			void writes
+				.settled()
+				.then(() => Promise.all([cached.close(), repository.close()]))
+				.catch((error) => {
+					console.error('Workspace storage could not close', error);
+					return { kind: 'failure' };
+				});
+		},
 		cache,
 		writes,
 		restoreLocalWrites: () =>
-			browserWriterLock.run(accountId, () => migrateLegacyNotes(accountId, repository))
+			withWorkspaceMigrationLock(accountId, () => migrateLegacyNotes(accountId, repository))
 	});
+	channel.subscribe((change) => {
+		void resources
+			.observeChanges()
+			.then(async () => {
+				if (change === 'writes' && resources.active && resources.online)
+					await resources.synchronize();
+			})
+			.catch((error) => {
+				console.error('Workspace changes could not be loaded', error);
+				return { kind: 'failure' };
+			});
+	});
+	return resources;
 };
 
 type EditContext = ReturnType<WorkspaceResources['editBase']>;
@@ -526,7 +603,6 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	async discard(): Promise<CacheAccess<WorkspaceValues[K]>> {
 		const reviewed = this.entries;
 		const conflict = reviewed.find((entry) => entry.delivery.kind === 'conflict');
-		if (this.resources.online) await this.resources.synchronize();
 		const state = this.resources.state(this.identity);
 		const snapshot = this.resources.snapshot(this.identity);
 		if (state?.kind !== 'deleted') {

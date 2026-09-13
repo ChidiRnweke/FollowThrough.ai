@@ -68,6 +68,19 @@ export const readLegacyNoteImports = async (
 			const parsed = schema.safeParse(row);
 			if (!parsed.success) {
 				const identity = z.object({ key: z.string() }).parse(row);
+				const noteId = z
+					.string()
+					.uuid()
+					.safeParse(identity.key.slice(accountId.length + 1));
+				const synchronized = z
+					.object({
+						record: z.object({
+							userId: z.literal(accountId),
+							noteId: z.string().uuid(),
+							state: z.literal('synced')
+						})
+					})
+					.safeParse(row);
 				await recovery.save(
 					{
 						accountId,
@@ -75,7 +88,17 @@ export const readLegacyNoteImports = async (
 						key: identity.key,
 						message:
 							'An older saved edit could not be imported. Download the original before resolving it.',
-						impact: { kind: 'write', operationId: null }
+						impact:
+							synchronized.success &&
+							identity.key === `${accountId}:${synchronized.data.record.noteId}`
+								? { kind: 'cache' }
+								: noteId.success
+									? {
+											kind: 'resource',
+											key: JSON.stringify(['notes', noteId.data]),
+											operationId: null
+										}
+									: { kind: 'write', operationId: null }
 					},
 					row
 				);

@@ -1,3 +1,4 @@
+import type { SyncScheduler } from './scheduler';
 import {
 	authoritativeWriteResource,
 	dependentWrites,
@@ -13,11 +14,17 @@ import type { OutboxRepository, OutboxTransport } from './outbox-contracts';
 import { OutboxAccountChangedError } from './outbox-contracts';
 
 export interface AccountWriterLock {
+	tryRun<T>(
+		accountId: string,
+		work: () => Promise<T>
+	): Promise<{ kind: 'acquired'; value: T } | { kind: 'busy' }>;
 	run<T>(accountId: string, work: () => Promise<T>): Promise<T>;
 }
 export type SubmissionResult =
-	{ kind: 'idle' | 'complete' | 'offline' | 'stopped' } | { kind: 'failure'; message: string };
+	| { kind: 'idle' | 'complete' | 'offline' | 'stopped' | 'waiting' }
+	| { kind: 'failure'; message: string };
 export interface MutationQueueDependencies<C, T> {
+	scheduler: SyncScheduler;
 	repository: OutboxRepository<C, T>;
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
@@ -35,6 +42,7 @@ export class MutationQueue<C, T> {
 	private online = true;
 	private stopped = false;
 	private result: SubmissionResult = { kind: 'idle' };
+	private cancelWake: (() => void) | null = null;
 	private readonly retryAfter = new Map<string, { attempts: number; at: number }>();
 	constructor(
 		readonly accountId: string,
@@ -55,20 +63,34 @@ export class MutationQueue<C, T> {
 	}
 	setOnline(online: boolean): void {
 		this.online = online;
+		this.scheduleRetry();
 		this.notify();
 	}
 	stop(): void {
 		this.stopped = true;
+		this.cancelWake?.();
+		this.cancelWake = null;
 		this.entries = [];
 		this.receipts.clear();
 		this.result = { kind: 'stopped' };
 		this.notify();
+	}
+	async settled(): Promise<void> {
+		await this.flushing;
 	}
 	async reload(): Promise<void> {
 		const generation = ++this.reloadGeneration;
 		const entries = await this.dependencies.repository.list(this.accountId);
 		if (this.stopped || generation !== this.reloadGeneration) return;
 		const present = new Set(entries.map((entry) => entry.intent.operationId));
+		const retryable = new Set(
+			entries
+				.filter((entry) => entry.delivery.kind === 'retry' || entry.delivery.kind === 'queued')
+				.map((entry) => entry.intent.operationId)
+		);
+		for (const id of this.retryAfter.keys())
+			if (!retryable.has(id) && id !== 'acknowledgements' && id !== 'writer')
+				this.retryAfter.delete(id);
 		const removedKeys = new Set(
 			this.entries
 				.filter((entry) => !present.has(entry.intent.operationId))
@@ -165,6 +187,8 @@ export class MutationQueue<C, T> {
 	private async acknowledgePending(): Promise<SubmissionResult> {
 		const recovery = this.dependencies.transport.recovery;
 		if (!recovery) return { kind: 'complete' };
+		if ((this.retryAfter.get('acknowledgements')?.at ?? 0) > this.dependencies.scheduler.now())
+			return { kind: 'waiting' };
 		try {
 			for (const operationId of await this.dependencies.repository.pendingAcknowledgements(
 				this.accountId
@@ -173,8 +197,10 @@ export class MutationQueue<C, T> {
 				await recovery.acknowledge(operationId);
 				await this.dependencies.repository.acknowledged(this.accountId, operationId);
 			}
+			this.retryAfter.delete('acknowledgements');
 			return { kind: 'complete' };
 		} catch (error) {
+			this.deferRetry('acknowledgements');
 			return {
 				kind: 'failure',
 				message: error instanceof Error ? error.message : 'Receipt acknowledgement failed'
@@ -186,6 +212,7 @@ export class MutationQueue<C, T> {
 		if (force) this.retryNow();
 		this.flushing ??= this.submit().finally(() => {
 			this.flushing = null;
+			this.scheduleRetry();
 		});
 		return this.flushing;
 	}
@@ -198,14 +225,17 @@ export class MutationQueue<C, T> {
 			await this.reload();
 			if (this.stopped) return { kind: 'stopped' };
 			if (!this.online) return { kind: 'offline' };
-			const result = await this.dependencies.writerLock.run(
+			const ownership = await this.dependencies.writerLock.tryRun(
 				this.accountId,
 				async (): Promise<SubmissionResult> => {
 					if (this.stopped) return { kind: 'stopped' };
 					if (!this.online) return { kind: 'offline' };
+					this.retryAfter.delete('writer');
 					await this.dependencies.repository.recover(this.accountId);
 					const excluded = new Set(
-						[...this.retryAfter].filter(([, retry]) => retry.at > Date.now()).map(([id]) => id)
+						[...this.retryAfter]
+							.filter(([, retry]) => retry.at > this.dependencies.scheduler.now())
+							.map(([id]) => id)
 					);
 					let failure: SubmissionResult = await this.acknowledgePending();
 					while (!this.stopped && this.online) {
@@ -230,6 +260,7 @@ export class MutationQueue<C, T> {
 								unresolved.intent.operationId,
 								resolution
 							);
+							this.retryAfter.delete(unresolved.intent.operationId);
 							const resource =
 								resolution.kind === 'matched'
 									? { kind: 'found' as const, snapshot: resolution.snapshot }
@@ -282,12 +313,18 @@ export class MutationQueue<C, T> {
 					return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
 				}
 			);
+			if (ownership.kind === 'busy') this.deferRetry('writer');
+			const result: SubmissionResult =
+				ownership.kind === 'busy' ? { kind: 'waiting' } : ownership.value;
 			if (!this.stopped) {
 				this.result = result;
 				this.notify();
 			}
 			return result;
 		} catch (error) {
+			for (const [id, retry] of this.retryAfter) {
+				if (retry.at <= this.dependencies.scheduler.now()) this.deferRetry(id);
+			}
 			const message = error instanceof Error ? error.message : 'Local write storage failed';
 			if (!this.stopped) {
 				this.result = { kind: 'failure', message };
@@ -296,11 +333,22 @@ export class MutationQueue<C, T> {
 			return { kind: 'failure', message };
 		}
 	}
+	private scheduleRetry(): void {
+		this.cancelWake?.();
+		this.cancelWake = null;
+		if (this.stopped || !this.online || !this.retryAfter.size) return;
+		const deadline = Math.min(...[...this.retryAfter.values()].map((retry) => retry.at));
+		this.cancelWake = this.dependencies.scheduler.schedule(deadline, async () => {
+			this.cancelWake = null;
+			await this.flush();
+		});
+	}
 	private deferRetry(operationId: string): void {
 		const attempts = (this.retryAfter.get(operationId)?.attempts ?? 0) + 1;
 		this.retryAfter.set(operationId, {
 			attempts,
-			at: Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(attempts - 1, 6))
+			at:
+				this.dependencies.scheduler.now() + Math.min(60_000, 1000 * 2 ** Math.min(attempts - 1, 6))
 		});
 	}
 	private async resolveImportedBase(

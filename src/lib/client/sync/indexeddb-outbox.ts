@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
 	authoritativeWriteResource,
+	rejectUnprovenAncestry,
 	writeReceiptSchema,
 	retainWriteReceipt,
 	retryConflictedWrite,
@@ -19,8 +20,8 @@ import {
 	type WriteReceipt,
 	type WriteOutcome
 } from '$lib/models/outbox';
-import { receiveResource, cachedSnapshot } from '$lib/models/sync';
-import { completed, openSyncDatabase, requestValue } from './database';
+import { receiveResource, cachedSnapshot, recoveryBlocksWrite } from '$lib/models/sync';
+import { completed, openSyncDatabase, requestValue, transactionLifetime } from './database';
 import type { OutboxRepository } from './outbox-contracts';
 import { quarantineRow, recoveryItems, recoverCacheRow } from './storage-recovery';
 
@@ -29,7 +30,8 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	constructor(
 		private readonly commandSchema: z.ZodType<C>,
 		private readonly valueSchema: z.ZodType<T>,
-		private readonly databaseName = 'followthrough-workspace-sync'
+		private readonly databaseName = 'followthrough-workspace-sync',
+		private readonly onCommit?: () => void
 	) {}
 	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
 		const database = await this.open();
@@ -200,13 +202,16 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	): Promise<OutboxEntry<C, T> | null> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const quarantined = await recoveryItems(transaction, accountId);
-			if (
-				quarantined.some((item) => item.impact.kind === 'write' && item.impact.operationId === null)
-			)
+			const blocked = new Set(excluded);
+			for (const entry of entries)
+				if (quarantined.some((item) => recoveryBlocksWrite(item.impact, entry.intent.key)))
+					blocked.add(entry.intent.operationId);
+			const next = nextWrite(entries, blocked);
+			if (!next && nextWrite(entries, excluded))
 				throw new Error(
-					'A saved edit could not be read. Download the recovery copy before resolving workspace writes.'
+					'Saved data needs review before these changes can sync. Download its recovery copy.'
 				);
-			const next = nextWrite(entries, excluded);
+
 			if (!next) return { entries, result: null };
 			const sent = beginWrite(next);
 			return { entries: entries.map((entry) => (entry === next ? sent : entry)), result: sent };
@@ -317,14 +322,19 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			requestValue(store.index('accountId').getAllKeys(accountId))
 		]);
 		const entries: OutboxEntry<C, T>[] = [];
+		let repaired = false;
 		for (const [index, row] of rows.entries()) {
 			const parsed = this.entriesSchema(accountId).element.safeParse(row);
 			if (parsed.success) {
 				entries.push(parsed.data.entry);
 				continue;
 			}
+			repaired = true;
 			const identity = z
 				.object({ entry: z.object({ intent: z.object({ operationId: z.string().uuid() }) }) })
+				.safeParse(row);
+			const resource = z
+				.object({ entry: z.object({ intent: z.object({ key: z.string().min(1) }) }) })
 				.safeParse(row);
 			quarantineRow(
 				transaction,
@@ -334,7 +344,9 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 					key: JSON.stringify(keys[index]),
 					message: 'This saved edit could not be read. Download its recovery copy.',
 					impact: {
-						kind: 'write',
+						...(resource.success
+							? { kind: 'resource' as const, key: resource.data.entry.intent.key }
+							: { kind: 'write' as const }),
 						operationId: identity.success ? identity.data.entry.intent.operationId : null
 					}
 				},
@@ -370,7 +382,11 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				);
 			heads.put({ accountId, sequence });
 		}
-		return entries;
+
+		const recovered = rejectUnprovenAncestry(entries);
+		for (const entry of recovered) if (!entries.includes(entry)) store.put({ accountId, entry });
+		if (repaired) transaction.addEventListener('complete', () => this.onCommit?.(), { once: true });
+		return recovered;
 	}
 
 	private async edit<R>(
@@ -395,14 +411,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			],
 			'readwrite'
 		);
-		const done = completed(transaction);
-		let active = true;
-		transaction.addEventListener('abort', () => {
-			active = false;
-		});
-		transaction.addEventListener('complete', () => {
-			active = false;
-		});
+		const { done, abort } = transactionLifetime(transaction);
 		try {
 			const store = transaction.objectStore('outbox');
 			const previous = await this.readEntries(accountId, transaction);
@@ -417,9 +426,14 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 						entry: outboxEntrySchema(this.commandSchema, this.valueSchema).parse(entry)
 					});
 			await done;
+			if (
+				change.entries.length !== previous.length ||
+				change.entries.some((entry, index) => entry !== previous[index])
+			)
+				this.onCommit?.();
 			return change.result;
 		} catch (error) {
-			if (active) transaction.abort();
+			abort();
 			await done.catch(() => {
 				return { kind: 'failure' };
 			});

@@ -1966,3 +1966,24 @@ export const applyAgentPreferenceUpdate = (
 		? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
 		: {})
 });
+
+/** Preserve explicitly configured models when the deployment catalog omits them. */
+export const configuredAgentModels = (
+	models: readonly AgentModel[],
+	defaults: { chatModelId: string; visionModelId: string }
+): readonly AgentModel[] => {
+	const result = [...models];
+	for (const id of new Set([defaults.chatModelId, defaults.visionModelId])) {
+		if (result.some((model) => model.id === id)) continue;
+		result.push({
+			id,
+			name: id,
+			provider: id.split('/')[0],
+			supportsTools: id === defaults.chatModelId,
+			supportsVision: id === defaults.visionModelId,
+			recommended: false,
+			capabilities: ['configured']
+		});
+	}
+	return result;
+};

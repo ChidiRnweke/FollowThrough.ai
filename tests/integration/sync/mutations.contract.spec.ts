@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
+import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -40,7 +42,15 @@ const setup = async (suffix: string) => {
 		null
 	);
 	if (resource.kind !== 'found') throw new Error('Seeded note was not readable');
-	return { ...seeded, controller, synchronization, catalog, baseEtag: resource.snapshot.etag };
+	return {
+		...seeded,
+		controller,
+		synchronization,
+		catalog,
+		database,
+		transactionRunner,
+		baseEtag: resource.snapshot.etag
+	};
 };
 
 describe('synchronized domain mutations on PostgreSQL', () => {
@@ -176,4 +186,51 @@ describe('guarded note trash actions', () => {
 			archivedAt: undefined
 		});
 	});
+});
+
+it('returns a sync rejection when a referenced row disappears inside the transaction', async () => {
+	const { owner, note, database, synchronization, baseEtag } = await setup('9181');
+	const result = await synchronization.mutations.run(
+		owner,
+		{
+			operationId: crypto.randomUUID(),
+			baseEtag,
+			command: { kind: 'renameNote', noteId: note.id, title: 'Never committed' }
+		},
+		async () => {
+			await database.execute(
+				sql`update notes set project_id = ${crypto.randomUUID()} where id = ${note.id}`
+			);
+		}
+	);
+	expect(result).toEqual({
+		kind: 'rejected',
+		message: 'A referenced item is no longer available. Review or discard this change.'
+	});
+});
+it('does not disguise a non-sync database failure as a domain decision', async () => {
+	const { note, database, transactionRunner } = await setup('9182');
+	await expect(
+		transactionRunner.run(
+			async () => {
+				await database.execute(sql`update notes set title = NULL where id = ${note.id}`);
+			},
+			{ retry: 'never' }
+		)
+	).rejects.toMatchObject({ cause: { code: '23502' } });
+});
+it('matches cancellation to normalized input after an applied response is lost', async () => {
+	const { owner, note, controller, synchronization, baseEtag } = await setup('9183');
+	const input = workspaceMutationRequestSchema.parse({
+		operationId: crypto.randomUUID(),
+		baseEtag,
+		command: { kind: 'renameNote', noteId: note.id, title: 'Plan ' }
+	});
+	if (input.command.kind !== 'renameNote') throw new Error('Expected a note rename');
+	const applied = await controller.synchronize(owner, { ...input, command: input.command });
+	const recovered = await synchronization.mutations.cancel(owner, {
+		operationId: input.operationId,
+		request: JSON.stringify(input)
+	});
+	expect(recovered).toEqual(applied);
 });

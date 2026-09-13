@@ -482,7 +482,8 @@ export class WorkspaceViews {
 				(suggestion) => suggestion.status === 'proposed'
 			).length,
 			pinnedNotes: notes.filter((note) => note.isPinned),
-			recentNotes: [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+			// Preserve Today’s existing five-item presentation (Workspace.today), without limiting sync.
+			recentNotes: [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
 		};
 	}
 }

@@ -19,11 +19,18 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
 	private readonly cursors = new Map<string, SyncCursor>();
 	private readonly inventories = new Map<string, boolean>();
+	private readonly generations = new Map<string, string>();
+
+	recoverInventory(accountId: string): void {
+		this.generations.set(accountId, crypto.randomUUID());
+		this.cursors.delete(accountId);
+		this.inventories.set(accountId, false);
+	}
 	writeFailure: string | null = null;
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		return {
-			generation: initialCacheGeneration,
+			generation: this.generations.get(accountId) ?? initialCacheGeneration,
 			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
 			cursor: this.cursors.get(accountId) ?? null
@@ -32,6 +39,15 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 
 	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
 		if (this.writeFailure) throw new Error(this.writeFailure);
+		const generation = this.generations.get(accountId) ?? initialCacheGeneration;
+		if (changes.generation !== undefined && changes.generation !== generation)
+			throw new Error('Workspace storage was recovered in another tab. Retry synchronization.');
+		const keys = [
+			...changes.put.map((record) => record.key),
+			...changes.remove.map((record) => record.key)
+		];
+		if (new Set(keys).size !== keys.length)
+			throw new Error('A cache commit must touch each resource only once');
 		const records = this.accounts.get(accountId) ?? new Map<string, CachedRecord<T>>();
 		const put: CachedRecord<T>[] = [];
 		const remove: CacheCommit<T>['remove'][number][] = [];
@@ -68,6 +84,10 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	readonly records = new Map<string, SyncSnapshot<T>>();
 	readonly deliveredBodies: string[] = [];
+	readonly readSnapshots = new Map<string, SyncSnapshot<T>>();
+	readBudget = Infinity;
+	maxConcurrentReads = Infinity;
+	private activeReads = 0;
 	pullFailure: string | null = null;
 	readFailure: string | null = null;
 	pageSize: number | null = null;
@@ -122,8 +142,15 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	}
 
 	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<ObjectRead<T>> {
-		const snapshot = this.records.get(key);
-		await this.wait(key);
+		if (--this.readBudget < 0) throw new Error('Transport capacity exhausted without progress');
+		const snapshot = this.readSnapshots.get(key) ?? this.records.get(key);
+		if (this.activeReads >= this.maxConcurrentReads) throw new Error('Download capacity exceeded');
+		this.activeReads++;
+		try {
+			await this.wait(key);
+		} finally {
+			this.activeReads--;
+		}
 		if (this.readFailure) throw new Error(this.readFailure);
 		if (!snapshot) return { kind: 'unavailable' };
 		if (snapshot.etag === etag) return { kind: 'unchanged', etag };

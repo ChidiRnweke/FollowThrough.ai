@@ -1,3 +1,4 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { noteEtag } from '$lib/models/notes';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
@@ -45,6 +46,7 @@ const setup = async () => {
 	const writes = new MutationQueue(note.userId, {
 		repository: outbox,
 		transport,
+		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		resolveBase: async (key, base, local) => {
 			const remote = await transport.read(key, null);

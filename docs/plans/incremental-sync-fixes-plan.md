@@ -17,7 +17,7 @@ user review; do not change its readiness state, close it, or merge it.
 Blocked or incomplete steps remain unchecked with an explanation.
 
 - [x] Capture matching starting/result UI evidence and measure the 7,000-record client fixture.
-- [ ] Run the full 5,000-message/2,000-provenance PostgreSQL/PWA benchmark. Local Docker is unavailable; the client measurement and its limits are recorded in the evidence document.
+- [ ] Run the full 5,000-message/2,000-provenance PostgreSQL/PWA benchmark. The client measurement and its limits are recorded in the evidence document. Docker is now available and functional PWA/contracts pass; the full-scale performance measurement has not been run.
 - [x] Queue recovery: failed writes cannot starve independent work; attempted input stays
       immutable; retry backoff and explicit retry; preserve dependencies and authentication stops.
 - [x] Race-safe discard: cancel under the submission operation lock; retain cancellation proof;
@@ -57,17 +57,10 @@ Final gates: `pnpm lint`, `pnpm check`, `pnpm test:architecture`, `pnpm test:uni
 Selected screenshots belong under `docs/pr-evidence/incremental-sync/`; use synthetic data,
 1280×720 and approximately 400px viewports, both themes, and commit-pinned PR image URLs.
 
-## Observed validation
+## Invariant-driven follow-up
 
-- `pnpm test:unit`: 296 files, 3,357 tests passed, including account-only recovery export
-  and damaged recovery metadata/reset token coverage.
-- `pnpm check`: zero errors and warnings, including the tooltip accessibility fix.
-- `pnpm lint`: passed after the final recovery and receipt fixes.
-- `pnpm test:architecture`: all audits pass at zero violations.
-- `pnpm docs:check`: zero errors, zero warnings, one existing Astro hint.
-- `pnpm test:browser:full`: 59 files, 494 tests passed, including all six review tests.
-- `pnpm test:contracts` and `pnpm test:sync:pwa`: local Testcontainers cannot start because
-  Docker integration is unavailable. Do not report these as local passes.
-
-- PostgreSQL contracts passed in GitHub Actions on `aea112c`, including guarded deletion
-  receipts, cancellation, receipt compaction, deferred journal publication, and repeatable setup.
+The implemented contracts, red–green observations, final suite results and explicit remaining
+limits are recorded in [workspace synchronization invariants](../architecture/workspace-sync-invariants.md).
+The review now has a declared spacing/type ladder, confirmed destructive decisions, and matching
+[desktop/mobile light/dark evidence](../pr-evidence/incremental-sync/invariants/README.md).
+The existing PR remains open with its readiness unchanged.

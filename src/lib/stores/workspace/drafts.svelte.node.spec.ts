@@ -1,3 +1,4 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { noteWrite, type WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -29,6 +30,7 @@ const setup = async () => {
 	const writes = new MutationQueue(note.userId, {
 		repository: outbox,
 		transport,
+		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		resolveBase: async () => {
 			throw new Error('No imported bases in this fixture');
@@ -310,4 +312,26 @@ it('coalesces overlapping local saves using their serialized observed ancestry',
 	expect(resources.pending.map((entry) => entry.intent.local)).toEqual([
 		{ type: 'notes', value: { ...note, plainText: 'Second' } }
 	]);
+});
+
+// SYNC-DECISION: discard never authorizes submission.
+it('discards a queued edit without changing the authoritative note after reconnecting', async () => {
+	const { note, key, store, transport, resources } = await setup();
+	await store.read();
+	await store.stage(noteWrite({ ...note, plainText: 'Do not submit this' }));
+	await resources.synchronize();
+	resources.setOnline(true);
+	const outcome = await store.discard().then(
+		(value) => ({ kind: 'discarded', value }),
+		(error) => ({ kind: 'failure', message: String(error) })
+	);
+	expect({
+		outcome,
+		authoritative: transport.records.get(key)?.value,
+		pending: resources.pending
+	}).toEqual({
+		outcome: { kind: 'discarded', value: { kind: 'ready', value: note } },
+		authoritative: { type: 'notes', value: note },
+		pending: []
+	});
 });

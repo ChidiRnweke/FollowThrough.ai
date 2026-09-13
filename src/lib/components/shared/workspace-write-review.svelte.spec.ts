@@ -1,5 +1,7 @@
-import { expect, it } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
+import type { StorageRecoveryItem } from '$lib/models/sync';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -16,7 +18,10 @@ import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import WorkspaceWriteReview from './workspace-write-review.svelte';
 
-const setup = async (status: 'queued' | 'rejected' | 'conflict' = 'queued') => {
+const setup = async (
+	status: 'queued' | 'rejected' | 'conflict' = 'queued',
+	remote: 'found' | 'deleted' = 'found'
+) => {
 	const project = projectBuilder({ name: 'My project' });
 	const record: WorkspaceRecord = { type: 'projects', value: project };
 	const identity: WorkspaceResourceIdentity = { type: 'projects', id: [project.id] };
@@ -28,6 +33,7 @@ const setup = async (status: 'queued' | 'rejected' | 'conflict' = 'queued') => {
 	});
 	const writes = new MutationQueue(project.userId, {
 		repository,
+		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: {
 			send: async () => {
@@ -75,13 +81,16 @@ const setup = async (status: 'queued' | 'rejected' | 'conflict' = 'queued') => {
 				? { kind: 'rejected', message: 'The project is archived' }
 				: {
 						kind: 'conflict',
-						remote: {
-							kind: 'found',
-							snapshot: {
-								etag: syncEtag(2n),
-								value: { type: 'projects', value: { ...project, name: 'Server project' } }
-							}
-						}
+						remote:
+							remote === 'deleted'
+								? { kind: 'deleted', etag: syncEtag(2n) }
+								: {
+										kind: 'found',
+										snapshot: {
+											etag: syncEtag(2n),
+											value: { type: 'projects', value: { ...project, name: 'Server project' } }
+										}
+									}
 					}
 		);
 		await writes.reload();
@@ -93,7 +102,8 @@ it('discards an explicitly reviewed new local project', async () => {
 	const { resources } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	await screen.getByRole('button', { name: 'Discard change' }).click();
+	await screen.getByRole('button', { name: 'Discard…', exact: true }).click();
+	await screen.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await expect.element(screen.getByText('Everything is saved')).toBeVisible();
 });
 
@@ -109,7 +119,7 @@ it('compares the authoritative conflict value before keeping a change', async ()
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
 	await expect
-		.element(screen.getByRole('region', { name: 'Current on server' }))
+		.element(screen.getByRole('region', { name: 'Latest' }))
 		.toHaveTextContent('Server project');
 });
 
@@ -128,7 +138,8 @@ it('refuses to discard dependent input added after review started', async () => 
 		coalesce: null,
 		references: []
 	});
-	await screen.getByRole('button', { name: 'Discard change' }).click();
+	await screen.getByRole('button', { name: 'Discard…', exact: true }).click();
+	await screen.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await expect
 		.element(screen.getByRole('alert'))
 		.toHaveTextContent('Review dependent edits before discarding their base');
@@ -142,13 +153,91 @@ it('closes retained change details when the account session stops', async () => 
 	await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
 });
 
-it('explains why an offline send is unavailable when the action receives keyboard focus', async () => {
+it('offers no send action for an offline queued change', async () => {
 	const { resources } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	screen.getByRole('button', { name: 'Discard change', exact: true }).element().focus();
-	await userEvent.keyboard('{Tab}');
 	await expect
-		.element(screen.getByRole('tooltip'))
-		.toHaveTextContent('Reconnect to send this change.');
+		.element(screen.getByRole('button', { name: /Send now|Sync now/ }))
+		.not.toBeInTheDocument();
+});
+
+it('preserves the reviewed intent until destructive confirmation', async () => {
+	const { resources } = await setup();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
+	await screen.getByRole('button', { name: /^Discard/ }).click();
+	expect(resources.pending).toHaveLength(1);
+});
+
+it('cancels the destructive decision without changing saved intent', async () => {
+	const { resources } = await setup();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
+	await screen.getByRole('button', { name: /^Discard/ }).click();
+	await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
+	expect(resources.pending).toHaveLength(1);
+});
+
+const recoveries: StorageRecoveryItem[] = [];
+afterEach(async () => {
+	const recovery = new IndexedDbStorageRecovery();
+	for (const item of recoveries.splice(0))
+		await recovery.remove(item.accountId, item.source, item.key);
+});
+const damagedScenario = async () => {
+	const { resources } = await setup();
+	const item: StorageRecoveryItem = {
+		accountId: resources.accountId,
+		source: 'outbox',
+		key: crypto.randomUUID(),
+		message: 'Unreadable edit',
+		impact: { kind: 'write', operationId: null }
+	};
+	await new IndexedDbStorageRecovery().save(item, 'Original damaged data');
+	recoveries.push(item);
+	await resources.loadRecovery();
+	return resources;
+};
+it('offers recovery removal only after a copy has been exported', async () => {
+	const resources = await damagedScenario();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await expect
+		.element(screen.getByRole('button', { name: /Remove from this device/ }))
+		.not.toBeInTheDocument();
+});
+it('keeps damaged data until its removal is confirmed', async () => {
+	const resources = await damagedScenario();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Download copy', exact: true }).click();
+	await screen.getByRole('button', { name: 'Remove from this device…', exact: true }).click();
+	expect(resources.recoveryItems).toHaveLength(1);
+});
+it('removes only the explicitly confirmed recovery item', async () => {
+	const resources = await damagedScenario();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Download copy', exact: true }).click();
+	await screen.getByRole('button', { name: 'Remove from this device…', exact: true }).click();
+	await screen.getByRole('button', { name: 'Remove from this device', exact: true }).click();
+	await expect
+		.element(screen.getByText('Some saved data could not be read.'))
+		.not.toBeInTheDocument();
+});
+
+it('returns to the list when a reviewed change is resolved elsewhere', async () => {
+	const { resources, operationId } = await setup();
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
+	await resources.discard([operationId]);
+	await expect.element(screen.getByText('Everything is saved')).toBeVisible();
+});
+
+it('does not promise a retained latest copy when the item was deleted elsewhere', async () => {
+	const { resources } = await setup('conflict', 'deleted');
+	const screen = render(WorkspaceWriteReview, { resources, open: true });
+	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
+	await screen.getByRole('button', { name: /Use latest…|Discard…/ }).click();
+	await expect
+		.element(screen.getByRole('group', { name: 'Confirm removal' }))
+		.toHaveTextContent('This item will remain deleted.');
 });

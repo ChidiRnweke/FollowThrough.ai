@@ -312,7 +312,9 @@
 				id="chat-composer"
 				bind:value={prompt}
 				bind:ref={textareaRef}
-				placeholder="Ask the agent… (@ to add context)"
+				placeholder={connection === 'offline'
+					? 'Reconnect to send'
+					: 'Ask the agent… (@ to add context)'}
 				rows={2}
 				class="max-h-56 min-h-16 px-3 overflow-y-auto"
 				{onkeydown}
@@ -371,10 +373,16 @@
 				<div class="ml-auto flex min-w-0 shrink items-center gap-2">
 					<Badge
 						variant="secondary"
-						class={isStreaming && connection !== 'connected' ? 'shrink-0' : 'hidden'}
+						class={connection === 'offline' || (isStreaming && connection !== 'connected')
+							? 'shrink-0'
+							: 'hidden'}
 						aria-live="polite"
 					>
-						{connection === 'offline' ? 'Offline · run continues' : 'Reconnecting'}
+						{connection === 'offline'
+							? isStreaming
+								? 'Offline · run continues'
+								: 'Offline'
+							: 'Reconnecting'}
 					</Badge>
 					<!--
 						A run in flight, in the toolbar's own quiet register. The stop button says
@@ -402,6 +410,7 @@
 						aria-label={isStreaming ? 'Stop generation' : 'Send message'}
 						onclick={isStreaming ? onstop : onsend}
 						disabled={!agentAvailable ||
+							connection === 'offline' ||
 							(!isStreaming && prompt.trim() === '' && !selectedImages.length)}
 					>
 						{#if isStreaming}

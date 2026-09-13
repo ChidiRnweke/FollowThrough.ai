@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { projectRecordSchema } from '$lib/models/workspace-records';
 import type { PageLoad } from './$types';
 const tabs = ['models', 'agents', 'documents', 'tools', 'mcp', 'policies'] as const;
@@ -13,14 +13,10 @@ export const load: PageLoad = async ({ parent, url }) => {
 	]);
 	const selected = url.searchParams.get('tab');
 	const scope = url.searchParams.get('project');
-	const projectId = scope ? projectRecordSchema.shape.id.parse(scope) : undefined;
+	const projectId = scope ? routeResourceId(projectRecordSchema.shape.id, scope) : undefined;
 	if (projectId) {
 		const opened = await session.resources.open({ type: 'projects', id: [projectId] });
-		if (opened.kind !== 'ready')
-			error(
-				opened.kind === 'deleted' ? 410 : 503,
-				opened.kind === 'failure' ? opened.message : 'This project is not available on this device'
-			);
+		requireRouteResource(opened, session.resources.online, 'project');
 	}
 	return {
 		projectId,

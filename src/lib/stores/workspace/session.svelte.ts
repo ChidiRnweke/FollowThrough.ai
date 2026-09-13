@@ -2,6 +2,8 @@ import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import type { ShellContext } from '$lib/models/workspace';
 import {
 	normalizeLanguageModelId,
+	configuredAgentModels,
+	type AgentModel,
 	type AgentPreferenceValues,
 	type Conversation
 } from '$lib/models/agent';
@@ -23,6 +25,7 @@ export interface WorkspaceSession {
 	readonly shell: ShellContext;
 	readonly preferences: AgentPreferenceValues;
 	readonly agentDefaults: WorkspaceBootstrap['agentDefaults'];
+	readonly agentModels: readonly AgentModel[];
 	readonly sessions: readonly Conversation[];
 }
 let current = $state<WorkspaceSession | null>(null);
@@ -139,6 +142,9 @@ const begin = async (): Promise<WorkspaceSession> => {
 				)
 			};
 		},
+		get agentModels() {
+			return configuredAgentModels(this.bootstrap.agentModels, this.agentDefaults);
+		},
 		get sessions() {
 			return resources.views
 				.all('conversations')
@@ -149,6 +155,9 @@ const begin = async (): Promise<WorkspaceSession> => {
 	const session = current;
 	await resources.initialize();
 	await resources.loadRecovery();
+	await resources.requireCollections(['users', 'projects', 'agent_preferences']);
+	void session.shell;
+	void session.preferences;
 	await resources.prepare([
 		'users',
 		'projects',

@@ -74,13 +74,24 @@ export const recoverCacheRow = async <T>(
 	return { key, entry };
 };
 
+const removedRecoverySchema = z.object({
+	accountId: z.string(),
+	source: z.string(),
+	key: z.string(),
+	resolution: z.literal('removed')
+});
+
 /** Raw malformed content stays at the storage boundary, never in workspace projections. */
 export const quarantineRow = (
 	transaction: IDBTransaction,
 	item: StorageRecoveryItem,
 	raw: unknown
 ): void => {
-	transaction.objectStore('quarantine').put({ ...item, raw });
+	const store = transaction.objectStore('quarantine');
+	const existing = store.get([item.accountId, item.source, item.key]);
+	existing.onsuccess = () => {
+		if (!removedRecoverySchema.safeParse(existing.result).success) store.put({ ...item, raw });
+	};
 };
 
 export const recoveryItems = async (
@@ -92,11 +103,12 @@ export const recoveryItems = async (
 		requestValue(store.index('accountId').getAll(accountId)),
 		requestValue(store.index('accountId').getAllKeys(accountId))
 	]);
-	return rows.map((row, index) => {
+	return rows.flatMap((row, index) => {
+		if (removedRecoverySchema.safeParse(row).success) return [];
 		const parsed = storageRecoveryItemSchema
 			.extend({ accountId: z.literal(accountId) })
 			.safeParse(row);
-		if (parsed.success) return parsed.data;
+		if (parsed.success) return [parsed.data];
 		const item: StorageRecoveryItem = {
 			accountId,
 			source: 'recovery-metadata',
@@ -107,7 +119,7 @@ export const recoveryItems = async (
 		};
 		store.delete(keys[index]);
 		quarantineRow(transaction, item, row);
-		return item;
+		return [item];
 	});
 };
 
@@ -137,7 +149,10 @@ const legacyRecoveryText = async (accountId: string): Promise<string> => {
 };
 
 export class IndexedDbStorageRecovery {
-	constructor(private readonly databaseName = 'followthrough-workspace-sync') {}
+	constructor(
+		private readonly databaseName = 'followthrough-workspace-sync',
+		private readonly legacyDatabaseName = 'followthrough-note-sync'
+	) {}
 	async downloadAccount(accountId: string): Promise<Blob> {
 		const legacyNotes = await legacyRecoveryText(accountId);
 		const database = await openSyncDatabase(this.databaseName, () => undefined);
@@ -160,6 +175,47 @@ export class IndexedDbStorageRecovery {
 				],
 				{ type: 'application/json' }
 			);
+		} finally {
+			database.close();
+		}
+	}
+
+	async remove(accountId: string, source: string, key: string): Promise<void> {
+		const database = await openSyncDatabase(this.databaseName, () => undefined);
+		try {
+			const transaction = database.transaction('quarantine', 'readwrite');
+			const done = completed(transaction);
+			const store = transaction.objectStore('quarantine');
+			const row = await requestValue(store.get([accountId, source, key]));
+			z.union([storageRecoveryItemSchema, removedRecoverySchema])
+				.refine(
+					(item) => item.accountId === accountId && item.source === source && item.key === key
+				)
+				.parse(row);
+			// Retain only identity proof. Reopening an old source cannot resurrect the blocker.
+			if (source === 'legacy-note' || source === 'imports' || source === 'outbox')
+				store.put({ accountId, source, key, resolution: 'removed' });
+			else store.delete([accountId, source, key]);
+			await done;
+		} finally {
+			database.close();
+		}
+		if (source === 'legacy-note') await this.removeLegacyRow(accountId, key);
+	}
+
+	private async removeLegacyRow(accountId: string, key: string): Promise<void> {
+		if (!key.startsWith(`${accountId}:`))
+			throw new Error('The recovery source belongs to another account');
+		if (
+			!(await indexedDB.databases()).some((database) => database.name === this.legacyDatabaseName)
+		)
+			return;
+		const database = await requestValue(indexedDB.open(this.legacyDatabaseName));
+		try {
+			const transaction = database.transaction('note-sync-records', 'readwrite');
+			const done = completed(transaction);
+			transaction.objectStore('note-sync-records').delete(key);
+			await done;
 		} finally {
 			database.close();
 		}

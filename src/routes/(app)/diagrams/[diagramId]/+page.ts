@@ -1,14 +1,10 @@
-import { error } from '@sveltejs/kit';
+import { requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { diagramRecordSchema } from '$lib/models/workspace-records';
 import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ parent, params }) => {
 	const { session } = await parent();
-	const diagramId = diagramRecordSchema.options[0].shape.id.parse(params.diagramId);
+	const diagramId = routeResourceId(diagramRecordSchema.options[0].shape.id, params.diagramId);
 	const result = await session.resources.open({ type: 'diagrams', id: [diagramId] });
-	if (result.kind !== 'ready')
-		error(
-			result.kind === 'deleted' ? 410 : 503,
-			result.kind === 'failure' ? result.message : 'This diagram is not available on this device'
-		);
+	requireRouteResource(result, session.resources.online, 'diagram');
 	return { diagramId };
 };

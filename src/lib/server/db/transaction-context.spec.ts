@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ValidationError } from '$lib/errors';
 import { InMemoryDatabaseTransactions } from '$lib/testing/workspace/fakes/in-memory-database-transactions';
 import { createTransactionContext } from './transaction-context';
 const deadlock = () =>
@@ -46,9 +45,10 @@ describe('outer transaction recovery', () => {
 		);
 		expect(database.rows).toEqual(['parent', 'child']);
 	});
-	it('reports a permanent constraint failure as a reviewable rejection after rollback', async () => {
+	it('preserves constraint failures for the owning capability to classify after rollback', async () => {
 		const database = new InMemoryDatabaseTransactions();
-		database.commitFailures.push(Object.assign(new Error('Foreign key'), { code: '23503' }));
+		const failure = Object.assign(new Error('Foreign key'), { code: '23503' });
+		database.commitFailures.push(failure);
 		const context = createTransactionContext(database);
 		await expect(
 			context.transactionRunner.run(
@@ -57,7 +57,7 @@ describe('outer transaction recovery', () => {
 				},
 				{ retry: 'database-only' }
 			)
-		).rejects.toBeInstanceOf(ValidationError);
+		).rejects.toBe(failure);
 	});
 	it('surfaces repeated deadlocks when its finite retry budget is exhausted', async () => {
 		const database = new InMemoryDatabaseTransactions();
@@ -73,3 +73,18 @@ describe('outer transaction recovery', () => {
 		).rejects.toThrow('Driver wrapper');
 	});
 });
+
+it.each(['23502', '23514', '23503'])(
+	'preserves unexpected database error %s outside sync',
+	async (code) => {
+		const database = new InMemoryDatabaseTransactions();
+		const failure = Object.assign(new Error('Invalid domain write'), { code });
+		database.commitFailures.push(failure);
+		const context = createTransactionContext(database);
+		await expect(
+			context.transactionRunner.run(async () => {
+				context.database.rows.push('invalid');
+			})
+		).rejects.toBe(failure);
+	}
+);

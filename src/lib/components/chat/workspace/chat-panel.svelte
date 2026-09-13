@@ -581,7 +581,9 @@
 			.uuid()
 			.transform((value) => value as SuggestionId)
 			.parse(id);
-		const ok = await suggestionActions.decide(suggestionId, decision);
+		const ok = await chat.decideSuggestion(suggestionId, decision, (id, choice) =>
+			suggestionActions.decide(id, choice)
+		);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
@@ -608,11 +610,7 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col">
-	{#if !resources.online}
-		<p role="status" class="mb-4 text-sm text-muted-foreground">
-			Offline. Saved chat history is available. Reconnect to send messages or answer approvals.
-		</p>
-	{:else if !agentAvailable}
+	{#if !agentAvailable}
 		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
 			Agent chat is disabled. Configure <code class="text-xs">OPENROUTER_API_KEY</code> to enable it.
 		</div>
@@ -707,7 +705,7 @@
 				{selectedImages}
 				agentAvailable={agentAvailable && chat.canExecute}
 				isStreaming={chat.isStreaming}
-				connection={chat.connection}
+				connection={resources.online ? chat.connection : 'offline'}
 				executionMode={chat.executionModeOverride}
 				models={agentModels}
 				modelOverride={chat.modelOverride}

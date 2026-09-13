@@ -56,26 +56,41 @@ export const writeGroup = (entry: Entry): 'decision' | 'waiting' | 'sending' =>
 		: entry.delivery.kind === 'sending'
 			? 'sending'
 			: 'decision';
+export const writeStatus = (entry: Entry): string => {
+	const action = writeAction[entry.intent.command.kind];
+	switch (entry.delivery.kind) {
+		case 'queued':
+			return `${action} · waiting to sync`;
+		case 'sending':
+			return `${action} · syncing…`;
+		case 'retry':
+			return `${action} · couldn't sync`;
+		case 'rejected':
+			return `${action} · needs a decision`;
+		case 'conflict':
+			return `${action} · ${entry.delivery.remote.kind === 'deleted' ? 'deleted elsewhere' : entry.delivery.remote.kind === 'unavailable' ? 'latest unavailable' : entry.intent.base === null ? 'already exists elsewhere' : 'also changed elsewhere'}`;
+	}
+};
 export const writeExplanation = (entry: Entry, online: boolean): string => {
 	switch (entry.delivery.kind) {
 		case 'queued':
 			return online
-				? 'This change is saved on this device and is waiting to send.'
-				: 'This change is saved on this device. It will send when you reconnect.';
+				? 'Saved on this device. This change is waiting to sync.'
+				: "Saved on this device. It syncs when you're back online.";
 		case 'sending':
-			return 'This change is being sent. Wait for confirmation before deciding what to keep.';
+			return 'Syncing…';
 		case 'retry':
-			return `${entry.delivery.message} The last send is not confirmed. Retry, or reconnect to cancel it safely.`;
+			return `Couldn't sync: ${entry.delivery.message}. Try again, or discard once you're back online.`;
 		case 'rejected':
 			return entry.delivery.message;
 		case 'conflict':
+			if (entry.delivery.remote.kind === 'deleted')
+				return 'Deleted elsewhere. Download yours to keep a copy.';
+			if (entry.delivery.remote.kind === 'unavailable')
+				return "The latest version can't be loaded. Reconnect to compare.";
 			return entry.intent.base === null
-				? 'An item already exists here. Download your change and create another item to keep both.'
-				: entry.delivery.remote.kind === 'found'
-					? 'The saved version changed. Compare the versions, then keep your change or discard it.'
-					: entry.delivery.remote.kind === 'deleted'
-						? 'This item was deleted on the server. Download your change before discarding it; recreation needs a new item.'
-						: 'The current server version is unavailable. Reconnect and retry before choosing a version.';
+				? 'An item already exists here. Download yours and create another item to keep both.'
+				: 'Also changed elsewhere. Pick the version to keep.';
 	}
 };
 
@@ -128,3 +143,17 @@ export const reviewFieldLabels: Readonly<Record<string, string>> = {
 	dueAt: 'Due date',
 	completedAt: 'Completed'
 };
+
+export const visibleReviewFields = (record: WorkspaceRecord, title: string) =>
+	Object.entries(record.value).filter(
+		([field, value]) =>
+			reviewFieldLabels[field] &&
+			value !== undefined &&
+			value !== null &&
+			!((field === 'name' || field === 'title') && value === title)
+	);
+export const hasReviewContent = (record: WorkspaceRecord | null, title: string): boolean =>
+	record === null ||
+	record.type === 'notes' ||
+	record.type === 'diagrams' ||
+	visibleReviewFields(record, title).length > 0;

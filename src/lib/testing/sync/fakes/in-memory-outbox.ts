@@ -120,6 +120,13 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 
 export class InMemoryAccountWriterLock implements AccountWriterLock {
 	private readonly waiting = new Map<string, Promise<void>>();
+	async tryRun<T>(
+		accountId: string,
+		work: () => Promise<T>
+	): Promise<{ kind: 'acquired'; value: T } | { kind: 'busy' }> {
+		if (this.waiting.has(accountId)) return { kind: 'busy' };
+		return { kind: 'acquired', value: await this.run(accountId, work) };
+	}
 	async run<T>(accountId: string, work: () => Promise<T>): Promise<T> {
 		const previous = this.waiting.get(accountId) ?? Promise.resolve();
 		const released = Promise.withResolvers<void>();

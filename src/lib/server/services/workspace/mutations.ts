@@ -1,3 +1,4 @@
+import { workspaceWriteRejection } from '$lib/server/repositories/workspace/write-failure';
 import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
 import { DomainError, ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
@@ -96,6 +97,8 @@ export class SyncMutationTransactions {
 			);
 		} catch (error) {
 			if (error instanceof DomainError) return { kind: 'rejected', message: error.message };
+			const rejection = workspaceWriteRejection(error);
+			if (rejection) return { kind: 'rejected', message: rejection };
 			throw error;
 		}
 	}

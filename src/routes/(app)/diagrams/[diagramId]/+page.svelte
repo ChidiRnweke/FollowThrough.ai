@@ -17,7 +17,7 @@
 		shell={data.session.shell}
 		sessions={data.session.sessions}
 		agentPreferences={data.session.preferences}
-		agentModels={data.session.bootstrap.agentModels}
+		agentModels={data.session.agentModels}
 		agentDefaults={data.session.agentDefaults}
 		agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
 	/>

@@ -208,11 +208,7 @@ test('opens saved chat history offline and disables execution', async ({ page, c
 	const href = page.url();
 	await context.setOffline(true);
 	await page.goto(href);
-	await page
-		.getByText(
-			'Offline. Saved chat history is available. Reconnect to send messages or answer approvals.'
-		)
-		.waitFor();
+	await page.getByPlaceholder('Reconnect to send').waitFor();
 	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
 });
 
@@ -234,11 +230,12 @@ test('reviews and discards an offline project without losing unreviewed work', a
 	await page.getByRole('button', { name: /^Sync status:/ }).click();
 	await page.getByRole('menuitem', { name: 'Review changes', exact: true }).click();
 	await page.getByRole('button', { name: /^Review / }).click();
-	await page.getByRole('heading', { name: 'Your change', exact: true }).waitFor();
+	await page.getByRole('heading', { name: 'Offline review project', exact: true }).waitFor();
 	await page.screenshot({
 		path: testInfo.outputPath('review-offline-project.png'),
 		fullPage: true
 	});
+	await page.getByRole('button', { name: 'Discard…', exact: true }).click();
 	await page.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await expect(page.getByText('Everything is saved')).toBeVisible();
 });
@@ -274,7 +271,7 @@ test('retains an offline note edit and publishes it after reconnecting', async (
 		.toEqual({ retained: 'An offline edit retained through publication.', applied: 2 });
 });
 
-test('refreshes another tab’s offline changes when returning to the app', async ({
+test('observes another tab’s offline changes without focus or refresh', async ({
 	page,
 	context
 }) => {
@@ -290,8 +287,6 @@ test('refreshes another tab’s offline changes when returning to the app', asyn
 	await creation.getByRole('textbox', { name: 'Project name' }).fill(name);
 	await creation.getByRole('button', { name: 'Create', exact: true }).click();
 	await page.getByRole('heading', { name, exact: true }).waitFor();
-	await other.bringToFront();
-	await other.evaluate(() => window.dispatchEvent(new Event('focus')));
 	await expect(other.getByRole('link', { name, exact: true }).first()).toBeVisible();
 });
 
@@ -582,6 +577,7 @@ test('keeps an open editor’s text visibly unsynchronized after another tab dis
 	await other.getByRole('button', { name: /^Sync status:/ }).click();
 	await other.getByRole('menuitem', { name: 'Review changes', exact: true }).click();
 	await other.getByRole('button', { name: /^Review / }).click();
+	await other.getByRole('button', { name: 'Discard…', exact: true }).click();
 	await other.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await other.getByText('Everything is saved').waitFor();
 	await page.bringToFront();
@@ -648,4 +644,30 @@ test('retains a renamed chat through offline reload and acknowledgement', async 
 	await context.setOffline(false);
 	await page.evaluate(() => window.dispatchEvent(new Event('online')));
 	expect(await (await pushed).text()).toContain('applied');
+});
+
+test('opens a second tab while the first tab waits for a write response', async ({
+	page,
+	context
+}) => {
+	await page.goto('/todos?view=board&quickTodo');
+	await waitForServiceWorker(page);
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	await page.route('**/pushWorkspaceMutation', async (route) => {
+		entered.resolve();
+		await release.promise;
+		await route.continue();
+	});
+	await page.locator('#quick-todo-input').fill(`Stalled write ${crypto.randomUUID()}`);
+	await page.locator('#quick-todo-input').press('Enter');
+	await entered.promise;
+	const other = await context.newPage();
+	try {
+		await other.goto('/todos?view=board&quickTodo');
+		await expect(other.locator('#quick-todo-input')).toBeVisible();
+	} finally {
+		release.resolve();
+		await other.close();
+	}
 });

@@ -153,9 +153,12 @@
 <div class="flex flex-col gap-6">
 	{#if loadError}<p role="alert">
 			{loadError}
-		</p>{:else if items.length === 0 && resources?.availability !== 'complete'}<p role="status">
-			Attachment data is not fully available on this device yet.
-		</p>{:else if items.length === 0}
+		</p>{:else if items.length === 0 && resources?.collectionReadiness( ['attachments', 'attachment_versions'] ) !== 'ready'}<p
+			role="status"
+		>
+			Still downloading attachments.
+		</p>
+		{@render uploadButton()}{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
 		<EmptyState

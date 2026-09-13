@@ -128,3 +128,26 @@ describe('guarded workspace mutation replay', () => {
 		expect(content.notes[0]).toEqual(noteBuilder());
 	});
 });
+
+it('reports a missing referenced resource as a rejected sync edit', async () => {
+	const { transactions } = setup();
+	const failure = Object.assign(new Error('Referenced project disappeared'), { code: '23503' });
+	expect(
+		await transactions.run(testActor(), input, async () => {
+			throw failure;
+		})
+	).toEqual({
+		kind: 'rejected',
+		message: 'A referenced item is no longer available. Review or discard this change.'
+	});
+});
+
+it.each(['23502', '23514'])('preserves unexpected constraint %s inside sync', async (code) => {
+	const { transactions } = setup();
+	const failure = Object.assign(new Error('Invalid domain write'), { code });
+	await expect(
+		transactions.run(testActor(), input, async () => {
+			throw failure;
+		})
+	).rejects.toBe(failure);
+});

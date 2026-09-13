@@ -1,3 +1,4 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import type { WriteDraft, WriteReceipt } from '$lib/models/outbox';
@@ -34,6 +35,7 @@ const setup = (transport: OutboxTransport<string, string>) => {
 	const accepted: WriteReceipt<string>['resource'][] = [];
 	const dependencies = {
 		repository,
+		scheduler: new InMemorySyncScheduler(),
 		writerLock,
 		transport,
 		resolveBase: async () => {
@@ -333,4 +335,113 @@ it('sends independent edits when an imported base cannot be checked', async () =
 		pending: queue.pending.map((entry) => entry.intent.operationId),
 		saved: accepted.length
 	}).toEqual({ pending: [firstId], saved: 1 });
+});
+
+// SYNC-PROGRESS: elapsed time, rather than user activity, retries an eligible write.
+it('settles a failed edit at its retry deadline without another user action', async () => {
+	let reachable = false;
+	const { dependencies } = setup({
+		send: async (input) => {
+			if (!reachable) throw new Error('Connection lost');
+			return applied(input.operationId, input.command);
+		}
+	});
+	const scheduler = new InMemorySyncScheduler();
+	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	await queue.append(draft(firstId));
+	await queue.flush();
+	reachable = true;
+	await scheduler.advance(1000);
+	queue.stop();
+	expect(await dependencies.repository.list('alice')).toEqual([]);
+});
+
+it('leaves a stopped account unchanged when a retry deadline arrives', async () => {
+	let reachable = false;
+	const { dependencies } = setup({
+		send: async (input) => {
+			if (!reachable) throw new Error('Connection lost');
+			return applied(input.operationId, input.command);
+		}
+	});
+	const scheduler = new InMemorySyncScheduler();
+	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	await queue.append(draft(firstId));
+	await queue.flush();
+	const before = await dependencies.repository.list('alice');
+	queue.stop();
+	reachable = true;
+	await scheduler.advance(60_000);
+	expect(await dependencies.repository.list('alice')).toEqual(before);
+});
+
+// SYNC-PROGRESS: a follower does not wait for the active writer's remote request.
+it('returns a waiting state without recovering another tab’s unresolved submission', async () => {
+	const started = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const { queue, dependencies } = setup({
+		send: async (input) => {
+			started.resolve();
+			await release.promise;
+			return applied(input.operationId, input.command);
+		}
+	});
+	await queue.append(draft(firstId));
+	const sending = queue.flush();
+	await started.promise;
+	const other = new MutationQueue('alice', dependencies);
+	const result = await Promise.race([
+		other.flush(),
+		new Promise((resolve) => setTimeout(() => resolve({ kind: 'blocked' }), 30))
+	]);
+	release.resolve();
+	await sending;
+	queue.stop();
+	other.stop();
+	expect(result).toEqual({ kind: 'waiting' });
+});
+
+it('becomes idle when an imported retry requires a decision', async () => {
+	const { dependencies } = setup({
+		send: async (input) => applied(input.operationId, input.command)
+	});
+	let available = false;
+	const queue = new MutationQueue('alice', {
+		...dependencies,
+		resolveBase: async () => {
+			if (!available) throw new Error('Disconnected');
+			return {
+				kind: 'conflict',
+				remote: { kind: 'found', snapshot: { etag: syncEtag(2n), value: 'Elsewhere' } }
+			};
+		}
+	});
+	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
+	await queue.flush();
+	available = true;
+	await dependencies.scheduler.advance(1000);
+	expect(queue.pending.map((entry) => entry.delivery.kind)).toEqual(['conflict']);
+});
+
+it('preserves acknowledgement backoff while independent edits become durable', async () => {
+	let acknowledgementAvailable = false;
+	const { queue, repository } = setup({
+		send: async (input) => applied(input.operationId, input.command),
+		recovery: {
+			observe: async () => ({ kind: 'unavailable' }),
+			cancel: async () => ({ kind: 'cancelled' }),
+			acknowledge: async () => {
+				if (!acknowledgementAvailable) throw new Error('Unavailable');
+			}
+		}
+	});
+	await queue.append(draft(firstId));
+	await queue.flush();
+	acknowledgementAvailable = true;
+	await queue.append({ ...draft(secondId), key: 'note:2' });
+	await queue.flush();
+	expect({
+		pending: queue.pending,
+		acknowledgements: await repository.pendingAcknowledgements('alice')
+	}).toEqual({ pending: [], acknowledgements: [firstId, secondId] });
 });

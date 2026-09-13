@@ -1,3 +1,4 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type {
 	AgentRunId,
@@ -22,7 +23,8 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import {
 	testActor,
 	testNow,
-	runAgentInputBuilder
+	runAgentInputBuilder,
+	suggestionBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
@@ -88,6 +90,7 @@ const setup = async (
 	const writes = new MutationQueue(conversation.userId, {
 		repository: new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(),
 		transport: new InMemoryNoteWrites(),
+		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		resolveBase: async () => {
 			throw new Error('No imported drafts');
@@ -351,4 +354,64 @@ describe('saved conversation choices', () => {
 			mode: store.executionModeOverride
 		}).toEqual({ model: null, vision: null, mode: 'approval_required' });
 	});
+});
+
+it('retains a new streaming turn when its conversation moves into a tab', async () => {
+	const { store, resources } = await setup({
+		live: {
+			submit: async () => ({ runId, conversationId, status: 'queued', latestCursor: '0' }),
+			openEvents: (input) => {
+				input.onOpen();
+				return { close: () => undefined };
+			}
+		}
+	});
+	await store.send({ ...runAgentInputBuilder(), prompt: 'A new live question' });
+	try {
+		await store.hydrate(resources);
+		expect(
+			store.entries.filter((entry) => entry.role === 'user').map((entry) => entry.parts)
+		).toEqual([[{ kind: 'text', text: 'A new live question' }]]);
+	} finally {
+		store.clear();
+		resources.stop();
+	}
+});
+
+it.each(['accept', 'reject'] as const)(
+	'removes a suggestion card after a successful %s decision',
+	async (decision) => {
+		const { store, resources } = await setup();
+		const suggestion = suggestionBuilder();
+		store.entries = [
+			{
+				id: crypto.randomUUID(),
+				role: 'assistant',
+				parts: [],
+				status: 'completed',
+				suggestions: [{ suggestion, origin: { pipeline: 'agent', createdAt: testNow } }]
+			}
+		];
+		await store.decideSuggestion(suggestion.id, decision, async () => true);
+		expect(store.entries.flatMap((entry) => entry.suggestions)).toEqual([]);
+		resources.stop();
+	}
+);
+it('preserves a suggestion card when its decision fails', async () => {
+	const { store, resources } = await setup();
+	const suggestion = suggestionBuilder();
+	store.entries = [
+		{
+			id: crypto.randomUUID(),
+			role: 'assistant',
+			parts: [],
+			status: 'completed',
+			suggestions: [{ suggestion, origin: { pipeline: 'agent', createdAt: testNow } }]
+		}
+	];
+	await store.decideSuggestion(suggestion.id, 'accept', async () => false);
+	expect(
+		store.entries.flatMap((entry) => entry.suggestions).map((view) => view.suggestion.id)
+	).toEqual([suggestion.id]);
+	resources.stop();
 });

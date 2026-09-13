@@ -27,13 +27,14 @@
 	import EmptyState from '../shared/empty-state.svelte';
 	import { newMemory, memoryWrite } from '$lib/models/workspace-mutations';
 	import { workspaceResourceKey } from '$lib/models/workspace-sync';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraft, WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 	import type { DateTime } from '$lib/models/workspace';
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
 	let {
 		projectId,
+		workspace,
 		placeholder,
 		emptyText,
 		emptyHint,
@@ -43,6 +44,7 @@
 	}: {
 		/** Omit for the user's profile memory. */
 		projectId?: ProjectId;
+		workspace?: WorkspaceResources;
 		placeholder: string;
 		emptyText: string;
 		/** Second line of the empty state — the invitation, kept out of the voice line. */
@@ -56,7 +58,7 @@
 		heroEmpty?: boolean;
 	} = $props();
 
-	const resources = $derived(workspaceSession.current?.resources);
+	const resources = $derived(workspace ?? workspaceSession.current?.resources);
 	const entries = $derived(resources?.views.memories(projectId) ?? []);
 	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
 	let loadError = $state<string | null>(null);
@@ -231,10 +233,14 @@
      a 24px step between the action row and the sections, 8px inside each section. -->
 <div class="flex h-full min-h-0 flex-col gap-6">
 	{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
-		<p class="text-sm text-muted-foreground">Loading memory…</p>
-	{:else if isEmpty && resources?.availability !== 'complete'}<p role="status">
-			Memory data is not fully available on this device yet.
-		</p>{:else if isEmpty}
+		<p class="text-sm text-muted-foreground">Still downloading memory.</p>
+		{@render addButton()}
+	{:else if isEmpty && resources?.collectionReadiness( ['memory_entries', 'suggestions'] ) !== 'ready'}<p
+			role="status"
+		>
+			Still downloading memory.
+		</p>
+		{@render addButton()}{:else if isEmpty}
 		<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
 		     EmptyState; the side panel keeps the slot size. -->
 		<EmptyState

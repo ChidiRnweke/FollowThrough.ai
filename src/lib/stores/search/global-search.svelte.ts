@@ -73,14 +73,12 @@ export class GlobalSearchStore {
 		return Promise.resolve();
 	}
 
-	async replaceAll(): Promise<void> {
-		const result = await this.replace({});
-		if (result) throw new Error(result.message);
+	async replaceAll(): Promise<void | { kind: 'failure'; message: string }> {
+		return this.replace({});
 	}
 
-	async replaceInNote(noteId: NoteId): Promise<void> {
-		const result = await this.replace({ noteIds: [noteId] });
-		if (result) throw new Error(result.message);
+	async replaceInNote(noteId: NoteId): Promise<void | { kind: 'failure'; message: string }> {
+		return this.replace({ noteIds: [noteId] });
 	}
 
 	toggleCollapsed(noteId: NoteId): void {

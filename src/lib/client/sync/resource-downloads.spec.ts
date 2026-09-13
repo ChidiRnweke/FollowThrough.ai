@@ -82,3 +82,39 @@ describe('paged workspace downloads', () => {
 		expect(transport.deliveredBodies.length).toBe(70);
 	});
 });
+
+// SYNC-READ: a fixed announced target cannot cause an unbounded retry loop.
+it.each(['foreground', 'background'] as const)(
+	'ends a non-progressing %s read with a recoverable failure',
+	async (lane) => {
+		const repository = new InMemorySyncCache<string>();
+		const transport = new InMemoryBatchSyncTransport<string>();
+		transport.records.set('note:1', { etag: syncEtag(2n), value: 'Latest' });
+		transport.readSnapshots.set('note:1', { etag: syncEtag(1n), value: 'Old' });
+		transport.readBudget = 3;
+		const cache = new ResourceCache('account', { repository, transport });
+		await cache.refresh();
+		if (lane === 'foreground') await cache.open('note:1');
+		else await cache.warm();
+		expect(cache.access('note:1')).toEqual({
+			kind: 'failure',
+			message: 'The latest copy could not be downloaded. Retry to check again.'
+		});
+	}
+);
+
+it('shares the body capacity between warming and concurrent collection preparation', async () => {
+	const { cache, transport } = setup();
+	transport.maxConcurrentReads = 32;
+	await cache.refresh();
+	const keys = [...transport.records.keys()];
+	const paused = keys.slice(0, 32).map((key) => transport.pause(key));
+	const warming = cache.warm();
+	await Promise.all(paused.map((item) => item.started));
+	const preparing = cache.prepare(keys.slice(32));
+	// Yield one event-loop turn so both lanes reach the controllable transport.
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	for (const item of paused) item.release();
+	await Promise.all([warming, preparing]);
+	expect(cache.availability).toBe('complete');
+});

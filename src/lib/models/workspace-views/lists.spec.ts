@@ -114,3 +114,24 @@ describe('normalized workspace lists', () => {
 		expect(new WorkspaceViews(new Map()).shell('absent')).toBeNull();
 	});
 });
+
+it('keeps the five most recently edited notes in Today', () => {
+	const notes = Array.from({ length: 7 }, (_, index) =>
+		noteBuilder({
+			id: testNoteId(index + 1),
+			title: `Note ${index}`,
+			updatedAt: `2026-09-0${index + 1}T10:00:00Z` as typeof testNow
+		})
+	);
+	const views = new WorkspaceViews(
+		new Map([
+			project,
+			...notes.map((value) => row({ type: 'notes', value: noteRecordSchema.parse(value) }))
+		])
+	);
+	expect(
+		views
+			.today('2026-09-08' as import('$lib/models/workspace').LocalDate)
+			.recentNotes.map((note) => note.title)
+	).toEqual(['Note 6', 'Note 5', 'Note 4', 'Note 3', 'Note 2']);
+});

@@ -4,6 +4,7 @@
 /// <reference types="@sveltejs/kit" />
 
 import { base, build, files, prerendered, version } from '$service-worker';
+import { precacheRequests } from './lib/client/pwa/precache';
 
 const worker: ServiceWorkerGlobalScope = self;
 const CACHE_PREFIX = 'followthrough-';
@@ -39,7 +40,9 @@ const store = async (cache: Cache, key: Request | string, response: Response): P
 };
 
 worker.addEventListener('install', (event) => {
-	event.waitUntil(caches.open(ASSET_CACHE).then((cache) => cache.addAll(PRECACHED_PATHS)));
+	event.waitUntil(
+		caches.open(ASSET_CACHE).then((cache) => cache.addAll(precacheRequests(PRECACHED_PATHS)))
+	);
 });
 
 worker.addEventListener('activate', (event) => {

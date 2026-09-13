@@ -494,3 +494,13 @@ current chat — no structured resolution card or model-controlled navigation.
   independent scrolling; desktop content measures are preserved.
 - Responsive geometry must be identical in light and dark modes; only semantic token values
   change.
+
+### Sync review
+
+The review dialog follows `components/shared/sync-review.ts`: 4px binds title/status,
+label/value and row/caption; 12px separates fields and rows; 24px separates content
+groups and the dialog frame; 40px separates saved changes from unreadable recovery
+items. The title uses `text-lg font-semibold`, group headings use `eyebrow`, values
+use foreground body text and labels use muted `text-label`. Changed values use the
+shared brand evidence wash. Connection state is inline. Queued changes sync without
+a required action. Removing local intent requires a separate confirmation step.

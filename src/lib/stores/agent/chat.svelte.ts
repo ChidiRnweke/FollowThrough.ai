@@ -12,7 +12,7 @@ import type {
 import { isHttpError } from '@sveltejs/kit';
 import { isAgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
-import type { SuggestionView } from '$lib/models/suggestions';
+import type { SuggestionView, SuggestionId } from '$lib/models/suggestions';
 import type {
 	AgentRunClientStorage,
 	AgentRunEventConnection,
@@ -521,6 +521,7 @@ export class ChatStore {
 	private async hydrateHistory(resources: WorkspaceResources): Promise<void> {
 		this.resources = resources;
 		if (!browser || !this.conversationId) return;
+		if (this.isStreaming && this.eventConnection) return;
 		const conversationId = this.conversationId;
 		const generation = this.generation;
 		this.liveConfirmed = false;
@@ -690,6 +691,15 @@ export class ChatStore {
 	 * does this through its own registry; a decision made from the panel with no
 	 * note open has to say so here, or the card outlives the thing it proposed.
 	 */
+	async decideSuggestion(
+		id: SuggestionId,
+		decision: 'accept' | 'reject',
+		decide: (id: SuggestionId, decision: 'accept' | 'reject') => Promise<boolean>
+	): Promise<boolean> {
+		const succeeded = await decide(id, decision);
+		if (succeeded) this.resolveSuggestion(id);
+		return succeeded;
+	}
 	resolveSuggestion(suggestionId: string): void {
 		for (const entry of this.entries)
 			entry.suggestions = entry.suggestions.filter((view) => view.suggestion.id !== suggestionId);

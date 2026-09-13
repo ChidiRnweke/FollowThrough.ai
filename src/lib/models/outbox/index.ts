@@ -470,3 +470,36 @@ export interface WriteConflictView<T> {
 	readonly remote:
 		{ readonly kind: 'found'; readonly value: T } | { readonly kind: 'deleted' | 'unavailable' };
 }
+
+/** A damaged ancestor preserves intent but requires an explicit decision for every descendant. */
+export const rejectUnprovenAncestry = <C, T>(
+	entries: readonly OutboxEntry<C, T>[]
+): readonly OutboxEntry<C, T>[] => {
+	const known = new Set(entries.map((entry) => entry.intent.operationId));
+	const operationIds = [
+		...new Set(
+			entries
+				.flatMap((entry) => [
+					...entry.intent.dependencies,
+					...(entry.intent.basedOn === null ? [] : [entry.intent.basedOn])
+				])
+				.filter((id) => !known.has(id))
+		)
+	];
+	const affected = new Set(
+		operationIds.flatMap((id) =>
+			dependentWrites(entries, id).map((entry) => entry.intent.operationId)
+		)
+	);
+	return entries.map((entry) =>
+		affected.has(entry.intent.operationId) && entry.delivery.kind === 'queued'
+			? {
+					...entry,
+					delivery: {
+						kind: 'rejected',
+						message: 'An earlier edit could not be read. Download this change or discard it.'
+					}
+				}
+			: entry
+	);
+};

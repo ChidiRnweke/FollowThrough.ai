@@ -57,7 +57,7 @@
 		     from firing while you are on another tab. -->
 		<Tabs.Content value="models" class="pt-6">
 			{#if data.tab === 'models'}
-				<SettingsModels models={data.session.bootstrap.agentModels} />
+				<SettingsModels models={data.session.agentModels} />
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="agents" class="pt-6">

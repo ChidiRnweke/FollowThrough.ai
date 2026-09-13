@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { syncCursorSchema, mergeResourceStates, resourceVersion } from '$lib/models/sync';
 import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
 
-import { requestValue, completed, openSyncDatabase } from './database';
+import { requestValue, openSyncDatabase, transactionLifetime } from './database';
 import {
 	recoverCacheRow,
 	recoveryGeneration,
@@ -16,7 +16,8 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 
 	constructor(
 		private readonly valueSchema: z.ZodType<T>,
-		private readonly databaseName = 'followthrough-workspace-sync'
+		private readonly databaseName = 'followthrough-workspace-sync',
+		private readonly onCommit?: () => void
 	) {}
 
 	async load(accountId: string): Promise<StoredCache<T>> {
@@ -25,7 +26,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			['records', 'cursors', 'quarantine', 'recovery-heads'],
 			'readwrite'
 		);
-		const done = completed(transaction);
+		const { done, abort } = transactionLifetime(transaction);
 		const [rows, keys] = await Promise.all([
 			requestValue(transaction.objectStore('records').index('accountId').getAll(accountId)),
 			requestValue(transaction.objectStore('records').index('accountId').getAllKeys(accountId))
@@ -92,7 +93,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 				generation
 			};
 		} catch (error) {
-			transaction.abort();
+			abort();
 			await done.catch(() => {
 				return { kind: 'failure' };
 			});
@@ -106,7 +107,7 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			['records', 'cursors', 'quarantine', 'recovery-heads'],
 			'readwrite'
 		);
-		const done = completed(transaction);
+		const { done, abort } = transactionLifetime(transaction);
 		const put: CacheCommit<T>['put'][number][] = [];
 		const remove: CacheCommit<T>['remove'][number][] = [];
 		let recovered: boolean;
@@ -183,13 +184,14 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 						(parsed.success && parsed.data.inventoryComplete) || (changes.inventoryComplete ?? true)
 				});
 		} catch (error) {
-			transaction.abort();
+			abort();
 			await done.catch(() => {
 				return { kind: 'failure' };
 			});
 			throw error;
 		}
 		await done;
+		this.onCommit?.();
 		if (recovered)
 			throw new Error(
 				'Damaged workspace storage was recovered. Retry synchronization to rebuild its inventory.'

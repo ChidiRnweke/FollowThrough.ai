@@ -1,10 +1,15 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { syncEtag, initialSyncCursor } from '$lib/models/sync';
-import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import {
+	InMemorySyncCache,
+	InMemorySyncTransport,
+	InMemoryBatchSyncTransport
+} from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
@@ -34,13 +39,14 @@ const setup = (
 		send: async () => {
 			throw new Error('This test only reads local resources');
 		}
-	}
+	},
+	transport = new InMemorySyncTransport<typeof project>()
 ) => {
 	const repository = new InMemorySyncCache<typeof project>();
-	const transport = new InMemorySyncTransport<typeof project>();
 	const cache = new ResourceCache('alice', { repository, transport });
 	const writes = new MutationQueue<WorkspaceCommand, typeof project>('alice', {
 		repository: new InMemoryOutbox(),
+		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: writeTransport,
 		resolveBase: async () => {
@@ -466,4 +472,92 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 	});
 	if (saved.kind !== 'saved') throw new Error(saved.message);
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
+});
+
+// SYNC-DOWNLOAD: preparation obeys the same transport budget as warming.
+it('prepares a complete collection within the batch transport capacity', async () => {
+	const transport = new InMemoryBatchSyncTransport<typeof project>();
+	transport.maxConcurrentReads = 32;
+	const { resources } = setup(undefined, transport);
+	for (let index = 0; index < 70; index++) {
+		const id = crypto.randomUUID();
+		const record = workspaceRecordSchema.parse({
+			type: 'projects',
+			value: { ...project.value, id }
+		});
+		transport.records.set(workspaceResourceKey({ type: 'projects', id: [id] }), {
+			etag: syncEtag(BigInt(index + 1)),
+			value: record
+		});
+	}
+	await resources.prepare(['projects']);
+	expect(resources.records.size).toBe(70);
+});
+
+// SYNC-READINESS: unrelated missing bodies cannot disable an available collection.
+it('makes a known empty collection ready while an unrelated body is unavailable', async () => {
+	const { resources, transport } = setup();
+	transport.records.set(key, { etag: syncEtag(1n), value: project });
+	transport.readFailure = 'Unavailable project body';
+	await resources.prepare(['projects']);
+	expect(resources.collectionReadiness(['attachments', 'attachment_versions'])).toBe('ready');
+});
+
+it('downloads authoritative records while an unrelated submission is stalled', async () => {
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const { resources, transport } = setup({
+		send: async (input) => {
+			entered.resolve();
+			await release.promise;
+			return {
+				kind: 'applied',
+				receipt: {
+					operationId: input.operationId,
+					resource: { kind: 'found', snapshot: { etag: syncEtag(2n), value: project } }
+				}
+			};
+		}
+	});
+	if (project.type !== 'projects') throw new Error('Expected project');
+	resources.setOnline(false);
+	await resources.append({
+		operationId: crypto.randomUUID(),
+		key,
+		command: { kind: 'createProject', id: project.value.id, name: project.value.name },
+		base: null,
+		basedOn: null,
+		local: project,
+		coalesce: null,
+		references: []
+	});
+	await resources.synchronize();
+	const otherId = crypto.randomUUID();
+	const otherKey = workspaceResourceKey({ type: 'projects', id: [otherId] });
+	transport.records.set(otherKey, {
+		etag: syncEtag(1n),
+		value: workspaceRecordSchema.parse({
+			type: 'projects',
+			value: { ...project.value, id: otherId }
+		})
+	});
+	resources.setOnline(true);
+	const synchronizing = resources.synchronize();
+	await entered.promise;
+	try {
+		await expect.poll(() => resources.records.has(otherKey), { timeout: 500 }).toBe(true);
+	} finally {
+		release.resolve();
+		await synchronizing;
+		resources.stop();
+	}
+});
+
+it('does not publish required collection readiness when its initial body failed', async () => {
+	const { resources, transport } = setup();
+	transport.records.set(key, { etag: syncEtag(1n), value: project });
+	transport.readFailure = 'Disconnected';
+	await expect(resources.requireCollections(['projects'])).rejects.toThrow(
+		'Required workspace data is not available on this device'
+	);
 });

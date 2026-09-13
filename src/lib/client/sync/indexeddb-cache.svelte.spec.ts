@@ -1,3 +1,4 @@
+import { cacheRepositoryContract } from '$lib/testing/sync/contracts/cache-contract';
 import { initialCacheGeneration } from '$lib/models/sync';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -162,4 +163,17 @@ describe('durable workspace cache', () => {
 			await incompatible.close();
 		}
 	});
+});
+
+cacheRepositoryContract(() => setup().repository);
+
+it('preserves a failure reported after the storage transaction completes', async () => {
+	const { name } = setup();
+	const repository = new IndexedDbSyncCache(z.string(), name, () => {
+		throw new Error('Observer failed after commit');
+	});
+	openRepositories.push(repository);
+	await expect(repository.commit('alice', { put: [], remove: [] })).rejects.toThrow(
+		'Observer failed after commit'
+	);
 });

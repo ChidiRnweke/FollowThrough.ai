@@ -9,6 +9,11 @@ export const storageRecoveryItemSchema = z.object({
 	message: z.string(),
 	impact: z.discriminatedUnion('kind', [
 		z.object({ kind: z.literal('cache') }),
+		z.object({
+			kind: z.literal('resource'),
+			key: z.string().min(1),
+			operationId: z.string().uuid().nullable()
+		}),
 		z.object({ kind: z.literal('write'), operationId: z.string().uuid().nullable() })
 	])
 });
@@ -34,7 +39,9 @@ export const syncIndicator = (
 	if (input.review || input.failedDownloads || input.failure)
 		return {
 			kind: 'attention',
-			headline: input.review ? `${input.review} changes need review` : 'Sync needs attention',
+			headline: input.review
+				? `${input.review} ${input.review === 1 ? 'change needs' : 'changes need'} a decision`
+				: 'Sync needs attention',
 			description:
 				input.failure ??
 				(input.failedDownloads
@@ -47,7 +54,7 @@ export const syncIndicator = (
 			kind: 'offline',
 			headline: "You're offline",
 			description: input.pending
-				? 'Your changes are saved on this device and will send when you reconnect.'
+				? `${input.pending} ${input.pending === 1 ? 'change' : 'changes'} will sync when you're back online.`
 				: 'Downloaded content remains available on this device.',
 			badge: input.pending
 		};
@@ -55,7 +62,7 @@ export const syncIndicator = (
 		return {
 			kind: 'saving',
 			headline: 'Saving your changes',
-			description: 'Your changes are saved on this device while they reach the server.',
+			description: 'Your changes are saved on this device while they sync.',
 			badge: 0
 		};
 	if (input.downloading)
@@ -325,4 +332,24 @@ export const accessCache = <T>(entry: CacheEntry<T>, online: boolean): CacheAcce
 	if (entry.kind === 'updating' && entry.transfer.kind === 'failed')
 		return { kind: 'failure', message: entry.transfer.message };
 	return { kind: 'wait' };
+};
+
+/** A collection is usable only when its membership and every required body are known. */
+export const collectionReadiness = <T>(
+	inventoryComplete: boolean,
+	entries: readonly ResourceState<T>[]
+): 'unknown' | 'incomplete' | 'ready' => {
+	if (!inventoryComplete) return 'unknown';
+	return entries.every((entry) => entry.kind === 'deleted' || cachedSnapshot(entry.cache) !== null)
+		? 'ready'
+		: 'incomplete';
+};
+
+export const recoveryBlocksWrite = (
+	impact: StorageRecoveryItem['impact'],
+	key: string
+): boolean => {
+	if (impact.kind === 'cache') return false;
+	if (impact.kind === 'write') return true;
+	return impact.key === key;
 };

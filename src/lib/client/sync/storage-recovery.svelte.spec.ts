@@ -187,3 +187,110 @@ it('rebuilds inventory under a fresh token when its recovery marker is damaged',
 		changed: loaded.generation !== initialCacheGeneration
 	}).toEqual({ cursor: null, complete: false, changed: true });
 });
+
+// SYNC-RECOVERY: removal is a durable decision, including repeated legacy discovery.
+it('can submit healthy work after explicitly removing an exported unknown legacy blocker', async () => {
+	const { name, recovery, outbox } = setup();
+	const item = {
+		accountId: 'account',
+		source: 'legacy-note',
+		key: 'account:old-note',
+		message: 'Unreadable old edit',
+		impact: { kind: 'write' as const, operationId: null }
+	};
+	await recovery.save(item, 'Original damaged content');
+	await recovery.download('account', item.source, item.key);
+	await recovery.remove('account', item.source, item.key);
+	const reopened = new IndexedDbStorageRecovery(name);
+	await reopened.save(item, 'Original damaged content');
+	const edit = draft();
+	await outbox.append('account', edit);
+	const sent = await outbox.take('account');
+	expect({ pending: sent?.intent.operationId, recovery: await reopened.list('account') }).toEqual({
+		pending: edit.operationId,
+		recovery: []
+	});
+});
+
+it('submits a provably independent edit while a known resource is quarantined', async () => {
+	const { outbox, recovery } = setup();
+	await recovery.save(
+		{
+			accountId: 'account',
+			source: 'legacy-note',
+			key: 'account:old',
+			message: 'Unreadable older note',
+			impact: { kind: 'resource', key: 'note:1', operationId: null }
+		},
+		'preserved'
+	);
+	await outbox.append('account', draft());
+	const independent = { ...draft(), key: 'note:2' };
+	await outbox.append('account', independent);
+	expect((await outbox.take('account'))?.intent.operationId).toBe(independent.operationId);
+});
+
+it('preserves a new damaged cache copy after an earlier recovery was removed', async () => {
+	const { recovery } = setup();
+	const item = {
+		accountId: 'account',
+		source: 'records',
+		key: 'note:1',
+		message: 'Damaged cached copy',
+		impact: { kind: 'cache' as const }
+	};
+	await recovery.save(item, 'Old damaged copy');
+	await recovery.remove('account', item.source, item.key);
+	await recovery.save(item, 'New damaged copy');
+	expect(await (await recovery.download('account', item.source, item.key)).text()).toContain(
+		'New damaged copy'
+	);
+});
+
+it.each([true, false])(
+	'keeps descendants visible after recovery removal when ancestor identity is readable: %s',
+	async (identityReadable) => {
+		const { name, outbox, recovery } = setup();
+		const parent = draft();
+		const child = draft();
+		await outbox.append('account', parent);
+		await outbox.append('account', { ...child, basedOn: parent.operationId });
+		const [entry] = await outbox.list('account');
+		await damage(name, 'outbox', {
+			accountId: 'account',
+			entry: {
+				...entry,
+				intent: {
+					...entry.intent,
+					command: 42,
+					operationId: identityReadable ? entry.intent.operationId : null
+				}
+			}
+		});
+		await outbox.list('account');
+		const [item] = await recovery.list('account');
+		await recovery.download('account', item.source, item.key);
+		await recovery.remove('account', item.source, item.key);
+		expect(
+			(await outbox.list('account')).map((entry) => ({
+				delivery: entry.delivery.kind,
+				basedOn: entry.intent.basedOn
+			}))
+		).toEqual([{ delivery: 'rejected', basedOn: parent.operationId }]);
+	}
+);
+
+it('can finish recovery removal again after its durable removal marker exists', async () => {
+	const { recovery } = setup();
+	const item = {
+		accountId: 'account',
+		source: 'imports',
+		key: 'damaged',
+		message: 'Damaged',
+		impact: { kind: 'write' as const, operationId: null }
+	};
+	await recovery.save(item, 'Original');
+	await recovery.remove('account', item.source, item.key);
+	await recovery.remove('account', item.source, item.key);
+	expect(await recovery.list('account')).toEqual([]);
+});

@@ -21,3 +21,11 @@ it('keeps incomplete downloads visible after a successful journal pull', () => {
 it('does not add a badge during an ordinary online save', () => {
 	expect(syncIndicator({ ...synced, pending: 1 })).toMatchObject({ kind: 'saving', badge: 0 });
 });
+it('names a single decision in the singular', () => {
+	expect(syncIndicator({ ...synced, review: 1 }).headline).toBe('1 change needs a decision');
+});
+it('describes offline pending work with its actual count', () => {
+	expect(syncIndicator({ ...synced, online: false, pending: 2 }).description).toBe(
+		"2 changes will sync when you're back online."
+	);
+});

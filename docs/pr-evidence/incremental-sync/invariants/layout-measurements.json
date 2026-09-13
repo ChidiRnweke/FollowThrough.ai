@@ -1,0 +1,298 @@
+[
+	{
+		"state": "queued",
+		"size": "desktop",
+		"theme": "light",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Discard…",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "conflict",
+		"size": "desktop",
+		"theme": "light",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Load latest",
+				"fits": true
+			},
+			{
+				"label": "Original version",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Use latest…",
+				"fits": true
+			},
+			{
+				"label": "Keep mine",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "queued",
+		"size": "desktop",
+		"theme": "dark",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Discard…",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "conflict",
+		"size": "desktop",
+		"theme": "dark",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Load latest",
+				"fits": true
+			},
+			{
+				"label": "Original version",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Use latest…",
+				"fits": true
+			},
+			{
+				"label": "Keep mine",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "queued",
+		"size": "mobile",
+		"theme": "light",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Discard…",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "conflict",
+		"size": "mobile",
+		"theme": "light",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Load latest",
+				"fits": true
+			},
+			{
+				"label": "Original version",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Use latest…",
+				"fits": true
+			},
+			{
+				"label": "Keep mine",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "queued",
+		"size": "mobile",
+		"theme": "dark",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Discard…",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	},
+	{
+		"state": "conflict",
+		"size": "mobile",
+		"theme": "dark",
+		"selectedTitle": "My project",
+		"frameGap": "24px",
+		"titleSize": "18px",
+		"titleWeight": "600",
+		"titleStatusGap": "4px",
+		"headerGap": "12px",
+		"statusSize": "14px",
+		"fitsViewport": true,
+		"controls": [
+			{
+				"label": "All changes",
+				"fits": true
+			},
+			{
+				"label": "Load latest",
+				"fits": true
+			},
+			{
+				"label": "Original version",
+				"fits": true
+			},
+			{
+				"label": "Download a copy",
+				"fits": true
+			},
+			{
+				"label": "Use latest…",
+				"fits": true
+			},
+			{
+				"label": "Keep mine",
+				"fits": true
+			},
+			{
+				"label": "Close",
+				"fits": true
+			}
+		]
+	}
+]

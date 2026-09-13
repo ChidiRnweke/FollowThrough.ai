@@ -196,7 +196,9 @@
 				description="This rewrites every match in the note bodies. Title matches are left alone."
 				confirmLabel="Replace all"
 				confirmVariant="default"
-				onconfirm={() => globalSearch.replaceAll()}
+				onconfirm={async () => {
+					await globalSearch.replaceAll();
+				}}
 			>
 				{#snippet trigger(props)}
 					<Button {...props} size="sm" class="h-11 shrink-0 sm:h-8" disabled={!replacing}>
