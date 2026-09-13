@@ -90,10 +90,10 @@ cancellation payloads under a newer command schema.
 
 ### Final local validation
 
-- `pnpm test:unit`: 300 files, 3,414 tests passed.
-- `pnpm test:browser:full`: 62 files, 538 tests passed.
+- `pnpm test:unit`: 301 files, 3,415 tests passed.
+- `pnpm test:browser:full`: 63 files, 541 tests passed.
 - `pnpm test:contracts`: 30 files, 191 PostgreSQL contracts passed locally.
-- `pnpm test:sync:pwa`: all 26 production PWA scenarios passed with minted authentication and disposable PostgreSQL. This includes two-page observation without focus and startup while another tab's submission is stalled.
+- `pnpm test:sync:pwa`: all 26 production PWA scenarios passed again after the transaction-lifetime and precache-policy fixes with minted authentication and disposable PostgreSQL. This includes two-page observation without focus and startup while another tab's submission is stalled.
 - `pnpm check`: zero errors and warnings.
 - `pnpm lint`: passed.
 - `pnpm docs:check`: zero errors and warnings, one existing Astro hint.
