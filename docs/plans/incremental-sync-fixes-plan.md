@@ -12,23 +12,21 @@ from a current resource. Retain all synchronized types and the legacy database v
 
 Read this file after compaction. Complete and verify each concern before marking it done.
 Use the existing linked worktree and PR; do not merge. Commit only task changes conventionally.
-Run focused behavioral checks as work progresses and all final gates before completion.
+Run focused behavioral checks as work progresses and all final gates. Keep the PR open for
+user review; do not change its readiness state, close it, or merge it.
 Blocked or incomplete steps remain unchecked with an explanation.
 
 - [x] Capture matching starting/result UI evidence and measure the 7,000-record client fixture.
 - [ ] Run the full 5,000-message/2,000-provenance PostgreSQL/PWA benchmark. Local Docker is unavailable; the client measurement and its limits are recorded in the evidence document.
 - [x] Queue recovery: failed writes cannot starve independent work; attempted input stays
       immutable; retry backoff and explicit retry; preserve dependencies and authentication stops.
-- [ ] Race-safe discard: cancel under the submission operation lock; retain cancellation proof;
+- [x] Race-safe discard: cancel under the submission operation lock; retain cancellation proof;
       already-applied edits settle from server evidence; revalidate reviewed descendants.
-      Implemented and unit-tested; real SQL contracts await CI.
-- [ ] Publish the journal with a deferred constraint trigger, then retry declared database-only
+- [x] Publish the journal with a deferred constraint trigger, then retry declared database-only
       outer transactions on deadlock/serialization failures after checking
       callback replay safety; nested transactions share attempts and errors remain visible.
-      Implemented and unit-tested; real SQL contracts await CI.
-- [ ] Compact server receipt snapshots only after durable client settlement and retryable client
+- [x] Compact server receipt snapshots only after durable client settlement and retryable client
       acknowledgement; retain operation/hash/resource/original-version proof indefinitely.
-      Implemented and unit-tested; real SQL contracts await CI.
 - [x] Recover malformed IndexedDB rows individually with atomic quarantine, direct refetch for
       damaged cache bodies, inventory generation protection, and honest dependency blockers.
       Preserve legacy markers/fences, repair bootstrap online, expose recovery offline.
@@ -40,12 +38,11 @@ Blocked or incomplete steps remain unchecked with an explanation.
 - [x] Replace status strip with sidebar/mobile utility indicator and pure indicator model.
       Rebuild review around decisions, meaningful fields, faithful diffs, dependencies,
       accessible actions, quarantine downloads, and the established empty state.
-- [ ] Exhaustive command routing, rolling account-cookie renewal without per-request writes,
+- [x] Exhaustive command routing, rolling account-cookie renewal without per-request writes,
       repeatable push-managed development SQL setup, and corrected browser inspection docs.
-      Implemented; repeatable setup contract awaits CI.
-- [ ] Update ADR 0040, design rules, and audit classifications; validate all new contracts.
-- [ ] Capture matching before/after desktop/mobile light/dark evidence; publish conventional
-      commits to PR #37, update its four-section body, and wait for required CI checks.
+- [x] Update ADR 0040, design rules, and audit classifications; validate all new contracts.
+- [x] Capture matching before/after desktop/mobile light/dark evidence; publish conventional
+      commits and the four-section evidence body to PR #37. Keep the PR open for user review.
 
 ## Required verification
 
@@ -71,3 +68,6 @@ Selected screenshots belong under `docs/pr-evidence/incremental-sync/`; use synt
 - `pnpm test:browser:full`: 59 files, 494 tests passed, including all six review tests.
 - `pnpm test:contracts` and `pnpm test:sync:pwa`: local Testcontainers cannot start because
   Docker integration is unavailable. Do not report these as local passes.
+
+- PostgreSQL contracts passed in GitHub Actions on `aea112c`, including guarded deletion
+  receipts, cancellation, receipt compaction, deferred journal publication, and repeatable setup.
