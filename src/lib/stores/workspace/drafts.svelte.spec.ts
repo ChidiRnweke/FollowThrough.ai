@@ -52,6 +52,7 @@ const setup = async () => {
 		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(note.userId, {
+		repository: outbox,
 		cache,
 		writes
 	});

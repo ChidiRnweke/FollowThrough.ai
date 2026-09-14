@@ -1,5 +1,5 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -34,6 +34,10 @@ const identity: WorkspaceResourceIdentity = {
 	id: ['a0000000-0000-4000-8000-000000000001']
 };
 const key = workspaceResourceKey(identity);
+const activeResources: WorkspaceResources[] = [];
+afterEach(() => {
+	for (const resources of activeResources.splice(0)) resources.stop();
+});
 const setup = (
 	writeTransport: OutboxTransport<WorkspaceCommand, typeof project> = {
 		send: async () => {
@@ -53,11 +57,16 @@ const setup = (
 		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources('alice', {
+		repository: outbox,
 		cache,
 		writes
 	});
-	outbox.observe('alice', (state) => resources.applyLocal(state));
+	const stopObserving = outbox.observe('alice', (state) => resources.applyLocal(state));
+	activeResources.push(resources);
 	return {
+		outbox,
+		writes,
+		stopObserving,
 		repository,
 		transport,
 		cache,
@@ -532,4 +541,34 @@ it('does not create a default while an unknown resource is being downloaded', as
 		paused.release();
 		await opening;
 	}
+});
+
+it('keeps a created resource visible until its complete settled projection arrives', async () => {
+	const { resources, outbox, writes, stopObserving } = setup();
+	if (project.type !== 'projects') throw new Error('Expected project fixture');
+	resources.setOnline(false);
+	await resources.append({
+		operationId: crypto.randomUUID(),
+		key,
+		command: { kind: 'createProject', id: project.value.id, name: project.value.name },
+		local: project,
+		base: null,
+		basedOn: null,
+		coalesce: null,
+		references: []
+	});
+	stopObserving();
+	const sent = await outbox.take('alice');
+	if (!sent) throw new Error('The created project was not queued');
+	await outbox.settle('alice', sent, {
+		kind: 'applied',
+		receipt: {
+			operationId: sent.intent.operationId,
+			resource: { kind: 'found', snapshot: { etag: syncEtag(2n), value: project } }
+		}
+	});
+	await writes.reload();
+	const beforePublication = resources.records.get(key);
+	resources.applyLocal(await outbox.read('alice'));
+	expect([beforePublication, resources.records.get(key)]).toEqual([project, project]);
 });

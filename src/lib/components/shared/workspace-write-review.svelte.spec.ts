@@ -41,6 +41,7 @@ const setup = async (
 		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(project.userId, {
+		repository: repository,
 		cache,
 		writes
 	});

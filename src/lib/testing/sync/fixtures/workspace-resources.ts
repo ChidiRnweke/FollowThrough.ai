@@ -24,6 +24,7 @@ export const workspaceResourcesFixture = (accountId: string) => {
 		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(accountId, {
+		repository: outbox,
 		cache,
 		writes
 	});

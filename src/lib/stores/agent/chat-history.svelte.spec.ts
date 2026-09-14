@@ -96,6 +96,7 @@ const setup = async (
 		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
+		repository: repository,
 		cache,
 		writes
 	});
