@@ -1,0 +1,35 @@
+# Workspace sync simplification
+
+## Executor instructions
+
+Work only in the owned linked worktree on refactor/sync-authority. Complete the unchecked concerns in order, verify behavior before checking them off, and commit conventionally. Keep this file current across context compaction. Publish through PR 39; do not merge. Failures remain unchecked. Prepend /home/chidi/.nvm/versions/node/v22.22.0/bin to PATH for pnpm.
+
+## Accepted decisions
+
+The feature is unreleased. No backward compatibility or legacy import machinery. Cached records open immediately; targeted reads remain for uncached records. Keep offline edits, account isolation, guarded mutations, explicit conflicts, independent retries and cancellation safety. Malformed local storage blocks the account: raw export and confirmed reset replace granular repair. Server keeps permanent small operation proofs, not receipt bodies/acknowledgements; dependent edits enter review when original application evidence is unavailable. Libraries only; add lazily loaded dexie-export-import. Keep compound operations, binary transfers, historical retrieval and agent execution online.
+
+## Baseline and audit
+
+Baseline 98194989d91f59d14db24845267734a4f1baf2fc against origin/master: 7,431 net application lines, 9,004 test/fake lines, 304 migration lines, 1,507 documentation lines. Nine client stores, three runtime lanes, separate journal/body protocols. Five CI gates pass; PWA last failed with Chromium SIGSEGV during context creation. Earlier held-write interception fix passed five local repetitions; full CI remains required.
+
+Audit found duplicate version/body authorities, full-queue editing and repair during reads, count-only observation plus repairing publication, caller-authored optimistic bodies and queue metadata, independent editor reconciliation loops, duplicated SQL/TS ownership rules, and migration text surgery. Today quick capture bypasses the outbox. Compound online operations are intentional: remove their unused outbox variants, do not generalize optimistic multi-record operations. Keep domain sync adapters: central controller dispatch would duplicate established workflows or violate controller chaining rules. Keep existing version/journal tables and commit-ordering triggers.
+
+## Implementation
+
+- [x] Save accepted plan, baseline and audit evidence.
+- [ ] Full-record delta pages: one readonly repeatable-read PostgreSQL transaction reads head, selected changes and exact versioned bodies. Missing/malformed records fail the page. Start with 32 records (existing measured body batch); no inventory cap. Client atomically commits page and checkpoint. Keep targeted read, which never advances inventory. Remove notice/body downloader machinery and body runtime lane. Verify concurrent page reads, atomic rollback, stale targeted response, partial inventory and cached immediate reads.
+- [ ] Account store: one Dexie database/account; records, outbox (++sequence, unique operation identity), receipts, meta. Direct readonly liveQuery. Explicit narrow stage/claim/settle/discard/apply-page operations. No legacy, import, quarantine, queue-head, recovery-head or acknowledgement stores. Storage parser failure blocks account and leaves raw data untouched. Account-owned export/reset works without normal startup. Permanent lifetime: autoOpen:false, explicit open, abort/close on versionchange and return false; never reuse closed instances; await deletion before replacement. Verify stale responses/reset/other tabs, account isolation, raw malformed export and storage rollback.
+- [ ] Proof-only writes: immutable attempted input and canonical hash; applied/cancelled permanent proof. Normal response includes authoritative body. Replay never invents original body from a newer resource; missing original evidence retains dependent edits for review. Remove acknowledgement/compaction protocol. Keep operation/resource locks and race-safe cancellation. Verify concurrent replay, hash mismatch, lost-response descendants and cancel/send races.
+- [ ] One runtime: pull/send lanes, one account lifetime and wakeup owner, per-operation retry eligibility, Web Lock submission. Busy writer does not block startup and retries. Pull after accepted mutations. Remove manual publication/reload and duplicate cache/queue execution state. Verify independent work, failure deadlines and follower takeover.
+- [ ] Command preparation: exhaustive command-oriented UI boundary derives primary identity, optimistic value, references and coalescing. Stable IDs/time once. Remove caller-authored queue bookkeeping. Queue Today capture, preserve intentional compound online actions and remove unused queued variants. Draft discard requires loaded published body; history stays online. Verify command/optimistic/server behavior and offline capture.
+- [ ] Shared editor session: per-pane observed base, dirty generation, serialized local persistence and conditional adoption. Migrate notes/skills/diagrams/todo fields/preferences; retain editor serialization and selection behavior. Preserve text during save/refresh, honest defaults, no queue on form open, explicit conflicts and live chat authority. Derived per-type record partition and keyed identity reads.
+- [ ] Server registration/setup: reuse SQL owner resolver in selected live reads and locks; retain persisted tombstone owners and explicit missing metadata failure. Consolidate repeated identity registrations without losing public allowlist. One explicit idempotent installation definition shared by dev setup and initial feature migration; no migration text surgery. Preserve pre-feature migration history. Verify ownership, cascades, metadata defects and repeated install.
+- [ ] Evidence and delivery: real PostgreSQL/PWA benchmark (5,000 messages/2,000 provenance, representative rich content), compare first usable view/full sync/requests/bytes/long tasks. UI before/after captures for changed startup/freshness/recovery. Update ADRs, remove obsolete handoffs, report production reduction separately. All lint/check/architecture/unit/browser/contracts/PWA/docs gates and required CI pass, update PR39 title/body with observed evidence.
+
+## Dependency decisions
+
+Dexie owns transaction and observation mechanics. dexie-export-import owns chunked raw database export (https://dexie.org/docs/ExportImport/dexie-export-import). TanStack offline transactions currently bypass durable offline execution in nonleader tabs; RxDB lacks the multi-record ACID transactions this design uses. No extra scheduler/query/state-machine framework or sync service. Existing small service worker and SvelteKit offline shell remain.
+
+## Completion criteria
+
+Four client stores, two runtime lanes, atomic complete-page replication, no background body downloader, compatibility, granular repair, queue heads or acknowledgement machinery. Shared command preparation and editor session. Measured net production reduction. All required CI green. No merge.
