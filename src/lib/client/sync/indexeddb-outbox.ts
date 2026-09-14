@@ -57,7 +57,10 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	}
 	async snapshot(accountId: string): Promise<OutboxProjection<C, T>> {
 		this.database.assertAccount(accountId);
-		return this.database.run('r', ['outbox', 'receipts'], async (tx) => ({
+		return this.database.run('r', ['outbox', 'receipts'], (tx) => this.snapshotIn(tx));
+	}
+	protected async snapshotIn(tx: Transaction): Promise<OutboxProjection<C, T>> {
+		return {
 			entries: await this.readEntries(tx),
 			receipts: new Map(
 				z
@@ -67,7 +70,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 					.parse(await storedTable(tx, 'receipts').toArray())
 					.map((row) => [row.key, row.receipt])
 			)
-		}));
+		};
 	}
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		this.database.assertAccount(accountId);

@@ -186,7 +186,10 @@ export class WorkspaceResources {
 
 	async requireCollections(): Promise<void> {
 		await this.initialize();
-		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
+		if (this.dependencies.cache.availability === 'unknown') {
+			const result = await this.dependencies.cache.refresh();
+			if (result.kind === 'failure') throw new Error(result.message);
+		}
 		await this.readLocal();
 		if (this.collectionReadiness() !== 'ready')
 			throw new Error(

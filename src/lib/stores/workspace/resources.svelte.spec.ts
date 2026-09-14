@@ -519,13 +519,11 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 	}
 });
 
-it('does not publish required collection readiness when its initial body failed', async () => {
+it('reports the transport failure when required inventory cannot load', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
 	transport.pullFailure = 'Disconnected';
-	await expect(resources.requireCollections()).rejects.toThrow(
-		'Required workspace data is not available on this device'
-	);
+	await expect(resources.requireCollections()).rejects.toThrow('Disconnected');
 });
 
 it('does not create a default while an unknown resource is being downloaded', async () => {

@@ -37,9 +37,9 @@ export class DexieWorkspaceRepository<C, T>
 	}
 	async read(accountId: string): Promise<WorkspaceLocalProjection<C, T>> {
 		this.database.assertAccount(accountId);
-		return this.database.run('r', ['records', 'outbox', 'receipts', 'meta'], async () => ({
-			cache: await this.cache.load(accountId),
-			writes: await super.snapshot(accountId)
+		return this.database.run('r', ['records', 'outbox', 'receipts', 'meta'], async (tx) => ({
+			cache: await this.cache.loadIn(tx),
+			writes: await this.snapshotIn(tx)
 		}));
 	}
 	observe(
@@ -47,7 +47,7 @@ export class DexieWorkspaceRepository<C, T>
 		changed: (projection: WorkspaceLocalProjection<C, T>) => void,
 		failed: (error: Error) => void
 	): () => void {
-		const subscription = liveQuery(() => this.read(accountId)).subscribe({
+		const subscription = liveQuery(async () => this.read(accountId)).subscribe({
 			next: changed,
 			error: (error) =>
 				failed(

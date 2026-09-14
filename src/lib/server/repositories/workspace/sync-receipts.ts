@@ -5,7 +5,7 @@ import type { ActorContext } from '$lib/models/identity';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { type WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 import type { Database } from '$lib/server/db';
-import { syncIdentitySql, syncRegistrations, syncOwnerSql } from './sync-catalog';
+import { syncIdentityPredicate, syncRegistrations, syncOwnerSql } from './sync-catalog';
 
 export type ReceiptLookup =
 	| { readonly kind: 'missing' }
@@ -56,7 +56,7 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 		// Lock the source row, not just its metadata: domain writers also lock that row.
 		// The resource advisory lock covers the absent-row case for offline creations.
 		await this.db.execute(sql`select 1 from ${sql.identifier(identity.type)} r
-			where ${syncOwnerSql(registration.type, actor)} and ${syncIdentitySql(registration)} = ${JSON.stringify(identity.id)}::jsonb
+			where ${syncOwnerSql(registration.type, actor)} and ${syncIdentityPredicate(registration, identity.id)}
 			for update`);
 	}
 

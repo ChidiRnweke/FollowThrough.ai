@@ -59,7 +59,7 @@ export class WorkspaceDatabase extends Dexie {
 	): Promise<T> {
 		await this.ready();
 		try {
-			return await this.transaction(mode, [...tables], work);
+			return await this.transaction(mode, [...tables], async (tx) => work(tx));
 		} catch (error) {
 			if (error instanceof z.ZodError || error instanceof WorkspaceStorageError) {
 				const failure = new WorkspaceStorageError(

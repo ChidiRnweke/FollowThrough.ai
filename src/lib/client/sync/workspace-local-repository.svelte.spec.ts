@@ -191,3 +191,32 @@ it('never publishes another account’s projection to an existing account observ
 	await new Promise((resolve) => setTimeout(resolve, 30));
 	expect(observed).toEqual(['Alice private note']);
 });
+
+it('reads a complete rich-content page while its live projection is active', async () => {
+	const { writer, follower } = setup();
+	const observed = Promise.withResolvers<number>();
+	subscriptions.push(
+		follower.observe(
+			'alice',
+			(projection) => {
+				if (projection.cache.records.length === 32)
+					observed.resolve(projection.cache.records.length);
+			},
+			observed.reject
+		)
+	);
+	await writer.cache.commit('alice', {
+		put: Array.from({ length: 32 }, (_, index) => ({
+			key: `note:${index}`,
+			entry: {
+				kind: 'present' as const,
+				snapshot: { etag: syncEtag(1n), value: 'Rich content paragraph. '.repeat(150) }
+			}
+		})),
+		remove: []
+	});
+	expect({
+		observed: await observed.promise,
+		stored: (await follower.read('alice')).cache.records.length
+	}).toEqual({ observed: 32, stored: 32 });
+});

@@ -66,3 +66,16 @@ export const syncIdentitySql = (registration: SyncRegistration): SQL => sql`json
 /** Same ownership rule used by version triggers, selected reads and resource locks. */
 export const syncOwnerSql = (type: WorkspaceResourceType, actor: ActorContext): SQL =>
 	sql`workspace_sync_account(${type}, to_jsonb(r)) = ${actor.userId}`;
+
+/** Keep source lookups on their existing primary-key indexes. JSON identity is journal metadata. */
+export const syncIdentityPredicate = (
+	registration: SyncRegistration,
+	id: readonly string[]
+): SQL => {
+	if (registration.keys.length !== id.length)
+		throw new Error('The resource identity has the wrong arity');
+	return sql.join(
+		registration.keys.map((key, index) => sql`r.${sql.identifier(key)} = ${id[index]}`),
+		sql` and `
+	);
+};

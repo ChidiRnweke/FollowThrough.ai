@@ -137,3 +137,25 @@ describe('durable workspace cache', () => {
 });
 
 cacheRepositoryContract(() => setup(undefined, 'alice').repository);
+
+it('commits a full rich-content page and its checkpoint together', async () => {
+	const { repository } = setup();
+	const put = Array.from({ length: 32 }, (_, index) => ({
+		key: `note:${index}`,
+		entry: {
+			kind: 'present' as const,
+			snapshot: { etag: syncEtag(1n), value: 'Rich content paragraph. '.repeat(150) }
+		}
+	}));
+	await repository.commit('user-a', {
+		put,
+		remove: [],
+		cursor: syncCursorSchema.parse('32'),
+		inventoryComplete: true
+	});
+	expect(await repository.load('user-a')).toEqual({
+		records: [...put].sort((a, b) => a.key.localeCompare(b.key)),
+		cursor: '32',
+		inventoryComplete: true
+	});
+});
