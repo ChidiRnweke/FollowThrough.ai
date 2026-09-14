@@ -59,6 +59,22 @@ describe('guarded workspace mutation replay', () => {
 		await apply(input);
 		expect(content.notes[0]?.title).toBe(noteBuilder().title);
 	});
+	it('keeps a cancelled operation cancelled after repeated acknowledgement', async () => {
+		const { transactions } = setup();
+		const cancellation = { operationId: input.operationId, request: JSON.stringify(input) };
+		await transactions.cancel(testActor(), cancellation);
+		await transactions.acknowledge(testActor(), input.operationId);
+		await transactions.acknowledge(testActor(), input.operationId);
+		expect(await transactions.cancel(testActor(), cancellation)).toEqual({ kind: 'cancelled' });
+	});
+	it('does not create a receipt when an unknown operation is acknowledged repeatedly', async () => {
+		const { transactions, mutationReceipts } = setup();
+		await transactions.acknowledge(testActor(), input.operationId);
+		await transactions.acknowledge(testActor(), input.operationId);
+		expect(
+			await mutationReceipts.find(testActor(), input.operationId, JSON.stringify(input))
+		).toEqual({ kind: 'missing' });
+	});
 	it('recovers the applied receipt instead of undoing an edit when cancellation arrives later', async () => {
 		const { transactions, apply } = setup();
 		const applied = await apply(input);

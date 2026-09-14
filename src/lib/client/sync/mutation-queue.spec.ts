@@ -1,13 +1,14 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import type { WriteDraft, WriteReceipt } from '$lib/models/outbox';
+import type { WriteDraft } from '$lib/models/outbox';
 import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import type { OutboxTransport } from './outbox-contracts';
 import { MutationQueue } from './mutation-queue';
+import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const secondId = 'a0000000-0000-4000-8000-000000000002';
@@ -30,9 +31,9 @@ const applied = (operationId: string, value: string) => ({
 	}
 });
 const setup = (transport: OutboxTransport<string, string>) => {
-	const repository = new InMemoryOutbox<string, string>();
+	const cache = new InMemorySyncCache<string>();
+	const repository = new InMemoryOutbox<string, string>(cache);
 	const writerLock = new InMemoryAccountWriterLock();
-	const accepted: WriteReceipt<string>['resource'][] = [];
 	const dependencies = {
 		repository,
 		scheduler: new InMemorySyncScheduler(),
@@ -41,11 +42,9 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		resolveBase: async () => {
 			throw new Error('This fixture has no imported draft');
 		},
-		received: async (_key: string, resource: WriteReceipt<string>['resource']) => {
-			accepted.push(resource);
-		}
+		committed: () => undefined
 	};
-	return { repository, dependencies, accepted, queue: new MutationQueue('alice', dependencies) };
+	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
 };
 
 describe('shared mutation submission', () => {
@@ -160,14 +159,24 @@ describe('shared mutation submission', () => {
 		]);
 	});
 	it('publishes receipts only after their queue acknowledgement is durable', async () => {
-		const { queue, accepted, repository } = setup({
+		const { queue, repository } = setup({
 			send: async (input) => applied(input.operationId, input.command)
 		});
 		await queue.append(draft(firstId));
 		await queue.flush();
-		expect({ pending: await repository.list('alice'), accepted }).toEqual({
-			pending: [],
-			accepted: [applied(firstId, 'Edited').receipt.resource]
+		expect(await repository.read('alice')).toMatchObject({
+			writes: { entries: [], receipts: new Map([['note:1', applied(firstId, 'Edited').receipt]]) },
+			cache: {
+				records: [
+					{
+						key: 'note:1',
+						entry: {
+							kind: 'present',
+							cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+						}
+					}
+				]
+			}
 		});
 	});
 	it('continues unrelated writes after a conflict without discarding the conflicting edit', async () => {
@@ -231,7 +240,7 @@ describe('shared mutation submission', () => {
 	it('finishes durable acknowledgement after logout without exposing the old account receipt', async () => {
 		const started = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
-		const { queue, repository, accepted } = setup({
+		const { queue, repository, cache } = setup({
 			send: async (input) => {
 				started.resolve();
 				await release.promise;
@@ -244,10 +253,24 @@ describe('shared mutation submission', () => {
 		queue.stop();
 		release.resolve();
 		await flushing;
-		expect({ durable: await repository.list('alice'), exposed: queue.pending, accepted }).toEqual({
+		expect({
+			durable: await repository.list('alice'),
+			exposed: queue.pending,
+			acknowledged: queue.acknowledged('note:1', firstId),
+			stored: (await cache.load('alice')).records
+		}).toEqual({
 			durable: [],
 			exposed: [],
-			accepted: []
+			acknowledged: false,
+			stored: [
+				{
+					key: 'note:1',
+					entry: {
+						kind: 'present',
+						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+					}
+				}
+			]
 		});
 	});
 });
@@ -255,13 +278,16 @@ describe('shared mutation submission', () => {
 describe('conflict cache publication', () => {
 	it('publishes the server version while keeping the local conflict queued', async () => {
 		const snapshot = { etag: syncEtag(2n), value: 'Other client' };
-		const { queue, accepted } = setup({
+		const { queue, cache } = setup({
 			send: async () => ({ kind: 'conflict', remote: { kind: 'found', snapshot } })
 		});
 		await queue.append(draft(firstId));
 		await queue.flush();
-		expect({ received: accepted, local: queue.pending[0].intent.local }).toEqual({
-			received: [{ kind: 'found', snapshot }],
+		expect({
+			stored: (await cache.load('alice')).records,
+			local: queue.pending[0].intent.local
+		}).toEqual({
+			stored: [{ key: 'note:1', entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }],
 			local: 'Edited'
 		});
 	});
@@ -325,7 +351,7 @@ it('does not treat disappearance from another writer’s discard as acknowledgem
 });
 
 it('sends independent edits when an imported base cannot be checked', async () => {
-	const { queue, accepted } = setup({
+	const { queue, cache } = setup({
 		send: async (input) => applied(input.operationId, input.command)
 	});
 	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Legacy original' } });
@@ -333,8 +359,8 @@ it('sends independent edits when an imported base cannot be checked', async () =
 	await queue.flush();
 	expect({
 		pending: queue.pending.map((entry) => entry.intent.operationId),
-		saved: accepted.length
-	}).toEqual({ pending: [firstId], saved: 1 });
+		saved: (await cache.load('alice')).records.map((record) => record.key)
+	}).toEqual({ pending: [firstId], saved: ['note:2'] });
 });
 
 // SYNC-PROGRESS: elapsed time, rather than user activity, retries an eligible write.
@@ -444,4 +470,16 @@ it('preserves acknowledgement backoff while independent edits become durable', a
 		pending: queue.pending,
 		acknowledgements: await repository.pendingAcknowledgements('alice')
 	}).toEqual({ pending: [], acknowledgements: [firstId, secondId] });
+});
+
+it('automatically retries the first storage failure before any operation is submitted', async () => {
+	const { queue, repository, dependencies } = setup({
+		send: async (input) => applied(input.operationId, input.command)
+	});
+	await queue.append(draft(firstId));
+	repository.snapshotFailure = 'Device storage unavailable';
+	await queue.flush();
+	repository.snapshotFailure = null;
+	await dependencies.scheduler.advance(1000);
+	expect(await repository.receipt('alice', 'note:1')).toEqual(applied(firstId, 'Edited').receipt);
 });

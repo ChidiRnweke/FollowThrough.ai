@@ -397,7 +397,9 @@ it('retains identical normalized input for submission and uncertain cancellation
 	const sent = await outbox.take(project.userId);
 	await outbox.retry(project.userId, operationId, 'Response lost');
 	await outbox.close();
-	const [retained] = await outbox.list(project.userId);
+	const reopened = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, name);
+	repositories.push(reopened);
+	const [retained] = await reopened.list(project.userId);
 	expect({ submitted: sent?.intent.command, cancelled: retained.intent.command }).toEqual({
 		submitted: { kind: 'createProject', id: project.id, name: 'Plan' },
 		cancelled: { kind: 'createProject', id: project.id, name: 'Plan' }

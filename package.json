@@ -160,6 +160,7 @@
 		"@tiptap/suggestion": "^3.27.3",
 		"@types/diff": "^8.0.0",
 		"adm-zip": "^0.6.0",
+		"dexie": "^4.4.6",
 		"diff": "^9.0.0",
 		"docx": "^9.7.1",
 		"dompurify": "3.4.11",

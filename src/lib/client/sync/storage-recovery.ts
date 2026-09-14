@@ -1,3 +1,4 @@
+import type { Transaction } from 'dexie';
 import { z } from 'zod';
 import {
 	storageRecoveryItemSchema,
@@ -5,20 +6,26 @@ import {
 	type StorageRecoveryItem,
 	type ResourceState
 } from '$lib/models/sync';
-import { completed, openSyncDatabase, requestValue, storedResourceSchema } from './database';
+import {
+	completed,
+	WorkspaceDatabase,
+	storedTable,
+	requestValue,
+	storedResourceSchema
+} from './database';
 
 export const recoveryGeneration = async (
-	transaction: IDBTransaction,
+	transaction: Transaction,
 	accountId: string
 ): Promise<string> => {
-	const store = transaction.objectStore('recovery-heads');
-	const raw = await requestValue(store.get(accountId));
+	const store = storedTable(transaction, 'recovery-heads');
+	const raw = await store.get(accountId);
 	if (raw === undefined) return initialCacheGeneration;
 	const parsed = z
 		.object({ accountId: z.literal(accountId), generation: z.string().uuid() })
 		.safeParse(raw);
 	if (parsed.success) return parsed.data.generation;
-	quarantineRow(
+	await quarantineRow(
 		transaction,
 		{
 			accountId,
@@ -30,22 +37,25 @@ export const recoveryGeneration = async (
 		raw
 	);
 	const generation = crypto.randomUUID();
-	store.put({ accountId, generation });
-	transaction.objectStore('cursors').delete(accountId);
+	await store.put({ accountId, generation });
+	await storedTable(transaction, 'cursors').delete(accountId);
 	return generation;
 };
 
 export const invalidateInventory = async (
-	transaction: IDBTransaction,
+	transaction: Transaction,
 	accountId: string
 ): Promise<void> => {
 	await recoveryGeneration(transaction, accountId);
-	transaction.objectStore('recovery-heads').put({ accountId, generation: crypto.randomUUID() });
-	transaction.objectStore('cursors').delete(accountId);
+	await storedTable(transaction, 'recovery-heads').put({
+		accountId,
+		generation: crypto.randomUUID()
+	});
+	await storedTable(transaction, 'cursors').delete(accountId);
 };
 
 export const recoverCacheRow = async <T>(
-	transaction: IDBTransaction,
+	transaction: Transaction,
 	accountId: string,
 	key: string,
 	schema: z.ZodType<T>,
@@ -54,7 +64,7 @@ export const recoverCacheRow = async <T>(
 	if (raw === undefined) return null;
 	const parsed = storedResourceSchema(accountId, schema).safeParse(raw);
 	if (parsed.success && parsed.data.key === key) return parsed.data;
-	quarantineRow(
+	await quarantineRow(
 		transaction,
 		{
 			accountId,
@@ -69,7 +79,7 @@ export const recoverCacheRow = async <T>(
 		kind: 'present',
 		cache: { kind: 'updating', previous: null, target: null, transfer: { kind: 'queued' } }
 	};
-	transaction.objectStore('records').put({ schemaVersion: 2, accountId, key, entry });
+	await storedTable(transaction, 'records').put({ schemaVersion: 2, accountId, key, entry });
 	await invalidateInventory(transaction, accountId);
 	return { key, entry };
 };
@@ -82,33 +92,35 @@ const removedRecoverySchema = z.object({
 });
 
 /** Raw malformed content stays at the storage boundary, never in workspace projections. */
-export const quarantineRow = (
-	transaction: IDBTransaction,
+export const quarantineRow = async (
+	transaction: Transaction,
 	item: StorageRecoveryItem,
 	raw: unknown
-): void => {
-	const store = transaction.objectStore('quarantine');
-	const existing = store.get([item.accountId, item.source, item.key]);
-	existing.onsuccess = () => {
-		if (!removedRecoverySchema.safeParse(existing.result).success) store.put({ ...item, raw });
-	};
+): Promise<void> => {
+	const store = storedTable(transaction, 'quarantine');
+	const existing = await store.get([item.accountId, item.source, item.key]);
+	if (!removedRecoverySchema.safeParse(existing).success) await store.put({ ...item, raw });
 };
 
 export const recoveryItems = async (
-	transaction: IDBTransaction,
+	transaction: Transaction,
 	accountId: string
 ): Promise<readonly StorageRecoveryItem[]> => {
-	const store = transaction.objectStore('quarantine');
+	const store = storedTable(transaction, 'quarantine');
 	const [rows, keys] = await Promise.all([
-		requestValue(store.index('accountId').getAll(accountId)),
-		requestValue(store.index('accountId').getAllKeys(accountId))
+		store.where('accountId').equals(accountId).toArray(),
+		store.where('accountId').equals(accountId).primaryKeys()
 	]);
-	return rows.flatMap((row, index) => {
-		if (removedRecoverySchema.safeParse(row).success) return [];
+	const items: StorageRecoveryItem[] = [];
+	for (const [index, row] of rows.entries()) {
+		if (removedRecoverySchema.safeParse(row).success) continue;
 		const parsed = storageRecoveryItemSchema
 			.extend({ accountId: z.literal(accountId) })
 			.safeParse(row);
-		if (parsed.success) return [parsed.data];
+		if (parsed.success) {
+			items.push(parsed.data);
+			continue;
+		}
 		const item: StorageRecoveryItem = {
 			accountId,
 			source: 'recovery-metadata',
@@ -117,10 +129,11 @@ export const recoveryItems = async (
 				'A recovery entry had damaged metadata. Its original content is preserved for download.',
 			impact: { kind: 'write', operationId: null }
 		};
-		store.delete(keys[index]);
+		await store.delete(keys[index]);
 		quarantineRow(transaction, item, row);
-		return [item];
-	});
+		items.push(item);
+	}
+	return items;
 };
 
 const legacyRecoveryText = async (accountId: string): Promise<string> => {
@@ -149,60 +162,43 @@ const legacyRecoveryText = async (accountId: string): Promise<string> => {
 };
 
 export class IndexedDbStorageRecovery {
+	private readonly database: WorkspaceDatabase;
 	constructor(
-		private readonly databaseName = 'followthrough-workspace-sync',
-		private readonly legacyDatabaseName = 'followthrough-note-sync'
-	) {}
+		databaseName = 'followthrough-workspace-sync',
+		private readonly legacyDatabaseName = 'followthrough-note-sync',
+		database = new WorkspaceDatabase(databaseName)
+	) {
+		this.database = database;
+	}
 	async downloadAccount(accountId: string): Promise<Blob> {
 		const legacyNotes = await legacyRecoveryText(accountId);
-		const database = await openSyncDatabase(this.databaseName, () => undefined);
-		try {
-			const transaction = database.transaction(['outbox', 'quarantine'], 'readonly');
-			const done = completed(transaction);
-			const [outbox, quarantine] = await Promise.all(
-				['outbox', 'quarantine'].map((store) =>
-					requestValue(transaction.objectStore(store).index('accountId').getAll(accountId))
-				)
-			);
-			await done;
-			return new Blob(
-				[
-					JSON.stringify(
-						{ accountId, outbox, quarantine, legacyNotes },
-						(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
-						2
+		const [outbox, quarantine] = await this.database.transaction(
+			'r',
+			['outbox', 'quarantine'],
+			async (transaction): Promise<unknown[][]> =>
+				await Promise.all(
+					['outbox', 'quarantine'].map((name) =>
+						storedTable(transaction, name).where('accountId').equals(accountId).toArray()
 					)
-				],
-				{ type: 'application/json' }
-			);
-		} finally {
-			database.close();
-		}
+				)
+		);
+		return recoveryBlob({ accountId, outbox, quarantine, legacyNotes });
 	}
-
 	async remove(accountId: string, source: string, key: string): Promise<void> {
-		const database = await openSyncDatabase(this.databaseName, () => undefined);
-		try {
-			const transaction = database.transaction('quarantine', 'readwrite');
-			const done = completed(transaction);
-			const store = transaction.objectStore('quarantine');
-			const row = await requestValue(store.get([accountId, source, key]));
+		await this.database.transaction('rw', 'quarantine', async (transaction) => {
+			const store = storedTable(transaction, 'quarantine');
+			const row = await store.get([accountId, source, key]);
 			z.union([storageRecoveryItemSchema, removedRecoverySchema])
 				.refine(
 					(item) => item.accountId === accountId && item.source === source && item.key === key
 				)
 				.parse(row);
-			// Retain only identity proof. Reopening an old source cannot resurrect the blocker.
 			if (source === 'legacy-note' || source === 'imports' || source === 'outbox')
-				store.put({ accountId, source, key, resolution: 'removed' });
-			else store.delete([accountId, source, key]);
-			await done;
-		} finally {
-			database.close();
-		}
+				await store.put({ accountId, source, key, resolution: 'removed' });
+			else await store.delete([accountId, source, key]);
+		});
 		if (source === 'legacy-note') await this.removeLegacyRow(accountId, key);
 	}
-
 	private async removeLegacyRow(accountId: string, key: string): Promise<void> {
 		if (!key.startsWith(`${accountId}:`))
 			throw new Error('The recovery source belongs to another account');
@@ -222,50 +218,33 @@ export class IndexedDbStorageRecovery {
 	}
 
 	async save(item: StorageRecoveryItem, raw: unknown): Promise<void> {
-		const database = await openSyncDatabase(this.databaseName, () => undefined);
-		try {
-			const transaction = database.transaction('quarantine', 'readwrite');
-			const done = completed(transaction);
-			quarantineRow(transaction, item, raw);
-			await done;
-		} finally {
-			database.close();
-		}
+		await this.database.transaction('rw', 'quarantine', (transaction) =>
+			quarantineRow(transaction, item, raw)
+		);
 	}
-	async list(accountId: string): Promise<readonly StorageRecoveryItem[]> {
-		const database = await openSyncDatabase(this.databaseName, () => undefined);
-		try {
-			const transaction = database.transaction('quarantine', 'readwrite');
-			const done = completed(transaction);
-			const items = await recoveryItems(transaction, accountId);
-			await done;
-			return items;
-		} finally {
-			database.close();
-		}
+	list(accountId: string): Promise<readonly StorageRecoveryItem[]> {
+		return this.database.transaction('rw', 'quarantine', (transaction) =>
+			recoveryItems(transaction, accountId)
+		);
 	}
 	async download(accountId: string, source: string, key: string): Promise<Blob> {
-		const database = await openSyncDatabase(this.databaseName, () => undefined);
-		try {
-			const transaction = database.transaction('quarantine', 'readonly');
-			const done = completed(transaction);
-			const row = await requestValue(
-				transaction.objectStore('quarantine').get([accountId, source, key])
-			);
-			await done;
-			storageRecoveryItemSchema.extend({ accountId: z.literal(accountId) }).parse(row);
-			return new Blob(
-				[
-					JSON.stringify(
-						row,
-						(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
-						2
-					)
-				],
-				{ type: 'application/json' }
-			);
-		} finally {
-			database.close();
-		}
+		const row = await this.database.table('quarantine').get([accountId, source, key]);
+		storageRecoveryItemSchema.extend({ accountId: z.literal(accountId) }).parse(row);
+		return recoveryBlob(row);
+	}
+	close(): void {
+		this.database.close();
 	}
 }
+
+const recoveryBlob = (value: unknown): Blob =>
+	new Blob(
+		[
+			JSON.stringify(
+				value,
+				(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+				2
+			)
+		],
+		{ type: 'application/json' }
+	);

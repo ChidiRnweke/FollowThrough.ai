@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
+import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
@@ -12,7 +13,8 @@ const savedReceipt = async (suffix: string) => {
 	const request = JSON.stringify({ kind: 'renameNote', noteId: note.id, title: 'Renamed' });
 	const receipt = await context.db.transaction(async (transaction) => {
 		const receipts = new WorkspaceSyncReceipts(transaction);
-		await receipts.lock(owner, operationId, identity);
+		await receipts.lockOperation(owner, operationId);
+		await receipts.lockResource(owner, identity);
 		await transaction.execute(sql`update notes set title = 'Renamed' where id = ${note.id}`);
 		const resource = await new WorkspaceSyncObjects(transaction).read(owner, identity, null);
 		if (resource.kind !== 'found') throw new Error('Seeded note was not readable');
@@ -63,7 +65,8 @@ describe('durable synchronization operation receipts', () => {
 			.transaction(async (transaction) => {
 				const receipts = new WorkspaceSyncReceipts(transaction);
 				const identity = { type: 'notes' as const, id: [note.id] as [string] };
-				await receipts.lock(owner, operationId, identity);
+				await receipts.lockOperation(owner, operationId);
+				await receipts.lockResource(owner, identity);
 				await transaction.execute(sql`update notes set title = 'Rejected' where id = ${note.id}`);
 				const resource = await new WorkspaceSyncObjects(transaction).read(owner, identity, null);
 				if (resource.kind !== 'found') throw new Error('Updated note was not readable');
@@ -100,7 +103,7 @@ it('retains the original proof after compacting an acknowledged receipt twice', 
 		}
 	});
 });
-it('retains a durable cancellation proof for an operation that never applied', async () => {
+it('retains cancellation proof after repeated acknowledgement', async () => {
 	const { owner } = await seedNote('8911');
 	const operationId = crypto.randomUUID();
 	await context.db.transaction(async (transaction) => {
@@ -108,9 +111,12 @@ it('retains a durable cancellation proof for an operation that never applied', a
 		await receipts.lockOperation(owner, operationId);
 		await receipts.cancel(owner, operationId, '{"command":"cancelled"}');
 	});
-	expect(
-		await new WorkspaceSyncReceipts(context.db).find(owner, operationId, '{"command":"cancelled"}')
-	).toEqual({ kind: 'cancelled' });
+	const receipts = new WorkspaceSyncReceipts(context.db);
+	await receipts.compact(owner, operationId);
+	await receipts.compact(owner, operationId);
+	expect(await receipts.find(owner, operationId, '{"command":"cancelled"}')).toEqual({
+		kind: 'cancelled'
+	});
 });
 it('still rejects different input after the receipt payload is compacted', async () => {
 	const { owner, receipt } = await savedReceipt('8912');
@@ -118,5 +124,39 @@ it('still rejects different input after the receipt payload is compacted', async
 	await receipts.compact(owner, receipt.operationId);
 	expect(await receipts.find(owner, receipt.operationId, '{"different":true}')).toEqual({
 		kind: 'reused'
+	});
+});
+
+it('preserves the same proof when acknowledgements arrive concurrently', async () => {
+	const { owner, request, receipt } = await savedReceipt('8913');
+	const receipts = new WorkspaceSyncReceipts(context.db);
+	const other = connectPostgresTestDatabase(context.url);
+	try {
+		await Promise.all([
+			receipts.compact(owner, receipt.operationId),
+			new WorkspaceSyncReceipts(other.db).compact(owner, receipt.operationId)
+		]);
+	} finally {
+		await other.close();
+	}
+	const resource = receipt.resource;
+	expect(await receipts.find(owner, receipt.operationId, request)).toEqual({
+		kind: 'compacted',
+		proof: {
+			operationId: receipt.operationId,
+			resourceKind: resource.kind,
+			etag: resource.kind === 'found' ? resource.snapshot.etag : resource.etag
+		}
+	});
+});
+
+it('does not create a receipt when acknowledging an unknown operation repeatedly', async () => {
+	const { owner } = await seedNote('8914');
+	const operationId = crypto.randomUUID();
+	const receipts = new WorkspaceSyncReceipts(context.db);
+	await receipts.compact(owner, operationId);
+	await receipts.compact(owner, operationId);
+	expect(await receipts.find(owner, operationId, '{"command":"missing"}')).toEqual({
+		kind: 'missing'
 	});
 });

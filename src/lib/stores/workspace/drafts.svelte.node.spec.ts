@@ -22,11 +22,11 @@ const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>();
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
 	const transport = new InMemoryNoteWrites();
 	const snapshot = { etag: syncEtag(1n), value: { type: 'notes' as const, value: note } };
 	transport.records.set(key, snapshot);
-	const cache = new ResourceCache(note.userId, { repository, transport });
+	const cache = new ResourceCache(note.userId, { repository: outbox.projectedCache, transport });
 	const writes = new MutationQueue(note.userId, {
 		repository: outbox,
 		transport,
@@ -35,14 +35,15 @@ const setup = async () => {
 		resolveBase: async () => {
 			throw new Error('No imported bases in this fixture');
 		},
-		received: async (key, resource) =>
-			cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource)
+		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
+		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
 		restoreLocalWrites: async () => undefined
 	});
+	outbox.observe(note.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);
 	await cache.accept(key, snapshot);
 	const store = resources.draft({ type: 'notes', id: [note.id] });

@@ -10,9 +10,10 @@ import { InMemorySyncScheduler } from '../fakes/in-memory-scheduler';
 export const workspaceResourcesFixture = (accountId: string) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const cache = new ResourceCache(accountId, { repository, transport });
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
+	const cache = new ResourceCache(accountId, { repository: outbox.projectedCache, transport });
 	const writes = new MutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
-		repository: new InMemoryOutbox(),
+		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: {
@@ -23,17 +24,18 @@ export const workspaceResourcesFixture = (accountId: string) => {
 		resolveBase: async () => {
 			throw new Error('This scenario has no imported edits');
 		},
-		received: async (key, resource) => {
-			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
-		}
+		committed: () => resources.committed()
 	});
+	const resources = new WorkspaceResources(accountId, {
+		scheduler: new InMemorySyncScheduler(),
+		cache,
+		writes,
+		restoreLocalWrites: async () => undefined
+	});
+	outbox.observe(accountId, (state) => resources.applyLocal(state));
 	return {
 		transport,
 		cache,
-		resources: new WorkspaceResources(accountId, {
-			cache,
-			writes,
-			restoreLocalWrites: async () => undefined
-		})
+		resources
 	};
 };

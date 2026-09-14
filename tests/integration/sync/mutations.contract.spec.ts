@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
+import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -233,4 +234,28 @@ it('matches cancellation to normalized input after an applied response is lost',
 		request: JSON.stringify(input)
 	});
 	expect(recovered).toEqual(applied);
+});
+
+it('recovers a completed write while another transaction locks its resource', async () => {
+	const { owner, note, controller, baseEtag, database, transactionRunner } = await setup('9111');
+	const request = {
+		operationId: crypto.randomUUID(),
+		baseEtag,
+		command: { kind: 'renameNote' as const, noteId: note.id, title: 'Completed rename' }
+	};
+	const applied = await controller.synchronize(owner, request);
+	const other = connectPostgresTestDatabase(context.url);
+	try {
+		const replayed = await other.db.transaction(async (transaction) => {
+			await transaction.execute(sql`select 1 from notes where id = ${note.id} for update`);
+			return transactionRunner.run(async () => {
+				// Fail promptly if receipt recovery starts waiting for the busy source row.
+				await database.execute(sql`set local lock_timeout = '1s'`);
+				return controller.synchronize(owner, request);
+			});
+		});
+		expect(replayed).toEqual(applied);
+	} finally {
+		await other.close();
+	}
 });

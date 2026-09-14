@@ -1,6 +1,5 @@
 import type { SyncScheduler } from './scheduler';
 import {
-	authoritativeWriteResource,
 	dependentWrites,
 	unresolvedWrite,
 	nextWrite,
@@ -10,7 +9,7 @@ import {
 	type WriteReceipt,
 	type WriteOutcome
 } from '$lib/models/outbox';
-import type { OutboxRepository, OutboxTransport } from './outbox-contracts';
+import type { OutboxProjection, OutboxRepository, OutboxTransport } from './outbox-contracts';
 import { OutboxAccountChangedError } from './outbox-contracts';
 
 export interface AccountWriterLock {
@@ -29,7 +28,7 @@ export interface MutationQueueDependencies<C, T> {
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
 	resolveBase(key: string, value: T, local: T | null): Promise<WriteBaseResolution<T>>;
-	received(key: string, resource: WriteReceipt<T>['resource']): Promise<void>;
+	committed(): void;
 }
 
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
@@ -61,6 +60,13 @@ export class MutationQueue<C, T> {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
 	}
+	useScheduler(scheduler: SyncScheduler): void {
+		this.cancelWake?.();
+		this.cancelWake = null;
+		this.dependencies.scheduler = scheduler;
+		this.scheduleRetry();
+	}
+
 	setOnline(online: boolean): void {
 		this.online = online;
 		this.scheduleRetry();
@@ -80,36 +86,26 @@ export class MutationQueue<C, T> {
 	}
 	async reload(): Promise<void> {
 		const generation = ++this.reloadGeneration;
-		const entries = await this.dependencies.repository.list(this.accountId);
-		if (this.stopped || generation !== this.reloadGeneration) return;
-		const present = new Set(entries.map((entry) => entry.intent.operationId));
+		const state = await this.dependencies.repository.snapshot(this.accountId);
+		if (generation === this.reloadGeneration) this.applyStored(state);
+	}
+	applyStored(state: OutboxProjection<C, T>, notify = true): void {
+		if (this.stopped) return;
+		this.reloadGeneration++;
 		const retryable = new Set(
-			entries
+			state.entries
 				.filter((entry) => entry.delivery.kind === 'retry' || entry.delivery.kind === 'queued')
 				.map((entry) => entry.intent.operationId)
 		);
 		for (const id of this.retryAfter.keys())
-			if (!retryable.has(id) && id !== 'acknowledgements' && id !== 'writer')
+			if (!retryable.has(id) && id !== 'acknowledgements' && id !== 'writer' && id !== 'storage')
 				this.retryAfter.delete(id);
-		const removedKeys = new Set(
-			this.entries
-				.filter((entry) => !present.has(entry.intent.operationId))
-				.map((entry) => entry.intent.key)
-		);
-		const receipts = await Promise.all(
-			[...removedKeys].map(async (key) => ({
-				key,
-				receipt: await this.dependencies.repository.receipt(this.accountId, key)
-			}))
-		);
-		if (this.stopped || generation !== this.reloadGeneration) return;
-		for (const { key, receipt } of receipts) {
-			if (receipt) this.receipts.set(key, receipt);
-			else this.receipts.delete(key);
-		}
-		this.entries = entries;
-		this.notify();
+		this.entries = state.entries;
+		this.receipts.clear();
+		for (const [key, receipt] of state.receipts) this.receipts.set(key, receipt);
+		if (notify) this.notify();
 	}
+
 	async append(draft: WriteDraft<C, T>): Promise<string> {
 		if (this.stopped) throw new Error('This account is no longer active');
 		const id = await this.dependencies.repository.append(this.accountId, draft);
@@ -173,8 +169,7 @@ export class MutationQueue<C, T> {
 						? { kind: 'rejected', message: 'Cancelled before application' }
 						: outcome
 				);
-				const resource = outcome.kind === 'applied' ? outcome.receipt.resource : null;
-				if (resource && !this.stopped) await this.dependencies.received(entry.intent.key, resource);
+				if (outcome.kind === 'applied' && !this.stopped) this.dependencies.committed();
 			}
 			const remaining = await this.dependencies.repository.list(this.accountId);
 			await this.dependencies.repository.discard(
@@ -231,6 +226,7 @@ export class MutationQueue<C, T> {
 					if (this.stopped) return { kind: 'stopped' };
 					if (!this.online) return { kind: 'offline' };
 					this.retryAfter.delete('writer');
+					this.retryAfter.delete('storage');
 					await this.dependencies.repository.recover(this.accountId);
 					const excluded = new Set(
 						[...this.retryAfter]
@@ -261,12 +257,6 @@ export class MutationQueue<C, T> {
 								resolution
 							);
 							this.retryAfter.delete(unresolved.intent.operationId);
-							const resource =
-								resolution.kind === 'matched'
-									? { kind: 'found' as const, snapshot: resolution.snapshot }
-									: resolution.remote;
-							if (resource.kind !== 'unavailable' && !this.stopped)
-								await this.dependencies.received(unresolved.intent.key, resource);
 							await this.reload();
 							continue;
 						}
@@ -303,9 +293,7 @@ export class MutationQueue<C, T> {
 						const outcome = response.outcome;
 						await this.dependencies.repository.settle(this.accountId, sent, outcome);
 						this.retryAfter.delete(sent.intent.operationId);
-						const resource = authoritativeWriteResource(outcome);
-						if (resource && !this.stopped)
-							await this.dependencies.received(sent.intent.key, resource);
+						if (outcome.kind === 'applied' && !this.stopped) this.dependencies.committed();
 						await this.reload();
 						const acknowledged = await this.acknowledgePending();
 						if (acknowledged.kind === 'failure') failure = acknowledged;
@@ -322,6 +310,7 @@ export class MutationQueue<C, T> {
 			}
 			return result;
 		} catch (error) {
+			this.deferRetry('storage');
 			for (const [id, retry] of this.retryAfter) {
 				if (retry.at <= this.dependencies.scheduler.now()) this.deferRetry(id);
 			}

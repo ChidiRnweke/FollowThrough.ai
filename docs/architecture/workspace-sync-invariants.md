@@ -88,7 +88,7 @@ both attempted and retained cancellation inputs are normalized identically. The 
 and PostgreSQL normalized-cancellation contract cover that boundary without reparsing historical
 cancellation payloads under a newer command schema.
 
-### Final local validation
+### Local validation at `29185ef`
 
 - `pnpm test:unit`: 301 files, 3,415 tests passed.
 - `pnpm test:browser:full`: 63 files, 541 tests passed.
@@ -107,3 +107,20 @@ Deleting a resource that the server has never known still fails
 without a receipt; inventing an authoritative tombstone would violate SYNC-AUTHORITY. A future
 change needs an explicit absent-deletion policy. The full PostgreSQL/PWA performance benchmark
 also remains unmeasured; the existing 7,000-record result is a client-only measurement.
+
+### Storage and runtime simplification
+
+The Dexie refactor preserves the contracts above. The previous transaction-lifetime helper and
+application change channel are replaced by Dexie; their historical results remain recorded above.
+
+- `database.svelte.spec.ts` checks rollback, original failure preservation, native version-6 upgrade,
+  pending writes/receipts/recovery retention, blocked upgrades and old-tab closure.
+- `workspace-local-repository.svelte.spec.ts` checks coherent settlement, updates across connections
+  without a changed row count, observer idleness and account isolation.
+- `workspace-runtime.spec.ts` checks late-commit feed discovery, first-failure retries, independent
+  work during backoff, startup recovery becoming idle, and clearing errors after automatic recovery.
+- Existing fake and real-storage contracts continue to cover ancestry, conflicts, cancellation,
+  recovery and version/tombstone ordering. Shared fakes now persist the authoritative body together
+  with queue settlement rather than relying on a second callback write.
+- PostgreSQL contracts check concurrent/repeated acknowledgement and receipt replay while a source
+  row is locked by another transaction.

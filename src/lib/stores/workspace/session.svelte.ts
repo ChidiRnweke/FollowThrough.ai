@@ -218,7 +218,12 @@ export const workspaceSession = {
 		const accountId = workspaceAccountHint(document.cookie);
 		if (!accountId)
 			throw new Error('Sign in to identify the account whose saved edits you want to download');
-		return new IndexedDbStorageRecovery().downloadAccount(accountId);
+		const recovery = new IndexedDbStorageRecovery();
+		try {
+			return await recovery.downloadAccount(accountId);
+		} finally {
+			recovery.close();
+		}
 	},
 	synchronize,
 	stop,

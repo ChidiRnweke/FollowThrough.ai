@@ -124,11 +124,11 @@ describe('generic resource cache', () => {
 	it('lets foreground demand bypass a different background download', async () => {
 		const { transport, cache } = setup();
 		transport.records.set('note:1', first);
-		transport.records.set('note:2', second);
 		await cache.refresh();
 		const gate = transport.pause('note:1');
 		const warming = cache.warm();
 		await gate.started;
+		transport.records.set('note:2', second);
 		const opened = await cache.open('note:2');
 		gate.release();
 		await warming;

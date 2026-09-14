@@ -199,6 +199,57 @@ at dependencies. Damaged import markers remain in place and prevent duplicate im
 database and version fence remain. Online startup replaces a corrupt bootstrap from the server.
 The public account hint renews halfway through its 30-day lifetime instead of on every request.
 
+### Local storage and execution ownership
+
+Dexie owns IndexedDB transactions and observation. The account repository reads cached records,
+queued intents, exact receipts, inventory checkpoints, and recovery state in one transaction.
+Settlement writes the authoritative body only once, together with its receipt and queue transition.
+The UI applies that combined projection before notifying readers. It does not infer acknowledgement
+from a disappeared queue entry or use a second cache write as a publication signal.
+
+Dexie live queries observe account-scoped primary-key ranges, including updates whose row count
+stays unchanged. Their notifications trigger the repository's combined read. Corruption repair runs
+outside the read-only live-query context, so it can quarantine damaged rows transactionally. The
+application no longer implements separate cache and outbox BroadcastChannel messages. Observation
+listeners and overlapping read publication are scoped by account.
+
+The existing native version-6 database upgrades in place to Dexie version 1 (native version 10).
+Store keys, queued operation identities and order, exact receipts, recovery evidence, and legacy
+import markers remain intact. A blocked upgrade asks the user to close older tabs. Failed upgrades
+roll back. Queue sequence allocation remains unchanged; a storage wrapper change does not require
+rekeying pending edits.
+
+One account runtime owns wake-ups for independent journal, download, and submission lanes. A request
+arriving during a lane's work remains pending. Successful mutation settlement requests another
+journal pull, including changes to secondary resources absent from the primary receipt. Lane
+failures receive retry deadlines even before an operation is selected. The queue retains
+operation-specific backoff; a future deadline for one edit does not delay a newly queued independent
+edit. Successful retries clear their own errors and consume obsolete deadlines.
+
+Foreground reads, collection preparation, and warming use one deduplicating batch download path.
+Durable storage records admission, target versions, retained bodies and tombstones. Live request
+promises and queued/fetching/failed attempt state belong to the current runtime. All demand shares
+the measured body capacity, and failures remain visible without persisting a claim that a network
+request is still running after reload.
+
+Receipt acknowledgement uses a single conditional PostgreSQL UPDATE, whose row lock and predicate
+make repeated compaction idempotent. Submission takes the operation lock and checks immutable proof
+before locking a resource. A replay therefore needs no resource lock. New mutations still use the
+resource lock, ETag guard, domain transaction, and receipt; an upsert cannot replace those conflict
+checks.
+
+We considered complete replication engines. Electric leaves write-path synchronization to the
+application. PowerSync and TanStack's offline transaction package require adaptation for independent
+pending work and this app's follower behavior. Replicache and RxDB would still need the application's
+explicit ancestry and conflict-review records. Dexie removes storage and observation plumbing while
+retaining the existing SvelteKit/PostgreSQL deployment and domain rules. See
+[Dexie observation](<https://dexie.org/docs/liveQuery()>),
+[Electric writes](https://electric.ax/docs/sync/guides/writes),
+[PowerSync consistency](https://docs.powersync.com/architecture/consistency),
+[TanStack offline transactions](https://github.com/TanStack/db/tree/main/packages/offline-transactions),
+[Replicache reconciliation](https://doc.replicache.dev/concepts/how-it-works), and
+[RxDB replication](https://rxdb.info/replication.html).
+
 ## Consequences
 
 - Subsequent synchronization transfers changed identities and content only.

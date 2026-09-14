@@ -118,3 +118,86 @@ it('shares the body capacity between warming and concurrent collection preparati
 	await Promise.all([warming, preparing]);
 	expect(cache.availability).toBe('complete');
 });
+
+it('joins a foreground read to its already admitted background batch', async () => {
+	const { cache, transport } = setup();
+	await cache.refresh();
+	const gate = transport.pause('note:1');
+	const warming = cache.warm();
+	await gate.started;
+	const foreground = cache.open('note:2');
+	gate.release();
+	await Promise.all([warming, foreground]);
+	expect(transport.batches.flat().filter((key) => key === 'note:2')).toEqual(['note:2']);
+});
+
+it('persists download admission without persisting the live network attempt', async () => {
+	const repository = new InMemorySyncCache<string>();
+	const transport = new InMemoryBatchSyncTransport<string>();
+	transport.records.set('note:1', { etag: syncEtag(1n), value: 'First' });
+	const cache = new ResourceCache('account', { repository, transport });
+	const gate = transport.pause('note:1');
+	const opening = cache.open('note:1');
+	await gate.started;
+	const stored = await repository.load('account');
+	gate.release();
+	await opening;
+	expect(stored.records[0].entry).toEqual({
+		kind: 'present',
+		cache: {
+			kind: 'updating',
+			previous: null,
+			target: null,
+			transfer: { kind: 'queued' }
+		}
+	});
+});
+
+it('keeps download failure local while retaining a durable retry target', async () => {
+	const { cache, transport, repository } = setup();
+	await cache.refresh();
+	transport.failures.set('note:1', 'Unreadable body');
+	await cache.open('note:1');
+	const stored = await repository.load('account');
+	expect({
+		local: cache.access('note:1'),
+		durable: stored.records.find((row) => row.key === 'note:1')?.entry
+	}).toEqual({
+		local: { kind: 'failure', message: 'Unreadable body' },
+		durable: {
+			kind: 'present',
+			cache: {
+				kind: 'updating',
+				previous: null,
+				target: syncEtag(1n),
+				transfer: { kind: 'queued' }
+			}
+		}
+	});
+});
+
+it('does not replace this tab’s failed attempt with another tab’s queued projection', async () => {
+	const { cache, transport, repository } = setup();
+	await cache.refresh();
+	transport.failures.set('note:1', 'Unreadable body');
+	await cache.open('note:1');
+	cache.applyStored(await repository.load('account'), false);
+	expect(cache.access('note:1')).toEqual({ kind: 'failure', message: 'Unreadable body' });
+});
+
+it('reports a failed body transfer to the warming scheduler', async () => {
+	const { cache, transport } = setup();
+	await cache.refresh();
+	transport.failures.set('note:1', 'Unreadable body');
+	expect(await cache.warm()).toEqual({ kind: 'failure', message: 'Unreadable body' });
+});
+
+it('retries failed body targets on the next warming attempt without another journal pull', async () => {
+	const { cache, transport } = setup();
+	await cache.refresh();
+	transport.failures.set('note:1', 'Unreadable body');
+	await cache.warm();
+	transport.failures.delete('note:1');
+	await cache.warm();
+	expect(cache.access('note:1')).toEqual({ kind: 'ready', value: 'Note 1' });
+});

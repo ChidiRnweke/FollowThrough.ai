@@ -2,7 +2,7 @@ import { initialCacheGeneration } from '$lib/models/sync';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { syncCursorSchema, syncEtag } from '$lib/models/sync';
-import { completed, openSyncDatabase } from './database';
+import { completed, WorkspaceDatabase } from './database';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 import { IndexedDbOutbox } from './indexeddb-outbox';
 import { IndexedDbStorageRecovery } from './storage-recovery';
@@ -28,9 +28,10 @@ const draft = (operationId = crypto.randomUUID()): WriteDraft<string, string> =>
 	references: []
 });
 const damage = async (name: string, store: string, row: object) => {
-	const database = await openSyncDatabase(name, () => undefined);
+	const database = new WorkspaceDatabase(name);
+	await database.open();
 	try {
-		const transaction = database.transaction(store, 'readwrite');
+		const transaction = database.backendDB().transaction(store, 'readwrite');
 		const done = completed(transaction);
 		transaction.objectStore(store).put(row);
 		await done;

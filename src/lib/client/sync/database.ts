@@ -1,3 +1,4 @@
+import { Dexie, type Table, type Transaction } from 'dexie';
 import { z } from 'zod';
 import { cacheEntrySchema, resourceStateSchema } from '$lib/models/sync';
 
@@ -16,25 +17,6 @@ export const completed = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-/** Capture cleanup while the transaction is active, before any request can settle it. */
-export const transactionLifetime = (
-	transaction: IDBTransaction
-): { done: Promise<void>; abort: () => void } => {
-	let active = true;
-	transaction.addEventListener('abort', () => {
-		active = false;
-	});
-	transaction.addEventListener('complete', () => {
-		active = false;
-	});
-	return {
-		done: completed(transaction),
-		abort: () => {
-			if (active) transaction.abort();
-		}
-	};
-};
-
 export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) => {
 	const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
 	return z.union([
@@ -48,64 +30,38 @@ export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) 
 	]);
 };
 
-/** Cache and outbox share a database so acknowledgement and the resulting body commit together. */
-export const openSyncDatabase = (name: string, onVersionChange: () => void): Promise<IDBDatabase> =>
-	new Promise((resolve, reject) => {
-		const request = indexedDB.open(name, 6);
-		let blocked = false;
-		request.onupgradeneeded = () => {
-			const database = request.result;
-			if (!database.objectStoreNames.contains('recovery-heads'))
-				database.createObjectStore('recovery-heads', { keyPath: 'accountId' });
-			if (!database.objectStoreNames.contains('acknowledgements')) {
-				const acknowledgements = database.createObjectStore('acknowledgements', {
-					keyPath: ['accountId', 'operationId']
-				});
-				acknowledgements.createIndex('accountId', 'accountId');
-			}
-			if (!database.objectStoreNames.contains('quarantine')) {
-				const quarantine = database.createObjectStore('quarantine', {
-					keyPath: ['accountId', 'source', 'key']
-				});
-				quarantine.createIndex('accountId', 'accountId');
-			}
-			if (!database.objectStoreNames.contains('records')) {
-				const records = database.createObjectStore('records', { keyPath: ['accountId', 'key'] });
-				records.createIndex('accountId', 'accountId');
-			}
-			if (!database.objectStoreNames.contains('cursors'))
-				database.createObjectStore('cursors', { keyPath: 'accountId' });
-			if (!database.objectStoreNames.contains('outbox')) {
-				const outbox = database.createObjectStore('outbox', {
-					keyPath: ['accountId', 'entry.sequence']
-				});
-				outbox.createIndex('accountId', 'accountId');
-				outbox.createIndex('operation', ['accountId', 'entry.intent.operationId'], {
-					unique: true
-				});
-			}
-			if (!database.objectStoreNames.contains('write-receipts'))
-				database.createObjectStore('write-receipts', { keyPath: ['accountId', 'key'] });
-			if (!database.objectStoreNames.contains('imports'))
-				database.createObjectStore('imports', { keyPath: ['accountId', 'source'] });
-			if (!database.objectStoreNames.contains('queue-heads'))
-				database.createObjectStore('queue-heads', { keyPath: 'accountId' });
-		};
-		request.onsuccess = () => {
-			if (blocked) {
-				request.result.close();
-				return;
-			}
-			request.result.onversionchange = () => {
-				request.result.close();
-				onVersionChange();
-			};
-			resolve(request.result);
-		};
-		request.onerror = () =>
-			reject(request.error ?? new Error('Workspace storage could not be opened'));
-		request.onblocked = () => {
-			blocked = true;
-			reject(new Error('Close other app tabs to upgrade workspace storage'));
-		};
-	});
+/** Native version 6 upgrades in place to Dexie version 1 (native version 10). */
+export class WorkspaceDatabase extends Dexie {
+	private upgradeBlocked = false;
+	constructor(name = 'followthrough-workspace-sync') {
+		super(name);
+		this.version(1).stores({
+			'recovery-heads': 'accountId',
+			acknowledgements: '[accountId+operationId], accountId',
+			quarantine: '[accountId+source+key], accountId',
+			records: '[accountId+key], accountId',
+			cursors: 'accountId',
+			outbox: '[accountId+entry.sequence], accountId, &[accountId+entry.intent.operationId]',
+			'write-receipts': '[accountId+key]',
+			imports: '[accountId+source]',
+			'queue-heads': 'accountId'
+		});
+		this.on('blocked', () => {
+			this.upgradeBlocked = true;
+			this.close();
+		});
+		this.on('versionchange', () => this.close());
+	}
+	override open(): ReturnType<Dexie['open']> {
+		this.upgradeBlocked = false;
+		return super.open().catch((error) => {
+			if (this.upgradeBlocked)
+				throw new Error('Close other app tabs to upgrade workspace storage', { cause: error });
+			throw error;
+		});
+	}
+}
+
+/** Weak persisted values are parsed by repository readers before leaving this boundary. */
+export const storedTable = (transaction: Transaction, name: string): Table<unknown, IDBValidKey> =>
+	transaction.table<unknown, IDBValidKey>(name);
