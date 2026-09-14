@@ -650,24 +650,25 @@ test('opens a second tab while the first tab waits for a write response', async 
 	page,
 	context
 }) => {
-	await page.goto('/todos?view=board&quickTodo');
-	await waitForServiceWorker(page);
 	const entered = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
-	await page.route('**/pushWorkspaceMutation', async (route) => {
+	// Route at the context boundary, including requests owned by the service worker.
+	await context.route('**/pushWorkspaceMutation', async (route) => {
 		entered.resolve();
 		await release.promise;
 		await route.continue();
 	});
-	await page.locator('#quick-todo-input').fill(`Stalled write ${crypto.randomUUID()}`);
-	await page.locator('#quick-todo-input').press('Enter');
-	await entered.promise;
-	const other = await context.newPage();
 	try {
+		await page.goto('/todos?view=board&quickTodo');
+		await waitForServiceWorker(page);
+		await page.locator('#quick-todo-input').fill(`Stalled write ${crypto.randomUUID()}`);
+		await page.locator('#quick-todo-input').press('Enter');
+		await test.step('hold the outgoing write', () => entered.promise, { timeout: 10_000 });
+		const other = await context.newPage();
 		await other.goto('/todos?view=board&quickTodo');
 		await expect(other.locator('#quick-todo-input')).toBeVisible();
 	} finally {
 		release.resolve();
-		await other.close();
+		await context.unrouteAll({ behavior: 'wait' });
 	}
 });
