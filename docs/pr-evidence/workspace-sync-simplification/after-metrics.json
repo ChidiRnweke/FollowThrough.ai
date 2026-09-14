@@ -1,0 +1,34 @@
+{
+	"label": "after",
+	"commit": "d824d92615e72902916ea18ed146a549792c56f7",
+	"fixture": {
+		"messages": 5000,
+		"provenance": 2000,
+		"messageTextBytes": 2160,
+		"noteDocumentBytes": 7858
+	},
+	"firstUsableMs": 31267.42284900001,
+	"fullSyncMs": 31276.53888600001,
+	"cachedOfflineOpenMs": 1691.4765789999947,
+	"inventory": {
+		"stored": 7004,
+		"bodies": 7004
+	},
+	"remoteRequests": 56,
+	"decodedRemoteBytes": 14534922,
+	"longTasks": {
+		"count": 46,
+		"totalMs": 3966,
+		"maxMs": 164
+	},
+	"grouped": {
+		"readWorkspaceBootstrap": {
+			"requests": 1,
+			"bytes": 100102
+		},
+		"pullWorkspaceChangePage": {
+			"requests": 55,
+			"bytes": 14434820
+		}
+	}
+}

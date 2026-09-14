@@ -1,0 +1,24 @@
+                                                                                                  QUERY PLAN                                                                                                  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on messages r  (cost=0.00..1688.00 rows=1 width=16) (actual time=0.817..5.582 rows=1 loops=1)
+   Filter: ((jsonb_build_array((id)::text) = '["50000000-0000-4000-8000-000000000001"]'::jsonb) AND (workspace_sync_account('messages'::text, to_jsonb(r.*)) = '00000000-0000-4000-8000-000000000001'::uuid))
+   Rows Removed by Filter: 4999
+   Buffers: shared hit=477
+ Planning:
+   Buffers: shared hit=105
+ Planning Time: 0.328 ms
+ Execution Time: 6.221 ms
+(8 rows)
+
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Index Scan using messages_pkey on messages r  (cost=0.28..8.56 rows=1 width=16) (actual time=0.168..0.169 rows=1 loops=1)
+   Index Cond: (id = '50000000-0000-4000-8000-000000000001'::uuid)
+   Filter: (workspace_sync_account('messages'::text, to_jsonb(r.*)) = '00000000-0000-4000-8000-000000000001'::uuid)
+   Buffers: shared hit=5
+ Planning:
+   Buffers: shared hit=4
+ Planning Time: 0.086 ms
+ Execution Time: 0.190 ms
+(8 rows)
+
