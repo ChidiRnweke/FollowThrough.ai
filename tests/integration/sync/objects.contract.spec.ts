@@ -139,3 +139,22 @@ it('reads message content and its ordering cursor without loss of precision', as
 		eventCursor: '9007199254740993'
 	});
 });
+
+it('normalizes PostgreSQL provenance timestamps in complete pages', async () => {
+	const { owner } = await seedNote('8733');
+	const id = crypto.randomUUID();
+	const runId = crypto.randomUUID();
+	await context.client`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, created_at)
+ values (${id}, ${owner.userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, 'contract-model', '2026-09-14T10:30:45.123+02:00')`;
+	const page = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+	expect(
+		page.records.find(
+			(entry) => entry.key === workspaceResourceKey({ type: 'provenance', id: [id] })
+		)?.resource
+	).toMatchObject({
+		kind: 'found',
+		snapshot: {
+			value: { type: 'provenance', value: { id, createdAt: '2026-09-14T08:30:45.123Z' } }
+		}
+	});
+});

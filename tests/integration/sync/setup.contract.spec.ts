@@ -18,7 +18,7 @@ it('can reinstall development sync SQL without advancing existing account checkp
 });
 
 it('seeds an existing source record that has no sync metadata', async () => {
-	const { owner, note } = await seedNote('8823');
+	const { owner, note } = await seedNote('8833');
 	await context.client`delete from workspace_sync_versions where resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await context.client`delete from workspace_sync_changes where account_id = ${owner.userId} and resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await installWorkspaceSync(context.client);
